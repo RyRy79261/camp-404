@@ -124,12 +124,12 @@
     var(--os-win-card-tinted)
   );
 }
-/* Colour-blind safe: its orange is lighter, so the near-white text on a bar
-   and a name reaches 4.5:1 only up to about 45%. A picked choice is a
-   brighter sky blue, not orange: orange in the dark card reads brown. */
+/* Colour-blind safe: its orange mixed into anything dark reads brown, so a
+   bar without focus, an icon's name and a picked choice take its sky blue
+   instead; the focused window and a lit name stay orange. */
 [data-os-theme="colour-blind"] {
-  --os-bar-idle: color-mix(in oklab, var(--os-primary) 42%, var(--os-chrome));
-  --os-label: color-mix(in oklab, var(--os-primary) 42%, var(--os-chrome));
+  --os-bar-idle: color-mix(in oklab, var(--os-accent) 35%, var(--os-chrome));
+  --os-label: color-mix(in oklab, var(--os-accent) 35%, var(--os-chrome));
   --os-win-card-tinted: color-mix(
     in oklab,
     var(--os-accent) 16%,
@@ -156,12 +156,13 @@
     var(--os-win-card-tinted)
   );
 }
-/* High contrast promises 7:1: its yellow darkens the white text's ground
-   fastest, so the bars keep a lower tint, and a picked choice is a brighter
-   cyan (yellow in the dark card reads olive). */
+/* High contrast promises 7:1. Its yellow mixed into black reads olive, so a
+   bar without focus, an icon's name and a picked choice take its cyan
+   instead, kept low enough for 7:1 white text; the focused window and a lit
+   name stay yellow. */
 [data-os-theme="high-contrast"] {
-  --os-bar-idle: color-mix(in oklab, var(--os-primary) 34%, var(--os-chrome));
-  --os-label: color-mix(in oklab, var(--os-primary) 34%, var(--os-chrome));
+  --os-bar-idle: color-mix(in oklab, var(--os-accent) 30%, var(--os-chrome));
+  --os-label: color-mix(in oklab, var(--os-accent) 30%, var(--os-chrome));
   --os-win-card-tinted: color-mix(
     in oklab,
     var(--os-accent) 16%,

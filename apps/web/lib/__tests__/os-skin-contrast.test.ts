@@ -316,10 +316,12 @@ describe.each(OS_THEMES_DEF.map((t) => [t.label, t] as const))(
         expect(lum(choice.on)).toBeGreaterThan(lum(choice.hover) * 1.1);
       }
     });
-    it("tints nothing inside a window brown (owner, 2026-10-01)", () => {
+    it("tints nothing brown: the chrome's tints and everything in a window (owner, 2026-10-01)", () => {
       // Brown is a dark orange: a hue from red-orange to yellow at low
       // lightness. A grey (almost no chroma) is not brown.
       const window = [
+        soft.barIdle,
+        soft.label,
         soft.winCard,
         soft.winChoice.off,
         soft.winChoice.hover,
