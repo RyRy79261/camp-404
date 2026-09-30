@@ -30,9 +30,10 @@ wears the same desktop and needs no sign-in.
 - **Team tools, which every member may read:** Power (loads, fuel, the fuel
   log, the grid plan, generator readiness), Transport (cars, lifts and
   trailers), Inventory (the camp's gear: suggest a change, pledge, book), the
-  Lounge (offer an activity or a DJ set), Camp layout (the site plan), and the
-  Kitchen's recipes and meal plan. A captain or a lead of the team that owns a
-  tool edits it.
+  Lounge (offer an activity or a DJ set), Camp layout (the site plan),
+  Logistics (the year's pack, travel, build, burn, strike and unpack days,
+  written onto the camp's Google Calendar), and the Kitchen's recipes and meal
+  plan. A captain or a lead of the team that owns a tool edits it.
 - **For captains (and leads, where the owner said so):** Applications (who is
   coming, the DDT and WAP), Payments and dues (with the Finance leads),
   Announcements, the questionnaire builder, the member panel (including how

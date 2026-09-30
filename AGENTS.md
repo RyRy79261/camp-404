@@ -619,6 +619,15 @@ Decisions baked into the schema — keep new code consistent with them:
   through `getSharedLayout`, which returns `neighbourView`'s allowlist (kinds
   and places, never a label or a side note) and arrival COUNTS per day. Add a
   field to it only by naming it in `neighbourView`.
+- **Logistics calendar (#247).** The year's pack, travel, build, burn, strike
+  and unpack days are one row per (year, phase) in `logistics_phases`. A
+  captain or a Transport and Logistics lead sets them (`canEditLogistics`), a
+  compare-and-set on `version`, audited; every member reads. The camp calendar
+  stays on Google (owner, 2026-09-28): a phase with days is ONE all-day event,
+  titled in the camp's convention ("Transport and Logistics Team - Build"). The
+  row claims its event id inside the write, before Google is called, so a
+  re-save or a retry never makes a second event; Google is called after the
+  transaction. Clearing the days takes the event off Google.
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.
