@@ -40,6 +40,7 @@ export const PROGRAM_ICON_KEYS = [
   "lift",
   "logistics",
   "tent",
+  "receipt",
   "lounge",
   "tickets",
 ] as const;
@@ -297,6 +298,13 @@ const PATHS: Record<IconKey, ReactNode> = {
     <>
       <path d="M12 4 3 20h18L12 4z" />
       <path d="M12 12l-3 8M12 12l3 8" />
+    </>
+  ),
+  // A till slip with a torn edge, for claims (#242).
+  receipt: (
+    <>
+      <path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z" />
+      <path d="M9 8h6M9 12h6M9 16h3" />
     </>
   ),
   // A Burn ticket, notched at both sides, with its tear-off line.

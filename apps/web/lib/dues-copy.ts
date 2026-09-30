@@ -1,3 +1,5 @@
+import { PAYMENTS_BUDGETS_PATH, PAYMENTS_CLAIMS_PATH } from "./claims-copy";
+
 // The dues screens' paths and shared sentences (#240). A plain module, not a
 // "use server" file, so pages, actions and components can all import it.
 
@@ -27,6 +29,8 @@ export const MONEY_REFUSAL = "Payments are for captains and Finance leads.";
 export const PAYMENTS_TABS = [
   { href: PAYMENTS_PATH, label: "Payments" },
   { href: PAYMENTS_OWING_PATH, label: "Who owes what" },
+  { href: PAYMENTS_CLAIMS_PATH, label: "Claims" },
+  { href: PAYMENTS_BUDGETS_PATH, label: "Budgets" },
   { href: PAYMENTS_IMPORT_PATH, label: "Bank statement" },
   { href: PAYMENTS_SETTLE_UP_PATH, label: "Settle-up" },
   { href: PAYMENTS_SETTINGS_PATH, label: "Fees and dates" },

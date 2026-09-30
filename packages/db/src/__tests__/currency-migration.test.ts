@@ -72,7 +72,7 @@ describe("0046_normalise_currency_codes and 0047_currency_check", () => {
   async function storeClaim(submitterId: string, currency: string) {
     await h.db().insert(schema.reimbursements).values({
       submitterId,
-      amount: "12.34",
+      amountCents: 1234,
       currency,
       accountType: "sa",
       accountDetailsEncrypted: "fake-ciphertext",
@@ -88,7 +88,7 @@ describe("0046_normalise_currency_codes and 0047_currency_check", () => {
       team,
       cycle: 2026,
       currency,
-      assignedAmount: "999.00",
+      amountCents: 99900,
     });
   }
 

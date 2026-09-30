@@ -83,7 +83,7 @@ describe("0050_money_in_rands_only_guard and 0051_money_in_rands_only", () => {
     } else if (table === "reimbursements") {
       await h.db().insert(schema.reimbursements).values({
         submitterId: userId,
-        amount: "12.34",
+        amountCents: 1234,
         currency,
         accountType: "sa",
         accountDetailsEncrypted: "fake-ciphertext",
@@ -98,7 +98,7 @@ describe("0050_money_in_rands_only_guard and 0051_money_in_rands_only", () => {
           team: teams[refSeq++ % teams.length]!,
           cycle: 2026,
           currency,
-          assignedAmount: "999.00",
+          amountCents: 99900,
         });
     }
   }
@@ -107,8 +107,8 @@ describe("0050_money_in_rands_only_guard and 0051_money_in_rands_only", () => {
   async function stored() {
     const rows: Record<string, string[]> = {};
     for (const table of MONEY_TABLES) {
-      const amount = table === "payments" ? "amount_cents" : "amount";
-      const column = table === "team_budgets" ? "assigned_amount" : amount;
+      // Every money table keeps whole cents since #242 (migration 0078).
+      const column = "amount_cents";
       const res = await h.client().query<{ row: string }>(
         `SELECT "currency" || ' ' || "${column}"::text AS row
            FROM "${table}" ORDER BY row`,

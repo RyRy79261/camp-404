@@ -1,19 +1,24 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { Currency } from "@camp404/types";
+import { decimalToMinor } from "@camp404/core";
+import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
 import {
   getTeamBudget,
-  listTeamBudgets,
+  listBudgetTotals,
   setTeamBudget,
 } from "@camp404/db/team-budgets";
-import { canWriteTeam } from "../scope";
-import { deny, runTool, ToolError } from "../tool-utils";
+import { runTool, ToolError } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
 const Amount = z
   .string()
-  .regex(/^\d{1,10}(\.\d{1,2})?$/, "An amount like 5000 or 5000.50.");
+  .regex(/^\d{1,10}(\.\d{1,2})?$/, "An amount in rands like 5000 or 5000.50.");
+
+// Team budgets (#242): one amount per team per year, in rands. Every member
+// reads each team's totals (budget, spent, left); captains and Finance leads
+// set a budget, which the database checks again inside its transaction
+// (canManageMoney). Amounts come back in whole cents.
 
 export function registerTeamTools(server: McpServer): void {
   server.registerTool(
@@ -21,7 +26,7 @@ export function registerTeamTools(server: McpServer): void {
     {
       title: "Get a team's budget",
       description:
-        "Returns this year's assigned + perceived budget figures for one team, or null when none is set. Readable by anyone.",
+        "Returns this year's totals for one team, in whole rand cents: its budget (null when none is set), what it has spent (the claims its team said yes to), what is waiting for a yes, and what is left. Readable by any member.",
       inputSchema: { team: TeamEnum },
     },
     async (args, extra) =>
@@ -29,7 +34,10 @@ export function registerTeamTools(server: McpServer): void {
         toolName: "get_team_budget",
         extra,
         argsForAudit: args,
-        handler: async () => await getTeamBudget(args.team),
+        handler: async () => {
+          const totals = await listBudgetTotals(await currentCycleNumber());
+          return { team: args.team, ...totals[args.team] };
+        },
       }),
   );
 
@@ -38,7 +46,7 @@ export function registerTeamTools(server: McpServer): void {
     {
       title: "List every team's budget",
       description:
-        "Returns this year's team budgets. Readable by anyone — useful for camp-wide planning views.",
+        "Returns this year's totals for every team, in whole rand cents: budget, spent, waiting and left. Readable by any member.",
       inputSchema: {},
     },
     async (_args, extra) =>
@@ -46,7 +54,10 @@ export function registerTeamTools(server: McpServer): void {
         toolName: "list_team_budgets",
         extra,
         argsForAudit: null,
-        handler: async () => await listTeamBudgets(),
+        handler: async () => {
+          const totals = await listBudgetTotals(await currentCycleNumber());
+          return Object.entries(totals).map(([team, t]) => ({ team, ...t }));
+        },
       }),
   );
 
@@ -55,49 +66,36 @@ export function registerTeamTools(server: McpServer): void {
     {
       title: "Set a team's budget for this year",
       description:
-        "A captain, or the lead of the team, sets this year's budget figures. Fields left out keep their value; pass null to clear an amount or the notes.",
+        "A captain or a Finance lead sets a team's one budget amount for this year, in rands (ZAR). Pass null to clear it.",
       inputSchema: {
         team: TeamEnum,
-        assignedAmount: Amount.nullable().optional(),
-        perceivedAmount: Amount.nullable().optional(),
-        currency: Currency.optional().describe(
-          'Always "ZAR" when given: the camp records money in rands only.',
+        amount: Amount.nullable().describe(
+          'Rands, like "5000" or "5000.50"; null clears the budget.',
         ),
-        notes: z.string().max(2000).nullable().optional(),
       },
     },
     async (args, extra) =>
       runTool({
         toolName: "set_team_budget",
         extra,
-        // The notes stay out of the log: free text a captain typed.
-        argsForAudit: {
-          team: args.team,
-          assignedAmount: args.assignedAmount,
-          perceivedAmount: args.perceivedAmount,
-          currency: args.currency,
-        },
+        argsForAudit: args,
         handler: async ({ scope }) => {
-          if (!canWriteTeam(scope, args.team)) {
-            deny("Only a captain or the lead of this team can set its budget.");
+          const cents =
+            args.amount === null ? null : decimalToMinor(args.amount);
+          if (args.amount !== null && cents === null) {
+            throw new ToolError("Give the amount in rands, like 5000.50.");
           }
-          const { team, ...change } = args;
-          if (Object.values(change).every((value) => value === undefined)) {
-            throw new ToolError("Say at least one field to set.");
-          }
-          // The SDK checks the schema first; this is the handler's own
-          // guard, for a caller that reaches it without that check.
-          if (
-            change.currency !== undefined &&
-            !Currency.safeParse(change.currency).success
-          ) {
-            throw new ToolError("Money is recorded in rands (ZAR) only.");
-          }
-          return await setTeamBudget({
-            team,
-            change,
+          const cycle = await currentCycleNumber();
+          const current = await getTeamBudget(args.team, cycle);
+          const result = await setTeamBudget({
+            team: args.team,
+            cycle,
+            amountCents: cents,
+            expectedCents: current?.amountCents ?? null,
             actorId: scope.campUserId,
           });
+          if (!result.ok) throw new ToolError(result.error);
+          return { team: args.team, cycle, amountCents: cents };
         },
       }),
   );

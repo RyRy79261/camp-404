@@ -1,4 +1,4 @@
-import { eq, or, sql } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import { writeAuditEvent } from "./audit";
 import { isRealCaptain } from "./bootstrap";
 import { withTransaction } from "./index";
@@ -282,11 +282,24 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .where(eq(schema.rentalOrderSharers.userId, userId));
 
     // Scrub encrypted bank details (NOT NULL → empty string, not null) while
-    // keeping the reimbursement record for accounting.
+    // keeping the reimbursement record for accounting. Their claims' receipt
+    // rows go too (the web app deletes the files themselves after the erasure
+    // commits, like the proof-of-payment files).
     await tx
       .update(schema.reimbursements)
       .set({ accountDetailsEncrypted: "" })
       .where(eq(schema.reimbursements.submitterId, userId));
+    await tx
+      .delete(schema.reimbursementFiles)
+      .where(
+        inArray(
+          schema.reimbursementFiles.reimbursementId,
+          tx
+            .select({ id: schema.reimbursements.id })
+            .from(schema.reimbursements)
+            .where(eq(schema.reimbursements.submitterId, userId)),
+        ),
+      );
 
     // The proof row. Without it a finished erasure and a data-loss incident
     // look the same afterwards. It names only the tombstone number: the row

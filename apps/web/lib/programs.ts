@@ -219,6 +219,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: ME,
     rank: "camp_member",
   },
+  // Every member's own claims (#242): money they spent for a team, claimed
+  // back with the receipts, and where each claim is.
+  {
+    id: "my-claims",
+    label: "My claims",
+    fileName: "CLAIMS.TXT",
+    href: "/claims",
+    icon: "my-claims",
+    place: ME,
+    rank: "camp_member",
+  },
   // Decision 11 A (owner, 2026-09-26): a driver, or a member with a seat in
   // someone's car, gets their lift as a program.
   {
@@ -423,6 +434,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     fileName: "NEWEVENT.EXE",
     href: "/captains/calendar",
     icon: "new-event",
+    place: CAPTAINS,
+    rank: "team_lead",
+  },
+  // Claims waiting for a team's yes (#242): every lead (the page shows only
+  // the teams they lead, canApproveClaim) and captains (every team).
+  {
+    id: "claim-approvals",
+    label: "Claims to approve",
+    fileName: "APPROVE.EXE",
+    href: "/captains/claims",
+    icon: "claim-approvals",
     place: CAPTAINS,
     rank: "team_lead",
   },

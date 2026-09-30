@@ -197,6 +197,9 @@ action that runs through the captain's web UI.
 | `approve_reimbursement` / `reject_reimbursement` | W | team L of claim's team OR C | per existing routing |
 | `mark_paid` / `mark_reconciled` | W | C | |
 
+[CORRECTION 2026-09-30] `submit_reimbursement` was removed (#242): a claim
+needs private receipt files, so it is made in the app (My claims) only.
+
 ### Broadcasts / inbox (read-only)
 
 | Tool | R/W | Tier | Notes |

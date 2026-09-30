@@ -90,6 +90,8 @@ export const AUDIT_ACTION_LABELS = {
   "recipe.variation_started": "Started a recipe variation",
   "recipe.version_added": "Wrote a new recipe version",
   "recipe.written_by_claude": "Had Claude write a recipe version",
+  "reimbursement.account_viewed": "Opened a claim's bank details",
+  "reimbursement.receipt_viewed": "Opened a claim's receipt",
   "reimbursement.status_changed": "Moved a reimbursement",
   "rental.item_added": "Added a rental item",
   "rental.item_archived": "Removed a rental item",
@@ -391,7 +393,7 @@ export function auditDetail(
     case "reimbursement.status_changed": {
       const from = text(metadata, "from");
       const to = text(metadata, "to");
-      const amount = text(metadata, "amount");
+      const cents = count(metadata, "amountCents");
       const currency = text(metadata, "currency");
       if (
         !from ||
@@ -402,6 +404,9 @@ export function auditDetail(
         return null;
       }
       const moved = `${REIMBURSEMENT_WORDS[from]} to ${REIMBURSEMENT_WORDS[to]}`;
+      // Claims since #242 keep whole cents; an older row keeps its decimal.
+      if (cents !== null) return `${formatMoney(cents)}, ${moved}`;
+      const amount = text(metadata, "amount");
       if (!amount || !currency) return moved;
       const minor = decimalToMinor(amount);
       // A row from before the currency rule keeps the text it was written with.
@@ -409,8 +414,19 @@ export function auditDetail(
         ? `${formatMoney(minor, currency)}, ${moved}`
         : `${currency} ${amount}, ${moved}`;
     }
-    case "team.program_changed":
+    case "team.program_changed": {
+      const team = text(metadata, "team");
+      return team ? teamLabel(team) : null;
+    }
     case "team_budget.set": {
+      const team = text(metadata, "team");
+      if (!team) return null;
+      if (!metadata || !("amountCents" in metadata)) return teamLabel(team);
+      const cents = count(metadata, "amountCents");
+      return `${teamLabel(team)}: ${cents === null ? "no budget" : formatMoney(cents)}`;
+    }
+    case "reimbursement.receipt_viewed":
+    case "reimbursement.account_viewed": {
       const team = text(metadata, "team");
       return team ? teamLabel(team) : null;
     }

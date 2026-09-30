@@ -1,101 +1,40 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
-import { Currency } from "@camp404/types";
-import { createHttpDb } from "@camp404/db";
+import { canManageMoney } from "@camp404/core";
 import * as schema from "@camp404/db/schema";
-import { decryptField, encrypt } from "@camp404/db/crypto";
+import { decryptField } from "@camp404/db/crypto";
 import {
-  getReimbursementForReview,
+  decideClaim,
+  listMyClaims,
   listReimbursementsForReview,
-  moveReimbursement,
-  submitReimbursement,
+  payClaim,
+  reconcileClaim,
+  type ClaimResult,
   type ReimbursementReviewRow,
-  type ReimbursementStatus,
   type ReimbursementTeam,
 } from "@camp404/db/reimbursements";
 import type { McpScope } from "../scope";
-import {
-  deny,
-  notFound,
-  runTool,
-  ToolError,
-  truncateList,
-} from "../tool-utils";
+import { deny, runTool, ToolError, truncateList } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
 const StatusEnum = z.enum(schema.reimbursementStatusEnum.enumValues);
-const AccountTypeEnum = z.enum(schema.reimbursementAccountTypeEnum.enumValues);
+
+// Claims (#242) over the Claude connector. A claim is MADE in the app only
+// (My claims): it needs one or more receipt files, stored privately, which a
+// tool call cannot carry, so there is no submit tool. A member lists their
+// own; a lead of a team or a captain lists and decides the claims of that
+// team; the Finance team (captains and Finance leads) marks them paid or
+// reconciled. Every move is checked again inside the database's own
+// transaction (decideClaim, payClaim, reconcileClaim): the tool's checks here
+// only word a refusal early. Nobody moves their own claim.
 
 export function registerReimbursementTools(server: McpServer): void {
   server.registerTool(
-    "submit_reimbursement",
-    {
-      title: "Submit a reimbursement",
-      description:
-        "Any camp user can submit an out-of-pocket expense. Account details are encrypted on write — the plaintext value is never persisted.",
-      inputSchema: {
-        team: TeamEnum.nullable().optional(),
-        amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
-        currency: Currency.describe(
-          'Always "ZAR": the camp records money in rands only.',
-        ),
-        accountType: AccountTypeEnum,
-        accountDetails: z
-          .string()
-          .min(1)
-          .describe(
-            "Account number + bank / SWIFT or international equivalent.",
-          ),
-        description: z.string().min(1),
-        receiptBlobUrl: z.string().url().nullable().optional(),
-        itemPhotoBlobUrl: z.string().url().nullable().optional(),
-        voiceMemoBlobUrl: z.string().url().nullable().optional(),
-      },
-    },
-    async (args, extra) =>
-      runTool({
-        toolName: "submit_reimbursement",
-        extra,
-        argsForAudit: {
-          team: args.team ?? "general",
-          amount: args.amount,
-          currency: args.currency,
-        },
-        handler: async ({ scope }) => {
-          if (!args.receiptBlobUrl && !args.itemPhotoBlobUrl) {
-            throw new Error(
-              "At least one of receipt or item photo is required.",
-            );
-          }
-          // The SDK checks the schema first; this is the handler's own
-          // guard, for a caller that reaches it without that check.
-          const currency = Currency.safeParse(args.currency);
-          if (!currency.success) {
-            throw new ToolError("Money is recorded in rands (ZAR) only.");
-          }
-          return await submitReimbursement({
-            submitterId: scope.campUserId,
-            team: args.team ?? null,
-            amount: args.amount,
-            currency: currency.data,
-            accountType: args.accountType,
-            accountDetailsEncrypted: encrypt(args.accountDetails),
-            description: args.description,
-            receiptBlobUrl: args.receiptBlobUrl,
-            itemPhotoBlobUrl: args.itemPhotoBlobUrl,
-            voiceMemoBlobUrl: args.voiceMemoBlobUrl,
-          });
-        },
-      }),
-  );
-
-  server.registerTool(
     "list_my_reimbursements",
     {
-      title: "List my submitted reimbursements",
+      title: "List my claims",
       description:
-        "Returns the current user's own submitted reimbursements, account details decrypted.",
+        "Returns the current user's own claims, every year, newest first: team, what for, amount in whole rand cents, day paid, status, and the reason if it was not approved. To make a claim, use My claims in the app: a claim needs its receipts.",
       inputSchema: { status: StatusEnum.optional() },
     },
     async (args, extra) =>
@@ -104,28 +43,14 @@ export function registerReimbursementTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async ({ scope }) => {
-          const db = createHttpDb();
-          const conditions = [
-            eq(schema.reimbursements.submitterId, scope.campUserId),
-          ];
-          if (args.status)
-            conditions.push(eq(schema.reimbursements.status, args.status));
-          const rows = await db
-            .select()
-            .from(schema.reimbursements)
-            .where(and(...conditions))
-            .orderBy(desc(schema.reimbursements.createdAt));
+          const rows = await listMyClaims(scope.campUserId);
           return truncateList(
-            rows.map((r) => {
-              const account = decryptField(r.accountDetailsEncrypted);
-              return {
-                ...r,
-                accountDetails: account.value,
-                // Bank details are on file but undecryptable here — never
-                // report this to the user as "no account details saved".
-                accountDetailsUnreadable: account.state === "unreadable",
-              };
-            }),
+            rows
+              .filter((r) => !args.status || r.status === args.status)
+              .map(({ files, ...rest }) => ({
+                ...rest,
+                receiptCount: files.length,
+              })),
           );
         },
       }),
@@ -134,55 +59,28 @@ export function registerReimbursementTools(server: McpServer): void {
   registerReviewTools(server);
 }
 
-// --- Review (captain and team lead) -----------------------------------------
-// A captain reviews every claim. A team lead reviews the claims lodged under a
-// team they lead this year; a claim under no team is a captain's. Paying and
-// reconciling are a captain's. Nobody moves their own claim. Account details
-// of someone else's claim are shown only to a captain, and only when the
-// submitter's AI data consent is on (the consent gate in the proposal).
+// --- Review (team leads, captains, the Finance team) ---------------------------
 
-type Move = {
-  from: ReimbursementStatus;
-  to: ReimbursementStatus;
-  title: string;
-};
-
-const MOVES = {
-  approve_reimbursement: {
-    from: "submitted",
-    to: "approved",
-    title: "Approve a reimbursement",
-  },
-  reject_reimbursement: {
-    from: "submitted",
-    to: "rejected",
-    title: "Reject a reimbursement",
-  },
-  mark_reimbursement_paid: {
-    from: "approved",
-    to: "paid",
-    title: "Mark a reimbursement paid",
-  },
-  mark_reimbursement_reconciled: {
-    from: "paid",
-    to: "reconciled",
-    title: "Mark a reimbursement reconciled",
-  },
-} as const satisfies Record<string, Move>;
-
-function canReview(
-  scope: McpScope,
-  claim: Pick<ReimbursementReviewRow, "team">,
-): boolean {
-  if (scope.isCaptain) return true;
-  return claim.team !== null && scope.leadTeams.includes(claim.team);
+function keepsMoney(scope: McpScope): boolean {
+  return canManageMoney(
+    scope.isCaptain
+      ? "captain"
+      : scope.leadTeams.length > 0
+        ? "team_lead"
+        : "camp_member",
+    scope.leadTeams,
+  );
 }
 
-/** The claim with its account details only where the caller may see them. */
+/**
+ * The claim with its bank details only where the caller may see them: the
+ * member themselves, or the Finance team when the member's AI data consent
+ * is on (the connector's consent gate).
+ */
 function presentForReview(scope: McpScope, row: ReimbursementReviewRow) {
   const { accountDetailsEncrypted, submitterAiDataConsent, ...rest } = row;
   const own = row.submitterId === scope.campUserId;
-  const mayRead = own || (scope.isCaptain && submitterAiDataConsent);
+  const mayRead = own || (keepsMoney(scope) && submitterAiDataConsent);
   if (!mayRead) {
     return { ...rest, accountDetails: null, accountDetailsWithheld: true };
   }
@@ -195,13 +93,53 @@ function presentForReview(scope: McpScope, row: ReimbursementReviewRow) {
   };
 }
 
+type Move = {
+  title: string;
+  description: string;
+  run: (id: string, actorId: string) => Promise<ClaimResult>;
+  to: string;
+};
+
+const MOVES: Record<string, Move> = {
+  approve_reimbursement: {
+    title: "Approve a claim",
+    description:
+      "A lead of the claim's team, or a captain, says yes to a waiting claim, at any amount. Nobody decides their own claim.",
+    run: (claimId, actorId) =>
+      decideClaim({ claimId, decision: "approved", actorId }),
+    to: "approved",
+  },
+  reject_reimbursement: {
+    title: "Turn down a claim",
+    description:
+      "A lead of the claim's team, or a captain, says no to a waiting claim. Nobody decides their own claim.",
+    run: (claimId, actorId) =>
+      decideClaim({ claimId, decision: "rejected", actorId }),
+    to: "rejected",
+  },
+  mark_reimbursement_paid: {
+    title: "Mark a claim paid",
+    description:
+      "A captain or a Finance lead marks an approved claim paid, after paying it back by bank transfer. Nobody pays their own claim.",
+    run: (claimId, actorId) => payClaim({ claimId, decision: "paid", actorId }),
+    to: "paid",
+  },
+  mark_reimbursement_reconciled: {
+    title: "Mark a claim reconciled",
+    description:
+      "A captain or a Finance lead marks a paid claim as matched to the bank statement.",
+    run: (claimId, actorId) => reconcileClaim({ claimId, actorId }),
+    to: "reconciled",
+  },
+};
+
 function registerReviewTools(server: McpServer): void {
   server.registerTool(
     "list_reimbursements",
     {
-      title: "List reimbursements to review",
+      title: "List claims to review",
       description:
-        "A captain gets every claim; a team lead gets the claims of teams they lead this year. Filter by status, or by team (\"general\" for claims under no team). Someone else's account details come back only for a captain, and only when that member's AI data consent is on.",
+        "A captain or a Finance lead gets every claim; a team lead gets the claims of teams they lead this year. Filter by status, or by team (\"general\" for old claims under no team). Amounts are whole rand cents. Someone else's bank details come back only for the Finance team, and only when that member's AI data consent is on.",
       inputSchema: {
         status: StatusEnum.optional(),
         team: z.union([TeamEnum, z.literal("general")]).optional(),
@@ -213,11 +151,12 @@ function registerReviewTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async ({ scope }) => {
-          if (!scope.isCaptain && scope.leadTeams.length === 0) {
-            deny("Only a captain or a team lead can review reimbursements.");
+          const everything = scope.isCaptain || keepsMoney(scope);
+          if (!everything && scope.leadTeams.length === 0) {
+            deny("Only a captain or a team lead can review claims.");
           }
           let teams: ReimbursementTeam[] | undefined;
-          if (!scope.isCaptain) {
+          if (!everything) {
             if (args.team === "general") {
               deny("Claims under no team are a captain's to review.");
             }
@@ -240,18 +179,12 @@ function registerReviewTools(server: McpServer): void {
       }),
   );
 
-  for (const [toolName, move] of Object.entries(MOVES) as [
-    keyof typeof MOVES,
-    Move,
-  ][]) {
-    const captainOnly = move.from !== "submitted";
+  for (const [toolName, move] of Object.entries(MOVES)) {
     server.registerTool(
       toolName,
       {
         title: move.title,
-        description: captainOnly
-          ? `Captain only. Moves a claim from ${move.from} to ${move.to}. Nobody moves their own claim.`
-          : `A captain, or the lead of the claim's team, moves a submitted claim to ${move.to}. Nobody decides their own claim.`,
+        description: move.description,
         inputSchema: { id: z.string().uuid() },
       },
       async (args, extra) =>
@@ -260,37 +193,8 @@ function registerReviewTools(server: McpServer): void {
           extra,
           argsForAudit: args,
           handler: async ({ scope }) => {
-            const claim = await getReimbursementForReview(args.id);
-            if (!claim) notFound("No reimbursement with that id.");
-            const allowed = captainOnly
-              ? scope.isCaptain
-              : canReview(scope, claim);
-            if (!allowed) {
-              deny(
-                captainOnly
-                  ? "Only a captain can do this."
-                  : "Only a captain or the lead of this claim's team can decide it.",
-              );
-            }
-            if (claim.submitterId === scope.campUserId) {
-              deny("Someone else has to review your own claim.");
-            }
-            if (claim.status !== move.from) {
-              throw new ToolError(
-                `This claim is ${claim.status}, so it can't be marked ${move.to}.`,
-              );
-            }
-            const result = await moveReimbursement({
-              id: args.id,
-              from: move.from,
-              to: move.to,
-              actorId: scope.campUserId,
-            });
-            if (!result.ok) {
-              throw new ToolError(
-                "Someone else changed this claim just now. Read it again.",
-              );
-            }
+            const result = await move.run(args.id, scope.campUserId);
+            if (!result.ok) throw new ToolError(result.error);
             return { id: args.id, status: move.to };
           },
         }),

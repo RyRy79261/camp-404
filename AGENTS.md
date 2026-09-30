@@ -688,6 +688,31 @@ Decisions baked into the schema — keep new code consistent with them:
     member saves it themselves).
   - Nothing here needs the app on site: tents are assigned, labelled and
     printed before the Burn (`/print/gear-rental`).
+- **Team budgets and claims (#242).** Owner's rulings (2026-09-30): ONE
+  budget amount per team per year (`team_budgets.amount_cents`; no "base" and
+  "hoped for", no confirm switch), set by captains and Finance leads
+  (`canManageMoney`). Every member reads each team's totals (budget, spent,
+  left) on the team's program; "spent" is worked out, never stored
+  (`budgetTotals` in `packages/core/src/claims.ts`).
+  - A claim (`reimbursements`, whole cents, year-scoped by `cycle`) needs ONE
+    OR MORE receipt files (`reimbursement_files`), refused with none. They
+    are private blobs under `claim-receipts/<member id>/`, stored and read
+    like proof of payment: `/api/uploads/claim` checks each file by its first
+    bytes, `/api/claim-receipt/<file id>` streams one to the claimant and the
+    Finance team only and audits every other reader. Erasure deletes the rows
+    and the folder. Bank details are encrypted in `apps/web/lib/claims.ts`
+    (the write boundary) and read by the Finance team one claim at a time,
+    audited (`reimbursement.account_viewed`).
+  - **A lead OF THAT TEAM, or a captain, says yes** (`canApproveClaim`), at
+    any amount: there is no limit that needs a second approval. The approving
+    lead reads who, how much, when and what for, never the receipts or the
+    bank details. Then the Finance team marks it paid, or turns it down after
+    all with a reason. Nobody decides or pays their own claim. Each move
+    re-reads the actor inside its transaction and is a compare-and-set on the
+    status, with its audit row. Change the rule in those functions, never at
+    a call site.
+  - A claim is made in the app only: the Claude connector lists and moves
+    claims, but has no tool to make one (it cannot carry the receipts).
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.

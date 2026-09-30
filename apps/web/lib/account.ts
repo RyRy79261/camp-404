@@ -2,6 +2,7 @@ import "server-only";
 
 import { sanitiseAccount, type SanitiseResult } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "./avatar-blob";
+import { deleteClaimReceiptBlobs } from "./claim-receipts";
 import { deletePaymentProofBlobs } from "./payment-proof";
 import { isE2ETestMode, usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
@@ -49,6 +50,12 @@ export async function deleteAccount(input: {
     await deletePaymentProofBlobs(input.userId);
   } catch (err) {
     console.error("payment-proof cleanup error (account erasure)", err);
+  }
+  // So are a claim's receipts (#242); their rows are already gone.
+  try {
+    await deleteClaimReceiptBlobs(input.userId);
+  } catch (err) {
+    console.error("claim-receipt cleanup error (account erasure)", err);
   }
   return result;
 }
