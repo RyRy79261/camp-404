@@ -1454,6 +1454,11 @@ export const rentalOrders = pgTable(
     chargeId: uuid("charge_id").references(() => duesCharges.id, {
       onDelete: "set null",
     }),
+    // The captain who filled the order in for a member who had not answered.
+    // Null once the member saves it themselves.
+    filledByUserId: uuid("filled_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -1477,7 +1482,9 @@ export const rentalOrders = pgTable(
 // One line per item the member answered: they have their own, or they need
 // some. `source` and `unit_price_cents` are the captain's decision and the
 // price it was confirmed at, set together. `tent_label` is the label a captain
-// gives a tent, for the member's page and the printed tent list.
+// gives a tent, for the member's page and the printed tent list. For a tent the
+// member has themselves, `own_description` and `own_sleeps` say what it is
+// and how many it sleeps (both optional): the site plan needs them.
 export const rentalOrderLines = pgTable(
   "rental_order_lines",
   {
@@ -1494,6 +1501,8 @@ export const rentalOrderLines = pgTable(
     unitPriceCents: integer("unit_price_cents"),
     currency: text("currency").notNull().default("ZAR"),
     tentLabel: text("tent_label"),
+    ownDescription: text("own_description"),
+    ownSleeps: integer("own_sleeps"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (l) => ({
@@ -1509,6 +1518,10 @@ export const rentalOrderLines = pgTable(
     priceCheck: check(
       "rental_order_lines_price_check",
       sql`(${l.source} is null) = (${l.unitPriceCents} is null) and coalesce(${l.unitPriceCents}, 0) >= 0`,
+    ),
+    ownCheck: check(
+      "rental_order_lines_own_check",
+      sql`(${l.choice} = 'own' or (${l.ownDescription} is null and ${l.ownSleeps} is null)) and coalesce(${l.ownSleeps}, 1) between 1 and 12`,
     ),
     currencyCheck: check(
       "rental_order_lines_currency_check",

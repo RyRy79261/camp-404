@@ -4,23 +4,29 @@ import {
   campStockTaken,
   canManageRental,
   checkRentalLines,
+  GEAR_ORDER_ACTION_KEY,
+  GEAR_ORDER_ACTION_TITLE,
+  GEAR_ORDER_REF_TYPE,
+  gearOrderAskNotification,
   holdsSharers,
+  isAskedForGear,
   priceRentalOrder,
   rentalChargeDescription,
   rentalSummary,
   tentInUse,
+  type RentalLineDraft,
   type RentalSummary,
 } from "@camp404/core";
 import type {
   ParticipationStatus,
   RentalChoice,
   RentalItemInput,
-  RentalLineInput,
   RentalOrderStatus,
   RentalSource,
 } from "@camp404/types";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
+import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import { reachRank } from "./power";
 import * as schema from "./schema";
@@ -39,6 +45,12 @@ import * as schema from "./schema";
 //    captain saw, and writes the `rental` charge on the member's dues and the
 //    audit row in the same transaction. Reopening cancels that charge the
 //    same way.
+//  - "Ask everyone" is a nudge on the gate spine, never a block: a
+//    NON-blocking `required_actions` row per member who is coming and has not
+//    sent an order, and a notice. Sending the order completes the row.
+//  - A captain may fill an order in for a member who has not answered. It is
+//    audited, a compare-and-set on the version, and marked as filled in by a
+//    captain until the member saves it themselves.
 //  - Camp stock is a price and a count on the catalogue item, for the few
 //    items the camp has (owner, 2026-09-30). A confirmation that gives out
 //    more than is left is refused; the year's items are locked first, so two
@@ -69,6 +81,8 @@ export const RENTAL_NOTHING_TO_SEND =
   "Say what you need, or that you have your own, before you send it.";
 export const RENTAL_ORDER_MOVED =
   "This order changed since you opened it. Reload the page.";
+export const RENTAL_REOPEN_FIRST =
+  "This order is confirmed. Reopen it before you change it.";
 export const RENTAL_TENT_NOT_CONFIRMED =
   "Only a tent on a confirmed order gets a label.";
 
@@ -385,6 +399,9 @@ export interface RentalLine {
   source: RentalSource | null;
   unitPriceCents: number | null;
   tentLabel: string | null;
+  /** For a tent they have themselves: what it is, and how many it sleeps. */
+  ownDescription: string | null;
+  ownSleeps: number | null;
   sharers: RentalSharer[];
 }
 
@@ -403,6 +420,8 @@ export interface RentalOrder {
   totalCents: number | null;
   /** The live charge on the member's dues; null when none, or cancelled. */
   chargeId: string | null;
+  /** A captain filled it in for the member, who has not saved it since. */
+  filledByCaptain: boolean;
   lines: RentalLine[];
 }
 
@@ -422,6 +441,7 @@ async function loadOrders(db: DbOrTx, where: SQL | undefined) {
       totalCents: schema.rentalOrders.totalCents,
       chargeId: schema.rentalOrders.chargeId,
       chargeCancelledAt: schema.duesCharges.cancelledAt,
+      filledByUserId: schema.rentalOrders.filledByUserId,
     })
     .from(schema.rentalOrders)
     .innerJoin(schema.users, eq(schema.users.id, schema.rentalOrders.userId))
@@ -452,6 +472,8 @@ async function loadOrders(db: DbOrTx, where: SQL | undefined) {
       source: schema.rentalOrderLines.source,
       unitPriceCents: schema.rentalOrderLines.unitPriceCents,
       tentLabel: schema.rentalOrderLines.tentLabel,
+      ownDescription: schema.rentalOrderLines.ownDescription,
+      ownSleeps: schema.rentalOrderLines.ownSleeps,
     })
     .from(schema.rentalOrderLines)
     .innerJoin(
@@ -511,6 +533,7 @@ async function loadOrders(db: DbOrTx, where: SQL | undefined) {
       confirmedAt: o.confirmedAt,
       totalCents: o.totalCents,
       chargeId: o.chargeCancelledAt === null ? o.chargeId : null,
+      filledByCaptain: o.filledByUserId !== null,
       lines: lines
         .filter((l) => l.orderId === o.id)
         .map((l) => ({
@@ -524,6 +547,8 @@ async function loadOrders(db: DbOrTx, where: SQL | undefined) {
           source: l.source,
           unitPriceCents: l.unitPriceCents,
           tentLabel: l.tentLabel,
+          ownDescription: l.ownDescription,
+          ownSleeps: l.ownSleeps,
           sharers: sharers
             .filter((s) => s.lineId === l.id)
             .map((s) => ({
@@ -537,15 +562,19 @@ async function loadOrders(db: DbOrTx, where: SQL | undefined) {
   );
 }
 
+/** What a member's own tent is called when they gave no words for it. */
+export const OWN_TENT = "Their own tent";
+
 /** A tent someone else put the member in. */
 export interface SharedTent {
   lineId: string;
+  /** The camp's item, or the owner's words for a tent of their own. */
   itemName: string;
   /** The label, once a captain confirmed the order and gave it one. */
   tentLabel: string | null;
   /** Whether the order it is on is confirmed. */
   confirmed: boolean;
-  /** Who ordered it. */
+  /** Who ordered it, or whose own tent it is. */
   ownerName: string;
   /** Everyone else in it, by name. */
   otherSharers: string[];
@@ -556,6 +585,8 @@ export interface MyRental {
   items: RentalItem[];
   order: RentalOrder | null;
   sharedWithMe: SharedTent[];
+  /** A captain asked them for their order, and they have not sent it yet. */
+  asked: boolean;
 }
 
 /**
@@ -567,9 +598,11 @@ export async function getMyRental(
   userId: string,
   cycle: number,
 ): Promise<MyRental> {
-  if (!UUID.test(userId)) return { items: [], order: null, sharedWithMe: [] };
+  if (!UUID.test(userId)) {
+    return { items: [], order: null, sharedWithMe: [], asked: false };
+  }
   const db = createHttpDb();
-  const [items, orders, shared] = await Promise.all([
+  const [items, orders, asks, shared] = await Promise.all([
     listRentalItems(cycle, {}, db),
     loadOrders(
       db,
@@ -579,9 +612,22 @@ export async function getMyRental(
       ),
     ),
     db
+      .select({ id: schema.requiredActions.id })
+      .from(schema.requiredActions)
+      .where(
+        and(
+          eq(schema.requiredActions.userId, userId),
+          eq(schema.requiredActions.actionKey, GEAR_ORDER_ACTION_KEY),
+          eq(schema.requiredActions.status, "pending"),
+        ),
+      )
+      .limit(1),
+    db
       .select({
         lineId: schema.rentalOrderLines.id,
         itemName: schema.rentalItems.name,
+        choice: schema.rentalOrderLines.choice,
+        ownDescription: schema.rentalOrderLines.ownDescription,
         tentLabel: schema.rentalOrderLines.tentLabel,
         status: schema.rentalOrders.status,
         ownerName: schema.users.displayName,
@@ -606,7 +652,8 @@ export async function getMyRental(
           eq(schema.rentalOrders.cycle, cycle),
           // A draft is not an offer yet: the member may still change it.
           sql`${schema.rentalOrders.status} <> 'draft'`,
-          eq(schema.rentalOrderLines.choice, "need"),
+          // A camp tent someone needs, or a tent of their own they share.
+          eq(schema.rentalItems.isTent, true),
         ),
       ),
   ]);
@@ -634,6 +681,7 @@ export async function getMyRental(
   const confirmed = mine?.status === "confirmed";
   return {
     items,
+    asked: asks.length > 0 && (mine === null || mine.status === "draft"),
     order: mine && {
       ...mine,
       participation: null,
@@ -649,7 +697,8 @@ export async function getMyRental(
     sharedWithMe: shared
       .map((s) => ({
         lineId: s.lineId,
-        itemName: s.itemName,
+        itemName:
+          s.choice === "own" ? (s.ownDescription ?? OWN_TENT) : s.itemName,
         tentLabel: s.status === "confirmed" ? s.tentLabel : null,
         confirmed: s.status === "confirmed",
         ownerName: nameOf(s.ownerName),
@@ -727,12 +776,24 @@ export interface RentalTent {
   sharers: string[];
 }
 
+/** A tent a member brings themselves, on a sent or confirmed order. */
+export interface RentalOwnTent {
+  lineId: string;
+  ownerName: string;
+  /** Their words for it; null when they gave none. */
+  description: string | null;
+  sleeps: number | null;
+  sharers: string[];
+}
+
 export interface RentalOverview {
   summary: RentalSummary;
   /** Orders sent and not confirmed yet: not in the totals. */
   waiting: number;
   confirmed: number;
   tents: RentalTent[];
+  /** Members' own tents, for the site plan. */
+  ownTents: RentalOwnTent[];
 }
 
 /**
@@ -791,139 +852,329 @@ export async function getRentalOverview(
             numeric: true,
           }) || a.ownerName.localeCompare(b.ownerName),
       ),
+    ownTents: orders
+      .filter((o) => o.status !== "draft")
+      .flatMap((o) =>
+        o.lines
+          .filter((l) => l.isTent && l.choice === "own")
+          .map((l) => ({
+            lineId: l.id,
+            ownerName: o.memberName,
+            description: l.ownDescription,
+            sleeps: l.ownSleeps,
+            sharers: l.sharers.map((s) => s.name),
+          })),
+      )
+      .sort((a, b) => a.ownerName.localeCompare(b.ownerName)),
   };
+}
+
+/** A member who is coming this year and has not sent a gear order. */
+export interface RentalUnanswered {
+  userId: string;
+  name: string;
+  participation: ParticipationStatus;
+  /** They started an order and have not sent it. */
+  draft: boolean;
+  /** A captain asked them, and the ask is still open. */
+  asked: boolean;
+}
+
+/** The members "Ask everyone" would ask, read in the caller's transaction or out of one. */
+async function unanswered(db: DbOrTx, cycle: number) {
+  const rows = await db
+    .select({
+      userId: schema.users.id,
+      name: schema.users.displayName,
+      participation: schema.campParticipations.status,
+      orderStatus: schema.rentalOrders.status,
+      askId: schema.requiredActions.id,
+      askStatus: schema.requiredActions.status,
+    })
+    .from(schema.users)
+    .innerJoin(
+      schema.campParticipations,
+      and(
+        eq(schema.campParticipations.userId, schema.users.id),
+        eq(schema.campParticipations.cycle, cycle),
+      ),
+    )
+    .leftJoin(
+      schema.rentalOrders,
+      and(
+        eq(schema.rentalOrders.userId, schema.users.id),
+        eq(schema.rentalOrders.cycle, cycle),
+      ),
+    )
+    .leftJoin(
+      schema.requiredActions,
+      and(
+        eq(schema.requiredActions.userId, schema.users.id),
+        eq(schema.requiredActions.actionKey, GEAR_ORDER_ACTION_KEY),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.users.isSystem, false),
+        eq(schema.users.sanitised, false),
+        eq(schema.users.approvalStatus, "approved"),
+      ),
+    );
+  return rows.filter(
+    (r) =>
+      isAskedForGear(r.participation) &&
+      (r.orderStatus === null || r.orderStatus === "draft"),
+  );
+}
+
+/**
+ * Who has not answered, by name, for the captains' Orders list: every member
+ * who is coming this year (isAskedForGear) with no order, or only a draft.
+ */
+export async function listRentalUnanswered(
+  cycle: number,
+): Promise<RentalUnanswered[]> {
+  const rows = await unanswered(createHttpDb(), cycle);
+  return rows
+    .map((r) => ({
+      userId: r.userId,
+      name: nameOf(r.name),
+      participation: r.participation,
+      draft: r.orderStatus === "draft",
+      asked: r.askStatus === "pending",
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** One approved member, for the captain's page of a member with no order yet. */
+export async function getRentalMember(
+  userId: string,
+  cycle: number,
+): Promise<{
+  userId: string;
+  name: string;
+  participation: ParticipationStatus | null;
+} | null> {
+  if (!UUID.test(userId)) return null;
+  const [row] = await createHttpDb()
+    .select({
+      name: schema.users.displayName,
+      participation: schema.campParticipations.status,
+    })
+    .from(schema.users)
+    .leftJoin(
+      schema.campParticipations,
+      and(
+        eq(schema.campParticipations.userId, schema.users.id),
+        eq(schema.campParticipations.cycle, cycle),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.users.id, userId),
+        eq(schema.users.isSystem, false),
+        eq(schema.users.sanitised, false),
+        eq(schema.users.approvalStatus, "approved"),
+      ),
+    )
+    .limit(1);
+  return row
+    ? { userId, name: nameOf(row.name), participation: row.participation }
+    : null;
 }
 
 // --- Orders: a member's writes ---------------------------------------------------
 
 /**
- * Save a member's own order, as a draft or sent to the captains. The lines
- * replace the ones before. A compare-and-set on the version the member saw (0
- * before their first save), and only a draft can change: a sent order is
- * taken back first, a confirmed one is reopened by a captain.
+ * Write an order's row and its lines inside the caller's transaction: the
+ * member's own save, or a captain filling it in for them. A compare-and-set
+ * on the version the writer saw (0 when there is no order) and on the states
+ * the writer may change it from. Sending it completes the member's open
+ * "Ask everyone" nudge and reads its notice, in the same transaction.
  */
-export async function saveRentalOrder(input: {
-  userId: string;
-  cycle: number;
-  lines: readonly RentalLineInput[];
-  submit: boolean;
-  expectedVersion: number;
-}): Promise<RentalResult<{ version: number; status: RentalOrderStatus }>> {
-  return write(async (tx) => {
-    if (!UUID.test(input.userId)) refuse(RENTAL_NO_SUCH_MEMBER);
-    const [member] = await tx
+async function storeOrder(
+  tx: Tx,
+  input: {
+    userId: string;
+    cycle: number;
+    lines: readonly RentalLineDraft[];
+    submit: boolean;
+    expectedVersion: number;
+    /** The states this writer may change the order from. */
+    from: readonly RentalOrderStatus[];
+    /** The captain filling it in, or null for the member's own save. */
+    filledBy: string | null;
+    /** The sentence for each state the writer may not change it from. */
+    locked: (status: RentalOrderStatus | undefined) => string;
+  },
+): Promise<{ orderId: string; version: number; status: RentalOrderStatus }> {
+  if (!UUID.test(input.userId)) refuse(RENTAL_NO_SUCH_MEMBER);
+  const [member] = await tx
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(
+      and(
+        eq(schema.users.id, input.userId),
+        eq(schema.users.isSystem, false),
+        eq(schema.users.sanitised, false),
+      ),
+    )
+    .limit(1);
+  if (!member) refuse(RENTAL_NO_SUCH_MEMBER);
+
+  const items = await listRentalItems(input.cycle, {}, tx);
+  const checked = checkRentalLines(items, input.lines, input.userId);
+  if (!checked.ok) refuse(checked.error);
+  if (input.submit && checked.lines.length === 0) {
+    refuse(RENTAL_NOTHING_TO_SEND);
+  }
+  const sharerIds = [...new Set(checked.lines.flatMap((l) => l.sharerIds))];
+  if (sharerIds.some((id) => !UUID.test(id))) refuse(RENTAL_SHARER_GONE);
+  if (sharerIds.length > 0) {
+    const real = await tx
       .select({ id: schema.users.id })
       .from(schema.users)
       .where(
         and(
-          eq(schema.users.id, input.userId),
+          inArray(schema.users.id, sharerIds),
           eq(schema.users.isSystem, false),
           eq(schema.users.sanitised, false),
+          eq(schema.users.approvalStatus, "approved"),
+        ),
+      );
+    if (real.length !== sharerIds.length) refuse(RENTAL_SHARER_GONE);
+  }
+
+  const now = new Date();
+  const status: RentalOrderStatus = input.submit ? "submitted" : "draft";
+  const next = input.expectedVersion + 1;
+  const fields = {
+    status,
+    version: next,
+    submittedAt: input.submit ? now : null,
+    filledByUserId: input.filledBy,
+    updatedAt: now,
+  };
+  let orderId: string | undefined;
+  if (input.expectedVersion === 0) {
+    const rows = await tx
+      .insert(schema.rentalOrders)
+      .values({ userId: input.userId, cycle: input.cycle, ...fields })
+      .onConflictDoNothing({
+        target: [schema.rentalOrders.userId, schema.rentalOrders.cycle],
+      })
+      .returning({ id: schema.rentalOrders.id });
+    orderId = rows[0]?.id;
+  } else {
+    const rows = await tx
+      .update(schema.rentalOrders)
+      .set(fields)
+      .where(
+        and(
+          eq(schema.rentalOrders.userId, input.userId),
+          eq(schema.rentalOrders.cycle, input.cycle),
+          inArray(schema.rentalOrders.status, [...input.from]),
+          eq(schema.rentalOrders.version, input.expectedVersion),
+        ),
+      )
+      .returning({ id: schema.rentalOrders.id });
+    orderId = rows[0]?.id;
+  }
+  if (!orderId) {
+    const [current] = await tx
+      .select({ status: schema.rentalOrders.status })
+      .from(schema.rentalOrders)
+      .where(
+        and(
+          eq(schema.rentalOrders.userId, input.userId),
+          eq(schema.rentalOrders.cycle, input.cycle),
         ),
       )
       .limit(1);
-    if (!member) refuse(RENTAL_NO_SUCH_MEMBER);
+    refuse(
+      input.locked(
+        current && !input.from.includes(current.status)
+          ? current.status
+          : undefined,
+      ),
+    );
+  }
 
-    const items = await listRentalItems(input.cycle, {}, tx);
-    const checked = checkRentalLines(items, input.lines, input.userId);
-    if (!checked.ok) refuse(checked.error);
-    if (input.submit && checked.lines.length === 0) {
-      refuse(RENTAL_NOTHING_TO_SEND);
+  await tx
+    .delete(schema.rentalOrderLines)
+    .where(eq(schema.rentalOrderLines.orderId, orderId));
+  for (const line of checked.lines) {
+    const [row] = await tx
+      .insert(schema.rentalOrderLines)
+      .values({
+        orderId,
+        itemId: line.itemId,
+        choice: line.choice,
+        quantity: line.quantity,
+        ownDescription: line.ownDescription,
+        ownSleeps: line.ownSleeps,
+      })
+      .returning({ id: schema.rentalOrderLines.id });
+    if (line.sharerIds.length > 0) {
+      await tx
+        .insert(schema.rentalLineSharers)
+        .values(line.sharerIds.map((userId) => ({ lineId: row!.id, userId })));
     }
-    const sharerIds = [...new Set(checked.lines.flatMap((l) => l.sharerIds))];
-    if (sharerIds.some((id) => !UUID.test(id))) refuse(RENTAL_SHARER_GONE);
-    if (sharerIds.length > 0) {
-      const real = await tx
-        .select({ id: schema.users.id })
-        .from(schema.users)
-        .where(
-          and(
-            inArray(schema.users.id, sharerIds),
-            eq(schema.users.isSystem, false),
-            eq(schema.users.sanitised, false),
-            eq(schema.users.approvalStatus, "approved"),
-          ),
-        );
-      if (real.length !== sharerIds.length) refuse(RENTAL_SHARER_GONE);
-    }
+  }
 
-    const now = new Date();
-    const status: RentalOrderStatus = input.submit ? "submitted" : "draft";
-    const next = input.expectedVersion + 1;
-    const fields = {
-      status,
-      version: next,
-      submittedAt: input.submit ? now : null,
-      updatedAt: now,
-    };
-    let orderId: string | undefined;
-    if (input.expectedVersion === 0) {
-      const rows = await tx
-        .insert(schema.rentalOrders)
-        .values({ userId: input.userId, cycle: input.cycle, ...fields })
-        .onConflictDoNothing({
-          target: [schema.rentalOrders.userId, schema.rentalOrders.cycle],
-        })
-        .returning({ id: schema.rentalOrders.id });
-      orderId = rows[0]?.id;
-      if (!orderId) refuse(RENTAL_ORDER_CHANGED);
-    } else {
-      const rows = await tx
-        .update(schema.rentalOrders)
-        .set(fields)
-        .where(
-          and(
-            eq(schema.rentalOrders.userId, input.userId),
-            eq(schema.rentalOrders.cycle, input.cycle),
-            eq(schema.rentalOrders.status, "draft"),
-            eq(schema.rentalOrders.version, input.expectedVersion),
-          ),
-        )
-        .returning({ id: schema.rentalOrders.id });
-      orderId = rows[0]?.id;
-      if (!orderId) {
-        const [current] = await tx
-          .select({ status: schema.rentalOrders.status })
-          .from(schema.rentalOrders)
-          .where(
-            and(
-              eq(schema.rentalOrders.userId, input.userId),
-              eq(schema.rentalOrders.cycle, input.cycle),
-            ),
-          )
-          .limit(1);
-        refuse(
-          current?.status === "submitted"
-            ? RENTAL_ORDER_SENT
-            : current?.status === "confirmed"
-              ? RENTAL_ORDER_CONFIRMED
-              : RENTAL_ORDER_CHANGED,
-        );
-      }
-    }
-
+  if (input.submit) {
+    // The order is sent: the nudge is answered, and its notice is read.
     await tx
-      .delete(schema.rentalOrderLines)
-      .where(eq(schema.rentalOrderLines.orderId, orderId));
-    for (const line of checked.lines) {
-      const [row] = await tx
-        .insert(schema.rentalOrderLines)
-        .values({
-          orderId,
-          itemId: line.itemId,
-          choice: line.choice,
-          quantity: line.quantity,
-        })
-        .returning({ id: schema.rentalOrderLines.id });
-      if (line.sharerIds.length > 0) {
-        await tx
-          .insert(schema.rentalLineSharers)
-          .values(
-            line.sharerIds.map((userId) => ({ lineId: row!.id, userId })),
-          );
-      }
-    }
-    return { version: next, status };
+      .update(schema.requiredActions)
+      .set({ status: "completed", completedAt: now })
+      .where(
+        and(
+          eq(schema.requiredActions.userId, input.userId),
+          eq(schema.requiredActions.actionKey, GEAR_ORDER_ACTION_KEY),
+          eq(schema.requiredActions.status, "pending"),
+        ),
+      );
+    await tx
+      .update(schema.notificationDeliveries)
+      .set({ readAt: now })
+      .where(
+        and(
+          eq(schema.notificationDeliveries.userId, input.userId),
+          eq(schema.notificationDeliveries.refType, GEAR_ORDER_REF_TYPE),
+          isNull(schema.notificationDeliveries.readAt),
+        ),
+      );
+  }
+  return { orderId, version: next, status };
+}
+
+/**
+ * Save a member's own order, as a draft or sent to the captains. The lines
+ * replace the ones before. A compare-and-set on the version the member saw (0
+ * before their first save), and only a draft can change: a sent order is
+ * taken back first, a confirmed one is reopened by a captain. An order a
+ * captain filled in becomes the member's own again.
+ */
+export async function saveRentalOrder(input: {
+  userId: string;
+  cycle: number;
+  lines: readonly RentalLineDraft[];
+  submit: boolean;
+  expectedVersion: number;
+}): Promise<RentalResult<{ version: number; status: RentalOrderStatus }>> {
+  return write(async (tx) => {
+    const saved = await storeOrder(tx, {
+      ...input,
+      from: ["draft"],
+      filledBy: null,
+      locked: (status) =>
+        status === "submitted"
+          ? RENTAL_ORDER_SENT
+          : status === "confirmed"
+            ? RENTAL_ORDER_CONFIRMED
+            : RENTAL_ORDER_CHANGED,
+    });
+    return { version: saved.version, status: saved.status };
   });
 }
 
@@ -975,6 +1226,138 @@ export async function withdrawRentalOrder(input: {
 }
 
 // --- Orders: a captain's writes --------------------------------------------------
+
+/**
+ * Fill an order in for a member who has not answered, as a captain. It is
+ * sent at once, for a captain to confirm as usual, and marked as filled in by
+ * a captain. A privileged write to another member's data: the audit row is
+ * in the same transaction, and it is a compare-and-set on the version the
+ * captain saw (0 when the member has no order). A draft or a sent order can
+ * be changed this way; a confirmed one is reopened first.
+ */
+export async function fillRentalOrderFor(input: {
+  userId: string;
+  cycle: number;
+  lines: readonly RentalLineDraft[];
+  expectedVersion: number;
+  actorId: string;
+}): Promise<RentalResult<{ version: number }>> {
+  return write(async (tx) => {
+    await assertRentalManager(tx, input.actorId);
+    const saved = await storeOrder(tx, {
+      userId: input.userId,
+      cycle: input.cycle,
+      lines: input.lines,
+      submit: true,
+      expectedVersion: input.expectedVersion,
+      from: ["draft", "submitted"],
+      filledBy: input.actorId,
+      locked: (status) =>
+        status === "confirmed" ? RENTAL_REOPEN_FIRST : RENTAL_ORDER_MOVED,
+    });
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "rental.order_filled",
+      target: input.userId,
+      metadata: {
+        cycle: input.cycle,
+        orderId: saved.orderId,
+        lines: input.lines.length,
+      },
+    });
+    return { version: saved.version };
+  });
+}
+
+/**
+ * "Ask everyone": nudge each member who is coming this year and has not sent
+ * a gear order (isAskedForGear; no order, or only a draft). A nudge, never a
+ * block: one NON-blocking `required_actions` row per member, opened again
+ * when it was answered in an earlier year, and one notice. Pressing it again
+ * reaches only the members who still have not answered, and never stacks: a
+ * member whose notice is still unread gets no second one. Audited.
+ */
+export async function askForGearOrders(input: {
+  cycle: number;
+  actorId: string;
+}): Promise<RentalResult<{ asked: number; notified: number }>> {
+  return write(async (tx) => {
+    await assertRentalManager(tx, input.actorId);
+    const targets = await unanswered(tx, input.cycle);
+    if (targets.length === 0) return { asked: 0, notified: 0 };
+    const now = new Date();
+    const userIds = targets.map((t) => t.userId);
+    await tx
+      .insert(schema.requiredActions)
+      .values(
+        userIds.map((userId) => ({
+          userId,
+          type: "questionnaire" as const,
+          actionKey: GEAR_ORDER_ACTION_KEY,
+          title: GEAR_ORDER_ACTION_TITLE,
+          blocking: false,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [
+          schema.requiredActions.userId,
+          schema.requiredActions.actionKey,
+        ],
+        set: { status: "pending", completedAt: null, blocking: false },
+      });
+    const rows = await tx
+      .select({
+        id: schema.requiredActions.id,
+        userId: schema.requiredActions.userId,
+      })
+      .from(schema.requiredActions)
+      .where(
+        and(
+          inArray(schema.requiredActions.userId, userIds),
+          eq(schema.requiredActions.actionKey, GEAR_ORDER_ACTION_KEY),
+        ),
+      );
+    const unread = await tx
+      .select({ userId: schema.notificationDeliveries.userId })
+      .from(schema.notificationDeliveries)
+      .where(
+        and(
+          inArray(schema.notificationDeliveries.userId, userIds),
+          eq(schema.notificationDeliveries.refType, GEAR_ORDER_REF_TYPE),
+          isNull(schema.notificationDeliveries.readAt),
+        ),
+      );
+    const stillUnread = new Set(unread.map((u) => u.userId));
+    const toNotify = rows.filter((r) => !stillUnread.has(r.userId));
+    if (toNotify.length > 0) {
+      await tx.insert(schema.notificationDeliveries).values(
+        toNotify.map((row) =>
+          deliveryValues(
+            gearOrderAskNotification({ requiredActionId: row.id }),
+            {
+              userId: row.userId,
+              broadcastId: null,
+              channel: "both",
+              presentation: "feed",
+              createdAt: now,
+            },
+          ),
+        ),
+      );
+    }
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "rental.orders_asked",
+      target: String(input.cycle),
+      metadata: {
+        cycle: input.cycle,
+        asked: targets.length,
+        notified: toNotify.length,
+      },
+    });
+    return { asked: targets.length, notified: toNotify.length };
+  });
+}
 
 /**
  * Confirm a sent order: the captain's source for each needed item, the price

@@ -1,16 +1,24 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
   campStockInUse,
   FINANCE_TEAM,
+  GEAR_ORDER_ACTION_KEY,
+  GEAR_ORDER_ACTION_TITLE,
+  GEAR_ORDER_REF_TYPE,
   noPriceFrom,
   notEnoughCampStock,
   RENTAL_PICK_EVERY_SOURCE,
   tentInUse,
   type AuditAction,
 } from "@camp404/core";
-import type { RentalItemInput, Team } from "@camp404/types";
+import type {
+  ParticipationStatus,
+  RentalItemInput,
+  Team,
+} from "@camp404/types";
 import { sanitiseAccount } from "../account";
+import { getPendingRequiredActions } from "../activations";
 import type { CampConfig } from "../camp-config";
 import { UNSET_CYCLE } from "../camp-config";
 import { setFoundingYear } from "../cycle-rollover";
@@ -18,20 +26,25 @@ import { getMemberDues } from "../dues";
 import {
   addRentalItem,
   archiveRentalItem,
+  askForGearOrders,
   confirmRentalOrder,
   editRentalItem,
+  fillRentalOrderFor,
   getMyRental,
   getRentalOrderOf,
   getRentalOverview,
   listRentalItems,
   listRentalOrders,
   listRentalSharerChoices,
+  listRentalUnanswered,
   NOT_A_RENTAL_MANAGER,
+  RENTAL_NO_SUCH_MEMBER,
   RENTAL_NOTHING_TO_SEND,
   RENTAL_ORDER_CHANGED,
   RENTAL_ORDER_CONFIRMED,
   RENTAL_ORDER_MOVED,
   RENTAL_ORDER_SENT,
+  RENTAL_REOPEN_FIRST,
   RENTAL_SHARER_GONE,
   RENTAL_TENT_NOT_CONFIRMED,
   reopenRentalOrder,
@@ -58,6 +71,8 @@ const CONFIRMED: AuditAction = "rental.order_confirmed";
 const REOPENED: AuditAction = "rental.order_reopened";
 const ITEM_ADDED: AuditAction = "rental.item_added";
 const LABELLED: AuditAction = "rental.tent_labelled";
+const ASKED: AuditAction = "rental.orders_asked";
+const FILLED: AuditAction = "rental.order_filled";
 const ITEM_CHANGED: AuditAction = "rental.item_changed";
 
 async function campYear(db: DB, year: number) {
@@ -83,6 +98,17 @@ async function auditActions(db: DB): Promise<string[]> {
     .select({ action: schema.auditLog.action })
     .from(schema.auditLog);
   return rows.map((r) => r.action);
+}
+
+/** A member's place this year. "applied" is the member's own Yes. */
+async function place(db: DB, userId: string, status: ParticipationStatus) {
+  await db.insert(schema.campParticipations).values({
+    userId,
+    cycle: YEAR,
+    status,
+    intent:
+      status === "not_attending" ? "no" : status === "maybe" ? "maybe" : "yes",
+  });
 }
 
 const TENT: RentalItemInput = {
@@ -954,6 +980,538 @@ describe("gear rental", () => {
           sharers: ["Fay Friend"],
         },
       ]);
+    });
+  });
+
+  describe("Ask everyone", () => {
+    /** Who is coming, who is not, and who has already answered. */
+    async function crowd() {
+      const c = await camp();
+      const named = (displayName: string) => makeUser(h.db(), { displayName });
+      const maybe = await named("Mo Maybe");
+      const waiting = await named("Wes Waiting");
+      const silent = await named("Nan Noanswer");
+      const away = await named("Noa Notcoming");
+      const sentAlready = await named("Sam Sent");
+      const drafting = await named("Dra Draft");
+      await place(h.db(), c.member.id, "applied");
+      await place(h.db(), c.friend.id, "accepted");
+      await place(h.db(), maybe.id, "maybe");
+      await place(h.db(), waiting.id, "waitlisted");
+      await place(h.db(), away.id, "not_attending");
+      await place(h.db(), sentAlready.id, "accepted");
+      await place(h.db(), drafting.id, "applied");
+      await sent(c, sentAlready.id, []);
+      await saveRentalOrder({
+        userId: drafting.id,
+        cycle: YEAR,
+        lines: [
+          { itemId: c.mattress, choice: "need", quantity: 1, sharerIds: [] },
+        ],
+        submit: false,
+        expectedVersion: 0,
+      });
+      return { ...c, maybe, waiting, silent, away, sentAlready, drafting };
+    }
+    const ask = (actorId: string) => askForGearOrders({ cycle: YEAR, actorId });
+    const asks = () =>
+      h
+        .db()
+        .select()
+        .from(schema.requiredActions)
+        .where(eq(schema.requiredActions.actionKey, GEAR_ORDER_ACTION_KEY));
+    const notices = () =>
+      h
+        .db()
+        .select()
+        .from(schema.notificationDeliveries)
+        .where(eq(schema.notificationDeliveries.refType, GEAR_ORDER_REF_TYPE));
+
+    it("names who is coming and has not sent an order, and asks exactly them", async () => {
+      const c = await crowd();
+      // Said Yes or accepted, with no order or only a draft. Not Maybe, not
+      // the waiting list, not No, not silent, and not one who already sent.
+      expect(await listRentalUnanswered(YEAR)).toEqual([
+        {
+          userId: c.member.id,
+          name: "Dee Member",
+          participation: "applied",
+          draft: false,
+          asked: false,
+        },
+        {
+          userId: c.drafting.id,
+          name: "Dra Draft",
+          participation: "applied",
+          draft: true,
+          asked: false,
+        },
+        {
+          userId: c.friend.id,
+          name: "Fay Friend",
+          participation: "accepted",
+          draft: false,
+          asked: false,
+        },
+      ]);
+
+      expect(await ask(c.captain.id)).toEqual({
+        ok: true,
+        asked: 3,
+        notified: 3,
+      });
+      const rows = await asks();
+      expect(rows.map((r) => r.userId).sort()).toEqual(
+        [c.member.id, c.drafting.id, c.friend.id].sort(),
+      );
+      // A nudge, never a block: not one of them is gated by it.
+      for (const row of rows) {
+        expect(row).toMatchObject({
+          type: "questionnaire",
+          title: GEAR_ORDER_ACTION_TITLE,
+          blocking: false,
+          status: "pending",
+          activationId: null,
+        });
+      }
+      expect(await getPendingRequiredActions(c.member.id)).toEqual([]);
+      // One notice each, which the email drain will pick up.
+      const sentNotices = await notices();
+      expect(sentNotices).toHaveLength(3);
+      for (const n of sentNotices) {
+        expect(n).toMatchObject({
+          kind: "questionnaire_reminder",
+          title: GEAR_ORDER_ACTION_TITLE,
+          broadcastId: null,
+          emailStatus: "queued",
+          readAt: null,
+        });
+        expect(rows.map((r) => r.id)).toContain(n.refId);
+      }
+      const audit = await h
+        .db()
+        .select()
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.action, ASKED));
+      expect(audit).toMatchObject([
+        {
+          actorId: c.captain.id,
+          metadata: { cycle: YEAR, asked: 3, notified: 3 },
+        },
+      ]);
+      // The member sees they were asked; one who was not asked does not.
+      expect((await getMyRental(c.member.id, YEAR)).asked).toBe(true);
+      expect((await getMyRental(c.maybe.id, YEAR)).asked).toBe(false);
+      expect((await listRentalUnanswered(YEAR)).every((m) => m.asked)).toBe(
+        true,
+      );
+    });
+
+    it("never stacks: a second press adds no row and no notice while the first is unread", async () => {
+      const c = await crowd();
+      await ask(c.captain.id);
+      expect(await ask(c.captain.id)).toEqual({
+        ok: true,
+        asked: 3,
+        notified: 0,
+      });
+      expect(await asks()).toHaveLength(3);
+      expect(await notices()).toHaveLength(3);
+      // One member read theirs and still has not answered: they are reminded,
+      // the others are not.
+      await h
+        .db()
+        .update(schema.notificationDeliveries)
+        .set({ readAt: new Date() })
+        .where(
+          and(
+            eq(schema.notificationDeliveries.userId, c.member.id),
+            eq(schema.notificationDeliveries.refType, GEAR_ORDER_REF_TYPE),
+          ),
+        );
+      expect(await ask(c.captain.id)).toEqual({
+        ok: true,
+        asked: 3,
+        notified: 1,
+      });
+      expect(await asks()).toHaveLength(3);
+      const mine = (await notices()).filter((n) => n.userId === c.member.id);
+      expect(mine).toHaveLength(2);
+      expect(mine.filter((n) => n.readAt === null)).toHaveLength(1);
+    });
+
+    it("clears for a member when they send their order, and reaches only the rest next time", async () => {
+      const c = await crowd();
+      await ask(c.captain.id);
+      await sent(c, c.member.id, []);
+      const [row] = (await asks()).filter((r) => r.userId === c.member.id);
+      expect(row).toMatchObject({ status: "completed" });
+      expect(row?.completedAt).not.toBeNull();
+      // Their notice is read, so the inbox stops counting it.
+      expect(
+        await h
+          .db()
+          .select()
+          .from(schema.notificationDeliveries)
+          .where(
+            and(
+              eq(schema.notificationDeliveries.userId, c.member.id),
+              isNull(schema.notificationDeliveries.readAt),
+            ),
+          ),
+      ).toEqual([]);
+      expect((await getMyRental(c.member.id, YEAR)).asked).toBe(false);
+      expect((await listRentalUnanswered(YEAR)).map((m) => m.name)).toEqual([
+        "Dra Draft",
+        "Fay Friend",
+      ]);
+      expect(await ask(c.captain.id)).toEqual({
+        ok: true,
+        asked: 2,
+        notified: 0,
+      });
+
+      // They take it back: not answered again, and the next ask opens the
+      // same row again rather than adding one.
+      const order = (await getRentalOrderOf(c.member.id, YEAR))!;
+      await withdrawRentalOrder({
+        userId: c.member.id,
+        cycle: YEAR,
+        expectedVersion: order.version,
+      });
+      expect((await getMyRental(c.member.id, YEAR)).asked).toBe(false);
+      expect(await ask(c.captain.id)).toEqual({
+        ok: true,
+        asked: 3,
+        notified: 1,
+      });
+      expect(await asks()).toHaveLength(3);
+      expect((await getMyRental(c.member.id, YEAR)).asked).toBe(true);
+    });
+
+    it("is a captain's to press: a Finance lead, another lead and a member are refused, and nobody is asked", async () => {
+      const c = await crowd();
+      const financeLead = await leadOf(FINANCE_TEAM as Team);
+      const kitchenLead = await leadOf("kitchen");
+      for (const actor of [financeLead, kitchenLead, c.member]) {
+        expect(await ask(actor.id)).toEqual({
+          ok: false,
+          error: NOT_A_RENTAL_MANAGER,
+        });
+      }
+      expect(await asks()).toEqual([]);
+      expect(await notices()).toEqual([]);
+      expect(await auditActions(h.db())).not.toContain(ASKED);
+    });
+
+    it("asks nobody when everyone who is coming has answered", async () => {
+      const c = await camp();
+      await place(h.db(), c.member.id, "accepted");
+      await sent(c, c.member.id, []);
+      expect(await ask(c.captain.id)).toEqual({
+        ok: true,
+        asked: 0,
+        notified: 0,
+      });
+      expect(await asks()).toEqual([]);
+      expect(await auditActions(h.db())).not.toContain(ASKED);
+    });
+  });
+
+  describe("a captain fills an order in for a member", () => {
+    const lines = (c: { tent: string; mattress: string }) => [
+      {
+        itemId: c.tent,
+        choice: "need" as const,
+        quantity: 1,
+        sharerIds: [] as string[],
+      },
+      {
+        itemId: c.mattress,
+        choice: "need" as const,
+        quantity: 1,
+        sharerIds: [] as string[],
+      },
+    ];
+
+    it("sends it for them, audited, and the member sees a captain did", async () => {
+      const c = await camp();
+      await place(h.db(), c.friend.id, "accepted");
+      await askForGearOrders({ cycle: YEAR, actorId: c.captain.id });
+      const fill = (expectedVersion: number, actorId = c.captain.id) =>
+        fillRentalOrderFor({
+          userId: c.friend.id,
+          cycle: YEAR,
+          lines: lines(c),
+          expectedVersion,
+          actorId,
+        });
+      // Not a member's to do for someone else, nor a Finance lead's.
+      const financeLead = await leadOf(FINANCE_TEAM as Team);
+      for (const actor of [c.member, financeLead]) {
+        expect(await fill(0, actor.id)).toEqual({
+          ok: false,
+          error: NOT_A_RENTAL_MANAGER,
+        });
+      }
+      expect(await getRentalOrderOf(c.friend.id, YEAR)).toBeNull();
+
+      expect(await fill(0)).toEqual({ ok: true, version: 1 });
+      expect(await getRentalOrderOf(c.friend.id, YEAR)).toMatchObject({
+        status: "submitted",
+        version: 1,
+        filledByCaptain: true,
+      });
+      const audit = await h
+        .db()
+        .select()
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.action, FILLED));
+      expect(audit).toMatchObject([
+        {
+          actorId: c.captain.id,
+          target: c.friend.id,
+          metadata: { cycle: YEAR, lines: 2 },
+        },
+      ]);
+      // It answers the ask, and the member sees who filled it in.
+      const theirs = await getMyRental(c.friend.id, YEAR);
+      expect(theirs.asked).toBe(false);
+      expect(theirs.order).toMatchObject({
+        status: "submitted",
+        filledByCaptain: true,
+      });
+      expect(await listRentalUnanswered(YEAR)).toEqual([]);
+
+      // A compare-and-set on the version the captain saw.
+      expect(await fill(0)).toEqual({ ok: false, error: RENTAL_ORDER_MOVED });
+      expect(await fill(1)).toEqual({ ok: true, version: 2 });
+      // A stale page, after another captain changed it.
+      expect(await fill(1)).toEqual({ ok: false, error: RENTAL_ORDER_MOVED });
+      expect(
+        (await auditActions(h.db())).filter((a) => a === FILLED),
+      ).toHaveLength(2);
+
+      // Confirmed as usual; after that it is reopened before it changes.
+      const order = (await getRentalOrderOf(c.friend.id, YEAR))!;
+      expect(
+        (
+          await confirmRentalOrder({
+            orderId: order.id,
+            expectedVersion: order.version,
+            sources: order.lines.map((l) => ({
+              lineId: l.id,
+              source: "supplier" as const,
+            })),
+            actorId: c.captain.id,
+          })
+        ).ok,
+      ).toBe(true);
+      expect(await fill(3)).toEqual({ ok: false, error: RENTAL_REOPEN_FIRST });
+    });
+
+    it("takes over a draft, and becomes the member's own again when they save it", async () => {
+      const c = await camp();
+      await saveRentalOrder({
+        userId: c.member.id,
+        cycle: YEAR,
+        lines: [{ itemId: c.tent, choice: "own", quantity: 1, sharerIds: [] }],
+        submit: false,
+        expectedVersion: 0,
+      });
+      expect(
+        await fillRentalOrderFor({
+          userId: c.member.id,
+          cycle: YEAR,
+          lines: lines(c),
+          expectedVersion: 1,
+          actorId: c.captain.id,
+        }),
+      ).toEqual({ ok: true, version: 2 });
+      expect((await getMyRental(c.member.id, YEAR)).order).toMatchObject({
+        status: "submitted",
+        filledByCaptain: true,
+      });
+      // The normal path: the member takes it back and sends their own.
+      await withdrawRentalOrder({
+        userId: c.member.id,
+        cycle: YEAR,
+        expectedVersion: 2,
+      });
+      await saveRentalOrder({
+        userId: c.member.id,
+        cycle: YEAR,
+        lines: [{ itemId: c.tent, choice: "own", quantity: 1, sharerIds: [] }],
+        submit: true,
+        expectedVersion: 3,
+      });
+      expect((await getMyRental(c.member.id, YEAR)).order).toMatchObject({
+        status: "submitted",
+        filledByCaptain: false,
+      });
+    });
+
+    it("refuses a member who is not in the camp, and writes no audit row", async () => {
+      const c = await camp();
+      const erased = await makeUser(h.db(), { sanitised: true });
+      expect(
+        await fillRentalOrderFor({
+          userId: erased.id,
+          cycle: YEAR,
+          lines: lines(c),
+          expectedVersion: 0,
+          actorId: c.captain.id,
+        }),
+      ).toEqual({ ok: false, error: RENTAL_NO_SUCH_MEMBER });
+      expect(await auditActions(h.db())).not.toContain(FILLED);
+      expect(await h.db().select().from(schema.rentalOrders)).toEqual([]);
+    });
+  });
+
+  describe("a tent of their own", () => {
+    it("keeps what it is, how many it sleeps and who shares it, for the site plan", async () => {
+      const c = await camp();
+      const own = {
+        itemId: c.tent,
+        choice: "own" as const,
+        quantity: 1,
+        sharerIds: [c.friend.id],
+        ownDescription: "3-person dome",
+        ownSleeps: 3,
+      };
+      const save = (submit: boolean, expectedVersion: number) =>
+        saveRentalOrder({
+          userId: c.member.id,
+          cycle: YEAR,
+          lines: [own],
+          submit,
+          expectedVersion,
+        });
+      expect((await save(false, 0)).ok).toBe(true);
+      // A draft is nobody's business yet.
+      expect((await getRentalOverview(YEAR)).ownTents).toEqual([]);
+      expect((await getMyRental(c.friend.id, YEAR)).sharedWithMe).toEqual([]);
+
+      expect((await save(true, 1)).ok).toBe(true);
+      const mine = await getMyRental(c.member.id, YEAR);
+      expect(mine.order?.lines).toMatchObject([
+        {
+          choice: "own",
+          ownDescription: "3-person dome",
+          ownSleeps: 3,
+          sharers: [{ id: c.friend.id, name: "Fay Friend" }],
+        },
+      ]);
+      // The captain reads it without confirming anything.
+      expect((await getRentalOverview(YEAR)).ownTents).toEqual([
+        {
+          lineId: mine.order!.lines[0]!.id,
+          ownerName: "Dee Member",
+          description: "3-person dome",
+          sleeps: 3,
+          sharers: ["Fay Friend"],
+        },
+      ]);
+      // It is not a camp tent: no label, and nothing to order or charge.
+      expect((await getRentalOverview(YEAR)).tents).toEqual([]);
+      expect((await getMyRental(c.friend.id, YEAR)).sharedWithMe).toEqual([
+        {
+          lineId: mine.order!.lines[0]!.id,
+          itemName: "3-person dome",
+          tentLabel: null,
+          confirmed: false,
+          ownerName: "Dee Member",
+          otherSharers: [],
+        },
+      ]);
+    });
+
+    it("leaves both fields optional, and refuses more sharers than it sleeps", async () => {
+      const c = await camp();
+      const base = { userId: c.member.id, cycle: YEAR, submit: true };
+      // An own tent with nothing said, as every order saved before these fields.
+      expect(
+        (
+          await saveRentalOrder({
+            ...base,
+            lines: [
+              { itemId: c.tent, choice: "own", quantity: 1, sharerIds: [] },
+            ],
+            expectedVersion: 0,
+          })
+        ).ok,
+      ).toBe(true);
+      expect((await getRentalOverview(YEAR)).ownTents).toMatchObject([
+        { description: null, sleeps: null, sharers: [] },
+      ]);
+      await withdrawRentalOrder({
+        userId: c.member.id,
+        cycle: YEAR,
+        expectedVersion: 1,
+      });
+      const tooMany = await saveRentalOrder({
+        ...base,
+        lines: [
+          {
+            itemId: c.tent,
+            choice: "own",
+            quantity: 1,
+            sharerIds: [c.friend.id],
+            ownSleeps: 1,
+          },
+        ],
+        expectedVersion: 2,
+      });
+      expect(tooMany).toMatchObject({ ok: false });
+    });
+  });
+
+  describe("the on-site reserve", () => {
+    it("keeps five camp tents back: they cannot be given out, and the summary counts them", async () => {
+      const c = await camp();
+      // The camp has 8 tents and reserves 5 for the site.
+      expect(
+        await editRentalItem({
+          itemId: c.tent,
+          item: {
+            ...TENT,
+            campStockCount: 8,
+            reserveCount: 5,
+            reserveSource: "camp",
+          },
+          actorId: c.captain.id,
+        }),
+      ).toEqual({ ok: true });
+      const confirmCamp = async (userId: string) => {
+        const s = await sent(c, userId, []);
+        return confirmRentalOrder({
+          orderId: s.order.id,
+          expectedVersion: s.order.version,
+          sources: s.sources("camp"),
+          actorId: c.captain.id,
+        });
+      };
+      // Three are left to give out.
+      for (const name of ["One", "Two", "Three"]) {
+        const who = await makeUser(h.db(), { displayName: name });
+        expect((await confirmCamp(who.id)).ok).toBe(true);
+      }
+      const fourth = await makeUser(h.db(), { displayName: "Four" });
+      expect(await confirmCamp(fourth.id)).toEqual({
+        ok: false,
+        error: notEnoughCampStock("2-person tent", 8, 0),
+      });
+      const [row] = (await getRentalOverview(YEAR)).summary.rows;
+      expect(row).toMatchObject({
+        name: "2-person tent",
+        campCount: 3,
+        reserveCount: 5,
+        reserveSource: "camp",
+        fromStorage: 8,
+        campStockCount: 8,
+        campStockLeft: 0,
+        toOrder: 0,
+      });
     });
   });
 

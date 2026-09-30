@@ -46,7 +46,7 @@ describe("saveMyGearAction", () => {
     expect(saveRentalOrder).toHaveBeenCalledExactlyOnceWith({
       userId: "me",
       cycle: 2027,
-      lines: [line],
+      lines: [{ ...line, ownDescription: null, ownSleeps: null }],
       submit: true,
       expectedVersion: 0,
     });

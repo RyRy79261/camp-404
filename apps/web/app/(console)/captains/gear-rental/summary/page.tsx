@@ -20,7 +20,7 @@ import {
   RENTAL_SUMMARY_PATH,
 } from "@/lib/rental-copy";
 import { runsRental } from "@/lib/rental-gate";
-import { nameList, quantityText } from "@/lib/rental-view";
+import { nameList, ownTentText, quantityText } from "@/lib/rental-view";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,7 @@ export const metadata = { title: "Gear rental summary — Camp 404" };
 
 // What the camp orders and what comes out of storage (#241), for captains:
 // totals by item across the CONFIRMED orders, split by source, with the
-// adoptee reserve added to the source it comes from. The supplier column is
+// on-site reserve added to the source it comes from. The supplier column is
 // the order the camp places; the camp stock column is what is taken out of
 // storage, against how many the camp has. Then the confirmed tents with who
 // is in each. This replaces the order sheet: it is read on screen or printed,
@@ -86,7 +86,7 @@ export default async function GearRentalSummaryPage() {
                   {summary.toOrder}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Items, with the adoptee reserve
+                  Items, with the on-site reserve
                 </span>
               </CardContent>
             </Card>
@@ -149,7 +149,7 @@ export default async function GearRentalSummaryPage() {
                           Members, supplier
                         </th>
                         <th className="px-3 py-2 text-right font-medium">
-                          Adoptee reserve
+                          On-site reserve
                         </th>
                         <th className="px-3 py-2 text-right font-medium">
                           Out of storage
@@ -245,6 +245,44 @@ export default async function GearRentalSummaryPage() {
                           <Badge variant="outline">No label</Badge>
                         )}
                         {quantityText(tent.quantity, tent.itemName)}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {nameList([tent.ownerName, ...tent.sharers])}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="p-5 pb-3">
+              <CardTitle className="text-base">
+                Members&rsquo; own tents
+              </CardTitle>
+              <CardDescription>
+                What members bring themselves, from sent and confirmed orders,
+                for the site plan.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-5 pt-0">
+              {overview.ownTents.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Nobody has said they bring a tent yet.
+                </p>
+              ) : (
+                <ul aria-label="Own tents" className="divide-y divide-border">
+                  {overview.ownTents.map((tent) => (
+                    <li
+                      key={tent.lineId}
+                      className="flex flex-col gap-0.5 py-2.5 text-sm page-sm:flex-row page-sm:items-center page-sm:justify-between page-sm:gap-4"
+                    >
+                      <span className="font-medium">
+                        {ownTentText({
+                          ownDescription: tent.description,
+                          ownSleeps: tent.sleeps,
+                        }) ?? "Not said"}
                       </span>
                       <span className="text-muted-foreground">
                         {nameList([tent.ownerName, ...tent.sharers])}

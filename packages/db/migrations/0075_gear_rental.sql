@@ -39,9 +39,12 @@ CREATE TABLE "rental_order_lines" (
 	"unit_price_cents" integer,
 	"currency" text DEFAULT 'ZAR' NOT NULL,
 	"tent_label" text,
+	"own_description" text,
+	"own_sleeps" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "rental_order_lines_quantity_check" CHECK ("rental_order_lines"."quantity" between 1 and 10),
 	CONSTRAINT "rental_order_lines_price_check" CHECK (("rental_order_lines"."source" is null) = ("rental_order_lines"."unit_price_cents" is null) and coalesce("rental_order_lines"."unit_price_cents", 0) >= 0),
+	CONSTRAINT "rental_order_lines_own_check" CHECK (("rental_order_lines"."choice" = 'own' or ("rental_order_lines"."own_description" is null and "rental_order_lines"."own_sleeps" is null)) and coalesce("rental_order_lines"."own_sleeps", 1) between 1 and 12),
 	CONSTRAINT "rental_order_lines_currency_check" CHECK ("rental_order_lines"."currency" = 'ZAR')
 );
 --> statement-breakpoint
@@ -57,6 +60,7 @@ CREATE TABLE "rental_orders" (
 	"total_cents" integer,
 	"currency" text DEFAULT 'ZAR' NOT NULL,
 	"charge_id" uuid,
+	"filled_by_user_id" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "rental_orders_total_check" CHECK ("rental_orders"."total_cents" is null or "rental_orders"."total_cents" >= 0),
@@ -70,6 +74,7 @@ ALTER TABLE "rental_order_lines" ADD CONSTRAINT "rental_order_lines_item_id_rent
 ALTER TABLE "rental_orders" ADD CONSTRAINT "rental_orders_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "rental_orders" ADD CONSTRAINT "rental_orders_confirmed_by_user_id_users_id_fk" FOREIGN KEY ("confirmed_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "rental_orders" ADD CONSTRAINT "rental_orders_charge_id_dues_charges_id_fk" FOREIGN KEY ("charge_id") REFERENCES "public"."dues_charges"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "rental_orders" ADD CONSTRAINT "rental_orders_filled_by_user_id_users_id_fk" FOREIGN KEY ("filled_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "rental_items_cycle_idx" ON "rental_items" USING btree ("cycle");--> statement-breakpoint
 CREATE INDEX "rental_line_sharers_user_idx" ON "rental_line_sharers" USING btree ("user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "rental_order_lines_order_item_idx" ON "rental_order_lines" USING btree ("order_id","item_id");--> statement-breakpoint

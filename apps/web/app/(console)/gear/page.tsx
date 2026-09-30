@@ -25,8 +25,16 @@ import {
   type RentalOrder,
   type SharedTent,
 } from "@/lib/rental";
-import { nameList, orderBadge, quantityText } from "@/lib/rental-view";
-import { ChangeMyOrder, MyGearForm } from "./my-gear-form";
+import {
+  nameList,
+  orderBadge,
+  ownTentText,
+  quantityText,
+} from "@/lib/rental-view";
+import {
+  ChangeMyOrder,
+  GearOrderForm,
+} from "@/components/rental/gear-order-form";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +76,12 @@ function LineRow({
               : "You need this"
             : "You have your own"}
         </span>
-        {needs && line.sharers.length > 0 && (
+        {!needs && line.isTent && ownTentText(line) && (
+          <span className="text-xs text-muted-foreground">
+            {ownTentText(line)}
+          </span>
+        )}
+        {line.sharers.length > 0 && (
           <span className="text-xs text-muted-foreground">
             Sharing with {nameList(line.sharers.map((s) => s.name))}
           </span>
@@ -226,7 +239,7 @@ export default async function MyGearPage() {
     getMyRental(campUser.id, cycle),
     listRentalSharerChoices(campUser.id),
   ]);
-  const { items, order, sharedWithMe } = rental;
+  const { items, order, sharedWithMe, asked } = rental;
   const editable = !order || order.status === "draft";
   const state = order ? rentalOrderState(order) : null;
 
@@ -260,6 +273,28 @@ export default async function MyGearPage() {
             </Card>
           )}
 
+          {asked && (
+            <p
+              role="status"
+              data-testid="gear-asked"
+              className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm"
+            >
+              The captains are putting the gear order together and asked
+              everyone who is coming. Say what you have and what you need, then
+              send it.
+            </p>
+          )}
+          {order?.filledByCaptain && (
+            <p
+              data-testid="gear-filled"
+              className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm"
+            >
+              A captain filled this in for you.{" "}
+              {order.status === "confirmed"
+                ? "Ask a captain to reopen it if it isn't right."
+                : "Change it if it isn't right."}
+            </p>
+          )}
           {sharedWithMe.length > 0 && (
             <p
               data-testid="in-a-tent"
@@ -279,7 +314,7 @@ export default async function MyGearPage() {
               description="The captains haven't listed this year's gear. Check back soon."
             />
           ) : (
-            <MyGearForm
+            <GearOrderForm
               items={items.map((i) => ({
                 id: i.id,
                 name: i.name,
@@ -296,6 +331,8 @@ export default async function MyGearPage() {
                 choice: l.choice,
                 quantity: l.quantity,
                 sharerIds: l.sharers.map((s) => s.id),
+                ownDescription: l.ownDescription,
+                ownSleeps: l.ownSleeps,
               }))}
             />
           )}

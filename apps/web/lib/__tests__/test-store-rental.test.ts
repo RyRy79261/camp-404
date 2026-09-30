@@ -2,11 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { notEnoughCampStock, tentInUse } from "@camp404/core";
+import {
+  GEAR_ORDER_REF_TYPE,
+  notEnoughCampStock,
+  tentInUse,
+} from "@camp404/core";
 import type { CampConfig, TeamsConfig } from "@camp404/db/camp-config";
 import {
   NOT_A_RENTAL_MANAGER,
   RENTAL_ORDER_MOVED,
+  RENTAL_REOPEN_FIRST,
   RENTAL_ORDER_SENT,
   RENTAL_TENT_NOT_CONFIRMED,
 } from "@camp404/db/rental";
@@ -293,6 +298,136 @@ describe("the gear rental twin", () => {
         ?.sleeps,
     ).toBe(2);
     expect(edit(3)).toEqual({ ok: true });
+  });
+
+  it("asks exactly the members who are coming and have not answered, and never stacks", () => {
+    const c = camp();
+    const maybe = user("Mo");
+    const coming = (id: string, status: "applied" | "accepted" | "maybe") =>
+      testStore.seedParticipation({ userId: id, cycle: YEAR, status });
+    coming(c.member.id, "applied");
+    coming(c.friend.id, "accepted");
+    coming(maybe.id, "maybe");
+    coming(c.financeLead.id, "accepted");
+    send(c, c.financeLead.id);
+    const ask = (actorId: string) =>
+      rentalTestStore.askForGearOrders({ cycle: YEAR, actorId });
+    const unread = (userId: string) =>
+      testStore.hasUnreadNotice(userId, GEAR_ORDER_REF_TYPE);
+
+    expect(
+      rentalTestStore.listRentalUnanswered(YEAR).map((m) => [m.name, m.asked]),
+    ).toEqual([
+      ["Fay", false],
+      ["Nova", false],
+    ]);
+    // Not a member's to press, nor a Finance lead's.
+    for (const actor of [c.member, c.financeLead]) {
+      expect(ask(actor.id)).toEqual({
+        ok: false,
+        error: NOT_A_RENTAL_MANAGER,
+      });
+    }
+    expect(unread(c.member.id)).toBe(false);
+
+    expect(ask(c.captain.id)).toEqual({ ok: true, asked: 2, notified: 2 });
+    expect(unread(c.member.id)).toBe(true);
+    expect(unread(maybe.id)).toBe(false);
+    expect(unread(c.financeLead.id)).toBe(false);
+    expect(rentalTestStore.getMyRental(c.member.id, YEAR).asked).toBe(true);
+    expect(rentalTestStore.getMyRental(maybe.id, YEAR).asked).toBe(false);
+    // A nudge, never a block.
+    expect(testStore.getPendingRequiredActions(c.member.id)).toEqual([]);
+    // Pressed again: nobody gets a second notice while the first is unread.
+    expect(ask(c.captain.id)).toEqual({ ok: true, asked: 2, notified: 0 });
+
+    // The member sends their order: the ask is answered and its notice read.
+    send(c);
+    expect(rentalTestStore.getMyRental(c.member.id, YEAR).asked).toBe(false);
+    expect(unread(c.member.id)).toBe(false);
+    expect(
+      rentalTestStore.listRentalUnanswered(YEAR).map((m) => [m.name, m.asked]),
+    ).toEqual([["Fay", true]]);
+    expect(ask(c.captain.id)).toEqual({ ok: true, asked: 1, notified: 0 });
+    // Taken back: the ask stays answered until a captain asks again.
+    const mine = rentalTestStore.getRentalOrderOf(c.member.id, YEAR)!;
+    rentalTestStore.withdrawRentalOrder({
+      userId: c.member.id,
+      cycle: YEAR,
+      expectedVersion: mine.version,
+    });
+    expect(rentalTestStore.getMyRental(c.member.id, YEAR).asked).toBe(false);
+    expect(ask(c.captain.id)).toEqual({ ok: true, asked: 2, notified: 1 });
+    expect(rentalTestStore.getMyRental(c.member.id, YEAR).asked).toBe(true);
+  });
+
+  it("lets a captain fill an order in for a member, who sees that a captain did", () => {
+    const c = camp();
+    const fill = (expectedVersion: number, actorId = c.captain.id) =>
+      rentalTestStore.fillRentalOrderFor({
+        userId: c.friend.id,
+        cycle: YEAR,
+        lines: [
+          { itemId: c.mattress, choice: "need", quantity: 1, sharerIds: [] },
+        ],
+        expectedVersion,
+        actorId,
+      });
+    expect(fill(0, c.member.id)).toEqual({
+      ok: false,
+      error: NOT_A_RENTAL_MANAGER,
+    });
+    expect(rentalTestStore.getRentalOrderOf(c.friend.id, YEAR)).toBeNull();
+    expect(fill(0)).toEqual({ ok: true, version: 1 });
+    expect(fill(0)).toEqual({ ok: false, error: RENTAL_ORDER_MOVED });
+    // A sent order can be changed again, on the version the captain saw.
+    expect(fill(1)).toEqual({ ok: true, version: 2 });
+    expect(fill(1)).toEqual({ ok: false, error: RENTAL_ORDER_MOVED });
+    expect(rentalTestStore.getMyRental(c.friend.id, YEAR).order).toMatchObject({
+      status: "submitted",
+      filledByCaptain: true,
+    });
+    const order = rentalTestStore.getRentalOrderOf(c.friend.id, YEAR)!;
+    rentalTestStore.confirmRentalOrder({
+      orderId: order.id,
+      expectedVersion: order.version,
+      sources: [{ lineId: order.lines[0]!.id, source: "supplier" }],
+      actorId: c.captain.id,
+    });
+    expect(fill(3)).toEqual({ ok: false, error: RENTAL_REOPEN_FIRST });
+  });
+
+  it("keeps a member's own tent for the site plan", () => {
+    const c = camp();
+    const save = rentalTestStore.saveRentalOrder({
+      userId: c.member.id,
+      cycle: YEAR,
+      lines: [
+        {
+          itemId: c.tent,
+          choice: "own",
+          quantity: 1,
+          sharerIds: [c.friend.id],
+          ownDescription: "3-person dome",
+          ownSleeps: 3,
+        },
+      ],
+      submit: true,
+      expectedVersion: 0,
+    });
+    expect(save.ok).toBe(true);
+    expect(rentalTestStore.getRentalOverview(YEAR).ownTents).toMatchObject([
+      {
+        ownerName: "Nova",
+        description: "3-person dome",
+        sleeps: 3,
+        sharers: ["Fay"],
+      },
+    ]);
+    expect(
+      rentalTestStore.getMyRental(c.friend.id, YEAR).sharedWithMe,
+    ).toMatchObject([{ itemName: "3-person dome", ownerName: "Nova" }]);
+    expect(rentalTestStore.getRentalOverview(YEAR).tents).toEqual([]);
   });
 
   it("adds the summary up from the confirmed orders, with the reserve", () => {

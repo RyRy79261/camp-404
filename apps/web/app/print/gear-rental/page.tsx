@@ -10,7 +10,7 @@ import {
   RENTAL_SUMMARY_PATH,
 } from "@/lib/rental-copy";
 import { runsRental } from "@/lib/rental-gate";
-import { quantityText } from "@/lib/rental-view";
+import { ownTentText, quantityText } from "@/lib/rental-view";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,9 @@ export const metadata = { title: "Gear rental to print — Camp 404" };
 // Two sheets. "Order" is what the camp asks the supplier for and what it
 // takes out of storage: item counts only, no member names and no prices, so
 // it can be handed to the supplier as it is. "Tents" is each confirmed tent's
-// label and who sleeps in it, to take to the Burn, where there is no signal.
+// label and who sleeps in it, then the tents members bring themselves (what
+// they are and how many they sleep, for the site plan), to take to the Burn,
+// where there is no signal.
 // Captains only, like the screen; a sleeper prints as a first name and a
 // surname initial.
 
@@ -89,7 +91,7 @@ export default async function GearRentalPrintPage({
                 {overview.confirmed === 1
                   ? "From 1 confirmed order"
                   : `From ${overview.confirmed} confirmed orders`}
-                , with the adoptee reserve.
+                , with the on-site reserve.
               </p>
             </div>
             <div>
@@ -190,6 +192,40 @@ export default async function GearRentalPrintPage({
                       </td>
                       <td className="py-2">
                         {quantityText(t.quantity, t.itemName)}
+                      </td>
+                      <td className="py-2">
+                        {[t.ownerName, ...t.sharers].map(printName).join(", ")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <h2 className="mb-2 mt-8 text-xl font-semibold">
+              Members&rsquo; own tents
+            </h2>
+            {overview.ownTents.length === 0 ? (
+              <p>Nobody has said they bring a tent yet.</p>
+            ) : (
+              <table className="w-full border-collapse text-base">
+                <thead>
+                  <tr className="border-b-2 border-black text-left">
+                    <th className="w-56 py-2">Tent</th>
+                    <th className="py-2">Who sleeps in it</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overview.ownTents.map((t) => (
+                    <tr
+                      key={t.lineId}
+                      data-testid="print-own-tent-row"
+                      className="border-b border-black/40 align-top"
+                    >
+                      <td className="py-2">
+                        {ownTentText({
+                          ownDescription: t.description,
+                          ownSleeps: t.sleeps,
+                        }) ?? "Not said"}
                       </td>
                       <td className="py-2">
                         {[t.ownerName, ...t.sharers].map(printName).join(", ")}

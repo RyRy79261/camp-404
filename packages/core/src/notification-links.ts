@@ -28,6 +28,10 @@ export function notificationLink(
   if (refType === "task" && refId && UUID.test(refId)) {
     return "/tasks";
   }
+  // A captain's ask for the gear order opens the order itself: My gear.
+  if (refType === "gear_order") {
+    return "/gear";
+  }
   // A required action has no page of its own; home sends the member on to
   // whatever still blocks them (requireMemberPage).
   if (refType === "required_action" && refId && UUID.test(refId)) {

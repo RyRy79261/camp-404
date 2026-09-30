@@ -5,17 +5,21 @@ import {
   ArchiveRentalItemInput,
   ConfirmRentalOrderInput,
   EditRentalItemInput,
+  FillRentalOrderInput,
   RentalItemInput,
   ReopenRentalOrderInput,
   TentLabelInput,
 } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
+import { deliverAfterResponse } from "@/lib/background-work";
 import { ledgerCycle } from "@/lib/payments";
 import {
   addRentalItem,
   archiveRentalItem,
+  askForGearOrders,
   confirmRentalOrder,
   editRentalItem,
+  fillRentalOrderFor,
   reopenRentalOrder,
   setTentLabel,
 } from "@/lib/rental";
@@ -91,6 +95,51 @@ export async function archiveRentalItemAction(
 }
 
 // --- Orders ------------------------------------------------------------------------
+
+/**
+ * "Ask everyone": nudge each member who is coming this year and has not sent
+ * their order. The write decides who that is; the notices go out after the
+ * response (no cron).
+ */
+export async function askForGearOrdersAction(): Promise<
+  ActionResult<{ asked: number; notified: number }>
+> {
+  return runAction("askForGearOrdersAction", async () => {
+    const gate = await rentalActionGate();
+    if (!gate.ok) return gate;
+    const result = await askForGearOrders({
+      cycle: await ledgerCycle(),
+      actorId: gate.campUser.id,
+    });
+    if (!result.ok) return result;
+    if (result.notified > 0) deliverAfterResponse();
+    revalidateRental();
+    return {
+      ok: true,
+      data: { asked: result.asked, notified: result.notified },
+    };
+  });
+}
+
+/** Fill an order in for a member who has not answered. It is sent at once. */
+export async function fillRentalOrderAction(
+  input: unknown,
+): Promise<ActionResult<{ version: number }>> {
+  return runAction("fillRentalOrderAction", async () => {
+    const gate = await rentalActionGate();
+    if (!gate.ok) return gate;
+    const parsed = FillRentalOrderInput.safeParse(input);
+    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+    const result = await fillRentalOrderFor({
+      ...parsed.data,
+      cycle: await ledgerCycle(),
+      actorId: gate.campUser.id,
+    });
+    if (!result.ok) return result;
+    revalidateRental();
+    return { ok: true, data: { version: result.version } };
+  });
+}
 
 export async function confirmRentalOrderAction(
   input: unknown,

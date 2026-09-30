@@ -95,7 +95,9 @@ export const AUDIT_ACTION_LABELS = {
   "rental.item_archived": "Removed a rental item",
   "rental.item_changed": "Changed a rental item",
   "rental.order_confirmed": "Confirmed a member's gear order",
+  "rental.order_filled": "Filled in a member's gear order for them",
   "rental.order_reopened": "Reopened a member's gear order",
+  "rental.orders_asked": "Asked members for their gear orders",
   "rental.tent_labelled": "Labelled a tent",
   "safety.emergency_contacts.view": "Read emergency contacts",
   "team.program_changed": "Changed a team's description or links",
@@ -356,6 +358,11 @@ export function auditDetail(
     case "rental.order_reopened": {
       const cents = count(metadata, "totalCents");
       return cents === null ? null : formatMoney(cents);
+    }
+    case "rental.orders_asked": {
+      const asked = count(metadata, "asked");
+      if (asked === null) return null;
+      return `${asked} ${asked === 1 ? "member" : "members"}`;
     }
     case "rental.tent_labelled": {
       const name = text(metadata, "name");

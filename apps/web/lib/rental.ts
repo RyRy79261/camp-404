@@ -7,9 +7,11 @@ import type {
   RentalLine,
   RentalOrder,
   RentalOverview,
+  RentalOwnTent,
   RentalResult,
   RentalSharer,
   RentalTent,
+  RentalUnanswered,
   SharedTent,
 } from "@camp404/db/rental";
 import type { RentalOrderStatus } from "@camp404/types";
@@ -27,9 +29,11 @@ export type {
   RentalLine,
   RentalOrder,
   RentalOverview,
+  RentalOwnTent,
   RentalResult,
   RentalSharer,
   RentalTent,
+  RentalUnanswered,
   SharedTent,
 };
 
@@ -89,6 +93,24 @@ export async function getRentalOverview(
   return store()?.getRentalOverview(cycle) ?? db.getRentalOverview(cycle);
 }
 
+/** Who is coming and has not sent an order, for captains. The page gates. */
+export async function listRentalUnanswered(
+  cycle: number,
+): Promise<RentalUnanswered[]> {
+  return store()?.listRentalUnanswered(cycle) ?? db.listRentalUnanswered(cycle);
+}
+
+/** One approved member, for a captain filling in their order. The page gates. */
+export async function getRentalMember(
+  userId: string,
+  cycle: number,
+): Promise<Awaited<ReturnType<typeof db.getRentalMember>>> {
+  const s = store();
+  return s
+    ? s.getRentalMember(userId, cycle)
+    : db.getRentalMember(userId, cycle);
+}
+
 // --- Writes -------------------------------------------------------------------
 
 export async function addRentalItem(
@@ -119,6 +141,18 @@ export async function withdrawRentalOrder(
   input: In<typeof db.withdrawRentalOrder>,
 ): Promise<RentalResult<{ version: number }>> {
   return store()?.withdrawRentalOrder(input) ?? db.withdrawRentalOrder(input);
+}
+
+export async function fillRentalOrderFor(
+  input: In<typeof db.fillRentalOrderFor>,
+): Promise<RentalResult<{ version: number }>> {
+  return store()?.fillRentalOrderFor(input) ?? db.fillRentalOrderFor(input);
+}
+
+export async function askForGearOrders(
+  input: In<typeof db.askForGearOrders>,
+): Promise<RentalResult<{ asked: number; notified: number }>> {
+  return store()?.askForGearOrders(input) ?? db.askForGearOrders(input);
 }
 
 export async function confirmRentalOrder(

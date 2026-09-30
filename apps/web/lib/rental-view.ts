@@ -50,6 +50,21 @@ export function sleepsText(sleeps: number): string {
   return `Sleeps ${sleeps}`;
 }
 
+/**
+ * A member's own tent in a few words: "3-person dome, sleeps 3", or whichever
+ * of the two they gave. Null when they said neither.
+ */
+export function ownTentText(line: {
+  ownDescription: string | null;
+  ownSleeps: number | null;
+}): string | null {
+  const parts = [
+    line.ownDescription,
+    line.ownSleeps === null ? null : sleepsText(line.ownSleeps).toLowerCase(),
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 /** A list of names as a sentence part: "Ann", "Ann and Bo", "Ann, Bo and Cy". */
 export function nameList(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? "";

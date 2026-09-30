@@ -1,5 +1,5 @@
 {
-  "id": "27790d0d-093b-461e-bf27-16e86cdfdbba",
+  "id": "83437679-2e00-467e-bf17-bee8fb1d5047",
   "prevId": "c0e28282-24b9-47a9-8f69-e32100fb57fe",
   "version": "7",
   "dialect": "postgresql",
@@ -10813,6 +10813,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "own_description": {
+          "name": "own_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "own_sleeps": {
+          "name": "own_sleeps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -10899,6 +10911,10 @@
           "name": "rental_order_lines_price_check",
           "value": "(\"rental_order_lines\".\"source\" is null) = (\"rental_order_lines\".\"unit_price_cents\" is null) and coalesce(\"rental_order_lines\".\"unit_price_cents\", 0) >= 0"
         },
+        "rental_order_lines_own_check": {
+          "name": "rental_order_lines_own_check",
+          "value": "(\"rental_order_lines\".\"choice\" = 'own' or (\"rental_order_lines\".\"own_description\" is null and \"rental_order_lines\".\"own_sleeps\" is null)) and coalesce(\"rental_order_lines\".\"own_sleeps\", 1) between 1 and 12"
+        },
         "rental_order_lines_currency_check": {
           "name": "rental_order_lines_currency_check",
           "value": "\"rental_order_lines\".\"currency\" = 'ZAR'"
@@ -10977,6 +10993,12 @@
         },
         "charge_id": {
           "name": "charge_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "filled_by_user_id": {
+          "name": "filled_by_user_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -11067,6 +11089,19 @@
           "tableTo": "dues_charges",
           "columnsFrom": [
             "charge_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "rental_orders_filled_by_user_id_users_id_fk": {
+          "name": "rental_orders_filled_by_user_id_users_id_fk",
+          "tableFrom": "rental_orders",
+          "tableTo": "users",
+          "columnsFrom": [
+            "filled_by_user_id"
           ],
           "columnsTo": [
             "id"

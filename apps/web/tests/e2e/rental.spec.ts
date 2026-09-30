@@ -333,4 +333,138 @@ test.describe("gear rental (test-mode)", () => {
       page.getByRole("button", { name: "Send my order" }),
     ).toBeVisible();
   });
+  test("a captain asks everyone; an asked member answers with their own tent; a captain fills one in for a member who has not", async ({
+    page,
+    request,
+  }) => {
+    await approvedMember(page, request, "rent-member", "Dee Member");
+    await seedParticipation(request, "rent-member", "applied");
+    await approvedMember(page, request, "rent-friend", "Fay Friend");
+    await seedParticipation(request, "rent-friend", "accepted");
+    await approvedMember(page, request, "rent-maybe", "Mo Maybe");
+    await seedParticipation(request, "rent-maybe", "maybe");
+    await approvedMember(page, request, "rent-kit", "Kit Lead");
+    await seedTeam(request, "rent-kit", "kitchen", true);
+    await seedParticipation(request, "rent-kit", "accepted");
+    await captainListsGear(page, request);
+
+    // A lead of another team cannot press it: a lock, and no button.
+    await login(page, { id: "rent-kit", email: "rent-kit@example.com" });
+    await page.goto("/captains/gear-rental");
+    await expect(
+      page.getByText("Captains only", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Ask everyone" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("Dee Member")).toHaveCount(0);
+    // Nobody has been asked yet.
+    await page.goto("/gear");
+    await heading(page, "My gear");
+    await expect(page.getByTestId("gear-asked")).toHaveCount(0);
+
+    // The captain sees who has not answered, by name, and asks exactly them.
+    await asCaptain(page, request);
+    await page.goto("/captains/gear-rental");
+    await heading(page, "Gear rental");
+    const waiting = page.getByRole("list", { name: "Not answered yet" });
+    await expect(waiting.getByRole("link")).toHaveText([
+      "Dee Member",
+      "Fay Friend",
+      "Kit Lead",
+    ]);
+    // Said Maybe: not coming, so not asked.
+    await expect(page.getByText("Mo Maybe")).toHaveCount(0);
+    await page.getByRole("button", { name: "Ask everyone" }).click();
+    await expect(page.getByText("Asked 3 members.")).toBeVisible();
+    await expect(waiting.getByRole("link")).toHaveText([
+      "Dee MemberAsked",
+      "Fay FriendAsked",
+      "Kit LeadAsked",
+    ]);
+    // Pressed again: no second notice while the first is unread.
+    await page.getByRole("button", { name: "Ask everyone" }).click();
+    await expect(
+      page.getByText(
+        "3 members already have the ask unread. No second notice was sent.",
+      ),
+    ).toBeVisible();
+
+    // The asked member is told, never blocked, and answers with their own tent.
+    await login(page, { id: "rent-member", email: "rent-member@example.com" });
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/$/);
+    await page.goto("/gear");
+    await heading(page, "My gear");
+    await expect(page.getByTestId("gear-asked")).toBeVisible();
+    const tent = page.getByRole("listitem", { name: "2-person tent" });
+    await tent.getByRole("radio", { name: "I have my own" }).click();
+    await tent.getByLabel("What tent is it? (optional)").fill("3-person dome");
+    await tent.getByLabel("It sleeps (optional)").selectOption("3");
+    await tent
+      .getByLabel("Who shares it with you?")
+      .selectOption({ label: "Fay Friend" });
+    await page.getByRole("button", { name: "Send my order" }).click();
+    await expect(page.getByTestId("order-state")).toHaveText(SENT);
+    await expect(page.getByTestId("gear-asked")).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("list", { name: "Your order" })
+        .getByText("3-person dome, sleeps 3"),
+    ).toBeVisible();
+    // Mo said Maybe and was not asked.
+    await login(page, { id: "rent-maybe", email: "rent-maybe@example.com" });
+    await page.goto("/gear");
+    await heading(page, "My gear");
+    await expect(page.getByTestId("gear-asked")).toHaveCount(0);
+
+    // The captain: Dee has answered; Fay has not, so the captain fills it in.
+    await asCaptain(page, request);
+    await page.goto("/captains/gear-rental");
+    await heading(page, "Gear rental");
+    await expect(waiting.getByRole("link")).toHaveText([
+      "Fay FriendAsked",
+      "Kit LeadAsked",
+    ]);
+    await waiting.getByRole("link", { name: /Fay Friend/ }).click();
+    await heading(page, "Fay Friend");
+    await expect(page.getByText("No order yet", { exact: true })).toBeVisible();
+    const mattress = page.getByRole("listitem", { name: "Mattress" });
+    await mattress.getByRole("radio", { name: "They need one" }).click();
+    await page.getByRole("button", { name: "Save for them" }).click();
+    await expect(
+      page.getByText("Filled in by a captain", { exact: true }),
+    ).toBeVisible();
+    // Confirmed as usual: the mattress has one source, already picked.
+    await page.getByRole("button", { name: "Confirm and charge" }).click();
+    await expect(page.getByTestId("order-on-dues")).toContainText(
+      "On their dues.",
+    );
+    // Dee's own tent is on her order, and on the printed tent list.
+    await openOrder(page, "Dee Member");
+    await expect(
+      page
+        .getByRole("list", { name: "What they have" })
+        .getByText(
+          "Has their own 2-person tent: 3-person dome, sleeps 3, shared with Fay Friend.",
+        ),
+    ).toBeVisible();
+    await page.goto("/print/gear-rental?sheet=tents");
+    await expect(page.getByTestId("print-own-tent-row")).toHaveText([
+      /3-person dome, sleeps 3.*Dee M\., Fay F\./,
+    ]);
+
+    // Fay sees that a captain filled it in, and the tent she was put in.
+    await login(page, { id: "rent-friend", email: "rent-friend@example.com" });
+    await page.goto("/gear");
+    await heading(page, "My gear");
+    await expect(page.getByTestId("gear-filled")).toContainText(
+      "A captain filled this in for you.",
+    );
+    await expect(page.getByTestId("gear-asked")).toHaveCount(0);
+    await expect(page.getByTestId("in-a-tent")).toContainText("Dee Member");
+    await page.goto("/dues");
+    await heading(page, "My dues");
+    await expect(page.getByText(/You owe R\s80,00\./)).toBeVisible();
+  });
 });

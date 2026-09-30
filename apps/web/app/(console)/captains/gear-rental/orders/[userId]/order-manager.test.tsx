@@ -50,6 +50,8 @@ function line(over: Partial<RentalLine>): RentalLine {
     source: "supplier",
     unitPriceCents: 8_000,
     tentLabel: null,
+    ownDescription: null,
+    ownSleeps: null,
     sharers: [],
     ...over,
   };

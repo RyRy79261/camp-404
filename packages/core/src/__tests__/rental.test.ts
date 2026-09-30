@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { RENTAL_SOURCES } from "@camp404/types";
 import { auditActionLabel, auditDetail } from "../audit-actions";
+import { notificationLink } from "../notification-links";
+import { gearOrderAskNotification, payloadLink } from "../notifications";
 import { formatMoney } from "../money";
 import {
   campStockInUse,
   campStockTaken,
   canManageRental,
   checkRentalLines,
+  GEAR_ORDER_ACTION_TITLE,
+  GEAR_ORDER_REF_TYPE,
+  isAskedForGear,
   holdsSharers,
   maxSharers,
   noPriceFrom,
@@ -58,6 +63,33 @@ describe("canManageRental", () => {
   it("fails closed on a rank it does not know", () => {
     expect(canManageRental("god", ["finance"])).toBe(false);
     expect(canManageRental("", [])).toBe(false);
+  });
+});
+
+describe("Ask everyone", () => {
+  it("asks a member who said Yes or was accepted, and nobody else", () => {
+    expect(isAskedForGear("applied")).toBe(true);
+    expect(isAskedForGear("accepted")).toBe(true);
+    for (const status of ["maybe", "waitlisted", "not_attending"] as const) {
+      expect(isAskedForGear(status)).toBe(false);
+    }
+    // No answer to "Coming this year?" at all.
+    expect(isAskedForGear(null)).toBe(false);
+  });
+
+  it("sends a notice that opens My gear", () => {
+    const notice = gearOrderAskNotification({
+      requiredActionId: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(notice).toMatchObject({
+      kind: "questionnaire_reminder",
+      title: GEAR_ORDER_ACTION_TITLE,
+      refType: GEAR_ORDER_REF_TYPE,
+      refId: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(payloadLink(notice)).toBe("/gear");
+    // The E2E store has no row id to point at; the link does not need one.
+    expect(notificationLink(GEAR_ORDER_REF_TYPE, null)).toBe("/gear");
   });
 });
 
@@ -121,17 +153,90 @@ describe("holdsSharers", () => {
 });
 
 describe("checkRentalLines", () => {
-  it("tidies an item the member has: one, with no sharers", () => {
+  it("tidies an item the member has: one, and nothing but a tent keeps words or sharers", () => {
     expect(
       checkRentalLines(
         ITEMS,
-        [{ itemId: "tent", choice: "own", quantity: 4, sharerIds: ["b"] }],
+        [
+          {
+            itemId: "mattress",
+            choice: "own",
+            quantity: 4,
+            sharerIds: ["b"],
+            ownDescription: "A foam one",
+            ownSleeps: 2,
+          },
+        ],
         "a",
       ),
     ).toEqual({
       ok: true,
-      lines: [{ itemId: "tent", choice: "own", quantity: 1, sharerIds: [] }],
+      lines: [
+        {
+          itemId: "mattress",
+          choice: "own",
+          quantity: 1,
+          sharerIds: [],
+          ownDescription: null,
+          ownSleeps: null,
+        },
+      ],
     });
+  });
+
+  it("keeps what a member says about their own tent, and who shares it", () => {
+    const own = {
+      itemId: "tent",
+      choice: "own" as const,
+      quantity: 3,
+      sharerIds: ["b", "c"],
+      ownDescription: "  3-person dome ",
+      ownSleeps: 3,
+    };
+    expect(checkRentalLines(ITEMS, [own], "a")).toEqual({
+      ok: true,
+      lines: [
+        {
+          itemId: "tent",
+          choice: "own",
+          quantity: 1,
+          sharerIds: ["b", "c"],
+          ownDescription: "3-person dome",
+          ownSleeps: 3,
+        },
+      ],
+    });
+    // Both are optional: a line saved before they existed is still valid.
+    expect(
+      checkRentalLines(
+        ITEMS,
+        [{ itemId: "tent", choice: "own", quantity: 1, sharerIds: [] }],
+        "a",
+      ),
+    ).toEqual({
+      ok: true,
+      lines: [
+        {
+          itemId: "tent",
+          choice: "own",
+          quantity: 1,
+          sharerIds: [],
+          ownDescription: null,
+          ownSleeps: null,
+        },
+      ],
+    });
+    // It sleeps what they say it does: three people is two sharers at most,
+    // and a tent with no size said holds only its owner.
+    expect(
+      checkRentalLines(ITEMS, [{ ...own, sharerIds: ["b", "c", "d"] }], "a"),
+    ).toEqual({ ok: false, error: tooManySharers("Your own tent", 2) });
+    expect(checkRentalLines(ITEMS, [{ ...own, ownSleeps: null }], "a")).toEqual(
+      { ok: false, error: tooManySharers("Your own tent", 0) },
+    );
+    expect(
+      checkRentalLines(ITEMS, [{ ...own, sharerIds: ["a"] }], "a"),
+    ).toEqual({ ok: false, error: RENTAL_NOT_WITH_YOURSELF });
   });
 
   it("keeps a needed tent's sharers, once each", () => {
@@ -151,7 +256,14 @@ describe("checkRentalLines", () => {
     ).toEqual({
       ok: true,
       lines: [
-        { itemId: "tent", choice: "need", quantity: 2, sharerIds: ["b"] },
+        {
+          itemId: "tent",
+          choice: "need",
+          quantity: 2,
+          sharerIds: ["b"],
+          ownDescription: null,
+          ownSleeps: null,
+        },
       ],
     });
   });
@@ -525,6 +637,16 @@ describe("the audit trail's words", () => {
       formatMoney(26_000),
     );
     expect(auditDetail("rental.order_reopened", {})).toBeNull();
+    expect(auditActionLabel("rental.orders_asked")).toBe(
+      "Asked members for their gear orders",
+    );
+    expect(auditDetail("rental.orders_asked", { asked: 1 })).toBe("1 member");
+    expect(auditDetail("rental.orders_asked", { asked: 12 })).toBe(
+      "12 members",
+    );
+    expect(auditActionLabel("rental.order_filled")).toBe(
+      "Filled in a member's gear order for them",
+    );
     expect(auditDetail("rental.item_added", { name: "Mattress" })).toBe(
       "Mattress",
     );

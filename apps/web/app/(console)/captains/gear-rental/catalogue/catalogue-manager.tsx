@@ -212,7 +212,7 @@ export function CatalogueManager({ items }: { items: RentalItem[] }) {
                     </span>
                     {item.reserveCount > 0 && (
                       <span className="text-xs text-muted-foreground">
-                        {item.reserveCount} kept for adoptees, from{" "}
+                        {item.reserveCount} reserved for on site, from{" "}
                         {RENTAL_SOURCE_LABELS[item.reserveSource].toLowerCase()}
                       </span>
                     )}
@@ -335,12 +335,12 @@ export function CatalogueManager({ items }: { items: RentalItem[] }) {
           )}
           <div className="grid gap-4 page-sm:grid-cols-2">
             <InputField
-              label="Adoptee reserve"
+              label="Reserved for on site"
               type="number"
               inputMode="numeric"
               min={0}
               value={draft.reserveCount}
-              helper="Spare ones kept for the adoptees."
+              helper="Spare ones kept back for the site: adoptees and late arrivals."
               disabled={busy}
               onChange={(e) => set({ reserveCount: e.currentTarget.value })}
             />

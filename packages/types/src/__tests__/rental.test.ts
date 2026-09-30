@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ConfirmRentalOrderInput,
+  FillRentalOrderInput,
   RENTAL_MAX_QUANTITY,
   RentalItemInput,
   SaveRentalOrderInput,
@@ -154,7 +155,62 @@ describe("SaveRentalOrderInput", () => {
       submit: false,
       expectedVersion: 0,
     });
-    expect(parsed.lines[0]).toEqual(line);
+    expect(parsed.lines[0]).toEqual({
+      ...line,
+      ownDescription: null,
+      ownSleeps: null,
+    });
+  });
+
+  it("takes what a member says about their own tent, and leaves it optional", () => {
+    const own = { ...line, choice: "own" };
+    const parse = (extra: object) =>
+      SaveRentalOrderInput.safeParse({
+        lines: [{ ...own, ...extra }],
+        submit: false,
+        expectedVersion: 0,
+      });
+    const said = parse({ ownDescription: " 3-person dome ", ownSleeps: 3 });
+    expect(said.success && said.data.lines[0]).toMatchObject({
+      ownDescription: "3-person dome",
+      ownSleeps: 3,
+    });
+    // A draft saved before the fields existed, and blanks, are both fine.
+    const blank = parse({ ownDescription: "  ", ownSleeps: null });
+    expect(blank.success && blank.data.lines[0]).toMatchObject({
+      ownDescription: null,
+      ownSleeps: null,
+    });
+    expect(parse({}).success).toBe(true);
+    expect(parse({ ownSleeps: 0 }).success).toBe(false);
+    expect(parse({ ownSleeps: 13 }).success).toBe(false);
+    expect(parse({ ownDescription: "x".repeat(61) }).success).toBe(false);
+  });
+});
+
+describe("FillRentalOrderInput", () => {
+  const line = { itemId: ID, choice: "need", quantity: 1, sharerIds: [] };
+
+  it("takes a member, their lines and the version the captain saw", () => {
+    expect(
+      FillRentalOrderInput.safeParse({
+        userId: "member-1",
+        lines: [line],
+        expectedVersion: 0,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("refuses no member, no lines, and the same item twice", () => {
+    for (const bad of [
+      { userId: "", lines: [line] },
+      { userId: "member-1", lines: [] },
+      { userId: "member-1", lines: [line, line] },
+    ]) {
+      expect(
+        FillRentalOrderInput.safeParse({ ...bad, expectedVersion: 0 }).success,
+      ).toBe(false);
+    }
   });
 });
 

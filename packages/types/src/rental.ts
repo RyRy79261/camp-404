@@ -36,6 +36,8 @@ export type RentalSource = z.infer<typeof RentalSource>;
 /** The longest text each field takes. */
 export const RENTAL_ITEM_NAME_MAX = 60;
 export const TENT_LABEL_MAX = 20;
+/** The longest a member's words for their own tent may be. */
+export const OWN_TENT_DESCRIPTION_MAX = 60;
 /** The most of one item a member may ask for. */
 export const RENTAL_MAX_QUANTITY = 10;
 /** The most people one tent sleeps. */
@@ -164,6 +166,28 @@ export const RentalLineInput = z.object({
     }),
   /** Who shares a tent with them. Empty for anything but a shared tent. */
   sharerIds: z.array(RefId).max(RENTAL_MAX_SLEEPS * RENTAL_MAX_QUANTITY),
+  /**
+   * For a tent the member has themselves: what it is ("3-person dome") and
+   * how many it sleeps. Both optional, so a line saved before these existed
+   * is still valid. The site plan needs them.
+   */
+  ownDescription: z
+    .string()
+    .trim()
+    .max(OWN_TENT_DESCRIPTION_MAX, {
+      error: `Keep it to ${OWN_TENT_DESCRIPTION_MAX} characters.`,
+    })
+    .nullish()
+    .transform((v) => (v ? v : null)),
+  ownSleeps: z
+    .number()
+    .int()
+    .min(1, { error: "A tent sleeps at least one." })
+    .max(RENTAL_MAX_SLEEPS, {
+      error: `A tent sleeps at most ${RENTAL_MAX_SLEEPS}.`,
+    })
+    .nullish()
+    .transform((v) => v ?? null),
 });
 export type RentalLineInput = z.infer<typeof RentalLineInput>;
 
@@ -186,6 +210,28 @@ export const SaveRentalOrderInput = z
     },
   );
 export type SaveRentalOrderInput = z.infer<typeof SaveRentalOrderInput>;
+
+/**
+ * A captain fills in an order for a member who has not answered. It is sent
+ * at once, for the captain to confirm as usual. `expectedVersion` is the order
+ * the captain saw (0 when the member has none).
+ */
+export const FillRentalOrderInput = z
+  .object({
+    userId: RefId,
+    lines: z.array(RentalLineInput).min(1, {
+      error: "Say what they have or what they need first.",
+    }),
+    expectedVersion: z.number().int().min(0),
+  })
+  .refine(
+    (v) => new Set(v.lines.map((l) => l.itemId)).size === v.lines.length,
+    {
+      error: "Each item can be on an order once.",
+      path: ["lines"],
+    },
+  );
+export type FillRentalOrderInput = z.infer<typeof FillRentalOrderInput>;
 
 /** A member takes a sent order back to change it. */
 export const WithdrawRentalOrderInput = z.object({

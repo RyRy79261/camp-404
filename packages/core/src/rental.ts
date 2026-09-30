@@ -1,5 +1,6 @@
 import {
   ViewerRank,
+  type ParticipationStatus,
   type RentalChoice,
   type RentalOrderStatus,
   type RentalSource,
@@ -47,6 +48,29 @@ export function canManageRental(
 ): boolean {
   if (!isViewerRank(rank)) return false;
   return rank === "captain";
+}
+
+// --- Asking everyone ---------------------------------------------------------
+//
+// A captain's "Ask everyone" is a nudge on the app's gate spine, never a block:
+// one NON-blocking `required_actions` row per member (this key), and a notice.
+// The row is completed when the member's order is sent.
+
+/** The `required_actions.action_key` of the gear order nudge. */
+export const GEAR_ORDER_ACTION_KEY = "gear_order";
+/** What the member is asked to do, in their words. */
+export const GEAR_ORDER_ACTION_TITLE = "Say what sleeping gear you need";
+/** The `ref_type` of the notice, which opens My gear. */
+export const GEAR_ORDER_REF_TYPE = "gear_order";
+
+/**
+ * Who "Ask everyone" asks: a member who is coming this year. That is a member
+ * who said Yes (`applied`) or whom a captain accepted (`accepted`). Not one
+ * who said Maybe or No, not one on the waiting list, and not one who has not
+ * answered "Coming this year?" at all.
+ */
+export function isAskedForGear(status: ParticipationStatus | null): boolean {
+  return status === "applied" || status === "accepted";
 }
 
 // --- Words -------------------------------------------------------------------
@@ -162,6 +186,19 @@ export interface RentalLineDraft {
   choice: RentalChoice;
   quantity: number;
   sharerIds: readonly string[];
+  /** For a tent they have themselves: what it is, and how many it sleeps. */
+  ownDescription?: string | null;
+  ownSleeps?: number | null;
+}
+
+/** A line as checkRentalLines leaves it: every field present. */
+export interface RentalLineChecked {
+  itemId: string;
+  choice: RentalChoice;
+  quantity: number;
+  sharerIds: string[];
+  ownDescription: string | null;
+  ownSleeps: number | null;
 }
 
 export const RENTAL_ITEM_GONE =
@@ -177,41 +214,59 @@ export function tooManySharers(name: string, fits: number): string {
 
 /**
  * A member's lines checked against the year's live catalogue and tidied: an
- * item they have themselves is one, with no sharers; a needed tent keeps its
- * sharers, once each, never the member and never more than it sleeps. An
- * error is a sentence the member can act on.
+ * item they have themselves is one; a tent keeps its sharers, once each, never
+ * the member and never more than it sleeps. A needed tent sleeps what the
+ * catalogue says; a tent of their own sleeps what they say it does (one, when
+ * they do not say), and keeps their words for it. An error is a sentence the
+ * member can act on.
  */
 export function checkRentalLines(
   items: readonly RentalPricedItem[],
   lines: readonly RentalLineDraft[],
   memberId: string,
-): { ok: true; lines: RentalLineDraft[] } | { ok: false; error: string } {
+): { ok: true; lines: RentalLineChecked[] } | { ok: false; error: string } {
   const byId = new Map(items.map((item) => [item.id, item]));
   const seen = new Set<string>();
-  const tidy: RentalLineDraft[] = [];
+  const tidy: RentalLineChecked[] = [];
   for (const line of lines) {
     const item = byId.get(line.itemId);
     if (!item || seen.has(line.itemId)) {
       return { ok: false, error: RENTAL_ITEM_GONE };
     }
     seen.add(line.itemId);
-    if (line.choice === "own") {
-      tidy.push({ itemId: item.id, choice: "own", quantity: 1, sharerIds: [] });
+    const own = line.choice === "own";
+    if (own && !item.isTent) {
+      tidy.push({
+        itemId: item.id,
+        choice: "own",
+        quantity: 1,
+        sharerIds: [],
+        ownDescription: null,
+        ownSleeps: null,
+      });
       continue;
     }
     const sharerIds = [...new Set(line.sharerIds)];
     if (sharerIds.includes(memberId)) {
       return { ok: false, error: RENTAL_NOT_WITH_YOURSELF };
     }
-    const fits = maxSharers(item, line.quantity);
+    const ownSleeps = own ? (line.ownSleeps ?? null) : null;
+    const fits = own
+      ? Math.max(0, (ownSleeps ?? 1) - 1)
+      : maxSharers(item, line.quantity);
     if (sharerIds.length > fits) {
-      return { ok: false, error: tooManySharers(item.name, fits) };
+      return {
+        ok: false,
+        error: tooManySharers(own ? "Your own tent" : item.name, fits),
+      };
     }
     tidy.push({
       itemId: item.id,
-      choice: "need",
-      quantity: line.quantity,
+      choice: line.choice,
+      quantity: own ? 1 : line.quantity,
       sharerIds,
+      ownDescription: own ? line.ownDescription?.trim() || null : null,
+      ownSleeps,
     });
   }
   return { ok: true, lines: tidy };

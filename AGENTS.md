@@ -654,7 +654,20 @@ Decisions baked into the schema — keep new code consistent with them:
   was confirmed at. Only a captain runs it (`canManageRental` in
   `packages/core/src/rental.ts`): this is member money data, so a team lead,
   a Finance lead included, gets nothing extra, and a member reads only their
-  own order plus the one tent another member put them in. Nothing here needs
+  own order plus the one tent another member put them in. My gear is the form
+  (owner, 2026-09-30: not a builder questionnaire). Three steps around it:
+  **"Ask everyone"** nudges each member who is coming this year
+  (`isAskedForGear`: said Yes, or accepted) and has not sent an order, on the
+  gate spine: one NON-blocking `required_actions` row (`gear_order`) and one
+  notice. It is a nudge, never a block; sending the order completes the row;
+  pressing again reaches only those who have not answered and never stacks (no
+  second notice while the first is unread). A member who says "I have my own"
+  tent may say **what it is and how many it sleeps** (both optional, for the
+  site plan), and who shares it. A captain may **fill an order in for a member**
+  who has not answered (`fillRentalOrderFor`: audited, a compare-and-set on the
+  version, marked on the order until the member saves it themselves). The
+  per-item reserve is "reserved for on site", and a camp-stock reserve counts
+  against the camp's stock. Nothing here needs
   the app on site: tents are labelled and printed before the Burn
   (`/print/gear-rental`).
 

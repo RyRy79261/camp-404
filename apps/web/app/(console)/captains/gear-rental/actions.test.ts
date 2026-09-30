@@ -8,7 +8,10 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/rental-gate", () => ({ rentalActionGate: vi.fn() }));
 vi.mock("@/lib/payments", () => ({ ledgerCycle: vi.fn(async () => 2027) }));
+vi.mock("@/lib/background-work", () => ({ deliverAfterResponse: vi.fn() }));
 vi.mock("@/lib/rental", () => ({
+  askForGearOrders: vi.fn(async () => ({ ok: true, asked: 3, notified: 2 })),
+  fillRentalOrderFor: vi.fn(async () => ({ ok: true, version: 1 })),
   addRentalItem: vi.fn(async () => ({ ok: true, id: "i1" })),
   editRentalItem: vi.fn(async () => ({ ok: true })),
   archiveRentalItem: vi.fn(async () => ({ ok: true })),
@@ -22,10 +25,13 @@ vi.mock("@/lib/rental", () => ({
 }));
 
 import { revalidatePath } from "next/cache";
+import { deliverAfterResponse } from "@/lib/background-work";
 import { MY_DUES_PATH } from "@/lib/dues-copy";
 import {
   addRentalItem,
+  askForGearOrders,
   confirmRentalOrder,
+  fillRentalOrderFor,
   reopenRentalOrder,
   setTentLabel,
 } from "@/lib/rental";
@@ -34,6 +40,8 @@ import { rentalActionGate } from "@/lib/rental-gate";
 import {
   addRentalItemAction,
   archiveRentalItemAction,
+  askForGearOrdersAction,
+  fillRentalOrderAction,
   confirmRentalOrderAction,
   editRentalItemAction,
   reopenRentalOrderAction,
@@ -152,7 +160,18 @@ describe("the gate", () => {
     expect(await setTentLabelAction({ lineId: LINE, label: "T1" })).toEqual(
       refused,
     );
+    expect(await askForGearOrdersAction()).toEqual(refused);
+    expect(
+      await fillRentalOrderAction({
+        userId: "member-1",
+        lines: [{ itemId: ID, choice: "need", quantity: 1, sharerIds: [] }],
+        expectedVersion: 0,
+      }),
+    ).toEqual(refused);
+    expect(deliverAfterResponse).not.toHaveBeenCalled();
     for (const write of [
+      askForGearOrders,
+      fillRentalOrderFor,
       addRentalItem,
       confirmRentalOrder,
       reopenRentalOrder,
@@ -160,6 +179,69 @@ describe("the gate", () => {
     ]) {
       expect(write).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe("askForGearOrdersAction", () => {
+  it("asks for this year as the captain, and sends the notices after the response", async () => {
+    expect(await askForGearOrdersAction()).toEqual({
+      ok: true,
+      data: { asked: 3, notified: 2 },
+    });
+    expect(askForGearOrders).toHaveBeenCalledExactlyOnceWith({
+      cycle: 2027,
+      actorId: "cap",
+    });
+    expect(deliverAfterResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts no delivery when nobody was sent a notice", async () => {
+    vi.mocked(askForGearOrders).mockResolvedValueOnce({
+      ok: true,
+      asked: 2,
+      notified: 0,
+    });
+    expect(await askForGearOrdersAction()).toEqual({
+      ok: true,
+      data: { asked: 2, notified: 0 },
+    });
+    expect(deliverAfterResponse).not.toHaveBeenCalled();
+  });
+});
+
+describe("fillRentalOrderAction", () => {
+  const line = { itemId: ID, choice: "need", quantity: 1, sharerIds: [] };
+
+  it("fills the named member's order as the captain", async () => {
+    expect(
+      await fillRentalOrderAction({
+        userId: "member-1",
+        lines: [line],
+        expectedVersion: 0,
+        actorId: "someone-else",
+      }),
+    ).toEqual({ ok: true, data: { version: 1 } });
+    expect(fillRentalOrderFor).toHaveBeenCalledExactlyOnceWith({
+      userId: "member-1",
+      lines: [{ ...line, ownDescription: null, ownSleeps: null }],
+      expectedVersion: 0,
+      cycle: 2027,
+      actorId: "cap",
+    });
+  });
+
+  it("refuses an empty order beside the form", async () => {
+    expect(
+      await fillRentalOrderAction({
+        userId: "member-1",
+        lines: [],
+        expectedVersion: 0,
+      }),
+    ).toEqual({
+      ok: false,
+      error: "Say what they have or what they need first.",
+    });
+    expect(fillRentalOrderFor).not.toHaveBeenCalled();
   });
 });
 

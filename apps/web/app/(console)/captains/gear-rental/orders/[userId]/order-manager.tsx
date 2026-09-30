@@ -30,6 +30,8 @@ import { Input } from "@camp404/ui/components/input";
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { toast } from "@camp404/ui/components/toast";
 import {
+  nameList,
+  ownTentText,
   quantityText,
   sourcePriceText,
   type PricedItemView,
@@ -257,9 +259,24 @@ export function OrderManager({
             </ul>
           )}
           {owned.length > 0 && (
-            <p className="text-sm text-muted-foreground">
-              Has their own: {owned.map((l) => l.itemName).join(", ")}.
-            </p>
+            <ul
+              aria-label="What they have"
+              className="flex flex-col gap-1 text-sm text-muted-foreground"
+            >
+              {owned.map((l) => {
+                const tent = l.isTent ? ownTentText(l) : null;
+                return (
+                  <li key={l.id}>
+                    Has their own {l.itemName}
+                    {tent ? `: ${tent}` : ""}
+                    {l.sharers.length > 0
+                      ? `, shared with ${nameList(l.sharers.map((s) => s.name))}`
+                      : ""}
+                    .
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </CardContent>
       </Card>

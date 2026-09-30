@@ -5,15 +5,22 @@ import {
   campStockTaken,
   canManageRental,
   checkRentalLines,
+  GEAR_ORDER_ACTION_KEY,
+  GEAR_ORDER_ACTION_TITLE,
+  GEAR_ORDER_REF_TYPE,
+  gearOrderAskNotification,
   holdsSharers,
+  isAskedForGear,
   priceRentalOrder,
   rentalChargeDescription,
   rentalSummary,
   tentInUse,
+  type RentalLineDraft,
 } from "@camp404/core";
 import { reachRank } from "@camp404/db/power";
 import {
   NOT_A_RENTAL_MANAGER,
+  OWN_TENT,
   RENTAL_ITEM_MISSING,
   RENTAL_NO_SUCH_MEMBER,
   RENTAL_NOTHING_TO_SEND,
@@ -21,6 +28,7 @@ import {
   RENTAL_ORDER_CONFIRMED,
   RENTAL_ORDER_MOVED,
   RENTAL_ORDER_SENT,
+  RENTAL_REOPEN_FIRST,
   RENTAL_SHARER_GONE,
   RENTAL_TENT_NOT_CONFIRMED,
   TOO_MANY_RENTAL_ITEMS,
@@ -30,11 +38,12 @@ import {
   type RentalOrder,
   type RentalOverview,
   type RentalResult,
+  type RentalUnanswered,
 } from "@camp404/db/rental";
 import type {
   RentalChoice,
+  ParticipationStatus,
   RentalItemInput,
-  RentalLineInput,
   RentalOrderStatus,
   RentalSource,
 } from "@camp404/types";
@@ -51,7 +60,8 @@ import {
 // member writes only their own order, the confirmation is a compare-and-set
 // on `submitted` and the version, and it charges the dues store. The store
 // keeps no audit log and is one synchronous process, so there is nothing to
-// lock. Kept apart from test-store.ts, which calls in here only to reset.
+// lock. "Ask everyone" opens the store's non-blocking required action and
+// pushes its notice, as the database does. Kept apart from test-store.ts, which calls in here only to reset.
 
 interface ItemRow extends RentalItem {
   archivedAt: Date | null;
@@ -65,6 +75,8 @@ interface LineRow {
   source: RentalSource | null;
   unitPriceCents: number | null;
   tentLabel: string | null;
+  ownDescription: string | null;
+  ownSleeps: number | null;
   sharerIds: string[];
 }
 
@@ -78,6 +90,7 @@ interface OrderRow {
   confirmedAt: Date | null;
   totalCents: number | null;
   chargeId: string | null;
+  filledByUserId: string | null;
   lines: LineRow[];
 }
 
@@ -192,6 +205,8 @@ function toOrder(row: OrderRow): RentalOrder {
         source: l.source,
         unitPriceCents: l.unitPriceCents,
         tentLabel: l.tentLabel,
+        ownDescription: l.ownDescription,
+        ownSleeps: l.ownSleeps,
         sharers: l.sharerIds
           .filter((id) => testStore.findUserById(id))
           .map((id) => ({
@@ -222,12 +237,122 @@ function toOrder(row: OrderRow): RentalOrder {
     totalCents: row.totalCents,
     chargeId:
       row.chargeId && isChargeLiveInStore(row.chargeId) ? row.chargeId : null,
+    filledByCaptain: row.filledByUserId !== null,
     lines,
   };
 }
 
 function orderOf(userId: string, cycle: number): OrderRow | undefined {
   return state().orders.find((o) => o.userId === userId && o.cycle === cycle);
+}
+
+/** The twin of `unanswered`: coming this year, with no order or only a draft. */
+function unansweredRows(cycle: number) {
+  return testStore
+    .allUsers()
+    .filter((u) => u.approvalStatus === "approved")
+    .flatMap((u) => {
+      const place = testStore.getParticipation(u.id, cycle)?.status ?? null;
+      const order = orderOf(u.id, cycle);
+      return place !== null &&
+        isAskedForGear(place) &&
+        (!order || order.status === "draft")
+        ? [
+            {
+              userId: u.id,
+              participation: place,
+              draft: order?.status === "draft",
+            },
+          ]
+        : [];
+    });
+}
+
+/** The twin of storeOrder: the member's own save, or a captain's fill-in. */
+function storeOrder(input: {
+  userId: string;
+  cycle: number;
+  lines: readonly RentalLineDraft[];
+  submit: boolean;
+  expectedVersion: number;
+  from: readonly RentalOrderStatus[];
+  filledBy: string | null;
+  locked: (status: RentalOrderStatus | undefined) => string;
+}): RentalResult<{ version: number; status: RentalOrderStatus }> {
+  const refuse = (error: string) => ({ ok: false as const, error });
+  if (!testStore.findUserById(input.userId)) {
+    return refuse(RENTAL_NO_SUCH_MEMBER);
+  }
+  const checked = checkRentalLines(
+    itemsOf(input.cycle),
+    input.lines,
+    input.userId,
+  );
+  if (!checked.ok) return refuse(checked.error);
+  if (input.submit && checked.lines.length === 0) {
+    return refuse(RENTAL_NOTHING_TO_SEND);
+  }
+  const sharers = checked.lines.flatMap((l) => l.sharerIds);
+  if (
+    sharers.some(
+      (id) => testStore.findUserById(id)?.approvalStatus !== "approved",
+    )
+  ) {
+    return refuse(RENTAL_SHARER_GONE);
+  }
+  const current = orderOf(input.userId, input.cycle);
+  const matches =
+    input.expectedVersion === 0
+      ? !current
+      : current !== undefined &&
+        input.from.includes(current.status) &&
+        current.version === input.expectedVersion;
+  if (!matches) {
+    return refuse(
+      input.locked(
+        current && !input.from.includes(current.status)
+          ? current.status
+          : undefined,
+      ),
+    );
+  }
+  const status: RentalOrderStatus = input.submit ? "submitted" : "draft";
+  const version = input.expectedVersion + 1;
+  const order: OrderRow = current ?? {
+    id: crypto.randomUUID(),
+    userId: input.userId,
+    cycle: input.cycle,
+    status,
+    version,
+    submittedAt: null,
+    confirmedAt: null,
+    totalCents: null,
+    chargeId: null,
+    filledByUserId: null,
+    lines: [],
+  };
+  order.status = status;
+  order.version = version;
+  order.submittedAt = input.submit ? new Date() : null;
+  order.filledByUserId = input.filledBy;
+  order.lines = checked.lines.map((l) => ({
+    id: crypto.randomUUID(),
+    itemId: l.itemId,
+    choice: l.choice,
+    quantity: l.quantity,
+    source: null,
+    unitPriceCents: null,
+    tentLabel: null,
+    ownDescription: l.ownDescription,
+    ownSleeps: l.ownSleeps,
+    sharerIds: [...l.sharerIds],
+  }));
+  if (!current) state().orders.push(order);
+  if (input.submit) {
+    testStore.satisfyRequiredAction(input.userId, GEAR_ORDER_ACTION_KEY);
+    testStore.readNotices(input.userId, GEAR_ORDER_REF_TYPE);
+  }
+  return { ok: true, version, status };
 }
 
 export const rentalTestStore = {
@@ -308,6 +433,9 @@ export const rentalTestStore = {
     const items = new Map(state().items.map((i) => [i.id, i]));
     return {
       items: itemsOf(cycle).map(toItem),
+      asked:
+        testStore.hasOpenNudge(userId, GEAR_ORDER_ACTION_KEY) &&
+        (mine === null || mine.status === "draft"),
       order: mine && {
         ...mine,
         participation: null,
@@ -324,10 +452,16 @@ export const rentalTestStore = {
         .orders.filter((o) => o.cycle === cycle && o.status !== "draft")
         .flatMap((o) =>
           o.lines
-            .filter((l) => l.choice === "need" && l.sharerIds.includes(userId))
+            .filter(
+              (l) =>
+                items.get(l.itemId)?.isTent && l.sharerIds.includes(userId),
+            )
             .map((l) => ({
               lineId: l.id,
-              itemName: items.get(l.itemId)!.name,
+              itemName:
+                l.choice === "own"
+                  ? (l.ownDescription ?? OWN_TENT)
+                  : items.get(l.itemId)!.name,
               tentLabel: o.status === "confirmed" ? l.tentLabel : null,
               confirmed: o.status === "confirmed",
               ownerName: nameOf(o.userId),
@@ -368,6 +502,33 @@ export const rentalTestStore = {
   getRentalOrderOf(userId: string, cycle: number): RentalOrder | null {
     const row = orderOf(userId, cycle);
     return row ? toOrder(row) : null;
+  },
+
+  listRentalUnanswered(cycle: number): RentalUnanswered[] {
+    return unansweredRows(cycle)
+      .map((r) => ({
+        ...r,
+        name: nameOf(r.userId),
+        asked: testStore.hasOpenNudge(r.userId, GEAR_ORDER_ACTION_KEY),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
+
+  getRentalMember(
+    userId: string,
+    cycle: number,
+  ): {
+    userId: string;
+    name: string;
+    participation: ParticipationStatus | null;
+  } | null {
+    const user = testStore.findUserById(userId);
+    if (!user || user.approvalStatus !== "approved") return null;
+    return {
+      userId,
+      name: nameOf(userId),
+      participation: testStore.getParticipation(userId, cycle)?.status ?? null,
+    };
   },
 
   getRentalOverview(cycle: number): RentalOverview {
@@ -417,6 +578,20 @@ export const rentalTestStore = {
               numeric: true,
             }) || a.ownerName.localeCompare(b.ownerName),
         ),
+      ownTents: orders
+        .filter((o) => o.status !== "draft")
+        .flatMap((o) =>
+          o.lines
+            .filter((l) => l.isTent && l.choice === "own")
+            .map((l) => ({
+              lineId: l.id,
+              ownerName: o.memberName,
+              description: l.ownDescription,
+              sleeps: l.ownSleeps,
+              sharers: l.sharers.map((s) => s.name),
+            })),
+        )
+        .sort((a, b) => a.ownerName.localeCompare(b.ownerName)),
     };
   },
 
@@ -425,74 +600,21 @@ export const rentalTestStore = {
   saveRentalOrder(input: {
     userId: string;
     cycle: number;
-    lines: readonly RentalLineInput[];
+    lines: readonly RentalLineDraft[];
     submit: boolean;
     expectedVersion: number;
   }): RentalResult<{ version: number; status: RentalOrderStatus }> {
-    const refuse = (error: string) => ({ ok: false as const, error });
-    if (!testStore.findUserById(input.userId)) {
-      return refuse(RENTAL_NO_SUCH_MEMBER);
-    }
-    const checked = checkRentalLines(
-      itemsOf(input.cycle),
-      input.lines,
-      input.userId,
-    );
-    if (!checked.ok) return refuse(checked.error);
-    if (input.submit && checked.lines.length === 0) {
-      return refuse(RENTAL_NOTHING_TO_SEND);
-    }
-    const sharers = checked.lines.flatMap((l) => l.sharerIds);
-    if (
-      sharers.some(
-        (id) => testStore.findUserById(id)?.approvalStatus !== "approved",
-      )
-    ) {
-      return refuse(RENTAL_SHARER_GONE);
-    }
-    const current = orderOf(input.userId, input.cycle);
-    if (input.expectedVersion === 0 ? current : !current) {
-      return refuse(RENTAL_ORDER_CHANGED);
-    }
-    if (current && current.status !== "draft") {
-      return refuse(
-        current.status === "submitted"
+    return storeOrder({
+      ...input,
+      from: ["draft"],
+      filledBy: null,
+      locked: (status) =>
+        status === "submitted"
           ? RENTAL_ORDER_SENT
-          : RENTAL_ORDER_CONFIRMED,
-      );
-    }
-    if (current && current.version !== input.expectedVersion) {
-      return refuse(RENTAL_ORDER_CHANGED);
-    }
-    const status: RentalOrderStatus = input.submit ? "submitted" : "draft";
-    const version = input.expectedVersion + 1;
-    const order: OrderRow = current ?? {
-      id: crypto.randomUUID(),
-      userId: input.userId,
-      cycle: input.cycle,
-      status,
-      version,
-      submittedAt: null,
-      confirmedAt: null,
-      totalCents: null,
-      chargeId: null,
-      lines: [],
-    };
-    order.status = status;
-    order.version = version;
-    order.submittedAt = input.submit ? new Date() : null;
-    order.lines = checked.lines.map((l) => ({
-      id: crypto.randomUUID(),
-      itemId: l.itemId,
-      choice: l.choice,
-      quantity: l.quantity,
-      source: null,
-      unitPriceCents: null,
-      tentLabel: null,
-      sharerIds: [...l.sharerIds],
-    }));
-    if (!current) state().orders.push(order);
-    return { ok: true, version, status };
+          : status === "confirmed"
+            ? RENTAL_ORDER_CONFIRMED
+            : RENTAL_ORDER_CHANGED,
+    });
   },
 
   withdrawRentalOrder(input: {
@@ -521,6 +643,56 @@ export const rentalTestStore = {
   },
 
   // --- A captain's writes ----------------------------------------------------------
+
+  fillRentalOrderFor(input: {
+    userId: string;
+    cycle: number;
+    lines: readonly RentalLineDraft[];
+    expectedVersion: number;
+    actorId: string;
+  }): RentalResult<{ version: number }> {
+    if (!isManager(input.actorId)) {
+      return { ok: false, error: NOT_A_RENTAL_MANAGER };
+    }
+    const saved = storeOrder({
+      userId: input.userId,
+      cycle: input.cycle,
+      lines: input.lines,
+      submit: true,
+      expectedVersion: input.expectedVersion,
+      from: ["draft", "submitted"],
+      filledBy: input.actorId,
+      locked: (status) =>
+        status === "confirmed" ? RENTAL_REOPEN_FIRST : RENTAL_ORDER_MOVED,
+    });
+    return saved.ok ? { ok: true, version: saved.version } : saved;
+  },
+
+  askForGearOrders(input: {
+    cycle: number;
+    actorId: string;
+  }): RentalResult<{ asked: number; notified: number }> {
+    return manager(input.actorId, () => {
+      const targets = unansweredRows(input.cycle);
+      let notified = 0;
+      for (const target of targets) {
+        testStore.openNudge({
+          userId: target.userId,
+          actionKey: GEAR_ORDER_ACTION_KEY,
+          title: GEAR_ORDER_ACTION_TITLE,
+        });
+        if (testStore.hasUnreadNotice(target.userId, GEAR_ORDER_REF_TYPE)) {
+          continue;
+        }
+        testStore.pushNotice(
+          target.userId,
+          gearOrderAskNotification({ requiredActionId: null }),
+        );
+        notified += 1;
+      }
+      return { asked: targets.length, notified };
+    });
+  },
 
   confirmRentalOrder(input: {
     orderId: string;
