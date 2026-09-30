@@ -106,7 +106,10 @@
 //     and the fuel maths (fuelLine, fuelPerHour, fuelForPlan,
 //     jerryCansNeeded, legacyFuelEstimate) (./power)
 //   - logistics: canEditLogistics (a captain or a Transport and Logistics
-//     lead), logisticsEventTitle, logisticsCalendarStep (./logistics)
+//     lead), logisticsEventTitle (plain), logisticsCalendarStep; attendance
+//     (canAskForAttendance, attendanceIsOpen, attendanceBoard, the nudge's
+//     key and notice); AfrikaBurn deadlines (canManageDeadlines,
+//     deadlineCalendarStep) (./logistics)
 //   - gear rental: canManageRental (a captain), checkRentalOrder, tentConflict,
 //     rentalEstimate, priceRentalOrder and rentalSummary (./rental)
 //   - camp layout: canEditLayout (a captain or a Structures lead),

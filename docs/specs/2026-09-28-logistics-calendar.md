@@ -47,9 +47,12 @@ The mirror rules (built in the first slice, reusable by later ones):
 - **Google failing never loses the save.** The app's row is the record; the
   page says which rows are not on the calendar yet, and saving again retries.
   No cron.
-- **Titles use the convention**: "Transport and Logistics Team - Build", with
-  the team key as the private property, so the Transport and Logistics page
-  and Home's "Coming up" pick the events up with no new reading code.
+- ~~**Titles use the convention**: "Transport and Logistics Team - Build", with
+  the team key as the private property.~~ [CORRECTION 2026-09-30] Titles are
+  plain ("Build", a deadline's own title) with no team property: every phase
+  is a whole-camp event (owner's answer 1 below). Events already on the
+  calendar are rewritten in place under the id they own, by the calendar
+  catch-up on a page load (migration 0080 marks them).
 - **Not connected** (no Google settings, as in tests): the in-app view works
   and says the dates are only in the app.
 
@@ -74,6 +77,16 @@ reads it. **A captain or a Transport and Logistics lead** sets the dates
 write's transaction, audited in the same transaction, compare-and-set on a
 version. One table, `logistics_phases` (year, phase, dates, place, note,
 Google event id, which version is on Google).
+
+## Slice 2 (built 2026-09-30): plain titles, attendance, AfrikaBurn deadlines
+
+Built to the owner's answers below. Plain titles on the calendar (and a
+catch-up that rewrites the old ones in place); `logistics_attendance` with
+Going / Maybe / Can't per member for Pack, Build, Strike and Unpack, shown on
+Logistics with counts and names and who has not answered (names for leads
+and captains only, counts for everyone), and a captains' "Ask everyone" nudge;
+`afrikaburn_deadlines` on the camp's year page, each dated one a Google event,
+read by members on Logistics. Items 1 and 5 below are done.
 
 ## Next slices (proposal, owner decides)
 

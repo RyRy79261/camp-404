@@ -50,6 +50,7 @@
     "./power-readiness": "./src/power-readiness.ts",
     "./power": "./src/power.ts",
     "./logistics": "./src/logistics.ts",
+    "./deadlines": "./src/deadlines.ts",
     "./camp-layout": "./src/camp-layout.ts",
     "./lounge": "./src/lounge.ts",
     "./inventory": "./src/inventory.ts",

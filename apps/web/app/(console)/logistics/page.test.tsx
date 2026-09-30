@@ -18,7 +18,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/(console)/logistics/actions", () => ({
   saveLogisticsPhaseAction: vi.fn(),
   clearLogisticsPhaseAction: vi.fn(),
+  setMyAttendanceAction: vi.fn(),
+  askForAttendanceAction: vi.fn(),
 }));
+vi.mock("@/lib/payments", () => ({ ledgerCycle: vi.fn(async () => 2027) }));
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn(async () => []) }));
 vi.mock("@/lib/camp-config", () => ({
@@ -27,12 +30,19 @@ vi.mock("@/lib/camp-config", () => ({
 vi.mock("@/lib/logistics", () => ({
   listLogisticsPhases: vi.fn(async () => []),
   isLogisticsCalendarConnected: vi.fn(() => true),
+  getAttendanceView: vi.fn(),
+  isAskedForAttendance: vi.fn(async () => false),
+  listDeadlines: vi.fn(async () => []),
 }));
 
 import { captainPageGate } from "@/lib/captain-gate";
 import {
+  getAttendanceView,
+  isAskedForAttendance,
   isLogisticsCalendarConnected,
+  listDeadlines,
   listLogisticsPhases,
+  type AttendanceView,
 } from "@/lib/logistics";
 import {
   CALENDAR_NOT_CONNECTED_NOTE,
@@ -69,10 +79,34 @@ async function show() {
   render(await LogisticsPage());
 }
 
+const EMPTY = { going: [], maybe: [], cant: [] };
+
+/** The board as the facade hands it to a viewer who may or may not see who is silent. */
+function board(names: boolean): AttendanceView {
+  return {
+    phases: [
+      {
+        phase: "pack",
+        names: { going: ["Dee"], maybe: ["Mo"], cant: [] },
+        notAnswered: names ? ["Quiet Quinn"] : [],
+      },
+      { phase: "build", names: EMPTY, notAnswered: [] },
+      { phase: "strike", names: EMPTY, notAnswered: [] },
+      { phase: "unpack", names: EMPTY, notAnswered: [] },
+    ],
+    mine: { pack: "maybe" },
+    namesWhoHaveNotAnswered: names,
+    notAnsweredCount: { pack: 1, build: 0, strike: 0, unpack: 0 },
+  };
+}
+
 describe("logistics page", () => {
   beforeEach(() => {
     vi.mocked(listLogisticsPhases).mockResolvedValue([BUILD]);
     vi.mocked(isLogisticsCalendarConnected).mockReturnValue(true);
+    vi.mocked(getAttendanceView).mockImplementation(async ({ rank }) =>
+      board(rank !== "camp_member"),
+    );
   });
   afterEach(() => {
     cleanup();
@@ -177,5 +211,93 @@ describe("logistics page", () => {
     const build = text(screen.getByRole("listitem", { name: "Build" }));
     expect(build).toContain("Sat 24 Apr to Mon 26 Apr 2027, 3 days");
     expect(build).not.toContain("camp calendar");
+  });
+
+  it("shows everyone's answers by name and the member's own, but not who is silent to a member", async () => {
+    signIn("camp_member");
+    await show();
+    const pack = screen.getByRole("listitem", { name: "Who can help: Pack" });
+    expect(text(pack)).toContain(
+      "1 going · 1 maybe · 0 can't · 1 not answered",
+    );
+    expect(text(pack)).toContain("Dee");
+    expect(text(pack)).not.toContain("Quiet Quinn");
+    const mine = within(pack).getByRole("group", {
+      name: "Your answer for Pack",
+    });
+    expect(
+      within(mine)
+        .getByRole("button", { name: "Maybe" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(getAttendanceView).toHaveBeenCalledWith({
+      userId: "user-1",
+      rank: "camp_member",
+      cycle: 2027,
+    });
+    // Only a captain asks everyone.
+    expect(screen.queryByRole("button", { name: "Ask everyone" })).toBeNull();
+  });
+
+  it("names who has not answered to a lead", async () => {
+    signIn("team_lead", ["kitchen"]);
+    await show();
+    const pack = screen.getByRole("listitem", { name: "Who can help: Pack" });
+    expect(text(pack)).toContain("Not answered (1)Quiet Quinn");
+    expect(screen.queryByRole("button", { name: "Ask everyone" })).toBeNull();
+  });
+
+  it("gives a captain Ask everyone", async () => {
+    signIn("captain");
+    await show();
+    expect(screen.getByRole("button", { name: "Ask everyone" })).toBeTruthy();
+  });
+
+  it("closes a phase's answers once it has started", async () => {
+    signIn("camp_member");
+    vi.mocked(listLogisticsPhases).mockResolvedValue([
+      { ...BUILD, startDate: "2020-01-01", endDate: "2020-01-02" },
+    ]);
+    await show();
+    const build = screen.getByRole("listitem", { name: "Who can help: Build" });
+    expect(text(build)).toContain("Build has started, so answers are closed.");
+    expect(
+      (
+        within(build).getByRole("button", {
+          name: "Going",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+  });
+
+  it("tells an asked member, and lists the AfrikaBurn deadlines for everyone", async () => {
+    signIn("camp_member");
+    vi.mocked(isAskedForAttendance).mockResolvedValue(true);
+    vi.mocked(listDeadlines).mockResolvedValue([
+      {
+        id: "d1",
+        cycle: 2027,
+        title: "Theme camp registration closes",
+        dueDate: "2027-01-15",
+        note: "On the AfrikaBurn site.",
+        done: true,
+        calendarEventId: "e1",
+        calendarSyncedVersion: 1,
+        version: 1,
+        removedAt: null,
+      },
+    ]);
+    await show();
+    expect(screen.getByTestId("attendance-asked")).toBeTruthy();
+    const list = screen.getByRole("list", { name: "AfrikaBurn deadlines" });
+    const row = text(
+      within(list).getByRole("listitem", {
+        name: "Theme camp registration closes",
+      }),
+    );
+    expect(row).toContain("Fri 15 Jan 2027 · Done");
+    expect(row).toContain("On the AfrikaBurn site.");
+    // Members read; only a captain is sent to change them.
+    expect(screen.queryByRole("link", { name: "Change them" })).toBeNull();
   });
 });

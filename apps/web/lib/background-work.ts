@@ -19,6 +19,7 @@ import { sweepOrphanAvatarBlobs } from "./avatar-blob";
 import { isEmailConfigured, sendEmail } from "./email";
 import { sendPush } from "./firebase-admin";
 import { firebaseAdminCredentials } from "./integration-config";
+import { catchUpCampCalendar } from "./logistics";
 import { SITE_URL } from "./site";
 import { isE2ETestMode } from "./test-mode";
 
@@ -35,7 +36,8 @@ import { isE2ETestMode } from "./test-mode";
 //  - On a page load. Any signed-in member loading a console page calls
 //    `runDueWorkAfterResponse()`, which does what is due: a scheduled
 //    announcement whose time has come, deadline reminders, a retry of anything
-//    left queued, and the upkeep. A row in `action_rate_limit` (one statement,
+//    left queued, the camp calendar catch-up (a logistics phase or AfrikaBurn
+//    deadline Google did not take yet), and the upkeep. A row in `action_rate_limit` (one statement,
 //    compare-and-set on the database clock) lets it run at most once per
 //    DUE_WORK_EVERY_MS across every server, and the upkeep once per
 //    MAINTENANCE_EVERY_MS.
@@ -174,6 +176,10 @@ export async function runDueWork(
     await step("task reminders", () => remindTaskDeadlines({ now }));
   }
   await deliverDue();
+  // Logistics phases and AfrikaBurn deadlines the camp calendar does not
+  // match yet: each is put under the event id its row already owns, so a
+  // retry never duplicates one.
+  await step("camp calendar catch-up", () => catchUpCampCalendar());
   if (await claim(MAINTENANCE_KEY, MAINTENANCE_EVERY_MS)) {
     await runMaintenance();
   }

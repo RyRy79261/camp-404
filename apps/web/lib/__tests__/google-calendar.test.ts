@@ -563,10 +563,11 @@ describe("writing to the calendar", () => {
 });
 
 describe("putCalendarEvent", () => {
+  // A logistics phase: a whole-camp event with a plain title.
   const body = eventRequestBody({
     title: "Build",
     description: null,
-    team: { key: "transport_and_logistics", label: "Transport and Logistics" },
+    team: null,
     date: "2027-04-24",
     allDay: true,
   });
@@ -609,7 +610,7 @@ describe("putCalendarEvent", () => {
     expect(calls.map((c) => c.method)).toEqual(["PUT", "POST"]);
     expect(calls[1]!.body).toMatchObject({
       id: "logistics001",
-      summary: "Transport and Logistics Team - Build",
+      summary: "Build",
     });
 
     calls.length = 0;

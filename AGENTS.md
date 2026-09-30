@@ -627,11 +627,37 @@ Decisions baked into the schema — keep new code consistent with them:
   and unpack days are one row per (year, phase) in `logistics_phases`. A
   captain or a Transport and Logistics lead sets them (`canEditLogistics`), a
   compare-and-set on `version`, audited; every member reads. The camp calendar
-  stays on Google (owner, 2026-09-28): a phase with days is ONE all-day event,
-  titled in the camp's convention ("Transport and Logistics Team - Build"). The
-  row claims its event id inside the write, before Google is called, so a
-  re-save or a retry never makes a second event; Google is called after the
-  transaction. Clearing the days takes the event off Google.
+  stays on Google (owner, 2026-09-28): a phase with days is ONE all-day event.
+  [CORRECTION 2026-09-30] Its title is PLAIN ("Build") and it carries no team
+  tag: every phase is a whole-camp event (owner: "Build and Strike is a whole
+  camp activity", then "All phases plain"), so the Calendar and Home show it as
+  the camp's, not on the Transport and Logistics page. The row claims its
+  event id inside the write, before Google is called, so a re-save or a retry
+  never makes a second event; Google is called after the transaction. Clearing
+  the days takes the event off Google. A row Google does not match yet
+  (`calendar_synced_version` behind `version`) is put right by the calendar
+  catch-up in `runDueWork` (on a page load, no cron), under the id it already
+  owns; migration 0080 marked the phases written with the old team title.
+  - **Attendance.** Every member who is coming (`isAskedForAttendance`, the
+    same people as the gear rental: said Yes, or accepted) is asked Going /
+    Maybe / Can't for Pack, Build, Strike and Unpack (`ATTENDANCE_PHASES`;
+    not Travel or the Burn). One row per (year, phase, member) in
+    `logistics_attendance`; a member writes only their own, until the phase's
+    first day, a compare-and-set on the answer they saw. Every member reads
+    the answers by name. Who has NOT answered is the list of who is coming,
+    and `campParticipations.status` reads at `team_lead`, so a plain member
+    gets the count only (`getAttendanceView` empties the names on the
+    server). "Ask everyone" is the gear rental's nudge, shared as
+    `openNudges`/`closeNudge` (`packages/db/src/nudges.ts`): captains only
+    (`canAskForAttendance`), a `logistics_attendance` required action,
+    completed once every open phase has an answer.
+  - **AfrikaBurn deadlines** (`afrikaburn_deadlines`) live on the camp's year
+    page (`/captains/camp-settings/cycle`): captains only
+    (`canManageDeadlines`), added one at a time, date optional, a done tick,
+    each change a compare-and-set on `version`, audited. A dated deadline is
+    one plain-titled Google event by the same mirror; a removed one keeps its
+    row (`removed_at`) until its event is gone. Members read them on
+    Logistics.
 - **Gear rental (#241).** The year's sleeping gear is `rental_items`; a
   member's order is one `rental_orders` row per member per year, with
   `rental_order_lines` and `rental_order_sharers`. Owner's rulings

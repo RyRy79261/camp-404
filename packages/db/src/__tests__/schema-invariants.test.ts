@@ -234,6 +234,7 @@ describe("every member-data column has a reader in the field-access list", () =>
     duesCharges: schema.duesCharges,
     duesInstalments: schema.duesInstalments,
     paymentRefunds: schema.paymentRefunds,
+    logisticsAttendance: schema.logisticsAttendance,
     rentalOrders: schema.rentalOrders,
     rentalOrderLines: schema.rentalOrderLines,
     rentalOrderSharers: schema.rentalOrderSharers,

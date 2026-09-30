@@ -32,6 +32,11 @@ export function notificationLink(
   if (refType === "gear_order") {
     return "/gear";
   }
+  // A captain's ask for logistics attendance opens Logistics, where the
+  // member answers.
+  if (refType === "logistics_attendance") {
+    return "/logistics";
+  }
   // A required action has no page of its own; home sends the member on to
   // whatever still blocks them (requireMemberPage).
   if (refType === "required_action" && refId && UUID.test(refId)) {

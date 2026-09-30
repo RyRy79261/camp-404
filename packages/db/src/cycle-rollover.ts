@@ -668,6 +668,20 @@ export async function setFoundingYear(input: {
         .set({ cycle: input.year })
         .where(eq(table.cycle, UNSET_CYCLE));
     }
+    // Logistics (#247): the year's phases, who can help on them, and the
+    // AfrikaBurn deadlines, written before the camp had a year. Nothing can
+    // hold the founding year yet (every write stamps the current year, which
+    // was the sentinel), so moving them cannot collide.
+    for (const table of [
+      schema.logisticsPhases,
+      schema.logisticsAttendance,
+      schema.afrikaburnDeadlines,
+    ]) {
+      await tx
+        .update(table)
+        .set({ cycle: input.year })
+        .where(eq(table.cycle, UNSET_CYCLE));
+    }
     // Transport (#270): the year's trailers and lift requests.
     const trailers = await tx
       .update(schema.transportTrailers)
