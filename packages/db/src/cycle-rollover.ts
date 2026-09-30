@@ -649,6 +649,11 @@ export async function setFoundingYear(input: {
         .set({ cycle: input.year })
         .where(eq(table.cycle, UNSET_CYCLE));
     }
+    // Claims (#242): a claim lodged before the camp had a year.
+    await tx
+      .update(schema.reimbursements)
+      .set({ cycle: input.year })
+      .where(eq(schema.reimbursements.cycle, UNSET_CYCLE));
     // Gear rental (#241): the year's catalogue and orders, and the charge a
     // confirmed order made on the member's dues, so the order and its charge
     // stay in the same year.

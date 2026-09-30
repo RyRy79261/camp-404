@@ -10,7 +10,12 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { canEditTeamProgram, canWorkInTeam } from "@camp404/core";
+import {
+  canApproveClaim,
+  canEditTeamProgram,
+  canManageMoney,
+  canWorkInTeam,
+} from "@camp404/core";
 import { Team } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import {
@@ -25,10 +30,12 @@ import { MeetingRow } from "@/components/meetings/meeting-row";
 import { TeamAboutCard } from "@/components/teams/team-about-card";
 import { TeamAboutEditor } from "@/components/teams/team-about-editor";
 import { TeamAnnouncementsCard } from "@/components/teams/team-announcements-card";
+import { TeamBudgetCard } from "@/components/teams/team-budget-card";
 import { TEAM_PANELS } from "@/components/teams/team-panels";
 import { getUpcomingEvents } from "@/lib/camp-calendar";
 import { getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
+import { listBudgetTotals } from "@/lib/claims";
 import { buildCalendarDays } from "@/lib/calendar-view";
 import { CALENDAR_PAGE_RANGE } from "@/lib/google-calendar";
 import { listMeetingNotes } from "@/lib/meeting-notes";
@@ -37,6 +44,7 @@ import {
   newMeetingHref,
   TEAM_MEETING_LIMIT,
 } from "@/lib/meeting-notes-view";
+import { ledgerCycle } from "@/lib/payments";
 import { listTeamPeople, type TeamPerson } from "@/lib/roster";
 import { presentTask } from "@/lib/task-board";
 import { buildTeamPage } from "@/lib/team-page";
@@ -69,7 +77,9 @@ export async function generateMetadata({
 // Who may change things (ruling 1): a captain or a lead of THIS team, by
 // canEditTeamProgram; only they get the Edit control, and the action checks
 // again. "New meeting" keeps the meeting notes' own rule (canWorkInTeam: the
-// team's members this year and captains).
+// team's members this year and captains). The team's budget (#242) follows
+// its own panels: every member reads the totals (budget, spent, left), never
+// a claim.
 // The composition is Home's: the main cards on the left, the people beside.
 
 const DUE_VARIANT = {
@@ -128,16 +138,25 @@ export default async function TeamPage({
   if (!entry || !team.success) notFound();
 
   const now = new Date();
-  const [people, calendar, tasks, leadTeams, meetings, about, announcements] =
-    await Promise.all([
-      listTeamPeople(team.data),
-      getUpcomingEvents(CALENDAR_PAGE_RANGE),
-      listBoardTasks(now),
-      rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
-      listMeetingNotes({ team: team.data, limit: TEAM_MEETING_LIMIT }),
-      getTeamProgram(team.data),
-      listTeamAnnouncements(team.data),
-    ]);
+  const [
+    people,
+    calendar,
+    tasks,
+    leadTeams,
+    meetings,
+    about,
+    announcements,
+    budgets,
+  ] = await Promise.all([
+    listTeamPeople(team.data),
+    getUpcomingEvents(CALENDAR_PAGE_RANGE),
+    listBoardTasks(now),
+    rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
+    listMeetingNotes({ team: team.data, limit: TEAM_MEETING_LIMIT }),
+    getTeamProgram(team.data),
+    listTeamAnnouncements(team.data),
+    ledgerCycle().then(listBudgetTotals),
+  ]);
   const canEdit = canEditTeamProgram(rank, leadTeams, team.data);
   // The team's own panels read their own data; drawn here, before the page,
   // so the whole program arrives in one server render. A panel that fails
@@ -219,6 +238,13 @@ export default async function TeamPage({
           />
 
           {panel}
+
+          <TeamBudgetCard
+            teamLabel={entry.label}
+            totals={budgets[team.data]}
+            canApprove={canApproveClaim(rank, leadTeams, team.data)}
+            keepsMoney={canManageMoney(rank, leadTeams)}
+          />
 
           <TeamAnnouncementsCard
             items={announcements.items}

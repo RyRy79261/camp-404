@@ -2,14 +2,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { UnknownCurrencyError } from "@camp404/core";
 import { useTestDb } from "./_harness";
-import { makeUser } from "./_factories";
-import { getTeamBudget, listTeamBudgets, setTeamBudget } from "../team-budgets";
 import * as schema from "../schema";
 
-// Budgets are one per team per year: reads and writes use the camp's current
-// year, and migration 0034 moves rows that predate the column into it.
+// Budgets are one per team per year: migration 0034 moves rows that predate
+// the column into the camp's current year. The budgets themselves (#242) are
+// tested in claims.test.ts.
 
 type DB = ReturnType<ReturnType<typeof useTestDb>["db"]>;
 
@@ -36,79 +34,6 @@ const OPEN_2027 = [
   },
   { year: 2027, startedAt: "2026-06-01T00:00:00.000Z", endedAt: null },
 ];
-
-describe("team budgets", () => {
-  const h = useTestDb();
-
-  it("sets this year's budget, keeps unnamed fields, and audits which fields changed", async () => {
-    const db = h.db();
-    const lead = await makeUser(db);
-    await setYears(db, OPEN_2027);
-
-    await setTeamBudget({
-      team: "kitchen",
-      change: { assignedAmount: "5000.00", notes: "Gas and ice" },
-      actorId: lead.id,
-    });
-    const row = await setTeamBudget({
-      team: "kitchen",
-      change: { perceivedAmount: "6200.00" },
-      actorId: lead.id,
-    });
-    expect(row).toMatchObject({
-      team: "kitchen",
-      cycle: 2027,
-      assignedAmount: "5000.00",
-      perceivedAmount: "6200.00",
-      notes: "Gas and ice",
-    });
-
-    const audit = await db.select().from(schema.auditLog);
-    expect(audit.map((a) => a.metadata)).toEqual([
-      { team: "kitchen", cycle: 2027, fields: ["assignedAmount", "notes"] },
-      { team: "kitchen", cycle: 2027, fields: ["perceivedAmount"] },
-    ]);
-  });
-
-  it("refuses any currency but rands, and creates no row", async () => {
-    const db = h.db();
-    const lead = await makeUser(db);
-    await setYears(db, OPEN_2027);
-    for (const currency of ["USD", "EUR", "zar", "GBP"]) {
-      await expect(
-        setTeamBudget({
-          team: "kitchen",
-          change: { assignedAmount: "999.00", currency: currency as never },
-          actorId: lead.id,
-        }),
-      ).rejects.toThrow(UnknownCurrencyError);
-    }
-    expect(await db.select().from(schema.teamBudgets)).toEqual([]);
-    expect(await db.select().from(schema.auditLog)).toEqual([]);
-
-    const row = await setTeamBudget({
-      team: "kitchen",
-      change: { assignedAmount: "999.00", currency: "ZAR" },
-      actorId: lead.id,
-    });
-    expect(row).toMatchObject({ assignedAmount: "999.00", currency: "ZAR" });
-  });
-
-  it("reads only the current year", async () => {
-    const db = h.db();
-    await setYears(db, OPEN_2027);
-    await db.insert(schema.teamBudgets).values([
-      { team: "kitchen", cycle: 2026, assignedAmount: "100.00" },
-      { team: "kitchen", cycle: 2027, assignedAmount: "200.00" },
-      { team: "structures", cycle: 2026, assignedAmount: "300.00" },
-    ]);
-    expect((await listTeamBudgets()).map((b) => [b.team, b.cycle])).toEqual([
-      ["kitchen", 2027],
-    ]);
-    expect((await getTeamBudget("kitchen"))?.assignedAmount).toBe("200.00");
-    expect(await getTeamBudget("structures")).toBeNull();
-  });
-});
 
 describe("migration 0034's year step", () => {
   const h = useTestDb();

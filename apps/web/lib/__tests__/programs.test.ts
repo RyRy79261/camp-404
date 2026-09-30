@@ -131,6 +131,8 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "my-dues" },
       // Their own gear order (#241).
       { kind: "program", id: "my-gear" },
+      // Their own claims (#242).
+      { kind: "program", id: "my-claims" },
       { kind: "program", id: "roster" },
       { kind: "folder", id: "teams" },
       { kind: "program", id: "meetings" },
@@ -204,6 +206,7 @@ describe("buildProgramManifest: the personas", () => {
       "questionnaires",
       "announcements",
       "new-event",
+      "claim-approvals",
     ]);
     // The Captains column: the folder, then the Terminal.
     expect(m.desktop.slice(-2)).toEqual([
@@ -305,6 +308,7 @@ describe("buildProgramManifest: the personas", () => {
       "questionnaires",
       "announcements",
       "new-event",
+      "claim-approvals",
     ]);
     // Not in the Teams folder (active teams only), but still their team: the
     // team page opens for an archived team the config names.
@@ -324,6 +328,7 @@ describe("buildProgramManifest: the personas", () => {
       "questionnaires",
       "announcements",
       "new-event",
+      "claim-approvals",
       "payments",
       "gear-rental",
       "camp-settings",

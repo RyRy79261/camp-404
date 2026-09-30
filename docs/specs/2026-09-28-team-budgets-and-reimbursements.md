@@ -1,6 +1,9 @@
 # Team budgets and reimbursements (#242): discovery
 
-Status: proposal, waiting for the owner. Nothing is built.
+Status: [CORRECTION 2026-09-30] built to the owner's answers below (#242):
+one budget per team, claims with receipts, a team lead's yes, then Finance
+pays. The proposal is kept as the record of what was weighed. Not built:
+Finance recording spend the camp paid directly, and a pre-approval step.
 
 ## What the owner asked
 

@@ -338,6 +338,42 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "rentalOrderSharers.orderId": "captain",
   "rentalOrderSharers.userId": "captain",
 
+  // reimbursements, reimbursement_files — claims (#242). The Finance team
+  // (captains, and Finance leads through canManageMoney in ./dues) and the
+  // member who claimed read a claim. A lead of the claim's own team reads who
+  // claimed, how much, when and what for, to say yes (canApproveClaim in
+  // ./claims), never through the global lead rung and never the receipts or
+  // bank details. Every member reads each team's totals, which are sums, not
+  // claims. Bank details and receipts are read by others only audited.
+  "reimbursements.id": "captain",
+  "reimbursements.submitterId": "captain",
+  "reimbursements.cycle": "captain",
+  "reimbursements.team": "captain",
+  "reimbursements.amountCents": "captain",
+  "reimbursements.currency": "captain",
+  "reimbursements.spentOn": "captain",
+  "reimbursements.accountType": "captain",
+  "reimbursements.accountDetailsEncrypted": "captain",
+  "reimbursements.description": "captain",
+  "reimbursements.receiptBlobUrl": "captain",
+  "reimbursements.itemPhotoBlobUrl": "captain",
+  "reimbursements.voiceMemoBlobUrl": "captain",
+  "reimbursements.status": "captain",
+  "reimbursements.approverId": "captain",
+  "reimbursements.approvedAt": "captain",
+  "reimbursements.decisionNote": "captain",
+  "reimbursements.paidById": "captain",
+  "reimbursements.paidAt": "captain",
+  "reimbursements.reconciledAt": "captain",
+  "reimbursements.createdAt": "captain",
+  "reimbursements.updatedAt": "captain",
+  "reimbursementFiles.id": "captain",
+  "reimbursementFiles.reimbursementId": "captain",
+  "reimbursementFiles.position": "captain",
+  "reimbursementFiles.pathname": "captain",
+  "reimbursementFiles.contentType": "captain",
+  "reimbursementFiles.createdAt": "captain",
+
   // team_memberships — the roster shows teams and leads
   "teamMemberships.userId": "camp_member",
   "teamMemberships.team": "camp_member",

@@ -21,6 +21,8 @@ import {
 import { sql } from "drizzle-orm";
 import {
   CHARGE_KINDS,
+  CLAIM_ACCOUNT_TYPES,
+  CLAIM_STATUSES,
   CURRENT_KINDS,
   FUEL_TYPES,
   GENERATOR_OWNERS,
@@ -199,13 +201,11 @@ export const recipeSourceEnum = pgEnum("recipe_source", [
   "voice",
 ]);
 
-export const reimbursementStatusEnum = pgEnum("reimbursement_status", [
-  "submitted",
-  "approved",
-  "paid",
-  "reconciled",
-  "rejected",
-]);
+// Mirrors CLAIM_STATUSES in @camp404/types claims.ts.
+export const reimbursementStatusEnum = pgEnum(
+  "reimbursement_status",
+  CLAIM_STATUSES,
+);
 
 export const platformEnum = pgEnum("platform", ["web", "ios", "android"]);
 
@@ -223,9 +223,10 @@ export const paymentMethodEnum = pgEnum("payment_method", PAYMENT_METHODS);
 export const paymentSourceEnum = pgEnum("payment_source", PAYMENT_SOURCES);
 export const refundStatusEnum = pgEnum("refund_status", REFUND_STATUSES);
 
+// Mirrors CLAIM_ACCOUNT_TYPES in @camp404/types claims.ts.
 export const reimbursementAccountTypeEnum = pgEnum(
   "reimbursement_account_type",
-  ["sa", "international"],
+  CLAIM_ACCOUNT_TYPES,
 );
 
 // A required_action is one outstanding obligation for one user. `type`
@@ -2301,11 +2302,15 @@ export const documents = pgTable(
 );
 
 // --- Reimbursements ------------------------------------------------------
-// A member submits an out-of-pocket expense, lodged under a team (NULL =
-// general). Approval routing is app logic: a team's lead approves that
-// team's claims; any lead or a captain approves general ones; a captain can
-// approve anything. Payments are actioned manually offline — this is a log,
-// not a finance system.
+// A member's claim for money they spent for a team (#242): what it was for,
+// the amount in whole rand cents, the day they paid, the bank account to pay
+// them back into (encrypted), and one or more receipt files
+// (reimbursement_files). A lead OF THAT TEAM, or a captain, says yes or no
+// (canApproveClaim in @camp404/core); then the Finance team (captains and
+// Finance leads, canManageMoney) marks it paid, or turns it down after all.
+// The app never moves money: Finance pays by bank transfer and records it.
+// Year-scoped by `cycle`, like the rest of the ledger. `team` is NULL only on
+// a claim from before #242 ("general"), which is a captain's to decide.
 
 export const reimbursements = pgTable(
   "reimbursements",
@@ -2314,31 +2319,45 @@ export const reimbursements = pgTable(
     submitterId: uuid("submitter_id")
       .notNull()
       .references(() => users.id, { onDelete: "set null" }),
-    // NULL = lodged under "general".
+    // The burn year; the sentinel until the camp names its first year, and
+    // setFoundingYear adopts sentinel rows.
+    cycle: integer("cycle").notNull().default(1),
+    // NULL = lodged under "general" (claims before #242 only).
     team: teamEnum("team"),
 
-    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    // Whole rand cents (AGENTS.md: the ledger keeps integer cents).
+    amountCents: integer("amount_cents").notNull(),
     // ISO 4217 code, always ZAR: a claim is made in rands, because the camp
     // records money in rands only (CURRENCIES in @camp404/core), held by
     // reimbursements_currency_check.
     currency: text("currency").notNull(),
+    // The day the member paid; NULL on a claim from before #242.
+    spentOn: date("spent_on", { mode: "string" }),
 
-    // Where to reimburse to. Bank details are encrypted via pgcrypto in
-    // route handlers (never stored plaintext); accountType picks the shape.
+    // Where to reimburse to. Bank details are encrypted with AES-256-GCM at
+    // the write boundary (crypto.ts), never stored plaintext; accountType
+    // picks the shape. Read only by the Finance team and the member, audited.
     accountType: reimbursementAccountTypeEnum("account_type").notNull(),
     accountDetailsEncrypted: text("account_details_encrypted").notNull(),
 
     description: text("description").notNull(),
-    // Photo of the receipt and/or the item — at least one (enforced in app).
+    // Links the Claude connector took before #242. No longer written: a
+    // claim's receipts are private files in reimbursement_files.
     receiptBlobUrl: text("receipt_blob_url"),
     itemPhotoBlobUrl: text("item_photo_blob_url"),
     voiceMemoBlobUrl: text("voice_memo_blob_url"),
 
     status: reimbursementStatusEnum("status").notNull().default("submitted"),
+    // Who said yes or no for the team, and when.
     approverId: uuid("approver_id").references(() => users.id, {
       onDelete: "set null",
     }),
     approvedAt: timestamp("approved_at", { mode: "date" }),
+    // Why it was turned down, for the member to read.
+    decisionNote: text("decision_note"),
+    paidById: uuid("paid_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     paidAt: timestamp("paid_at", { mode: "date" }),
     reconciledAt: timestamp("reconciled_at", { mode: "date" }),
 
@@ -2349,6 +2368,7 @@ export const reimbursements = pgTable(
     statusIdx: index("reimbursements_status_idx").on(r.status),
     submitterIdx: index("reimbursements_submitter_idx").on(r.submitterId),
     teamIdx: index("reimbursements_team_idx").on(r.team),
+    cycleTeamIdx: index("reimbursements_cycle_team_idx").on(r.cycle, r.team),
     currencyCheck: check(
       "reimbursements_currency_check",
       sql`${r.currency} = 'ZAR'`,
@@ -2356,9 +2376,35 @@ export const reimbursements = pgTable(
   }),
 );
 
+// A claim's receipts (#242): one row per file, at least one per claim (the
+// upload refuses a claim with none). Each is a PRIVATE blob in the member's
+// own folder (`claim-receipts/<member id>/`); its address never leaves the
+// server, and /api/claim-receipt/<file id> streams it to the member and the
+// Finance team only, auditing every other reader. Erasure deletes the rows
+// and the folder.
+export const reimbursementFiles = pgTable(
+  "reimbursement_files",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    reimbursementId: uuid("reimbursement_id")
+      .notNull()
+      .references(() => reimbursements.id, { onDelete: "cascade" }),
+    // The order the member added them in: receipt 1, 2, ...
+    position: integer("position").notNull(),
+    pathname: text("pathname").notNull(),
+    contentType: text("content_type").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (f) => ({
+    claimIdx: index("reimbursement_files_claim_idx").on(f.reimbursementId),
+  }),
+);
+
 // --- Team budgets --------------------------------------------------------
-// Lightweight per-team budget: assigned (allocated) vs perceived
-// (projected) spend. Deliberately simple — reimbursements are the ledger.
+// One budget amount per team per year (owner, 2026-09-30: no "base" and
+// "hoped for"), set by captains and Finance leads (canManageMoney). Spent is
+// worked out from the team's claims (budgetTotals in @camp404/core), never
+// stored. A NULL amount means none set.
 
 // One budget per team PER YEAR: a new year starts with no budgets. `cycle`
 // defaults to the pre-namespace sentinel like every year-scoped table, and
@@ -2371,8 +2417,8 @@ export const teamBudgets = pgTable(
     // ISO 4217 code, always ZAR: the camp records money in rands only
     // (CURRENCIES in @camp404/core), held by team_budgets_currency_check.
     currency: text("currency").notNull().default("ZAR"),
-    assignedAmount: numeric("assigned_amount", { precision: 12, scale: 2 }),
-    perceivedAmount: numeric("perceived_amount", { precision: 12, scale: 2 }),
+    // Whole rand cents; NULL when cleared.
+    amountCents: integer("amount_cents"),
     notes: text("notes"),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -3651,10 +3697,7 @@ export const refuelEntries = pgTable(
     correctsUniq: uniqueIndex("refuel_entries_corrects_uniq").on(
       r.correctsEntryId,
     ),
-    litresCheck: check(
-      "refuel_entries_litres_check",
-      sql`${r.litres} > 0`,
-    ),
+    litresCheck: check("refuel_entries_litres_check", sql`${r.litres} > 0`),
     voidCheck: check(
       "refuel_entries_void_check",
       sql`not ${r.voided} or ${r.correctsEntryId} is not null`,

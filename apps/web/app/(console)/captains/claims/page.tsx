@@ -1,0 +1,164 @@
+import Link from "next/link";
+import { formatMoney } from "@camp404/core";
+import { Team } from "@camp404/types";
+import { CaptainLock } from "@camp404/ui/components/captain-lock";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
+import { PageHeading } from "@camp404/ui/components/page-heading";
+import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
+import { captainPageGate } from "@/lib/captain-gate";
+import { listBudgetTotals, listClaimsForApproval } from "@/lib/claims";
+import { APPROVALS_REFUSAL, MY_CLAIMS_PATH } from "@/lib/claims-copy";
+import { budgetHeadline, budgetLeftLine } from "@/lib/claims-view";
+import { ledgerCycle } from "@/lib/payments";
+import { getLeadTeams } from "@/lib/users";
+import { ClaimApprovals, type ApprovalRow } from "./claim-approvals";
+
+export const dynamic = "force-dynamic";
+
+export const metadata = { title: "Claims to approve — Camp 404" };
+
+// Claims waiting for a team's yes (#242). A lead OF THAT TEAM, or a captain,
+// says yes at any amount (owner, 2026-09-30: no limit that needs a second
+// yes); then the Finance team pays. A lead sees only the claims of the teams
+// they lead (canApproveClaim), a captain every team's; a member sees the
+// heading and a lock, and nothing is read. What a lead reads is who, how
+// much, when and what for, never the receipts or the bank details (those are
+// the Finance team's and the member's). Each team's budget sits above its
+// claims, so a yes is said knowing what is left.
+
+export default async function ClaimApprovalsPage() {
+  const gate = await captainPageGate("team_lead");
+  const data = gate.cleared
+    ? await (async () => {
+        const cycle = await ledgerCycle();
+        const scope =
+          gate.rank === "captain"
+            ? ("all" as const)
+            : (await getLeadTeams(gate.campUser.id)).filter(
+                (t): t is Team => Team.safeParse(t).success,
+              );
+        const [claims, totals, config] = await Promise.all([
+          listClaimsForApproval({ cycle, teams: scope }),
+          listBudgetTotals(cycle),
+          getTeamsConfig(),
+        ]);
+        return { scope, claims, totals, config };
+      })()
+    : null;
+
+  if (!data) {
+    return (
+      <div className="flex flex-col">
+        <PageHeading
+          eyebrow="Captains / Claims"
+          title="Claims to approve"
+          description="Claims members made for a team, waiting for the team's yes."
+        />
+        <CaptainLock
+          title="Team leads and captains"
+          message={`${APPROVALS_REFUSAL} Your rank doesn't have clearance for this.`}
+        />
+      </div>
+    );
+  }
+
+  const labels = teamLabelMap(data.config);
+  // One card per team: the teams they lead (with nothing waiting too), or,
+  // for a captain, every team with a claim waiting.
+  const byTeam = new Map<string, typeof data.claims>();
+  const shown =
+    data.scope === "all"
+      ? [...new Set(data.claims.map((c) => c.team ?? "general"))]
+      : data.scope;
+  for (const key of shown) byTeam.set(key, []);
+  for (const c of data.claims) byTeam.get(c.team ?? "general")?.push(c);
+
+  return (
+    <div className="flex flex-col">
+      <PageHeading
+        eyebrow="Captains / Claims"
+        title="Claims to approve"
+        description={
+          data.scope === "all"
+            ? "Claims members made for a team, waiting for a yes. A lead of the team or a captain says yes; then the Finance team pays it."
+            : "Claims members made for the teams you lead. Say yes if it was a team purchase; then the Finance team pays it."
+        }
+      />
+      {byTeam.size === 0 ? (
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">
+              Nothing is waiting for a yes.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {[...byTeam.entries()].map(([key, claims]) => {
+            const totals = Team.safeParse(key).success
+              ? data.totals[key as Team]
+              : null;
+            const left = totals ? budgetLeftLine(totals) : null;
+            const label = key === "general" ? "No team" : (labels[key] ?? key);
+            return (
+              <Card key={key}>
+                <CardHeader className="p-5 pb-3">
+                  <CardTitle className="text-base">{label}</CardTitle>
+                  {totals && (
+                    <CardDescription>
+                      Budget: {budgetHeadline(totals)}
+                      {left ? `, ${left}` : ""}.
+                    </CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent className="p-5 pt-0">
+                  {claims.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Nothing is waiting for {label}.
+                    </p>
+                  ) : (
+                    <ClaimApprovals
+                      rows={claims.map(
+                        (c): ApprovalRow => ({
+                          id: c.id,
+                          submitterName:
+                            c.submitterName?.trim() || "Unnamed burner",
+                          description: c.description,
+                          amountCents: c.amountCents,
+                          spentOn: c.spentOn,
+                          own: c.submitterId === gate.campUser.id,
+                        }),
+                      )}
+                    />
+                  )}
+                  {claims.length > 1 && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {claims.length} claims,{" "}
+                      {formatMoney(
+                        claims.reduce((sum, c) => sum + c.amountCents, 0),
+                      )}{" "}
+                      in all.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+      <p className="mt-6 text-xs text-muted-foreground">
+        Spent something yourself?{" "}
+        <Link href={MY_CLAIMS_PATH} className="text-accent hover:underline">
+          Claim it on My claims
+        </Link>
+        .
+      </p>
+    </div>
+  );
+}
