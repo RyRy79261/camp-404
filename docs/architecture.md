@@ -142,7 +142,7 @@ flowchart LR
   notes["Notices<br/>broadcasts, notification_deliveries,<br/>push_tokens"]
   money["Money (rands)<br/>payments, dues_*, fee_tiers,<br/>payment_refunds, reimbursements"]
   teams["Team work<br/>team_programs, meeting_notes, tasks"]
-  site["On site<br/>power_*, generators, fuel_cans,<br/>refuel_entries, driver_profiles,<br/>car_members, lift_requests"]
+  site["On site<br/>power_*, generators, fuel_cans,<br/>refuel_entries, driver_profiles,<br/>car_members, lift_requests,<br/>logistics_phases"]
   gear["Gear and lounge<br/>inventory_* (items, needs,<br/>pledges, bookings, loans),<br/>lounge_offers, lounge_slots"]
   layout["Camp layout<br/>camp_layouts,<br/>camp_layout_versions"]
   kitchen["Kitchen<br/>recipes, recipe_versions,<br/>kitchen_meal_plans"]
@@ -163,7 +163,12 @@ flowchart LR
   "who may change it" is one pure function in `@camp404/core` that fails
   closed: a captain or a lead of that team this year (`canEditPower`,
   `canEditTransport`, `canEditInventory`, `canRunLounge`, `canEditLayout`,
-  `canManageMoney`, `canEditTeamProgram`).
+  `canEditLogistics`, `canManageMoney`, `canEditTeamProgram`).
+- **The logistics days go onto the camp's Google Calendar.** Each phase with
+  days (`logistics_phases`, one row per year and phase) is one all-day event.
+  The row claims its event id inside the write, before Google is called, so a
+  re-save or a retry updates that event and never makes a second. Google is
+  called after the transaction, never inside it.
 - **The neighbour page reads an allowlist.** `getSharedLayout`
   (`@camp404/db/camp-layout`) returns only `neighbourView`'s fields (each
   piece's kind, size and place) and arrival counts per day. The link is off
