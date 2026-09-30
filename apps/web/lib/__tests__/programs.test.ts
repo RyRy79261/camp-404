@@ -134,6 +134,7 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "meetings" },
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
+      { kind: "program", id: "logistics" },
       { kind: "program", id: "camp-layout" },
       { kind: "program", id: "lounge" },
       { kind: "program", id: "inventory" },
@@ -230,6 +231,7 @@ describe("buildProgramManifest: the personas", () => {
       `team:${Team.enum.transport_and_logistics}`,
       "inventory",
       "transport",
+      "logistics",
     ]);
     expect(m.allowedChildren).toContain(pid("inventory-item"));
   });
@@ -244,6 +246,22 @@ describe("buildProgramManifest: the personas", () => {
     expect(teamFolder(m, POWER)?.programs.map((p) => p.id)).toEqual([
       `team:${POWER}`,
       "power",
+    ]);
+  });
+
+  it("puts Logistics in a Transport and Logistics member's team folder", () => {
+    const m = buildProgramManifest(
+      facts({
+        memberships: [{ team: "transport_and_logistics", isLead: false }],
+      }),
+    );
+    expect(
+      teamFolder(m, "transport_and_logistics")?.programs.map((p) => p.id),
+    ).toEqual([
+      "team:transport_and_logistics",
+      "inventory",
+      "transport",
+      "logistics",
     ]);
   });
 
@@ -267,6 +285,7 @@ describe("buildProgramManifest: the personas", () => {
       `team:${TRANSPORT}`,
       "inventory",
       "transport",
+      "logistics",
     ]);
   });
 

@@ -25,6 +25,20 @@ describe("auditActionLabel", () => {
 describe("auditDetail", () => {
   const teams = (key: string) => ({ kitchen: "Kitchen" })[key] ?? key;
 
+  it("says which logistics phase changed, and to which days", () => {
+    expect(
+      auditDetail("logistics.phase_set", {
+        phase: "build",
+        startDate: "2027-04-24",
+        endDate: "2027-04-26",
+      }),
+    ).toBe("Build, 2027-04-24 to 2027-04-26");
+    expect(auditDetail("logistics.phase_cleared", { phase: "strike" })).toBe(
+      "Strike",
+    );
+    expect(auditDetail("logistics.phase_set", { phase: "party" })).toBeNull();
+  });
+
   it("labels and says a captain's decision on a member's place", () => {
     expect(auditActionLabel("participation.decided")).toBe(
       "Decided a member's place this year",

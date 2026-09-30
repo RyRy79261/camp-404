@@ -105,6 +105,8 @@
 //     powerTotals, dayLabel)
 //     and the fuel maths (fuelLine, fuelPerHour, fuelForPlan,
 //     jerryCansNeeded, legacyFuelEstimate) (./power)
+//   - logistics: canEditLogistics (a captain or a Transport and Logistics
+//     lead), logisticsEventTitle, logisticsCalendarStep (./logistics)
 //   - camp layout: canEditLayout (a captain or a Structures lead),
 //     canShareLayout (a captain), the grid helpers (keepOnPlot, movePiece,
 //     turnPiece, newPiece, resizePlot, overlappingPieces), and what a
@@ -180,6 +182,7 @@ export * from "./participation";
 export * from "./membership-tier";
 export * from "./tickets";
 export * from "./power";
+export * from "./logistics";
 export * from "./camp-layout";
 export * from "./inventory";
 export * from "./power-site";

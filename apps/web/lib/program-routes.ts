@@ -37,6 +37,7 @@ export type ProgramId =
   | "new-meeting"
   | "edit-meeting"
   | "power"
+  | "logistics"
   | "camp-layout"
   | "lounge"
   | "inventory"
@@ -100,6 +101,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "new-meeting": "New meeting",
   "edit-meeting": "Edit meeting",
   power: "Power",
+  logistics: "Logistics",
   "camp-layout": "Camp layout",
   lounge: "Lounge",
   inventory: "Inventory",
@@ -222,6 +224,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/power", "power", "POWER.EXE"),
   route("/power/loads", "power", "POWER.EXE"),
   route("/power/fuel", "power", "POWER.EXE"),
+  route("/logistics", "logistics", "LOGISTICS.EXE"),
   route("/camp-layout", "camp-layout", "SITEPLAN.DWG"),
   route("/lounge", "lounge", "LOUNGE.EXE"),
   // The inventory's four views share one window; an item opens its own.

@@ -519,6 +519,13 @@
       "when": 1790705595565,
       "tag": "0073_camp_layout",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1790709617677,
+      "tag": "0074_logistics_phases",
+      "breakpoints": true
     }
   ]
 }

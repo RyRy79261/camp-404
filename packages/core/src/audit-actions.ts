@@ -3,6 +3,7 @@
 // `AuditEvent.action` in @camp404/db is typed from this list, so a writer with
 // a new action does not compile until the action has a label here.
 
+import { LOGISTICS_PHASE_LABELS, LogisticsPhase } from "@camp404/types";
 import { MEMBERSHIP_TIER_LABEL } from "./membership-tier";
 import { decimalToMinor, formatMoney, isCurrency } from "./money";
 
@@ -48,6 +49,8 @@ export const AUDIT_ACTION_LABELS = {
   "inventory.change_rejected": "Rejected a change to camp gear",
   "invite.revoked": "Revoked an invite code",
   "join_site.section_saved": "Changed the join site",
+  "logistics.phase_cleared": "Cleared a logistics phase's days",
+  "logistics.phase_set": "Set a logistics phase's days",
   "lounge.music_policy_changed": "Changed the lounge's music note",
   "lounge.offer_decided": "Decided a lounge offer",
   "lounge.offer_placed": "Put a lounge offer on the programme",
@@ -208,6 +211,17 @@ export function auditDetail(
   teamLabel: (key: string) => string = (key) => key,
 ): string | null {
   switch (action) {
+    case "logistics.phase_set":
+    case "logistics.phase_cleared": {
+      const phase = LogisticsPhase.safeParse(text(metadata, "phase"));
+      if (!phase.success) return null;
+      const label = LOGISTICS_PHASE_LABELS[phase.data];
+      const start = text(metadata, "startDate");
+      const end = text(metadata, "endDate");
+      return action === "logistics.phase_set" && start && end
+        ? `${label}, ${start} to ${end}`
+        : label;
+    }
     case "member.approval_decided": {
       const status = text(metadata, "status");
       const word = status ? APPROVAL_WORDS[status] : undefined;

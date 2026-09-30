@@ -71,6 +71,7 @@ const PAGE_ICONS: Record<string, LucideIcon> = {
   "/family-tree": Network,
   "/about": Info,
   "/power": Plug,
+  "/logistics": Truck,
   "/camp-layout": LayoutGrid,
   "/inventory": Boxes,
   "/transport": CarFront,

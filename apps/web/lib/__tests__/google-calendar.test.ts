@@ -10,6 +10,7 @@ import {
   eventRequestBody,
   forgetCalendarCache,
   getUpcomingEvents,
+  putCalendarEvent,
   CALENDAR_PAGE_RANGE,
   signAssertion,
   toCalendarEvents,
@@ -558,5 +559,81 @@ describe("writing to the calendar", () => {
       ),
     );
     expect(await deleteCalendarEvent(ENV, "google-event-1")).toBe(true);
+  });
+});
+
+describe("putCalendarEvent", () => {
+  const body = eventRequestBody({
+    title: "Build",
+    description: null,
+    team: { key: "transport_and_logistics", label: "Transport and Logistics" },
+    date: "2027-04-24",
+    allDay: true,
+  });
+  const calls: { method: string; url: string; body: unknown }[] = [];
+
+  /** Google, holding the event ids in `held`. */
+  function google(held: Set<string>, fail?: number) {
+    calls.length = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL, init?: RequestInit) => {
+        if (String(url).includes("oauth2")) {
+          return Response.json({ access_token: "tok" });
+        }
+        const sent = JSON.parse(String(init?.body)) as { id?: string };
+        calls.push({ method: init!.method!, url: String(url), body: sent });
+        if (fail) return new Response("no", { status: fail });
+        const id = decodeURIComponent(String(url).split("/events/")[1] ?? "");
+        if (init!.method === "PUT") {
+          return held.has(id)
+            ? Response.json({ id })
+            : new Response("not found", { status: 404 });
+        }
+        if (held.has(sent.id!)) return new Response("dup", { status: 409 });
+        held.add(sent.id!);
+        return Response.json({ id: sent.id });
+      }),
+    );
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("creates the event under our id the first time, then updates it: one event", async () => {
+    const held = new Set<string>();
+    google(held);
+    await putCalendarEvent(ENV, "logistics001", body);
+    expect(calls.map((c) => c.method)).toEqual(["PUT", "POST"]);
+    expect(calls[1]!.body).toMatchObject({
+      id: "logistics001",
+      summary: "Transport and Logistics Team - Build",
+    });
+
+    calls.length = 0;
+    await putCalendarEvent(ENV, "logistics001", body);
+    expect(calls.map((c) => c.method)).toEqual(["PUT"]);
+    expect(calls[0]!.url).toMatch(/\/events\/logistics001$/);
+    expect(calls[0]!.body).toMatchObject({ status: "confirmed" });
+    expect(held.size).toBe(1);
+  });
+
+  it("throws with the status when Google refuses", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    google(new Set(), 403);
+    await expect(putCalendarEvent(ENV, "logistics001", body)).rejects.toThrow(
+      "update 403",
+    );
+  });
+
+  it("throws, calling nobody, when the calendar is not set up", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(putCalendarEvent({}, "logistics001", body)).rejects.toThrow(
+      "calendar not configured",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

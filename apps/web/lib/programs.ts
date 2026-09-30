@@ -251,6 +251,16 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // The year's pack-to-unpack days (#247), for every member to read.
+  {
+    id: "logistics",
+    label: "Logistics",
+    fileName: "LOGISTICS.EXE",
+    href: "/logistics",
+    icon: "logistics",
+    place: CAMP,
+    rank: "camp_member",
+  },
   // The site plan (#271): every member reads it; its page gates the edits.
   {
     id: "camp-layout",
@@ -701,7 +711,7 @@ export const TEAM_TOOLS: Readonly<Partial<Record<Team, readonly ProgramId[]>>> =
     structures: ["camp-layout"],
     power_and_lighting: ["power"],
     ministry_of_vibes: ["lounge"],
-    transport_and_logistics: ["inventory", "transport"],
+    transport_and_logistics: ["inventory", "transport", "logistics"],
     communications_and_hr: ["announcements", "questionnaires", "join-site"],
     finance: ["payments"],
   };
