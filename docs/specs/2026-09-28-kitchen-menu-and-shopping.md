@@ -157,16 +157,15 @@ once the camp says which days the fresh shop covers.
 - **Left out** until asked: prices, buyers, suppliers, order status, costing,
   and the allergen cross-check. Each is its own step.
 
-## Questions for the owner
+## Owner's answers (2026-09-30)
 
-1. **Menu layout:** A (recipes inside the meal plan table) or B (one day at a
-   time)? _Default: A._
-2. **Shopping list layout:** A (one list grouped by shop area, like Noble
-   Notations) or B (by shop trip)? _Default: A now, B later._
-3. **More than one recipe per meal** (a main and a side)? _Default: yes._
-4. **Ticks on the shopping list:** shared by everyone (one tick for the whole
-   camp) or each person's own? _Default: shared, and only Kitchen leads and
-   captains tick._
-5. **Snacks:** their own short list on the Kitchen page (name, amount per
-   day or for the week), added into the shopping list, built after the menu?
-   _Default: yes, after the menu._
+The owner approved both layouts, so the Kitchen build may start.
+
+1. **Menu layout: A.** Recipes sit inside the meal plan table.
+2. **Shopping list layout: A.** One list grouped by shop area, like Noble
+   Notations. B (by shop trip) is not planned.
+3. **More than one recipe per meal:** yes.
+4. **Ticks:** shared by the whole camp, and **any member may tick** (not only
+   Kitchen leads and captains).
+5. **Snacks:** their own short list, added into the shopping list, built
+   after the menu.

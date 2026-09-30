@@ -93,18 +93,15 @@ already use (black on white, no desktop, browser print dialog for a PDF).
 5. Hand-offs: generator watch → refuel logging (#298); clash warnings in the
    Lounge (#301); shifts on the camp calendar (#247).
 
-## Questions for the owner
+## Owner's answers (2026-09-30)
 
-1. **Where does sign-up happen?** In the app before the burn, printed for
-   site, with changes on site on paper. _Default: yes (option b in #248)._
-2. **How many shifts each?** #248 says 3–5 in burn week; the old intro says
-   one cooking and one cleaning. And is it a gate (a blocking required
-   action) or a nudge? _Default: a nudge, minimum 3, shown on the fairness
-   view and Home; never blocks._
-3. **Who owns cleaning shifts?** There is no Cleaning team; the nearest is
-   Sanitation & Water. _Default: Sanitation & Water leads set them up (and
-   captains); every member takes them._
-4. **Reconcile paper afterwards?** _Default: no. The paper is the record on
-   site, and nobody types it back in._
-5. **Generator watch members log refuelling** (PR #298's follow-up) once
-   shifts exist? _Default: yes, only while their watch is on._
+1. **Sign-up:** in the app before the burn, printed for site, changes on site
+   on paper.
+2. **How many:** a minimum of 3, as a reminder only. It never blocks.
+3. **Cleaning shifts:** Sanitation leads and captains set them up; every
+   member takes them.
+4. **Paper afterwards:** nobody types it back in.
+5. **Generator watch logging refuelling: dropped.** [CORRECTION 2026-09-30]
+   "How would they log that, there's no internet out there." Nothing in the
+   shift roster may need the app during the burn. A paper fuel log was offered
+   and also declined. Build-order step 5's hand-off to refuel logging is off.

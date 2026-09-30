@@ -96,14 +96,18 @@ Google event id, which version is on Google).
    we can rely on, and there is no cron to fetch one.
 6. **Next year**: "copy last year's phases, shifted to the new burn dates".
 
-## Questions for the owner
+## Owner's answers (2026-09-30)
 
-1. **Phase titles on Google**: "Transport and Logistics Team - Build" (the
-   convention, so they show on that team's page)? The burn is everyone's, so
-   the alternative is plain "Build" as whole-camp events.
-   _Default (built): the team prefix._
-2. **Who sets the dates**: captains and Transport and Logistics leads.
-   _Default (built): yes._
-3. **Attendance next** (slice 2 above)? _Default: yes._
-4. **Phone calendars**: members subscribe to the Google calendar itself, so
-   no separate ICS link from the app. _Default: no ICS link._
+1. **Phase titles on Google: plain.** [CORRECTION 2026-09-30] Every phase is
+   a whole-camp event ("Build and Strike is a whole camp activity"), so the
+   titles are "Pack", "Travel", "Build", "Burn", "Strike" and "Unpack", with
+   no team prefix. PR #309 built the team prefix; this changes it.
+2. **Who sets the dates:** captains and Transport and Logistics leads (as
+   built).
+3. **Attendance is next, and it is for everyone.** Every member who is coming
+   is asked going / maybe / can't for pack, build, strike and unpack. The page
+   shows who has not answered yet.
+4. **AfrikaBurn deadlines:** captains add them one at a time, because the
+   dates are not all known at once. They live on the year's settings page.
+5. **Phone calendars:** no link from the app. Members use the camp's Google
+   calendar.

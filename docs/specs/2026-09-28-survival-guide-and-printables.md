@@ -83,19 +83,15 @@ anaphylaxis: see the kitchen lead").
 4. Duty cards (guide + prints together).
 5. Shift prints once #248 exists; calendar prints once #247 exists.
 
-## Questions for the owner
+## Owner's answers (2026-09-30)
 
-1. **Domain:** `survivalguide.camp-404.com` (with the dash, like the rest)?
-   _Default: yes._
-2. **Members only, or partly public?** Some chapters ("Before you come", the
-   drive-to-burn guide) could be public; the rest members-only. Members-only
-   chapters need the sign-in cookie shared across `camp-404.com` subdomains,
-   which changes the cookie for the whole site (members may have to sign in
-   once more). _Default: public chapters marked one by one; members-only
-   chapters read in the new app with a shared cookie._
-3. **Who writes:** captains for everything, a team's leads for their team's
-   chapters? _Default: yes._
-4. **PDF:** the browser's print dialog ("Save as PDF"), no PDF library?
-   _Default: yes._
-5. **Order:** print shell and recipe card first, then the Survival Guide?
-   _Default: yes._
+1. **Domain:** `survivalguide.camp-404.com`.
+2. **Readers:** public chapters marked one by one; the rest members only,
+   with the sign-in shared across the subdomains.
+3. **Writers:** captains for everything, a team's leads for their team's
+   chapters.
+4. **PDF: a download button.** [CORRECTION 2026-09-30] The owner chose a real
+   PDF file from the app over the browser's print dialog, so a PDF library is
+   accepted. The print views stay; the button makes the file from them.
+5. **Order:** the print shell and the recipe card first, then the Survival
+   Guide.

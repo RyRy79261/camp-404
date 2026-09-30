@@ -105,22 +105,15 @@ once #299 is on main, so both routes use one copy.
 tables hold no real data today (MCP-only), but the migration must still be
 safe on a table with rows.
 
-## Questions for the owner
+## Owner's answers (2026-09-30)
 
-1. **Budget shape:** two amounts per team (Base and Hoped for) plus one
-   per-year "Hoped for confirmed" switch set by Finance?
-   _Default: yes._
-2. **Who sets budgets:** captains and Finance leads (the #299 rule), with each
-   team's lead able to read and comment but not change the number?
-   _Default: yes._
-3. **Who may read a team's budget and spend:** every member sees each team's
-   totals (base, spent, left), and only Finance and the claimant see a claim's
-   detail? _Default: yes, totals for everyone, detail for Finance._
-4. **Receipts and bank details:** you wrote "captain-read only". Since #299 the
-   Finance team is captains **and Finance leads**. Should Finance leads read
-   claim receipts and bank details too (audited)? _Default: yes, same as
-   dues proofs._
-5. **Approval before buying:** is "the team lead says yes on the claim, and a
-   captain too above R2 000" enough for the first version, with no
-   separate ask-before-you-buy step? _Default: yes; the threshold amount is
-   yours to set (R2 000 suggested)._
+1. **Budget shape: one amount per team.** [CORRECTION 2026-09-30] No Base and
+   Hoped for, and no per-year "confirmed" switch. Where the proposal above
+   says base, hoped for or the switch, read one budget amount.
+2. **Who sets budgets:** captains and Finance leads. A team's lead reads it.
+3. **Who reads:** every member sees each team's totals (budget, spent, left).
+   A claim's detail is for Finance and the claimant.
+4. **Receipts and bank details:** Finance leads read them too, audited.
+5. **Approval: no amount limit.** [CORRECTION 2026-09-30] The team lead's (or
+   a captain's) yes is enough at any amount; then Finance pays. There is no
+   second captain approval above a threshold.
