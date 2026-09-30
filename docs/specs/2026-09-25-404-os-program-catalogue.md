@@ -1,5 +1,7 @@
 # 404 OS program catalogue
 
+Status (checked 2026-09-29): built, the manifest in #287 and the desktop in #288 (2026-09-26). The status paragraph below is the record from while it was being built. Programs added since, each with its row in `apps/web/lib/program-routes.ts` rather than here: About Camp 404 (#302), Transport (#303), My dues (#299), Applications (#297), Inventory (#300), Lounge (#301) and Camp layout (#305).
+
 Status: proposal, 2026-09-25. [CORRECTION 2026-09-26] PR B has built the
 program manifest (`apps/web/lib/programs.ts`, `lib/program-manifest.ts`) and
 the My lift page (`/lift`); the current header and Home are views of it, so

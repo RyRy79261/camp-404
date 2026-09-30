@@ -1,7 +1,7 @@
 # Sub-project D — Push delivery pipeline (design + plan)
 
 **Date:** 2026-05-30
-**Status:** Proposed — synthesized from the `d-push-research` workflow (codebase scan + Firebase web-push + firebase-admin + Capacitor research).
+**Status:** Built in #41 and #43 (2026-05-30). [CORRECTION 2026-09-29] The drain cron and `assertCron` are gone: the drain runs at the action or on a page load, locking its rows (#274). Originally: Proposed — synthesized from the `d-push-research` workflow (codebase scan + Firebase web-push + firebase-admin + Capacitor research).
 **Program:** Camp 404 audit remediation, sub-project **D**. Drains the **push** half that C left at `pushStatus='queued'`. Builds on C (notification_deliveries) + reuses B's `assertCron`.
 
 ## Approach — web-first, platform-agnostic server

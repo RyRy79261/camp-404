@@ -1,5 +1,7 @@
 # 404 OS: a welcome wizard and system themes
 
+Status: built in #293 (2026-09-27).
+
 Status: spec, 2026-09-26. [CORRECTION 2026-09-27] Built (issues #289 and
 #290), with the recommended answers to the open questions below (owner: go
 with the defaults): all four themes ship, the wizard shows once to every

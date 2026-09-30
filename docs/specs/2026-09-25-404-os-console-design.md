@@ -1,5 +1,7 @@
 # 404 OS console: architecture
 
+Status (checked 2026-09-29): built in #286, #287, #288 and #291 (2026-09-25 to 2026-09-27). The status paragraph below is the record from while it was being built.
+
 Status: proposal, 2026-09-25; being built. PR A (#286, the packages) and PR B (the program manifest) are done. The owner picked
 the look on 2026-09-25 (the Classic desktop, see
 [The owner's pick](#the-owners-pick-2026-09-25)), then reviewed the

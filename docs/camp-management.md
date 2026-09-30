@@ -1,5 +1,7 @@
 # Camp Management
 
+Status (checked 2026-09-29): out of date in places. [CORRECTION 2026-09-29] The home control panel is gone: the roster is the Roster program on the 404 OS desktop, at `app/(console)/captains/camp-management/`. Every approved member now reads a public roster (`rosterForViewer`), and team leads also see each member's "This year" status; captains still get the full view. The approval filter is "Pending"; Accept and Waiting list for the year also live on `/captains/applications`. Shared `table.tsx` and `responsive-data-table.tsx` now exist in `@camp404/ui`.
+
 > The captains' roster view: everyone who has signed up, their rank and
 > status, whether their required questionnaires are done, whether they
 > registered as a driver, and whether they're in South Africa. Reachable

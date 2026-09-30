@@ -17,4 +17,4 @@ The vision is **"a calm command centre for a chaotic desert."** It must work for
 ---
 
 > The remainder of this document is preserved as v0.2 of the brief, kept here for reference.
-> See README.md for the day-to-day quickstart and the Phase 0 setup that lives in this repo.
+> See README.md for the day-to-day quickstart, and docs/architecture.md for how the app is built. [CORRECTION 2026-09-29: this pointed at "the Phase 0 setup"; the app is long past it.]

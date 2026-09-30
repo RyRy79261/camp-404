@@ -6,6 +6,8 @@ Companion: docs/design/camp-404-design-system-port-briefing.md
 
 # Totalistic Feature-Set Analysis + Adversarial Verification — A Repo-Agnostic Multi-Agent Playbook
 
+Status (checked 2026-09-29): the method is current; the Camp 404 worked example is history. Its companion briefing (`docs/design/…`) and the `design/` folder were deleted (owner, 2026-09-25), and the control panel, quadrant nav and OKLCH-only palette it describes were replaced by the 404 OS desktop.
+
 ## 1. Title & Purpose
 
 This playbook tells a team (and its fan-out of Claude Code agents) how to reproduce, on **their own codebase**, the *totalistic feature-set analysis + adversarial verification* method originally run on `intake-tracker`. Follow it end-to-end and paste its embedded prompt templates straight into agents.

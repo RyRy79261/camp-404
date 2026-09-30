@@ -16,13 +16,15 @@ Turborepo + pnpm workspaces. Node >= 22, pnpm 10.x.
 
 ```
 apps/
-  web/        Next.js 16 app (App Router, React 19, Tailwind v4)
+  web/        Next.js 16 app (App Router, React 19, Tailwind v4): the 404 OS console
   join/       join.camp-404.com: the "404 OS" recruiting site; reads the db, no sign-in
   mobile/     Capacitor host wrapping the web static export
   admin-cli/  Node CLI for data ops
 packages/
   core/       Framework-free domain logic: access, privacy, redaction, … (@camp404/core)
   ui/         Shared shadcn/ui components (@camp404/ui)
+  os/         The 404 OS window engine, shared by web and join (@camp404/os)
+  games/      The desktop's games and cats (@camp404/games)
   db/         Drizzle schema + migrations (@camp404/db)
   auth/       Self-hosted Better Auth server and client (@camp404/auth)
   types/      Zod schemas + shared TS types (@camp404/types)
@@ -31,7 +33,8 @@ packages/
   eslint-config/ typescript-config/
 ```
 
-`pnpm-workspace.yaml` is the source of truth.
+`pnpm-workspace.yaml` is the source of truth. Each app and most packages have a
+short README; `docs/architecture.md` draws how they fit together.
 
 ## Commands
 
@@ -57,9 +60,12 @@ Traps that already cost real time:
   though production would use a second connection. Fix the code, not the
   test: pass the `tx` down, or read after the transaction returns. Green on
   PGlite is not proof of Neon pooling or cold starts.
-- **E2E runs on the in-memory test store.** Playwright starts `next dev` with
+- **E2E runs on the in-memory test store.** Playwright runs the app with
   `E2E_TEST_MODE=1`, and `apps/web/lib/test-store.ts` stands in for the login
-  and the database. A data function with no test-store twin cannot be driven
+  and the database. [CORRECTION 2026-09-29] This said Playwright starts
+  `next dev`. That is the local default only: CI builds the app and serves it
+  with `next start` (`E2E_SERVE_BUILD=1`). `tests/e2e-db` runs the specs the
+  store cannot hold against a real Postgres. A data function with no test-store twin cannot be driven
   by Playwright. Add the twin with the feature, or say in the PR that the flow
   has no E2E cover.
 - **A `"use server"` file may export only async functions.** A `const`
@@ -399,8 +405,10 @@ NOTHING`, with no target, is not affected.
 
 **Driver choice.** `@camp404/db` exposes two drivers: `createHttpDb()` is
 stateless, for route handlers and server components, and has **no
-transactions**; `createPooledDb()` is a WebSocket pool, for cron jobs and
-the CLI, and **supports transactions**. Multi-statement atomic work must
+transactions**; `createPooledDb()` is a WebSocket pool, for background work and
+the CLI, and **supports transactions** (`withTransaction` opens one).
+[CORRECTION 2026-09-29] This said "cron jobs"; there are none (see No cron
+jobs). Multi-statement atomic work must
 use the pooled driver.
 
 **Local database.** `docker-compose.local.yml` runs Postgres plus the Neon
@@ -546,7 +554,7 @@ Decisions baked into the schema — keep new code consistent with them:
   (`intent`); "Accepted" (on the camp's list this year) and "Waiting list"
   (said Coming, but the camp is full) are the captains' decision. The stored
   `status` still holds both; screens split it with the helpers in
-  `@camp404/core/participation` (`INTENT_LABEL`, `participationDecision`,
+  `packages/core/src/participation.ts`, exported from `@camp404/core` (`INTENT_LABEL`, `participationDecision`,
   `DECISION_LABEL`, and `STANDING_LABEL` for filters and counts, e.g.
   "Coming, not decided"). Never write one label that mixes the two.
   `intent` reads at `team_lead`, like `status`, so a lead sees both halves.
@@ -571,8 +579,10 @@ Decisions baked into the schema — keep new code consistent with them:
   `/captains/applications` (Applications: team lead and up, no tickets below
   captain), and the overview's "This year" card counts accepted members with
   no ticket yet and WAPs issued.
-- **Notifications.** `broadcasts` are composed messages fanned out by a
-  worker into per-user `notification_deliveries` (a queue). `push_tokens`
+- **Notifications.** `broadcasts` are composed messages fanned out into
+  per-user `notification_deliveries` (a queue). [CORRECTION 2026-09-29] There
+  is no worker: `deliverDue` fans out and drains the queue in `after()` (see
+  No cron jobs). `push_tokens`
   holds device tokens.
 - **Component mapping.** String keys (`required_actions.action_key`,
   `questionnaire_activations.questionnaire_key`, `broadcasts.ref_type`)
@@ -820,10 +830,15 @@ never measured.
 - One PR per feature. The PR template leads with **Why** and **Decisions**;
   fill in Database even when the answer is "None."
 - Keep the CI gate green before requesting review. `ci-pass` is the one
-  required check.
+  required check. [2026-09-29] The `main` ruleset also asks for the branch to
+  be up to date with `main`, and allows squash or rebase merges only (no
+  merge commits on `main`).
 
 ## Before you commit
 
 Run the full CI gate locally — `pnpm turbo run lint typecheck test build` —
-and make sure it passes. This is exactly what `.github/workflows/ci.yml`
-runs on every PR.
+and make sure it passes. `.github/workflows/ci.yml` runs the same four on
+every PR. [CORRECTION 2026-09-29] It also runs the migrations on a Neon branch
+(`schema-migration`), the Playwright jobs (`e2e`, `e2e-join`, `e2e-db`), a
+dependency audit (`supply-chain`) and `commitlint`; `ci-pass` waits for all of
+them.
