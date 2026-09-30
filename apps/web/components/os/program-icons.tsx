@@ -40,6 +40,7 @@ const LINE: Readonly<Record<string, IconKey>> = {
   "recipe-version": "cookbook",
   "recipe-source": "cookbook",
   "meal-plan": "mealplan",
+  "shopping-list": "basket",
   "recipe-review": "review",
   questionnaires: "forms",
   "edit-questionnaire": "forms",

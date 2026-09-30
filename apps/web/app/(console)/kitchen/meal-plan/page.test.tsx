@@ -18,7 +18,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn() }));
 vi.mock("@/lib/meal-plan", () => ({ getMealPlan: vi.fn() }));
-vi.mock("./actions", () => ({ saveMealPlanAction: vi.fn() }));
+vi.mock("@/lib/kitchen-menu", () => ({
+  getKitchenMenu: vi.fn(),
+  getSnacks: vi.fn(),
+}));
+vi.mock("@/lib/recipes", () => ({ listRecipeBook: vi.fn() }));
+vi.mock("./actions", () => ({
+  saveMealPlanAction: vi.fn(),
+  addMenuItemAction: vi.fn(),
+  removeMenuItemAction: vi.fn(),
+  addSnackAction: vi.fn(),
+  removeSnackAction: vi.fn(),
+}));
+vi.mock("../recipes/actions", () => ({ proofreadPlatesAction: vi.fn() }));
 vi.mock("@camp404/ui/components/toast", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
@@ -28,11 +40,19 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { toast } from "@camp404/ui/components/toast";
+import type { KitchenMenu } from "@camp404/db/kitchen-menu";
 import { captainPageGate } from "@/lib/captain-gate";
+import { getKitchenMenu, getSnacks } from "@/lib/kitchen-menu";
 import { getMealPlan } from "@/lib/meal-plan";
+import { listRecipeBook } from "@/lib/recipes";
 import { getLeadTeams } from "@/lib/users";
 import { saveMealPlanAction } from "./actions";
 import MealPlanPage from "./page";
+
+const DAL = "00000000-0000-4000-8000-000000000001";
+const RICE = "00000000-0000-4000-8000-000000000002";
+
+const NO_MENU: KitchenMenu = { cycle: 2026, items: [], recipes: {} };
 
 const DAYS = [
   { breakfast: 20, lunch: 0, dinner: 25 },
@@ -49,6 +69,7 @@ async function renderAs(
     version: number;
     firstDay?: string | null;
   } = { daysOnSite: 3, days: DAYS, version: 4 },
+  menu: KitchenMenu = NO_MENU,
 ) {
   vi.mocked(captainPageGate).mockResolvedValue({
     campUser: { id: "viewer" },
@@ -62,6 +83,12 @@ async function renderAs(
     ...plan,
     firstDay: plan.firstDay ?? null,
   });
+  vi.mocked(getKitchenMenu).mockResolvedValue(menu);
+  vi.mocked(getSnacks).mockResolvedValue([]);
+  vi.mocked(listRecipeBook).mockResolvedValue([
+    { id: DAL, title: "Camp dal" },
+    { id: RICE, title: "Rice" },
+  ] as never);
   render(await MealPlanPage());
 }
 
@@ -97,10 +124,11 @@ describe("meal plan page", () => {
         .map((h) => h.textContent),
     ).toEqual(["Day", "Breakfast", "Lunch", "Dinner"]);
     const rows = within(table).getAllByRole("row").slice(1);
+    // Each cell names its meal too, for the phone's one card per day.
     expect(rows.map((r) => r.textContent)).toEqual([
-      "Day 1" + "20" + "0" + "25",
-      "Day 2" + "45" + "0" + "50",
-      "Day 3" + "45" + "10" + "60",
+      "Day 1" + "Breakfast20 plates" + "Lunch0" + "Dinner25 plates",
+      "Day 2" + "Breakfast45 plates" + "Lunch0" + "Dinner50 plates",
+      "Day 3" + "Breakfast45 plates" + "Lunch10 plates" + "Dinner60 plates",
     ]);
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(
@@ -108,6 +136,9 @@ describe("meal plan page", () => {
     ).toBeNull();
     expect(screen.queryByRole("spinbutton")).toBeNull();
     expect(getLeadTeams).not.toHaveBeenCalled();
+    // A member is never sent the recipe book's picker.
+    expect(listRecipeBook).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Add a recipe/ })).toBeNull();
   });
 
   it("shows every member each day's date once the plan has the date of day 1", async () => {
@@ -252,5 +283,104 @@ describe("meal plan page", () => {
       "Someone changed the meal plan first. Reload the page.",
     );
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  describe("the menu inside it (#244)", () => {
+    const item = (
+      id: string,
+      day: number,
+      meal: "breakfast" | "lunch" | "dinner",
+      recipeId: string,
+      position = 1,
+    ) => ({ id, day, meal, recipeId, position });
+
+    // Camp dal is verified at 50 and 25 plates; Rice only at 50, and Claude
+    // is on 25 for it. A recipe on day 4 is past the 3 days on site.
+    const MENU: KitchenMenu = {
+      cycle: 2026,
+      items: [
+        item("i1", 1, "dinner", DAL, 1),
+        item("i2", 1, "dinner", RICE, 2),
+        item("i3", 2, "dinner", RICE),
+        item("i4", 3, "breakfast", DAL),
+        item("i5", 4, "dinner", DAL),
+      ],
+      recipes: {
+        [DAL]: {
+          recipeId: DAL,
+          title: "Camp dal",
+          versionId: "v-dal",
+          categories: [],
+          counts: [
+            { plates: 25, lines: [] },
+            { plates: 50, lines: [] },
+          ],
+          openPlates: [],
+        },
+        [RICE]: {
+          recipeId: RICE,
+          title: "Rice",
+          versionId: "v-rice",
+          categories: [],
+          counts: [{ plates: 50, lines: [] }],
+          openPlates: [25],
+        },
+      },
+    };
+
+    const recipes = (name: string) =>
+      screen.queryByRole("list", { name: `Recipes for ${name}` });
+
+    it("shows every member each meal's recipes, each on its own line, with where its count stands", async () => {
+      await renderAs("camp_member", [], undefined, MENU);
+      const dinner = recipes("Day 1, dinner")!;
+      expect(
+        within(dinner)
+          .getAllByRole("listitem")
+          .map((li) => li.textContent),
+      ).toEqual(["Camp dalVerified", "RiceWith Claude…"]);
+      expect(
+        within(dinner).getByRole("link", { name: "Camp dal" }),
+      ).toHaveProperty(
+        "href",
+        expect.stringContaining(`/kitchen/recipes/${DAL}?plates=25`),
+      );
+      // Day 2 dinner is 50 plates: Rice is verified there.
+      expect(recipes("Day 2, dinner")!.textContent).toBe("RiceVerified");
+      // Day 3 breakfast is 45 plates, which Camp dal has no count for.
+      expect(recipes("Day 3, breakfast")!.textContent).toBe(
+        "Camp dalNot proofread yet",
+      );
+      // Day 4 is past the days on site: left off.
+      expect(recipes("Day 4, dinner")).toBeNull();
+      expect(screen.queryByRole("button")).toBeNull();
+    });
+
+    it("gives a Kitchen lead the add, the take-off and Proofread for N; no add on a meal with no plates", async () => {
+      await renderAs("team_lead", ["kitchen"], undefined, MENU);
+      expect(
+        screen.getByRole("button", { name: "Add a recipe to Day 1, dinner" }),
+      ).toBeTruthy();
+      // Lunch on day 1 is 0 plates.
+      expect(
+        screen.queryByRole("button", { name: "Add a recipe to Day 1, lunch" }),
+      ).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Take Rice off Day 1, dinner" }),
+      ).toBeTruthy();
+      expect(
+        within(recipes("Day 3, breakfast")!).getByRole("button", {
+          name: "Proofread for 45",
+        }),
+      ).toBeTruthy();
+      expect(listRecipeBook).toHaveBeenCalled();
+    });
+
+    it("gives a lead of another team the same read-only menu", async () => {
+      await renderAs("team_lead", ["structures"], undefined, MENU);
+      expect(recipes("Day 1, dinner")).toBeTruthy();
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(listRecipeBook).not.toHaveBeenCalled();
+    });
   });
 });

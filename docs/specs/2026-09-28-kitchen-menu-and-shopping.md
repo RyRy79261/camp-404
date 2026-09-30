@@ -1,9 +1,10 @@
 # Kitchen menu planner (#244) and shopping list (#245): layouts for approval
 
-Status: **layout proposal. No Kitchen UI is built until the owner approves a
-layout in writing** (owner, 2026-09-24: "You no longer have authority to do
-the kitchen things without my express consent of what layout you want to come
-up with"). This doc only proposes.
+Status: **approved 2026-09-30 (layouts A and A, see "Owner's answers"
+below) and built** in the kitchen menu PR (2026-10-01): the menu inside the
+meal plan, the shopping list at `/kitchen/shopping`, and the snacks. Left out
+until asked: prices, suppliers, stock, the allergen cross-check and a PDF
+(#249). The proposal below is kept as it was approved.
 
 ## Rules these layouts follow
 

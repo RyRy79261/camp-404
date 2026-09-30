@@ -2277,6 +2277,93 @@ export const kitchenMealPlanDays = pgTable(
   }),
 );
 
+// The kitchen's menu (#244, the owner's layout A, 2026-09-30): the recipes on
+// each meal of a year's meal plan, more than one to a meal (a main and a
+// side), each on its own line in `position` order. The plates come from the
+// meal plan's day, never stored twice, and the recipe is read at its book
+// (accepted) version, so a new version counts from its own plate counts. A
+// captain or a Kitchen lead adds and removes (canEditMealPlan), audited.
+// A row for a day past the plan's days on site is kept and left off the
+// page and the shopping list until the days grow back.
+export const kitchenMenuItems = pgTable(
+  "kitchen_menu_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    day: integer("day").notNull(),
+    // breakfast | lunch | dinner (MEALS_OF_THE_DAY).
+    meal: text("meal").notNull(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    addedByUserId: uuid("added_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    // A recipe sits on a meal once.
+    mealRecipeIdx: uniqueIndex("kitchen_menu_items_meal_recipe_idx").on(
+      t.cycle,
+      t.day,
+      t.meal,
+      t.recipeId,
+    ),
+    cycleIdx: index("kitchen_menu_items_cycle_idx").on(t.cycle),
+    dayCheck: check(
+      "kitchen_menu_items_day_check",
+      sql`${t.day} between 1 and 30`,
+    ),
+    mealCheck: check(
+      "kitchen_menu_items_meal_check",
+      sql`${t.meal} in ('breakfast', 'lunch', 'dinner')`,
+    ),
+  }),
+);
+
+// The kitchen's snacks for a year (#244, the owner, 2026-09-30: "their own
+// short list"): a name and, if known, an amount as typed ("6 packets"). They
+// sit at the end of the shopping list. A captain or a Kitchen lead adds and
+// removes, audited.
+export const kitchenSnacks = pgTable(
+  "kitchen_snacks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    name: text("name").notNull(),
+    amount: text("amount"),
+    addedByUserId: uuid("added_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("kitchen_snacks_cycle_idx").on(t.cycle),
+  }),
+);
+
+// The shopping list's ticks for a year (#245), shared by the whole camp: any
+// approved member ticks (the owner, 2026-09-30). A line is named by its key
+// (the ingredient and its unit, or `snack:<id>`), and the tick keeps the
+// amount the ticker saw, so it stops counting as bought when the list needs
+// a different amount. Unticking deletes the row.
+export const kitchenShoppingTicks = pgTable(
+  "kitchen_shopping_ticks",
+  {
+    cycle: integer("cycle").notNull(),
+    itemKey: text("item_key").notNull(),
+    amount: text("amount").notNull(),
+    tickedByUserId: uuid("ticked_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    tickedAt: timestamp("ticked_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.cycle, t.itemKey] }),
+  }),
+);
+
 // --- Documents / manuals -------------------------------------------------
 
 export const documents = pgTable(

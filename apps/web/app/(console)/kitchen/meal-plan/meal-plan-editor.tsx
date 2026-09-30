@@ -31,7 +31,9 @@ import {
   type EditorDraft,
 } from "@/components/os/editor-draft";
 import { UNREACHABLE } from "@/lib/recipe-copy";
+import { platesLabel } from "@/lib/recipe-labels";
 import { saveMealPlanAction } from "./actions";
+import { MenuCell, type BookRecipe, type MenuLine } from "./menu-cell";
 
 // The meal plan's page body (the owner's sketch, 2026-09-24): Save in the
 // heading, the days on site and the date of day 1, then one row per day, named
@@ -84,8 +86,8 @@ function problems(
 }
 
 /**
- * "Day 1 · Sat 25 Apr", with the date on its own line on a phone so the table's
- * last column stays on screen; "Day 1" alone when there is no date.
+ * "Day 1 · Sat 25 Apr"; the date wraps under the day when the column is
+ * narrow. "Day 1" alone when there is no date.
  */
 function DayLabel({ label }: { label: string }) {
   const [day, date] = label.split(" · ");
@@ -98,7 +100,7 @@ function DayLabel({ label }: { label: string }) {
       {date ? (
         <>
           {" "}
-          <span className="block whitespace-nowrap page-sm:inline">{date}</span>
+          <span className="whitespace-nowrap">{date}</span>
         </>
       ) : null}
     </>
@@ -136,6 +138,10 @@ type MealPlanEditorProps = {
   version: number;
   /** A captain or a Kitchen lead. */
   canEdit: boolean;
+  /** The recipes on each meal (#244), read for the meals' saved plates. */
+  menu?: readonly MenuLine[];
+  /** The recipe book, for an editor's picker; empty for everyone else. */
+  book?: readonly BookRecipe[];
 };
 
 /**
@@ -169,8 +175,11 @@ export function MealPlanEditor(props: MealPlanEditorProps) {
 function MealPlanEditorForm({
   daysOnSite: savedDays,
   firstDay: savedFirstDay,
+  days: savedDayPlates,
   version,
   canEdit,
+  menu = [],
+  book = [],
   draft,
 }: MealPlanEditorProps & { draft: EditorDraft<MealPlanDraft> }) {
   const router = useRouter();
@@ -332,8 +341,10 @@ function MealPlanEditorForm({
       </div>
 
       <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
-        <Table aria-label="Plates per day">
-          <TableHeader>
+        {/* A phone shows one card per day (the owner's layout A): below
+            page-md the rows and cells stack, each meal named in its cell. */}
+        <Table aria-label="Plates per day" className="block page-md:table">
+          <TableHeader className="hidden page-md:table-header-group">
             <TableRow>
               <TableHead scope="col">Day</TableHead>
               {MEALS_OF_THE_DAY.map((meal) => (
@@ -343,10 +354,20 @@ function MealPlanEditorForm({
               ))}
             </TableRow>
           </TableHeader>
-          <TableBody>
+          <TableBody className="flex flex-col gap-3 page-md:table-row-group">
             {rows.map((row, i) => (
-              <TableRow key={i}>
-                <TableHead scope="row" className="whitespace-normal">
+              <TableRow
+                key={i}
+                className="block rounded-xl border bg-card p-3 text-card-foreground page-md:table-row page-md:rounded-none page-md:border-x-0 page-md:border-t-0 page-md:bg-transparent page-md:p-0"
+              >
+                <TableHead
+                  scope="row"
+                  className={`block h-auto whitespace-normal px-0 pb-1 text-foreground page-md:table-cell page-md:px-2 page-md:pb-2 page-md:align-top page-md:text-muted-foreground ${
+                    // Level with the first line of the cells: a plates box
+                    // for an editor, a line of text for everyone else.
+                    canEdit ? "page-md:pt-4" : "page-md:pt-2"
+                  }`}
+                >
                   <DayLabel
                     label={mealPlanDayLabel(
                       canEdit ? firstDay : savedFirstDay,
@@ -357,10 +378,21 @@ function MealPlanEditorForm({
                 {MEALS_OF_THE_DAY.map((meal) => {
                   const key = `${i}.${meal}`;
                   const label = `Day ${i + 1} ${MEAL_LABELS[meal].toLowerCase()}`;
+                  const saved = savedDayPlates[i]?.[meal] ?? 0;
+                  const lines = menu.filter(
+                    (l) => l.day === i + 1 && l.meal === meal,
+                  );
                   return (
-                    <TableCell key={meal} className="align-top">
-                      {canEdit ? (
-                        <>
+                    <TableCell
+                      key={meal}
+                      className="block whitespace-normal px-0 py-1.5 align-top page-md:table-cell page-md:min-w-36 page-md:px-2 page-md:py-2"
+                    >
+                      {/* On a phone the meal's name sits beside its plates. */}
+                      <div className="flex items-center gap-3 page-md:block">
+                        <span className="w-20 shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground page-md:hidden">
+                          {MEAL_LABELS[meal]}
+                        </span>
+                        {canEdit ? (
                           <Input
                             type="number"
                             inputMode="numeric"
@@ -374,23 +406,35 @@ function MealPlanEditorForm({
                             aria-describedby={
                               errors[key] ? `plates-${key}-error` : undefined
                             }
-                            className="w-16 page-sm:w-20"
+                            className="w-20"
                             onChange={(e) =>
                               changePlates(i, meal, e.target.value)
                             }
                           />
-                          {errors[key] && (
-                            <p
-                              id={`plates-${key}-error`}
-                              className="mt-1 text-xs text-destructive"
-                            >
-                              {errors[key]}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <span className="tabular-nums">{row[meal]}</span>
+                        ) : (
+                          <span className="tabular-nums">
+                            {Number(row[meal]) > 0
+                              ? platesLabel(Number(row[meal]))
+                              : row[meal]}
+                          </span>
+                        )}
+                      </div>
+                      {canEdit && errors[key] && (
+                        <p
+                          id={`plates-${key}-error`}
+                          className="mt-1 text-xs text-destructive"
+                        >
+                          {errors[key]}
+                        </p>
                       )}
+                      <MenuCell
+                        day={i + 1}
+                        meal={meal}
+                        plates={saved}
+                        lines={lines}
+                        book={book}
+                        canEdit={canEdit}
+                      />
                     </TableCell>
                   );
                 })}

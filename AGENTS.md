@@ -613,6 +613,21 @@ Decisions baked into the schema — keep new code consistent with them:
   already in the book is revised, not rewritten: the run carries its accepted
   version and the questions and answers that settled it
   (`recipeSourceRevisionPrompt`, recorded as `PROMPT_VERSIONS.recipeSourceRevision`).
+  [2026-10-01] The menu (#244) sits inside the meal plan table (the owner's
+  layout A, 2026-09-30): `kitchen_menu_items` holds the recipes on each meal,
+  more than one to a meal, read at the recipe's book (accepted) version; the
+  plates stay on the meal plan, never stored twice. The shopping list (#245,
+  `/kitchen/shopping`) is worked out on each load by `buildShoppingList`
+  (`packages/core/src/kitchen-menu.ts`): for each recipe on a meal, the
+  `recipe_plate_counts` row for that meal's plates, added up by ingredient and
+  unit and grouped by shop area. A recipe with no row for its meal's plates is
+  "Not counted yet: proofread first" and adds nothing; nothing is scaled by
+  multiplying. The same people as the meal plan edit the menu and the year's
+  snacks (`kitchen_snacks`, a name and an amount as typed, listed last on the
+  shopping list). The list's ticks (`kitchen_shopping_ticks`) are shared by
+  the whole camp and any approved member ticks (`canTickShoppingList`); a tick
+  keeps the amount it was given at and stops counting when the list needs
+  another. No prices, suppliers, stock or allergen check on the list yet.
 
 - **Camp layout (#271).** This year's site plan is one Zod-checked document
   (`CampLayout`, `@camp404/types`) saved as numbered versions in

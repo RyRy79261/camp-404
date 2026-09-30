@@ -83,6 +83,7 @@ import {
   resetDuesStore,
 } from "./test-store-dues";
 import { resetClaimsStore } from "./test-store-claims";
+import { resetKitchenMenuStore } from "./test-store-kitchen-menu";
 import { resetRentalStore } from "./test-store-rental";
 import { resetLogisticsStore } from "./test-store-logistics";
 import type { MyLift } from "@camp404/db/cars";
@@ -289,6 +290,7 @@ import {
   type MealPlanSave,
   type MealPlanWriteResult,
 } from "@camp404/db/meal-plan";
+import type { MenuRecipeFacts } from "@camp404/db/kitchen-menu";
 import {
   calendarEventRefusal,
   type AddCalendarEventResult,
@@ -6007,6 +6009,53 @@ export const testStore = {
     };
   },
 
+  /**
+   * What the kitchen menu reads about each recipe on it (the twin of the
+   * recipe half of readKitchenMenu): the book version, its lines' shop areas,
+   * its plate counts with their lines, and the counts Claude is working on.
+   */
+  kitchenMenuRecipes(
+    recipeIds: readonly string[],
+  ): Record<string, MenuRecipeFacts> {
+    const out: Record<string, MenuRecipeFacts> = {};
+    for (const id of new Set(recipeIds)) {
+      const recipe = findRecipe(id);
+      if (!recipe) continue;
+      const version = recipe.acceptedVersionId
+        ? recipeVersions.find((v) => v.id === recipe.acceptedVersionId)
+        : undefined;
+      out[id] = {
+        recipeId: id,
+        title: recipe.title?.trim() || UNTITLED_RECIPE,
+        versionId: version?.id ?? null,
+        categories: version?.body.ingredients.map((l) => l.category) ?? [],
+        counts: version
+          ? storePlateCounts(version.id).map((p) => ({
+              plates: p.plates,
+              lines: p.lines,
+            }))
+          : [],
+        openPlates: version
+          ? recipeRuns
+              .filter(
+                (r) =>
+                  r.kind === "plates" &&
+                  r.versionId === version.id &&
+                  (r.outcome === "queued" || r.outcome === "running") &&
+                  r.plates !== null,
+              )
+              .map((r) => r.plates!)
+          : [],
+      };
+    }
+    return out;
+  },
+
+  /** Whether a recipe is in the book (it has an accepted version). */
+  recipeInBook(recipeId: string): boolean {
+    return Boolean(findRecipe(recipeId)?.acceptedVersionId);
+  },
+
   getPlateCount(versionId: string, plates: number): PlateCountDetail | null {
     const row = recipePlateCounts.find(
       (p) => p.versionId === versionId && p.plates === plates,
@@ -6114,6 +6163,7 @@ export const testStore = {
     resetRentalStore();
     resetLogisticsStore();
     resetClaimsStore();
+    resetKitchenMenuStore();
   },
 
   // --- INKBLOT's board (the twin of @camp404/db/inkblot) --------------------

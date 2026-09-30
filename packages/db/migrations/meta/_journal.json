@@ -568,6 +568,13 @@
       "when": 1790803506301,
       "tag": "0080_logistics_plain_titles",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1790810500095,
+      "tag": "0081_kitchen_menu_and_shopping",
+      "breakpoints": true
     }
   ]
 }

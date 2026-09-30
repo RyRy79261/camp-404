@@ -121,6 +121,10 @@
 //     groupStepsByPhase for the recipe page, defaultPlates, and the meal
 //     plan's canEditMealPlan, mealPlanPlateCounts, mealPlanPeaks and
 //     mealPlanDayLabel (./recipes)
+//   - kitchen menu and shopping list: canTickShoppingList (any member),
+//     buildShoppingList (the verified plate counts added up by shop area),
+//     shoppingKey, snackKey, sortMenu, mealPlates, sourcesSummary
+//     (./kitchen-menu)
 //   - recipe sources: sourceText (the Markdown-like text Claude reads),
 //     sourceFromText (pasted text into sections), emptySourceSections,
 //     sameSections and sameSource (./recipe-source)
@@ -195,6 +199,7 @@ export * from "./power-site";
 export * from "./power-grid";
 export * from "./power-sharing";
 export * from "./recipes";
+export * from "./kitchen-menu";
 export * from "./recipe-source";
 export * from "./calendar-titles";
 export * from "./meeting-notes";
