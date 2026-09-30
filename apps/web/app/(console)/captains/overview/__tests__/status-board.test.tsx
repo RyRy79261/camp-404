@@ -339,12 +339,12 @@ describe("ThisYearCard", () => {
     expect(within(card).getByText("16 approved members")).toBeTruthy();
     const legend = within(card).getAllByRole("listitem");
     expect(legend.map((li) => li.textContent)).toEqual([
-      "Coming3",
-      "Maybe2",
+      "Coming, not decided3",
+      "Maybe, not decided2",
       "Accepted4",
       "Waiting list1",
       "Not coming1",
-      "Not answered5",
+      "No answer yet5",
     ]);
     // One bar segment per non-zero count, sized from the number beside it.
     const bars = container.querySelectorAll<HTMLElement>(
@@ -352,6 +352,27 @@ describe("ThisYearCard", () => {
     );
     expect(bars).toHaveLength(6);
     expect(bars[2]!.style.width).toBe("25%");
+  });
+
+  it("adds the year's ticket figures, and a way to the Applications page", () => {
+    render(
+      <ThisYearCard
+        counts={counts}
+        tickets={{ needTicket: 3, wapIssued: 2 }}
+      />,
+    );
+    const card = screen.getByRole("article", { name: "This year" });
+    const tickets = within(card).getByRole("list", { name: "Tickets" });
+    expect(
+      within(tickets)
+        .getAllByRole("listitem")
+        .map((li) => li.textContent),
+    ).toEqual(["Have a place, no ticket yet3", "WAPs issued2"]);
+    expect(
+      within(card)
+        .getByRole("link", { name: "Applications" })
+        .getAttribute("href"),
+    ).toBe("/captains/applications");
   });
 
   it("draws no segment for a zero count, but keeps it in the legend", () => {

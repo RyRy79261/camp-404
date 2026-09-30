@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   DEFAULT_CURRENCY,
@@ -8,13 +7,16 @@ import {
   parseMoneyToMinor,
 } from "@camp404/core";
 import { Currency } from "@camp404/types";
+import { MoneyRefused } from "@camp404/db/dues";
 import { runAction } from "@/lib/action-result";
-import { captainActionGate } from "@/lib/captain-gate";
+import { revalidateDues } from "@/lib/dues-revalidate";
+import { moneyActionGate } from "@/lib/money-gate";
 import { recordPayment, setPaymentStatus } from "@/lib/payments";
 import { findCampUserById } from "@/lib/users";
 
-// The payments ledger's writes. Captain-only. The database writes the audit
-// row for each in the same transaction.
+// The payments ledger's writes, for the Finance team: captains and Finance
+// leads (canManageMoney). Each write checks that again inside its own
+// transaction and writes its audit row there.
 
 export type PaymentActionResult =
   | { ok: true; reference?: string }
@@ -23,12 +25,6 @@ export type PaymentActionResult =
 const Status = z.enum(PAYMENT_STATUSES);
 const Id = z.string().min(1);
 const MAX_NOTE = 500;
-
-function revalidateLedger(): void {
-  revalidatePath("/captains/payments");
-  // The roster's "Dues this year" reads the ledger.
-  revalidatePath("/captains/camp-management");
-}
 
 /** Record a payment for this year from what the bank statement shows. */
 export async function recordPaymentAction(input: {
@@ -40,7 +36,7 @@ export async function recordPaymentAction(input: {
   currency?: string;
 }): Promise<PaymentActionResult> {
   return runAction("recordPaymentAction", async () => {
-    const gate = await captainActionGate("captain");
+    const gate = await moneyActionGate();
     if (!gate.ok) return gate;
 
     if (!Id.safeParse(input?.userId).success) {
@@ -72,15 +68,23 @@ export async function recordPaymentAction(input: {
     const member = await findCampUserById(input.userId);
     if (!member) return { ok: false, error: "Member not found." };
 
-    const { reference } = await recordPayment({
-      userId: input.userId,
-      amountCents,
-      currency: currency.data,
-      status: status.data,
-      note: note || null,
-      recordedByUserId: gate.campUser.id,
-    });
-    revalidateLedger();
+    let reference: string;
+    try {
+      ({ reference } = await recordPayment({
+        userId: input.userId,
+        amountCents,
+        currency: currency.data,
+        status: status.data,
+        note: note || null,
+        recordedByUserId: gate.campUser.id,
+      }));
+    } catch (error) {
+      if (error instanceof MoneyRefused) {
+        return { ok: false, error: error.sentence };
+      }
+      throw error;
+    }
+    revalidateDues();
     return { ok: true, reference };
   });
 }
@@ -92,7 +96,7 @@ export async function setPaymentStatusAction(input: {
   to: string;
 }): Promise<PaymentActionResult> {
   return runAction("setPaymentStatusAction", async () => {
-    const gate = await captainActionGate("captain");
+    const gate = await moneyActionGate();
     if (!gate.ok) return gate;
 
     const from = Status.safeParse(input?.from);
@@ -106,18 +110,26 @@ export async function setPaymentStatusAction(input: {
     }
     if (from.data === to.data) return { ok: true };
 
-    const changed = await setPaymentStatus({
-      paymentId: input.paymentId,
-      from: from.data,
-      to: to.data,
-      actorId: gate.campUser.id,
-    });
-    revalidateLedger();
+    let changed: boolean;
+    try {
+      changed = await setPaymentStatus({
+        paymentId: input.paymentId,
+        from: from.data,
+        to: to.data,
+        actorId: gate.campUser.id,
+      });
+    } catch (error) {
+      if (error instanceof MoneyRefused) {
+        return { ok: false, error: error.sentence };
+      }
+      throw error;
+    }
+    revalidateDues();
     if (!changed) {
       return {
         ok: false,
         error:
-          "Another captain already changed this payment. The list is up to date now.",
+          "Someone else already changed this payment. The list is up to date now.",
       };
     }
     return { ok: true };

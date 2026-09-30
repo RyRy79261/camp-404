@@ -5,7 +5,7 @@ import {
   isCampBootstrapped,
   FOUNDER_CODE,
   mayFoundCamp,
-  SETUP_REFUSED_MESSAGE,
+  setupRefusedMessage,
 } from "@/lib/bootstrap";
 import { SetupRefused, SetupWizard } from "./setup-wizard";
 
@@ -36,7 +36,7 @@ export default async function SetupPage() {
     const address = user.emailVerified ? null : await getAddressToConfirm();
     return (
       <SetupRefused
-        message={SETUP_REFUSED_MESSAGE}
+        message={setupRefusedMessage()}
         confirm={
           address
             ? { email: address, deliverable: canDeliverAuthEmail(process.env) }

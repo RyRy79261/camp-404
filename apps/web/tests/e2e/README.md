@@ -22,14 +22,16 @@ This is the fast feedback layer — sub-second, runs on every PR.
 
 ## Layer 2 — Playwright
 
-`apps/web/tests/e2e/*.spec.ts`. Auto-starts `next dev` on port 3000 with
-the following fixture env (see `playwright.config.ts`):
+`apps/web/tests/e2e/*.spec.ts`. Auto-starts the app on port 3000 with the
+following fixture env (see `playwright.config.ts`). Locally that is `next dev`;
+with `E2E_SERVE_BUILD=1` it serves a production build with `next start`
+instead, which is what CI does (see [CI](#ci)).
 
-| Var             | Value                       | Purpose                                                                                                                                                                                                                                         |
-| --------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `E2E_TEST_MODE` | `1`                         | Enables `/api/test/{login,logout,reset,seed-invite,seed-team,inspect,complete-onboarding,set-approval,set-rank}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
-| `INVITE_CODES`  | `test-invite-e2e-only-code` | One known bootstrap (env-list) code for redemption specs. The specs type it in capitals to prove redemption ignores case. It is at least 20 characters, so it lets a member in without approval.                                                |
-| `GOD_EMAILS`    | `god@example.com`           | One whitelisted god account that bypasses the invite gate.                                                                                                                                                                                      |
+| Var             | Value                       | Purpose                                                                                                                                                                                                                                                               |
+| --------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `E2E_TEST_MODE` | `1`                         | Enables `/api/test/{login,reset,seed-invite,seed-team,seed-lift,seed-participation,inspect,complete-onboarding,set-approval,set-rank}` and routes auth + DB through an in-memory store. The whole test-mode harness is gated on this flag — production never sets it. |
+| `INVITE_CODES`  | `test-invite-e2e-only-code` | One known bootstrap (env-list) code for redemption specs. The specs type it in capitals to prove redemption ignores case. It is at least 20 characters, so it lets a member in without approval.                                                                      |
+| `GOD_EMAILS`    | `god@example.com`           | One whitelisted god account that bypasses the invite gate.                                                                                                                                                                                                            |
 
 Run with:
 
@@ -107,7 +109,12 @@ CI=1 E2E_SERVE_BUILD=1 pnpm --filter @camp404/web test:e2e:db
 ### Helpers
 
 - `_helpers.ts`: the test-mode seams (`login`, `resetTestState`,
-  `completeOnboarding`, `redeemInviteAtGate`, `setRank`).
+  `completeOnboarding`, `redeemInviteAtGate`, `setRank`, `seedTeam`,
+  `seedLift`, `seedParticipation`, `logoutAll`).
+- `lib/console-nav.ts`: the way round the 404 OS desktop. `openConsoleNav`
+  drives the Start menu and folder windows on a desktop and the home screen
+  and folder sheets on a phone; `expectDesktop`, `openToday`, `desktopIcon`
+  and `osWindow` do what they say. See the Design section of `AGENTS.md`.
 - `lib/dom.ts`: `appAlerts(page, text?)` finds the app's own alerts and
   skips Next's route announcer (a bare `getByRole("alert")` collides with
   it); `desktopOnly(testInfo, reason)` skips a test on the `mobile-360`
@@ -121,16 +128,17 @@ In production, every page that needs a user calls
 `getAuthenticatedUser()` which reads the Better Auth session cookie. In
 test mode, that same helper looks for the `camp404_test_user` cookie
 first and only falls back to Better Auth if it's absent. Playwright specs
-POST to `/api/test/login` with a JSON body to set that cookie:
+POST to `/api/test/login` with a JSON body to set that cookie, through the
+`login` helper:
 
 ```ts
-await login(request, { id: "alice-auth", email: "god@example.com" });
+await login(page, { id: "alice-auth", email: "god@example.com" });
 ```
 
 The `id` field becomes the synthetic auth-user id, so the camp `users`
 row that gets lazily created is keyed to it deterministically. The
 in-memory store (`apps/web/lib/test-store.ts`) replaces all the
-Neon-backed reads/writes in this mode.
+database reads and writes in this mode.
 
 #### Reaching post-onboarding gates
 
@@ -161,12 +169,17 @@ complete and jump straight to the gates that follow it (home vs.
 > `captain-preview-locked.spec.ts` checks its Outstanding line. Captain
 > notes are not modelled and come back empty. The approve/reject action
 > writes through the test-backed `users` helpers (`findCampUserById`,
-> `decideUserApproval`), but no spec drives the modal yet. The approval
+> `decideUserApproval`); the store run does not drive the modal, but
+> `tests/e2e-db/captain-review.spec.ts` does. The approval
 > _gate_ (pending users blocked at `/pending-approval`) and the
 > `users.approval_status` stamping on redemption are covered, since those go
 > through the same helpers.
 
 ### Spec coverage
+
+[CORRECTION 2026-09-29] This is a sample, not the full list: `tests/e2e/`
+holds over forty specs. Read the directory for the rest; the shell's own
+cases are `os-shell.spec.ts`.
 
 - `home.spec.ts` — **[CORRECTION 2026-09-24]** the signed-out page shows
   its one sign-in link, and the lost link lands on sign-in. Signed in: an
@@ -186,13 +199,15 @@ complete and jump straight to the gates that follow it (home vs.
   empty): a Kitchen lead adds a Kitchen event, which Kitchen members see on
   Home as theirs and Finance members as Kitchen's; a captain adds an all-day
   whole-camp event, which wears no badge; a plain member sees the lock.
-- `signup.spec.ts` — invite form renders, invalid codes error, valid
-  codes set the cookie and redirect to the Neon Auth sign-up page.
+- `signup.spec.ts` — the invite gate (`/signup/required`) renders for a
+  signed-in member without a code, an invalid code errors and stays on the
+  gate, and a valid code unlocks the questionnaire. [CORRECTION 2026-09-29:
+  this said a valid code redirects to the Neon Auth sign-up page.]
 - `api.spec.ts` — `/api/health` returns ok, `/api/voice/transcribe`
   rejects unauthenticated callers with 401.
 - `authenticated.spec.ts` — god email reaches the questionnaire,
   non-god without invite is bounced to `/signup/required`, redeeming an
-  invite at `/signup` unlocks the questionnaire, an approved user who
+  invite at the gate unlocks the questionnaire, an approved user who
   finishes onboarding lands home, a pending (vetting-required) user is
   held at `/pending-approval` after onboarding, a rejected member sees the
   not-approved screen, an unauthenticated visit to a protected page
@@ -238,27 +253,34 @@ suite — covered elsewhere, or only coverable by the future real-auth suite:
 - **Captain approve / reject from the UI.** **[CORRECTION 2026-09-24]** The
   roster and the member panel now have test-store twins (`lib/roster.ts`), so
   the panel opens under `E2E_TEST_MODE`, and its decision action writes
-  through the test-backed `decideUserApproval`. No spec drives the modal yet;
-  that is a gap, not a blocker. The approval _gate_ it controls is covered:
+  through the test-backed `decideUserApproval`. No store spec drives the modal
+  yet. [CORRECTION 2026-09-29] The real-database run does:
+  `tests/e2e-db/captain-review.spec.ts` approves, rejects and reads the ID. The approval _gate_ it controls is covered:
   pending and rejected members are driven via the `set-approval` seam and
   asserted at `/pending-approval`.
 
 ### Running against a deployed preview
 
 The test-mode endpoints are deliberately disabled in production. To run
-the unauth-only specs (`home`, `signup`, `api`, `smoke`) against a
-deployed preview, point at it and skip the bundled server:
+the specs that need no test login against a deployed preview, point at it
+and skip the bundled server. [CORRECTION 2026-09-29] `signup` is not one of
+them any more: it calls `login()`, which needs test mode.
 
 ```bash
 export PLAYWRIGHT_BASE_URL=https://your-preview.vercel.app
 export PLAYWRIGHT_SKIP_WEB_SERVER=1
-pnpm --filter @camp404/web test:e2e -- home.spec.ts signup.spec.ts api.spec.ts
+pnpm --filter @camp404/web test:e2e -- api.spec.ts
 ```
 
 The `authenticated.spec.ts` and `invite-tracking.spec.ts` specs depend
 on `E2E_TEST_MODE` and so only run against the local dev server.
 
 ## What real production E2E will need
+
+[CORRECTION 2026-09-29] Superseded: the real-database run above
+(`tests/e2e-db`, the `e2e-db` job) is that suite. It keeps the test login and
+the outside-service stubs, runs against local Postgres, and needs no secrets.
+The plan below is kept as the record.
 
 > Full plan: [`docs/e2e-true-auth.md`](../../../../docs/e2e-true-auth.md) —
 > a brief for the real-Neon-Auth suite (dedicated test identity, ephemeral
@@ -293,13 +315,17 @@ would share the same signature so the specs themselves don't change.
 The Playwright suite runs in `.github/workflows/ci.yml` as the `e2e` job on
 every PR that touches `apps/**` / `packages/**` / config. It's self-contained:
 the job installs the Chromium browser (cached on `~/.cache/ms-playwright`,
-keyed by the lockfile) and runs `pnpm --filter @camp404/web test:e2e`, which
-auto-starts `next dev` with `E2E_TEST_MODE=1`. Because that flag routes auth
+keyed by the lockfile), builds the app with the test env
+(`pnpm --filter @camp404/web build`), then runs
+`pnpm --filter @camp404/web test:e2e` with `E2E_SERVE_BUILD=1` in two shards,
+so Playwright serves the build with `next start` and `E2E_TEST_MODE=1`.
+[CORRECTION 2026-09-29] This said the job starts `next dev`; under `next dev`
+one shard's memory grew past the runner's. Because that flag routes auth
 and DB through the in-memory store, the job needs **no** Vercel preview, no
 `DATABASE_URL`, and no auth secret — the build-time placeholders in
 `packages/auth/src/config.ts` / `packages/db/src/index.ts` carry module load. On
 failure the Playwright HTML report is uploaded as a build artifact.
 
-The Vitest layer also runs on every PR (the `test` job). A future "true" E2E
-suite driving real Neon Auth + a real Neon branch (see below) would be a
-separate job with its own secrets.
+The Vitest layer also runs on every PR (the `test` job), the real-database
+run is the `e2e-db` job, and the join site's specs are the `e2e-join` job.
+`ci-pass`, the one required check, waits for all of them.

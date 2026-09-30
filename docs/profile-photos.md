@@ -3,7 +3,8 @@
 > How a burner's optional profile photo is captured, stored, and shown.
 > Photos are stored in a **private** Vercel Blob store and surfaced — to
 > approved members only, via a gated proxy route — as a large circular
-> avatar on the profile page and a small one in the home header.
+> avatar on the profile page. [CORRECTION 2026-09-29] The home header is
+> gone; the 404 OS account chip shows initials only (`components/os/os-avatar.tsx`).
 
 ## Goal
 
@@ -16,9 +17,9 @@ be added or changed later from the profile editor.
 1. **Onboarding.** The burner-profile questionnaire (`apps/web/lib/questionnaire.ts`)
    opens with a full-screen `profile_photo` page backed by the `image`
    question kind. When no photo is chosen the wizard's primary button reads
-   **Skip** instead of **Next** (see `components/questionnaire/wizard.tsx`),
+   **Skip** instead of **Next** (see `components/questionnaire/runner.tsx`),
    so moving on without a photo is explicit.
-2. **Upload.** `components/profile/avatar-upload.tsx` is a large circular
+2. **Upload.** `avatar-upload.tsx` (`packages/ui/src/components/`) is a large circular
    control. On file select it centre-crops + downscales to a 512px square
    WebP in the browser (`lib/image.ts`, canvas — no extra dependency) and
    POSTs the result to `/api/uploads/avatar`.
@@ -45,16 +46,16 @@ be added or changed later from the profile editor.
 6. **Display.** The `@camp404/ui` `Avatar` component renders the photo with
    an initials fallback. Because the stored value is an ordinary same-origin
    URL, every `<img src={profileImageUrl}>` works unchanged. Used on
-   `/profile`, `/profile/edit`, and in the home header (which links to
-   `/profile`).
+   `/profile` and `/profile/edit`. [CORRECTION 2026-09-29: this also named
+   the home header, which is gone; the desktop's account chip shows initials.]
 
 ## Profile pages
 
-- **`/profile`** (`app/profile/page.tsx`) — large circular avatar, display
+- **`/profile`** (`app/(console)/profile/page.tsx`) — large circular avatar, display
   name, rank badge, email, and an **Edit profile** link.
-- **`/profile/edit`** (`app/profile/edit/`) — change the photo and display
+- **`/profile/edit`** (`app/(console)/profile/edit/`) — change the photo and display
   name. Submits to the `updateProfile` server action in
-  `app/profile/actions.ts`, which writes via `setProfileImage` /
+  `app/(console)/profile/actions.ts`, which writes via `setProfileImage` /
   `setDisplayName` (`lib/users.ts`) and redirects back to `/profile`.
 
 Both pages gate on the same access checks as the rest of the app and bounce

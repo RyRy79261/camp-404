@@ -1,5 +1,7 @@
 # join.camp-404.com: read the database, edit it from the app
 
+Status: built in #284 (2026-09-25).
+
 Owner's go-ahead, 2026-09-25, stacked on PR #283 (the 404 OS site). Decisions:
 
 - **Data:** the join app reads the same Neon database directly through

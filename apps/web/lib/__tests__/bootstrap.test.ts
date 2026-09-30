@@ -23,6 +23,9 @@ import {
   isCampBootstrapped,
   mayFoundCamp,
   runFirstTimeSetup,
+  SETUP_REFUSED_MESSAGE,
+  SETUP_UNCONFIGURED_MESSAGE,
+  setupRefusedMessage,
 } from "../bootstrap";
 
 const authUser = {
@@ -105,10 +108,20 @@ describe("runFirstTimeSetup", () => {
 describe("mayFoundCamp", () => {
   // Sign-up is open, so on a fresh database "the first signed-in account"
   // could be a stranger racing the founder.
-  const saved = process.env.GOD_EMAILS;
+  const saved = {
+    GOD_EMAILS: process.env.GOD_EMAILS,
+    FOUNDER_EMAILS: process.env.FOUNDER_EMAILS,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+  };
+  beforeEach(() => {
+    delete process.env.FOUNDER_EMAILS;
+    delete process.env.VERCEL_ENV;
+  });
   afterEach(() => {
-    if (saved === undefined) delete process.env.GOD_EMAILS;
-    else process.env.GOD_EMAILS = saved;
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   });
 
   it("refuses an account that is not a founding address when GOD_EMAILS is set", () => {
@@ -116,6 +129,7 @@ describe("mayFoundCamp", () => {
     expect(
       mayFoundCamp({ ...authUser, primaryEmail: "stranger@example.com" }),
     ).toBe(false);
+    expect(setupRefusedMessage()).toBe(SETUP_REFUSED_MESSAGE);
   });
 
   it("refuses the founding address while it is unverified (primaryEmail is null)", () => {
@@ -131,10 +145,30 @@ describe("mayFoundCamp", () => {
     ).toBe(true);
   });
 
-  it("allows any signed-in account when GOD_EMAILS is unset, as before", () => {
+  it("allows a verified founding address on a Vercel deployment", () => {
+    process.env.VERCEL_ENV = "production";
+    process.env.FOUNDER_EMAILS = "founder@example.com";
+    expect(
+      mayFoundCamp({ ...authUser, primaryEmail: "founder@example.com" }),
+    ).toBe(true);
+  });
+
+  it("allows any signed-in account off Vercel when no founding address is set, for local dev and tests", () => {
     delete process.env.GOD_EMAILS;
     expect(mayFoundCamp(authUser)).toBe(true);
     process.env.GOD_EMAILS = " , ";
     expect(mayFoundCamp(authUser)).toBe(true);
+    process.env.VERCEL_ENV = " ";
+    expect(mayFoundCamp(authUser)).toBe(true);
   });
+
+  it.each(["production", "preview", "development"])(
+    "refuses everyone on a Vercel %s deployment that names no founding address",
+    (vercelEnv) => {
+      delete process.env.GOD_EMAILS;
+      process.env.VERCEL_ENV = vercelEnv;
+      expect(mayFoundCamp(authUser)).toBe(false);
+      expect(setupRefusedMessage()).toBe(SETUP_UNCONFIGURED_MESSAGE);
+    },
+  );
 });

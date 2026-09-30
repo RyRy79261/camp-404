@@ -1,5 +1,7 @@
 # Brief — True E2E with a real Neon Auth login
 
+Status (checked 2026-09-29): superseded. The real-database Playwright run (`apps/web/playwright.db.config.ts`, `tests/e2e-db/`, the `e2e-db` CI job) covers a real sign-in (#258) and the captain review against local Postgres, with `E2E_TEST_MODE=1` kept for the outside-service stubs. The Neon Auth plan below (`playwright.auth.config.ts`, `tests/e2e-auth/`, an `e2e-auth` job) was never built. Google sign-in still has no E2E test.
+
 > **[CORRECTION 2026-09-23]** Sign-in is now self-hosted Better Auth
 > (`packages/auth`), not managed Neon Auth. Most of this brief's plumbing is
 > gone: there is no separate auth project or `NEON_AUTH_*` secret. A real

@@ -1,5 +1,7 @@
 # join.camp-404.com — build brief
 
+Status: built as `apps/join` in #283 (2026-09-25). [CORRECTION 2026-09-29] Since #284 it is not static: it reads the database when `DATABASE_URL` is set (`getJoinSitePublic` in `@camp404/db/join-site`), and serves `DEFAULT_JOIN_DATA` (`lib/join-data.ts`) when it is not or the read fails. Captains edit its words and fee in the console's Join site program (`/captains/join-site`). Where this brief says `content.ts` holds the copy or the fee, the database now does.
+
 Handoff notes for building the Camp 404 recruitment site, agreed in chat on
 2026-09-25. [CORRECTION 2026-09-25] It is now built: `apps/join`. The owner's
 answers below settle the open questions; the copy lives in
@@ -9,8 +11,11 @@ answers below settle the open questions; the copy lives in
 
 A public, signed-out site at **join.camp-404.com** that tells prospective
 members what Camp 404 is and sends them to apply. It lives in the monorepo as
-its own app, **`apps/join`**, deployed as its own Vercel project. No database,
-no sign-in: static content only.
+its own app, **`apps/join`**, deployed as its own Vercel project. No sign-in.
+[CORRECTION 2026-09-29] It is not static content any more: it reads the
+database when `DATABASE_URL` is set, and serves `DEFAULT_JOIN_DATA`
+(`lib/join-data.ts`) when it is not or the read fails
+(`lib/load-join-data.ts`).
 
 ## The reference: dimensional.org/prototype
 
@@ -95,8 +100,9 @@ MEMORY CHECK… LOST`) ending in `ERROR 404: YOU ARE HERE`. Skippable
 
 ## Build notes
 
-- Next.js (match `apps/web`: Next 16, React 19, Tailwind v4), static export
-  — no server features are needed.
+- Next.js (match `apps/web`: Next 16, React 19, Tailwind v4). [CORRECTION
+  2026-09-29: this said "static export — no server features are needed"; it
+  renders on its own server so it can read the database.]
 - All copy in one typed content module so next year is a one-file edit.
 - Add the app to the Turbo pipeline so `pnpm turbo run lint typecheck test
 build` covers it. A Playwright smoke test: boot skips, an icon opens its
@@ -261,5 +267,7 @@ Transport & Travel team makes sure everyone and everything has a ride.
   [UNRESOLVED 2026-09-25] bat-cat does not record where that sheet came from
   or its licence; the owner should confirm it may ship on a public site.
 - Clearing the level shows GOODEST BOI and a "speed of chaos" top 10 with
-  arcade initials. The site has no database, so the board lives in each
-  visitor's browser; a shared board would need the main app.
+  arcade initials. On Join the board lives in each visitor's browser.
+  [CORRECTION 2026-09-29] Join now reads the database for its words, but the
+  INKBLOT board still stays in the browser there; the main app's INKBLOT keeps
+  a shared camp board in the database (`inkblot_scores`, d98e695b).

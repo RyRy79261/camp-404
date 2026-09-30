@@ -1,5 +1,7 @@
 # Cross-repo harvest — Camp 404 × AfrikaBurn contributors app
 
+Status (checked 2026-09-29): Waves 0–7 are built (#144 to #224, 2026-09-16 to 2026-09-22); Wave 8 was elective and some of it was built later. Kept as the record of the harvest; the code and `AGENTS.md` win where they differ.
+
 Generated 2026-09-08 by a 105-agent cross-repo analysis of
 [`RyRy79261/afrikaburn-contributors-app`](https://github.com/RyRy79261/afrikaburn-contributors-app)
 (the "quagga-portal" donor: 3 apps, 8 packages, 835 TS/TSX files) against this repo.

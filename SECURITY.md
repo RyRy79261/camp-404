@@ -29,7 +29,8 @@ Everything at the deployed URL is **production**. There is no staging site. The
 accounts are real people.
 
 Run the app locally instead (`pnpm dev`, see `AGENTS.md`). The Playwright suite
-runs with `E2E_TEST_MODE=1` and an in-memory store, with no real data in it.
+runs with `E2E_TEST_MODE=1` and an in-memory store, with no real data in it;
+its real-database run (`tests/e2e-db`) uses a local Postgres in Docker.
 
 Never do these on the live site:
 
@@ -59,7 +60,7 @@ captain is allowed to take.
 ## Known and accepted
 
 - **The founder invite code is in this repo.** First-time setup creates the root
-  invite code `meowzit` (`apps/web/lib/bootstrap.ts`). Anyone can read it. A
+  invite code `meowzit` (`FOUNDER_CODE`, `packages/core/src/invites.ts`). Anyone can read it. A
   sign-up with it lands as **pending**, needs a captain's approval, and the code
   works once only: the founder used it. Knowing it gets you nothing.
 - **One encryption key, no rotation.** ID numbers and bank details are
@@ -69,8 +70,8 @@ captain is allowed to take.
 
 ## For contributors
 
-- **Never commit a secret** (`DATABASE_URL`, `PGCRYPTO_KEY`, `CRON_SECRET`, API
-  keys, blob tokens). If you commit one, say so at once. A force-push does not
+- **Never commit a secret** (`DATABASE_URL`, `PGCRYPTO_KEY`, `BETTER_AUTH_SECRET`,
+  API keys, blob tokens). If you commit one, say so at once. A force-push does not
   remove it from copies other people already fetched.
 - **Privacy is enforced on the server, not in the UI.** Hiding a control is not
   a boundary. A new surface that shows personal data needs a server check, from
@@ -86,7 +87,7 @@ A pull request cannot set these. A maintainer sets them in **Settings**:
   status check, `ci-pass`. It is the last job in `.github/workflows/ci.yml`: it
   needs every other job and fails if any of them failed. Do not require the
   Vercel checks. They are external, and they fail for reasons outside the code
-  (for example the Neon branch limit).
+  (for example the Neon branch limit). Allow squash and rebase merges only.
 - **Private vulnerability reporting:** Settings → Security → enable.
 - **Secret scanning and push protection:** on. Push protection blocks the push
   instead of warning after it.

@@ -1,5 +1,7 @@
 # Camp 404 × quagga-portal — what to take, what to skip, what's left
 
+Status (checked 2026-09-29): Waves 0–7 are built (#144 to #224, 2026-09-16 to 2026-09-22); Wave 8 was elective and some of it was built later. Kept as the record of the harvest; the code and `AGENTS.md` win where they differ.
+
 **Date:** 2026-09-08 · **Donor:** AfrikaBurn contributors app (quagga-portal), snapshot at 2026-08-12, 1,835 files / 44 tables / 3 apps · **Target:** Camp 404 `main` + `fix/turbo-exclude-next-dev-outputs`, 38 tables / 1 app.
 **Corpus:** 76 agents → 892 assessed assets → 478 actionable → **83 real pieces of work**. Adversarial verifier: 765 upheld, 88 REFUTED (corrections applied throughout), 39 not individually checked.
 

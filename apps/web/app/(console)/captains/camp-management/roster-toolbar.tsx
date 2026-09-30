@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { ChevronDown, Search, TriangleAlert } from "lucide-react";
+import { NO_ANSWER_LABEL, STANDING_LABEL } from "@camp404/core";
+import { PARTICIPATION_STATUSES } from "@camp404/types";
 import { Input } from "@camp404/ui/components/input";
 import { cn } from "@camp404/ui/lib/utils";
 import type { RosterChip, RosterSort, ThisYearFilter } from "@/lib/camp-roster";
@@ -35,15 +37,16 @@ const SORT_OPTIONS: { value: string; label: string; sort: RosterSort }[] = [
   },
 ];
 
-// The captain's "This year" choices, in the words the badges use.
+// The captain's "This year" choices: one group each, in words that say
+// whether they are about the member's answer or the captains' decision
+// (STANDING_LABEL), never one label for both.
 const THIS_YEAR_OPTIONS: { value: ThisYearFilter; label: string }[] = [
   { value: "any", label: "Any" },
-  { value: "applied", label: "Coming" },
-  { value: "maybe", label: "Maybe" },
-  { value: "accepted", label: "Accepted" },
-  { value: "waitlisted", label: "Waiting list" },
-  { value: "not_attending", label: "Not coming" },
-  { value: "none", label: "Not answered" },
+  ...PARTICIPATION_STATUSES.map((value) => ({
+    value,
+    label: STANDING_LABEL[value],
+  })),
+  { value: "none", label: NO_ANSWER_LABEL },
 ];
 
 // The roster's filter strip, laid out like the AfrikaBurn registrations filters:

@@ -196,10 +196,8 @@ describe("a person built from a look", () => {
 
   it("bares the waist on a crop top, in every pose", () => {
     const topPixels = (look: CharacterLook, pose: HumanPose) =>
-      buildCharacter(look)
-        .frames[pose].flat()
-        .join("")
-        .replace(/[^Tt]/g, "").length;
+      buildCharacter(look).frames[pose].flat().join("").replace(/[^Tt]/g, "")
+        .length;
     const full = { ...OTHER, top: { ...OTHER.top, crop: false } };
     const crop = { ...OTHER, top: { ...OTHER.top, crop: true } };
     for (const pose of Object.keys(HUMAN_TEMPLATES) as HumanPose[]) {

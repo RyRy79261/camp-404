@@ -28,8 +28,11 @@ export function shouldEmailNotification(
     case "approval_decision":
     case "captain_promotion":
       return true;
+    // Team chatter, and a driver's word to their riders: in the app and by
+    // push only.
     case "team_message":
     case "lead_directive":
+    case "car_message":
       return false;
     default: {
       const _exhaustive: never = kind;

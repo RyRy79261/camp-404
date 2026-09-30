@@ -1,5 +1,7 @@
 # Shake-to-Report — As Built
 
+Status: built in #48 (2026-05-31); later changes to the report in #176 and #186.
+
 > Files an in-app bug/feature report as a **GitHub issue**. Nothing is stored in our
 > database — GitHub Issues is the store and the triage board. Modelled on
 > RyRy79261/intake-tracker's report-bug dialog, simplified.

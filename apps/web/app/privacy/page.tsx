@@ -12,7 +12,7 @@ import { LegalPage, LegalSection } from "@/components/legal-page";
 
 export const metadata = { title: "Privacy — Camp 404" };
 
-const UPDATED = "23 September 2026";
+const UPDATED = "28 September 2026";
 
 export default function PrivacyPage() {
   return (
@@ -83,6 +83,12 @@ export default function PrivacyPage() {
           Emergency contacts, allergies and anaphylaxis are visible to captains
           and team leads, because withholding them in an emergency would be the
           worse failure. The screens that ask for them say so.
+        </p>
+        <p>
+          If a captain shares the camp&rsquo;s site plan with neighbouring
+          camps, the page they get shows how many people arrive on each day,
+          never who, and none of the names or notes written on the plan. Members
+          see the same counts on the plan.
         </p>
         <p>
           When someone opens your ID number, safety details or a captain&rsquo;s

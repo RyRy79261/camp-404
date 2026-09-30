@@ -1,5 +1,7 @@
 # Offline mesh networking on-site at AfrikaBurn
 
+Status (checked 2026-09-29): research only, not built. Since it was written the push pipeline was built and the reminder cron removed (reminders run on a page load), and its `schema.ts:NNN` line numbers no longer match.
+
 > **Status:** Research only — no implementation decisions or code changes.
 > **Question on the table:** Can Camp 404 update inventory, manage tasks,
 > dispatch notifications, and surface the schedule **on-site at

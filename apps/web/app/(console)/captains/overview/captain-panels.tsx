@@ -1,6 +1,7 @@
 import { cache } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { deriveTicketCounts } from "@camp404/core";
 import { listAuditLog } from "@camp404/db/audit";
 import {
   Card,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/questionnaire-definitions";
 import { getCampManagementRoster, getTeamCoverage } from "@/lib/roster";
 import { usesTestStore } from "@/lib/test-mode";
+import { listTicketsThisYear } from "@/lib/tickets";
 import {
   deriveKpis,
   deriveReadinessFunnel,
@@ -61,9 +63,9 @@ const overviewTeamsConfig = cache(getTeamsConfig);
  * second `getCampManagementRoster()` on one render would be a second answer.
  */
 export async function CaptainStatusBoard() {
-  // Six independent reads, issued together. The two send reads are the ones
+  // Seven independent reads, issued together. The two send reads are the ones
   // the test store cannot answer, and they answer empty there.
-  const [members, openSends, coverage, teamsConfig, gates, received] =
+  const [members, openSends, coverage, teamsConfig, gates, received, tickets] =
     await Promise.all([
       getCampManagementRoster(),
       listOpenSendBlocking(),
@@ -71,6 +73,7 @@ export async function CaptainStatusBoard() {
       overviewTeamsConfig(),
       listOpenSendGates(),
       ledgerCycle().then((cycle) => receivedTotal(cycle)),
+      listTicketsThisYear(),
     ]);
   const rows = members.map(toRosterRow);
   // Every deployment reads the payments ledger (the test store keeps a twin),
@@ -90,6 +93,11 @@ export async function CaptainStatusBoard() {
   const sends = deriveSendCompletion(gates);
   // Who is coming this year, from the SAME rows as every other figure here.
   const thisYear = deriveThisYear(rows);
+  // Tickets over the same approved members (#238).
+  const ticketCounts = deriveTicketCounts(
+    rows.filter((r) => r.approvalStatus === "approved"),
+    tickets,
+  );
   // The unknown the completion card respects, said in the KPI row's own
   // shape: no open-send list means that card has no figure, not a figure of 0.
   // The dues card reads the ledger and names the rands received.
@@ -108,7 +116,7 @@ export async function CaptainStatusBoard() {
           <ReadinessFunnelCard funnel={funnel} />
         </div>
         <div className="flex flex-col gap-4">
-          <ThisYearCard counts={thisYear} />
+          <ThisYearCard counts={thisYear} tickets={ticketCounts} />
           <TeamCoverageCard rows={teams} />
           {/* No send is modelled in the test store, so "no questionnaires are
               open" would be this panel's only possible sentence there, true or

@@ -176,21 +176,26 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "dietaryRequirements.createdAt": "captain",
   "dietaryRequirements.updatedAt": "captain",
 
-  // driver_profiles — travel logistics, captain-only
+  // driver_profiles — travel logistics. The car list (#270, owner 2026-09-24:
+  // "Everyone can view the car list (names and cars only)") opens who is
+  // driving, the car, where it leaves from, its seats and whether it can tow.
+  // Dates, registration, driving experience and notes stay captain-only (the
+  // travel dates are pinned so by privacy.test.ts). The car's own driver and
+  // riders read their shared car in full through getMyLift, about themselves.
   "driverProfiles.userId": "camp_member",
-  "driverProfiles.cycle": "captain",
-  "driverProfiles.intendsToDrive": "captain",
+  "driverProfiles.cycle": "camp_member",
+  "driverProfiles.intendsToDrive": "camp_member",
   "driverProfiles.intentRegisteredAt": "captain",
-  "driverProfiles.vehicleMake": "captain",
-  "driverProfiles.vehicleModel": "captain",
+  "driverProfiles.vehicleMake": "camp_member",
+  "driverProfiles.vehicleModel": "camp_member",
   "driverProfiles.vehicleRegistration": "captain",
   "driverProfiles.seatsTotal": "captain",
-  "driverProfiles.seatsOffered": "captain",
+  "driverProfiles.seatsOffered": "camp_member",
   "driverProfiles.canOfferLifts": "captain",
   "driverProfiles.offroadExperienced": "captain",
-  "driverProfiles.canTow": "captain",
+  "driverProfiles.canTow": "camp_member",
   "driverProfiles.proficiencyNotes": "captain",
-  "driverProfiles.departureCity": "captain",
+  "driverProfiles.departureCity": "camp_member",
   "driverProfiles.arrivalAt": "captain",
   "driverProfiles.departureAt": "captain",
   "driverProfiles.notes": "captain",
@@ -199,11 +204,22 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "driverProfiles.createdAt": "captain",
   "driverProfiles.updatedAt": "captain",
 
-  // car_members — who rides with whom, captain-only
-  "carMembers.driverUserId": "captain",
-  "carMembers.memberUserId": "captain",
-  "carMembers.cycle": "captain",
+  // car_members — who rides with whom: the car list names each car's riders
+  // (#270, the same ruling).
+  "carMembers.driverUserId": "camp_member",
+  "carMembers.memberUserId": "camp_member",
+  "carMembers.cycle": "camp_member",
   "carMembers.createdAt": "captain",
+
+  // lift_requests — who asked for a lift, and in which car. The transport
+  // team matches people, and a Transport & Logistics lead stands on the
+  // team_lead rung (the page shows every request only to a captain or such a
+  // lead). A driver also sees the requests for their OWN car, and a member
+  // their own request: relationship reads, like getMyLift.
+  "liftRequests.userId": "team_lead",
+  "liftRequests.cycle": "team_lead",
+  "liftRequests.driverUserId": "team_lead",
+  "liftRequests.createdAt": "captain",
 
   // user — the sign-in identity (Better Auth). Captains read email to assign
   // DDT tickets; members never see another member's email. The credential
@@ -218,7 +234,8 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "user.createdAt": "captain",
   "user.updatedAt": "captain",
 
-  // payments — the dues ledger, captain-only
+  // payments — the dues ledger: captains, and Finance leads through
+  // canManageMoney (./dues)
   "payments.id": "captain",
   "payments.userId": "captain",
   "payments.cycle": "captain",
@@ -228,8 +245,63 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "payments.status": "captain",
   "payments.note": "captain",
   "payments.recordedByUserId": "captain",
+  "payments.source": "captain",
+  "payments.method": "captain",
+  "payments.paidOn": "captain",
+  "payments.proofPathname": "captain",
+  "payments.proofContentType": "captain",
   "payments.createdAt": "captain",
   "payments.updatedAt": "captain",
+
+  // dues (#240): a member's pledge, charges, plan and refunds. Captain on the
+  // ladder; a lead of Finance reads them too, through the Finance tools'
+  // own rule (canManageMoney in ./dues), never through the global lead rung.
+  "duesAccounts.userId": "captain",
+  "duesAccounts.cycle": "captain",
+  "duesAccounts.pledgedTierId": "captain",
+  "duesAccounts.pledgedAmountCents": "captain",
+  "duesAccounts.pledgedAt": "captain",
+  "duesAccounts.planVersion": "captain",
+  "duesAccounts.createdAt": "captain",
+  "duesAccounts.updatedAt": "captain",
+  "duesCharges.id": "captain",
+  "duesCharges.userId": "captain",
+  "duesCharges.cycle": "captain",
+  "duesCharges.kind": "captain",
+  "duesCharges.description": "captain",
+  "duesCharges.amountCents": "captain",
+  "duesCharges.currency": "captain",
+  "duesCharges.standardAmountCents": "captain",
+  // Never read by the member it is about either (the screens leave it out).
+  "duesCharges.concessionReason": "captain",
+  "duesCharges.settleUpId": "captain",
+  "duesCharges.cancelledAt": "captain",
+  "duesCharges.cancelledByUserId": "captain",
+  "duesCharges.createdByUserId": "captain",
+  "duesCharges.createdAt": "captain",
+  "duesCharges.updatedAt": "captain",
+  "duesInstalments.id": "captain",
+  "duesInstalments.userId": "captain",
+  "duesInstalments.cycle": "captain",
+  "duesInstalments.dueOn": "captain",
+  "duesInstalments.amountCents": "captain",
+  "duesInstalments.currency": "captain",
+  "duesInstalments.createdAt": "captain",
+  "paymentRefunds.id": "captain",
+  "paymentRefunds.paymentId": "captain",
+  "paymentRefunds.userId": "captain",
+  "paymentRefunds.cycle": "captain",
+  "paymentRefunds.status": "captain",
+  "paymentRefunds.proposedCents": "captain",
+  "paymentRefunds.amountCents": "captain",
+  "paymentRefunds.currency": "captain",
+  "paymentRefunds.note": "captain",
+  "paymentRefunds.declineReason": "captain",
+  "paymentRefunds.requestedByUserId": "captain",
+  "paymentRefunds.decidedByUserId": "captain",
+  "paymentRefunds.decidedAt": "captain",
+  "paymentRefunds.createdAt": "captain",
+  "paymentRefunds.updatedAt": "captain",
 
   // team_memberships — the roster shows teams and leads
   "teamMemberships.userId": "camp_member",
@@ -245,12 +317,26 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "campParticipations.cycle": "camp_member",
   "campParticipations.status": "team_lead",
   // The member's own Yes / Maybe / No, apart from the captain's decision.
-  "campParticipations.intent": "captain",
+  // Team lead (owner, 2026-09-28: the answer and the decision are shown apart
+  // wherever the status shows, and a lead reads the status).
+  "campParticipations.intent": "team_lead",
   "campParticipations.decidedByUserId": "captain",
   "campParticipations.decidedAt": "captain",
   "campParticipations.reason": "captain",
   "campParticipations.createdAt": "captain",
   "campParticipations.updatedAt": "captain",
+
+  // camp_tickets — a member's ticket, DDT and WAP for one year (#238). A
+  // member reads their own row (ticket status, DDT and WAP; owner,
+  // 2026-09-28) and nobody else's; team leads read none of it.
+  "campTickets.userId": "captain",
+  "campTickets.cycle": "captain",
+  "campTickets.ticketStatus": "captain",
+  "campTickets.ddt": "captain",
+  "campTickets.wap": "captain",
+  "campTickets.passesUpdatedByUserId": "captain",
+  "campTickets.createdAt": "captain",
+  "campTickets.updatedAt": "captain",
 };
 
 /**

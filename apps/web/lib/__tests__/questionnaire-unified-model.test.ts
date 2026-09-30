@@ -7,6 +7,7 @@ import {
 import {
   BURNER_PROFILE_TEMPLATE,
   DEFAULT_TEAM_OPTIONS,
+  TEAM_INTERESTS_PAGE_ID,
   buildQuestionnaire,
 } from "@/lib/questionnaire";
 
@@ -40,5 +41,24 @@ describe("the burner_profile definition under the unified model", () => {
       0,
     );
     expect(flattenQuestions(BURNER_PROFILE_TEMPLATE)).toHaveLength(blockCount);
+  });
+});
+
+describe("the team-interest page's promise", () => {
+  // Audit #134: the page promised a team's follow-up questionnaire for any
+  // team rated above zero, but nothing sends one (no `opt_in` send exists).
+  // It may only say what happens: captains read the answers.
+  const text = BURNER_PROFILE_TEMPLATE.pages
+    .filter((page) => page.id.startsWith(TEAM_INTERESTS_PAGE_ID))
+    .map((page) => JSON.stringify(page))
+    .join(" ");
+
+  it("promises no follow-up questionnaire", () => {
+    expect(text).not.toMatch(/questionnaire/i);
+    expect(text).not.toMatch(/send you/i);
+  });
+
+  it("says who reads the answers", () => {
+    expect(text).toContain("Captains see your answers");
   });
 });

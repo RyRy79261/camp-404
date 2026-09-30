@@ -11,6 +11,7 @@ import type {
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { writeAuditEvent, type DbOrTx } from "./audit";
+import { chargeFeeFromPledge } from "./dues";
 import { currentCycleNumber } from "./cycles";
 import { recordQuestionnaireEdit } from "./questionnaire-edits";
 
@@ -273,6 +274,15 @@ export async function decideParticipation(input: {
       target: input.userId,
       metadata: { cycle, from: input.from, to: input.to },
     });
+    // An accepted member is charged the camp fee they pledged (#240), in the
+    // same transaction, so a place and its fee commit together.
+    if (input.to === "accepted") {
+      await chargeFeeFromPledge(tx, {
+        userId: input.userId,
+        cycle,
+        actorId: input.decidedByUserId,
+      });
+    }
     return true;
   });
 }

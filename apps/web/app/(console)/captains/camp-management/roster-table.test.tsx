@@ -1,3 +1,4 @@
+import { INTENT_IMPLIED_BY_STATUS } from "@camp404/core";
 import { describe, expect, it, vi } from "vitest";
 import {
   act,
@@ -39,6 +40,7 @@ function pendingMember(): CampManagementMember {
     driverProfileComplete: false,
     country: "ZA",
     participation: null,
+    participationIntent: null,
     createdAt: new Date("2026-01-01"),
   };
 }
@@ -212,7 +214,13 @@ describe("RosterTable — This year", () => {
   const withYear = (
     thisYear: ParticipationStatus | null,
     over: Partial<RosterDisplayRow> = {},
-  ): RosterDisplayRow => ({ ...captainRow, thisYear, ...over });
+  ): RosterDisplayRow => ({
+    ...captainRow,
+    thisYear,
+    // What the member said, from the code's own status-to-answer map.
+    thisYearSays: thisYear ? INTENT_IMPLIED_BY_STATUS[thisYear] : null,
+    ...over,
+  });
 
   it("draws the column only when the rows carry the key", () => {
     const { unmount } = render(
@@ -227,7 +235,7 @@ describe("RosterTable — This year", () => {
     // A lead's public row: the key, no captain status.
     render(
       <RosterTable
-        rows={[{ ...memberRow, thisYear: "applied" }]}
+        rows={[{ ...memberRow, thisYear: "applied", thisYearSays: "yes" }]}
         selectedId={null}
         onSelect={() => {}}
       />,
@@ -235,12 +243,14 @@ describe("RosterTable — This year", () => {
     expect(
       screen.getByRole("columnheader", { name: "This year" }),
     ).toBeTruthy();
-    expect(screen.getByText("Coming")).toBeTruthy();
+    // What the member said and the decision, as two badges.
+    expect(screen.getByText("Says: Coming")).toBeTruthy();
+    expect(screen.getByText("Not decided yet")).toBeTruthy();
     // No decision callback: read-only, whatever the status.
     expect(screen.queryByRole("button", { name: /^Accept / })).toBeNull();
   });
 
-  it("says Not answered for a member with no answer", () => {
+  it("says No answer yet for a member with no answer, and no decision", () => {
     render(
       <RosterTable
         rows={[withYear(null)]}
@@ -249,7 +259,8 @@ describe("RosterTable — This year", () => {
         onDecideThisYear={vi.fn()}
       />,
     );
-    expect(screen.getByText("Not answered")).toBeTruthy();
+    expect(screen.getByText("No answer yet")).toBeTruthy();
+    expect(screen.queryByText("Not decided yet")).toBeNull();
     expect(screen.queryByRole("button", { name: /^Accept / })).toBeNull();
     expect(
       screen.queryByRole("button", { name: /on the waiting list$/ }),
@@ -436,7 +447,7 @@ describe("RosterTable — This year", () => {
     });
     expect(open.contains(accept)).toBe(false);
     expect(
-      within(screen.getByRole("listitem")).getByText("Maybe"),
+      within(screen.getByRole("listitem")).getByText("Says: Maybe"),
     ).toBeTruthy();
   });
 

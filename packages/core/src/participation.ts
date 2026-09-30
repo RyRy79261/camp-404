@@ -77,16 +77,56 @@ export function isParticipationDecision(
   return DECISIONS[to]?.includes(from) ?? false;
 }
 
-/** The words a captain reads for each status. */
-export const PARTICIPATION_LABEL: Readonly<
-  Record<ParticipationStatus, string>
-> = {
-  applied: "Coming",
+// --- Two things, shown apart (owner, 2026-09-28) ---------------------------
+//
+// A member's year is two separate facts, and no label mixes them:
+// - what the MEMBER said (`intent`): Coming, Maybe, Not coming, or no answer;
+// - what the CAPTAINS decided: Accepted (on the camp's list this year),
+//   Waiting list (said they are coming, but the camp is full), or not decided.
+// The stored `status` still holds both (applied / maybe / not_attending are
+// the member's answer with no decision; accepted / waitlisted are a decision).
+// The helpers below split it for every screen, with no migration.
+
+/** What the member said, in plain words. */
+export const INTENT_LABEL: Readonly<Record<ParticipationIntent, string>> = {
+  yes: "Coming",
   maybe: "Maybe",
+  no: "Not coming",
+};
+
+/** A member with no answer for the year. */
+export const NO_ANSWER_LABEL = "No answer yet";
+
+/** A captain's decision for the year. */
+export type ParticipationDecision = "accepted" | "waitlisted";
+
+export const DECISION_LABEL: Readonly<Record<ParticipationDecision, string>> = {
+  accepted: "Accepted",
+  waitlisted: "Waiting list",
+};
+
+/** A member the captains have not decided on (or who said No). */
+export const NOT_DECIDED_LABEL = "Not decided yet";
+
+/** The captains' decision a stored status holds, or null for none. */
+export function participationDecision(
+  status: ParticipationStatus | null,
+): ParticipationDecision | null {
+  return status !== null && HELD.has(status)
+    ? (status as ParticipationDecision)
+    : null;
+}
+
+/**
+ * The one group each stored status puts a member in, for filters and counts.
+ * Each label says which half it is about, so none reads as both: "Coming, not
+ * decided" is the member's Yes with no decision yet; "Accepted" and "Waiting
+ * list" are the captains' decision, whatever the member said.
+ */
+export const STANDING_LABEL: Readonly<Record<ParticipationStatus, string>> = {
+  applied: "Coming, not decided",
+  maybe: "Maybe, not decided",
   accepted: "Accepted",
   waitlisted: "Waiting list",
   not_attending: "Not coming",
 };
-
-/** A member with no answer for the year. */
-export const NOT_ANSWERED_LABEL = "Not answered";

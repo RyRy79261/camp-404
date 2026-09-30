@@ -16,13 +16,15 @@ Turborepo + pnpm workspaces. Node >= 22, pnpm 10.x.
 
 ```
 apps/
-  web/        Next.js 16 app (App Router, React 19, Tailwind v4)
+  web/        Next.js 16 app (App Router, React 19, Tailwind v4): the 404 OS console
   join/       join.camp-404.com: the "404 OS" recruiting site; reads the db, no sign-in
   mobile/     Capacitor host wrapping the web static export
   admin-cli/  Node CLI for data ops
 packages/
   core/       Framework-free domain logic: access, privacy, redaction, … (@camp404/core)
   ui/         Shared shadcn/ui components (@camp404/ui)
+  os/         The 404 OS window engine, shared by web and join (@camp404/os)
+  games/      The desktop's games and cats (@camp404/games)
   db/         Drizzle schema + migrations (@camp404/db)
   auth/       Self-hosted Better Auth server and client (@camp404/auth)
   types/      Zod schemas + shared TS types (@camp404/types)
@@ -31,7 +33,8 @@ packages/
   eslint-config/ typescript-config/
 ```
 
-`pnpm-workspace.yaml` is the source of truth.
+`pnpm-workspace.yaml` is the source of truth. Each app and most packages have a
+short README; `docs/architecture.md` draws how they fit together.
 
 ## Commands
 
@@ -57,9 +60,12 @@ Traps that already cost real time:
   though production would use a second connection. Fix the code, not the
   test: pass the `tx` down, or read after the transaction returns. Green on
   PGlite is not proof of Neon pooling or cold starts.
-- **E2E runs on the in-memory test store.** Playwright starts `next dev` with
+- **E2E runs on the in-memory test store.** Playwright runs the app with
   `E2E_TEST_MODE=1`, and `apps/web/lib/test-store.ts` stands in for the login
-  and the database. A data function with no test-store twin cannot be driven
+  and the database. [CORRECTION 2026-09-29] This said Playwright starts
+  `next dev`. That is the local default only: CI builds the app and serves it
+  with `next start` (`E2E_SERVE_BUILD=1`). `tests/e2e-db` runs the specs the
+  store cannot hold against a real Postgres. A data function with no test-store twin cannot be driven
   by Playwright. Add the twin with the feature, or say in the PR that the flow
   has no E2E cover.
 - **A `"use server"` file may export only async functions.** A `const`
@@ -393,13 +399,16 @@ activation_id)` would allow any number of duplicates whose
   `captain_promotion_open_per_target_idx`,
   `recipe_proofread_runs_open_plates_idx`,
   `questionnaire_activations_one_open_per_key_idx`,
-  `notification_deliveries_broadcast_user_uniq`. A bare `ON CONFLICT DO
+  `notification_deliveries_broadcast_user_uniq`, `dues_charges_one_fee_idx`,
+  `payment_refunds_one_live_idx`. A bare `ON CONFLICT DO
 NOTHING`, with no target, is not affected.
 
 **Driver choice.** `@camp404/db` exposes two drivers: `createHttpDb()` is
 stateless, for route handlers and server components, and has **no
-transactions**; `createPooledDb()` is a WebSocket pool, for cron jobs and
-the CLI, and **supports transactions**. Multi-statement atomic work must
+transactions**; `createPooledDb()` is a WebSocket pool, for background work and
+the CLI, and **supports transactions** (`withTransaction` opens one).
+[CORRECTION 2026-09-29] This said "cron jobs"; there are none (see No cron
+jobs). Multi-statement atomic work must
 use the pooled driver.
 
 **Local database.** `docker-compose.local.yml` runs Postgres plus the Neon
@@ -499,6 +508,15 @@ Decisions baked into the schema — keep new code consistent with them:
     There are no kitchen settings any more (the owner removed the largest
     pot and the burner count), so `canSetKitchenSettings` is gone. Change the
     rule in those functions, never at a call site.
+  - **A team's program is another place team identity decides** (owner's
+    ruling 1, 2026-09-27): only a captain or a lead OF THAT TEAM changes what
+    a team's program says (its description today), by
+    `canEditTeamProgram` in `packages/core/src/team-programs.ts`, which fails
+    closed. Every member
+    reads every team's program. The write re-reads the actor's rank and lead
+    teams inside its own transaction. Meeting notes keep their own, wider
+    rule (`canWorkInTeam`: the team's members this year). Change the rule in
+    that function, never at a call site.
 - **Blocking gates.** `required_actions` is the one generic table for
   "what blocks this user". The app routes a user to their first pending
   blocking action. A bespoke feature satisfies its own row by flipping
@@ -531,8 +549,40 @@ Decisions baked into the schema — keep new code consistent with them:
   back Maybe; My forms edits that answer, and the same write rewrites the
   answer stored with the "Coming this year?" questionnaire so its results
   agree with the roster. Erasure deletes every year's row.
-- **Notifications.** `broadcasts` are composed messages fanned out by a
-  worker into per-user `notification_deliveries` (a queue). `push_tokens`
+- **The member's answer and the captains' decision are two things** (owner,
+  2026-09-28). "Coming" / "Maybe" / "Not coming" is what the member said
+  (`intent`); "Accepted" (on the camp's list this year) and "Waiting list"
+  (said Coming, but the camp is full) are the captains' decision. The stored
+  `status` still holds both; screens split it with the helpers in
+  `packages/core/src/participation.ts`, exported from `@camp404/core` (`INTENT_LABEL`, `participationDecision`,
+  `DECISION_LABEL`, and `STANDING_LABEL` for filters and counts, e.g.
+  "Coming, not decided"). Never write one label that mixes the two.
+  `intent` reads at `team_lead`, like `status`, so a lead sees both halves.
+- **Tickets, DDT and WAP.** `camp_tickets` (#238) is the same shape: one
+  row per member per burn year (adopted by `setFoundingYear`, which merges a
+  member's sentinel row into one they already have for the founding year,
+  the founding year's non-default values winning; erased with the account),
+  written only through `@camp404/db/tickets`. Who reads what (owner,
+  2026-09-28): a member reads their own row only (ticket status, DDT and WAP,
+  under "This year" on their profile) and sets only their own ticket status;
+  captains read every member's ticket data, may set a member's ticket status
+  for them, and alone set the DDT (direct distribution ticket) and the WAP
+  (work access pass). A ticket status, by the member or a captain, is only
+  for someone who said Coming or Maybe (`mayRecordTicket`); the DDT and WAP
+  are not bound by it. Each captain change is a compare-and-set on the value
+  they saw, audited as `ticket.pass_changed`. In code they are
+  `ddt` and `wap`; the Postgres columns keep their first names
+  (`directed_ticket`, `early_entry`) so the rename needed no migration. A team
+  lead reads none of it, and a member's own read carries only their own row.
+  No row means every column's default. It stores no ticket number,
+  barcode, order reference or card detail. The captains' view is
+  `/captains/applications` (Applications: team lead and up, no tickets below
+  captain), and the overview's "This year" card counts accepted members with
+  no ticket yet and WAPs issued.
+- **Notifications.** `broadcasts` are composed messages fanned out into
+  per-user `notification_deliveries` (a queue). [CORRECTION 2026-09-29] There
+  is no worker: `deliverDue` fans out and drains the queue in `after()` (see
+  No cron jobs). `push_tokens`
   holds device tokens.
 - **Component mapping.** String keys (`required_actions.action_key`,
   `questionnaire_activations.questionnaire_key`, `broadcasts.ref_type`)
@@ -559,6 +609,25 @@ Decisions baked into the schema — keep new code consistent with them:
   already in the book is revised, not rewritten: the run carries its accepted
   version and the questions and answers that settled it
   (`recipeSourceRevisionPrompt`, recorded as `PROMPT_VERSIONS.recipeSourceRevision`).
+
+- **Camp layout (#271).** This year's site plan is one Zod-checked document
+  (`CampLayout`, `@camp404/types`) saved as numbered versions in
+  `camp_layout_versions`, a compare-and-set on `camp_layouts.latest_version`.
+  A captain or a Structures lead saves (`canEditLayout`); every member reads.
+  The neighbour page (`/neighbours/<token>`) is the one PUBLIC data page: off
+  until a captain turns it on (`canShareLayout`, audited), and it reads only
+  through `getSharedLayout`, which returns `neighbourView`'s allowlist (kinds
+  and places, never a label or a side note) and arrival COUNTS per day. Add a
+  field to it only by naming it in `neighbourView`.
+- **Logistics calendar (#247).** The year's pack, travel, build, burn, strike
+  and unpack days are one row per (year, phase) in `logistics_phases`. A
+  captain or a Transport and Logistics lead sets them (`canEditLogistics`), a
+  compare-and-set on `version`, audited; every member reads. The camp calendar
+  stays on Google (owner, 2026-09-28): a phase with days is ONE all-day event,
+  titled in the camp's convention ("Transport and Logistics Team - Build"). The
+  row claims its event id inside the write, before Google is called, so a
+  re-save or a retry never makes a second event; Google is called after the
+  transaction. Clearing the days takes the event off Google.
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.
@@ -613,7 +682,8 @@ or lazily on a page load, both in `after()` (`apps/web/lib/background-work.ts`):
   too.
 - **On a page load.** `resolveMemberState` (every signed-in console page)
   calls `runDueWorkAfterResponse()`: scheduled announcements whose time has
-  come, deadline reminders (camp daytime only, 09:00–21:00), a retry of
+  come, deadline reminders for questionnaires, tasks and any other required
+  action with a `due_at` (camp daytime only, 09:00–21:00), a retry of
   anything left queued, and once a day the upkeep (encrypt leftover plaintext
   ID numbers; on production only, delete avatar folders whose owner has no
   camp account). It is guarded by a row in `action_rate_limit`
@@ -637,6 +707,11 @@ LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
 
 ## Conventions
 
+- **No Google Sheets or Google Forms** (owner, 2026-09-27; narrowed
+  2026-09-28). Never build a feature that sends people to a spreadsheet or
+  a form, or that links out to Drive or Docs; build what the camp needs
+  inside the app instead. Google Calendar (the camp calendar) and Telegram
+  stay: the owner wants both.
 - TypeScript throughout; shared types and Zod schemas live in
   `@camp404/types`. Validate external input at the boundary with Zod.
 - Lint via `@camp404/eslint-config`; format via Prettier (`.prettierrc.json`).
@@ -659,6 +734,14 @@ LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
   `.returning()` tells the caller whether it won. A lost race returns a
   sentence the user can act on, never a silent overwrite. See
   `setUserApproval` and `decideCaptainPromotion`.
+- **Dues (#240): the Finance tools are for captains and Finance leads.**
+  `canManageMoney` in `packages/core/src/dues.ts` is the one rule (fail-closed;
+  a lead of any other team is refused), and every Finance write re-checks it
+  inside its own transaction (`lockMoneyKeeper`). A member reads only their own
+  dues; a concession's reason and the ledger notes never reach them. Proof of
+  payment files are private blobs read only through `/api/payment-proof`, and
+  the bank statement import reads the file in memory and stores nothing but
+  the payments someone confirms.
 - **Money is in South African rands only** (owner's call, 2026-09-24:
   "Everything should be in South African rands"). The ledger keeps integer
   cents, and every write path (payments, reimbursements, team budgets) refuses
@@ -756,10 +839,15 @@ never measured.
 - One PR per feature. The PR template leads with **Why** and **Decisions**;
   fill in Database even when the answer is "None."
 - Keep the CI gate green before requesting review. `ci-pass` is the one
-  required check.
+  required check. [2026-09-29] The `main` ruleset also asks for the branch to
+  be up to date with `main`, and allows squash or rebase merges only (no
+  merge commits on `main`).
 
 ## Before you commit
 
 Run the full CI gate locally — `pnpm turbo run lint typecheck test build` —
-and make sure it passes. This is exactly what `.github/workflows/ci.yml`
-runs on every PR.
+and make sure it passes. `.github/workflows/ci.yml` runs the same four on
+every PR. [CORRECTION 2026-09-29] It also runs the migrations on a Neon branch
+(`schema-migration`), the Playwright jobs (`e2e`, `e2e-join`, `e2e-db`), a
+dependency audit (`supply-chain`) and `commitlint`; `ci-pass` waits for all of
+them.

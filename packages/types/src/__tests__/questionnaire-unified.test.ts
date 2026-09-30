@@ -41,7 +41,7 @@ const GRID: MultiChoiceGridQuestion = {
 };
 
 describe("the unified schema", () => {
-  it("declares Camp 404's fourteen kinds and AB's seven", () => {
+  it("declares Camp 404's fourteen kinds, AB's seven and the rating grid", () => {
     expect([...QUESTION_KINDS].sort()).toEqual(
       [
         ...BUILDER_QUESTION_KINDS,
@@ -52,6 +52,7 @@ describe("the unified schema", () => {
         "file_link",
         "multi_choice_grid",
         "checkbox_grid",
+        "rating_grid",
       ].sort(),
     );
   });
