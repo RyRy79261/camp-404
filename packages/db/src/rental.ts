@@ -4,9 +4,11 @@ import {
   campStockTaken,
   canManageRental,
   checkRentalLines,
+  holdsSharers,
   priceRentalOrder,
   rentalChargeDescription,
   rentalSummary,
+  tentInUse,
   type RentalSummary,
 } from "@camp404/core";
 import type {
@@ -262,7 +264,8 @@ export async function addRentalItem(input: {
  * Change a live item: its name, prices, camp stock, size or reserve. An order
  * already confirmed keeps the price it was confirmed at. Refused when it
  * would leave the camp with fewer than confirmed orders and a camp reserve
- * already take.
+ * already take, or a tent smaller than the people sharing it on a sent or
+ * confirmed order.
  */
 export async function editRentalItem(input: {
   itemId: string;
@@ -284,6 +287,31 @@ export async function editRentalItem(input: {
       .returning({ cycle: schema.rentalItems.cycle });
     if (rows.length === 0) refuse(RENTAL_ITEM_MISSING);
     // The update above holds the item's row, so a confirmation waits here.
+    // A tent cannot shrink under the people already sharing it on a sent or
+    // confirmed order (a draft is checked again when the member saves it).
+    const inUse = await tx
+      .select({
+        quantity: schema.rentalOrderLines.quantity,
+        sharers: sql<number>`count(${schema.rentalLineSharers.userId})::int`,
+      })
+      .from(schema.rentalOrderLines)
+      .innerJoin(
+        schema.rentalOrders,
+        eq(schema.rentalOrders.id, schema.rentalOrderLines.orderId),
+      )
+      .leftJoin(
+        schema.rentalLineSharers,
+        eq(schema.rentalLineSharers.lineId, schema.rentalOrderLines.id),
+      )
+      .where(
+        and(
+          eq(schema.rentalOrderLines.itemId, input.itemId),
+          eq(schema.rentalOrderLines.choice, "need"),
+          ne(schema.rentalOrders.status, "draft"),
+        ),
+      )
+      .groupBy(schema.rentalOrderLines.id, schema.rentalOrderLines.quantity);
+    if (!holdsSharers(input.item, inUse)) refuse(tentInUse(input.item.name));
     const taken = campStockTaken(
       input.item,
       (await campTakenByOrders(tx, rows[0]!.cycle)).get(input.itemId) ?? 0,

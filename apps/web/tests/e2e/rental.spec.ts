@@ -36,6 +36,10 @@ async function approvedMember(
   await completeOnboarding(request, id);
 }
 
+// The toast that follows a save can say the same words as the page, and both
+// are `role="status"`: the page's own elements are named by test id.
+const SENT = "Sent. A captain will confirm it.";
+
 async function heading(page: Page, name: string) {
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 }
@@ -143,9 +147,7 @@ test.describe("gear rental (test-mode)", () => {
       page.getByRole("status", { name: "What it may cost" }),
     ).toHaveText(/R\s260,00 to R\s410,00/);
     await page.getByRole("button", { name: "Send my order" }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: /^Sent\./ }),
-    ).toBeVisible();
+    await expect(page.getByTestId("order-state")).toHaveText(SENT);
 
     // The friend reads the tent they are in, and nothing else of the order.
     await login(page, { id: "rent-friend", email: "rent-friend@example.com" });
@@ -201,7 +203,9 @@ test.describe("gear rental (test-mode)", () => {
       /R\s260,00/,
     );
     await page.getByRole("button", { name: "Confirm and charge" }).click();
-    await expect(page.getByText("On their dues.")).toBeVisible();
+    await expect(page.getByTestId("order-on-dues")).toContainText(
+      "On their dues.",
+    );
     await tent.getByLabel("Tent label").fill("T3");
     await tent.getByRole("button", { name: "Save label" }).click();
     await expect(page.getByText("Label saved")).toBeVisible();
@@ -246,11 +250,9 @@ test.describe("gear rental (test-mode)", () => {
     ).toBeVisible();
     await page.goto("/gear");
     await heading(page, "My gear");
-    await expect(
-      page
-        .getByRole("status")
-        .filter({ hasText: /^Confirmed\. It.s on your dues/ }),
-    ).toBeVisible();
+    await expect(page.getByTestId("order-state")).toHaveText(
+      /^Confirmed\. It.s on your dues\.$/,
+    );
     const order = page.getByRole("list", { name: "Your order" });
     await expect(order.getByText("From camp stock")).toBeVisible();
     await expect(order.getByText("Tent label: T3")).toBeVisible();
@@ -278,9 +280,7 @@ test.describe("gear rental (test-mode)", () => {
       await login(page, { id, email: `${id}@example.com` });
       await orderGear(page);
       await page.getByRole("button", { name: "Send my order" }).click();
-      await expect(
-        page.getByRole("status").filter({ hasText: /^Sent\./ }),
-      ).toBeVisible();
+      await expect(page.getByTestId("order-state")).toHaveText(SENT);
     }
 
     await asCaptain(page, request);
@@ -288,7 +288,9 @@ test.describe("gear rental (test-mode)", () => {
     const tent = page.getByRole("listitem", { name: "2-person tent" });
     await tent.getByRole("radio", { name: /Camp stock/ }).click();
     await page.getByRole("button", { name: "Confirm and charge" }).click();
-    await expect(page.getByText("On their dues.")).toBeVisible();
+    await expect(page.getByTestId("order-on-dues")).toContainText(
+      "On their dues.",
+    );
 
     // The second order: camp stock is refused in a sentence, the supplier works.
     await openOrder(page, "Tim Second");
@@ -307,7 +309,9 @@ test.describe("gear rental (test-mode)", () => {
     await expect(page.getByRole("status", { name: "Order total" })).toHaveText(
       /R\s250,00/,
     );
-    await expect(page.getByText("On their dues.")).toBeVisible();
+    await expect(page.getByTestId("order-on-dues")).toContainText(
+      "On their dues.",
+    );
 
     // Reopened: the charge comes off, and the member may change the order.
     await page.getByRole("button", { name: "Reopen" }).click();

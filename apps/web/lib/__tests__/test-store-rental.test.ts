@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { notEnoughCampStock } from "@camp404/core";
+import { notEnoughCampStock, tentInUse } from "@camp404/core";
 import type { CampConfig, TeamsConfig } from "@camp404/db/camp-config";
 import {
   NOT_A_RENTAL_MANAGER,
@@ -273,6 +273,26 @@ describe("the gear rental twin", () => {
       "submitted",
     );
     expect(confirm("supplier").ok).toBe(true);
+  });
+
+  it("keeps a shared tent's size under the people on a sent order", () => {
+    const c = camp();
+    const edit = (sleeps: number) =>
+      rentalTestStore.editRentalItem({
+        itemId: c.tent,
+        item: { ...TENT, sleeps },
+        actorId: c.captain.id,
+      });
+    // Nobody has ordered it: any size.
+    expect(edit(1)).toEqual({ ok: true });
+    expect(edit(2)).toEqual({ ok: true });
+    send(c);
+    expect(edit(1)).toEqual({ ok: false, error: tentInUse("2-person tent") });
+    expect(
+      rentalTestStore.listRentalItems(YEAR).find((i) => i.id === c.tent)
+        ?.sleeps,
+    ).toBe(2);
+    expect(edit(3)).toEqual({ ok: true });
   });
 
   it("adds the summary up from the confirmed orders, with the reserve", () => {

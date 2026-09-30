@@ -7,6 +7,7 @@ import {
   campStockTaken,
   canManageRental,
   checkRentalLines,
+  holdsSharers,
   maxSharers,
   noPriceFrom,
   notEnoughCampStock,
@@ -90,6 +91,32 @@ describe("the catalogue", () => {
     expect(maxSharers(TENT, 2)).toBe(3);
     expect(maxSharers({ isTent: true, sleeps: 1 }, 1)).toBe(0);
     expect(maxSharers(MATTRESS, 3)).toBe(0);
+  });
+});
+
+describe("holdsSharers", () => {
+  // One 2-person tent shared with one person, and two shared with three.
+  const lines = [
+    { quantity: 1, sharers: 1 },
+    { quantity: 2, sharers: 3 },
+  ];
+
+  it("holds while every line's sharers still fit", () => {
+    expect(holdsSharers(TENT, lines)).toBe(true);
+    expect(holdsSharers({ isTent: true, sleeps: 4 }, lines)).toBe(true);
+    expect(holdsSharers({ isTent: true, sleeps: 1 }, [])).toBe(true);
+    // Nobody shares: any size, and not a tent at all, is fine.
+    expect(
+      holdsSharers({ isTent: false, sleeps: 1 }, [{ quantity: 3, sharers: 0 }]),
+    ).toBe(true);
+  });
+
+  it("fails for a tent made smaller, or one that stops being a tent", () => {
+    expect(holdsSharers({ isTent: true, sleeps: 1 }, lines)).toBe(false);
+    expect(holdsSharers({ isTent: false, sleeps: 1 }, lines)).toBe(false);
+    expect(
+      holdsSharers({ isTent: true, sleeps: 2 }, [{ quantity: 1, sharers: 2 }]),
+    ).toBe(false);
   });
 });
 

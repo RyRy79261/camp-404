@@ -142,7 +142,9 @@ export function OrderManager({
         setError(res.error);
         return;
       }
-      toast.success("Reopened. The charge is off their dues.");
+      toast.success(
+        order.charged ? "Reopened. The charge is off their dues." : "Reopened.",
+      );
       router.refresh();
     });
   }
@@ -300,7 +302,10 @@ export function OrderManager({
           )}
           {confirmed && (
             <>
-              <p className="text-sm text-muted-foreground">
+              <p
+                data-testid="order-on-dues"
+                className="text-sm text-muted-foreground"
+              >
                 {order.charged ? (
                   <>
                     On their dues.{" "}

@@ -249,7 +249,11 @@ export default async function MyGearPage() {
                     {orderBadge(order).label}
                   </Badge>
                 </span>
-                <p role="status" className="text-lg font-semibold">
+                <p
+                  role="status"
+                  data-testid="order-state"
+                  className="text-lg font-semibold"
+                >
                   {STATE_WORDS[state]}
                 </p>
               </CardContent>

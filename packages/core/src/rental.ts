@@ -129,6 +129,31 @@ export function maxSharers(
   return item.isTent ? Math.max(0, item.sleeps * quantity - 1) : 0;
 }
 
+/** A needed tent line on an order that is sent or confirmed. */
+export interface RentalLineInUse {
+  quantity: number;
+  /** How many people share it with the member who ordered it. */
+  sharers: number;
+}
+
+/**
+ * Whether a catalogue item, as a captain wants to change it, still holds the
+ * people already on orders: every line's sharers must fit its tents. A tent
+ * made smaller, or an item that stops being a tent, fails while someone
+ * shares one.
+ */
+export function holdsSharers(
+  item: Pick<RentalPricedItem, "isTent" | "sleeps">,
+  lines: readonly RentalLineInUse[],
+): boolean {
+  return lines.every((line) => line.sharers <= maxSharers(item, line.quantity));
+}
+
+/** Said when a catalogue change would leave a shared tent too small. */
+export function tentInUse(name: string): string {
+  return `An order already has more people sharing ${name} than that would sleep. Reopen the order, or keep the size.`;
+}
+
 // --- A member's order ----------------------------------------------------------
 
 /** One line of a member's order as they send it. */

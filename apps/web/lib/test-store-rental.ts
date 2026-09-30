@@ -5,9 +5,11 @@ import {
   campStockTaken,
   canManageRental,
   checkRentalLines,
+  holdsSharers,
   priceRentalOrder,
   rentalChargeDescription,
   rentalSummary,
+  tentInUse,
 } from "@camp404/core";
 import { reachRank } from "@camp404/db/power";
 import {
@@ -268,6 +270,12 @@ export const rentalTestStore = {
         (i) => i.id === input.itemId && i.archivedAt === null,
       );
       if (!row) return RENTAL_ITEM_MISSING;
+      const inUse = state()
+        .orders.filter((o) => o.status !== "draft")
+        .flatMap((o) => o.lines)
+        .filter((l) => l.itemId === row.id && l.choice === "need")
+        .map((l) => ({ quantity: l.quantity, sharers: l.sharerIds.length }));
+      if (!holdsSharers(input.item, inUse)) return tentInUse(input.item.name);
       const taken = campStockTaken(
         input.item,
         campTakenByOrders(row.cycle).get(row.id) ?? 0,

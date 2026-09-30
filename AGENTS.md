@@ -644,7 +644,9 @@ Decisions baked into the schema — keep new code consistent with them:
   catalogue item, together or not at all. It is not a link to `inventory_*`,
   and the Inventory has no prices and must not get any. A confirmation that
   gives out more camp stock than is left is refused (`priceRentalOrder`; the
-  year's items are locked first). Confirming is a compare-and-set on
+  year's items are locked first). A catalogue edit is refused when it would
+  leave fewer than are given out, or a tent smaller than the people sharing
+  it on a sent or confirmed order (`holdsSharers`). Confirming is a compare-and-set on
   `submitted` AND the order's `version`, and writes the `rental` charge on the
   member's dues and the audit row in the same transaction; reopening cancels
   that charge the same way. "Charged" is not stored: it is a confirmed order

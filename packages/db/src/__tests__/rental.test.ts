@@ -6,6 +6,7 @@ import {
   noPriceFrom,
   notEnoughCampStock,
   RENTAL_PICK_EVERY_SOURCE,
+  tentInUse,
   type AuditAction,
 } from "@camp404/core";
 import type { RentalItemInput, Team } from "@camp404/types";
@@ -57,6 +58,7 @@ const CONFIRMED: AuditAction = "rental.order_confirmed";
 const REOPENED: AuditAction = "rental.order_reopened";
 const ITEM_ADDED: AuditAction = "rental.item_added";
 const LABELLED: AuditAction = "rental.tent_labelled";
+const ITEM_CHANGED: AuditAction = "rental.item_changed";
 
 async function campYear(db: DB, year: number) {
   const cycles: CampConfig["cycles"] = [
@@ -711,6 +713,75 @@ describe("gear rental", () => {
         (await listRentalItems(YEAR)).find((i) => i.id === c.tent)
           ?.campStockCount,
       ).toBe(1);
+    });
+  });
+
+  describe("a shared tent", () => {
+    it("cannot be made smaller, or stop being a tent, under the people on a sent order", async () => {
+      const c = await camp();
+      const edit = (item: RentalItemInput) =>
+        editRentalItem({ itemId: c.tent, item, actorId: c.captain.id });
+      // A draft does not hold the size: it is checked again when it is saved.
+      await saveRentalOrder({
+        userId: c.member.id,
+        cycle: YEAR,
+        lines: [
+          {
+            itemId: c.tent,
+            choice: "need",
+            quantity: 1,
+            sharerIds: [c.friend.id],
+          },
+        ],
+        submit: false,
+        expectedVersion: 0,
+      });
+      expect(await edit({ ...TENT, sleeps: 1 })).toEqual({ ok: true });
+      expect(await edit(TENT)).toEqual({ ok: true });
+
+      // Sent, with one sharer: the tent must keep sleeping two.
+      const sentOrder = await saveRentalOrder({
+        userId: c.member.id,
+        cycle: YEAR,
+        lines: [
+          {
+            itemId: c.tent,
+            choice: "need",
+            quantity: 1,
+            sharerIds: [c.friend.id],
+          },
+        ],
+        submit: true,
+        expectedVersion: 1,
+      });
+      expect(sentOrder.ok).toBe(true);
+      const refused = { ok: false, error: tentInUse("2-person tent") };
+      const changes = async () =>
+        (await auditActions(h.db())).filter((a) => a === ITEM_CHANGED).length;
+      const before = await changes();
+      expect(await edit({ ...TENT, sleeps: 1 })).toEqual(refused);
+      expect(await edit({ ...TENT, isTent: false, sleeps: 1 })).toEqual(
+        refused,
+      );
+      // Refused whole: the item is as it was, and nothing was audited.
+      expect(
+        (await listRentalItems(YEAR)).find((i) => i.id === c.tent),
+      ).toMatchObject({ isTent: true, sleeps: 2 });
+      expect(await changes()).toBe(before);
+      // A price change, or a bigger tent, is still fine.
+      expect(await edit({ ...TENT, sleeps: 3, supplierPriceCents: 1 })).toEqual(
+        { ok: true },
+      );
+
+      // Confirmed orders hold it too, so the printed tent list stays true.
+      const order = (await getRentalOrderOf(c.member.id, YEAR))!;
+      await confirmRentalOrder({
+        orderId: order.id,
+        expectedVersion: order.version,
+        sources: [{ lineId: order.lines[0]!.id, source: "camp" }],
+        actorId: c.captain.id,
+      });
+      expect(await edit({ ...TENT, sleeps: 1 })).toEqual(refused);
     });
   });
 
