@@ -524,7 +524,11 @@ Decisions baked into the schema — keep new code consistent with them:
   requirement is a `required_actions` row — never an ad-hoc `redirect()`.
   Every member page walks one ladder, `requireMemberPage` in
   `apps/web/lib/member-gate.ts`: invite, blocking questionnaire, burner
-  profile, captain approval.
+  profile, captain approval. **One deliberate exception: `/notifications`**
+  (owner, 2026-09-30) checks only camp access, so a member who is not
+  approved yet still reads their own inbox, including the forms they owe. It
+  shows nothing of anyone else's, and captain requests stay hidden from an
+  unapproved member. Do not "fix" it onto the ladder.
 - **Questionnaires — two classes.** _Code questionnaires_ (`burner_profiles`,
   `dietary_requirements`, `driver_profiles`, …) are bespoke coded pages
   writing into their own distinct domain tables — keep these as-is.
