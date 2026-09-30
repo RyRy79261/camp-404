@@ -236,6 +236,32 @@ describe("auditDetail", () => {
     expect(auditDetail("team_budget.set", { team: "kitchen" }, teams)).toBe(
       "Kitchen",
     );
+    // Claims and budgets since #242 keep whole cents.
+    expect(
+      auditDetail("reimbursement.status_changed", {
+        from: "approved",
+        to: "paid",
+        amountCents: 45050,
+        currency: "ZAR",
+      }),
+    ).toMatch(/^R[\s\u00a0\u202f]?450,50, approved to paid$/);
+    expect(
+      auditDetail(
+        "team_budget.set",
+        { team: "kitchen", amountCents: 500000, fromCents: null },
+        teams,
+      ),
+    ).toMatch(/^Kitchen: R[\s\u00a0\u202f]?5[\s\u00a0\u202f]?000,00$/);
+    expect(
+      auditDetail(
+        "team_budget.set",
+        { team: "kitchen", amountCents: null, fromCents: 100 },
+        teams,
+      ),
+    ).toBe("Kitchen: no budget");
+    expect(
+      auditDetail("reimbursement.receipt_viewed", { team: "kitchen" }, teams),
+    ).toBe("Kitchen");
     expect(
       auditDetail("team.program_changed", { team: "kitchen" }, teams),
     ).toBe("Kitchen");

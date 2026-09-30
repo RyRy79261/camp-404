@@ -34,3 +34,4 @@ export * from "./desktop-preferences";
 export * from "./team-program";
 export * from "./inkblot";
 export * from "./lounge";
+export * from "./claims";

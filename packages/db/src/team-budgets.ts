@@ -1,20 +1,29 @@
 import { and, asc, eq } from "drizzle-orm";
-import { type Currency, isCurrency, UnknownCurrencyError } from "@camp404/core";
+import { budgetTotals, type BudgetTotals } from "@camp404/core";
+import type { Team } from "@camp404/types";
 import { writeAuditEvent } from "./audit";
-import { currentCycleNumber } from "./cycles";
+import { lockMoneyKeeper, MoneyRefused, type MoneyResult } from "./dues";
 import { createHttpDb, withTransaction } from "./index";
+import { listClaimAmounts } from "./reimbursements";
 import * as schema from "./schema";
 
-// Team budgets, one per team per year (migration 0034). Reads and writes are
-// for the camp's current year: a new year starts with no budgets. Who may set
-// a budget is the caller's check (a captain, or the lead of that team).
+// Team budgets (#242): ONE amount per team per year (owner, 2026-09-30), in
+// whole rand cents, set by captains and Finance leads (canManageMoney,
+// re-checked inside the write's own transaction). Every member reads each
+// team's totals: budget, spent (the claims the team said yes to), left.
+// A new year starts with no budgets.
 
-export type TeamBudgetTeam = (typeof schema.teamEnum.enumValues)[number];
+export type TeamBudgetTeam = Team;
 export type TeamBudgetRow = typeof schema.teamBudgets.$inferSelect;
 
-/** This year's budgets, by team key. */
-export async function listTeamBudgets(): Promise<TeamBudgetRow[]> {
-  const cycle = await currentCycleNumber();
+export const BUDGET_NOT_FINANCE =
+  "Only captains and Finance leads can set budgets.";
+export const BUDGET_CHANGED =
+  "Someone changed this budget first. Reload the page.";
+export const BUDGET_BAD_AMOUNT = "A budget must be R0 or more.";
+
+/** One year's budget rows, by team. */
+export async function listTeamBudgets(cycle: number): Promise<TeamBudgetRow[]> {
   return createHttpDb()
     .select()
     .from(schema.teamBudgets)
@@ -22,11 +31,11 @@ export async function listTeamBudgets(): Promise<TeamBudgetRow[]> {
     .orderBy(asc(schema.teamBudgets.team));
 }
 
-/** This year's budget for one team, or null when none is set. */
+/** One team's budget row for a year, or null when none is set. */
 export async function getTeamBudget(
-  team: TeamBudgetTeam,
+  team: Team,
+  cycle: number,
 ): Promise<TeamBudgetRow | null> {
-  const cycle = await currentCycleNumber();
   const [row] = await createHttpDb()
     .select()
     .from(schema.teamBudgets)
@@ -40,49 +49,101 @@ export async function getTeamBudget(
   return row ?? null;
 }
 
-export interface TeamBudgetChange {
-  /** A decimal string with up to 2 places, or null to clear. */
-  assignedAmount?: string | null;
-  perceivedAmount?: string | null;
-  /** Always ZAR; any other code is refused before writing. */
-  currency?: Currency;
-  notes?: string | null;
+/**
+ * Every team's totals for a year: its budget, what it spent, what is waiting.
+ * A team with neither a budget nor a claim reads as no budget and nothing
+ * spent. Claims under no team (from before #242) count against no team.
+ */
+export async function listBudgetTotals(
+  cycle: number,
+): Promise<Record<Team, BudgetTotals>> {
+  const [budgets, claims] = await Promise.all([
+    listTeamBudgets(cycle),
+    listClaimAmounts(cycle),
+  ]);
+  const teams = schema.teamEnum.enumValues;
+  return Object.fromEntries(
+    teams.map((team) => [
+      team,
+      budgetTotals(
+        budgets.find((b) => b.team === team)?.amountCents ?? null,
+        claims.filter((c) => c.team === team),
+      ),
+    ]),
+  ) as Record<Team, BudgetTotals>;
 }
 
 /**
- * Set fields of a team's budget for this year, creating the row on first use.
- * Fields left out keep their value. The row and its audit entry commit
- * together; the audit names which fields changed, not the notes text.
+ * Set or clear a team's budget for a year. `expectedCents` is the amount the
+ * editor saw (null: none set); a change someone made in between is refused,
+ * never overwritten. The row and its audit entry commit together.
  */
 export async function setTeamBudget(input: {
-  team: TeamBudgetTeam;
-  change: TeamBudgetChange;
+  team: Team;
+  cycle: number;
+  amountCents: number | null;
+  expectedCents: number | null;
   actorId: string;
-}): Promise<TeamBudgetRow> {
-  const { currency } = input.change;
-  if (currency !== undefined && !isCurrency(currency)) {
-    throw new UnknownCurrencyError(currency);
+}): Promise<MoneyResult> {
+  if (
+    input.amountCents !== null &&
+    (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0)
+  ) {
+    return { ok: false, error: BUDGET_BAD_AMOUNT };
   }
-  // Resolved before the transaction: currentCycleNumber reads on its own handle.
-  const cycle = await currentCycleNumber();
-  const set = Object.fromEntries(
-    Object.entries(input.change).filter(([, value]) => value !== undefined),
-  ) as TeamBudgetChange;
-  return await withTransaction(async (tx) => {
-    const [row] = await tx
-      .insert(schema.teamBudgets)
-      .values({ team: input.team, cycle, ...set })
-      .onConflictDoUpdate({
-        target: [schema.teamBudgets.team, schema.teamBudgets.cycle],
-        set: { ...set, updatedAt: new Date() },
-      })
-      .returning();
-    await writeAuditEvent(tx, {
-      actorId: input.actorId,
-      action: "team_budget.set",
-      target: input.team,
-      metadata: { team: input.team, cycle, fields: Object.keys(set) },
+  try {
+    await withTransaction(async (tx) => {
+      if (!(await lockMoneyKeeper(tx, input.actorId))) {
+        throw new MoneyRefused(BUDGET_NOT_FINANCE);
+      }
+      const where = and(
+        eq(schema.teamBudgets.team, input.team),
+        eq(schema.teamBudgets.cycle, input.cycle),
+      );
+      const [row] = await tx
+        .select({ amountCents: schema.teamBudgets.amountCents })
+        .from(schema.teamBudgets)
+        .where(where)
+        .for("update");
+      const current = row?.amountCents ?? null;
+      if (current !== input.expectedCents) {
+        throw new MoneyRefused(BUDGET_CHANGED);
+      }
+      if (current === input.amountCents) return;
+      const written = row
+        ? await tx
+            .update(schema.teamBudgets)
+            .set({ amountCents: input.amountCents, updatedAt: new Date() })
+            .where(where)
+            .returning({ team: schema.teamBudgets.team })
+        : await tx
+            .insert(schema.teamBudgets)
+            .values({
+              team: input.team,
+              cycle: input.cycle,
+              amountCents: input.amountCents,
+            })
+            .onConflictDoNothing()
+            .returning({ team: schema.teamBudgets.team });
+      // Another editor inserted the row between our read and our insert.
+      if (written.length === 0) throw new MoneyRefused(BUDGET_CHANGED);
+      await writeAuditEvent(tx, {
+        actorId: input.actorId,
+        action: "team_budget.set",
+        target: input.team,
+        metadata: {
+          team: input.team,
+          cycle: input.cycle,
+          amountCents: input.amountCents,
+          fromCents: current,
+        },
+      });
     });
-    return row!;
-  });
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof MoneyRefused) {
+      return { ok: false, error: error.sentence };
+    }
+    throw error;
+  }
 }

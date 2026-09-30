@@ -25,7 +25,8 @@ wears the same desktop and needs no sign-in.
 - **For every member:** the desktop and Today, the inbox and announcements,
   My forms (including their own ticket, DDT and WAP), My dues (pledge, send
   proof, see the balance), My gear (the tent, mattress and bedding they need
-  from the camp, and who shares their tent), My lift, Tasks, the Calendar, the Roster and Family
+  from the camp, and who shares their tent), My claims (money spent for a
+  team, claimed back with the receipt), My lift, Tasks, the Calendar, the Roster and Family
   tree, About Camp 404, and each team's program and meetings. Themes include
   Calm, High contrast and Colour-blind safe.
 - **Team tools, which every member may read:** Power (loads, fuel, the fuel
@@ -34,9 +35,12 @@ wears the same desktop and needs no sign-in.
   Lounge (offer an activity or a DJ set), Camp layout (the site plan),
   Logistics (the year's pack, travel, build, burn, strike and unpack days,
   written onto the camp's Google Calendar), and the Kitchen's recipes and meal
-  plan. A captain or a lead of the team that owns a tool edits it.
+  plan. A captain or a lead of the team that owns a tool edits it. Each
+  team's program shows its budget: budget, spent and left.
 - **For captains (and leads, where the owner said so):** Applications (who is
-  coming, the DDT and WAP), Payments and dues (with the Finance leads), Gear
+  coming, the DDT and WAP), Payments and dues (with the Finance leads; its
+  Claims and Budgets tabs pay claims and set each team's one budget), Claims
+  to approve (a lead of the claim's team, or a captain), Gear
   rental (the year's catalogue, confirming orders from camp stock or the
   supplier, and the tent list; captains only), Announcements, the questionnaire builder, the member panel (including how
   long a member stays), Camp settings, the Join site editor, the Audit log and

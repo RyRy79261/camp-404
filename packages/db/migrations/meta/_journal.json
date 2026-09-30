@@ -533,6 +533,27 @@
       "when": 1790782662691,
       "tag": "0075_gear_rental",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1790798286917,
+      "tag": "0076_claims_and_budgets_in_cents",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1790798288459,
+      "tag": "0077_claims_and_budgets_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1790798290063,
+      "tag": "0078_claims_and_budgets_cents_only",
+      "breakpoints": true
     }
   ]
 }

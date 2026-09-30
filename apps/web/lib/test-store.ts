@@ -82,6 +82,7 @@ import {
   refundStatusOf,
   resetDuesStore,
 } from "./test-store-dues";
+import { resetClaimsStore } from "./test-store-claims";
 import { resetRentalStore } from "./test-store-rental";
 import type { MyLift } from "@camp404/db/cars";
 import {
@@ -6086,6 +6087,7 @@ export const testStore = {
     S.inkblotRuns.length = 0;
     resetDuesStore();
     resetRentalStore();
+    resetClaimsStore();
   },
 
   // --- INKBLOT's board (the twin of @camp404/db/inkblot) --------------------

@@ -27,6 +27,7 @@ export type ProgramId =
   | "my-lift"
   | "my-dues"
   | "my-gear"
+  | "my-claims"
   | "tasks"
   | "calendar"
   | "team"
@@ -62,6 +63,7 @@ export type ProgramId =
   | "new-event"
   | "overview"
   | "applications"
+  | "claim-approvals"
   | "payments"
   | "gear-rental"
   | "camp-settings"
@@ -93,6 +95,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "my-lift": "My lift",
   "my-dues": "My dues",
   "my-gear": "My gear",
+  "my-claims": "My claims",
   tasks: "Tasks",
   calendar: "Calendar",
   team: "Team",
@@ -128,6 +131,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "new-event": "New event",
   overview: "Camp overview",
   applications: "Applications",
+  "claim-approvals": "Claims to approve",
   payments: "Payments",
   "gear-rental": "Gear rental",
   "camp-settings": "Camp settings",
@@ -209,6 +213,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/lift", "my-lift", "MY_LIFT.EXE"),
   route("/dues", "my-dues", "MY_DUES.TXT"),
   route("/gear", "my-gear", "MY_GEAR.TXT"),
+  route("/claims", "my-claims", "CLAIMS.TXT"),
 
   // Camp
   route("/tasks", "tasks", "TASKS.EXE"),
@@ -316,8 +321,11 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/captains/calendar", "new-event", "NEWEVENT.EXE"),
   route("/captains/overview", "overview", "CAMPSTAT.EXE"),
   route("/captains/applications", "applications", "INTAKE.DB"),
+  route("/captains/claims", "claim-approvals", "APPROVE.EXE"),
   route("/captains/payments", "payments", "LEDGER.DB"),
   route("/captains/payments/members", "payments", "LEDGER.DB"),
+  route("/captains/payments/claims", "payments", "LEDGER.DB"),
+  route("/captains/payments/budgets", "payments", "LEDGER.DB"),
   route("/captains/payments/members/[userId]", "payments", "LEDGER.DB"),
   route("/captains/payments/import", "payments", "LEDGER.DB"),
   route("/captains/payments/settle-up", "payments", "LEDGER.DB"),

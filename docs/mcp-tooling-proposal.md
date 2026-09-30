@@ -151,6 +151,11 @@ the appropriate tier with no consent gate.
 | `get_team_budget(team)` | R | M (any) |
 | `set_team_budget(team, ...)` | W | lead of team + C |
 
+[CORRECTION 2026-09-30] `set_team_budget` is for captains and Finance leads
+only (#242, owner: one budget per team, set by Finance); a team's own lead
+reads it. `get_team_budget` and `list_team_budgets` return each team's
+budget, spent, waiting and left, in cents.
+
 ### Required actions (admin)
 
 | Tool | R/W | Tier |
@@ -196,6 +201,16 @@ action that runs through the captain's web UI.
 | `list_reimbursements(filter)` | R | L (own team, redacted) / C (all, decrypted) | |
 | `approve_reimbursement` / `reject_reimbursement` | W | team L of claim's team OR C | per existing routing |
 | `mark_paid` / `mark_reconciled` | W | C | |
+
+[CORRECTION 2026-09-30] The claim tools as built (#242):
+`submit_reimbursement` was removed, because a claim needs private receipt
+files, so it is made in the app (My claims) only. `list_my_reimbursements`
+returns the member's claims without bank details. `list_reimbursements` gives
+a team lead their teams' claims, and captains and Finance leads every claim;
+another member's bank details come back decrypted only to captains and
+Finance leads, and only when that member's AI data consent is on. The paying
+tools are `mark_reimbursement_paid` and `mark_reimbursement_reconciled`, for
+captains and Finance leads.
 
 ### Broadcasts / inbox (read-only)
 

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@camp404/db/account", () => ({ sanitiseAccount: vi.fn() }));
 vi.mock("@/lib/avatar-blob", () => ({ deleteAvatarBlobs: vi.fn() }));
 vi.mock("@/lib/payment-proof", () => ({ deletePaymentProofBlobs: vi.fn() }));
+vi.mock("@/lib/claim-receipts", () => ({ deleteClaimReceiptBlobs: vi.fn() }));
 vi.mock("@/lib/test-mode", () => ({
   isE2ETestMode: vi.fn(() => false),
   usesTestStore: vi.fn(() => false),
@@ -14,6 +15,7 @@ vi.mock("@/lib/test-mode", () => ({
 import { deleteAccount } from "@/lib/account";
 import { sanitiseAccount } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "@/lib/avatar-blob";
+import { deleteClaimReceiptBlobs } from "@/lib/claim-receipts";
 import { deletePaymentProofBlobs } from "@/lib/payment-proof";
 import { isE2ETestMode, usesTestStore } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
@@ -74,6 +76,7 @@ describe("deleteAccount", () => {
     expect(deleteAvatarBlobs).toHaveBeenCalledExactlyOnceWith("auth-1");
     // Proof-of-payment files are filed under the camp id (#240).
     expect(deletePaymentProofBlobs).toHaveBeenCalledExactlyOnceWith("u1");
+    expect(deleteClaimReceiptBlobs).toHaveBeenCalledExactlyOnceWith("u1");
   });
 
   it("takes no avatar blobs with it when the DB refused the erasure", async () => {
@@ -88,6 +91,7 @@ describe("deleteAccount", () => {
     expect(res).toEqual({ ok: false, reason: "sole_captain" });
     expect(deleteAvatarBlobs).not.toHaveBeenCalled();
     expect(deletePaymentProofBlobs).not.toHaveBeenCalled();
+    expect(deleteClaimReceiptBlobs).not.toHaveBeenCalled();
   });
 
   it("swallows a blob-cleanup failure (the DB scrub stands) and logs it", async () => {
