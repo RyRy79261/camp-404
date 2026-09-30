@@ -144,7 +144,7 @@ function PhoneIconButton({ item }: { item: PhoneIcon }) {
         aria-hidden
         data-label={item.label}
         className={`line-clamp-2 max-w-full px-1 py-0.5 text-center font-pixel text-[10px] uppercase leading-tight after:content-[attr(data-label)] ${
-          item.open ? "bg-os-primary text-os-bg" : "bg-os-chrome/80 text-os-fg"
+          item.open ? "bg-os-primary text-os-bg" : "bg-os-label text-os-fg"
         }`}
       />
     </button>

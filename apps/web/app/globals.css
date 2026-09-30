@@ -43,6 +43,24 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* Colour that stays on (owner, 2026-09-30: "I want the colors on the screens
+   always visible, to lighten the appearance up a bit"). A window without
+   focus keeps a soft tint of the main colour on its title bar, and an icon's
+   name keeps one at rest; the focused window and a lit icon stay full colour,
+   so which window has focus still reads at a glance. Each is the theme's own
+   main colour mixed into its chrome, never a new colour. Mixed in oklab: a
+   grey with a faint hue of its own pulls an oklch mix round to that hue.
+   Declared where a theme sets its colours (<html> and the desktop root), so
+   each mix is worked out from that theme's values.
+   lib/__tests__/os-skin-contrast.test.ts reads these lines and measures the
+   text on each in every theme. */
+:root,
+[data-os-theme] {
+  --os-bar-idle: color-mix(in oklab, var(--os-primary) 28%, var(--os-chrome));
+  --os-bar-idle-fg: var(--os-fg);
+  --os-label: color-mix(in oklab, var(--os-primary) 28%, var(--os-chrome));
+}
+
 :root.os-skinned,
 :host,
 :host > div {
@@ -106,7 +124,13 @@
 :host > div {
   --color-background: var(--os-win-bg);
   --color-foreground: var(--os-win-fg);
-  --color-card: var(--os-win-card);
+  /* Cards and panels carry a soft tint of the main colour (owner,
+     2026-09-30), mixed in oklab like the chrome's tints above. */
+  --color-card: color-mix(
+    in oklab,
+    var(--os-win-primary) 10%,
+    var(--os-win-card)
+  );
   --color-card-foreground: var(--os-win-fg);
   --color-popover: var(--os-win-card);
   --color-popover-foreground: var(--os-win-fg);

@@ -32,7 +32,7 @@ describe("CheckboxCardGroup", () => {
     expect(onValuesChange).toHaveBeenLastCalledWith([]);
   });
 
-  it("marks a picked card the way the board draws it", () => {
+  it("marks a picked card bright and leaves the rest soft", () => {
     render(
       <CheckboxCardGroup
         options={options}
@@ -43,8 +43,12 @@ describe("CheckboxCardGroup", () => {
     const kitchen = screen.getByRole("checkbox", { name: "Kitchen" });
     expect(kitchen.getAttribute("aria-checked")).toBe("true");
     expect(kitchen.className).toContain("border-primary");
-    expect(
-      screen.getByRole("checkbox", { name: "Structures" }).className,
-    ).toContain("bg-muted");
+    expect(kitchen.className).toContain("ring-primary");
+    // Not picked: the soft colour of a choice, never the grey it used to be.
+    const structures = screen.getByRole("checkbox", { name: "Structures" });
+    expect(structures.className).toContain(
+      "bg-[color-mix(in_oklab,var(--color-primary)_8%,var(--color-card))]",
+    );
+    expect(structures.className).not.toContain("ring-primary");
   });
 });
