@@ -67,6 +67,16 @@ describe("decisions and budgets", () => {
     expect(
       ClaimPayInput.parse({ claimId: "c1", decision: "paid" }).note,
     ).toBeNull();
+    // Finance turning down a claim the team said yes to must say why.
+    expect(
+      first(
+        ClaimPayInput.safeParse({
+          claimId: "c1",
+          decision: "rejected",
+          note: " ",
+        }),
+      ),
+    ).toBe("Say why, so the member knows: the team already said yes.");
     expect(ClaimRefInput.safeParse({ claimId: "" }).success).toBe(false);
     expect(
       ClaimDecisionInput.safeParse({ claimId: "c1", decision: "paid" }).success,

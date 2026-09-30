@@ -7,6 +7,7 @@ import { sanitiseAccount } from "../account";
 import { setFoundingYear } from "../cycle-rollover";
 import {
   CLAIM_CHANGED,
+  CLAIM_NEEDS_A_REASON,
   CLAIM_NEEDS_A_RECEIPT,
   CLAIM_NO_SUCH_MEMBER,
   CLAIM_NOT_FINANCE,
@@ -434,6 +435,18 @@ describe("the Finance team pays", () => {
     const db = h.db();
     const { id, captain, member } = await approved(db);
     expect((await listBudgetTotals(YEAR)).kitchen.spentCents).toBe(450_00);
+    // The team already said yes, so a no without a reason is refused.
+    for (const note of [null, "  "]) {
+      expect(
+        await payClaim({
+          claimId: id,
+          decision: "rejected",
+          note,
+          actorId: captain.id,
+        }),
+      ).toEqual({ ok: false, error: CLAIM_NEEDS_A_REASON });
+    }
+    expect((await listMyClaims(member.id))[0]!.status).toBe("approved");
     expect(
       await payClaim({
         claimId: id,
@@ -544,15 +557,22 @@ describe("team budgets", () => {
 describe("erasure", () => {
   const h = useTestDb();
 
-  it("keeps the claim for accounting but drops its bank details and receipt rows", async () => {
+  it("keeps the claim for accounting but drops its bank details, the reason given and the receipt rows", async () => {
     const db = h.db();
-    const { member } = await people(db);
-    await submitted(claimFor(member.id));
+    const { member, captain } = await people(db);
+    const id = await submitted(claimFor(member.id));
+    await decideClaim({
+      claimId: id,
+      decision: "rejected",
+      note: "Mem bought this for their own tent",
+      actorId: captain.id,
+    });
     await sanitiseAccount(member.id);
     const [row] = await db.select().from(schema.reimbursements);
     expect(row).toMatchObject({
       amountCents: 450_00,
       accountDetailsEncrypted: "",
+      decisionNote: null,
     });
     expect(await db.select().from(schema.reimbursementFiles)).toEqual([]);
   });

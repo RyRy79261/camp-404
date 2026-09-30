@@ -282,12 +282,14 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .where(eq(schema.rentalOrderSharers.userId, userId));
 
     // Scrub encrypted bank details (NOT NULL → empty string, not null) while
-    // keeping the reimbursement record for accounting. Their claims' receipt
+    // keeping the reimbursement record for accounting, and the reason a lead
+    // or the Finance team wrote about a claim, which may name them. Their
+    // claims' receipt
     // rows go too (the web app deletes the files themselves after the erasure
     // commits, like the proof-of-payment files).
     await tx
       .update(schema.reimbursements)
-      .set({ accountDetailsEncrypted: "" })
+      .set({ accountDetailsEncrypted: "", decisionNote: null })
       .where(eq(schema.reimbursements.submitterId, userId));
     await tx
       .delete(schema.reimbursementFiles)

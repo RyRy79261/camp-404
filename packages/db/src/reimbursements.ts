@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { canApproveClaim, CLAIM_MOVES } from "@camp404/core";
 import {
   CLAIM_MAX_FILES,
+  CLAIM_NEEDS_A_REASON,
   type ClaimAccountType,
   type ClaimStatus,
   type Team,
@@ -53,6 +54,7 @@ export const NOT_THE_CLAIMS_TEAM =
 export const CLAIM_NOT_FINANCE =
   "Only captains and Finance leads can pay claims.";
 export const OWN_CLAIM_DECISION = "Someone else has to decide your own claim.";
+export { CLAIM_NEEDS_A_REASON };
 export const OWN_CLAIM_PAYMENT =
   "Someone else in the Finance team has to pay your own claim.";
 
@@ -481,7 +483,8 @@ export async function decideClaim(input: {
 
 /**
  * The Finance team marks an approved claim paid, or turns it down after all
- * (with a note for the member). Never on their own claim.
+ * with a reason for the member (refused without one: the team already said
+ * yes). Never on their own claim.
  */
 export async function payClaim(input: {
   claimId: string;
@@ -489,6 +492,9 @@ export async function payClaim(input: {
   note?: string | null;
   actorId: string;
 }): Promise<ClaimResult> {
+  if (input.decision === "rejected" && !input.note?.trim()) {
+    return { ok: false, error: CLAIM_NEEDS_A_REASON };
+  }
   return write(async (tx) => {
     if (!(await lockMoneyKeeper(tx, input.actorId))) refuse(CLAIM_NOT_FINANCE);
     const claim = await lockClaim(tx, input.claimId);

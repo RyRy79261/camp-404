@@ -36,6 +36,9 @@ export type ClaimAccountType = z.infer<typeof ClaimAccountType>;
 export const CLAIM_DESCRIPTION_MAX = 300;
 export const CLAIM_ACCOUNT_MAX = 300;
 export const CLAIM_NOTE_MAX = 500;
+/** Said when Finance turns down an approved claim without saying why. */
+export const CLAIM_NEEDS_A_REASON =
+  "Say why, so the member knows: the team already said yes.";
 /** The most receipt files one claim takes. */
 export const CLAIM_MAX_FILES = 5;
 
@@ -113,14 +116,26 @@ export const ClaimDecisionInput = z.object({
 export type ClaimDecisionInput = z.infer<typeof ClaimDecisionInput>;
 
 /** The Finance team paying an approved claim, or turning it down after all. */
-export const ClaimPayInput = z.object({
-  claimId: ClaimId,
-  decision: z.enum(["paid", "rejected"]),
-  note: optionalText(
-    CLAIM_NOTE_MAX,
-    `Keep the note under ${CLAIM_NOTE_MAX} characters.`,
-  ),
-});
+export const ClaimPayInput = z
+  .object({
+    claimId: ClaimId,
+    decision: z.enum(["paid", "rejected"]),
+    note: optionalText(
+      CLAIM_NOTE_MAX,
+      `Keep the note under ${CLAIM_NOTE_MAX} characters.`,
+    ),
+  })
+  .superRefine((value, ctx) => {
+    // The team already said yes, so turning it down after all needs a reason
+    // the member can read.
+    if (value.decision === "rejected" && value.note === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["note"],
+        message: CLAIM_NEEDS_A_REASON,
+      });
+    }
+  });
 export type ClaimPayInput = z.infer<typeof ClaimPayInput>;
 
 /** A claim whose bank details the Finance team opens. */

@@ -4,6 +4,7 @@ vi.mock("server-only", () => ({}));
 
 import {
   CLAIM_CHANGED,
+  CLAIM_NEEDS_A_REASON,
   CLAIM_NEEDS_A_RECEIPT,
   CLAIM_NOT_FINANCE,
   NOT_THE_CLAIMS_TEAM,
@@ -167,6 +168,13 @@ describe("claims twin", () => {
       ok: false,
       error: OWN_CLAIM_PAYMENT,
     });
+    expect(
+      s.payClaim({
+        claimId: id,
+        decision: "rejected",
+        actorId: c.financeLead.id,
+      }),
+    ).toEqual({ ok: false, error: CLAIM_NEEDS_A_REASON });
     expect(
       s.payClaim({ claimId: id, decision: "paid", actorId: c.financeLead.id }),
     ).toEqual({

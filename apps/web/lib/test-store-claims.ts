@@ -12,6 +12,7 @@ import { reachRank } from "@camp404/db/power";
 import {
   CLAIM_BAD_AMOUNT,
   CLAIM_CHANGED,
+  CLAIM_NEEDS_A_REASON,
   CLAIM_NEEDS_A_RECEIPT,
   CLAIM_NO_SUCH_MEMBER,
   CLAIM_NOT_FINANCE,
@@ -335,6 +336,9 @@ export const claimsTestStore = {
     note?: string | null;
     actorId: string;
   }): ClaimResult {
+    if (input.decision === "rejected" && !input.note?.trim()) {
+      return { ok: false, error: CLAIM_NEEDS_A_REASON };
+    }
     if (!isMoneyKeeper(input.actorId))
       return { ok: false, error: CLAIM_NOT_FINANCE };
     const c = state().claims.find((row) => row.id === input.claimId);

@@ -150,7 +150,14 @@ function BudgetItem({ row }: { row: BudgetRow }) {
               size="sm"
               variant="ghost"
               aria-label={`Edit ${row.label}'s budget`}
-              onClick={() => setEditing(true)}
+              onClick={() => {
+                // Start from the budget as it is now, never an old draft.
+                setAmount(
+                  row.budgetCents === null ? "" : typedRands(row.budgetCents),
+                );
+                setError(null);
+                setEditing(true);
+              }}
             >
               <Pencil aria-hidden />
             </Button>
