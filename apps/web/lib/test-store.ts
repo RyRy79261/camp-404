@@ -82,6 +82,7 @@ import {
   refundStatusOf,
   resetDuesStore,
 } from "./test-store-dues";
+import { resetRentalStore } from "./test-store-rental";
 import type { MyLift } from "@camp404/db/cars";
 import {
   ALREADY_SEATED,
@@ -1858,6 +1859,61 @@ export const testStore = {
     action.status = "completed";
     action.completedAt = new Date();
     return true;
+  },
+  // --- Nudges (non-blocking required actions with a notice) -------------
+  // The twins of what @camp404/db/rental's askForGearOrders and its order
+  // writer do to `required_actions` and `notification_deliveries`.
+
+  /** Open (or open again) a member's NON-blocking action. */
+  openNudge(input: { userId: string; actionKey: string; title: string }): void {
+    const row = requiredActions.find(
+      (a) => a.userId === input.userId && a.actionKey === input.actionKey,
+    );
+    if (row) {
+      row.status = "pending";
+      row.completedAt = null;
+      row.blocking = false;
+      return;
+    }
+    requiredActions.push({
+      ...input,
+      type: "questionnaire",
+      version: null,
+      activationId: null,
+      blocking: false,
+      dueAt: null,
+      status: "pending",
+      completedAt: null,
+      createdAt: new Date(),
+    });
+  },
+  /** Whether a member's action with this key is still open. */
+  hasOpenNudge(userId: string, actionKey: string): boolean {
+    return requiredActions.some(
+      (a) =>
+        a.userId === userId &&
+        a.actionKey === actionKey &&
+        a.status === "pending",
+    );
+  },
+  /** Whether the member has an unread notice with this reference type. */
+  hasUnreadNotice(userId: string, refType: string): boolean {
+    return deliveries.some(
+      (d) => d.userId === userId && d.refType === refType && d.readAt === null,
+    );
+  },
+  /** One system notice to one member, from a builder in @camp404/core. */
+  pushNotice(userId: string, payload: NotificationPayload): void {
+    pushDelivery(payload, { userId, broadcastId: null, presentation: "feed" });
+  },
+  /** Read every unread notice a member has with this reference type. */
+  readNotices(userId: string, refType: string): void {
+    const now = new Date();
+    for (const d of deliveries) {
+      if (d.userId === userId && d.refType === refType && d.readAt === null) {
+        d.readAt = now;
+      }
+    }
   },
   /** Twin of getPendingRequiredActions: pending and blocking, oldest first. */
   getPendingRequiredActions(userId: string): TestRequiredAction[] {
@@ -6029,6 +6085,7 @@ export const testStore = {
     S.teamPrograms.clear();
     S.inkblotRuns.length = 0;
     resetDuesStore();
+    resetRentalStore();
   },
 
   // --- INKBLOT's board (the twin of @camp404/db/inkblot) --------------------

@@ -632,6 +632,62 @@ Decisions baked into the schema — keep new code consistent with them:
   row claims its event id inside the write, before Google is called, so a
   re-save or a retry never makes a second event; Google is called after the
   transaction. Clearing the days takes the event off Google.
+- **Gear rental (#241).** The year's sleeping gear is `rental_items`; a
+  member's order is one `rental_orders` row per member per year, with
+  `rental_order_lines` and `rental_order_sharers`. Owner's rulings
+  (2026-09-30): camp fees are separate from rental (no "camp contribution"
+  line); gear comes from the camp's own stock or a supplier and BOTH have a
+  price a captain sets; the member says only what they need and never picks
+  the source; a captain picks it when they confirm.
+  - **The tent is asked ONCE per member, by need, never once per catalogue
+    tent** (owner, 2026-09-30, after seeing "2-person tent: I have my own / I
+    need one" on one row). The answer is on the order (`tent_choice`): "I have
+    my own" (what it is and how many it sleeps, both optional, for the site
+    plan), "I need one" (for how many people), or "I'm in someone else's
+    tent". A member never sees or picks a catalogue tent. **A captain picks the
+    actual tent**, and its source, when they confirm; that pick is the order's
+    one tent line, so the camp stock count, the on-site reserve, the summary
+    and the charge all read the tent the captain picked. A tent that sleeps
+    fewer than the people it is for is a warning on screen, not a refusal
+    (`tentSleepsEnough`). Do not build the member's form from the catalogue's
+    tents again. Every other item (mattress, sleeping bag) is still one row
+    per catalogue item.
+  - **Who is in whose tent has one source of truth**: the sharer list on the
+    order of the member whose tent it is. "I'm in someone else's tent" names
+    nobody, so it cannot disagree. A SENT order is refused when it would make
+    two orders disagree (`tentConflict`): a member in someone's tent cannot
+    also have their own or need one, and a sharer cannot have their own tent
+    answer or be in two tents. The writer locks the member and everyone they
+    name first. A draft is checked only when it is sent.
+  - Camp stock is optional per item (only the camp's tents and some
+    mattresses): a price AND a count on the catalogue item, together or not at
+    all. It is not a link to `inventory_*`, and the Inventory has no prices
+    and must not get any. A confirmation that gives out more camp stock than
+    is left is refused (`priceRentalOrder`; the year's items are locked
+    first), and so is a catalogue edit that would leave fewer than are given
+    out. The per-item reserve is "reserved for on site", and a camp-stock
+    reserve counts against the camp's stock.
+  - Confirming is a compare-and-set on `submitted` AND the order's `version`,
+    and writes the `rental` charge on the member's dues and the audit row in
+    the same transaction; reopening cancels that charge the same way.
+    "Charged" is not stored: it is a confirmed order with a live charge
+    (`rentalOrderState`). A confirmed line keeps the price it was confirmed at.
+  - Only a captain runs it (`canManageRental` in
+    `packages/core/src/rental.ts`): this is member money data, so a team lead,
+    a Finance lead included, gets nothing extra, and a member reads only their
+    own order plus whose tent they are in.
+  - My gear is the form (owner, 2026-09-30: not a builder questionnaire).
+    **"Ask everyone"** nudges each member who is coming this year
+    (`isAskedForGear`: said Yes, or accepted) and has not sent an order, on the
+    gate spine: one NON-blocking `required_actions` row (`gear_order`) and one
+    notice. It is a nudge, never a block; sending the order completes the row;
+    pressing again reaches only those who have not answered and never stacks
+    (no second notice while the first is unread). A captain may **fill an
+    order in for a member** who has not answered (`fillRentalOrderFor`:
+    audited, a compare-and-set on the version, marked on the order until the
+    member saves it themselves).
+  - Nothing here needs the app on site: tents are assigned, labelled and
+    printed before the Burn (`/print/gear-rental`).
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.

@@ -129,6 +129,8 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "account" },
       // Their own dues (#240).
       { kind: "program", id: "my-dues" },
+      // Their own gear order (#241).
+      { kind: "program", id: "my-gear" },
       { kind: "program", id: "roster" },
       { kind: "folder", id: "teams" },
       { kind: "program", id: "meetings" },
@@ -323,6 +325,7 @@ describe("buildProgramManifest: the personas", () => {
       "announcements",
       "new-event",
       "payments",
+      "gear-rental",
       "camp-settings",
       "join-site",
       "audit",
@@ -487,6 +490,20 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
       `team:${FINANCE}`,
       "payments",
     ]);
+  });
+
+  it("offers Gear rental to captains only: not a Finance lead, not any lead", () => {
+    const captain = buildProgramManifest(facts({ rank: CAPTAIN }));
+    expect(ids(captain)).toContain("gear-rental");
+    for (const team of [FINANCE, KITCHEN, STRUCTURES]) {
+      const lead = buildProgramManifest(
+        facts({ rank: LEAD, memberships: [{ team, isLead: true }] }),
+      );
+      expect(ids(lead)).not.toContain("gear-rental");
+      // Their own order is theirs like any member's.
+      expect(ids(lead)).toContain("my-gear");
+    }
+    expect(ids(buildProgramManifest(facts()))).not.toContain("gear-rental");
   });
 
   it("shows a plain Comms member none of the lead or captain tools", () => {

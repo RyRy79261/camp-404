@@ -13,6 +13,7 @@
 
 import type { NotificationKind, NotificationPayload } from "@camp404/types";
 import { notificationLink } from "./notification-links";
+import { GEAR_ORDER_ACTION_TITLE, GEAR_ORDER_REF_TYPE } from "./rental";
 import { CAMP_TIME_ZONE } from "./time-zone";
 
 export type { NotificationKind, NotificationPayload } from "@camp404/types";
@@ -130,6 +131,24 @@ export function requiredActionReminderNotification(input: {
     title: input.title,
     body: `Reminder: ${input.title} is due ${DUE_ON.format(input.dueAt)}. Tap to open the app.`,
     refType: REQUIRED_ACTION_REF_TYPE,
+    refId: input.requiredActionId,
+  };
+}
+
+/**
+ * A captain asked the member to say what sleeping gear they need (#241). It
+ * reuses the questionnaire reminder's kind, as the required-action reminder
+ * does: the kind is not shown and only decides that it is emailed. It points
+ * at the member's `required_actions` row and opens My gear.
+ */
+export function gearOrderAskNotification(input: {
+  requiredActionId: string | null;
+}): NotificationPayload {
+  return {
+    kind: "questionnaire_reminder",
+    title: GEAR_ORDER_ACTION_TITLE,
+    body: "The captains are putting the camp's gear order together. Open My gear and say what you have and what you need.",
+    refType: GEAR_ORDER_REF_TYPE,
     refId: input.requiredActionId,
   };
 }

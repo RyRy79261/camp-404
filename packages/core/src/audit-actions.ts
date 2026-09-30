@@ -91,6 +91,14 @@ export const AUDIT_ACTION_LABELS = {
   "recipe.version_added": "Wrote a new recipe version",
   "recipe.written_by_claude": "Had Claude write a recipe version",
   "reimbursement.status_changed": "Moved a reimbursement",
+  "rental.item_added": "Added a rental item",
+  "rental.item_archived": "Removed a rental item",
+  "rental.item_changed": "Changed a rental item",
+  "rental.order_confirmed": "Confirmed a member's gear order",
+  "rental.order_filled": "Filled in a member's gear order for them",
+  "rental.order_reopened": "Reopened a member's gear order",
+  "rental.orders_asked": "Asked members for their gear orders",
+  "rental.tent_labelled": "Labelled a tent",
   "safety.emergency_contacts.view": "Read emergency contacts",
   "team.program_changed": "Changed a team's description or links",
   "team_budget.set": "Set a team budget",
@@ -340,6 +348,27 @@ export function auditDetail(
           : null;
       const parts = [label, money, concession].filter(Boolean);
       return parts.length > 0 ? parts.join(", ") : null;
+    }
+    // Gear rental (#241): the item, the order's total, or the tent's label.
+    case "rental.item_added":
+    case "rental.item_changed":
+    case "rental.item_archived":
+      return text(metadata, "name");
+    case "rental.order_confirmed":
+    case "rental.order_reopened": {
+      const cents = count(metadata, "totalCents");
+      return cents === null ? null : formatMoney(cents);
+    }
+    case "rental.orders_asked": {
+      const asked = count(metadata, "asked");
+      if (asked === null) return null;
+      return `${asked} ${asked === 1 ? "member" : "members"}`;
+    }
+    case "rental.tent_labelled": {
+      const name = text(metadata, "name");
+      const label = text(metadata, "label");
+      if (!name) return label;
+      return label ? `${name}, ${label}` : `${name}, label removed`;
     }
     case "dues.plan_set": {
       const instalments = count(metadata, "instalments");

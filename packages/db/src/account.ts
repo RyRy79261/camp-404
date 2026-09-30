@@ -271,6 +271,16 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .set({ note: null, declineReason: null })
       .where(eq(schema.paymentRefunds.userId, userId));
 
+    // Gear rental (#241): their orders go (the lines and sharers cascade),
+    // and they leave every tent another member put them in. The rental charge
+    // stays on the dues ledger for accounting, like the rest of it.
+    await tx
+      .delete(schema.rentalOrders)
+      .where(eq(schema.rentalOrders.userId, userId));
+    await tx
+      .delete(schema.rentalOrderSharers)
+      .where(eq(schema.rentalOrderSharers.userId, userId));
+
     // Scrub encrypted bank details (NOT NULL → empty string, not null) while
     // keeping the reimbursement record for accounting.
     await tx

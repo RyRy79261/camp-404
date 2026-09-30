@@ -234,6 +234,9 @@ describe("every member-data column has a reader in the field-access list", () =>
     duesCharges: schema.duesCharges,
     duesInstalments: schema.duesInstalments,
     paymentRefunds: schema.paymentRefunds,
+    rentalOrders: schema.rentalOrders,
+    rentalOrderLines: schema.rentalOrderLines,
+    rentalOrderSharers: schema.rentalOrderSharers,
     // The sign-in identity: it holds member email.
     user: schema.user,
   };

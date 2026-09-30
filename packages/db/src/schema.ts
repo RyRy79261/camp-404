@@ -44,6 +44,10 @@ import {
   PAYMENT_METHODS,
   PAYMENT_SOURCES,
   REFUND_STATUSES,
+  RENTAL_CHOICES,
+  RENTAL_ORDER_STATUSES,
+  RENTAL_SOURCES,
+  RENTAL_TENT_CHOICES,
   DDT_STATUSES,
   WAP_STATUSES,
   TICKET_STATUSES,
@@ -1349,6 +1353,217 @@ export const paymentRefunds = pgTable(
       "payment_refunds_currency_check",
       sql`${r.currency} = 'ZAR'`,
     ),
+  }),
+);
+
+// --- Gear rental (#241) ------------------------------------------------------
+// The year's sleeping gear (tents, mattresses, bedding) and each member's
+// order. Gear comes from two sources, the camp's own stock and a rental
+// supplier, and BOTH have a price a captain sets (owner, 2026-09-30). A member
+// only says what they need; a captain decides each item's source when they
+// confirm the order, and that confirmation charges the member's dues in the
+// same transaction. A member reads only their own order; captains read all
+// (canManageRental in @camp404/core); a team lead gets nothing extra. Money is
+// whole rand cents, ZAR only. Mirror RENTAL_ORDER_STATUSES, RENTAL_CHOICES,
+// RENTAL_SOURCES and RENTAL_TENT_CHOICES in @camp404/types rental.ts.
+//
+// The tent is asked ONCE per member (owner, 2026-09-30), not once per tent in
+// the catalogue: the answer lives on the order (`tent_choice`), and a captain
+// picks the actual tent when they confirm, which becomes the order's one tent
+// line. Who is in whose tent is `rental_order_sharers`, on the order of the
+// member whose tent it is, and nowhere else.
+
+export const rentalOrderStatusEnum = pgEnum(
+  "rental_order_status",
+  RENTAL_ORDER_STATUSES,
+);
+export const rentalChoiceEnum = pgEnum("rental_choice", RENTAL_CHOICES);
+export const rentalSourceEnum = pgEnum("rental_source", RENTAL_SOURCES);
+export const rentalTentChoiceEnum = pgEnum(
+  "rental_tent_choice",
+  RENTAL_TENT_CHOICES,
+);
+
+// The year's catalogue. An item with orders is archived, never deleted, so an
+// order keeps its name. `sleeps` is how many people one tent holds; only a
+// tent is shared and labelled. A null supplier price means the supplier does
+// not rent it. Camp stock is optional per item (owner, 2026-09-30: only the
+// camp's tents and some mattresses): `camp_price_cents` and
+// `camp_stock_count` are set together, or both null. It is a price and a
+// count HERE, not a link to `inventory_items`, and the inventory itself has
+// no prices. `reserve_count` is the spare gear set aside for the adoptees,
+// from `reserve_source`.
+export const rentalItems = pgTable(
+  "rental_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    name: text("name").notNull(),
+    isTent: boolean("is_tent").notNull().default(false),
+    sleeps: integer("sleeps").notNull().default(1),
+    campPriceCents: integer("camp_price_cents"),
+    campStockCount: integer("camp_stock_count"),
+    supplierPriceCents: integer("supplier_price_cents"),
+    // ISO 4217 code, always ZAR (CURRENCIES in @camp404/core).
+    currency: text("currency").notNull().default("ZAR"),
+    reserveCount: integer("reserve_count").notNull().default(0),
+    reserveSource: rentalSourceEnum("reserve_source")
+      .notNull()
+      .default("supplier"),
+    archivedAt: timestamp("archived_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (i) => ({
+    cycleIdx: index("rental_items_cycle_idx").on(i.cycle),
+    sleepsCheck: check(
+      "rental_items_sleeps_check",
+      sql`${i.sleeps} between 1 and 12 and (${i.isTent} or ${i.sleeps} = 1)`,
+    ),
+    priceCheck: check(
+      "rental_items_price_check",
+      sql`(${i.campPriceCents} is not null or ${i.supplierPriceCents} is not null) and coalesce(${i.campPriceCents}, 0) >= 0 and coalesce(${i.supplierPriceCents}, 0) >= 0`,
+    ),
+    campStockCheck: check(
+      "rental_items_camp_stock_check",
+      sql`(${i.campPriceCents} is null) = (${i.campStockCount} is null) and coalesce(${i.campStockCount}, 1) >= 1`,
+    ),
+    reserveCheck: check(
+      "rental_items_reserve_check",
+      sql`${i.reserveCount} >= 0`,
+    ),
+    currencyCheck: check(
+      "rental_items_currency_check",
+      sql`${i.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// A member's order for one year: one row per member per year. `version` goes
+// up on every change, so a captain's confirmation is a compare-and-set on the
+// order they saw (status `submitted` AND that version). A confirmed order
+// keeps its total and, when there is something to pay, the charge it made on
+// the member's dues; reopening it cancels that charge in the same transaction.
+export const rentalOrders = pgTable(
+  "rental_orders",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    status: rentalOrderStatusEnum("status").notNull().default("draft"),
+    version: integer("version").notNull().default(1),
+    submittedAt: timestamp("submitted_at", { mode: "date" }),
+    confirmedAt: timestamp("confirmed_at", { mode: "date" }),
+    confirmedByUserId: uuid("confirmed_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // The confirmed total, and the charge it made (none for a total of R0).
+    totalCents: integer("total_cents"),
+    currency: text("currency").notNull().default("ZAR"),
+    chargeId: uuid("charge_id").references(() => duesCharges.id, {
+      onDelete: "set null",
+    }),
+    // The member's one tent answer: they have their own, they need one, or
+    // they are in someone else's. Null until they say. `tent_people` is how
+    // many people a needed tent is for, the member included. For a tent of
+    // their own, `own_description` and `own_sleeps` say what it is and how
+    // many it sleeps (both optional): the site plan needs them.
+    tentChoice: rentalTentChoiceEnum("tent_choice"),
+    tentPeople: integer("tent_people"),
+    ownDescription: text("own_description"),
+    ownSleeps: integer("own_sleeps"),
+    // The captain who filled the order in for a member who had not answered.
+    // Null once the member saves it themselves.
+    filledByUserId: uuid("filled_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (o) => ({
+    userCycleIdx: uniqueIndex("rental_orders_user_cycle_idx").on(
+      o.userId,
+      o.cycle,
+    ),
+    cycleIdx: index("rental_orders_cycle_idx").on(o.cycle),
+    tentCheck: check(
+      "rental_orders_tent_check",
+      sql`((${o.tentChoice} is not distinct from 'need') = (${o.tentPeople} is not null)) and coalesce(${o.tentPeople}, 1) between 1 and 12 and (${o.tentChoice} is not distinct from 'own' or (${o.ownDescription} is null and ${o.ownSleeps} is null)) and coalesce(${o.ownSleeps}, 1) between 1 and 12`,
+    ),
+    totalCheck: check(
+      "rental_orders_total_check",
+      sql`${o.totalCents} is null or ${o.totalCents} >= 0`,
+    ),
+    currencyCheck: check(
+      "rental_orders_currency_check",
+      sql`${o.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// One line per item that is not a tent, as the member answered it (they have
+// their own, or they need some), and ONE tent line that a captain adds when
+// they confirm an order that needs a tent: the catalogue tent they picked.
+// `source` and `unit_price_cents` are the captain's decision and the price it
+// was confirmed at, set together. `tent_label` is the label a captain gives
+// the tent, for the member's page and the printed tent list.
+export const rentalOrderLines = pgTable(
+  "rental_order_lines",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => rentalOrders.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => rentalItems.id),
+    choice: rentalChoiceEnum("choice").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    source: rentalSourceEnum("source"),
+    unitPriceCents: integer("unit_price_cents"),
+    currency: text("currency").notNull().default("ZAR"),
+    tentLabel: text("tent_label"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (l) => ({
+    orderItemIdx: uniqueIndex("rental_order_lines_order_item_idx").on(
+      l.orderId,
+      l.itemId,
+    ),
+    itemIdx: index("rental_order_lines_item_idx").on(l.itemId),
+    quantityCheck: check(
+      "rental_order_lines_quantity_check",
+      sql`${l.quantity} between 1 and 10`,
+    ),
+    priceCheck: check(
+      "rental_order_lines_price_check",
+      sql`(${l.source} is null) = (${l.unitPriceCents} is null) and coalesce(${l.unitPriceCents}, 0) >= 0`,
+    ),
+    currencyCheck: check(
+      "rental_order_lines_currency_check",
+      sql`${l.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// Who shares the member's tent: the one place that says who is in whose tent.
+// A sharer reads that on their own page (whose tent, its label once there is
+// one, and who else is in it).
+export const rentalOrderSharers = pgTable(
+  "rental_order_sharers",
+  {
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => rentalOrders.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (s) => ({
+    pk: primaryKey({ columns: [s.orderId, s.userId] }),
+    userIdx: index("rental_order_sharers_user_idx").on(s.userId),
   }),
 );
 
