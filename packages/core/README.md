@@ -9,15 +9,15 @@ no `process.env`, no I/O, so every rule is tested on its own.
   comment lists what each module adds. The modules include `access`,
   `privacy`, `audience-authz`, `money`, `dues`, `participation`, `tickets`,
   `membership-tier`, `team-programs`, `transport`, `power`, `power-site`,
-  `power-grid`, `power-sharing`, `inventory`, `lounge`, `camp-layout` and
-  `recipes`; there are no subpath imports.
+  `power-grid`, `power-sharing`, `inventory`, `lounge`, `camp-layout`,
+  `logistics` and `recipes`; there are no subpath imports.
 - **Depends on:** `@camp404/types` only.
 - **Imported by:** any app or package. `@camp404/db`, `@camp404/auth`,
   `@camp404/ui` and the apps all use it.
 - **Rule:** a "who may act" check lives here as one pure function that fails
   closed (`canSendToAudience`, `canApproveRecipe`, `canEditTeamProgram`,
   `canManageMoney`, `canEditPower`, `canEditTransport`, `canEditInventory`,
-  `canRunLounge`, `canEditLayout`, …). For a team's tool the rule is "a
+  `canRunLounge`, `canEditLayout`, `canEditLogistics`, …). For a team's tool the rule is "a
   captain or a lead of that team this year"; every member reads. Change the rule in its function, never at a call site.
 
 ```bash

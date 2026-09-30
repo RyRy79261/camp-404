@@ -9,7 +9,7 @@ against Neon Postgres.
   for example `@camp404/db/broadcasts`, `/participations`, `/tickets`,
   `/dues`, `/payments`, `/team-memberships`, `/team-programs`, `/transport`,
   `/power`, `/power-site`, `/power-grid`, `/power-readiness`, `/inventory`,
-  `/lounge`, `/camp-layout` and `/meal-plan`. The full list is `exports` in
+  `/lounge`, `/camp-layout`, `/logistics` and `/meal-plan`. The full list is `exports` in
   `package.json`.
 - **Depends on:** `@camp404/core`, `@camp404/types`.
 - **Imported by:** server code only: `apps/web`, `apps/join` (the join site
