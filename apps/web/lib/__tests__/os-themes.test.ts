@@ -85,6 +85,7 @@ describe("the themes' tokens (drift)", () => {
       "--os-bar-idle",
       "--os-bar-idle-fg",
       "--os-label",
+      "--os-win-card-tinted",
     ]);
     const tokens = new Set<string>(OS_THEME_TOKENS);
     for (const [name, value] of derived) {

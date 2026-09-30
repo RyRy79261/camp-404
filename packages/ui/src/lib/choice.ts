@@ -13,9 +13,13 @@
 // Written out whole, not built from parts: Tailwind finds a class only as a
 // literal in the source.
 
-/** A choice not picked: a soft tint of the main colour, full-strength text. */
+/**
+ * A choice not picked: a tint of the main colour, full-strength text. A
+ * choice's quiet text (a description) is lifted toward the text colour, so it
+ * keeps 4.5:1 on the tint.
+ */
 export const CHOICE_OFF =
-  "border-[color-mix(in_oklab,var(--color-primary)_40%,var(--color-border))] bg-[color-mix(in_oklab,var(--color-primary)_8%,var(--color-card))] text-foreground hover:bg-[color-mix(in_oklab,var(--color-primary)_12%,var(--color-card))]";
+  "border-[color-mix(in_oklab,var(--color-primary)_40%,var(--color-border))] bg-[color-mix(in_oklab,var(--color-primary)_14%,var(--color-card))] text-foreground hover:bg-[color-mix(in_oklab,var(--color-primary)_18%,var(--color-card))] [&_.text-muted-foreground]:text-[color-mix(in_oklab,var(--color-muted-foreground)_60%,var(--color-foreground))]";
 
 /**
  * A picked card or row (it carries a description, a picture or a tick in the
@@ -23,7 +27,7 @@ export const CHOICE_OFF =
  * solid edge of the main colour.
  */
 export const CHOICE_ON =
-  "border-primary bg-[color-mix(in_oklab,var(--color-primary)_16%,var(--color-card))] text-foreground ring-1 ring-primary";
+  "border-primary bg-[color-mix(in_oklab,var(--color-primary)_24%,var(--color-card))] text-foreground ring-1 ring-primary [&_.text-muted-foreground]:text-[color-mix(in_oklab,var(--color-muted-foreground)_60%,var(--color-foreground))]";
 
 /** A picked segment, number or chip: filled with the main colour. */
 export const CHOICE_ON_FILL =

@@ -47,7 +47,7 @@ describe("CheckboxCardGroup", () => {
     // Not picked: the soft colour of a choice, never the grey it used to be.
     const structures = screen.getByRole("checkbox", { name: "Structures" });
     expect(structures.className).toContain(
-      "bg-[color-mix(in_oklab,var(--color-primary)_8%,var(--color-card))]",
+      "bg-[color-mix(in_oklab,var(--color-primary)_14%,var(--color-card))]",
     );
     expect(structures.className).not.toContain("ring-primary");
   });

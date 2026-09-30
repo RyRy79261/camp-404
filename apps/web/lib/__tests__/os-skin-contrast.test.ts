@@ -28,15 +28,42 @@ const choiceSource = readFileSync(
   "utf8",
 );
 
-// The soft colour that stays on (owner, 2026-09-30), read from where it is
-// written, so a change to a percentage is measured again here:
-// `--name: color-mix(in oklab, var(--a) N%, var(--b))` in app/globals.css.
-function cssMix(name: string): { a: string; b: string; p: number } {
-  const m = new RegExp(
+// The colour that stays on (owner, 2026-09-30), read from where it is written,
+// so a change to a percentage is measured again here:
+// `--name: color-mix(in oklab, var(--a) N%, var(--b))` in app/globals.css,
+// from the theme's own rule when it has one, else from the rule every theme
+// shares.
+function cssBlock(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(css);
+  return m?.[1] ?? "";
+}
+function cssMix(
+  name: string,
+  themeId: string,
+): { a: string; b: string; p: number } {
+  const re = new RegExp(
     `${name}:\\s*color-mix\\(\\s*in oklab,\\s*var\\((--[\\w-]+)\\)\\s+(\\d+)%,\\s*var\\((--[\\w-]+)\\)\\s*\\)`,
-  ).exec(css);
+  );
+  const m =
+    re.exec(cssBlock(`[data-os-theme="${themeId}"]`)) ??
+    re.exec(cssBlock(":root,\n[data-os-theme]"));
   if (!m) throw new Error(`No oklab mix for ${name} in app/globals.css`);
   return { a: m[1]!, p: Number(m[2]) / 100, b: m[3]! };
+}
+
+/** How far a choice lifts its quiet text toward the text colour (0 to 1),
+ * read from a constant of packages/ui/src/lib/choice.ts. */
+function choiceLift(constant: string): number {
+  const body = new RegExp(`export const ${constant} =\\s*"([^"]+)"`).exec(
+    choiceSource,
+  )?.[1];
+  const m =
+    /\[&_\.text-muted-foreground\]:text-\[color-mix\(in_oklab,var\(--color-muted-foreground\)_(\d+)%,var\(--color-foreground\)\)\]/.exec(
+      body ?? "",
+    );
+  if (!m) throw new Error(`${constant} does not lift its quiet text`);
+  return Number(m[1]) / 100;
 }
 
 /** A choice's tint, N% of the main colour in the card: the Nth such mix in a
@@ -76,9 +103,9 @@ function themed(
  */
 function softSurfaces(theme: OsThemeDef) {
   const c = theme.colours;
-  const barIdle = themed(c, cssMix("--os-bar-idle"));
-  const label = themed(c, cssMix("--os-label"));
-  const winCard = themed(c, cssMix("--color-card"));
+  const barIdle = themed(c, cssMix("--os-bar-idle", theme.id));
+  const label = themed(c, cssMix("--os-label", theme.id));
+  const winCard = themed(c, cssMix("--os-win-card-tinted", theme.id));
   const off = choicePct("CHOICE_OFF");
   const hover = choicePct("CHOICE_OFF", 1);
   const on = choicePct("CHOICE_ON");
@@ -188,8 +215,15 @@ function pairs(theme: OsThemeDef): Pair[] {
       c["--os-primary"],
     ],
   ] as const;
-  for (const [where, choice, fg, quiet, primary] of places) {
+  const lift = { off: choiceLift("CHOICE_OFF"), on: choiceLift("CHOICE_ON") };
+  for (const [where, choice, fg, plainQuiet, primary] of places) {
     for (const state of ["off", "hover", "on"] as const) {
+      // A choice lifts its quiet text toward the text colour (lib/choice.ts).
+      const quiet = mixOklab(
+        plainQuiet,
+        fg,
+        state === "on" ? lift.on : lift.off,
+      );
       list.push([
         `a choice's label ${where} (${state})`,
         fg,
@@ -226,11 +260,13 @@ describe.each(OS_THEMES_DEF.map((t) => [t.label, t] as const))(
   },
 );
 
-// The soft colour must not blur which window has focus, or which icon is lit
-// or picked: the full-colour state stands clearly apart from the soft one.
-// Measured as a contrast between the two fills (2:1 at least; 404 Night's
-// focused bar against its tinted one is the closest, about 2:1), beside the
-// focused window's own glow and edge.
+// The colour that stays on must not blur which window has focus, or which
+// icon is lit or picked: the full-colour state stands clearly apart. Measured
+// as a contrast between the two fills: 1.5:1 at least for the bar and the
+// name (404 Night's is the closest, about 1.6:1, with the stronger tint the
+// owner asked for), and each also changes more than its fill: the focused
+// window gains its glow and its edge in the main colour, and a lit name turns
+// its text dark (checked below). A picked segment stays 2:1 from the rest.
 describe.each(OS_THEMES_DEF.map((t) => [t.label, t] as const))(
   "%s: the soft colour keeps the strong state apart",
   (_label, theme) => {
@@ -239,17 +275,26 @@ describe.each(OS_THEMES_DEF.map((t) => [t.label, t] as const))(
     it("the focused title bar against one without focus", () => {
       expect(
         contrastRatio(c["--os-primary"], soft.barIdle),
-      ).toBeGreaterThanOrEqual(2);
+      ).toBeGreaterThanOrEqual(1.5);
     });
     it("a lit icon's name against one at rest", () => {
       expect(
         contrastRatio(c["--os-primary"], soft.label),
-      ).toBeGreaterThanOrEqual(2);
+      ).toBeGreaterThanOrEqual(1.5);
     });
     it("a picked segment against one not picked", () => {
       expect(
         contrastRatio(c["--os-win-primary"], soft.winChoice.off),
       ).toBeGreaterThanOrEqual(2);
+    });
+    it("a lit name and a focused bar change their text too", () => {
+      // Resting and unfocused: the full text colour. Lit: the dark
+      // background colour on the main colour; focused: the title-bar text.
+      expect(c["--os-bg"]).not.toBe(c["--os-fg"]);
+      expect(contrastRatio(c["--os-bg"], c["--os-fg"])).toBeGreaterThanOrEqual(
+        7,
+      );
+      expect(css).toMatch(/--os-bar-idle-fg:\s*var\(--os-fg\)/);
     });
     it("tints each surface: none is the plain grey it was", () => {
       expect(soft.barIdle).not.toBe(c["--os-chrome"]);
