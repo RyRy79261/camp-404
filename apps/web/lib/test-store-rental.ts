@@ -22,6 +22,7 @@ import {
   NOT_A_RENTAL_MANAGER,
   OWN_TENT,
   RENTAL_ITEM_MISSING,
+  RENTAL_KIND_IN_USE,
   RENTAL_NO_SUCH_MEMBER,
   RENTAL_NOTHING_TO_SEND,
   RENTAL_ORDER_CHANGED,
@@ -449,6 +450,12 @@ export const rentalTestStore = {
         (i) => i.id === input.itemId && i.archivedAt === null,
       );
       if (!row) return RENTAL_ITEM_MISSING;
+      if (
+        row.isTent !== input.item.isTent &&
+        state().orders.some((o) => o.lines.some((l) => l.itemId === row.id))
+      ) {
+        return RENTAL_KIND_IN_USE;
+      }
       const taken = campStockTaken(
         input.item,
         campTakenByOrders(row.cycle).get(row.id) ?? 0,

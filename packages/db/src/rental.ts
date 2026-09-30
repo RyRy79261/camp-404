@@ -91,6 +91,8 @@ export const RENTAL_ORDER_MOVED =
   "This order changed since you opened it. Reload the page.";
 export const RENTAL_REOPEN_FIRST =
   "This order is confirmed. Reopen it before you change it.";
+export const RENTAL_KIND_IN_USE =
+  "Orders already have this item, so it can't change between a tent and not a tent. Add a new item instead.";
 export const RENTAL_TENT_NOT_CONFIRMED =
   "Only a tent on a confirmed order gets a label.";
 
@@ -286,7 +288,8 @@ export async function addRentalItem(input: {
  * Change a live item: its name, prices, camp stock, size or reserve. An order
  * already confirmed keeps the price it was confirmed at. Refused when it
  * would leave the camp with fewer than confirmed orders and a camp reserve
- * already take.
+ * already take, and when it would turn an item that is on orders into a tent
+ * or out of one.
  */
 export async function editRentalItem(input: {
   itemId: string;
@@ -296,6 +299,21 @@ export async function editRentalItem(input: {
   return write(async (tx) => {
     await assertRentalManager(tx, input.actorId);
     if (!UUID.test(input.itemId)) refuse(RENTAL_ITEM_MISSING);
+    // Whether a line is a member's item or the tent a captain picked is read
+    // from the item's `is_tent`, so it cannot flip under lines that have it.
+    const [current] = await tx
+      .select({ isTent: schema.rentalItems.isTent })
+      .from(schema.rentalItems)
+      .where(eq(schema.rentalItems.id, input.itemId))
+      .for("update");
+    if (current && current.isTent !== input.item.isTent) {
+      const [used] = await tx
+        .select({ id: schema.rentalOrderLines.id })
+        .from(schema.rentalOrderLines)
+        .where(eq(schema.rentalOrderLines.itemId, input.itemId))
+        .limit(1);
+      if (used) refuse(RENTAL_KIND_IN_USE);
+    }
     const rows = await tx
       .update(schema.rentalItems)
       .set({ ...itemValues(input.item), updatedAt: new Date() })

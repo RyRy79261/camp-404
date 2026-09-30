@@ -42,6 +42,7 @@ import {
   listRentalSharerChoices,
   listRentalUnanswered,
   NOT_A_RENTAL_MANAGER,
+  RENTAL_KIND_IN_USE,
   RENTAL_NO_SUCH_MEMBER,
   RENTAL_NOTHING_TO_SEND,
   RENTAL_ORDER_CHANGED,
@@ -945,6 +946,43 @@ describe("gear rental", () => {
         (await listRentalItems(YEAR)).find((i) => i.id === c.tent)
           ?.campStockCount,
       ).toBe(1);
+    });
+  });
+
+  describe("what an item is", () => {
+    it("cannot change between a tent and not a tent while orders have it", async () => {
+      const c = await camp();
+      const edit = (itemId: string, item: RentalItemInput) =>
+        editRentalItem({ itemId, item, actorId: c.captain.id });
+      // Nothing has it yet: a mistake in the catalogue can still be fixed.
+      expect(
+        await edit(c.bigTent, { ...BIG_TENT, isTent: false, sleeps: 1 }),
+      ).toEqual({ ok: true });
+      expect(await edit(c.bigTent, BIG_TENT)).toEqual({ ok: true });
+
+      const s = await sent(c);
+      await confirmed(c, s, "camp");
+      const refused = { ok: false, error: RENTAL_KIND_IN_USE };
+      // A member's mattress line must not become "the tent a captain picked".
+      expect(
+        await edit(c.mattress, { ...MATTRESS, isTent: true, sleeps: 2 }),
+      ).toEqual(refused);
+      // The tent a captain picked must not become an ordinary line.
+      expect(await edit(c.tent, { ...TENT, isTent: false, sleeps: 1 })).toEqual(
+        refused,
+      );
+      const items = await listRentalItems(YEAR);
+      expect(items.find((i) => i.id === c.mattress)?.isTent).toBe(false);
+      expect(items.find((i) => i.id === c.tent)?.isTent).toBe(true);
+      // Everything else about it may still change.
+      expect(
+        await edit(c.mattress, { ...MATTRESS, supplierPriceCents: 9_000 }),
+      ).toEqual({ ok: true });
+      expect(await edit(c.tent, { ...TENT, sleeps: 3 })).toEqual({ ok: true });
+      // The order still reads as it was confirmed.
+      const order = (await getRentalOrderOf(c.member.id, YEAR))!;
+      expect(order.tent?.assigned?.itemName).toBe("2-person tent");
+      expect(order.lines.map((l) => l.itemName)).toEqual(["Mattress"]);
     });
   });
 

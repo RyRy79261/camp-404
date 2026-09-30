@@ -12,6 +12,7 @@ import {
 import type { CampConfig, TeamsConfig } from "@camp404/db/camp-config";
 import {
   NOT_A_RENTAL_MANAGER,
+  RENTAL_KIND_IN_USE,
   RENTAL_ORDER_MOVED,
   RENTAL_REOPEN_FIRST,
   RENTAL_ORDER_SENT,
@@ -364,6 +365,26 @@ describe("the gear rental twin", () => {
       duesTestStore.getMemberDues(c.member.id, YEAR, { forFinance: false })
         ?.charges,
     ).toEqual([]);
+  });
+
+  it("keeps an item a tent, or not a tent, while orders have it", () => {
+    const c = camp();
+    const edit = (itemId: string, item: RentalItemInput) =>
+      rentalTestStore.editRentalItem({ itemId, item, actorId: c.captain.id });
+    // Nothing has the mattress yet: it may still be turned into a tent.
+    expect(edit(c.mattress, { ...MATTRESS, isTent: true, sleeps: 2 })).toEqual({
+      ok: true,
+    });
+    expect(edit(c.mattress, MATTRESS)).toEqual({ ok: true });
+    send(c).confirm("camp");
+    const refused = { ok: false, error: RENTAL_KIND_IN_USE };
+    expect(edit(c.mattress, { ...MATTRESS, isTent: true, sleeps: 2 })).toEqual(
+      refused,
+    );
+    expect(edit(c.tent, { ...TENT, isTent: false, sleeps: 1 })).toEqual(
+      refused,
+    );
+    expect(edit(c.tent, { ...TENT, sleeps: 3 })).toEqual({ ok: true });
   });
 
   it("refuses camp stock that is already given out", () => {
