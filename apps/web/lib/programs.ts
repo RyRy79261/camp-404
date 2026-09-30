@@ -3,6 +3,7 @@ import "server-only";
 import {
   canApproveRecipe,
   canManageMoney,
+  canManageRental,
   canWorkInTeam,
   hasClearance,
 } from "@camp404/core";
@@ -204,6 +205,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     fileName: "MY_DUES.TXT",
     href: "/dues",
     icon: "my-dues",
+    place: ME,
+    rank: "camp_member",
+  },
+  // Every member's own gear order (#241): the tent, mattress and bedding
+  // they need this year, and the tent they are in.
+  {
+    id: "my-gear",
+    label: "My gear",
+    fileName: "MY_GEAR.TXT",
+    href: "/gear",
+    icon: "my-gear",
     place: ME,
     rank: "camp_member",
   },
@@ -427,6 +439,18 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "team_lead",
     requires: (ctx) => canManageMoney(ctx.rank, ctx.ledTeams),
+  },
+  // Gear rental (#241): captains only (canManageRental). This is member
+  // money data, so a team lead gets nothing extra and is not offered it.
+  {
+    id: "gear-rental",
+    label: "Gear rental",
+    fileName: "RENTAL.DB",
+    href: "/captains/gear-rental",
+    icon: "gear-rental",
+    place: CAPTAINS,
+    rank: "team_lead",
+    requires: (ctx) => canManageRental(ctx.rank, ctx.ledTeams),
   },
   {
     id: "camp-settings",

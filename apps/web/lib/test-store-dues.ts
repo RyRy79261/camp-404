@@ -194,6 +194,47 @@ export function refundStatusOf(
     : null;
 }
 
+/**
+ * A confirmed gear order's charge (#241), the twin of the insert inside
+ * confirmRentalOrder. The rental store has already checked who is acting.
+ */
+export function addRentalChargeInStore(input: {
+  userId: string;
+  cycle: number;
+  description: string;
+  amountCents: number;
+}): string {
+  const id = crypto.randomUUID();
+  state().charges.push({
+    id,
+    userId: input.userId,
+    cycle: input.cycle,
+    kind: "rental",
+    description: input.description,
+    amountCents: input.amountCents,
+    standardAmountCents: null,
+    concessionReason: null,
+    cancelledAt: null,
+    createdAt: new Date(),
+  });
+  return id;
+}
+
+/** Cancel a charge when a gear order is reopened; nothing when already cancelled. */
+export function cancelChargeInStore(chargeId: string): void {
+  const row = state().charges.find(
+    (c) => c.id === chargeId && c.cancelledAt === null,
+  );
+  if (row) row.cancelledAt = new Date();
+}
+
+/** Whether a charge is on the account and not cancelled. */
+export function isChargeLiveInStore(chargeId: string): boolean {
+  return state().charges.some(
+    (c) => c.id === chargeId && c.cancelledAt === null,
+  );
+}
+
 function isConcession(c: ChargeRow): boolean {
   return (
     c.kind === "fee" &&

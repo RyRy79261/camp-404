@@ -39,6 +39,7 @@ export const PROGRAM_ICON_KEYS = [
   "cat",
   "lift",
   "logistics",
+  "tent",
   "lounge",
   "tickets",
 ] as const;
@@ -289,6 +290,13 @@ const PATHS: Record<IconKey, ReactNode> = {
       <path d="M2 6h12v10H2z" />
       <path d="M14 10h4l3 3v3h-7" />
       <path d="M5 16a2 2 0 1 0 4 0M15 16a2 2 0 1 0 4 0" />
+    </>
+  ),
+  // A tent with its door, for gear rental (#241).
+  tent: (
+    <>
+      <path d="M12 4 3 20h18L12 4z" />
+      <path d="M12 12l-3 8M12 12l3 8" />
     </>
   ),
   // A Burn ticket, notched at both sides, with its tear-off line.

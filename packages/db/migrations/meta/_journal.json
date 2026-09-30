@@ -526,6 +526,13 @@
       "when": 1790709617677,
       "tag": "0074_logistics_phases",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790771669005,
+      "tag": "0075_gear_rental",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,338 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+import { notEnoughCampStock } from "@camp404/core";
+import type { CampConfig, TeamsConfig } from "@camp404/db/camp-config";
+import {
+  NOT_A_RENTAL_MANAGER,
+  RENTAL_ORDER_MOVED,
+  RENTAL_ORDER_SENT,
+  RENTAL_TENT_NOT_CONFIRMED,
+} from "@camp404/db/rental";
+import type { RentalItemInput } from "@camp404/types";
+import { testStore } from "../test-store";
+import { duesTestStore } from "../test-store-dues";
+import { rentalTestStore } from "../test-store-rental";
+
+// The E2E twin of @camp404/db/rental (#241). Playwright drives the gear
+// screens through it, so it keeps the database module's rules, case for case
+// with packages/db/src/__tests__/rental.test.ts: only a captain runs it, a
+// member reads only their own order, the confirmation is a compare-and-set
+// that charges the dues twin, camp stock cannot be given out twice, and the
+// summary adds up. Prices are made up.
+
+const YEAR = 2027;
+
+function foundedAt(year: number): void {
+  const config: CampConfig = {
+    ...(testStore.getTeamsConfig() as CampConfig),
+    cycles: [{ year, startedAt: `${year}-01-01T00:00:00.000Z`, endedAt: null }],
+  };
+  testStore.setTeamsConfig(config satisfies TeamsConfig);
+}
+
+function user(name: string, rank: "captain" | "member" = "member") {
+  return testStore.createUser({
+    authUserId: `auth-${name}`,
+    displayName: name,
+    inviteCode: "seeded",
+    rank,
+  });
+}
+
+const TENT: RentalItemInput = {
+  name: "2-person tent",
+  isTent: true,
+  sleeps: 2,
+  campPriceCents: 10_000,
+  campStockCount: 1,
+  supplierPriceCents: 25_000,
+  reserveCount: 0,
+  reserveSource: "supplier",
+};
+const MATTRESS: RentalItemInput = {
+  name: "Mattress",
+  isTent: false,
+  sleeps: 1,
+  campPriceCents: null,
+  campStockCount: null,
+  supplierPriceCents: 8_000,
+  reserveCount: 2,
+  reserveSource: "supplier",
+};
+
+function camp() {
+  const captain = user("Cap", "captain");
+  const financeLead = user("Fin");
+  testStore.seedTeamMembership({
+    userId: financeLead.id,
+    team: "finance",
+    isLead: true,
+  });
+  const member = user("Nova");
+  const friend = user("Fay");
+  const add = (item: RentalItemInput) => {
+    const res = rentalTestStore.addRentalItem({
+      cycle: YEAR,
+      item,
+      actorId: captain.id,
+    });
+    if (!res.ok) throw new Error(res.error);
+    return res.id;
+  };
+  return {
+    captain,
+    financeLead,
+    member,
+    friend,
+    tent: add(TENT),
+    mattress: add(MATTRESS),
+  };
+}
+
+function send(c: ReturnType<typeof camp>, userId = c.member.id) {
+  const res = rentalTestStore.saveRentalOrder({
+    userId,
+    cycle: YEAR,
+    lines: [
+      {
+        itemId: c.tent,
+        choice: "need",
+        quantity: 1,
+        sharerIds: userId === c.member.id ? [c.friend.id] : [],
+      },
+      { itemId: c.mattress, choice: "need", quantity: 2, sharerIds: [] },
+    ],
+    submit: true,
+    expectedVersion: 0,
+  });
+  if (!res.ok) throw new Error(res.error);
+  const order = rentalTestStore.getRentalOrderOf(userId, YEAR)!;
+  const line = (itemId: string) =>
+    order.lines.find((l) => l.itemId === itemId)!.id;
+  return {
+    order,
+    tentLine: line(c.tent),
+    sources: (tent: "camp" | "supplier") => [
+      { lineId: line(c.tent), source: tent },
+      { lineId: line(c.mattress), source: "supplier" as const },
+    ],
+  };
+}
+
+beforeEach(() => {
+  testStore.reset();
+  foundedAt(YEAR);
+});
+
+describe("the gear rental twin", () => {
+  it("lets only a captain run it: a Finance lead and a member are refused", () => {
+    const c = camp();
+    const { order, sources } = send(c);
+    const refused = { ok: false, error: NOT_A_RENTAL_MANAGER };
+    for (const actor of [c.financeLead, c.member]) {
+      expect(
+        rentalTestStore.addRentalItem({
+          cycle: YEAR,
+          item: MATTRESS,
+          actorId: actor.id,
+        }),
+      ).toEqual(refused);
+      expect(
+        rentalTestStore.confirmRentalOrder({
+          orderId: order.id,
+          expectedVersion: order.version,
+          sources: sources("camp"),
+          actorId: actor.id,
+        }),
+      ).toEqual(refused);
+    }
+    expect(rentalTestStore.listRentalItems(YEAR)).toHaveLength(2);
+    expect(rentalTestStore.getRentalOrderOf(c.member.id, YEAR)?.status).toBe(
+      "submitted",
+    );
+  });
+
+  it("shows a member their own order only, and a sharer the one tent", () => {
+    const c = camp();
+    send(c);
+    const mine = rentalTestStore.getMyRental(c.member.id, YEAR);
+    expect(mine.order?.lines.map((l) => l.itemName)).toEqual([
+      "2-person tent",
+      "Mattress",
+    ]);
+    // No place is shown to a member, and no source before a captain confirms.
+    expect(mine.order?.lines[0]).toMatchObject({
+      source: null,
+      sharers: [{ id: c.friend.id, name: "Fay", accepted: null }],
+    });
+    const friends = rentalTestStore.getMyRental(c.friend.id, YEAR);
+    expect(friends.order).toBeNull();
+    expect(friends.sharedWithMe).toMatchObject([
+      { itemName: "2-person tent", ownerName: "Nova", confirmed: false },
+    ]);
+    expect(
+      rentalTestStore.getMyRental(c.captain.id, YEAR).sharedWithMe,
+    ).toEqual([]);
+  });
+
+  it("confirms once, on the order the captain saw, and charges the dues twin", () => {
+    const c = camp();
+    const { order, sources } = send(c);
+    // Only a draft changes: a sent order is taken back first.
+    expect(
+      rentalTestStore.saveRentalOrder({
+        userId: c.member.id,
+        cycle: YEAR,
+        lines: [],
+        submit: false,
+        expectedVersion: order.version,
+      }),
+    ).toEqual({ ok: false, error: RENTAL_ORDER_SENT });
+    const confirm = (expectedVersion: number) =>
+      rentalTestStore.confirmRentalOrder({
+        orderId: order.id,
+        expectedVersion,
+        sources: sources("camp"),
+        actorId: c.captain.id,
+      });
+    expect(confirm(order.version + 1)).toEqual({
+      ok: false,
+      error: RENTAL_ORDER_MOVED,
+    });
+    expect(confirm(order.version)).toEqual({
+      ok: true,
+      totalCents: 26_000,
+      chargeId: expect.any(String),
+    });
+    expect(confirm(order.version)).toEqual({
+      ok: false,
+      error: RENTAL_ORDER_MOVED,
+    });
+    const dues = duesTestStore.getMemberDues(c.member.id, YEAR, {
+      forFinance: false,
+    });
+    expect(dues?.balance.balanceCents).toBe(26_000);
+    expect(dues?.charges).toMatchObject([
+      {
+        kind: "rental",
+        amountCents: 26_000,
+        description: "Gear rental: 1 × 2-person tent, 2 × Mattress",
+      },
+    ]);
+    // Reopened: the charge is cancelled and the order can change.
+    expect(
+      rentalTestStore.reopenRentalOrder({
+        orderId: order.id,
+        expectedVersion: order.version + 1,
+        actorId: c.captain.id,
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      duesTestStore.getMemberDues(c.member.id, YEAR, { forFinance: false })
+        ?.balance.balanceCents,
+    ).toBe(0);
+    expect(rentalTestStore.getRentalOrderOf(c.member.id, YEAR)).toMatchObject({
+      status: "submitted",
+      chargeId: null,
+      totalCents: null,
+    });
+    // A reopened order is not counted, though its lines still name a source.
+    expect(rentalTestStore.getRentalOverview(YEAR)).toMatchObject({
+      waiting: 1,
+      confirmed: 0,
+      tents: [],
+      summary: { chargedCents: 0, fromStorage: 0, toOrder: 2 },
+    });
+  });
+
+  it("refuses camp stock that is already given out", () => {
+    const c = camp();
+    const first = send(c);
+    rentalTestStore.confirmRentalOrder({
+      orderId: first.order.id,
+      expectedVersion: first.order.version,
+      sources: first.sources("camp"),
+      actorId: c.captain.id,
+    });
+    const second = send(c, c.friend.id);
+    const confirm = (tent: "camp" | "supplier") =>
+      rentalTestStore.confirmRentalOrder({
+        orderId: second.order.id,
+        expectedVersion: second.order.version,
+        sources: second.sources(tent),
+        actorId: c.captain.id,
+      });
+    // The camp has one tent, and the first order took it.
+    expect(confirm("camp")).toEqual({
+      ok: false,
+      error: notEnoughCampStock("2-person tent", 1, 0),
+    });
+    expect(rentalTestStore.getRentalOrderOf(c.friend.id, YEAR)?.status).toBe(
+      "submitted",
+    );
+    expect(confirm("supplier").ok).toBe(true);
+  });
+
+  it("adds the summary up from the confirmed orders, with the reserve", () => {
+    const c = camp();
+    const a = send(c);
+    const b = send(c, c.friend.id);
+    send(c, c.financeLead.id);
+    rentalTestStore.confirmRentalOrder({
+      orderId: a.order.id,
+      expectedVersion: a.order.version,
+      sources: a.sources("camp"),
+      actorId: c.captain.id,
+    });
+    rentalTestStore.confirmRentalOrder({
+      orderId: b.order.id,
+      expectedVersion: b.order.version,
+      sources: b.sources("supplier"),
+      actorId: c.captain.id,
+    });
+    const overview = rentalTestStore.getRentalOverview(YEAR);
+    expect(overview.waiting).toBe(1);
+    expect(overview.summary.rows).toMatchObject([
+      {
+        name: "2-person tent",
+        fromStorage: 1,
+        toOrder: 1,
+        campStockLeft: 0,
+      },
+      { name: "Mattress", fromStorage: 0, toOrder: 6, campStockLeft: null },
+    ]);
+    expect(overview.summary.chargedCents).toBe(26_000 + 41_000);
+    expect(
+      rentalTestStore
+        .listRentalOrders(YEAR)
+        .reduce((n, o) => n + (o.totalCents ?? 0), 0),
+    ).toBe(overview.summary.chargedCents);
+  });
+
+  it("labels a tent only once its order is confirmed", () => {
+    const c = camp();
+    const { order, sources, tentLine } = send(c);
+    const label = () =>
+      rentalTestStore.setTentLabel({
+        lineId: tentLine,
+        label: "T3",
+        actorId: c.captain.id,
+      });
+    expect(label()).toEqual({ ok: false, error: RENTAL_TENT_NOT_CONFIRMED });
+    rentalTestStore.confirmRentalOrder({
+      orderId: order.id,
+      expectedVersion: order.version,
+      sources: sources("camp"),
+      actorId: c.captain.id,
+    });
+    expect(label()).toEqual({ ok: true });
+    expect(
+      rentalTestStore.getMyRental(c.friend.id, YEAR).sharedWithMe[0],
+    ).toMatchObject({ tentLabel: "T3", confirmed: true });
+    expect(rentalTestStore.getRentalOverview(YEAR).tents).toMatchObject([
+      { tentLabel: "T3", ownerName: "Nova", sharers: ["Fay"] },
+    ]);
+  });
+});

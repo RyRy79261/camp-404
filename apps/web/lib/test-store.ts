@@ -82,6 +82,7 @@ import {
   refundStatusOf,
   resetDuesStore,
 } from "./test-store-dues";
+import { resetRentalStore } from "./test-store-rental";
 import type { MyLift } from "@camp404/db/cars";
 import {
   ALREADY_SEATED,
@@ -6029,6 +6030,7 @@ export const testStore = {
     S.teamPrograms.clear();
     S.inkblotRuns.length = 0;
     resetDuesStore();
+    resetRentalStore();
   },
 
   // --- INKBLOT's board (the twin of @camp404/db/inkblot) --------------------

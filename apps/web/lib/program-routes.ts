@@ -26,6 +26,7 @@ export type ProgramId =
   | "invites"
   | "my-lift"
   | "my-dues"
+  | "my-gear"
   | "tasks"
   | "calendar"
   | "team"
@@ -62,6 +63,7 @@ export type ProgramId =
   | "overview"
   | "applications"
   | "payments"
+  | "gear-rental"
   | "camp-settings"
   | "join-site"
   | "audit"
@@ -90,6 +92,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   invites: "Invites",
   "my-lift": "My lift",
   "my-dues": "My dues",
+  "my-gear": "My gear",
   tasks: "Tasks",
   calendar: "Calendar",
   team: "Team",
@@ -126,6 +129,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   overview: "Camp overview",
   applications: "Applications",
   payments: "Payments",
+  "gear-rental": "Gear rental",
   "camp-settings": "Camp settings",
   "join-site": "Join site",
   audit: "Audit log",
@@ -204,6 +208,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/tools/invite", "invites", "KEYGEN.EXE"),
   route("/lift", "my-lift", "MY_LIFT.EXE"),
   route("/dues", "my-dues", "MY_DUES.TXT"),
+  route("/gear", "my-gear", "MY_GEAR.TXT"),
 
   // Camp
   route("/tasks", "tasks", "TASKS.EXE"),
@@ -317,6 +322,11 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/captains/payments/import", "payments", "LEDGER.DB"),
   route("/captains/payments/settle-up", "payments", "LEDGER.DB"),
   route("/captains/payments/settings", "payments", "LEDGER.DB"),
+  // Gear rental's three views and a member's order share one window.
+  route("/captains/gear-rental", "gear-rental", "RENTAL.DB"),
+  route("/captains/gear-rental/summary", "gear-rental", "RENTAL.DB"),
+  route("/captains/gear-rental/catalogue", "gear-rental", "RENTAL.DB"),
+  route("/captains/gear-rental/orders/[userId]", "gear-rental", "RENTAL.DB"),
   route("/captains/camp-settings", "camp-settings", "SETTINGS.CPL"),
   route("/captains/camp-settings/cycle", "camp-settings", "SETTINGS.CPL"),
   route("/captains/join-site", "join-site", "JOINSITE.EXE"),

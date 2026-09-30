@@ -632,6 +632,29 @@ Decisions baked into the schema — keep new code consistent with them:
   row claims its event id inside the write, before Google is called, so a
   re-save or a retry never makes a second event; Google is called after the
   transaction. Clearing the days takes the event off Google.
+- **Gear rental (#241).** The year's sleeping gear is `rental_items`; a
+  member's order is one `rental_orders` row per member per year, with
+  `rental_order_lines` and `rental_line_sharers`. Owner's rulings
+  (2026-09-30): camp fees are separate from rental (no "camp contribution"
+  line); gear comes from the camp's own stock or a supplier and BOTH have a
+  price a captain sets; the member says only what they need (have my own /
+  need one, how many, who shares a tent) and never picks the source; a captain
+  picks the source per item when they confirm. Camp stock is optional per
+  item (only the camp's tents and some mattresses): a price AND a count on the
+  catalogue item, together or not at all. It is not a link to `inventory_*`,
+  and the Inventory has no prices and must not get any. A confirmation that
+  gives out more camp stock than is left is refused (`priceRentalOrder`; the
+  year's items are locked first). Confirming is a compare-and-set on
+  `submitted` AND the order's `version`, and writes the `rental` charge on the
+  member's dues and the audit row in the same transaction; reopening cancels
+  that charge the same way. "Charged" is not stored: it is a confirmed order
+  with a live charge (`rentalOrderState`). A confirmed line keeps the price it
+  was confirmed at. Only a captain runs it (`canManageRental` in
+  `packages/core/src/rental.ts`): this is member money data, so a team lead,
+  a Finance lead included, gets nothing extra, and a member reads only their
+  own order plus the one tent another member put them in. Nothing here needs
+  the app on site: tents are labelled and printed before the Burn
+  (`/print/gear-rental`).
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.

@@ -140,7 +140,7 @@ flowchart LR
   year["This year<br/>camp_participations,<br/>camp_tickets (DDT, WAP),<br/>team_memberships"]
   gates["Gates and questionnaires<br/>required_actions, questionnaire_*"]
   notes["Notices<br/>broadcasts, notification_deliveries,<br/>push_tokens"]
-  money["Money (rands)<br/>payments, dues_*, fee_tiers,<br/>payment_refunds, reimbursements"]
+  money["Money (rands)<br/>payments, dues_*, fee_tiers,<br/>payment_refunds, reimbursements,<br/>rental_items, rental_orders"]
   teams["Team work<br/>team_programs, meeting_notes, tasks"]
   site["On site<br/>power_*, generators, fuel_cans,<br/>refuel_entries, driver_profiles,<br/>car_members, lift_requests,<br/>logistics_phases"]
   gear["Gear and lounge<br/>inventory_* (items, needs,<br/>pledges, bookings, loans),<br/>lounge_offers, lounge_slots"]
