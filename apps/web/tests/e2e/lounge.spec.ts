@@ -11,7 +11,7 @@ import {
   resetTestState,
   seedTeam,
 } from "./_helpers";
-import { startButton } from "./lib/console-nav";
+import { osBar } from "./lib/console-nav";
 
 // The lounge programme (#269, test-mode). A member offers sunrise yoga. A
 // Kitchen lead (the same global team_lead rung) reads the programme but gets
@@ -126,13 +126,14 @@ test.describe("lounge programme (test-mode)", () => {
       page.getByRole("region", { name: "Your offers" }).getByText("Accepted"),
     ).toBeVisible();
 
-    // The console's taskbar is here, and not on paper.
-    await expect(startButton(page)).toBeVisible();
+    // The console's bar is here (the taskbar, or the phone's bottom bar), and
+    // not on paper.
+    await expect(osBar(page)).toBeVisible();
 
     // The printed day 2: the item, the host's first name and initial, no nav.
     await page.goto("/print/lounge?day=2");
     await expect(page.getByTestId("print-item")).toContainText("Sunrise yoga");
     await expect(page.getByTestId("print-item")).toContainText("Sam M.");
-    await expect(startButton(page)).toHaveCount(0);
+    await expect(osBar(page)).toHaveCount(0);
   });
 });

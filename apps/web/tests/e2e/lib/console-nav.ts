@@ -44,6 +44,11 @@ export function bottomBar(page: Page): Locator {
   return page.getByRole("toolbar", { name: "Bottom bar" });
 }
 
+/** The console's own bar at this width: the taskbar, or the phone's bottom bar. */
+export function osBar(page: Page): Locator {
+  return usesPhoneLayout(page) ? bottomBar(page) : taskbar(page);
+}
+
 /** The Start menu, once open. */
 export function startMenu(page: Page): Locator {
   return page.getByRole("menu", { name: "Start", exact: true });
