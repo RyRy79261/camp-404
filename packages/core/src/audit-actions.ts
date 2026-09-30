@@ -108,6 +108,14 @@ export const AUDIT_ACTION_LABELS = {
   "rental.orders_asked": "Asked members for their gear orders",
   "rental.tent_labelled": "Labelled a tent",
   "safety.emergency_contacts.view": "Read emergency contacts",
+  "shifts.asked": "Asked members to sign up for shifts",
+  "shifts.days_added": "Added days to a shift",
+  "shifts.member_placed": "Put a member on a shift",
+  "shifts.member_removed": "Took a member off a shift",
+  "shifts.slot_needed_set": "Changed whether a shift is needed on a day",
+  "shifts.type_added": "Added a shift",
+  "shifts.type_changed": "Changed a shift",
+  "shifts.type_removed": "Removed a shift",
   "team.program_changed": "Changed a team's description or links",
   "team_budget.set": "Set a team budget",
   "ticket.pass_changed": "Changed a member's ticket, DDT or WAP",
@@ -242,6 +250,30 @@ export function auditDetail(
       const asked = count(metadata, "asked");
       if (asked === null) return null;
       return `${asked} ${asked === 1 ? "member" : "members"}`;
+    }
+    case "shifts.asked": {
+      const asked = count(metadata, "asked");
+      if (asked === null) return null;
+      return `${asked} ${asked === 1 ? "member" : "members"}`;
+    }
+    case "shifts.type_added":
+    case "shifts.type_changed":
+    case "shifts.type_removed":
+    case "shifts.days_added": {
+      return text(metadata, "name");
+    }
+    case "shifts.slot_needed_set": {
+      const name = text(metadata, "name");
+      const day = text(metadata, "day");
+      if (!name || !day) return null;
+      return `${name}, ${day}, ${metadata?.needed === true ? "needed" : "not needed"}`;
+    }
+    case "shifts.member_placed":
+    case "shifts.member_removed": {
+      const name = text(metadata, "name");
+      const day = text(metadata, "day");
+      if (!name || !day) return null;
+      return `${name}, ${day}`;
     }
     case "logistics.deadline_added":
     case "logistics.deadline_changed":

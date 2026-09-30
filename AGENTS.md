@@ -583,6 +583,15 @@ Decisions baked into the schema — keep new code consistent with them:
   `/captains/applications` (Applications: team lead and up, no tickets below
   captain), and the overview's "This year" card counts accepted members with
   no ticket yet and WAPs issued.
+- **Shift roster (#248).** Members sign up before the burn; the roster is
+  printed for site and changed there on paper, never typed back in (owner,
+  2026-09-30: no internet on site). So a slot takes changes only until its
+  day starts, for everyone (`shiftChangesOpen`). A shift type belongs to one
+  team; a captain or a lead of THAT team sets it up (`canManageShifts`,
+  `packages/core/src/shifts.ts`); cleaning is Sanitation's. Filling a place
+  counts under the slot's row lock, so the last place goes to one member.
+  The minimum of 3 is a reminder and a captain's nudge, never a
+  `required_actions` block. The Burn days come from the logistics Burn phase.
 - **Notifications.** `broadcasts` are composed messages fanned out into
   per-user `notification_deliveries` (a queue). [CORRECTION 2026-09-29] There
   is no worker: `deliverDue` fans out and drains the queue in `after()` (see

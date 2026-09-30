@@ -277,6 +277,15 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .delete(schema.logisticsAttendance)
       .where(eq(schema.logisticsAttendance.userId, userId));
 
+    // Shift roster (#248): they come off every shift, and their own
+    // AfrikaBurn volunteer shifts go. Both are about them alone.
+    await tx
+      .delete(schema.shiftSignups)
+      .where(eq(schema.shiftSignups.userId, userId));
+    await tx
+      .delete(schema.volunteerShifts)
+      .where(eq(schema.volunteerShifts.userId, userId));
+
     // Gear rental (#241): their orders go (the lines and sharers cascade),
     // and they leave every tent another member put them in. The rental charge
     // stays on the dues ledger for accounting, like the rest of it.

@@ -356,7 +356,7 @@ export async function listAttendance(cycle: number): Promise<AttendanceRead> {
 }
 
 /** The members who are coming this year (isAskedForAttendance). */
-async function comingMembers(
+export async function comingMembers(
   db: DbOrTx,
   cycle: number,
 ): Promise<{ userId: string; name: string }[]> {

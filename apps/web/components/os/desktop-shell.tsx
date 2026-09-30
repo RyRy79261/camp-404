@@ -193,6 +193,8 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   calendar: L_SIZE,
   power: L_SIZE,
   logistics: L_SIZE,
+  shifts: XL_SIZE,
+  "my-shifts": L_SIZE,
   "camp-layout": XL_SIZE,
   "inventory-item": L_SIZE,
   transport: L_SIZE,
