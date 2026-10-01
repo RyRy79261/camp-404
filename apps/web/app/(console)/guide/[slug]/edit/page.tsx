@@ -6,7 +6,7 @@ import {
   canEditGuideChapter,
   canSetGuideChapterPublic,
 } from "@camp404/core";
-import { GuideCategory, Team } from "@camp404/types";
+import { Team } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
@@ -77,7 +77,6 @@ export default async function EditGuideChapterPage({
         config.teams.find((t) => t.key === draft.team)?.label ?? draft.team,
     });
   }
-  const category = GuideCategory.safeParse(draft.category);
   const isCaptain = rank === "captain";
 
   return (
@@ -121,7 +120,7 @@ export default async function EditGuideChapterPage({
             initial={{
               kind: draft.kind,
               title: draft.title,
-              category: category.success ? category.data : "on_site",
+              category: draft.category,
               team: draft.team ?? WHOLE_CAMP,
               markdown: draft.markdown,
               card: draft.card,

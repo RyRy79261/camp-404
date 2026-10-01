@@ -225,6 +225,9 @@ export const SaveGuideChapterInput = z.object({
   slug: GuideSlug,
   expectedVersion: z.number().int().min(1),
   ...ChapterFields,
+  // Left out, the chapter keeps the topic it has: one the Claude connector
+  // wrote as free text is not one of these, and a save must not move it.
+  category: GuideCategory.optional(),
 });
 export type SaveGuideChapterInput = z.infer<typeof SaveGuideChapterInput>;
 

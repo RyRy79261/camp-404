@@ -28,6 +28,33 @@ export function guideCategoryLabel(category: string): string {
   return known.success ? GUIDE_CATEGORY_LABELS[known.data] : category;
 }
 
+/**
+ * The Topic select's choices: the guide's own topics, and a chapter's current
+ * topic too when the Claude connector wrote it as free text, so opening and
+ * saving the chapter keeps it.
+ */
+export function guideTopicOptions(
+  current: string,
+): { value: string; label: string }[] {
+  const options = GUIDE_CATEGORIES.map((c) => ({
+    value: c as string,
+    label: GUIDE_CATEGORY_LABELS[c],
+  }));
+  if (!GuideCategory.safeParse(current).success && current !== "") {
+    options.push({ value: current, label: current });
+  }
+  return options;
+}
+
+/**
+ * The topic a save sends: one of the guide's own, or nothing, which keeps the
+ * chapter's free-text topic as it is.
+ */
+export function guideTopicToSave(topic: string): GuideCategory | undefined {
+  const known = GuideCategory.safeParse(topic);
+  return known.success ? known.data : undefined;
+}
+
 export const WHOLE_CAMP_LABEL = "Whole camp";
 
 export const KIND_LABEL = { chapter: "Chapter", duty_card: "Duty card" };

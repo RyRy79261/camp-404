@@ -3,6 +3,8 @@ import {
   groupByTeam,
   groupByTopic,
   guideCategoryLabel,
+  guideTopicOptions,
+  guideTopicToSave,
   guideVersionPath,
 } from "../guide-copy";
 
@@ -40,5 +42,19 @@ describe("the guide's contents", () => {
   it("names topics and links versions", () => {
     expect(guideCategoryLabel("on_site")).toBe("On site");
     expect(guideVersionPath("drive-in", 2)).toBe("/guide/drive-in/versions/2");
+  });
+
+  it("offers a connector's free-text topic in the editor and never sends it, so a save keeps it", () => {
+    expect(guideTopicOptions("packing").map((o) => o.value)).toEqual([
+      "before_you_come",
+      "on_site",
+      "kitchen",
+      "safety",
+      "teams",
+      "packing",
+    ]);
+    expect(guideTopicOptions("kitchen")).toHaveLength(5);
+    expect(guideTopicToSave("packing")).toBeUndefined();
+    expect(guideTopicToSave("safety")).toBe("safety");
   });
 });

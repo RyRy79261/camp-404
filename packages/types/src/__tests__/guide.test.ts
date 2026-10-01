@@ -4,6 +4,7 @@ import {
   EMPTY_DUTY_CARD,
   GuideSlug,
   NewGuideChapterInput,
+  SaveGuideChapterInput,
   containsPhoneNumber,
 } from "../guide";
 
@@ -56,6 +57,22 @@ describe("the Survival Guide's shapes", () => {
         kind: "chapter",
         card: null,
       }).success,
+    ).toBe(false);
+  });
+
+  it("lets a save leave the topic out, so a connector's free-text topic stays", () => {
+    const save = {
+      ...base,
+      slug: "packing",
+      expectedVersion: 2,
+      card: null,
+    };
+    const { category: _category, ...withoutTopic } = save;
+    const kept = SaveGuideChapterInput.safeParse(withoutTopic);
+    expect(kept.success && kept.data.category).toBe(undefined);
+    expect(SaveGuideChapterInput.safeParse(save).success).toBe(true);
+    expect(
+      SaveGuideChapterInput.safeParse({ ...save, category: "packing" }).success,
     ).toBe(false);
   });
 

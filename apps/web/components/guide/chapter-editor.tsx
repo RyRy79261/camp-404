@@ -15,11 +15,8 @@ import {
 import { dutyCardProblem } from "@camp404/core";
 import {
   DUTY_CARD_MAX,
-  GUIDE_CATEGORIES,
-  GUIDE_CATEGORY_LABELS,
   GUIDE_TITLE_MAX,
   type DutyCardDraft,
-  type GuideCategory,
 } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
@@ -56,6 +53,8 @@ import {
 import {
   guideChapterPath,
   guideEditPath,
+  guideTopicOptions,
+  guideTopicToSave,
   KIND_LABEL,
   WHOLE_CAMP_LABEL,
 } from "@/lib/guide-copy";
@@ -78,7 +77,8 @@ export interface ChapterEditorTeam {
 export interface ChapterEditorValues {
   kind: "chapter" | "duty_card";
   title: string;
-  category: GuideCategory;
+  /** A guide topic, or a free-text one the Claude connector wrote. */
+  category: string;
   /** A team key, or WHOLE_CAMP. */
   team: string;
   markdown: string;
@@ -141,8 +141,10 @@ export function ChapterEditor({
   const [pending, startTransition] = React.useTransition();
   const [kind, setKind] = React.useState(initial.kind);
   const [title, setTitle] = React.useState(initial.title);
-  const [category, setCategory] = React.useState<GuideCategory>(
-    initial.category,
+  const [category, setCategory] = React.useState(initial.category);
+  const topics = React.useMemo(
+    () => guideTopicOptions(initial.category),
+    [initial.category],
   );
   const [team, setTeam] = React.useState(initial.team);
   const [markdown, setMarkdown] = React.useState(initial.markdown);
@@ -188,7 +190,7 @@ export function ChapterEditor({
       : null;
   const fields = {
     title,
-    category,
+    category: guideTopicToSave(category),
     team: team === WHOLE_CAMP ? null : team,
     markdown,
     card: cardDraft,
@@ -367,16 +369,16 @@ export function ChapterEditor({
             <Field label="Topic" htmlFor="chapter-topic" required>
               <Select
                 value={category}
-                onValueChange={(v) => setCategory(v as GuideCategory)}
+                onValueChange={setCategory}
                 disabled={pending}
               >
                 <SelectTrigger id="chapter-topic">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {GUIDE_CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {GUIDE_CATEGORY_LABELS[c]}
+                  {topics.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
