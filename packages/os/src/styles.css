@@ -22,6 +22,12 @@
      --os-line                     between bg and fg
      --os-danger                   delete rows in menus (the primary colour
                                    when unset)
+     --os-bar-idle, --os-bar-idle-fg
+                                   the title bar of a window without focus,
+                                   and its text (the chrome and the quiet
+                                   colour lifted when unset)
+     --os-label                    an icon's name at rest (the chrome, 80%,
+                                   when unset); lit, it is the primary
      --os-font-pixel               the pixel face for titles and labels */
 @theme inline {
   --color-os-bg: var(--os-bg);
@@ -34,6 +40,15 @@
   --color-os-chrome: var(--os-chrome);
   --color-os-line: var(--os-line);
   --color-os-danger: var(--os-danger, var(--os-primary));
+  --color-os-bar-idle: var(--os-bar-idle, var(--os-chrome));
+  --color-os-bar-idle-fg: var(
+    --os-bar-idle-fg,
+    color-mix(in oklch, var(--os-muted) 60%, var(--os-fg))
+  );
+  --color-os-label: var(
+    --os-label,
+    color-mix(in oklab, var(--os-chrome) 80%, transparent)
+  );
   --font-pixel: var(--os-font-pixel);
 }
 

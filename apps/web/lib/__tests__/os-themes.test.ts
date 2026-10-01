@@ -23,12 +23,23 @@ const read = (file: string) =>
 /** Every `var(--os-…)` a stylesheet reads, fonts and layout values aside. */
 function colourVarsRead(css: string): Set<string> {
   const names = new Set<string>();
-  for (const m of css.matchAll(/var\((--os-[a-z-]+)/g)) {
+  for (const m of css.matchAll(/var\(\s*(--os-[a-z-]+)/g)) {
     const name = m[1]!;
     if (/^--os-(font|phone|toast)/.test(name)) continue;
     names.add(name);
   }
   return names;
+}
+
+/** The `--os-…` colours the console's stylesheet sets itself, from others. */
+function derivedVars(css: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const m of css.matchAll(/^\s*(--os-[a-z-]+):\s*([^;]+);/gm)) {
+    const name = m[1]!;
+    if (/^--os-(font|phone|toast)/.test(name)) continue;
+    out.set(name, m[2]!);
+  }
+  return out;
 }
 
 describe("the themes' tokens (drift)", () => {
@@ -60,7 +71,35 @@ describe("the themes' tokens (drift)", () => {
       ...colourVarsRead(read("apps/web/app/globals.css")),
     ]);
     const tokens = new Set<string>(OS_THEME_TOKENS);
-    expect([...read_].filter((name) => !tokens.has(name))).toEqual([]);
+    const derived = derivedVars(read("apps/web/app/globals.css"));
+    expect(
+      [...read_].filter((name) => !tokens.has(name) && !derived.has(name)),
+    ).toEqual([]);
+  });
+
+  it("works out each colour the console derives from theme colours alone", () => {
+    // The soft colour (owner, 2026-09-30): --os-bar-idle and the rest are
+    // mixed from a theme's own colours, so every theme has them.
+    const derived = derivedVars(read("apps/web/app/globals.css"));
+    expect([...derived.keys()].sort()).toEqual([
+      "--os-bar-idle",
+      "--os-bar-idle-fg",
+      "--os-label",
+      "--os-win-card-tinted",
+      "--os-win-choice",
+      "--os-win-choice-edge",
+      "--os-win-choice-hover",
+      "--os-win-pick",
+    ]);
+    const tokens = new Set<string>(OS_THEME_TOKENS);
+    for (const [name, value] of derived) {
+      const reads = [...colourVarsRead(value)];
+      expect([name, reads.length > 0]).toEqual([name, true]);
+      expect([
+        name,
+        reads.filter((r) => !tokens.has(r) && !derived.has(r)),
+      ]).toEqual([name, []]);
+    }
   });
 
   it("maps every window token onto the kit inside a window", () => {

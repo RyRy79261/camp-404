@@ -442,9 +442,9 @@ export function OsWindowFrame<K extends string>({
         } ${fills ? "" : responsive ? "md:cursor-grab md:active:cursor-grabbing" : "cursor-grab active:cursor-grabbing"} ${
           isTop
             ? "border-os-primary bg-os-primary text-os-primary-fg"
-            : // The quiet colour lifted toward the text (5.5:1 on the chrome;
-              // plain muted is 3.7:1).
-              "border-os-line bg-os-chrome text-[color-mix(in_oklch,var(--os-muted)_60%,var(--os-fg))]"
+            : // The app may keep colour on it (the console: a soft tint of
+              // the primary); unset, the chrome with the quiet colour lifted.
+              "border-os-line bg-os-bar-idle text-os-bar-idle-fg"
         }`}
       >
         {responsive && (

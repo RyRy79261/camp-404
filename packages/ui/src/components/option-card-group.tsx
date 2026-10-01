@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Check } from "lucide-react";
 
+import { CHOICE_OFF, CHOICE_ON } from "../lib/choice";
 import { cn } from "../lib/utils";
 
 // A vertical stack of large tappable radio cards — the redesign's single-choice
@@ -82,7 +83,7 @@ function OptionCardGroup({
             onKeyDown={(e) => onKeyDown(e, i)}
             className={cn(
               "flex items-start gap-3 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              selected ? "border-primary bg-primary/10" : "hover:bg-accent/30",
+              selected ? CHOICE_ON : CHOICE_OFF,
             )}
           >
             <span
@@ -91,7 +92,7 @@ function OptionCardGroup({
                 "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
                 selected
                   ? "border-transparent bg-primary text-primary-foreground"
-                  : "border-border",
+                  : "border-primary bg-card",
               )}
             >
               {selected && <Check className="h-3.5 w-3.5" />}
@@ -142,9 +143,7 @@ function CheckboxCard({
       onClick={() => onCheckedChange(!checked)}
       className={cn(
         "flex items-center gap-3 rounded-[var(--radius)] border px-3.5 py-[13px] text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        checked
-          ? "border-primary bg-primary/10"
-          : "border-border bg-muted hover:bg-accent/30",
+        checked ? CHOICE_ON : CHOICE_OFF,
         className,
       )}
     >
@@ -154,7 +153,7 @@ function CheckboxCard({
           "flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border",
           checked
             ? "border-primary bg-primary text-primary-foreground"
-            : "border-muted-foreground",
+            : "border-primary bg-card",
         )}
       >
         {checked && <Check className="h-3.5 w-3.5" />}
