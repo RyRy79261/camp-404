@@ -26,7 +26,7 @@ export const metadata = { title: "Edit chapter — Survival Guide" };
 // not read until it is published. A captain edits any chapter; a lead only
 // their own team's. Anyone else sees the heading and a lock, and the server
 // sends them nothing of the draft. The writes check the rule again inside
-// their transactions. The versions sit beside the editor, as on the reader.
+// their transactions. The versions sit below the editor, so the writing and its preview get the width.
 
 export default async function EditGuideChapterPage({
   params,
@@ -104,8 +104,8 @@ export default async function EditGuideChapterPage({
           ) : null
         }
       />
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 page-lg:grid-cols-3">
-        <div className="page-lg:col-span-2">
+      <div className="flex min-w-0 flex-col gap-6">
+        <div className="min-w-0">
           <ChapterEditor
             key={`${draft.slug}:${draft.version}`}
             mode={{
@@ -130,7 +130,7 @@ export default async function EditGuideChapterPage({
             canSetPublic={canSetGuideChapterPublic(rank)}
           />
         </div>
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 page-md:max-w-md">
           {versions.length > 0 ? (
             <VersionsCard
               slug={draft.slug}

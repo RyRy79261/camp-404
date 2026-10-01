@@ -85,6 +85,12 @@ test.describe("survival guide (test-mode)", () => {
     await page
       .getByLabel("Lead's end-of-shift checklist")
       .fill("Basins empty and upside down.");
+    // The free text is the WYSIWYG editor: Ctrl+B makes bold as on a page.
+    await page.getByRole("textbox", { name: "Good to know" }).click();
+    await page.keyboard.press("Control+b");
+    await page.keyboard.type("Gloves");
+    await page.keyboard.press("Control+b");
+    await page.keyboard.type(" are in the blue crate.");
     await page.getByRole("button", { name: "Publish" }).click();
     await expect(
       page.getByRole("heading", { level: 1, name: "Morning clean" }),
@@ -93,6 +99,7 @@ test.describe("survival guide (test-mode)", () => {
     await expect(page.getByRole("list", { name: "Hard rules" })).toContainText(
       "Never pour liquid into the burn barrel.",
     );
+    await expect(page.locator("strong", { hasText: "Gloves" })).toBeVisible();
 
     // A plain member: the card is New, then read, then no longer New.
     await approvedMember(page, request, "guide-member", "Mo Member");
@@ -144,7 +151,17 @@ test.describe("survival guide (test-mode)", () => {
       page.getByRole("heading", { level: 1, name: "New chapter" }),
     ).toBeVisible();
     await page.getByLabel("Title").fill("Fridge rules");
-    await page.getByLabel("The chapter").fill("## Labels\n\nName and date.");
+    // The text is written as on a page, never as Markdown: the toolbar
+    // makes the heading, and the preview shows it as members will read it.
+    const body = page.getByRole("textbox", { name: "The chapter" });
+    await body.click();
+    await page.getByRole("button", { name: "Heading", exact: true }).click();
+    await page.keyboard.type("Labels");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Name and date.");
+    await expect(
+      page.getByTestId("preview-panel").getByRole("heading", { name: "Labels" }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Save draft" }).click();
     await expect(page).toHaveURL(/\/guide\/fridge-rules\/edit$/);
     await expect(
@@ -168,6 +185,8 @@ test.describe("survival guide (test-mode)", () => {
         "Only captains and this team's leads can edit its chapters.",
       ),
     ).toBeVisible();
-    await expect(page.getByLabel("The chapter")).toHaveCount(0);
+    await expect(
+      page.getByRole("textbox", { name: "The chapter" }),
+    ).toHaveCount(0);
   });
 });

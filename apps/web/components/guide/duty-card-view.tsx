@@ -56,39 +56,43 @@ const icon = "h-4 w-4 text-accent";
 export function DutyCardView({ card }: { card: DutyCard }) {
   return (
     <div className="flex flex-col gap-6" aria-label="Duty card">
-      <Section
-        title="Who's on it"
-        icon={<Users className={icon} aria-hidden />}
-      >
-        <ul aria-label="Sub-roles" className="divide-y divide-border">
-          {card.subRoles.map((r) => (
-            <li
-              key={r.name}
-              className="flex items-baseline justify-between gap-3 py-2"
-            >
-              <span className="font-medium">{r.name}</span>
-              <span className="tabular-nums text-muted-foreground">
-                {headcountLabel(r.min, r.max)}{" "}
-                {r.max === 1 ? "person" : "people"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </Section>
-
-      <Section
-        title="Steps"
-        icon={<ListOrdered className={icon} aria-hidden />}
-      >
-        <ol
-          aria-label="Steps"
-          className="flex list-decimal flex-col gap-1.5 pl-5 marker:font-semibold marker:text-accent"
+      {card.subRoles.length > 0 ? (
+        <Section
+          title="Who's on it"
+          icon={<Users className={icon} aria-hidden />}
         >
-          {card.steps.map((s, i) => (
-            <li key={i}>{s}</li>
-          ))}
-        </ol>
-      </Section>
+          <ul aria-label="Sub-roles" className="divide-y divide-border">
+            {card.subRoles.map((r, i) => (
+              <li
+                key={i}
+                className="flex items-baseline justify-between gap-3 py-2"
+              >
+                <span className="font-medium">{r.name}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {headcountLabel(r.min, r.max)}{" "}
+                  {r.max === 1 ? "person" : "people"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+
+      {card.steps.length > 0 ? (
+        <Section
+          title="Steps"
+          icon={<ListOrdered className={icon} aria-hidden />}
+        >
+          <ol
+            aria-label="Steps"
+            className="flex list-decimal flex-col gap-1.5 pl-5 marker:font-semibold marker:text-accent"
+          >
+            {card.steps.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ol>
+        </Section>
+      ) : null}
 
       {card.hardRules.length > 0 ? (
         <Section
@@ -129,12 +133,14 @@ export function DutyCardView({ card }: { card: DutyCard }) {
         </Section>
       ) : null}
 
-      <Section
-        title="Who to ask"
-        icon={<MessageCircleQuestion className={icon} aria-hidden />}
-      >
-        <p className="font-medium">{card.askRole}</p>
-      </Section>
+      {card.askRole.trim() !== "" ? (
+        <Section
+          title="Who to ask"
+          icon={<MessageCircleQuestion className={icon} aria-hidden />}
+        >
+          <p className="font-medium">{card.askRole}</p>
+        </Section>
+      ) : null}
     </div>
   );
 }
