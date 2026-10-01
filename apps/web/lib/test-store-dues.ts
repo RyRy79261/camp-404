@@ -6,6 +6,7 @@ import {
   duesBalance,
   duesSettled,
   nextInstalment,
+  paymentFigures,
   proposeRefund,
   splitEvenly,
 } from "@camp404/core";
@@ -680,6 +681,7 @@ export const duesTestStore = {
           pendingProofs: dues.payments.filter(
             (p) => p.status === "pending" && p.source === "member",
           ).length,
+          figures: paymentFigures(dues.payments),
           openRefunds: refundsOf(u.id, cycle).filter(
             (r) => r.status === "requested",
           ).length,

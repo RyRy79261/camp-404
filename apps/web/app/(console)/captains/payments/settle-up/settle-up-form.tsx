@@ -26,7 +26,15 @@ import { publishSettleUpAction } from "../dues-actions";
 // The settle-up form (#240): what it is for, the total, and which way the
 // money goes. The split is worked out here with the same function the server
 // uses (splitEvenly), so the preview is the split; publishing sends the ids
-// previewed, and the server refuses if the members changed meanwhile.
+// previewed, and the server refuses if the members changed meanwhile. The
+// button comes after the split, so it is read before it is pressed, and says
+// what pressing it does ("Add R 840,00 to 5 members' dues"); it stays
+// disabled until there is something to add, then asks once more.
+
+/** "5 members' dues", "1 member's dues". */
+function whose(count: number): string {
+  return count === 1 ? "1 member's dues" : `${count} members' dues`;
+}
 
 export function SettleUpForm({
   candidates,
@@ -56,6 +64,16 @@ export function SettleUpForm({
   const people =
     members.length === 1 ? "1 member" : `${members.length} members`;
   const high = amounts.length ? Math.max(...amounts) : 0;
+  const share = low === high ? formatMoney(high) : `about ${formatMoney(high)}`;
+  const ready =
+    description.trim() !== "" && shares !== null && members.length > 0;
+  const actionLabel = !ready
+    ? direction === "top_up"
+      ? "Add to members' dues"
+      : "Give money back"
+    : direction === "top_up"
+      ? `Add ${share} to ${whose(members.length)}`
+      : `Give ${share} back on ${whose(members.length)}`;
 
   function check(): boolean {
     setError(null);
@@ -84,7 +102,11 @@ export function SettleUpForm({
         setConfirming(false);
         return;
       }
-      toast.success(`Published to ${res.data.members} members`);
+      toast.success(
+        res.data.members === 1
+          ? "Added to 1 member's dues"
+          : `Added to ${res.data.members} members' dues`,
+      );
       setConfirming(false);
       setDescription("");
       setTotal("");
@@ -107,13 +129,17 @@ export function SettleUpForm({
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Publish the settle-up?"
+        title={
+          direction === "top_up"
+            ? "Add the settle-up to their dues?"
+            : "Give the settle-up back?"
+        }
         description={
           direction === "top_up"
             ? `${people} each get a charge of about ${formatMoney(high)} on their dues.`
             : `${people} each get about ${formatMoney(high)} back on their dues.`
         }
-        confirmLabel={`Publish to ${people}`}
+        confirmLabel={actionLabel}
         pending={pending}
         error={error}
         onConfirm={publish}
@@ -155,30 +181,19 @@ export function SettleUpForm({
               disabled={pending}
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-start gap-2">
             <Checkbox
               id="skip-concessions"
+              className="mt-0.5"
               checked={skipConcessions}
               onCheckedChange={(v) => setSkipConcessions(v === true)}
               disabled={pending}
             />
-            <Label htmlFor="skip-concessions" className="font-normal">
-              Leave out members with a concession
-            </Label>
+            {/* Body text, not the form's small capitals: it is a sentence. */}
+            <label htmlFor="skip-concessions" className="text-sm leading-snug">
+              Leave out members whose fee Finance lowered
+            </label>
           </div>
-          {error && !confirming && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <Button
-            type="button"
-            disabled={pending || members.length === 0}
-            onClick={() => check() && setConfirming(true)}
-          >
-            {pending && <Loader2 className="animate-spin" aria-hidden />}
-            Publish
-          </Button>
         </CardContent>
       </Card>
 
@@ -210,7 +225,7 @@ export function SettleUpForm({
             >
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate">{m.name}</span>
-                {m.concession && <Badge variant="outline">Concession</Badge>}
+                {m.concession && <Badge variant="outline">Lowered</Badge>}
               </span>
               <span className="tabular-nums text-muted-foreground">
                 {shares
@@ -220,6 +235,20 @@ export function SettleUpForm({
             </li>
           ))}
         </ul>
+        {error && !confirming && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        <Button
+          type="button"
+          className="self-start"
+          disabled={pending || !ready}
+          onClick={() => check() && setConfirming(true)}
+        >
+          {pending && <Loader2 className="animate-spin" aria-hidden />}
+          {actionLabel}
+        </Button>
       </section>
     </div>
   );

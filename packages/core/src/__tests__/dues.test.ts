@@ -6,6 +6,7 @@ import {
   FINANCE_TEAM,
   findMemberRef,
   nextInstalment,
+  paymentFigures,
   parseStatement,
   parseStatementAmount,
   parseStatementDate,
@@ -42,6 +43,27 @@ describe("canManageMoney", () => {
 });
 
 const zar = (amountCents: number) => ({ amountCents, currency: "ZAR" });
+
+describe("paymentFigures", () => {
+  it("keeps the bank, excused, sent-in and promised money apart", () => {
+    const f = paymentFigures([
+      { amountCents: 250000, status: "reconciled", source: "statement" },
+      { amountCents: 100000, status: "reconciled", source: "captain" },
+      { amountCents: 50000, status: "waived", source: "captain" },
+      { amountCents: 120000, status: "pending", source: "captain" },
+      { amountCents: 70000, status: "pending", source: "member" },
+      { amountCents: 30000, status: "pending", source: "member" },
+    ]);
+    expect(f).toEqual({
+      inBankCents: 350000,
+      excusedCents: 50000,
+      toCheckCents: 100000,
+      toCheckCount: 2,
+      promisedCents: 120000,
+      promisedCount: 1,
+    });
+  });
+});
 
 describe("duesBalance", () => {
   it("is charges less payments received or waived, plus refunds paid out", () => {
@@ -358,6 +380,7 @@ describe("proposeStatementMatches", () => {
       },
     ]);
     expect(p!.member).toEqual({ id: "u1", name: "Ada", refCode: "C404-M017" });
+    expect(p!.matchedBy).toBe("reference");
     expect(p!.pendingPaymentId).toBe("p1");
     expect(p!.alreadyRecorded).toBe(false);
   });
@@ -400,5 +423,43 @@ describe("proposeStatementMatches", () => {
       [],
     );
     expect(p!.member).toBeNull();
+    expect(p!.matchedBy).toBeNull();
+  });
+
+  it("suggests the member whose one pending payment has the same amount, when the line has no reference", () => {
+    const pending = (id: string, userId: string, amountCents = 125_000) => ({
+      id,
+      userId,
+      amountCents,
+      status: "pending" as const,
+      paidOn: null,
+    });
+    const membersWithRefs = [
+      { id: "u1", name: "Ada", refCode: "C404-M017" },
+      { id: "u3", name: "Cy", refCode: "C404-M018" },
+    ];
+    const noRef = line({ memberRef: null, description: "EFT ADA" });
+    const [p] = proposeStatementMatches([noRef], membersWithRefs, [
+      pending("p1", "u3"),
+    ]);
+    expect(p!.member).toEqual({ id: "u3", name: "Cy", refCode: "C404-M018" });
+    expect(p!.matchedBy).toBe("amount");
+    expect(p!.pendingPaymentId).toBe("p1");
+
+    // Two pending payments with that amount: no guess.
+    const [two] = proposeStatementMatches([noRef], membersWithRefs, [
+      pending("p1", "u3"),
+      pending("p2", "u1"),
+    ]);
+    expect(two!.member).toBeNull();
+
+    // A referenced line takes its member's payment first; nothing is left
+    // to suggest from.
+    const [, after] = proposeStatementMatches(
+      [line({}), noRef],
+      membersWithRefs,
+      [pending("p2", "u1")],
+    );
+    expect(after!.member).toBeNull();
   });
 });
