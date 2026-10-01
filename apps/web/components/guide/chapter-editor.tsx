@@ -203,7 +203,7 @@ export function ChapterEditor({
   const dirty = mode.kind === "new" || snapshot !== savedSnapshot;
   const problem =
     kind === "duty_card"
-      ? dutyCardProblem(cardDraft)
+      ? dutyCardProblem(cardDraft, markdown)
       : markdown.trim() === ""
         ? "Write something in the chapter before you publish it."
         : null;

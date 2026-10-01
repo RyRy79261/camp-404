@@ -367,7 +367,7 @@ export const guideTestStore = {
       }
       let card: DutyCard | null = null;
       if (c.kind === "duty_card") {
-        const problem = dutyCardProblem(c.card);
+        const problem = dutyCardProblem(c.card, c.markdown);
         if (problem) return problem;
         card = DutyCard.parse(c.card);
       } else if (c.markdown.trim() === "") {

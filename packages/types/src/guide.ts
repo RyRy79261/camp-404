@@ -85,7 +85,7 @@ export function containsPhoneNumber(text: string): boolean {
   return PHONE.test(text);
 }
 
-const NO_PHONE =
+export const DUTY_CARD_NO_PHONE =
   "A duty card is pinned up for anyone to read: name a role to ask, never a phone number.";
 
 const line = (what: string) =>
@@ -160,7 +160,7 @@ export const DutyCard = z
       ...card.checklist,
     ];
     if (texts.some(containsPhoneNumber)) {
-      ctx.addIssue({ code: "custom", message: NO_PHONE });
+      ctx.addIssue({ code: "custom", message: DUTY_CARD_NO_PHONE });
     }
   });
 export type DutyCard = z.infer<typeof DutyCard>;

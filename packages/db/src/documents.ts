@@ -600,7 +600,7 @@ export async function publishGuideChapter(input: {
 
     let card: DutyCard | null = null;
     if (doc.kind === "duty_card") {
-      const problem = dutyCardProblem(doc.card);
+      const problem = dutyCardProblem(doc.card, doc.markdown);
       if (problem) refuse(problem);
       card = DutyCard.parse(doc.card);
     } else if (doc.markdown.trim() === "") {

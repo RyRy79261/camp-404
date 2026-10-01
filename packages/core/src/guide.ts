@@ -1,4 +1,11 @@
-import { DutyCard, Team, ViewerRank, type DutyCardDraft } from "@camp404/types";
+import {
+  DUTY_CARD_NO_PHONE,
+  DutyCard,
+  Team,
+  ViewerRank,
+  containsPhoneNumber,
+  type DutyCardDraft,
+} from "@camp404/types";
 
 // The Survival Guide (#250). Pure: no DB, no session, no next/*.
 //
@@ -84,14 +91,19 @@ export function guideReviewDue(
 /**
  * Why a duty card cannot be published yet, in the first sentence its check
  * gives, or null when it is ready. A card in this state may still be saved as
- * a draft.
+ * a draft. Its Markdown is checked for a phone number too: the reader shows it
+ * on the card, under "Good to know", where it is pinned up on site.
  */
-export function dutyCardProblem(card: DutyCardDraft | null): string | null {
+export function dutyCardProblem(
+  card: DutyCardDraft | null,
+  markdown: string,
+): string | null {
   if (!card) return "A duty card needs its card filled in.";
   const parsed = DutyCard.safeParse(card);
-  return parsed.success
-    ? null
-    : (parsed.error.issues[0]?.message ?? "Check the card.");
+  if (!parsed.success) {
+    return parsed.error.issues[0]?.message ?? "Check the card.";
+  }
+  return containsPhoneNumber(markdown) ? DUTY_CARD_NO_PHONE : null;
 }
 
 /** A sub-role's headcount as the card prints it: "2" or "2–3". */

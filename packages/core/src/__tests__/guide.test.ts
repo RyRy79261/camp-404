@@ -79,32 +79,44 @@ describe("dutyCardProblem", () => {
   };
 
   it("passes a whole card", () => {
-    expect(dutyCardProblem(card)).toBeNull();
+    expect(dutyCardProblem(card, "")).toBeNull();
   });
 
   it("names the first thing missing", () => {
-    expect(dutyCardProblem(null)).toBe("A duty card needs its card filled in.");
-    expect(dutyCardProblem({ ...card, subRoles: [] })).toBe(
+    expect(dutyCardProblem(null, "")).toBe(
+      "A duty card needs its card filled in.",
+    );
+    expect(dutyCardProblem({ ...card, subRoles: [] }, "")).toBe(
       "Add at least one sub-role.",
     );
-    expect(dutyCardProblem({ ...card, askRole: " " })).toBe(
+    expect(dutyCardProblem({ ...card, askRole: " " }, "")).toBe(
       "Say who to ask, as a role.",
     );
     expect(
-      dutyCardProblem({
-        ...card,
-        subRoles: [{ name: "Dishes", min: 3, max: 2 }],
-      }),
+      dutyCardProblem(
+        {
+          ...card,
+          subRoles: [{ name: "Dishes", min: 3, max: 2 }],
+        },
+        "",
+      ),
     ).toBe("A sub-role's most people can't be fewer than its fewest.");
   });
 
   it("refuses a phone number anywhere on the card", () => {
     expect(
-      dutyCardProblem({ ...card, steps: ["If stuck, +27 82 555 1234."] }),
+      dutyCardProblem({ ...card, steps: ["If stuck, +27 82 555 1234."] }, ""),
     ).toMatch(/never a phone number/);
-    expect(dutyCardProblem({ ...card, steps: ["From 06:00 to 08:00."] })).toBe(
-      null,
-    );
+    expect(
+      dutyCardProblem({ ...card, steps: ["From 06:00 to 08:00."] }, ""),
+    ).toBe(null);
+  });
+
+  it("refuses a phone number in the card's Markdown, shown on the card as Good to know", () => {
+    expect(
+      dutyCardProblem(card, "Call Sam on 082 555 1234 if the gas runs out."),
+    ).toMatch(/never a phone number/);
+    expect(dutyCardProblem(card, "Ask the Kitchen lead at 06:00.")).toBeNull();
   });
 });
 
