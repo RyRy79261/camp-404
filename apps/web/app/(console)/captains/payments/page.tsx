@@ -25,8 +25,9 @@ export const metadata = { title: "Payments — Camp 404" };
 // leads (canManageMoney): the rank gate is team_lead, because clearance is
 // global, and the Finance rule then turns away a lead of any other team.
 // Anyone else sees the heading and a lock, and no payment is read. The year's
-// figures sit on top (the same four as Who owes what, read from the same
-// accounts, so the tabs never disagree), then the ledger. "Record a payment"
+// figures sit on top (the same four as Who owes what: who is paid up from the
+// same accounts, the money from the ledger under them, so it adds up to its
+// rows), then the ledger. "Record a payment"
 // is the page's one main button, in the heading, and opens its form in a
 // dialog.
 
@@ -55,7 +56,9 @@ export default async function PaymentsPage() {
           cycle,
           payments,
           members,
-          figures: duesStatsFigures(accounts),
+          // Who is paid up from the accounts; the money from the ledger
+          // below, so the figures add up to its rows.
+          figures: duesStatsFigures(accounts, payments),
           deadline: year.deadline,
         };
       })()

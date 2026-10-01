@@ -1,4 +1,9 @@
-import { formatMoney, sumMinor } from "@camp404/core";
+import {
+  formatMoney,
+  paymentFigures,
+  sumMinor,
+  type PaymentFigures,
+} from "@camp404/core";
 import type { DuesAccountRow } from "@/lib/dues";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { cn } from "@camp404/ui/lib/utils";
@@ -24,24 +29,39 @@ export interface DuesStatsFigures {
   promisedCents: number;
 }
 
-/** The figures, from every member's account for the year. Pure. */
+/**
+ * The figures, from every member's account for the year. Pure. Pass the
+ * year's ledger to read the money from it instead: the Payments tab lists
+ * every payment (a member waiting for approval, an erased member's too), so
+ * its money figures add up to the rows below them.
+ */
 export function duesStatsFigures(
   rows: readonly Pick<DuesAccountRow, "balance" | "figures">[],
+  ledger?: Parameters<typeof paymentFigures>[0],
 ): DuesStatsFigures {
   const charged = rows.filter((r) => r.balance.chargedCents > 0);
   const owing = rows.filter((r) => r.balance.balanceCents > 0);
   const sum = (pick: (r: (typeof rows)[number]) => number) =>
     sumMinor(rows.map(pick));
+  const money: Omit<PaymentFigures, "promisedCount"> = ledger
+    ? paymentFigures(ledger)
+    : {
+        inBankCents: sum((r) => r.figures.inBankCents),
+        excusedCents: sum((r) => r.figures.excusedCents),
+        toCheckCents: sum((r) => r.figures.toCheckCents),
+        toCheckCount: sum((r) => r.figures.toCheckCount),
+        promisedCents: sum((r) => r.figures.promisedCents),
+      };
   return {
     paidUp: charged.filter((r) => r.balance.balanceCents <= 0).length,
     charged: charged.length,
     owingCents: sumMinor(owing.map((r) => r.balance.balanceCents)),
     owingCount: owing.length,
-    inBankCents: sum((r) => r.figures.inBankCents),
-    excusedCents: sum((r) => r.figures.excusedCents),
-    toCheckCents: sum((r) => r.figures.toCheckCents),
-    toCheckCount: sum((r) => r.figures.toCheckCount),
-    promisedCents: sum((r) => r.figures.promisedCents),
+    inBankCents: money.inBankCents,
+    excusedCents: money.excusedCents,
+    toCheckCents: money.toCheckCents,
+    toCheckCount: money.toCheckCount,
+    promisedCents: money.promisedCents,
   };
 }
 

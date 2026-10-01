@@ -71,6 +71,23 @@ describe("duesStatsFigures", () => {
   });
 });
 
+describe("duesStatsFigures with the ledger", () => {
+  it("reads the money from every ledger row, not only the accounts", () => {
+    // An erased member's payment, or one for a member still waiting for
+    // approval: on the ledger, in no account.
+    const f = duesStatsFigures(
+      [],
+      [
+        { amountCents: 90000, status: "reconciled", source: "captain" },
+        { amountCents: 40000, status: "pending", source: "member" },
+      ],
+    );
+    expect(f.inBankCents).toBe(90000);
+    expect(f.toCheckCents).toBe(40000);
+    expect(f.toCheckCount).toBe(1);
+  });
+});
+
 describe("DuesStats", () => {
   it("shows the four figures, with excused and promised money named apart", () => {
     render(
