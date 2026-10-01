@@ -369,7 +369,7 @@ function IndividualTable({
         data={rows}
         getRowKey={(row) => row.userId}
         label="Answers"
-        className="page-md:rounded-xl page-md:border page-md:bg-card page-md:shadow-sm"
+        framed
       />
       <ResponseViewer
         response={viewing}

@@ -30,6 +30,7 @@ import {
   changeMyGearAction,
   saveMyGearAction,
 } from "@/app/(console)/gear/actions";
+import { TentLabelValue } from "./tent-label-value";
 import {
   itemPriceText,
   moneyRange,
@@ -100,6 +101,7 @@ export function GearOrderForm({
   tent: savedTent,
   lines,
   hostedBy,
+  hostedLabel = null,
   forMember,
 }: {
   /** The year's live catalogue, tents included (for the price range only). */
@@ -111,15 +113,16 @@ export function GearOrderForm({
   lines: GearLine[];
   /** The members whose sent orders already have this member in their tent. */
   hostedBy: string[];
+  /** That tent's label, once a captain gave it one. */
+  hostedLabel?: string | null;
   /** Set when a captain fills the order in for this member. */
   forMember?: { userId: string; name: string };
 }) {
   const router = useRouter();
   const theirs = forMember !== undefined;
   const hosted = hostedBy.length > 0;
-  const [tent, setTent] = useState<TentState>(() => ({
-    // Already in someone's tent: the question is answered.
-    choice: savedTent?.choice ?? (hosted ? "shared" : ""),
+  const [tentAnswer, setTent] = useState<TentState>(() => ({
+    choice: savedTent?.choice ?? "",
     people: savedTent?.choice === "need" ? savedTent.people : 1,
     ownDescription:
       savedTent?.choice === "own" ? (savedTent.ownDescription ?? "") : "",
@@ -127,6 +130,12 @@ export function GearOrderForm({
     sharerIds:
       savedTent && savedTent.choice !== "shared" ? savedTent.sharerIds : [],
   }));
+  // Already in someone's tent: the question is answered, whatever a draft
+  // saved before that said (the server refuses "need" or "own" then, and the
+  // radios are not shown to change it).
+  const tent: TentState = hosted
+    ? { ...tentAnswer, choice: "shared", sharerIds: [] }
+    : tentAnswer;
   const [answers, setAnswers] = useState<Record<string, Answer>>(() =>
     Object.fromEntries(
       lines.map((l) => [l.itemId, { choice: l.choice, quantity: l.quantity }]),
@@ -259,58 +268,66 @@ export function GearOrderForm({
           <CardDescription>
             {theirs
               ? `You are filling this in for ${forMember.name}. They see on My gear that a captain did.`
-              : "Where do you sleep? One answer."}
+              : hosted
+                ? "Answered for you by the tent\u2019s owner."
+                : "Where do you sleep? One answer."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 p-5 pt-0">
-          {hosted && (
-            <p
-              data-testid="tent-hosted"
-              className="rounded-lg border border-accent/40 bg-accent/10 px-4 py-3 text-sm"
+          {hosted ? (
+            // Answered by someone else's order: content, never a locked form.
+            <div data-testid="tent-hosted" className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <p className="text-base font-semibold">
+                  {theirs ? "They\u2019re" : "You\u2019re"} in{" "}
+                  {nameList(hostedBy)}&rsquo;s tent.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Ask {nameList(hostedBy)} to take {theirs ? "them" : "you"} off
+                  if that&rsquo;s wrong. It costs {theirs ? "them" : "you"}{" "}
+                  nothing.
+                </p>
+              </div>
+              {hostedLabel && <TentLabelValue label={hostedLabel} />}
+            </div>
+          ) : (
+            <div
+              role="radiogroup"
+              aria-label="Tent"
+              className="flex flex-col gap-2"
             >
-              {nameList(hostedBy)} put {theirs ? "them" : "you"} in their tent,
-              so this is answered. If that&rsquo;s wrong, ask them to take{" "}
-              {theirs ? "them" : "you"} off first.
-            </p>
-          )}
-          <div
-            role="radiogroup"
-            aria-label="Tent"
-            className="flex flex-col gap-2"
-          >
-            {TENT_OPTIONS.map((option) => {
-              const locked = hosted && option.value !== "shared";
-              const checked = tent.choice === option.value;
-              return (
-                <label
-                  key={option.value}
-                  className={cn(
-                    "flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md border p-3 text-sm",
-                    checked ? CHOICE_ON : CHOICE_OFF,
-                    locked && "cursor-not-allowed opacity-60",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="tent-choice"
-                    className="mt-1 accent-[var(--color-primary)]"
-                    value={option.value}
-                    checked={checked}
-                    disabled={pending || locked}
-                    onChange={() =>
-                      setTent((t) => ({ ...t, choice: option.value }))
-                    }
-                  />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="font-medium">{option.label}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {option.hint}
+              {TENT_OPTIONS.map((option) => {
+                const checked = tent.choice === option.value;
+                return (
+                  <label
+                    key={option.value}
+                    className={cn(
+                      "flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md border p-3 text-sm",
+                      checked ? CHOICE_ON : CHOICE_OFF,
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="tent-choice"
+                      className="mt-1 accent-[var(--color-primary)]"
+                      value={option.value}
+                      checked={checked}
+                      disabled={pending}
+                      onChange={() =>
+                        setTent((t) => ({ ...t, choice: option.value }))
+                      }
+                    />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="font-medium">{option.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {option.hint}
+                      </span>
                     </span>
-                  </span>
-                </label>
-              );
-            })}
-          </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
 
           {tent.choice === "own" && (
             <div className="grid gap-3 page-sm:grid-cols-[1fr_8rem]">
@@ -437,30 +454,33 @@ export function GearOrderForm({
           <CardDescription>
             {others.length === 0
               ? "The camp rents out nothing else this year."
-              : `Answer for each one ${you} care about. Leave the rest alone.`}
+              : `Pick \u201cI need\u201d for anything ${you} want from the camp. Anything left blank, ${you} don\u2019t need.`}
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-5 p-5 pt-0">
-          {others.length > 0 && (
-            <ul aria-label="Bedding" className="flex flex-col gap-3">
+        {others.length > 0 && (
+          <CardContent className="p-5 pt-0">
+            <ul aria-label="Bedding" className="divide-y divide-border">
               {others.map((item) => {
                 const a = answerOf(item.id);
                 return (
                   <li
                     key={item.id}
                     aria-label={item.name}
-                    className="flex flex-col gap-3 rounded-lg border border-border p-4"
+                    className="flex flex-col gap-2 py-3 page-sm:flex-row page-sm:items-center page-sm:justify-between page-sm:gap-4"
                   >
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-sm tabular-nums text-muted-foreground">
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="text-sm font-medium">{item.name}</span>
+                      <span className="text-xs tabular-nums text-muted-foreground">
                         {itemPriceText(item)}
                       </span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    </span>
+                    {/* The toggle first, then a slot for how many and one
+                        for Clear that keep their width, so the toggle never
+                        moves when an answer is picked. */}
+                    <span className="flex shrink-0 items-center gap-2">
                       <SegmentedControl
                         aria-label={`${item.name}: ${theirs ? "do they" : "do you"} need one?`}
-                        className="page-sm:w-auto"
+                        className="flex-1 page-sm:w-auto page-sm:flex-none"
                         disabled={pending}
                         value={a.choice}
                         onValueChange={(choice) =>
@@ -487,42 +507,56 @@ export function GearOrderForm({
                           },
                         ]}
                       />
-                      {a.choice === "need" && (
-                        <select
-                          aria-label={`How many ${item.name}`}
-                          className={cn(selectClass, "w-20")}
-                          disabled={pending}
-                          value={a.quantity}
-                          onChange={(e) =>
-                            set(item.id, { quantity: Number(e.target.value) })
-                          }
-                        >
-                          {upTo(RENTAL_MAX_QUANTITY).map((n) => (
-                            <option key={n} value={n}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      {a.choice !== "" && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          disabled={pending}
-                          onClick={() => set(item.id, NONE)}
-                        >
-                          Clear
-                        </Button>
-                      )}
-                    </div>
+                      <span className="flex w-16 shrink-0">
+                        {a.choice === "need" && (
+                          <select
+                            aria-label={`How many ${item.name}`}
+                            className={cn(selectClass, "w-16")}
+                            disabled={pending}
+                            value={a.quantity}
+                            onChange={(e) =>
+                              set(item.id, {
+                                quantity: Number(e.target.value),
+                              })
+                            }
+                          >
+                            {upTo(RENTAL_MAX_QUANTITY).map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </span>
+                      <span className="flex w-10 shrink-0 justify-end">
+                        {a.choice !== "" && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Clear ${item.name}`}
+                            title="Clear"
+                            disabled={pending}
+                            onClick={() => set(item.id, NONE)}
+                          >
+                            <X aria-hidden />
+                          </Button>
+                        )}
+                      </span>
+                    </span>
                   </li>
                 );
               })}
             </ul>
-          )}
+          </CardContent>
+        )}
+      </Card>
 
-          <div className="flex flex-col gap-1 rounded-lg bg-muted/40 p-4">
+      {/* What it may cost and the buttons, after both questions: they send
+          the tent answer and the bedding together. */}
+      <Card>
+        <CardContent className="flex flex-col gap-4 p-5 page-sm:flex-row page-sm:items-end page-sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-1">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               What it may cost
             </span>
@@ -537,28 +571,19 @@ export function GearOrderForm({
             </span>
             {needsAny && estimate.lowCents !== estimate.highCents && (
               <span className="text-xs text-muted-foreground">
-                A captain picks the tent, and whether each thing comes from the
-                camp&rsquo;s own stock or the supplier.{" "}
-                {theirs ? "They" : "You"} see the exact total once it is
-                confirmed.
+                {theirs ? "They" : "You"} see the exact total once a captain
+                confirms.
               </span>
             )}
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
           </div>
-
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={pending} onClick={() => save(true)}>
-              {pending && sending ? (
-                <Loader2 className="animate-spin" aria-hidden />
-              ) : (
-                <Send aria-hidden />
-              )}
-              {theirs ? "Save for them" : "Send my order"}
-            </Button>
+          {/* The main button last, so it sits on the right; on a phone the
+              column is reversed, so it sits on top. */}
+          <div className="flex shrink-0 flex-col-reverse gap-2 page-sm:flex-row page-sm:flex-wrap">
             {!theirs && (
               <Button
                 type="button"
@@ -572,6 +597,14 @@ export function GearOrderForm({
                 Save as a draft
               </Button>
             )}
+            <Button type="button" disabled={pending} onClick={() => save(true)}>
+              {pending && sending ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : (
+                <Send aria-hidden />
+              )}
+              {theirs ? "Save for them" : "Send my order"}
+            </Button>
           </div>
         </CardContent>
       </Card>

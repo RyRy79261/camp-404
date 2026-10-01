@@ -60,3 +60,12 @@ export function buildTeamPage(input: {
     ),
   };
 }
+
+/**
+ * The announcements composer, its audience set to this team (`?audience=`):
+ * the team page's "Write announcement", for a captain or a lead of the team.
+ * The composer offers it only when the sender may address it.
+ */
+export function writeAnnouncementHref(team: string): string {
+  return `/captains/announcements?audience=${encodeURIComponent(`team:${team}`)}`;
+}

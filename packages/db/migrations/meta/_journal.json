@@ -572,8 +572,22 @@
     {
       "idx": 81,
       "version": "7",
-      "when": 1790835310913,
-      "tag": "0081_kitchen_menu_and_shopping",
+      "when": 1790813691104,
+      "tag": "0081_survival_guide",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1790829533917,
+      "tag": "0082_survival_guide_published_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1790877876839,
+      "tag": "0083_kitchen_menu_and_shopping",
       "breakpoints": true
     }
   ]

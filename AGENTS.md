@@ -281,6 +281,32 @@ keyboard's way to them is the Terminal.
   off take decoration out of the DOM, not just out of sight. The landing page,
   Join and the sign-in pages are never themed.
 
+Three rules from the design audit of 2026-10-01, each with its shared
+building block in `packages/ui`:
+
+- **A table fits its window.** A program window is narrower than the screen,
+  so a table never switches on `md:`/`lg:`. Use `ResponsiveDataTable`: it
+  switches to AfrikaBurn's stacked cards by its OWN width (a container query,
+  `stackBelow`), and its `TableFit` guard also stacks a table that would still
+  run past its box. Never a table scrolled sideways with its buttons out of
+  sight. Text columns wrap (or `truncate` with the full text as a tooltip);
+  the `role: "actions"` column keeps its own width on the right. Pass
+  `framed` for the card frame; do not wrap it in a `page-md:` frame.
+- **Read-only is content, not a disabled form.** A viewer who cannot edit sees
+  the values, never greyed inputs, a greyed Add button or dead row icons:
+  render no control at all, show a read-only form as a `FieldList` (label over
+  value, the edit form's columns, `components/field-list`), and say who edits
+  once, in the page description or one quiet `EditorsNote` line, not a lock
+  banner. The server still refuses the write.
+- **The main button stays put.** A row's buttons go in `RowActions`
+  (`components/row-actions`): one `primary` action, the same variant on every
+  row (only its words may change), then quiet ghost icons in a `secondary`
+  slot that keeps its width (`secondarySlots`) even on rows that have none.
+- **Long text is never a raw Markdown textarea** (owner, 2026-10-01). Use
+  `MarkdownField` (`apps/web/components/markdown`): the WYSIWYG Markdown
+  editor with its preview beside it, Write | Preview tabs in a narrow window.
+  The meeting notes use it.
+
 ## Database — read this before touching the schema
 
 The database is Neon Postgres + Drizzle ORM. Sign-in is self-hosted Better

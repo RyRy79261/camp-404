@@ -85,7 +85,11 @@ import {
 import { resetClaimsStore } from "./test-store-claims";
 import { resetKitchenMenuStore } from "./test-store-kitchen-menu";
 import { resetRentalStore } from "./test-store-rental";
-import { resetLogisticsStore } from "./test-store-logistics";
+import { resetGuideStore } from "./test-store-guide";
+import {
+  adoptLogisticsSentinel,
+  resetLogisticsStore,
+} from "./test-store-logistics";
 import type { MyLift } from "@camp404/db/cars";
 import {
   ALREADY_SEATED,
@@ -342,14 +346,18 @@ import {
 import {
   currentCycle,
   DEFAULT_CAMP_CONFIG,
+  foundingCycles,
+  isCycleYear,
   MAX_CYCLE_YEAR,
   resolveCycles,
   UNSET_CYCLE,
+  type CampConfig,
   type TeamsConfig,
 } from "@camp404/db/camp-config";
 import {
   ROLLOVER_UNTOUCHED,
   type RolloverPlan,
+  type SetFoundingYearResult,
 } from "@camp404/db/cycle-rollover";
 // Type-only: the store's three team operations return the SAME shapes the
 // production writers do, so a divergence is a typecheck failure rather than a
@@ -2675,6 +2683,93 @@ export const testStore = {
   },
 
   /**
+   * Twin of setFoundingYear, so the camp's year page can be founded under
+   * E2E and its rollover state reached (it crashed the window before:
+   * "Camp settings stopped responding"). Names the year in the camp config,
+   * refuses a second founding, and adopts the store's own sentinel rows the
+   * way production does: team places, driver profiles and their seats,
+   * coming-this-year answers, tickets, trailers, lift requests and the
+   * logistics phases, answers and deadlines. KNOWN BOUNDARY: the store keeps
+   * no questionnaire sends, budgets, adoption slots, inventory, claims or
+   * rental orders under a year, so those counts are 0 and nothing of theirs
+   * moves; a ticket whose member already has one for the year keeps the
+   * year's row (production merges the two field by field).
+   */
+  setFoundingYear(input: {
+    year: number;
+    actorUserId: string | null;
+    now?: Date;
+  }): SetFoundingYearResult {
+    if (!isCycleYear(input.year)) return { ok: false, reason: "invalid-year" };
+    const config = globalState().teamsConfig;
+    if (resolveCycles(config).length > 0) {
+      return { ok: false, reason: "already-founded" };
+    }
+    // The cycles live beside the team config in the one camp config, as the
+    // participations suite's `foundedAt` writes them.
+    const founded: CampConfig = {
+      ...(config as CampConfig),
+      cycles: foundingCycles(input.year, input.now ?? new Date()),
+    };
+    globalState().teamsConfig = founded satisfies TeamsConfig;
+    const { year } = input;
+    const adopt = <T extends { cycle: number }>(rows: T[]): number => {
+      let moved = 0;
+      for (const row of rows) {
+        if (row.cycle !== UNSET_CYCLE) continue;
+        row.cycle = year;
+        moved += 1;
+      }
+      return moved;
+    };
+    const rekey = <T extends { userId: string; cycle: number }>(
+      rows: Map<string, T>,
+    ): number => {
+      let moved = 0;
+      for (const [key, row] of [...rows]) {
+        if (row.cycle !== UNSET_CYCLE) continue;
+        rows.delete(key);
+        const next = participationKey(row.userId, year);
+        if (rows.has(next)) continue;
+        rows.set(next, { ...row, cycle: year });
+        moved += 1;
+      }
+      return moved;
+    };
+    const carSeatsStamped = adopt(carMembers);
+    const driverProfilesStamped = adopt(driverProfiles);
+    const teamMembershipsStamped = adopt(teamMemberships);
+    const participationsStamped = rekey(participations);
+    const ticketsStamped = rekey(tickets);
+    const trailersStamped = adopt(transportTrailers);
+    const liftRequestsStamped = adopt(liftRequests);
+    for (const [key, row] of [...logisticsPhases]) {
+      if (row.cycle !== UNSET_CYCLE) continue;
+      logisticsPhases.delete(key);
+      logisticsPhases.set(`${year}:${row.phase}`, { ...row, cycle: year });
+    }
+    adoptLogisticsSentinel(UNSET_CYCLE, year);
+    return {
+      ok: true,
+      report: {
+        year,
+        activationsStamped: 0,
+        responsesStamped: 0,
+        teamMembershipsStamped,
+        driverProfilesStamped,
+        carSeatsStamped,
+        teamBudgetsStamped: 0,
+        adopteesStamped: 0,
+        participationsStamped,
+        trailersStamped,
+        liftRequestsStamped,
+        ticketsStamped,
+        auditLogId: `test-audit-founding-${year}`,
+      },
+    };
+  },
+
+  /**
    * This year's memberships for one member, team-ordered (mirrors
    * getTeamMemberships). "Team order" is the database's: `ORDER BY team` on a
    * Postgres enum sorts by the enum's declared order (kitchen, structures, …),
@@ -3371,6 +3466,8 @@ export const testStore = {
         heldAt: n.heldAt,
         decisions: n.decisions.length,
         actionItems: n.actionItems.length,
+        attendees: n.attendeeIds.length,
+        firstDecision: n.decisions[0]?.text ?? null,
       }));
     return input.limit ? rows.slice(0, input.limit) : rows;
   },
@@ -6314,6 +6411,7 @@ export const testStore = {
     resetDuesStore();
     resetRentalStore();
     resetLogisticsStore();
+    resetGuideStore();
     resetClaimsStore();
     resetKitchenMenuStore();
   },

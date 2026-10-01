@@ -1,4 +1,5 @@
-import { PrintSheet, SHEET_TABLE } from "@/components/power/print-sheet";
+import { PrintSheet } from "@/components/print/print-sheet";
+import { SHEET_TABLE } from "@/lib/print";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getGenerator, getPowerPlan } from "@/lib/power";
 import { listFuelCans } from "@/lib/power-site";
@@ -24,6 +25,7 @@ export default async function RefuelSheetPage() {
 
   return (
     <PrintSheet
+      area="Power & Lighting"
       title="Refuelling log"
       subtitle={
         generator

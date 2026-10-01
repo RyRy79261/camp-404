@@ -1,4 +1,4 @@
-import { Car, Lock, Truck, Users } from "lucide-react";
+import { Car, Truck, Users } from "lucide-react";
 import {
   canEditTransport,
   canManageCar,
@@ -19,6 +19,7 @@ import {
   ResponsiveDataTable,
   type ResponsiveColumn,
 } from "@camp404/ui/components/responsive-data-table";
+import { RowActions } from "@camp404/ui/components/row-actions";
 import { PowerKpiCards, type PowerKpi } from "@/components/power/load-panels";
 import {
   AddTrailerButton,
@@ -45,7 +46,7 @@ import {
   type TransportCar,
   type UnseatedMember,
 } from "@/lib/transport";
-import { TRANSPORT_REFUSAL, seatsText } from "@/lib/transport-copy";
+import { seatsText } from "@/lib/transport-copy";
 import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
@@ -57,14 +58,15 @@ export const metadata = { title: "Transport — Camp 404" };
 // only: no phone, registration or travel dates). A driver manages their own
 // car and writes to the people in it; a member asks for a lift; a captain or
 // a Transport & Logistics lead matches people and keeps the trailers.
-// Composed as the power load list: KPI cards, then tables in cards, and for
-// anyone who may not use a control, the control present but disabled with one
-// Lock line that each one points at.
+// Composed as the power load list: KPI cards, then tables in cards. Anyone
+// who may not change the trailers reads them as content (the car that tows
+// each one as words, no Add, Edit or Remove); the heading says who edits.
 //
 // Filtered here on the server: lift requests reach only an editor, the asked
 // driver and the asker; the members still without a seat (built on attendance,
 // which leads and captains read) reach only an editor.
 
+/** Kept for the shared controls' props; a reader never sees a refusal. */
 const REFUSAL_ID = "transport-edit-refusal";
 
 const nameOf = (name: string | null) => name?.trim() || "A camp member";
@@ -275,6 +277,16 @@ function trailerColumns(input: {
       header: "Towed by",
       cell: (t) => {
         // The cars that can tow and tow nothing else this year, and this one.
+        if (!input.canEdit) {
+          const car = input.cars.find(
+            (c) => c.driverUserId === t.towedByUserId,
+          );
+          return car ? (
+            carLabel(car)
+          ) : (
+            <span className="text-muted-foreground">No car yet</span>
+          );
+        }
         const options: CarOption[] = input.cars
           .filter(
             (c) => c.canTow && (c.trailer === null || c.trailer.id === t.id),
@@ -284,31 +296,38 @@ function trailerColumns(input: {
           <TowSelect
             trailer={t}
             cars={options}
-            canEdit={input.canEdit}
+            canEdit
             refusalId={REFUSAL_ID}
           />
         );
       },
     },
-    {
-      id: "actions",
-      header: "Actions",
-      role: "actions",
-      hideHeader: true,
-      align: "right",
-      cell: (t) => (
-        <TrailerRowActions
-          trailer={t}
-          canEdit={input.canEdit}
-          refusalId={REFUSAL_ID}
-        />
-      ),
-    },
+    ...(input.canEdit
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            role: "actions",
+            hideHeader: true,
+            align: "right",
+            cell: (t) => (
+              <RowActions
+                label={`Actions for ${t.name}`}
+                secondarySlots={2}
+                secondary={
+                  <TrailerRowActions
+                    trailer={t}
+                    canEdit
+                    refusalId={REFUSAL_ID}
+                  />
+                }
+              />
+            ),
+          } satisfies ResponsiveColumn<TrailerRow>,
+        ]
+      : []),
   ];
 }
-
-const TABLE_CARD =
-  "page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm";
 
 export default async function TransportPage() {
   // Every approved member reads the car list.
@@ -464,14 +483,13 @@ export default async function TransportPage() {
               description="A car shows here once its driver says on their driver form that they're driving this year."
             />
           ) : (
-            <div className={TABLE_CARD}>
-              <ResponsiveDataTable
-                columns={carColumns({ viewerId: me, canEdit, rank, leadTeams })}
-                data={cars}
-                getRowKey={(c) => c.driverUserId}
-                label="Cars"
-              />
-            </div>
+            <ResponsiveDataTable
+              columns={carColumns({ viewerId: me, canEdit, rank, leadTeams })}
+              data={cars}
+              getRowKey={(c) => c.driverUserId}
+              label="Cars"
+              framed
+            />
           )}
         </section>
 
@@ -480,21 +498,20 @@ export default async function TransportPage() {
             <h2 id="requests" className="text-base font-semibold">
               {canEdit ? "Lift requests" : "Asking to ride with you"}
             </h2>
-            <div className={TABLE_CARD}>
-              <ResponsiveDataTable
-                columns={requestColumns({
-                  cars,
-                  viewerId: me,
-                  canEdit,
-                  rank,
-                  leadTeams,
-                  placeCars,
-                })}
-                data={shownRequests}
-                getRowKey={(r) => r.userId}
-                label="Lift requests"
-              />
-            </div>
+            <ResponsiveDataTable
+              columns={requestColumns({
+                cars,
+                viewerId: me,
+                canEdit,
+                rank,
+                leadTeams,
+                placeCars,
+              })}
+              data={shownRequests}
+              getRowKey={(r) => r.userId}
+              label="Lift requests"
+              framed
+            />
           </section>
         )}
 
@@ -515,14 +532,13 @@ export default async function TransportPage() {
                 description="Or nobody has said they're coming yet."
               />
             ) : (
-              <div className={TABLE_CARD}>
-                <ResponsiveDataTable
-                  columns={unseatedColumns(placeCars, askedIds)}
-                  data={unseated}
-                  getRowKey={(m) => m.userId}
-                  label="Still without a seat"
-                />
-              </div>
+              <ResponsiveDataTable
+                columns={unseatedColumns(placeCars, askedIds)}
+                data={unseated}
+                getRowKey={(m) => m.userId}
+                label="Still without a seat"
+                framed
+              />
             )}
           </section>
         )}
@@ -532,17 +548,8 @@ export default async function TransportPage() {
             <h2 id="trailers" className="text-base font-semibold">
               Trailers
             </h2>
-            <AddTrailerButton canEdit={canEdit} refusalId={REFUSAL_ID} />
+            {canEdit && <AddTrailerButton canEdit refusalId={REFUSAL_ID} />}
           </div>
-          {!canEdit && (
-            <p
-              id={REFUSAL_ID}
-              className="flex items-start gap-2 rounded-lg border border-border bg-card/40 px-3 py-2.5 text-xs text-muted-foreground"
-            >
-              <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              {TRANSPORT_REFUSAL}
-            </p>
-          )}
           {trailers.length === 0 ? (
             <EmptyState
               icon={<Truck />}
@@ -550,14 +557,13 @@ export default async function TransportPage() {
               description="Add the trailers the camp has this year, then pick the car that tows each one."
             />
           ) : (
-            <div className={TABLE_CARD}>
-              <ResponsiveDataTable
-                columns={trailerColumns({ canEdit, cars })}
-                data={trailers}
-                getRowKey={(t) => t.id}
-                label="Trailers"
-              />
-            </div>
+            <ResponsiveDataTable
+              columns={trailerColumns({ canEdit, cars })}
+              data={trailers}
+              getRowKey={(t) => t.id}
+              label="Trailers"
+              framed
+            />
           )}
         </section>
       </div>

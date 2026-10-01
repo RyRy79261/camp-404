@@ -223,3 +223,62 @@ describe("TaskBoard", () => {
     expect(screen.queryByRole("button", { name: "Add task" })).toBeNull();
   });
 });
+
+describe("TaskBoard from a team page", () => {
+  const KITCHEN = [{ value: "kitchen", label: "Kitchen" }];
+
+  it("starts filtered to the team it was opened for", () => {
+    render(
+      <TaskBoard
+        cards={[
+          card({ id: "k", title: "Buy the gas", team: "kitchen" }),
+          card({ id: "f", title: "Count the float", team: "finance" }),
+        ]}
+        viewerId="me"
+        members={[]}
+        filterTeams={[...KITCHEN, { value: "finance", label: "Finance" }]}
+        addTeams={[]}
+        canAddWithoutTeam={false}
+        initialTeam="kitchen"
+      />,
+    );
+    expect(screen.getByRole("article", { name: "Buy the gas" })).toBeTruthy();
+    expect(
+      screen.queryByRole("article", { name: "Count the float" }),
+    ).toBeNull();
+  });
+
+  it("opens Add task on the team a lead came from", () => {
+    render(
+      <TaskBoard
+        cards={[]}
+        viewerId="me"
+        members={[]}
+        filterTeams={KITCHEN}
+        addTeams={[{ value: "finance", label: "Finance" }, ...KITCHEN]}
+        canAddWithoutTeam={false}
+        initialTeam="kitchen"
+        openAdd="kitchen"
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: "Add a task" });
+    expect(
+      within(dialog).getByRole("combobox", { name: "Team" }).textContent,
+    ).toBe("Kitchen");
+  });
+
+  it("offers each column with its count for a narrow window, and an empty one says so in one line", () => {
+    renderBoard([card()]);
+    const tabs = screen.getByRole("radiogroup", { name: "Column" });
+    expect(
+      within(tabs)
+        .getAllByRole("radio")
+        .map((r) => r.textContent),
+    ).toEqual(["To do 1", "Doing 0", "Done 0"]);
+    expect(
+      within(screen.getByRole("region", { name: "Doing" })).getByText(
+        "Nothing here.",
+      ),
+    ).toBeTruthy();
+  });
+});

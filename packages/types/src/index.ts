@@ -36,3 +36,4 @@ export * from "./team-program";
 export * from "./inkblot";
 export * from "./lounge";
 export * from "./claims";
+export * from "./guide";

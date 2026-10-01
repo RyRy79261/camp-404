@@ -30,6 +30,7 @@ import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { Input } from "@camp404/ui/components/input";
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { toast } from "@camp404/ui/components/toast";
+import { CHOICE_OFF, CHOICE_ON } from "@camp404/ui/lib/choice";
 import { cn } from "@camp404/ui/lib/utils";
 import {
   nameList,
@@ -208,41 +209,71 @@ export function OrderManager({
   const leftText = (itemId: string) => {
     const left = campLeft[itemId];
     return left === undefined
-      ? "The camp has none of its own: supplier only."
+      ? "The camp has none of its own."
       : left <= 0
         ? "No camp stock left."
         : `${left} left in camp stock.`;
   };
+  /**
+   * Where one thing comes from. Two sources: a choice, marked while it is
+   * unpicked. One source: plain words, since there is nothing to choose.
+   */
   const sourcePicker = (
     label: string,
     item: ItemView,
     value: RentalSource | "",
     onChange: (source: RentalSource) => void,
-  ) => (
-    <div className="flex flex-col gap-1.5">
-      <SegmentedControl
-        aria-label={label}
-        className="page-sm:w-auto page-sm:self-start"
-        disabled={pending}
-        value={value}
-        onValueChange={(v) => onChange(v as RentalSource)}
-        options={rentalSources(item).map((source) => ({
-          value: source,
-          label: (
-            <span className="flex flex-col">
-              <span className="whitespace-nowrap">
-                {RENTAL_SOURCE_LABELS[source]}
-              </span>{" "}
-              <span className="whitespace-nowrap text-xs font-normal tabular-nums">
-                {sourcePriceText(item, source)}
+  ) => {
+    const has = rentalSources(item);
+    if (has.length === 1) {
+      const only = has[0]!;
+      return (
+        <p data-testid="only-source" className="flex flex-col gap-0.5 text-sm">
+          <span>
+            <span className="font-medium">{RENTAL_SOURCE_LABELS[only]}</span>
+            {" · "}
+            <span className="tabular-nums">{sourcePriceText(item, only)}</span>
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {leftText(item.id)}
+          </span>
+        </p>
+      );
+    }
+    return (
+      <div className="flex flex-col gap-1.5">
+        <SegmentedControl
+          aria-label={label}
+          className="page-sm:w-auto page-sm:self-start"
+          disabled={pending}
+          value={value}
+          onValueChange={(v) => onChange(v as RentalSource)}
+          options={has.map((source) => ({
+            value: source,
+            label: (
+              <span className="flex flex-col">
+                <span className="whitespace-nowrap">
+                  {RENTAL_SOURCE_LABELS[source]}
+                </span>{" "}
+                <span className="whitespace-nowrap text-xs font-normal tabular-nums">
+                  {sourcePriceText(item, source)}
+                </span>
               </span>
-            </span>
-          ),
-        }))}
-      />
-      <span className="text-xs text-muted-foreground">{leftText(item.id)}</span>
-    </div>
-  );
+            ),
+          }))}
+        />
+        {value === "" ? (
+          <span className="text-xs font-medium text-warning">
+            Pick camp stock or supplier. {leftText(item.id)}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            {leftText(item.id)}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   const sharers = tent && tent.sharers.length > 0 && (
     <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
@@ -266,234 +297,292 @@ export function OrderManager({
     shownTent !== null &&
     shownTent !== undefined &&
     !tentSleepsEnough(shownTent, tent.people);
+  const tooSmallNote = tooSmall && shownTent && (
+    <p
+      role="status"
+      data-testid="tent-too-small"
+      className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm"
+    >
+      {tooSmallText(shownTent.sleeps, tent.people ?? 0)}
+    </p>
+  );
+  // What the tent answer says, when there is no catalogue tent to pick.
+  const tentWords = !tent ? (
+    <p className="text-sm text-muted-foreground">No tent answer.</p>
+  ) : tent.choice === "own" ? (
+    <p className="text-sm">
+      Their own tent
+      {ownTentText(tent) ? `: ${ownTentText(tent)}` : ""}.
+    </p>
+  ) : tent.choice === "shared" ? (
+    order.hostedBy.length > 0 ? (
+      <p className="text-sm">In {nameList(order.hostedBy)}&rsquo;s tent.</p>
+    ) : (
+      <p
+        role="status"
+        className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm"
+      >
+        They say they are in someone else&rsquo;s tent, and nobody has put them
+        in theirs yet.
+      </p>
+    )
+  ) : null;
+  const alsoHosted = tent?.choice !== "shared" && order.hostedBy.length > 0 && (
+    <p className="text-sm text-muted-foreground">
+      {nameList(order.hostedBy)} also has them in their tent.
+    </p>
+  );
+
+  // What is still to pick before there is a total.
+  const missing = {
+    tent: needsTent && tentItem === undefined,
+    sources:
+      needed.filter((l) => !sources[l.id]).length +
+      (needsTent && tentItem !== undefined && tentSource === "" ? 1 : 0),
+  };
 
   return (
-    <div className="grid items-start gap-6 page-lg:grid-cols-3">
+    // A column on a phone, so the Confirm card can stay in sight at the
+    // bottom of the window (sticky only works inside a flex column, not a
+    // grid row); three columns from page-lg.
+    <div className="flex flex-col gap-6 page-lg:grid page-lg:grid-cols-3 page-lg:items-start">
       {confirmDialog}
-      <div className="flex flex-col gap-6 page-lg:col-span-2">
-        <Card>
-          <CardHeader className="p-5 pb-3">
-            <CardTitle className="text-base">Tent</CardTitle>
-            <CardDescription>
-              {!tent
-                ? "They have not said where they sleep."
-                : tent.choice === "need"
-                  ? confirmed
-                    ? "The tent you picked for them."
-                    : "They need a tent. Pick which one they get."
-                  : tent.choice === "own"
-                    ? "They bring their own. Nothing to pick or charge."
-                    : "They sleep in another member's tent."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent
-            data-testid="tent-panel"
-            className="flex flex-col gap-4 p-5 pt-0"
-          >
-            {!tent && (
-              <p className="text-sm text-muted-foreground">No tent answer.</p>
-            )}
-            {tent?.choice === "own" && (
-              <p className="text-sm">
-                Their own tent
-                {ownTentText(tent) ? `: ${ownTentText(tent)}` : ""}.
-              </p>
-            )}
-            {tent?.choice === "shared" &&
-              (order.hostedBy.length > 0 ? (
-                <p className="text-sm">
-                  In {nameList(order.hostedBy)}&rsquo;s tent.
-                </p>
-              ) : (
+      <div className="flex min-w-0 flex-col gap-6 page-lg:col-span-2">
+        {confirmed ? (
+          <Card>
+            <CardHeader className="p-5 pb-3">
+              <CardTitle className="text-base">Their order</CardTitle>
+              <CardDescription>
+                Confirmed at these prices. A later price change doesn&rsquo;t
+                move it.
+              </CardDescription>
+            </CardHeader>
+            <CardContent
+              data-testid="tent-panel"
+              className="flex flex-col gap-4 p-5 pt-0"
+            >
+              <ul
+                aria-label="Confirmed order"
+                className="divide-y divide-border"
+              >
+                {needsTent && assigned && (
+                  <ConfirmedRow
+                    name={assigned.itemName}
+                    detail={[
+                      tentNeedText(tent.people),
+                      sleepsText(assigned.sleeps).toLowerCase(),
+                    ].join(", ")}
+                    source={assigned.source}
+                    priceCents={assigned.unitPriceCents}
+                  />
+                )}
+                {needed.map((line) => (
+                  <ConfirmedRow
+                    key={line.id}
+                    name={quantityText(line.quantity, line.itemName)}
+                    source={line.source}
+                    priceCents={
+                      line.unitPriceCents === null
+                        ? null
+                        : line.unitPriceCents * line.quantity
+                    }
+                  />
+                ))}
+              </ul>
+              {!needsTent && tentWords}
+              {alsoHosted}
+              {sharers}
+              {needsTent && assigned && (
+                <TentLabel lineId={assigned.id} label={assigned.tentLabel} />
+              )}
+              {tooSmallNote}
+              {owned.length > 0 && (
                 <p
-                  role="status"
-                  className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm"
+                  data-testid="what-they-have"
+                  className="text-sm text-muted-foreground"
                 >
-                  They say they are in someone else&rsquo;s tent, and nobody has
-                  put them in theirs yet.
+                  Has their own: {owned.map((l) => l.itemName).join(", ")}.
                 </p>
-              ))}
-            {tent?.choice !== "shared" && order.hostedBy.length > 0 && (
-              <p className="text-sm text-muted-foreground">
-                {nameList(order.hostedBy)} also has them in their tent.
-              </p>
-            )}
-            {needsTent && (
-              <p className="text-sm font-medium">{tentNeedText(tent.people)}</p>
-            )}
-            {sharers}
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <Card>
+              <CardHeader className="p-5 pb-3">
+                <CardTitle className="text-base">Tent</CardTitle>
+                <CardDescription>
+                  {!tent
+                    ? "They have not said where they sleep."
+                    : tent.choice === "need"
+                      ? "They need a tent. Pick which one they get."
+                      : tent.choice === "own"
+                        ? "They bring their own. Nothing to pick or charge."
+                        : "They sleep in another member's tent."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent
+                data-testid="tent-panel"
+                className="flex flex-col gap-4 p-5 pt-0"
+              >
+                {tentWords}
+                {alsoHosted}
+                {needsTent && (
+                  <p className="text-sm font-medium">
+                    {tentNeedText(tent.people)}
+                  </p>
+                )}
+                {sharers}
 
-            {needsTent && sent && (
-              <>
-                {tents.length === 0 ? (
-                  <p role="alert" className="text-sm text-destructive">
-                    There is no tent in the catalogue. Add one first.
+                {needsTent && sent && (
+                  <>
+                    {tents.length === 0 ? (
+                      <p role="alert" className="text-sm text-destructive">
+                        There is no tent in the catalogue. Add one first.
+                      </p>
+                    ) : (
+                      <div
+                        role="radiogroup"
+                        aria-label="Which tent"
+                        className="flex flex-col gap-2"
+                      >
+                        {tents.map((item) => {
+                          const checked = tentId === item.id;
+                          return (
+                            <label
+                              key={item.id}
+                              className={cn(
+                                "flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md border p-3 text-sm",
+                                checked ? CHOICE_ON : CHOICE_OFF,
+                              )}
+                            >
+                              <input
+                                type="radio"
+                                name="tent-item"
+                                className="accent-[var(--color-primary)]"
+                                checked={checked}
+                                disabled={pending}
+                                onChange={() => {
+                                  setTentId(item.id);
+                                  setTentSource(firstSource(item.id, null));
+                                }}
+                              />
+                              <span className="font-medium">{item.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {sleepsText(item.sleeps)}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {tentItem &&
+                      sourcePicker(
+                        "Where the tent comes from",
+                        tentItem,
+                        tentSource,
+                        setTentSource,
+                      )}
+                  </>
+                )}
+                {tooSmallNote}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="p-5 pb-3">
+                <CardTitle className="text-base">Bedding</CardTitle>
+                <CardDescription>
+                  Camp stock is only offered for items the camp has some of.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4 p-5 pt-0">
+                {needed.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nothing else from the camp.
                   </p>
                 ) : (
-                  <div
-                    role="radiogroup"
-                    aria-label="Which tent"
-                    className="flex flex-col gap-2"
+                  <ul
+                    aria-label="Items they need"
+                    className="divide-y divide-border"
                   >
-                    {tents.map((item) => {
-                      const checked = tentId === item.id;
+                    {needed.map((line) => {
+                      const item = itemOf(line.itemId);
                       return (
-                        <label
-                          key={item.id}
-                          className={cn(
-                            "flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md border p-3 text-sm",
-                            checked
-                              ? "border-accent bg-accent/10"
-                              : "border-input bg-background hover:bg-muted/40",
-                          )}
+                        <li
+                          key={line.id}
+                          aria-label={line.itemName}
+                          className="flex flex-col gap-2 py-3"
                         >
-                          <input
-                            type="radio"
-                            name="tent-item"
-                            className="accent-[var(--color-accent)]"
-                            checked={checked}
-                            disabled={pending}
-                            onChange={() => {
-                              setTentId(item.id);
-                              setTentSource(firstSource(item.id, null));
-                            }}
-                          />
-                          <span className="font-medium">{item.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {sleepsText(item.sleeps)}
+                          <span className="text-sm font-medium">
+                            {quantityText(line.quantity, line.itemName)}
                           </span>
-                        </label>
+                          {item &&
+                            sourcePicker(
+                              `Where ${line.itemName} comes from`,
+                              item,
+                              sources[line.id] ?? "",
+                              (source) =>
+                                setSources((all) => ({
+                                  ...all,
+                                  [line.id]: source,
+                                })),
+                            )}
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                 )}
-                {tentItem &&
-                  sourcePicker(
-                    "Where the tent comes from",
-                    tentItem,
-                    tentSource,
-                    setTentSource,
-                  )}
-              </>
-            )}
-            {needsTent && confirmed && assigned && (
-              <>
-                <p className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
-                  <span className="font-medium">
-                    {assigned.itemName}{" "}
-                    <span className="text-xs font-normal text-muted-foreground">
-                      {sleepsText(assigned.sleeps)}
-                    </span>
-                  </span>
-                  {assigned.source && assigned.unitPriceCents !== null && (
-                    <span className="tabular-nums">
-                      {RENTAL_SOURCE_LABELS[assigned.source]},{" "}
-                      {formatMoney(assigned.unitPriceCents)}
-                    </span>
-                  )}
-                </p>
-                <TentLabel lineId={assigned.id} label={assigned.tentLabel} />
-              </>
-            )}
-            {tooSmall && shownTent && (
-              <p
-                role="status"
-                data-testid="tent-too-small"
-                className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm"
-              >
-                {tooSmallText(shownTent.sleeps, tent.people ?? 0)}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="p-5 pb-3">
-            <CardTitle className="text-base">Bedding</CardTitle>
-            <CardDescription>
-              {sent
-                ? "Camp stock is only offered for items the camp has some of."
-                : confirmed
-                  ? "Confirmed at these prices. A later price change doesn't move it."
-                  : "The member hasn't sent this yet. It may still change."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 p-5 pt-0">
-            {needed.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nothing else from the camp.
-              </p>
-            ) : (
-              <ul aria-label="Items they need" className="flex flex-col gap-3">
-                {needed.map((line) => {
-                  const item = itemOf(line.itemId);
-                  return (
-                    <li
-                      key={line.id}
-                      aria-label={line.itemName}
-                      className="flex flex-col gap-3 rounded-lg border border-border p-4"
-                    >
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                        <span className="font-medium">
-                          {quantityText(line.quantity, line.itemName)}
-                        </span>
-                        {confirmed &&
-                          line.source &&
-                          line.unitPriceCents !== null && (
-                            <span className="text-sm tabular-nums">
-                              {RENTAL_SOURCE_LABELS[line.source]},{" "}
-                              {formatMoney(line.unitPriceCents * line.quantity)}
-                            </span>
-                          )}
-                      </div>
-                      {sent &&
-                        item &&
-                        sourcePicker(
-                          `Where ${line.itemName} comes from`,
-                          item,
-                          sources[line.id] ?? "",
-                          (source) =>
-                            setSources((all) => ({
-                              ...all,
-                              [line.id]: source,
-                            })),
-                        )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {owned.length > 0 && (
-              <p
-                data-testid="what-they-have"
-                className="text-sm text-muted-foreground"
-              >
-                Has their own: {owned.map((l) => l.itemName).join(", ")}.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+                {owned.length > 0 && (
+                  <p
+                    data-testid="what-they-have"
+                    className="text-sm text-muted-foreground"
+                  >
+                    Has their own: {owned.map((l) => l.itemName).join(", ")}.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
-      <Card>
-        <CardHeader className="p-5 pb-3">
+      {/* On a phone a sent order's total and Confirm stay at the foot of
+          the window while the captain scrolls the picks. */}
+      <Card
+        className={cn(
+          sent &&
+            "sticky bottom-0 z-10 shadow-lg page-sm:static page-sm:shadow-sm",
+        )}
+      >
+        <CardHeader className={cn("p-5 pb-3", sent && "hidden page-sm:flex")}>
           <CardTitle className="text-base">
             {confirmed ? "Confirmed" : "Confirm"}
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 p-5 pt-0">
+        <CardContent
+          className={cn(
+            "flex flex-col gap-3 p-5 pt-0",
+            sent && "p-4 page-sm:p-5 page-sm:pt-0",
+          )}
+        >
           <p className="flex items-baseline justify-between gap-3">
             <span className="text-sm text-muted-foreground">Total</span>
             <span
               role="status"
               aria-label="Order total"
-              className="text-2xl font-bold tabular-nums"
+              className={cn(
+                "tabular-nums",
+                confirmed || allPicked
+                  ? "text-2xl font-bold"
+                  : "text-right text-sm font-medium text-warning",
+              )}
             >
               {confirmed
                 ? formatMoney(order.totalCents ?? 0)
-                : sent && allPicked
+                : allPicked
                   ? formatMoney(total)
-                  : "Not yet"}
+                  : stillToPickText(missing)}
             </span>
           </p>
           {error && (
@@ -546,14 +635,59 @@ export function OrderManager({
               </Button>
             </>
           )}
-          {order.status === "draft" && (
-            <p className="text-sm text-muted-foreground">
-              You can confirm it once the member sends it.
-            </p>
-          )}
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * What still stands between a sent order and its total: "Pick their tent",
+ * "Pick a source for 2 items", or both.
+ */
+export function stillToPickText(missing: {
+  tent: boolean;
+  sources: number;
+}): string {
+  const sources =
+    missing.sources === 1
+      ? "a source for 1 item"
+      : `a source for ${missing.sources} items`;
+  if (missing.tent) {
+    return missing.sources > 0
+      ? `Pick their tent and ${sources}`
+      : "Pick their tent";
+  }
+  return missing.sources > 0 ? `Pick ${sources}` : "Not yet";
+}
+
+/** One confirmed line: the thing, where it came from, and what it cost. */
+function ConfirmedRow({
+  name,
+  detail,
+  source,
+  priceCents,
+}: {
+  name: string;
+  detail?: string;
+  source: RentalSource | null;
+  priceCents: number | null;
+}) {
+  return (
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5 py-2.5 text-sm page-sm:grid-cols-[minmax(0,1fr)_8rem_7rem]">
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="font-medium">{name}</span>
+        {detail && (
+          <span className="text-xs text-muted-foreground">{detail}</span>
+        )}
+      </span>
+      <span className="col-start-1 row-start-2 text-xs text-muted-foreground page-sm:col-start-2 page-sm:row-start-1 page-sm:text-sm">
+        {source ? RENTAL_SOURCE_LABELS[source] : "–"}
+      </span>
+      <span className="col-start-2 row-start-1 text-right font-medium tabular-nums page-sm:col-start-3">
+        {priceCents === null ? "–" : formatMoney(priceCents)}
+      </span>
+    </li>
   );
 }
 
@@ -570,7 +704,7 @@ function TentLabel({
   const id = `tent-label-${lineId}`;
   return (
     <form
-      className="flex flex-wrap items-end gap-2"
+      className="flex flex-col gap-1.5 border-t border-border pt-4"
       onSubmit={(e) => {
         e.preventDefault();
         start(async () => {
@@ -584,27 +718,33 @@ function TentLabel({
         });
       }}
     >
-      <label htmlFor={id} className="flex flex-col gap-1.5 text-sm font-medium">
+      <label htmlFor={id} className="text-sm font-medium">
         Tent label
+      </label>
+      <span className="flex items-center gap-2">
         <Input
           id={id}
           className="w-32"
           maxLength={TENT_LABEL_MAX}
-          placeholder="T1"
+          placeholder="e.g. T1"
           value={value}
           disabled={pending}
           onChange={(e) => setValue(e.currentTarget.value)}
         />
-      </label>
-      <Button
-        type="submit"
-        size="sm"
-        variant="outline"
-        disabled={pending || value.trim() === (label ?? "")}
-      >
-        {pending && <Loader2 className="animate-spin" aria-hidden />}
-        Save label
-      </Button>
+        <Button
+          type="submit"
+          size="sm"
+          variant="outline"
+          className="ml-auto"
+          disabled={pending || value.trim() === (label ?? "")}
+        >
+          {pending && <Loader2 className="animate-spin" aria-hidden />}
+          Save label
+        </Button>
+      </span>
+      <span className="text-xs text-muted-foreground">
+        The member sees it on My gear and writes it down before the Burn.
+      </span>
     </form>
   );
 }

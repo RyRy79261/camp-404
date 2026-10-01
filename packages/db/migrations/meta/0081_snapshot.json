@@ -1,5 +1,5 @@
 {
-  "id": "615b2a2b-777f-48a1-b4e4-2013e908e828",
+  "id": "cf3bca58-136b-48b9-b509-2ff1e5808d78",
   "prevId": "05f1e1c4-2e07-4697-98ac-1f0356245edb",
   "version": "7",
   "dialect": "postgresql",
@@ -1763,6 +1763,195 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.document_reads": {
+      "name": "document_reads",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "read_at": {
+          "name": "read_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "document_reads_user_id_users_id_fk": {
+          "name": "document_reads_user_id_users_id_fk",
+          "tableFrom": "document_reads",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "document_reads_document_id_documents_id_fk": {
+          "name": "document_reads_document_id_documents_id_fk",
+          "tableFrom": "document_reads",
+          "tableTo": "documents",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "document_reads_user_id_document_id_pk": {
+          "name": "document_reads_user_id_document_id_pk",
+          "columns": [
+            "user_id",
+            "document_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.document_versions": {
+      "name": "document_versions",
+      "schema": "",
+      "columns": {
+        "document_id": {
+          "name": "document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "team": {
+          "name": "team",
+          "type": "team",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "document_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "markdown": {
+          "name": "markdown",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "card": {
+          "name": "card",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "published_by": {
+          "name": "published_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "document_versions_document_id_documents_id_fk": {
+          "name": "document_versions_document_id_documents_id_fk",
+          "tableFrom": "document_versions",
+          "tableTo": "documents",
+          "columnsFrom": [
+            "document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "document_versions_published_by_users_id_fk": {
+          "name": "document_versions_published_by_users_id_fk",
+          "tableFrom": "document_versions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "published_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "document_versions_document_id_version_pk": {
+          "name": "document_versions_document_id_version_pk",
+          "columns": [
+            "document_id",
+            "version"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "document_versions_version_check": {
+          "name": "document_versions_version_check",
+          "value": "\"document_versions\".\"version\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.documents": {
       "name": "documents",
       "schema": "",
@@ -1799,12 +1988,26 @@
           "primaryKey": false,
           "notNull": false
         },
+        "kind": {
+          "name": "kind",
+          "type": "document_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'chapter'"
+        },
         "markdown": {
           "name": "markdown",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "''"
+        },
+        "card": {
+          "name": "card",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "version": {
           "name": "version",
@@ -1821,6 +2024,25 @@
         },
         "published": {
           "name": "published",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "published_version": {
+          "name": "published_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cycle_reviewed": {
+          "name": "cycle_reviewed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "public": {
+          "name": "public",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -1891,7 +2113,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "documents_card_check": {
+          "name": "documents_card_check",
+          "value": "(\"documents\".\"kind\" = 'duty_card') = (\"documents\".\"card\" is not null)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.driver_profiles": {
@@ -4840,301 +5067,6 @@
           "value": "\"kitchen_meal_plans\".\"days_on_site\" between 1 and 30"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.kitchen_menu_items": {
-      "name": "kitchen_menu_items",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "day": {
-          "name": "day",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "meal": {
-          "name": "meal",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "recipe_id": {
-          "name": "recipe_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "added_by_user_id": {
-          "name": "added_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "kitchen_menu_items_meal_recipe_idx": {
-          "name": "kitchen_menu_items_meal_recipe_idx",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "day",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "meal",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "recipe_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "kitchen_menu_items_cycle_idx": {
-          "name": "kitchen_menu_items_cycle_idx",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "kitchen_menu_items_recipe_id_recipes_id_fk": {
-          "name": "kitchen_menu_items_recipe_id_recipes_id_fk",
-          "tableFrom": "kitchen_menu_items",
-          "tableTo": "recipes",
-          "columnsFrom": [
-            "recipe_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "kitchen_menu_items_added_by_user_id_users_id_fk": {
-          "name": "kitchen_menu_items_added_by_user_id_users_id_fk",
-          "tableFrom": "kitchen_menu_items",
-          "tableTo": "users",
-          "columnsFrom": [
-            "added_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "kitchen_menu_items_day_check": {
-          "name": "kitchen_menu_items_day_check",
-          "value": "\"kitchen_menu_items\".\"day\" between 1 and 30"
-        },
-        "kitchen_menu_items_meal_check": {
-          "name": "kitchen_menu_items_meal_check",
-          "value": "\"kitchen_menu_items\".\"meal\" in ('breakfast', 'dinner')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.kitchen_shopping_ticks": {
-      "name": "kitchen_shopping_ticks",
-      "schema": "",
-      "columns": {
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "item_key": {
-          "name": "item_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "amount": {
-          "name": "amount",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ticked_by_user_id": {
-          "name": "ticked_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ticked_at": {
-          "name": "ticked_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "kitchen_shopping_ticks_ticked_by_user_id_users_id_fk": {
-          "name": "kitchen_shopping_ticks_ticked_by_user_id_users_id_fk",
-          "tableFrom": "kitchen_shopping_ticks",
-          "tableTo": "users",
-          "columnsFrom": [
-            "ticked_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "kitchen_shopping_ticks_cycle_item_key_pk": {
-          "name": "kitchen_shopping_ticks_cycle_item_key_pk",
-          "columns": [
-            "cycle",
-            "item_key"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.kitchen_snacks": {
-      "name": "kitchen_snacks",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "cycle": {
-          "name": "cycle",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "amount": {
-          "name": "amount",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "added_by_user_id": {
-          "name": "added_by_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "kitchen_snacks_cycle_idx": {
-          "name": "kitchen_snacks_cycle_idx",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "kitchen_snacks_added_by_user_id_users_id_fk": {
-          "name": "kitchen_snacks_added_by_user_id_users_id_fk",
-          "tableFrom": "kitchen_snacks",
-          "tableTo": "users",
-          "columnsFrom": [
-            "added_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.lift_requests": {
@@ -13703,6 +13635,14 @@
         "none",
         "allocated",
         "can_transfer"
+      ]
+    },
+    "public.document_kind": {
+      "name": "document_kind",
+      "schema": "public",
+      "values": [
+        "chapter",
+        "duty_card"
       ]
     },
     "public.dues_charge_kind": {

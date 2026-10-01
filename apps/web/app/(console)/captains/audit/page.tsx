@@ -122,7 +122,7 @@ export async function AuditRows({ cursor }: { cursor: string | null }) {
           data={data.entries}
           getRowKey={(e) => e.id}
           label="Audit log"
-          className="page-md:rounded-xl page-md:border page-md:bg-card page-md:shadow-sm"
+          framed
         />
       )}
 

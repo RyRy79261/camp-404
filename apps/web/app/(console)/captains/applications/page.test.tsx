@@ -37,8 +37,12 @@ import ApplicationsPage from "./page";
 function member(
   id: string,
   displayName: string,
-  participation: "applied" | "accepted" | null,
-  participationIntent: "yes" | "maybe" | null = participation ? "yes" : null,
+  participation: "applied" | "accepted" | "not_attending" | null,
+  participationIntent: "yes" | "maybe" | "no" | null = participation
+    ? participation === "not_attending"
+      ? "no"
+      : "yes"
+    : null,
 ) {
   return {
     id,
@@ -68,6 +72,7 @@ beforeEach(() => {
     member("m1", "Ada Yes", "applied"),
     // Accepted, though he said Maybe: the page shows both, apart.
     member("m2", "Ben Placed", "accepted", "maybe"),
+    member("m3", "Nadia No", "not_attending"),
   ] as never);
   vi.mocked(listTicketsThisYear).mockResolvedValue(
     new Map([
@@ -79,6 +84,7 @@ beforeEach(() => {
           wap: "requested",
         },
       ],
+      ["m3", { ticketStatus: "unknown", ddt: "none", wap: "issued" }],
     ]),
   );
 });
@@ -103,22 +109,78 @@ describe("Applications page", () => {
         }) as HTMLSelectElement
       ).value,
     ).toBe("needs_directed_ticket");
-    // The two short names are spelled out once, with the decision rule.
-    const hint = screen.getByText(/Decision is yours/);
-    expect(hint.textContent).toMatch(/DDT \(direct distribution ticket\)/);
-    expect(hint.textContent).toMatch(/WAP \(work access pass\)/);
-    expect(hint.textContent).toMatch(/says Coming or Maybe/);
+    // One line under the heading says who sets what; the short names are
+    // spelled out once, in the column heads' tooltips.
+    expect(
+      screen.getByText(
+        "Says is the member's answer. Decision, ticket, DDT and WAP are set by captains.",
+      ),
+    ).toBeTruthy();
+    expect(within(t).getByTitle("Direct distribution ticket")).toBeTruthy();
+    expect(within(t).getByTitle("Work access pass")).toBeTruthy();
     const early = within(t).getByRole("combobox", {
       name: "WAP for Ben Placed",
     }) as HTMLSelectElement;
     expect(early.value).toBe("requested");
+    // The decision is one control in the same place on every row, with the
+    // captains' decision pressed.
+    const adaAccept = within(t).getByRole("button", {
+      name: "Accept Ada Yes for this year",
+    });
+    expect(adaAccept.getAttribute("aria-pressed")).toBe("false");
     expect(
-      within(t).getByRole("button", { name: "Accept Ada Yes for this year" }),
+      within(t)
+        .getByRole("button", { name: "Accept Ben Placed for this year" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      within(t)
+        .getByRole("button", { name: "Put Ben Placed on the waiting list" })
+        .getAttribute("aria-pressed"),
+    ).toBe("false");
+    // A name opens the member on the roster.
+    expect(
+      within(t).getByRole("link", { name: "Ada Yes" }).getAttribute("href"),
+    ).toBe("/captains/camp-management?member=m1");
+    // The count line, and the ticket filter's count: one accepted member has
+    // no ticket yet.
+    expect(screen.getByRole("status").textContent).toBe(
+      "3 members, 1 still needs a ticket",
+    );
+    const ticketFilter = screen.getByRole("combobox", {
+      name: "Ticket",
+    }) as HTMLSelectElement;
+    expect([...ticketFilter.options].map((o) => o.textContent)).toContain(
+      "Still needs a ticket (1)",
+    );
+  });
+
+  it("gives a member who is not coming nothing to set or decide", async () => {
+    gate("captain");
+    render(await ApplicationsPage());
+
+    const t = table();
+    const nadia = within(t).getByText("Nadia No").closest("tr")!;
+    expect(within(nadia).getByText("Not coming")).toBeTruthy();
+    // Present first, then the absences.
+    expect(
+      within(nadia).getByText(
+        "Nothing to decide until they say Coming or Maybe",
+      ),
     ).toBeTruthy();
-    // The filter counts: one accepted member has no ticket yet.
+    expect(within(nadia).queryByRole("button")).toBeNull();
     expect(
-      screen.getByRole("button", { name: /Still need a ticket/ }).textContent,
-    ).toBe("Still need a ticket1");
+      within(nadia).queryByRole("combobox", { name: /Ticket|DDT/ }),
+    ).toBeNull();
+    // A WAP the captains already gave her stays a select, so it can be taken
+    // back.
+    expect(
+      (
+        within(nadia).getByRole("combobox", {
+          name: "WAP for Nadia No",
+        }) as HTMLSelectElement
+      ).value,
+    ).toBe("issued");
   });
 
   it("gives a team lead the statuses only, and never reads the tickets", async () => {
@@ -142,11 +204,14 @@ describe("Applications page", () => {
     expect(
       within(t).queryByRole("columnheader", { name: "Ticket" }),
     ).toBeNull();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    // Nobody decided on Nadia: a dash, not an empty cell.
+    const nadia = within(t).getByText("Nadia No").closest("tr")!;
+    expect(within(nadia).getByTitle("Nothing to decide")).toBeTruthy();
+    expect(within(t).queryByRole("combobox")).toBeNull();
     expect(screen.queryByRole("button", { name: /for this year$/ })).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: /Still need a ticket/ }),
-    ).toBeNull();
+    expect(screen.getByRole("combobox", { name: "This year" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Ticket" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("3 members");
   });
 
   it("locks the page for a plain member, and reads nothing", async () => {
@@ -156,8 +221,9 @@ describe("Applications page", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Applications" }),
     ).toBeTruthy();
+    expect(screen.getByText("For captains and team leads")).toBeTruthy();
     expect(
-      screen.getByText(/Applications are for captains and team leads/),
+      screen.getByText("Ask a captain if you need to know who is coming."),
     ).toBeTruthy();
     expect(getCampManagementRoster).not.toHaveBeenCalled();
     expect(listTicketsThisYear).not.toHaveBeenCalled();
@@ -168,12 +234,28 @@ describe("Applications page", () => {
     gate("captain");
     render(await ApplicationsPage());
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /Still need a ticket/ }),
-    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Ticket" }), {
+      target: { value: "needs_ticket" },
+    });
     const t = table();
     expect(within(t).getByText("Ben Placed")).toBeTruthy();
     expect(within(t).queryByText("Ada Yes")).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe(
+      "1 member, 1 still needs a ticket",
+    );
+  });
+
+  it("finds a member by name", async () => {
+    gate("captain");
+    render(await ApplicationsPage());
+
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Find a member by name" }),
+      { target: { value: "ada" } },
+    );
+    const t = table();
+    expect(within(t).getByText("Ada Yes")).toBeTruthy();
+    expect(within(t).queryByText("Ben Placed")).toBeNull();
   });
 
   it("saves a pass with the value the captain saw, and refreshes", async () => {
@@ -239,5 +321,17 @@ describe("Applications page", () => {
         to: "accepted",
       }),
     );
+  });
+
+  it("does nothing when the decision already made is tapped again", async () => {
+    gate("captain");
+    render(await ApplicationsPage());
+
+    fireEvent.click(
+      within(table()).getByRole("button", {
+        name: "Accept Ben Placed for this year",
+      }),
+    );
+    expect(decideParticipationAction).not.toHaveBeenCalled();
   });
 });

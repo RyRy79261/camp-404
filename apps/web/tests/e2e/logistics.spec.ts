@@ -16,8 +16,9 @@ import {
 // camp's Google Calendar). A Transport and Logistics lead sets the Build days;
 // they show on the Calendar once, as a whole-camp event titled "Build". Saving again with a new last day still
 // leaves ONE event there (the phase owns its event id). Clearing the days
-// takes it off. A lead of Kitchen and a plain member read the days and find
-// Edit disabled with the reason beside it.
+// takes it off, after the dialog asks. A lead of Kitchen and a plain member
+// read the days as content: no Edit at all, and one quiet line saying who sets
+// them.
 
 /** The camp's day `days` from now (YYYY-MM-DD). */
 function campDay(days: number): string {
@@ -88,7 +89,8 @@ test.describe("logistics days (test-mode)", () => {
     await expect(page.getByText("Build saved")).toBeVisible();
     await expect(phaseRow(page, "Build")).toContainText("3 days");
     await expect(phaseRow(page, "Build")).toContainText("On site");
-    await expect(phaseRow(page, "Build")).toContainText("On the camp calendar");
+    // On the calendar is the normal case, said once in the page description.
+    await expect(phaseRow(page, "Build")).not.toContainText("camp calendar");
 
     let events = await buildEventsOnCalendar(page);
     await expect(events).toHaveCount(1);
@@ -127,20 +129,16 @@ test.describe("logistics days (test-mode)", () => {
     await expect(phaseRow(page, "Build")).toContainText("4 days");
     await expect(
       page.getByText(
-        "Only captains and Transport and Logistics leads can change the logistics days.",
+        "Captains and Transport and Logistics leads set the days.",
       ),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /^Edit Build/ }),
-    ).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Edit/ })).toHaveCount(0);
 
     // So does a plain member.
     await approvedMember(page, request, "log-member", "Mo Member");
     await openLogistics(page);
     await expect(phaseRow(page, "Build")).toContainText("4 days");
-    await expect(
-      page.getByRole("button", { name: /^Edit Pack/ }),
-    ).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Edit/ })).toHaveCount(0);
 
     // The lead clears the days: the event comes off the calendar.
     await login(page, {
@@ -152,6 +150,8 @@ test.describe("logistics days (test-mode)", () => {
     await page.getByRole("button", { name: "Edit Build" }).click();
     dialog = page.getByRole("dialog", { name: "Build" });
     await dialog.getByRole("button", { name: "Clear days" }).click();
+    await expect(dialog).toContainText("Take Build off the camp calendar?");
+    await dialog.getByRole("button", { name: "Yes, clear the days" }).click();
     await expect(page.getByText("Build days cleared")).toBeVisible();
     await expect(phaseRow(page, "Build")).toContainText("Days not set yet.");
     events = await buildEventsOnCalendar(page);

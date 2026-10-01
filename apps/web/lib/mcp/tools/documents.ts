@@ -1,14 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { and, asc, eq } from "drizzle-orm";
-import { createHttpDb } from "@camp404/db";
 import { slugify } from "@camp404/core";
 import {
-  createDocument,
+  createGuideChapter,
   getDocumentBySlug,
+  getPublishedChapter,
   listDocumentDrafts,
-  setDocumentPublished,
-  updateDocument,
+  listPublishedChapters,
+  publishGuideChapter,
+  saveGuideChapter,
+  unpublishGuideChapter,
   type DocumentTeam,
 } from "@camp404/db/documents";
 import * as schema from "@camp404/db/schema";
@@ -41,17 +42,15 @@ export function registerDocumentTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async () => {
-          const db = createHttpDb();
-          const conditions = [eq(schema.documents.published, true)];
-          if (args.team) conditions.push(eq(schema.documents.team, args.team));
-          if (args.category)
-            conditions.push(eq(schema.documents.category, args.category));
-          const rows = await db
-            .select()
-            .from(schema.documents)
-            .where(and(...conditions))
-            .orderBy(asc(schema.documents.title));
-          return truncateList(rows);
+          // What members read: each chapter's published version.
+          const rows = await listPublishedChapters();
+          return truncateList(
+            rows.filter(
+              (row) =>
+                (!args.team || row.team === args.team) &&
+                (!args.category || row.category === args.category),
+            ),
+          );
         },
       }),
   );
@@ -70,14 +69,7 @@ export function registerDocumentTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async () => {
-          const db = createHttpDb();
-          const [row] = await db
-            .select()
-            .from(schema.documents)
-            .where(
-              and(eq(schema.documents.slug, args.slug), eq(schema.documents.published, true)),
-            )
-            .limit(1);
+          const row = await getPublishedChapter(args.slug);
           if (!row) notFound("No published document with that slug.");
           return row;
         },
@@ -201,19 +193,21 @@ function registerDocumentAuthoringTools(server: McpServer): void {
           }
           const slug = args.slug ?? slugify(args.title);
           if (!Slug.safeParse(slug).success) {
-            throw new ToolError("Give the document a slug, like kitchen-safety.");
+            throw new ToolError(
+              "Give the document a slug, like kitchen-safety.",
+            );
           }
-          const result = await createDocument({
+          const result = await createGuideChapter({
             title: args.title,
             slug,
             category: args.category,
             team,
+            kind: "chapter",
             markdown: args.markdown,
-            authorId: scope.campUserId,
+            card: null,
+            actorId: scope.campUserId,
           });
-          if (!result.ok) {
-            throw new ToolError(`The slug "${slug}" is taken. Pick another.`);
-          }
+          if (!result.ok) throw new ToolError(result.error);
           return result.document;
         },
       }),
@@ -237,24 +231,23 @@ function registerDocumentAuthoringTools(server: McpServer): void {
       runTool({
         toolName: "update_document",
         extra,
-        argsForAudit: { slug: args.slug, expectedVersion: args.expectedVersion },
+        argsForAudit: {
+          slug: args.slug,
+          expectedVersion: args.expectedVersion,
+        },
         handler: async ({ scope }) => {
           await writableDocument(scope, args.slug);
           const { slug, expectedVersion, ...change } = args;
           if (Object.values(change).every((value) => value === undefined)) {
             throw new ToolError("Say at least one field to change.");
           }
-          const result = await updateDocument({
+          const result = await saveGuideChapter({
             slug,
             expectedVersion,
             change,
             actorId: scope.campUserId,
           });
-          if (!result.ok) {
-            throw new ToolError(
-              "Someone saved this document since you read it. Read it again.",
-            );
-          }
+          if (!result.ok) throw new ToolError(result.error);
           return result.document;
         },
       }),
@@ -265,7 +258,7 @@ function registerDocumentAuthoringTools(server: McpServer): void {
     {
       title: "Publish or unpublish a camp document",
       description:
-        "A captain, or the lead of the document's team, publishes a document so every member can read it, or takes it back to a draft.",
+        "A captain, or the lead of the document's team, publishes a document so every member can read it in the Survival Guide (each publish that changes it is a new version; old versions stay), or takes it off the guide.",
       inputSchema: { slug: Slug, published: z.boolean() },
     },
     async (args, extra) =>
@@ -275,13 +268,20 @@ function registerDocumentAuthoringTools(server: McpServer): void {
         argsForAudit: args,
         handler: async ({ scope }) => {
           await writableDocument(scope, args.slug);
-          const row = await setDocumentPublished({
+          if (!args.published) {
+            const result = await unpublishGuideChapter({
+              slug: args.slug,
+              actorId: scope.campUserId,
+            });
+            if (!result.ok) throw new ToolError(result.error);
+            return { slug: args.slug, published: false };
+          }
+          const result = await publishGuideChapter({
             slug: args.slug,
-            published: args.published,
             actorId: scope.campUserId,
           });
-          if (!row) notFound("No document with that slug.");
-          return { slug: row.slug, published: row.published, version: row.version };
+          if (!result.ok) throw new ToolError(result.error);
+          return { slug: args.slug, published: true, version: result.version };
         },
       }),
   );

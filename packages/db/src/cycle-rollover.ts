@@ -708,6 +708,13 @@ export async function setFoundingYear(input: {
     await tx
       .delete(schema.kitchenMealPlans)
       .where(eq(schema.kitchenMealPlans.cycle, UNSET_CYCLE));
+    // The Survival Guide (#250): a chapter published or marked reviewed
+    // before the camp had a year was checked for the founding year, not for
+    // "year 1", or every one of them would wait for review again.
+    await tx
+      .update(schema.documents)
+      .set({ cycleReviewed: input.year })
+      .where(eq(schema.documents.cycleReviewed, UNSET_CYCLE));
     // Transport (#270): the year's trailers and lift requests.
     const trailers = await tx
       .update(schema.transportTrailers)

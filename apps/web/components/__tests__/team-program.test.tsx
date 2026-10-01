@@ -141,16 +141,33 @@ describe("PowerGlanceCard", () => {
     ).toBe("/power/fuel");
   });
 
-  it("says what is missing before there is a plan", () => {
+  it("is one line before there is a plan, with the editor's way to start it", () => {
+    const empty = { loadCount: 0, peak: null, generator: null, fuel: null };
+    render(<PowerGlanceCard glance={empty} canEdit={false} />);
+    expect(screen.getByText("No power plan yet.")).toBeTruthy();
+    expect(screen.queryByRole("article")).toBeNull();
+    expect(screen.queryByRole("link")).toBeNull();
+    cleanup();
+    render(<PowerGlanceCard glance={empty} canEdit />);
+    expect(
+      screen
+        .getByRole("link", { name: "Start the load list" })
+        .getAttribute("href"),
+    ).toBe("/power/loads");
+  });
+
+  it("says what is missing once there is part of a plan", () => {
     render(
       <PowerGlanceCard
-        glance={{ loadCount: 0, peak: null, generator: null, fuel: null }}
+        glance={{ ...GLANCE, generator: null, fuel: null }}
         canEdit={false}
       />,
     );
-    expect(tile("Peak load").textContent).toContain("No loads on the list yet");
     expect(tile("Generator load").textContent).toContain(
       "No generator chosen yet",
+    );
+    expect(tile("Fuel for the burn").textContent).toContain(
+      "Needs loads and a generator",
     );
   });
 });
@@ -185,6 +202,18 @@ describe("TeamAboutEditor", () => {
       description: "We bring the water.",
       expectedVersion: 1,
     });
+  });
+
+  it("says in plain words who reads it, on the window's colours, and grows with the text", () => {
+    const dialog = open();
+    expect(dialog.textContent).toContain(
+      "Every member reads this on the Water page. Captains and Water leads can change it.",
+    );
+    expect(dialog.textContent).not.toContain("program");
+    expect(dialog.hasAttribute("data-window-tint")).toBe(true);
+    expect(
+      within(dialog).getByLabelText("What the team does").className,
+    ).toContain("field-sizing-content");
   });
 
   it("shows a description over the limit beside its field and sends nothing", () => {

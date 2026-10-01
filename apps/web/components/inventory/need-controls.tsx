@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { HandHeart, Pencil, Plus, Trash2, X } from "lucide-react";
+import { HandHeart, Pencil, Plus, Trash2, Undo2 } from "lucide-react";
 import {
   EditInventoryNeedInput,
   InventoryNeedInput,
@@ -305,7 +305,7 @@ export function NeedRowActions({
   const [confirming, setConfirming] = React.useState(false);
   const [removing, start] = React.useTransition();
   return (
-    <span className="flex items-center gap-1">
+    <>
       <Button
         variant="ghost"
         size="icon"
@@ -362,7 +362,7 @@ export function NeedRowActions({
           })
         }
       />
-    </span>
+    </>
   );
 }
 
@@ -387,7 +387,6 @@ export function PledgeButton({
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
-  const [withdrawing, startWithdraw] = React.useTransition();
 
   function close(next: boolean) {
     if (pending) return;
@@ -420,43 +419,20 @@ export function PledgeButton({
     });
   }
 
+  // The row's one main action, the same filled button whether or not the
+  // viewer has pledged (only its words change), so it never moves or fades
+  // between rows. Taking a pledge back is a quiet action of its own
+  // (WithdrawPledgeButton, in the row's secondary slot).
   return (
-    <span className="flex flex-wrap items-center gap-1">
+    <>
       <Button
         size="sm"
-        variant={mine ? "outline" : "default"}
         onClick={() => setOpen(true)}
         aria-label={mine ? `Change my pledge for ${name}` : `Pledge ${name}`}
       >
         <HandHeart aria-hidden />
-        {mine ? "Change" : "I'll bring some"}
+        {mine ? "Change pledge" : "I'll bring some"}
       </Button>
-      {mine && (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={withdrawing}
-          aria-label={`Take back my pledge for ${name}`}
-          onClick={() =>
-            startWithdraw(async () => {
-              const result = await reached(withdrawPledgeAction({ needId }));
-              if (!result.ok) {
-                toast.error(result.error);
-                return;
-              }
-              toast.success("Pledge taken back");
-              router.refresh();
-            })
-          }
-        >
-          {withdrawing ? (
-            <Spinner size="sm" label="Taking back…" />
-          ) : (
-            <X aria-hidden />
-          )}
-          Take back
-        </Button>
-      )}
       <Dialog open={open} onOpenChange={close}>
         <DialogContent>
           <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
@@ -518,6 +494,44 @@ export function PledgeButton({
           </form>
         </DialogContent>
       </Dialog>
-    </span>
+    </>
+  );
+}
+
+/** Takes the viewer's own pledge back: a quiet icon beside the main button. */
+export function WithdrawPledgeButton({
+  needId,
+  name,
+}: {
+  needId: string;
+  name: string;
+}) {
+  const router = useRouter();
+  const [withdrawing, start] = React.useTransition();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      disabled={withdrawing}
+      aria-label={`Take back my pledge for ${name}`}
+      title="Take back my pledge"
+      onClick={() =>
+        start(async () => {
+          const result = await reached(withdrawPledgeAction({ needId }));
+          if (!result.ok) {
+            toast.error(result.error);
+            return;
+          }
+          toast.success("Pledge taken back");
+          router.refresh();
+        })
+      }
+    >
+      {withdrawing ? (
+        <Spinner size="sm" label="Taking back…" />
+      ) : (
+        <Undo2 aria-hidden />
+      )}
+    </Button>
   );
 }

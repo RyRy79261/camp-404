@@ -1,8 +1,14 @@
 import Link from "next/link";
-import { Tent } from "lucide-react";
+import { ChevronRight, Tent } from "lucide-react";
 import { formatMoney, sumMinor } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
-import { Card, CardContent } from "@camp404/ui/components/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@camp404/ui/components/card";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import {
   ResponsiveDataTable,
@@ -29,8 +35,8 @@ export const metadata = { title: "Gear rental — Camp 404" };
 // Every member's gear order for the year (#241), for captains: the ones
 // waiting to be confirmed first. A row opens the order, where the captain
 // picks camp stock or the supplier for each item and confirms. Above them:
-// who is coming this year and has NOT sent an order, by name, and "Ask
-// everyone", which nudges exactly those members. A name opens a page where a
+// who is coming this year and has NOT sent an order, by name, and the
+// button in that card, which nudges exactly those members. A name opens a page where a
 // captain can fill the order in for them. Member money data: nothing is read
 // for anyone but a captain.
 
@@ -39,19 +45,27 @@ const COLUMNS: ResponsiveColumn<RentalOrder>[] = [
     id: "member",
     header: "Member",
     role: "title",
-    cellClassName: "whitespace-normal",
+    headClassName: "min-w-40",
+    cellClassName: "whitespace-nowrap",
+    // The name is the row's way in: it reads as a link (AfrikaBurn's
+    // RegistrationsTable), with a chevron that says it opens.
     cell: (o) => (
       <Link
         href={rentalOrderPath(o.userId)}
-        className="font-medium hover:text-accent"
+        className="group/name inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 hover:text-accent hover:underline"
       >
         {o.memberName}
+        <ChevronRight
+          className="h-4 w-4 text-muted-foreground group-hover/name:text-accent"
+          aria-hidden
+        />
       </Link>
     ),
   },
   {
     id: "place",
-    header: "This year",
+    header: "Place",
+    cellClassName: "whitespace-nowrap",
     cell: (o) =>
       o.participation ? (
         PLACE_WORDS[o.participation]
@@ -70,7 +84,9 @@ const COLUMNS: ResponsiveColumn<RentalOrder>[] = [
         ...(tent?.choice === "need"
           ? [
               o.status === "confirmed" && tent.assigned
-                ? tent.assigned.itemName
+                ? tent.assigned.tentLabel
+                  ? `${tent.assigned.itemName} (label ${tent.assigned.tentLabel})`
+                  : tent.assigned.itemName
                 : `${tentNeedText(tent.people)}, not assigned yet`,
             ]
           : []),
@@ -128,7 +144,6 @@ export default async function GearRentalOrdersPage() {
       title="Gear rental"
       description="Members say what sleeping gear they need. Open an order to pick camp stock or the supplier for each item and confirm it. Confirming puts the total on the member's dues."
       cleared={orders !== null}
-      actions={<AskEveryone />}
     >
       {orders && (
         <div className="flex flex-col gap-6">
@@ -178,20 +193,17 @@ export default async function GearRentalOrdersPage() {
           </div>
 
           <Card>
-            <CardContent className="flex flex-col gap-3 p-5">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-base font-semibold">
-                  Not answered yet
-                  <span className="ml-2 font-normal tabular-nums text-muted-foreground">
-                    {unanswered.length}
-                  </span>
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Members who said they are coming, or whom a captain accepted,
-                  and who have not sent an order. Ask everyone reaches exactly
-                  these. Open a name to fill their order in for them.
-                </p>
-              </div>
+            <CardHeader className="p-5 pb-3">
+              <CardTitle className="text-base">
+                Not answered yet ({unanswered.length})
+              </CardTitle>
+              <CardDescription>
+                Members who say they are coming, or whom a captain accepted, and
+                who have not sent an order. The button asks exactly these. Open
+                a name to fill their order in for them.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 p-5 pt-0">
               {unanswered.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Everyone who is coming has sent their order.
@@ -215,6 +227,9 @@ export default async function GearRentalOrdersPage() {
                   ))}
                 </ul>
               )}
+              {unanswered.length > 0 && (
+                <AskEveryone count={unanswered.length} />
+              )}
             </CardContent>
           </Card>
 
@@ -230,7 +245,7 @@ export default async function GearRentalOrdersPage() {
               data={orders}
               getRowKey={(o) => o.id}
               label="Gear orders"
-              className="page-md:rounded-xl page-md:border page-md:bg-card page-md:shadow-sm"
+              framed
             />
           )}
         </div>

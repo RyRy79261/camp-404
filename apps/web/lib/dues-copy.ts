@@ -25,6 +25,13 @@ export function paymentProofPath(paymentId: string): string {
 /** Said to anyone who is not a captain or a Finance lead. */
 export const MONEY_REFUSAL = "Payments are for captains and Finance leads.";
 
+/**
+ * The lock a member sees on the Finance tools. What they almost always want
+ * is their own dues, so the lock says where those are and links there.
+ */
+export const MONEY_LOCK_MESSAGE =
+  "Only captains and the Finance team see the camp's payments. Your own dues are in My dues.";
+
 /** The tabs across the top of the Finance tools, in order. */
 export const PAYMENTS_TABS = [
   { href: PAYMENTS_PATH, label: "Payments" },

@@ -1,5 +1,6 @@
 import { gridRuns, treeOrder, type GridLoad } from "@camp404/core";
-import { PrintSheet, SHEET_TABLE } from "@/components/power/print-sheet";
+import { PrintSheet } from "@/components/print/print-sheet";
+import { SHEET_TABLE } from "@/lib/print";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getPowerPlan, listPowerLoads } from "@/lib/power";
 import { GRID_KIND_LABELS, formatNumber } from "@/lib/power-copy";
@@ -36,6 +37,7 @@ export default async function GridSheetPage() {
 
   return (
     <PrintSheet
+      area="Power & Lighting"
       title="Grid sheet"
       subtitle="Each run from the generator out. Tick it when it is laid."
     >

@@ -2,13 +2,16 @@ import "server-only";
 
 import {
   canApproveRecipe,
+  canEditAnyGuideChapter,
   canManageMoney,
   canManageRental,
   canWorkInTeam,
   hasClearance,
 } from "@camp404/core";
 import { Team, type ViewerRank } from "@camp404/types";
+import { meetingsHref } from "./meeting-notes-view";
 import type { ProgramId } from "./program-routes";
+import { tasksHref } from "./task-board";
 
 // The 404 OS program manifest (docs/specs/2026-09-25-404-os-console-design.md,
 // section 4): which programs, folders, team folders and tray items one member
@@ -347,6 +350,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // The Survival Guide (#250): every approved member reads it; captains and
+  // a team's leads write it (canEditGuideChapter, checked in each write).
+  {
+    id: "guide",
+    label: "Survival Guide",
+    fileName: "GUIDE.HLP",
+    href: "/guide",
+    icon: "guide",
+    place: CAMP,
+    rank: "camp_member",
+  },
   // Every team's page, for every approved member (owner's decision 2,
   // 2026-09-26: every member sees every team's dashboard, read-only; the
   // actions on it keep their own gates).
@@ -359,6 +373,18 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: TEAMS,
     rank: "camp_member",
     perTeam: true,
+  },
+  // Every team's budget for the year in one table (#242; owner, 2026-09-30:
+  // every member sees each team's totals). Read-only here; the Finance team
+  // sets them on its Budgets tab.
+  {
+    id: "budgets",
+    label: "Budgets",
+    fileName: "BUDGETS.XLS",
+    href: "/teams/budgets",
+    icon: "budgets",
+    place: TEAMS,
+    rank: "camp_member",
   },
   {
     id: "recipes",
@@ -600,6 +626,46 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     rank: "camp_member",
   },
   {
+    id: "guide-chapter",
+    label: "Chapter",
+    fileName: "CHAPTER.HLP",
+    href: null,
+    icon: "guide",
+    place: null,
+    rank: "camp_member",
+  },
+  {
+    id: "guide-version",
+    label: "Chapter version",
+    fileName: "CHAPTER.VER",
+    href: null,
+    icon: "guide",
+    place: null,
+    rank: "camp_member",
+  },
+  // Writing opens for captains and leads; the page locks a lead out of
+  // another team's chapter, and every write checks again.
+  {
+    id: "new-guide-chapter",
+    label: "New chapter",
+    fileName: "CHAPTER.WRI",
+    href: null,
+    icon: "guide",
+    place: null,
+    rank: "team_lead",
+    requires: (ctx) => canEditAnyGuideChapter(ctx.rank, ctx.ledTeams),
+  },
+  {
+    id: "edit-guide-chapter",
+    label: "Edit chapter",
+    fileName: "CHAPTER.WRI",
+    href: null,
+    icon: "guide",
+    place: null,
+    rank: "team_lead",
+    requires: (ctx) => canEditAnyGuideChapter(ctx.rank, ctx.ledTeams),
+  },
+  {
     id: "new-recipe",
     label: "New recipe",
     fileName: "IMPORT.EXE",
@@ -770,6 +836,29 @@ export const TEAM_TOOLS: Readonly<Partial<Record<Team, readonly ProgramId[]>>> =
     communications_and_hr: ["announcements", "questionnaires", "join-site"],
     finance: ["payments"],
   };
+
+/**
+ * After a team folder's page: the team's own meetings and tasks, each the
+ * shared program filtered to the team (audit, 2026-10-01: the folder had no
+ * way to the things its members work in). Listed only when the member's
+ * manifest holds the program; the id is `<program>:<team>`.
+ */
+const TEAM_FOLDER_SHORTCUTS: readonly {
+  id: ProgramId;
+  noun: string;
+  href: (team: string) => string;
+}[] = [
+  {
+    id: "meetings",
+    noun: "meetings",
+    href: (team) => meetingsHref(team),
+  },
+  {
+    id: "tasks",
+    noun: "tasks",
+    href: (team) => tasksHref(team),
+  },
+];
 
 // --- What leaves the server ---------------------------------------------------
 
@@ -1099,11 +1188,34 @@ export function buildProgramManifest(
             const tools = (TEAM_TOOLS[m.team as Team] ?? [])
               .map((id) => byId.get(id))
               .filter((p): p is ClientProgram => p !== undefined);
+            // The team's own meetings and tasks, filtered to it: what its
+            // members work in. Shortcuts to programs the member already has.
+            const filtered = TEAM_FOLDER_SHORTCUTS.flatMap(
+              ({ id, noun, href }) => {
+                const program = byId.get(id);
+                return program
+                  ? [
+                      {
+                        ...program,
+                        id: `${id}:${m.team}`,
+                        label: `${label} ${noun}`,
+                        href: href(m.team),
+                      },
+                    ]
+                  : [];
+              },
+            );
             return {
               team: m.team,
               label: `${label} team`,
               lead: m.isLead,
-              programs: page ? [page, ...tools] : tools,
+              programs: [
+                // "Kitchen page", not "Kitchen": the camp-wide Kitchen folder
+                // has that name.
+                ...(page ? [{ ...page, label: `${label} page` }] : []),
+                ...filtered,
+                ...tools,
+              ],
             };
           })
           .filter((folder) => folder.programs.length > 0);

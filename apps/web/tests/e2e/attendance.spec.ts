@@ -140,9 +140,7 @@ test.describe("attendance: the member's own answer", () => {
     await approvedMember(page, request, "quiet-member");
 
     await thisYear(page);
-    await expect(
-      page.getByText("You haven't told us yet.", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText(/^You haven't told us yet\./)).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Change your answer" }),
     ).toHaveCount(0);

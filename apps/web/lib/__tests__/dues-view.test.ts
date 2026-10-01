@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { parseMoneyToMinor } from "@camp404/core";
-import { typedRands } from "../dues-view";
+import {
+  chargeSubline,
+  financeStatusWords,
+  owesMoreThanSent,
+  proofPlace,
+  typedRands,
+} from "../dues-view";
 
 describe("typedRands", () => {
   it("writes cents back the way a member types rands, with a comma", () => {
@@ -13,5 +19,77 @@ describe("typedRands", () => {
     for (const cents of [1, 99, 100, 125050, 999999]) {
       expect(parseMoneyToMinor(typedRands(cents))).toBe(cents);
     }
+  });
+});
+
+describe("owesMoreThanSent", () => {
+  const balance = (balanceCents: number, pendingCents: number) => ({
+    chargedCents: 250000,
+    paidCents: 0,
+    pendingCents,
+    refundedCents: 0,
+    balanceCents,
+  });
+
+  it("keeps the proof form open while some of the balance has no proof", () => {
+    expect(owesMoreThanSent(balance(250000, 100000))).toBe(true);
+  });
+
+  it("folds it once a proof covers the rest, or nothing is owed", () => {
+    expect(owesMoreThanSent(balance(250000, 250000))).toBe(false);
+    expect(owesMoreThanSent(balance(0, 0))).toBe(false);
+  });
+});
+
+describe("proofPlace", () => {
+  const balance = (
+    chargedCents: number,
+    balanceCents: number,
+    pendingCents = 0,
+  ) => ({
+    chargedCents,
+    paidCents: 0,
+    pendingCents,
+    refundedCents: 0,
+    balanceCents,
+  });
+
+  it("opens the form while something owed has no proof", () => {
+    expect(proofPlace(balance(250000, 250000))).toBe("form");
+  });
+
+  it("still offers a proof before anything is charged", () => {
+    expect(proofPlace(balance(0, 0))).toBe("button");
+  });
+
+  it("folds to the button once a proof covers the rest", () => {
+    expect(proofPlace(balance(250000, 250000, 250000))).toBe("button");
+  });
+});
+
+describe("chargeSubline", () => {
+  const createdAt = new Date("2026-10-01T10:00:00Z");
+
+  it("does not repeat the kind the description already says", () => {
+    expect(
+      chargeSubline({ kind: "fee", description: "Camp fee: Base", createdAt }),
+    ).toBe("Charged 01 Oct 2026");
+  });
+
+  it("names the kind when the description does not", () => {
+    expect(
+      chargeSubline({ kind: "rental", description: "Tent hire", createdAt }),
+    ).toBe("Rental · charged 01 Oct 2026");
+  });
+});
+
+describe("financeStatusWords", () => {
+  it("keeps a member's proof apart from a payment promised by hand", () => {
+    expect(financeStatusWords("pending", "member").label).toBe("To check");
+    expect(financeStatusWords("pending", "captain").label).toBe("Promised");
+    expect(financeStatusWords("reconciled", "statement").label).toBe(
+      "In the bank",
+    );
+    expect(financeStatusWords("waived", "captain").label).toBe("Excused");
   });
 });

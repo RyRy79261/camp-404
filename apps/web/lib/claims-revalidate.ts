@@ -6,6 +6,7 @@ import {
   MY_CLAIMS_PATH,
   PAYMENTS_BUDGETS_PATH,
   PAYMENTS_CLAIMS_PATH,
+  TEAM_BUDGETS_PATH,
 } from "./claims-copy";
 
 /**
@@ -18,6 +19,7 @@ export function revalidateClaims(): void {
     CLAIM_APPROVALS_PATH,
     PAYMENTS_BUDGETS_PATH,
     PAYMENTS_CLAIMS_PATH,
+    TEAM_BUDGETS_PATH,
   ]) {
     revalidatePath(path);
   }

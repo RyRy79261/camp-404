@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   actionItemDue,
+  campDayLabel,
   meetingCounts,
   meetingEventOptions,
   meetingsHref,
@@ -24,6 +25,18 @@ describe("meeting notes' words", () => {
     );
     expect(meetingCounts({ decisions: 1, actionItems: 0 })).toBe("1 decision");
     expect(meetingCounts({ decisions: 0, actionItems: 0 })).toBeNull();
+    expect(meetingCounts({ decisions: 2, actionItems: 0, attendees: 3 })).toBe(
+      "3 people there · 2 decisions",
+    );
+    expect(meetingCounts({ decisions: 0, actionItems: 0, attendees: 1 })).toBe(
+      "1 person there",
+    );
+  });
+
+  it("says a picked day in words, whatever the browser's locale", () => {
+    expect(campDayLabel("2026-10-01")).toBe("Thu 1 Oct 2026");
+    expect(campDayLabel("")).toBeNull();
+    expect(campDayLabel("10/01/2026")).toBeNull();
   });
 
   it("links to one team's meetings, the whole camp's, or all", () => {

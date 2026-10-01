@@ -485,14 +485,13 @@ export default async function PowerFuelLogPage() {
               description="Add the jerry cans the camp brings, with the litres in each."
             />
           ) : (
-            <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
-              <ResponsiveDataTable
-                columns={canColumns(canEdit)}
-                data={cans}
-                getRowKey={(c) => c.id}
-                label="Fuel stock"
-              />
-            </div>
+            <ResponsiveDataTable
+              columns={canColumns(canEdit)}
+              data={cans}
+              getRowKey={(c) => c.id}
+              label="Fuel stock"
+              framed
+            />
           )}
         </section>
 
@@ -513,14 +512,13 @@ export default async function PowerFuelLogPage() {
               description="Log each time the generator is filled. With two or more, the page works out the litres a day and the days of fuel left."
             />
           ) : (
-            <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
-              <ResponsiveDataTable
-                columns={entryColumns(canEdit, status, options)}
-                data={entries}
-                getRowKey={(e) => e.id}
-                label="Refuelling log"
-              />
-            </div>
+            <ResponsiveDataTable
+              columns={entryColumns(canEdit, status, options)}
+              data={entries}
+              getRowKey={(e) => e.id}
+              label="Refuelling log"
+              framed
+            />
           )}
         </section>
 

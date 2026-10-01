@@ -27,7 +27,8 @@ import { desktopFolderKey } from "@camp404/types/desktop-keys";
 // from the member's manifest, built on the server, per mode.
 //
 // The Start menu (the prototype's): the magenta "CAMP 404 OS" spine, the
-// member at the top, then three columns: Me with My teams under it, Camp with
+// member at the top, then three columns: My teams over Me (at the top, so a
+// short screen never hides it under the footer), Camp with
 // the Kitchen's programs under it, and the Captains folder's programs with
 // the Terminal. Along the bottom: Tidy windows, Line up icons, Show desktop,
 // Welcome (the welcome wizard again), Report a problem and Log off. It sits
@@ -44,7 +45,7 @@ function plainClick(e: MouseEvent) {
 }
 
 /** How the Start menu's groups stand side by side, by key. */
-const COLUMNS = [["me", "my-teams"], ["camp", "kitchen"], ["captains"]];
+const COLUMNS = [["my-teams", "me"], ["camp", "kitchen"], ["captains"]];
 
 export interface DesktopTaskbarProps {
   manifest: ProgramManifest;
@@ -174,9 +175,15 @@ export function DesktopTaskbar({
   // folders' order), then the Teams folder with every team.
   const myTeams: StartMenuItem[] = manifest.teamFolders.flatMap((folder) => {
     const page = folder.programs.find((p) => p.id === `team:${folder.team}`);
+    // The team's own name ("Kitchen"), as the Teams folder has it; the team
+    // folder calls its copy "Kitchen page".
+    const named =
+      folders.get("teams")?.programs.find((p) => p.id === page?.id)?.label ??
+      page?.label;
     return page
       ? [
           programRow(page, {
+            ...(named ? { label: named } : {}),
             ...(folder.lead
               ? { tag: { text: "Lead", spoken: "you lead it" } }
               : {}),
