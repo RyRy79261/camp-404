@@ -100,16 +100,19 @@ async function pressUntil(control: Locator, shown: () => Promise<void>) {
   }).toPass({ timeout: 20_000 });
 }
 
-// The day is a table from page-md up (the phone's cards are hidden then).
+// The day is a table from page-md up and stacked cards below it; whichever
+// shows is the row (the other is display:none).
 const slotRow = (page: Page, name: string, label = FIRST_LABEL) =>
   page
-    .getByRole("table", { name: `Shifts on ${label}` })
-    .getByRole("row", { name: `${name} on ${label}`, exact: true });
+    .getByTestId("shift-day")
+    .getByLabel(`${name} on ${label}`, { exact: true })
+    .filter({ visible: true });
 
 const typeRow = (page: Page, name: string) =>
   page
-    .getByRole("table", { name: "The shifts" })
-    .getByRole("row", { name, exact: true });
+    .getByRole("region", { name: "The shifts" })
+    .getByLabel(name, { exact: true })
+    .filter({ visible: true });
 
 async function setBurnDays(page: Page) {
   await page.goto("/logistics");
@@ -168,7 +171,9 @@ test.describe("shift roster (test-mode)", () => {
     await login(page, { id: "sh-san", email: "sh-san@example.com" });
     await openShifts(page);
     await addCleaningShift(page);
-    await expect(typeRow(page, "Morning clean")).toContainText("08:00–10:00");
+    // The phone's card splits the hours over two lines.
+    await expect(typeRow(page, "Morning clean")).toContainText("08:00");
+    await expect(typeRow(page, "Morning clean")).toContainText("10:00");
     await expect(typeRow(page, "Morning clean")).toContainText("1 person");
     await expect(slotRow(page, "Morning clean")).toContainText("Nobody yet");
     await expect(slotRow(page, "Morning clean")).toContainText("0 of 1");
