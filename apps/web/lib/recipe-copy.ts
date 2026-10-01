@@ -30,6 +30,14 @@ export function recipeSourceVersionPath(
   return `${recipePath(recipeId)}/sources/${version}`;
 }
 
+/**
+ * A recipe's card to print (#249), at a plate count the recipe has a checked
+ * result for. Without a count, the card is the version's own count.
+ */
+export function recipeCardPath(recipeId: string, plates?: number): string {
+  return `/print/kitchen/recipes/${recipeId}${plates ? `?plates=${plates}` : ""}`;
+}
+
 /** A recipe's source editor. */
 export function recipeEditPath(recipeId: string): string {
   return `${recipePath(recipeId)}/edit`;
