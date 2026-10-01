@@ -8,9 +8,12 @@ import type { ChangedField } from "@/lib/inventory-copy";
 export function SuggestionDiff({
   fields,
   note,
+  narrow = false,
 }: {
   fields: ChangedField[];
   note: string | null;
+  /** The item page's side rail: a narrower label column (the mock-up). */
+  narrow?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -19,7 +22,9 @@ export function SuggestionDiff({
           No change to the numbers: a count that matches.
         </p>
       ) : (
-        <dl className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1 text-[13px] leading-5">
+        <dl
+          className={`grid ${narrow ? "grid-cols-[5rem_1fr]" : "grid-cols-[6rem_1fr]"} gap-x-3 gap-y-1 text-[13px] leading-5`}
+        >
           {fields.map((f) => (
             <div key={f.label} className="contents">
               <dt className="text-muted-foreground">{f.label}</dt>

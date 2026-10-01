@@ -545,6 +545,7 @@ export default async function InventoryItemPage({
                     <SuggestionDiff
                       fields={suggestionDiff(item, u)}
                       note={u.note}
+                      narrow
                     />
                     {canEdit && (
                       <ReviewButtons
