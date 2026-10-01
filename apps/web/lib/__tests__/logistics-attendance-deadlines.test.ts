@@ -59,6 +59,7 @@ import {
   listDeadlines,
   removeDeadline,
   saveLogisticsPhase,
+  setAfrikaburnDate,
   setDeadlineDone,
   setMyAttendance,
 } from "../logistics";
@@ -76,10 +77,12 @@ function deadline(overrides: Partial<DeadlineRow> = {}): DeadlineRow {
   return {
     id: "3f9c2a1e-8b7d-4c6e-9f10-112233445566",
     cycle: 2027,
+    kind: null,
     title: "Theme camp registration closes",
     dueDate: "2027-01-15",
     note: null,
     done: false,
+    skipped: false,
     calendarEventId: "deadline0001",
     calendarSyncedVersion: null,
     version: 1,
@@ -130,7 +133,7 @@ describe("with the database", () => {
       expect.anything(),
       "deadline0001",
       expect.objectContaining({
-        summary: "Theme camp registration closes",
+        summary: "AfrikaBurn: Theme camp registration closes",
         start: { date: "2027-01-15" },
         end: { date: "2027-01-16" },
       }),
@@ -231,6 +234,17 @@ describe("with the database", () => {
   it("a deadline's event names no team", () => {
     const body = deadlineEventBody({ ...deadline(), dueDate: "2027-01-15" });
     expect(body.extendedProperties?.private).not.toHaveProperty("camp404Team");
+  });
+
+  it("a standard date's event is AfrikaBurn: <name>, and says what it is", () => {
+    const body = deadlineEventBody({
+      ...deadline({ kind: "form_2", title: "Form 2 registration" }),
+      dueDate: "2027-01-15",
+    });
+    expect(body.summary).toBe("AfrikaBurn: Form 2 registration");
+    expect(body.description).toContain(
+      "Size, placement, sound, layout; art projects register here too.",
+    );
   });
 });
 
@@ -448,7 +462,7 @@ describe("under E2E (the test store)", () => {
         .events.filter((e) => e.id === row!.calendarEventId);
     expect(onCalendar()).toEqual([
       expect.objectContaining({
-        title: "Theme camp registration closes",
+        title: "AfrikaBurn: Theme camp registration closes",
         teamTag: null,
       }),
     ]);
@@ -480,5 +494,62 @@ describe("under E2E (the test store)", () => {
     expect(
       logisticsTestStore.listDeadlines(undefined, { withRemoved: true }),
     ).toEqual([]);
+  });
+  it("keeps AfrikaBurn's standard dates: a captain sets one, one per year, and no round takes it off", async () => {
+    const captain = makeUser("Cap", "captain");
+    const tl = lead("Truck", "transport_and_logistics");
+    const closes = {
+      kind: "registration_closes" as const,
+      dueDate: "2027-04-10",
+      note: null,
+      skipped: false,
+      expectedVersion: null,
+    };
+    expect(await setAfrikaburnDate(tl.id, closes)).toEqual({
+      ok: false,
+      error: deadlinesDb.NOT_A_DEADLINE_KEEPER,
+    });
+    expect(await setAfrikaburnDate(captain.id, closes)).toEqual({
+      ok: true,
+      calendar: "synced",
+    });
+    expect(await setAfrikaburnDate(captain.id, closes)).toEqual({
+      ok: false,
+      error: deadlinesDb.DATE_SET_FIRST,
+    });
+    const events = () =>
+      testStore
+        .listCalendarEvents(BEFORE_PACK, { days: 365, max: 250 })
+        .events.map((e) => e.title);
+    expect(events()).toEqual(["AfrikaBurn: Registration closes"]);
+    const [row] = await listDeadlines();
+    expect(
+      await removeDeadline(captain.id, { id: row!.id, expectedVersion: 1 }),
+    ).toEqual({ ok: false, error: deadlinesDb.DEADLINE_CHANGED });
+
+    const second = {
+      ...closes,
+      kind: "second_ddt_round" as const,
+      dueDate: "2027-04-20",
+    };
+    await setAfrikaburnDate(captain.id, second);
+    expect(events()).toContain("AfrikaBurn: Second DDT round");
+    expect(
+      await setAfrikaburnDate(captain.id, {
+        ...second,
+        dueDate: null,
+        skipped: true,
+        expectedVersion: 1,
+      }),
+    ).toEqual({ ok: true, calendar: "synced" });
+    expect(events()).toEqual(["AfrikaBurn: Registration closes"]);
+    expect(
+      await setAfrikaburnDate(captain.id, {
+        ...closes,
+        dueDate: null,
+        skipped: true,
+        expectedVersion: 1,
+      }),
+    ).toEqual({ ok: false, error: deadlinesDb.CANNOT_SKIP_DATE });
   });
 });

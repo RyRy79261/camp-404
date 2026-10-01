@@ -124,6 +124,12 @@ describe("partial unique and queue indexes keep their predicates", () => {
         columns: ["ref_code"],
         where: "ref_code IS NOT NULL",
       },
+      // One row per AfrikaBurn standard date per year; "Other" ones (no kind)
+      // are not limited.
+      afrikaburn_deadlines_cycle_kind_uniq: {
+        columns: ["cycle", "kind"],
+        where: "kind is not null",
+      },
       // One open plate-count run per (version, plates): a second captain
       // pressing the same count is refused rather than paying twice.
       recipe_proofread_runs_open_plates_idx: {

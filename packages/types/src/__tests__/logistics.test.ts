@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AddDeadlineInput,
+  SetAfrikaburnDateInput,
   SetAttendanceInput,
   ClearLogisticsPhaseInput,
   LOGISTICS_MAX_DAYS,
@@ -123,6 +124,38 @@ describe("AddDeadlineInput", () => {
     expect(
       AddDeadlineInput.safeParse({ title: "WAP", dueDate: "2027-02-30" })
         .success,
+    ).toBe(false);
+  });
+});
+
+describe("SetAfrikaburnDateInput", () => {
+  const base = { kind: "registration_closes", expectedVersion: null };
+
+  it("needs a date unless it is no round this year, which drops the day", () => {
+    expect(
+      SetAfrikaburnDateInput.safeParse({ ...base, dueDate: "" }).error
+        ?.issues[0]?.message,
+    ).toBe("Pick the date.");
+    expect(
+      SetAfrikaburnDateInput.parse({
+        ...base,
+        kind: "second_ddt_round",
+        dueDate: "2027-04-01",
+        skipped: true,
+      }),
+    ).toMatchObject({ dueDate: null, skipped: true });
+    expect(
+      SetAfrikaburnDateInput.parse({ ...base, dueDate: "2027-02-27" }),
+    ).toMatchObject({ dueDate: "2027-02-27", skipped: false, note: null });
+  });
+
+  it("refuses an unknown kind", () => {
+    expect(
+      SetAfrikaburnDateInput.safeParse({
+        ...base,
+        kind: "burn_starts",
+        dueDate: "2027-02-27",
+      }).success,
     ).toBe(false);
   });
 });
