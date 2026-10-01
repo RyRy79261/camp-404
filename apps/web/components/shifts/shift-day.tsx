@@ -181,7 +181,10 @@ function Places({ slot, alignEnd }: { slot: Slot; alignEnd?: boolean }) {
         aria-valuemin={0}
         aria-valuemax={places}
         aria-label={`${taken} of ${places} places taken`}
-        className="mt-1 block h-1 w-16 bg-foreground/10"
+        className={cn(
+          "block h-1 w-16 bg-foreground/10",
+          alignEnd ? "mt-1" : "mt-2",
+        )}
       >
         <span
           className="block h-full bg-[var(--os-accent)]"

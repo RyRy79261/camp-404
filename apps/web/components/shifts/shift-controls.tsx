@@ -169,6 +169,8 @@ export function AskShifts() {
     <Button
       type="button"
       variant="outline"
+      // On a phone it takes its own row, above My shifts and Print.
+      className="basis-full page-sm:basis-auto"
       disabled={pending}
       onClick={() =>
         start(async () => {

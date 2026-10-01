@@ -126,8 +126,8 @@ function Fairness({ view }: { view: ShiftsView }) {
         )}
         {view.days.length > 0 && (
           <p className="text-xs text-muted-foreground tabular-nums">
-            Open places:{" "}
-            {view.days.map((d) => `${d.label}: ${d.openPlaces}`).join(" · ")}
+            Places still open:{" "}
+            {view.days.map((d) => `${d.tab} (${d.openPlaces})`).join(" · ")}
           </p>
         )}
       </div>
@@ -162,10 +162,11 @@ export default async function ShiftsPage({
         actions={
           <>
             {view.canAsk && <AskShifts />}
-            <Button asChild variant="outline">
+            {/* On a phone, My shifts and Print share the row half and half. */}
+            <Button asChild variant="outline" className="flex-1 page-sm:flex-none">
               <Link href={MY_SHIFTS_PATH}>My shifts</Link>
             </Button>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="flex-1 page-sm:flex-none">
               <Link
                 href={`${SHIFTS_PRINT_PATH}${day ? `?day=${day.day}` : ""}`}
               >

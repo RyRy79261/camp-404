@@ -246,11 +246,9 @@ export async function getShiftsView(viewer: {
           type,
         };
       })
-      .sort(
-        (a, b) =>
-          a.type.startMinute - b.type.startMinute ||
-          a.type.name.localeCompare(b.type.name),
-      );
+      // By start time; two at the same time keep the order they were added
+      // in (the roster's order), so a lead puts "head chef" before "cooks".
+      .sort((a, b) => a.type.startMinute - b.type.startMinute);
     return {
       day,
       label: shiftDayLabel(day),

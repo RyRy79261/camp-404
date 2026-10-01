@@ -370,7 +370,12 @@ export async function readShiftRoster(cycle: number): Promise<ShiftRosterRead> {
       .select(TYPE_COLUMNS)
       .from(schema.shiftTypes)
       .where(eq(schema.shiftTypes.cycle, cycle))
-      .orderBy(asc(schema.shiftTypes.startMinute), asc(schema.shiftTypes.name)),
+      .orderBy(
+        asc(schema.shiftTypes.startMinute),
+        // Two at the same time keep the order a lead added them in.
+        asc(schema.shiftTypes.createdAt),
+        asc(schema.shiftTypes.id),
+      ),
     db
       .select(SLOT_COLUMNS)
       .from(schema.shiftSlots)

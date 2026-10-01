@@ -250,7 +250,17 @@ export function ShiftTypeDialog({
                 label="Ends"
                 htmlFor={id("end")}
                 error={errors.end}
-                help="Before the start: it runs past midnight."
+                help={
+                  // Said only when it is true: an end at or before the start
+                  // is the next morning.
+                  (() => {
+                    const from = minutesFromClock(form.start);
+                    const to = minutesFromClock(form.end);
+                    return from !== null && to !== null && to <= from
+                      ? "Ends the next day: it runs past midnight."
+                      : undefined;
+                  })()
+                }
               >
                 <Input
                   id={id("end")}

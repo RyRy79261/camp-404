@@ -240,9 +240,9 @@ export const shiftsTestStore = {
   readShiftRoster(cycle: number): ShiftRosterRead {
     const types = state()
       .types.filter((t) => t.cycle === cycle)
-      .sort(
-        (a, b) => a.startMinute - b.startMinute || a.name.localeCompare(b.name),
-      )
+      // Start time, then the order they were added in (a stable sort over
+      // the insertion order), as the database orders them.
+      .sort((a, b) => a.startMinute - b.startMinute)
       .map((t) => ({ ...t }));
     const ids = new Set(types.map((t) => t.id));
     const slots = state()
