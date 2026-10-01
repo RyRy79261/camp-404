@@ -23,7 +23,7 @@ export function TeamAboutCard({
 }) {
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-3">
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-x-3 gap-y-2 space-y-0 pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Info className="h-4 w-4 text-accent" aria-hidden />
           About this team

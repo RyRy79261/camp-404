@@ -37,7 +37,7 @@ import { AnnouncementsManager } from "./announcements-manager";
 
 const KEY = draftStorageKey(DRAFT_OWNER, "announcements", "announcement");
 
-function composer() {
+function composer(preferredAudience?: string) {
   render(
     <DraftWindow windowKey="announcements">
       <AnnouncementsManager
@@ -49,6 +49,7 @@ function composer() {
         teamLabels={{ kitchen: "Kitchen" }}
         leadTeams={null}
         announcements={[]}
+        preferredAudience={preferredAudience}
       />
     </DraftWindow>,
   );
@@ -110,6 +111,18 @@ describe("the composer's unsaved draft", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save draft/ }));
     await waitFor(() => expect(saveDraftAction).toHaveBeenCalled());
     await waitFor(() => expect(title().value).toBe(""));
+    cleanup();
+    expect(window.sessionStorage.getItem(KEY)).toBeNull();
+  });
+});
+
+describe("the composer opened from a team page", () => {
+  it("starts on that team's audience, and keeps it as the clean state", () => {
+    composer("team:kitchen");
+    expect(
+      screen.getByRole("combobox", { name: "Who it's for" }).textContent,
+    ).toBe("Kitchen");
+    // Nothing typed yet: nothing to keep.
     cleanup();
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
   });

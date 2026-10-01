@@ -161,6 +161,8 @@ describe("buildProgramManifest: the personas", () => {
     // Their team's folder holds the camp layout (#271), read-only for them.
     expect(teamFolder(m, STRUCTURES)?.programs.map((p) => p.id)).toEqual([
       `team:${STRUCTURES}`,
+      `meetings:${STRUCTURES}`,
+      `tasks:${STRUCTURES}`,
       "camp-layout",
     ]);
   });
@@ -234,6 +236,8 @@ describe("buildProgramManifest: the personas", () => {
       ),
     ).toEqual([
       `team:${Team.enum.transport_and_logistics}`,
+      `meetings:${Team.enum.transport_and_logistics}`,
+      `tasks:${Team.enum.transport_and_logistics}`,
       "inventory",
       "transport",
       "logistics",
@@ -250,6 +254,8 @@ describe("buildProgramManifest: the personas", () => {
     expect(ids(m)).toContain("announcements");
     expect(teamFolder(m, POWER)?.programs.map((p) => p.id)).toEqual([
       `team:${POWER}`,
+      `meetings:${POWER}`,
+      `tasks:${POWER}`,
       "power",
     ]);
   });
@@ -264,6 +270,8 @@ describe("buildProgramManifest: the personas", () => {
       teamFolder(m, "transport_and_logistics")?.programs.map((p) => p.id),
     ).toEqual([
       "team:transport_and_logistics",
+      "meetings:transport_and_logistics",
+      "tasks:transport_and_logistics",
       "inventory",
       "transport",
       "logistics",
@@ -277,6 +285,8 @@ describe("buildProgramManifest: the personas", () => {
     );
     expect(teamFolder(m, VIBES)?.programs.map((p) => p.id)).toEqual([
       `team:${VIBES}`,
+      `meetings:${VIBES}`,
+      `tasks:${VIBES}`,
       "lounge",
     ]);
   });
@@ -288,6 +298,8 @@ describe("buildProgramManifest: the personas", () => {
     );
     expect(teamFolder(m, TRANSPORT)?.programs.map((p) => p.id)).toEqual([
       `team:${TRANSPORT}`,
+      `meetings:${TRANSPORT}`,
+      `tasks:${TRANSPORT}`,
       "inventory",
       "transport",
       "logistics",
@@ -315,8 +327,36 @@ describe("buildProgramManifest: the personas", () => {
     expect(ids(m)).not.toContain(`team:${SOUND}`);
     expect(teamFolder(m, SOUND)).toMatchObject({
       lead: true,
-      programs: [{ id: `team:${SOUND}`, href: `/teams/${SOUND}` }],
+      programs: [
+        { id: `team:${SOUND}`, href: `/teams/${SOUND}` },
+        { id: `meetings:${SOUND}`, href: `/meetings?team=${SOUND}` },
+        { id: `tasks:${SOUND}`, href: `/tasks?team=${SOUND}` },
+      ],
     });
+  });
+
+  it("names a team folder's page and its own meetings and tasks after the team", () => {
+    const m = buildProgramManifest(
+      facts({ rank: MEMBER, memberships: [{ team: KITCHEN, isLead: false }] }),
+    );
+    expect(
+      teamFolder(m, KITCHEN)
+        ?.programs.slice(0, 3)
+        .map((p) => ({ label: p.label, href: p.href, icon: p.icon })),
+    ).toEqual([
+      { label: "Kitchen page", href: "/teams/kitchen", icon: "team" },
+      {
+        label: "Kitchen meetings",
+        href: "/meetings?team=kitchen",
+        icon: "meetings",
+      },
+      { label: "Kitchen tasks", href: "/tasks?team=kitchen", icon: "tasks" },
+    ]);
+    // The Teams folder keeps the team's own name.
+    expect(
+      folder(m, "teams")?.programs.find((p) => p.id === `team:${KITCHEN}`)
+        ?.label,
+    ).toBe("Kitchen");
   });
 
   it("gives a captain every program, and captain-only children", () => {
@@ -458,6 +498,8 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     );
     expect(teamFolder(m, KITCHEN)?.programs.map((p) => p.id)).toEqual([
       `team:${KITCHEN}`,
+      `meetings:${KITCHEN}`,
+      `tasks:${KITCHEN}`,
       "recipes",
       "meal-plan",
       "recipe-review",
@@ -470,6 +512,8 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     );
     expect(teamFolder(member, FINANCE)?.programs.map((p) => p.id)).toEqual([
       `team:${FINANCE}`,
+      `meetings:${FINANCE}`,
+      `tasks:${FINANCE}`,
     ]);
     // The Finance tools (#240) are for captains and Finance leads
     // (canManageMoney), which replaced decision 13 A's "captains only".
@@ -478,6 +522,8 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     );
     expect(teamFolder(lead, FINANCE)?.programs.map((p) => p.id)).toEqual([
       `team:${FINANCE}`,
+      `meetings:${FINANCE}`,
+      `tasks:${FINANCE}`,
       "payments",
     ]);
     expect(folder(lead, "captains")?.programs.map((p) => p.id)).toContain(
@@ -493,6 +539,8 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     );
     expect(teamFolder(captain, FINANCE)?.programs.map((p) => p.id)).toEqual([
       `team:${FINANCE}`,
+      `meetings:${FINANCE}`,
+      `tasks:${FINANCE}`,
       "payments",
     ]);
   });
@@ -517,6 +565,8 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     );
     expect(teamFolder(m, COMMS)?.programs.map((p) => p.id)).toEqual([
       `team:${COMMS}`,
+      `meetings:${COMMS}`,
+      `tasks:${COMMS}`,
     ]);
   });
 
@@ -543,8 +593,14 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     const m = buildProgramManifest(
       facts({ memberships: [{ team: FINANCE, isLead: false }] }),
     );
-    const teams = folder(m, "teams")!.programs;
+    const programs = folder(m, "teams")!.programs;
+    const teams = programs.filter((p) => p.id.startsWith("team:"));
     expect(teams).toHaveLength(TEAMS.filter((t) => !t.archived).length);
+    // Every team's budget, read-only, ends the folder (#242).
+    expect(programs.at(-1)).toMatchObject({
+      id: "budgets",
+      href: "/teams/budgets",
+    });
     // Their own first, then the camp's order.
     expect(teams[0]).toMatchObject({ id: `team:${FINANCE}`, mine: true });
     expect(teams[1]).toMatchObject({ id: `team:${KITCHEN}` });

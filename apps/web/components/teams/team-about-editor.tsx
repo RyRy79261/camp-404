@@ -106,13 +106,16 @@ export function TeamAboutEditor(props: TeamAboutEditorProps) {
           setOpen(next);
         }}
       >
-        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
+        <DialogContent
+          data-window-tint
+          className="max-h-[90svh] overflow-y-auto sm:max-w-xl"
+        >
           <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
             <DialogHeader>
               <DialogTitle>About {props.teamLabel}</DialogTitle>
               <DialogDescription>
-                Every member reads this on the team&rsquo;s program. Captains
-                and this team&rsquo;s leads can change it.
+                Every member reads this on the {props.teamLabel} page. Captains
+                and {props.teamLabel} leads can change it.
               </DialogDescription>
             </DialogHeader>
 
@@ -126,6 +129,8 @@ export function TeamAboutEditor(props: TeamAboutEditorProps) {
                 value={description}
                 maxLength={TEAM_DESCRIPTION_MAX}
                 rows={4}
+                // Grows with the text, so the whole of it shows when it opens.
+                textareaClassName="field-sizing-content min-h-24"
                 onChange={(e) => setDescription(e.target.value)}
                 aria-invalid={errors.description ? true : undefined}
               />
