@@ -30,15 +30,26 @@ export function ClaimDialog({
   today: string;
 }) {
   const [open, setOpen] = useState(false);
+  // A send on its way keeps the dialog open: closing it would unmount the
+  // form, and a refusal from the server would then show nowhere.
+  const [sending, setSending] = useState(false);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next || !sending) setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm">
           <ReceiptText aria-hidden />
           Claim money back
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:max-w-full max-sm:rounded-none max-sm:border-0">
+      <DialogContent
+        showCloseButton={!sending}
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:max-w-full max-sm:rounded-none max-sm:border-0"
+      >
         <DialogHeader>
           <DialogTitle>Claim money back</DialogTitle>
           <DialogDescription>
@@ -50,7 +61,11 @@ export function ClaimDialog({
           teams={teams}
           defaultTeam={defaultTeam}
           today={today}
-          onSent={() => setOpen(false)}
+          onSent={() => {
+            setSending(false);
+            setOpen(false);
+          }}
+          onPendingChange={setSending}
         />
       </DialogContent>
     </Dialog>

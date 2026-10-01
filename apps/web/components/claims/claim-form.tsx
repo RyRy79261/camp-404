@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, useState, useTransition, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Send } from "lucide-react";
 import { parseMoneyToMinor } from "@camp404/core";
@@ -101,12 +107,15 @@ export function ClaimForm({
   defaultTeam,
   today,
   onSent,
+  onPendingChange,
 }: {
   teams: { key: string; label: string }[];
   defaultTeam: string | null;
   today: string;
   /** After a claim is sent (the dialog closes). */
   onSent?: () => void;
+  /** While a send is on its way (the dialog will not close mid-send). */
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -120,6 +129,9 @@ export function ClaimForm({
   const [errors, setErrors] = useState<Errors>({});
   const [refusal, setRefusal] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
 
   /** Clear a field's error as soon as the member changes it. */
   function touched(field: Field) {
