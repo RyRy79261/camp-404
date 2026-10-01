@@ -344,6 +344,42 @@ describe("shift types", () => {
     expect(await audits("shifts.type_removed")).toHaveLength(1);
   });
 
+  it("keeps a shift once one of its days has started, even with nobody on it", async () => {
+    const { sanitationLead } = await people();
+    const { type } = await cleaning(sanitationLead.id);
+    const remove = {
+      id: type.id,
+      expectedVersion: 1,
+      actorId: sanitationLead.id,
+    };
+    expect(await removeShiftType({ ...remove, now: ON_THE_DAY })).toEqual({
+      ok: false,
+      error: SHIFT_CLOSED,
+    });
+    expect((await readShiftRoster(YEAR)).slots.length).toBeGreaterThan(0);
+    expect(await removeShiftType({ ...remove, now: BEFORE })).toEqual({
+      ok: true,
+    });
+  });
+
+  it("adds no slot for a Burn day that has already started", async () => {
+    const { sanitationLead } = await people(false);
+    const saved = await saveShiftType({
+      ...CLEANING,
+      actorId: sanitationLead.id,
+    });
+    if (!saved.ok) throw new Error(saved.error);
+    await burnDays(h.db(), BURN.start, BURN.end);
+    const result = await fillShiftDays({
+      actorId: sanitationLead.id,
+      typeId: saved.type.id,
+      now: ON_THE_DAY,
+    });
+    const days = (await readShiftRoster(YEAR)).slots.map((s) => s.day);
+    expect(result.ok).toBe(true);
+    expect(days).not.toContain(BURN.start);
+  });
+
   it("adds the Burn days a shift lacks, once the Burn has days", async () => {
     const { sanitationLead } = await people(false);
     const saved = await saveShiftType({

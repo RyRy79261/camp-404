@@ -229,11 +229,14 @@ async function addMissingSlots(
   tx: Tx,
   typeId: string,
   days: readonly string[],
+  today: string,
 ): Promise<number> {
-  if (days.length === 0) return 0;
+  // A day that has started is on paper (shiftChangesOpen): no new slot there.
+  const open = days.filter((day) => shiftChangesOpen(day, today));
+  if (open.length === 0) return 0;
   const added = await tx
     .insert(schema.shiftSlots)
-    .values(days.map((day) => ({ typeId, day })))
+    .values(open.map((day) => ({ typeId, day })))
     .onConflictDoNothing({
       target: [schema.shiftSlots.typeId, schema.shiftSlots.day],
     })
@@ -573,6 +576,7 @@ export async function saveShiftType(input: {
       tx,
       type.id,
       await burnDaysIn(tx, cycle),
+      campDayKey(input.now ?? new Date()),
     );
     await writeAuditEvent(tx, {
       actorId: input.actorId,
@@ -597,6 +601,8 @@ export async function removeShiftType(input: {
   actorId: string;
   id: string;
   expectedVersion: number;
+  /** For tests; the server's clock otherwise. */
+  now?: Date;
 }): Promise<ShiftWriteResult> {
   return write(async (tx) => {
     const keeper = await lockKeeper(tx, input.actorId);
@@ -605,6 +611,16 @@ export async function removeShiftType(input: {
     if (!current) refuse(SHIFT_GONE);
     assertKeeper(keeper, current.team);
     if (current.version !== input.expectedVersion) refuse(SHIFT_TYPE_CHANGED);
+    // Once one of its days has started, the printed roster is the record:
+    // the shift stays, empty or not.
+    const today = campDayKey(input.now ?? new Date());
+    const slotDays = await tx
+      .select({ day: schema.shiftSlots.day })
+      .from(schema.shiftSlots)
+      .where(eq(schema.shiftSlots.typeId, current.id));
+    if (slotDays.some(({ day }) => !shiftChangesOpen(day, today))) {
+      refuse(SHIFT_CLOSED);
+    }
     const [people] = await tx
       .select({ n: count() })
       .from(schema.shiftSignups)
@@ -631,6 +647,8 @@ export async function removeShiftType(input: {
 export async function fillShiftDays(input: {
   actorId: string;
   typeId: string;
+  /** For tests; the server's clock otherwise. */
+  now?: Date;
 }): Promise<ShiftWriteResult<{ daysAdded: number }>> {
   return write(async (tx) => {
     const keeper = await lockKeeper(tx, input.actorId);
@@ -640,7 +658,12 @@ export async function fillShiftDays(input: {
     assertKeeper(keeper, current.team);
     const days = await burnDaysIn(tx, cycle);
     if (days.length === 0) refuse(NO_BURN_DAYS);
-    const daysAdded = await addMissingSlots(tx, current.id, days);
+    const daysAdded = await addMissingSlots(
+      tx,
+      current.id,
+      days,
+      campDayKey(input.now ?? new Date()),
+    );
     if (daysAdded > 0) {
       await writeAuditEvent(tx, {
         actorId: input.actorId,

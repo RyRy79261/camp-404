@@ -153,9 +153,14 @@ function burnDays(cycle: number): string[] {
   return shiftDays(burn ? { start: burn.startDate, end: burn.endDate } : null);
 }
 
-function addMissingSlots(typeId: string, days: readonly string[]): number {
+function addMissingSlots(
+  typeId: string,
+  days: readonly string[],
+  today: string,
+): number {
   let added = 0;
   for (const day of days) {
+    if (!shiftChangesOpen(day, today)) continue;
     if (state().slots.some((s) => s.typeId === typeId && s.day === day)) {
       continue;
     }
@@ -382,7 +387,11 @@ export const shiftsTestStore = {
         Object.assign(current, fields, { version: current.version + 1 });
         type = current;
       }
-      const daysAdded = addMissingSlots(type.id, burnDays(cycle));
+      const daysAdded = addMissingSlots(
+        type.id,
+        burnDays(cycle),
+        campDayKey(input.now ?? new Date()),
+      );
       return { type: { ...type }, daysAdded };
     });
   },
@@ -391,6 +400,7 @@ export const shiftsTestStore = {
     actorId: string;
     id: string;
     expectedVersion: number;
+    now?: Date;
   }): ShiftWriteResult {
     return run(() => {
       const keeper = keeperOf(input.actorId);
@@ -399,6 +409,15 @@ export const shiftsTestStore = {
       if (!current) refuse(SHIFT_GONE);
       assertKeeper(keeper, current.team);
       if (current.version !== input.expectedVersion) refuse(SHIFT_TYPE_CHANGED);
+      const today = campDayKey(input.now ?? new Date());
+      if (
+        state().slots.some(
+          (slot) =>
+            slot.typeId === current.id && !shiftChangesOpen(slot.day, today),
+        )
+      ) {
+        refuse(SHIFT_CLOSED);
+      }
       const slotIds = new Set(
         state()
           .slots.filter((s) => s.typeId === current.id)
@@ -417,6 +436,7 @@ export const shiftsTestStore = {
   fillShiftDays(input: {
     actorId: string;
     typeId: string;
+    now?: Date;
   }): ShiftWriteResult<{ daysAdded: number }> {
     return run(() => {
       const keeper = keeperOf(input.actorId);
@@ -426,7 +446,13 @@ export const shiftsTestStore = {
       assertKeeper(keeper, current.team);
       const days = burnDays(cycle);
       if (days.length === 0) refuse(NO_BURN_DAYS);
-      return { daysAdded: addMissingSlots(current.id, days) };
+      return {
+        daysAdded: addMissingSlots(
+          current.id,
+          days,
+          campDayKey(input.now ?? new Date()),
+        ),
+      };
     });
   },
 
