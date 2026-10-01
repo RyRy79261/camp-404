@@ -1,6 +1,7 @@
 # Shift roster (#248): discovery
 
-Status: proposal, waiting for the owner. Nothing is built.
+Status: the first build is in (2026-10-01), to the owner's answers below.
+[CORRECTION 2026-10-01] This line said nothing was built.
 
 The owner (2026-09-23): shift sheets are "more like on-site", and "we need to
 figure out how we're going to do that". Already decided on #248 (2026-09-24):
@@ -105,3 +106,29 @@ already use (black on white, no desktop, browser print dialog for a PDF).
    "How would they log that, there's no internet out there." Nothing in the
    shift roster may need the app during the burn. A paper fuel log was offered
    and also declined. Build-order step 5's hand-off to refuel logging is off.
+
+## What was built (2026-10-01)
+
+To the answers above; where they and the proposal differ, the answers won.
+
+- Tables: `shift_types` (team, name, hours, places, note; a role is its own
+  type, "Brunch: head chef" x1 and "Brunch: cooks" x3), `shift_slots` (one per
+  type per Burn day, `open | not_needed`), `shift_signups` (unique slot and
+  member) and `volunteer_shifts` (a member's own AfrikaBurn shifts, only they
+  see them). No qualifications (owner, 2026-09-24).
+- The Burn days come from the logistics calendar's Burn phase. A new shift
+  gets a slot on each; "Add the missing days" fills days added later.
+- Who sets a shift up: a captain or a lead of its team (`canManageShifts`,
+  `packages/core/src/shifts.ts`); cleaning belongs to Sanitation. Every
+  member takes any open place; the last place goes to one member (a count
+  under the slot's row lock). Leads and captains put members on and take
+  them off, audited.
+- A slot takes changes only until its day starts. From then on the printed
+  roster is the one that counts; nothing is typed back in.
+- The minimum of 3 is a reminder on Shifts and My shifts, and a captain's
+  "Ask everyone" (the shared nudge), never a block.
+- Screens: Shifts (`/shifts`, Camp), My shifts (`/shifts/mine`, Me), and the
+  fairness view for leads and captains. Prints: the day's roster, the blank
+  whiteboard sheet (`/print/shifts`) and a pocket card (`/print/shifts/mine`).
+- Not built, waiting for the owner: shifts on the camp's Google Calendar, a
+  real PDF button (#249), "Your next shift" on Home.

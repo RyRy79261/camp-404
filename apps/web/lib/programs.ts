@@ -222,6 +222,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: ME,
     rank: "camp_member",
   },
+  // Every member's own shifts in burn week (#248), with a pocket card to
+  // print: there is no internet on site.
+  {
+    id: "my-shifts",
+    label: "My shifts",
+    fileName: "MY_SHIFTS.TXT",
+    href: "/shifts/mine",
+    icon: "my-shifts",
+    place: ME,
+    rank: "camp_member",
+  },
   // Every member's own claims (#242): money they spent for a team, claimed
   // back with the receipts, and where each claim is.
   {
@@ -284,6 +295,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     fileName: "LOGISTICS.EXE",
     href: "/logistics",
     icon: "logistics",
+    place: CAMP,
+    rank: "camp_member",
+  },
+  // The shift roster (#248): every member signs up before the burn; a
+  // captain or a lead of a shift's team sets it up; printed for site.
+  {
+    id: "shifts",
+    label: "Shifts",
+    fileName: "ROSTER.EXE",
+    href: "/shifts",
+    icon: "shifts",
     place: CAMP,
     rank: "camp_member",
   },

@@ -111,6 +111,10 @@
 //     key and notice); AfrikaBurn dates (canManageDeadlines,
 //     deadlineCalendarStep, the standard AFRIKABURN_DATES and their calendar
 //     title afrikaburnEventTitle) (./logistics)
+//   - shifts: canManageShifts (a captain or a lead of the shift's team),
+//     canAskForShifts (a captain), shiftChangesOpen (until the slot's day
+//     starts), shiftDays, shiftClashes, shiftFairness, the minimum's reminder
+//     and nudge (./shifts)
 //   - gear rental: canManageRental (a captain), checkRentalOrder, tentConflict,
 //     rentalEstimate, priceRentalOrder and rentalSummary (./rental)
 //   - camp layout: canEditLayout (a captain or a Structures lead),
@@ -198,6 +202,7 @@ export * from "./membership-tier";
 export * from "./tickets";
 export * from "./power";
 export * from "./logistics";
+export * from "./shifts";
 export * from "./rental";
 export * from "./camp-layout";
 export * from "./inventory";

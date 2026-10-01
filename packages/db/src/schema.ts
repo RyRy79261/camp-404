@@ -32,6 +32,7 @@ import {
   LOAD_CATEGORIES,
   LOGISTICS_PHASES,
   ATTENDANCE_ANSWERS,
+  SHIFT_SLOT_STATUSES,
   LOAD_OWNERS,
   LOAD_SCHEDULES,
   LOUNGE_BANDS,
@@ -4184,6 +4185,135 @@ export const afrikaburnDeadlines = pgTable(
     skippedCheck: check(
       "afrikaburn_deadlines_skipped_check",
       sql`not ${d.skipped} or ${d.dueDate} is null`,
+    ),
+  }),
+);
+
+// --- Shift roster (#248) ------------------------------------------------------
+// Members sign up in the app BEFORE the burn; the roster is printed for site,
+// and changes on site are written on the paper, never typed back in (owner,
+// 2026-09-30). A shift type belongs to one team, whose leads and the captains
+// set it up (canManageShifts); every approved member takes any open slot.
+// Every count comes from `user_id`, never from a typed name.
+
+// One kind of shift for one year: its team, its hours and how many people it
+// takes. A role is its own type ("Brunch: head chef" x1, "Brunch: cooks" x3).
+export const shiftTypes = pgTable(
+  "shift_types",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    team: teamEnum("team").notNull(),
+    name: text("name").notNull(),
+    // Minutes after midnight, camp time. A shift may run past midnight.
+    startMinute: integer("start_minute").notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    places: integer("places").notNull(),
+    note: text("note"),
+    version: integer("version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("shift_types_cycle_idx").on(t.cycle),
+    startCheck: check(
+      "shift_types_start_check",
+      sql`${t.startMinute} >= 0 and ${t.startMinute} < 1440`,
+    ),
+    durationCheck: check(
+      "shift_types_duration_check",
+      sql`${t.durationMinutes} >= 15 and ${t.durationMinutes} <= 720`,
+    ),
+    placesCheck: check(
+      "shift_types_places_check",
+      sql`${t.places} >= 1 and ${t.places} <= 20`,
+    ),
+  }),
+);
+
+// A shift type on one day of the Burn. `not_needed` is a lead's "not this
+// day", apart from a slot nobody has taken yet (the old sheet's "XXX" meant
+// both).
+export const shiftSlotStatusEnum = pgEnum(
+  "shift_slot_status",
+  SHIFT_SLOT_STATUSES,
+);
+
+export const shiftSlots = pgTable(
+  "shift_slots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    typeId: uuid("type_id")
+      .notNull()
+      .references(() => shiftTypes.id, { onDelete: "cascade" }),
+    day: date("day", { mode: "string" }).notNull(),
+    status: shiftSlotStatusEnum("status").notNull().default("open"),
+    version: integer("version").notNull().default(1),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (s) => ({
+    typeDayUniq: uniqueIndex("shift_slots_type_day_uniq").on(s.typeId, s.day),
+  }),
+);
+
+// A member on a slot. Taking one is a count against the type's places under
+// the slot's row lock, so two people can never take the last place.
+export const shiftSignups = pgTable(
+  "shift_signups",
+  {
+    slotId: uuid("slot_id")
+      .notNull()
+      .references(() => shiftSlots.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The lead or captain who put them on; null when they signed up.
+    addedByUserId: uuid("added_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (s) => ({
+    pk: primaryKey({ columns: [s.slotId, s.userId] }),
+    userIdx: index("shift_signups_user_idx").on(s.userId),
+  }),
+);
+
+// A member's own AfrikaBurn volunteer shifts (Rangers, Greeters, Sanctuary):
+// not ours to fill, kept only so their camp shifts can warn about a clash.
+// Only the member reads them.
+export const volunteerShifts = pgTable(
+  "volunteer_shifts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    department: text("department").notNull(),
+    day: date("day", { mode: "string" }).notNull(),
+    startMinute: integer("start_minute").notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (v) => ({
+    userCycleIdx: index("volunteer_shifts_user_cycle_idx").on(
+      v.userId,
+      v.cycle,
+    ),
+    startCheck: check(
+      "volunteer_shifts_start_check",
+      sql`${v.startMinute} >= 0 and ${v.startMinute} < 1440`,
+    ),
+    durationCheck: check(
+      "volunteer_shifts_duration_check",
+      sql`${v.durationMinutes} >= 15 and ${v.durationMinutes} <= 720`,
     ),
   }),
 );

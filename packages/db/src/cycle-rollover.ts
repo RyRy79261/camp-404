@@ -676,6 +676,10 @@ export async function setFoundingYear(input: {
       schema.logisticsPhases,
       schema.logisticsAttendance,
       schema.afrikaburnDeadlines,
+      // The shift roster (#248): its shift types (their days and sign-ups
+      // hang off them) and members' AfrikaBurn volunteer shifts.
+      schema.shiftTypes,
+      schema.volunteerShifts,
     ]) {
       await tx
         .update(table)
