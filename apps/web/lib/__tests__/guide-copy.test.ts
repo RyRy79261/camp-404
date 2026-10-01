@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { GUIDE_SLUG_MAX } from "@camp404/types";
 import {
   groupByTeam,
   groupByTopic,
   guideCategoryLabel,
+  guideSlugFor,
   guideTopicOptions,
   guideTopicToSave,
   guideVersionPath,
@@ -56,5 +58,25 @@ describe("the guide's contents", () => {
     expect(guideTopicOptions("kitchen")).toHaveLength(5);
     expect(guideTopicToSave("packing")).toBeUndefined();
     expect(guideTopicToSave("safety")).toBe("safety");
+  });
+});
+
+describe("guideSlugFor", () => {
+  it("cuts a long title at a whole word, never mid-word", () => {
+    const slug = guideSlugFor(
+      "Everything about the generators and fuel management on site",
+      "abcde",
+    );
+    // slugify alone would give "...-fuel-managem".
+    expect(slug).toBe("everything-about-the-generators-and-fuel");
+    expect(slug.length).toBeLessThanOrEqual(GUIDE_SLUG_MAX);
+  });
+
+  it("keeps a short title as it is", () => {
+    expect(guideSlugFor("Driving in", "abcde")).toBe("driving-in");
+  });
+
+  it("adds the suffix to an empty title, within the limit", () => {
+    expect(guideSlugFor("!!!", "abcde")).toBe("chapter-abcde");
   });
 });

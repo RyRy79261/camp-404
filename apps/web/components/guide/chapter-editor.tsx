@@ -690,7 +690,7 @@ export function ChapterEditor({
                   help="Anything else the shift should know."
                 >
                   <MarkdownEditor
-                    value={initial.markdown}
+                    value={markdown}
                     onChange={setMarkdown}
                     ariaLabel="Good to know"
                     describedBy="chapter-body-help"
@@ -702,7 +702,7 @@ export function ChapterEditor({
               <div className="min-h-0 flex-1">
                 <MarkdownEditor
                   fill
-                  value={initial.markdown}
+                  value={markdown}
                   onChange={setMarkdown}
                   ariaLabel="The chapter"
                   disabled={pending}

@@ -71,6 +71,14 @@ first name + surname initial. So the pattern is settled; what is missing is
 | 5   | Burn timeline, loading checklist per pack event                                                     | calendar (#247), inventory (#300) | no                                             |
 | 6   | Shopping list (no prices), recipe book for the menu                                                 | #244, #245                        | no                                             |
 
+[2026-10-01] Rows 1 and 2 are built: the shared shell
+(`components/print/print-sheet.tsx`) with Download PDF (the server opens the
+print page as the member in a headless Chromium and saves it,
+`app/print/pdf/route.ts`), the power, lounge and gear-rental prints moved onto
+it, and the recipe card at a checked plate count
+(`/print/kitchen/recipes/[id]?plates=N`). The shift prints (PR #319) move onto
+the shell after it merges.
+
 Rules on every print: first names (surname initial only to tell two apart);
 no phone, email, ID, bank or medical details; allergies as counts only ("1
 anaphylaxis: see the kitchen lead").

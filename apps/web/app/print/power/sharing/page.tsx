@@ -6,7 +6,8 @@ import {
   powerTotals,
   splitLitres,
 } from "@camp404/core";
-import { PrintSheet, SHEET_TABLE } from "@/components/power/print-sheet";
+import { PrintSheet } from "@/components/print/print-sheet";
+import { SHEET_TABLE } from "@/lib/print";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getGenerator, getPowerPlan, listPowerLoads } from "@/lib/power";
 import { formatNumber, litres, watts } from "@/lib/power-copy";
@@ -33,7 +34,7 @@ export default async function SharingSummaryPage() {
 
   if (!agreement) {
     return (
-      <PrintSheet title="Sharing a generator">
+      <PrintSheet area="Power & Lighting" title="Sharing a generator">
         <p className="text-sm">There is no sharing agreement this year.</p>
       </PrintSheet>
     );
@@ -74,6 +75,7 @@ export default async function SharingSummaryPage() {
 
   return (
     <PrintSheet
+      area="Power & Lighting"
       title="Sharing a generator"
       subtitle={`Camp 404 and ${agreement.partnerCamp}`}
     >

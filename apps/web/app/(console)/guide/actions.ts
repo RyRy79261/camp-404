@@ -1,12 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { slugify } from "@camp404/core";
 import {
   GuideChapterRef,
-  GuideSlug,
   NewGuideChapterInput,
-  RESERVED_GUIDE_SLUGS,
   SaveGuideChapterInput,
   SetGuideChapterPublicInput,
 } from "@camp404/types";
@@ -20,7 +17,7 @@ import {
   setGuideChapterPublic,
   unpublishGuideChapter,
 } from "@/lib/guide";
-import { GUIDE_PATH, guideChapterPath } from "@/lib/guide-copy";
+import { GUIDE_PATH, guideChapterPath, guideSlugFor } from "@/lib/guide-copy";
 
 // The Survival Guide's writes (#250). The rank gate lets captains and team
 // leads ask; whether THIS writer may write THIS chapter (a captain, or a lead
@@ -38,13 +35,9 @@ function revalidateChapter(slug: string) {
   revalidatePath(guideChapterPath(slug));
 }
 
-/** The chapter's address, from its title. */
+/** The chapter's address, from its title (guideSlugFor). */
 function slugFor(title: string): string {
-  const slug = slugify(title);
-  if (slug === "" || RESERVED_GUIDE_SLUGS.has(slug)) {
-    return `${slug || "chapter"}-${Math.random().toString(36).slice(2, 7)}`;
-  }
-  return GuideSlug.safeParse(slug).success ? slug : `chapter-${Date.now()}`;
+  return guideSlugFor(title, Math.random().toString(36).slice(2, 7));
 }
 
 /** Start a chapter or a duty card, as a draft. */

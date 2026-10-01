@@ -1,7 +1,11 @@
+import { slugify } from "@camp404/core";
 import {
   GUIDE_CATEGORIES,
   GUIDE_CATEGORY_LABELS,
+  GUIDE_SLUG_MAX,
   GuideCategory,
+  GuideSlug,
+  RESERVED_GUIDE_SLUGS,
 } from "@camp404/types";
 
 // What the Survival Guide's pages say and where they link (#250). Pure, so
@@ -133,4 +137,29 @@ export function groupByTeam<T extends { team: string | null }>(
     }
   }
   return groups.filter((g) => g.chapters.length > 0);
+}
+
+/**
+ * A chapter's address from its title, cut at a whole word so it fits
+ * GUIDE_SLUG_MAX (slugify alone cuts mid-word). The address is permanent, so
+ * it should read well. A reserved or empty slug gets `suffix` added (a short
+ * random tail from the caller), still within the limit.
+ */
+export function guideSlugFor(title: string, suffix: string): string {
+  let slug = "";
+  for (const word of title.split(/\s+/).map(slugify).filter(Boolean)) {
+    const next = slug ? `${slug}-${word}` : word;
+    if (next.length > GUIDE_SLUG_MAX) break;
+    slug = next;
+  }
+  // A first word longer than the limit: fall back to slugify's own cut.
+  if (slug === "") slug = slugify(title);
+  if (slug === "" || RESERVED_GUIDE_SLUGS.has(slug)) {
+    const tail = `-${suffix}`;
+    const base = (slug || "chapter")
+      .slice(0, GUIDE_SLUG_MAX - tail.length)
+      .replace(/-+$/g, "");
+    return `${base}${tail}`;
+  }
+  return GuideSlug.safeParse(slug).success ? slug : `chapter-${suffix}`;
 }

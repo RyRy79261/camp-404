@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight, ExternalLink, Lock, SquarePen } from "lucide-react";
+import {
+  ChevronRight,
+  ExternalLink,
+  Lock,
+  Printer,
+  SquarePen,
+} from "lucide-react";
 import {
   auditActionLabel,
   canApproveRecipe,
@@ -27,6 +33,7 @@ import { RecipeStatusBadge } from "@/components/recipes/recipe-status-badge";
 import { captainPageGate } from "@/lib/captain-gate";
 import {
   RECIPES_PATH,
+  recipeCardPath,
   recipeEditPath,
   recipeSourceVersionPath,
   recipeVersionPath,
@@ -610,6 +617,8 @@ export default async function RecipePage({
     const recipe = current.recipe;
     const ready = detail.plateCounts.map((c) => c.plates);
     const wanted = platesParam(query.plates);
+    const shown =
+      wanted !== null && ready.includes(wanted) ? wanted : current.plates;
     const total = formatDuration(recipe.totalTimeMinutes);
     const meta = [
       `Written for ${platesLabel(current.plates)}`,
@@ -623,7 +632,22 @@ export default async function RecipePage({
           eyebrow="Kitchen / Recipes"
           title={detail.title}
           description={recipe.summary ?? undefined}
-          actions={actions}
+          actions={
+            <>
+              {/* The recipe card to print, at the count on show (#249). */}
+              <Button asChild variant="outline">
+                <Link
+                  href={recipeCardPath(detail.id, shown)}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <Printer aria-hidden />
+                  Print card
+                </Link>
+              </Button>
+              {actions}
+            </>
+          }
         />
         <p className="-mt-4 text-sm text-muted-foreground tabular-nums">
           {meta.join(" · ")}
@@ -677,8 +701,6 @@ export default async function RecipePage({
     }
 
     // --- The Recipe tab: the refined recipe, at the count in the address. --
-    const shown =
-      wanted !== null && ready.includes(wanted) ? wanted : current.plates;
     const asked = wanted !== null && !ready.includes(wanted) ? wanted : null;
     const count: PlateCountDetail | null = await getPlateCount(
       current.id,
