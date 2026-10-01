@@ -28,7 +28,10 @@ test("name the year, answer, start the next year, and be asked again", async ({
   await captain.goto("/captains/camp-settings/cycle");
   await captain.getByLabel("This year").fill("2026");
   await captain.getByRole("button", { name: "Save 2026 as the year" }).click();
-  await expect(captain.getByText(/The camp is in/)).toBeVisible();
+  // The page's receipt says it in a longer sentence; the toast says just this.
+  await expect(
+    captain.getByText("The camp is in 2026", { exact: true }),
+  ).toBeVisible();
 
   await buildAndPublish(captain, { ...GEAR, askAgainNextYear: true });
   await sendBlockingToEveryone(captain, GEAR.title);

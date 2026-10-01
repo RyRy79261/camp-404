@@ -54,7 +54,8 @@ const ROUTES: Route[] = [
   {
     path: "/captains/payments",
     bar: "captain",
-    open: (p) => p.getByLabel("Amount (R)"),
+    // The record form sits in a dialog behind the page's main button.
+    open: (p) => p.getByRole("button", { name: "Record a payment" }),
   },
   {
     path: "/captains/audit",
