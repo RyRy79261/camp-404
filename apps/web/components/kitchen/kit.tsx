@@ -28,7 +28,10 @@ export function FilterToggle<V extends string>({
     <div
       role="group"
       aria-label={label}
-      className={cn("flex h-10 border border-input", className)}
+      className={cn(
+        "flex h-10 border border-[var(--color-choice-edge,var(--color-input))]",
+        className,
+      )}
     >
       {options.map((o) => {
         const on = o.value === value;
@@ -39,9 +42,9 @@ export function FilterToggle<V extends string>({
             aria-pressed={on}
             onClick={() => onChange(o.value)}
             className={cn(
-              "flex-1 whitespace-nowrap border-l border-input px-3 text-[13px] font-semibold first:border-l-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
+              "flex-1 whitespace-nowrap border-l border-[var(--color-choice-edge,var(--color-input))] px-3 text-[13px] font-semibold first:border-l-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary",
               on
-                ? "bg-primary/25 text-foreground shadow-[inset_0_-2px_0_var(--color-primary)]"
+                ? "bg-[var(--color-pick,color-mix(in_oklab,var(--color-primary)_25%,var(--color-card)))] text-foreground shadow-[inset_0_-2px_0_var(--color-primary)]"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -64,6 +67,7 @@ export function SearchField({
   onChange,
   onKeyDown,
   autoFocus,
+  className,
 }: {
   label: string;
   placeholder: string;
@@ -71,9 +75,16 @@ export function SearchField({
   onChange: (value: string) => void;
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
   autoFocus?: boolean;
+  /** The box's fill: the page's by default (the picker), or a choice's. */
+  className?: string;
 }) {
   return (
-    <span className="flex h-10 items-center gap-2 border border-input bg-background px-3 text-muted-foreground focus-within:border-primary">
+    <span
+      className={cn(
+        "flex h-10 items-center gap-2 border border-[var(--color-choice-edge,var(--color-input))] bg-background px-3 text-muted-foreground focus-within:border-primary",
+        className,
+      )}
+    >
       <svg
         viewBox="0 0 24 24"
         className="h-4 w-4 shrink-0"

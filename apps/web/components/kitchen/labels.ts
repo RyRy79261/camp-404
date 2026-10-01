@@ -15,7 +15,7 @@ export const FIELD_LABEL =
 
 /** A quiet outlined button (Copy, Tick all, Done, Add snack). */
 export const QUIET_BUTTON =
-  "inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap border border-input bg-secondary px-3 text-[13px] font-semibold text-foreground hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60";
+  "inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap border border-[var(--color-choice-edge,var(--color-input))] bg-[var(--color-choice,var(--color-secondary))] px-3 text-[13px] font-semibold text-foreground hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60";
 
 /** The pink action on a row (Add to dinner). */
 export const PINK_BUTTON =

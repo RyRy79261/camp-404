@@ -221,6 +221,7 @@ export function ShoppingListView({
         <label className="flex min-w-0 flex-col gap-1.5 page-md:w-80">
           <span className={FIELD_LABEL}>Filter</span>
           <SearchField
+            className="bg-[var(--color-choice,var(--color-background))]"
             label="Filter the list"
             placeholder="Ingredient name"
             value={query}
