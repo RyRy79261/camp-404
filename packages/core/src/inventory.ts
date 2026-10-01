@@ -85,6 +85,31 @@ export function bookingsLeft(
   return Math.max(0, bookableCount - booked);
 }
 
+/** An item's state, as far as booking it goes. */
+export interface BookableState {
+  /** How many members may book one this year (the item's limit), or null. */
+  bookableCount: number | null;
+  /** How many the camp owns. */
+  quantity: number;
+  /** Whether the item is marked broken. */
+  broken: boolean;
+  /** How many are lent to other camps and not back yet. */
+  lentOut: number;
+}
+
+/**
+ * How many units can be booked this year, taken before any booking: the
+ * item's limit, less the units lent to other camps (they are not here), and
+ * none at all while the item is marked broken. A booking is one unit for the
+ * whole burn. Never below 0; 0 for an item with no limit.
+ */
+export function bookableNow(item: BookableState): number {
+  if (item.bookableCount === null || item.bookableCount < 1) return 0;
+  if (item.broken) return 0;
+  const here = Math.max(0, item.quantity - Math.max(0, item.lentOut));
+  return Math.min(item.bookableCount, here);
+}
+
 // --- Maintenance -----------------------------------------------------------
 
 const DAY_MS = 24 * 60 * 60 * 1000;
