@@ -239,7 +239,11 @@ function LeadPanel({
   phone?: boolean;
 }) {
   const router = useRouter();
-  const tap = useOneTap();
+  // Each one-tap control spins on its own (AGENTS.md): a take-off shows on
+  // the person pressed, the skip on its own button.
+  const remove = useOneTap();
+  const skip = useOneTap();
+  const [removing, setRemoving] = React.useState<string | null>(null);
   const [who, setWho] = React.useState<string | undefined>();
   const [error, setError] = React.useState<string | null>(null);
   const [putting, startPut] = React.useTransition();
@@ -357,18 +361,22 @@ function LeadPanel({
                         {p.name}
                         <button
                           type="button"
-                          disabled={tap.pending}
+                          disabled={remove.pending}
                           aria-label={`Take ${p.name} off ${slot.type.name}`}
-                          onClick={() =>
-                            tap.run(() =>
+                          onClick={() => {
+                            setRemoving(p.userId);
+                            remove.run(() =>
                               takeMemberOffShiftAction({
                                 slotId: slot.id,
                                 userId: p.userId,
                               }),
-                            )
-                          }
-                          className="h-6 border border-foreground/30 px-2 text-xs font-semibold hover:bg-foreground/10 disabled:opacity-50"
+                            );
+                          }}
+                          className="inline-flex h-6 items-center gap-1 border border-foreground/30 px-2 text-xs font-semibold hover:bg-foreground/10 disabled:opacity-50"
                         >
+                          {remove.pending && removing === p.userId && (
+                            <Spinner size="sm" label="Saving…" />
+                          )}
                           Take off
                         </button>
                       </li>
@@ -391,9 +399,9 @@ function LeadPanel({
                 size="sm"
                 variant="outline"
                 className="h-8 disabled:border-dashed"
-                disabled={tap.pending || (needed && slot.taken > 0)}
+                disabled={skip.pending || (needed && slot.taken > 0)}
                 onClick={() =>
-                  tap.run(() =>
+                  skip.run(() =>
                     setSlotNeededAction({
                       slotId: slot.id,
                       needed: !needed,
@@ -402,7 +410,7 @@ function LeadPanel({
                   )
                 }
               >
-                {tap.pending && <Spinner size="sm" label="Saving…" />}
+                {skip.pending && <Spinner size="sm" label="Saving…" />}
                 {needed
                   ? `Not needed on ${day.tab}`
                   : `Needed on ${day.tab} after all`}

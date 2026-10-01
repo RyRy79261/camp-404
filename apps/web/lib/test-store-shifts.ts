@@ -97,6 +97,24 @@ export function resetShiftsStore(): void {
   s.serial = 0;
 }
 
+/**
+ * As setUserApproval in production: a member who leaves approved comes off
+ * the year's shifts, so their places are free again.
+ */
+export function dropMemberShifts(userId: string, cycle: number): void {
+  const s = state();
+  const types = new Set(
+    s.types.filter((t) => t.cycle === cycle).map((t) => t.id),
+  );
+  const slots = new Set(
+    s.slots.filter((x) => types.has(x.typeId)).map((x) => x.id),
+  );
+  for (let n = s.signups.length - 1; n >= 0; n--) {
+    const row = s.signups[n]!;
+    if (row.userId === userId && slots.has(row.slotId)) s.signups.splice(n, 1);
+  }
+}
+
 const nameOf = (userId: string) =>
   testStore.findUserById(userId)?.displayName?.trim() || "Unnamed burner";
 
@@ -318,6 +336,7 @@ export const shiftsTestStore = {
     places: number;
     note: string | null;
     expectedVersion: number;
+    now?: Date;
   }): ShiftWriteResult<{ type: ShiftTypeRow; daysAdded: number }> {
     return run(() => {
       const keeper = keeperOf(input.actorId);
@@ -344,6 +363,14 @@ export const shiftsTestStore = {
         assertKeeper(keeper, current.team);
         if (current.version !== input.expectedVersion) {
           refuse(SHIFT_TYPE_CHANGED);
+        }
+        const today = campDayKey(input.now ?? new Date());
+        if (
+          state().slots.some(
+            (s) => s.typeId === current.id && !shiftChangesOpen(s.day, today),
+          )
+        ) {
+          refuse(SHIFT_CLOSED);
         }
         const most = Math.max(
           0,

@@ -499,12 +499,14 @@ export async function saveShiftType(input: {
   places: number;
   note: string | null;
   expectedVersion: number;
+  /** For tests; the server's clock otherwise. */
+  now?: Date;
 }): Promise<ShiftWriteResult<{ type: ShiftTypeRow; daysAdded: number }>> {
   return write(async (tx) => {
     const keeper = await lockKeeper(tx, input.actorId);
     assertKeeper(keeper, input.team);
     const cycle = await currentCycleNumber(tx);
-    const now = new Date();
+    const now = input.now ?? new Date();
     const fields = {
       team: input.team,
       name: input.name,
@@ -538,6 +540,15 @@ export async function saveShiftType(input: {
       if (!current) refuse(SHIFT_GONE);
       assertKeeper(keeper, current.team);
       if (current.version !== input.expectedVersion) refuse(SHIFT_TYPE_CHANGED);
+      // A change reaches every day of the shift, and a day that has started
+      // is on paper now (shiftChangesOpen): the printed roster is the record.
+      const days = await tx
+        .select({ day: schema.shiftSlots.day })
+        .from(schema.shiftSlots)
+        .where(eq(schema.shiftSlots.typeId, current.id));
+      if (days.some(({ day }) => !shiftChangesOpen(day, campDayKey(now)))) {
+        refuse(SHIFT_CLOSED);
+      }
       const [most] = await tx
         .select({ n: count() })
         .from(schema.shiftSignups)

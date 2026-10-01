@@ -427,6 +427,18 @@ describe("taking places", () => {
         now: ON_THE_DAY,
       }),
     ).toEqual({ ok: false, error: SHIFT_CLOSED });
+    // A change to the shift reaches the day that has started, so it is
+    // refused too.
+    expect(
+      await saveShiftType({
+        ...CLEANING,
+        id: first.typeId,
+        note: "Bins too.",
+        expectedVersion: 1,
+        actorId: sanitationLead.id,
+        now: ON_THE_DAY,
+      }),
+    ).toEqual({ ok: false, error: SHIFT_CLOSED });
     // The next day still takes sign-ups.
     expect(
       (
