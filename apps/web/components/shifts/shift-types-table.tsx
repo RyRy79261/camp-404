@@ -4,7 +4,7 @@ import type { ShiftsView, ShiftTypeView } from "@/lib/shifts";
 
 // "The shifts" (#248), as the owner approved it with the day table (Option A,
 // 2026-10-01): the same table style (Time | Shift | What it is | Each day |
-// Change) when its box is 48rem or wider, and narrower one row per shift with its hours
+// Change) when its box is 48rem or wider; narrower, one row per shift with its hours
 // down the left. Change sits in the same right-hand slot; on a row the viewer
 // may not set up, the slot stays and is empty, so the columns never move.
 // Adding a shift, the missing Burn days and removing a shift live in the
