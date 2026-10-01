@@ -4,10 +4,12 @@ import {
   canManageMoney,
   duesBalance,
   nextInstalment,
+  paymentFigures,
   proposeRefund,
   splitEvenly,
   type DuesBalance,
   type NextInstalment,
+  type PaymentFigures,
   type RefundRule,
 } from "@camp404/core";
 import type {
@@ -1057,6 +1059,8 @@ export interface DuesAccountRow {
   next: NextInstalment | null;
   /** Payments the member sent in, waiting to be checked against the bank. */
   pendingProofs: number;
+  /** Their payments in the Finance team's words (bank, excused, to check, promised). */
+  figures: PaymentFigures;
   /** Refunds asked for and not decided. */
   openRefunds: number;
 }
@@ -1184,6 +1188,7 @@ export async function listDuesAccounts(
         pendingProofs: paid.filter(
           (p) => p.status === "pending" && p.source === "member",
         ).length,
+        figures: paymentFigures(paid),
         openRefunds: refunded.filter((r) => r.status === "requested").length,
       };
     })
@@ -1534,6 +1539,7 @@ export async function statementContext(cycle: number): Promise<{
     userId: string;
     amountCents: number;
     status: PaymentStatus;
+    source: PaymentSource;
     paidOn: string | null;
   }[];
 }> {
@@ -1558,6 +1564,7 @@ export async function statementContext(cycle: number): Promise<{
         userId: schema.payments.userId,
         amountCents: schema.payments.amountCents,
         status: schema.payments.status,
+        source: schema.payments.source,
         paidOn: schema.payments.paidOn,
       })
       .from(schema.payments)

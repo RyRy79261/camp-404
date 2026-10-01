@@ -11,8 +11,10 @@ import {
   WAP_LABEL,
   TICKET_STATUS_LABEL,
   TICKET_STATUS_OPTION,
+  ddtRequestMet,
   deriveTicketCounts,
   mayRecordTicket,
+  myDdtLabel,
   stillNeedsTicket,
   type TicketFacts,
 } from "../tickets";
@@ -32,6 +34,47 @@ describe("ticket words", () => {
     );
     expect(Object.keys(DDT_LABEL).sort()).toEqual([...DDT_STATUSES].sort());
     expect(Object.keys(WAP_LABEL).sort()).toEqual([...WAP_STATUSES].sort());
+  });
+});
+
+describe("the member's own DDT words", () => {
+  it("says a requested DDT is asked for, not refused", () => {
+    expect(myDdtLabel(ticket({ ticketStatus: "needs_directed_ticket" }))).toBe(
+      "Asked for, not given yet",
+    );
+    expect(myDdtLabel(ticket())).toBe("Not given");
+    expect(myDdtLabel(ticket({ ticketStatus: "buying_own" }))).toBe(
+      "Not given",
+    );
+  });
+
+  it("says a given DDT is given, and whether it may be passed on", () => {
+    expect(
+      myDdtLabel(
+        ticket({ ticketStatus: "needs_directed_ticket", ddt: "allocated" }),
+      ),
+    ).toBe("Given");
+    expect(myDdtLabel(ticket({ ddt: "can_transfer" }))).toBe(
+      "Given, and you may pass it on",
+    );
+  });
+
+  it("knows when the member's request for a DDT is met", () => {
+    expect(
+      ddtRequestMet(
+        ticket({ ticketStatus: "needs_directed_ticket", ddt: "allocated" }),
+      ),
+    ).toBe(true);
+    expect(
+      ddtRequestMet(
+        ticket({ ticketStatus: "needs_directed_ticket", ddt: "can_transfer" }),
+      ),
+    ).toBe(true);
+    expect(
+      ddtRequestMet(ticket({ ticketStatus: "needs_directed_ticket" })),
+    ).toBe(false);
+    // A DDT the member did not ask for is not "their request met".
+    expect(ddtRequestMet(ticket({ ddt: "allocated" }))).toBe(false);
   });
 });
 

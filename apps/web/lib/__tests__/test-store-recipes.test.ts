@@ -1331,7 +1331,7 @@ describe("recipe twins", () => {
         testStore.setMealPlan({
           actorId: captain.id,
           daysOnSite: 1,
-          days: [{ breakfast: 45, lunch: 0, dinner: 60 }],
+          days: [{ breakfast: 45, dinner: 60 }],
           expectedVersion: 0,
         }),
       ).toEqual({ ok: true, version: 1 });
@@ -1389,8 +1389,8 @@ describe("meal plan twin", () => {
     const two = {
       daysOnSite: 2,
       days: [
-        { breakfast: 20, lunch: 0, dinner: 25 },
-        { breakfast: 45, lunch: 0, dinner: 50 },
+        { breakfast: 20, dinner: 25 },
+        { breakfast: 45, dinner: 50 },
       ],
     };
     for (const actor of [structures, member]) {
@@ -1421,7 +1421,7 @@ describe("meal plan twin", () => {
       testStore.setMealPlan({
         actorId: captain.id,
         daysOnSite: 1,
-        days: [{ breakfast: 501, lunch: 0, dinner: 0 }],
+        days: [{ breakfast: 501, dinner: 0 }],
         expectedVersion: 1,
       }).ok,
     ).toBe(false);
@@ -1432,7 +1432,7 @@ describe("meal plan twin", () => {
     const captain = makeUser("Cap", "captain");
     const plan = {
       daysOnSite: 1,
-      days: [{ breakfast: 20, lunch: 0, dinner: 25 }],
+      days: [{ breakfast: 20, dinner: 25 }],
     };
     expect(testStore.getMealPlan().firstDay).toBeNull();
     expect(

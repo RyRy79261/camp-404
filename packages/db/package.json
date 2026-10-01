@@ -57,6 +57,7 @@
     "./inventory": "./src/inventory.ts",
     "./transport": "./src/transport.ts",
     "./team-programs": "./src/team-programs.ts",
+    "./kitchen-menu": "./src/kitchen-menu.ts",
     "./meal-plan": "./src/meal-plan.ts",
     "./recipes": "./src/recipes.ts",
     "./calendar-events": "./src/calendar-events.ts",

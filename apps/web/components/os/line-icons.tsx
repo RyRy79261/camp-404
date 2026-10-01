@@ -42,8 +42,10 @@ export const PROGRAM_ICON_KEYS = [
   "shifts",
   "tent",
   "receipt",
+  "basket",
   "lounge",
   "tickets",
+  "guide",
 ] as const;
 
 export const GLYPH_KEYS = [
@@ -106,6 +108,14 @@ const PATHS: Record<IconKey, ReactNode> = {
     <>
       <path d="M10 3h4v4h-4zM3 17h4v4H3zM10 17h4v4h-4zM17 17h4v4h-4z" />
       <path d="M12 7v6M5 17v-4h14v4M12 13v4" />
+    </>
+  ),
+  // An open book with a ribbon, for the Survival Guide (#250).
+  guide: (
+    <>
+      <path d="M3 5h6a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H3z" />
+      <path d="M21 5h-6a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h7z" />
+      <path d="M16 5v6l1.5-1.5L19 11V5" />
     </>
   ),
   readme: (
@@ -314,6 +324,14 @@ const PATHS: Record<IconKey, ReactNode> = {
       <path d="M6 4h12v17H6z" />
       <path d="M9 3h6v3H9z" />
       <path d="M9 10h6M9 14h6M9 18h3" />
+    </>
+  ),
+  // A shopping basket with its handle, for the Kitchen's shopping list (#245).
+  basket: (
+    <>
+      <path d="M3 10h18l-2 10H5L3 10z" />
+      <path d="M8 10l3-6M16 10l-3-6" />
+      <path d="M9 13v4M12 13v4M15 13v4" />
     </>
   ),
   // A Burn ticket, notched at both sides, with its tear-off line.

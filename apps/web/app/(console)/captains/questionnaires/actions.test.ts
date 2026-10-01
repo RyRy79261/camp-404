@@ -1055,8 +1055,8 @@ describe("createFromTemplateAction (#251)", () => {
     daysOnSite: 2,
     firstDay: null,
     days: [
-      { breakfast: 0, lunch: 0, dinner: 30 },
-      { breakfast: 30, lunch: 0, dinner: 0 },
+      { breakfast: 0, dinner: 30 },
+      { breakfast: 30, dinner: 0 },
     ],
     version: 1,
     updatedAt: null,
@@ -1114,7 +1114,7 @@ describe("mealPlanRowsAction (#251)", () => {
       cycle: 3,
       daysOnSite: 1,
       firstDay: null,
-      days: [{ breakfast: 0, lunch: 0, dinner: 0 }],
+      days: [{ breakfast: 0, dinner: 0 }],
       version: 0,
       updatedAt: null,
     });

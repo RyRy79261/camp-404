@@ -11,6 +11,24 @@ export const TASK_COLUMNS: { status: TaskBoardStatus; label: string }[] = [
   { status: "done", label: "Done" },
 ];
 
+/** Each column's name, by the status it holds (a task's place on the board). */
+export const TASK_COLUMN_LABEL: Record<TaskBoardStatus, string> =
+  Object.fromEntries(TASK_COLUMNS.map((c) => [c.status, c.label])) as Record<
+    TaskBoardStatus,
+    string
+  >;
+
+/**
+ * The task board filtered to one team (`?team=`), and with `add` its Add task
+ * form open for that team: a team page's "Add task" and a team folder's
+ * "<Team> tasks".
+ */
+export function tasksHref(team: string, opts: { add?: boolean } = {}): string {
+  const q = new URLSearchParams({ team });
+  if (opts.add) q.set("add", "1");
+  return `/tasks?${q.toString()}`;
+}
+
 /** The fields of a stored task the board needs. */
 export interface TaskRow {
   id: string;

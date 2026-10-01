@@ -31,7 +31,10 @@ export default async function CampManagementPage({
   // check adds that key to the filter dropdown so the select's value is one of
   // its options). A stale or invented key opens the full roster rather than an
   // empty, silently-filtered one.
-  searchParams: Promise<{ team?: string }>;
+  // `?member=` opens a captain's roster with that member's panel open (the
+  // Applications page links each name here). An id not on the roster opens
+  // nothing.
+  searchParams: Promise<{ team?: string; member?: string }>;
 }) {
   // Every approved member may browse; the captain bar only picks the full or
   // the public projection.
@@ -51,7 +54,12 @@ export default async function CampManagementPage({
   // camp-wide) also reads everyone's "This year" status, and nothing else of
   // the captain's view. The captain gate does not resolve the lead flag at a
   // captain bar, so it is read here.
-  const [members, config, { team: requestedTeam }, lead] = await Promise.all([
+  const [
+    members,
+    config,
+    { team: requestedTeam, member: requestedMember },
+    lead,
+  ] = await Promise.all([
     getCampManagementRoster({ includeEmail: isCaptain }),
     getTeamsConfig(),
     searchParams,
@@ -109,6 +117,11 @@ export default async function CampManagementPage({
           teams={teams}
           teamLabels={teamLabels}
           initialTeam={initialTeam}
+          initialMember={
+            requestedMember && roster.rows.some((r) => r.id === requestedMember)
+              ? requestedMember
+              : null
+          }
         />
       ) : (
         <MemberRoster

@@ -58,30 +58,91 @@ export function applicationRows(
 }
 
 /**
- * The page's filters: one group per stored status (STANDING_LABEL: "Coming,
- * not decided", "Accepted", …), no answer, or (captains) no ticket yet.
+ * The page's two filters, apart as the owner keeps them apart (2026-09-28):
+ * "This year" is the member's answer and the captains' decision, one stored
+ * status each (STANDING_LABEL: "Coming, not decided", "Accepted", …) or no
+ * answer; "Ticket" (captains only) is where their ticket, DDT or WAP stands.
  */
-export type ApplicationFilter =
-  | "all"
-  | ParticipationStatus
-  | "none"
-  | "needs_ticket";
+export type YearFilter = "all" | ParticipationStatus | "none";
 
-/** Whether a row shows under a filter. */
-export function matchesApplicationFilter(
+export type TicketFilter =
+  | "any"
+  | "needs_ticket"
+  | "wants_ddt"
+  | "wap_requested";
+
+export interface ApplicationFilters {
+  year: YearFilter;
+  ticket: TicketFilter;
+  /** Part of a name, any case; blank matches everyone. */
+  query: string;
+}
+
+export const NO_FILTERS: ApplicationFilters = {
+  year: "all",
+  ticket: "any",
+  query: "",
+};
+
+/** Whether a row shows under a "This year" filter. */
+export function matchesYearFilter(
   row: ApplicationRow,
-  filter: ApplicationFilter,
+  year: YearFilter,
 ): boolean {
-  switch (filter) {
-    case "all":
-      return true;
-    case "none":
-      return row.thisYear === null;
+  if (year === "all") return true;
+  if (year === "none") return row.thisYear === null;
+  return row.thisYear === year;
+}
+
+/**
+ * Whether a row shows under a "Ticket" filter. A team lead's rows carry no
+ * ticket, so every ticket filter but "any" finds nobody on them.
+ */
+export function matchesTicketFilter(
+  row: ApplicationRow,
+  ticket: TicketFilter,
+): boolean {
+  if (ticket === "any") return true;
+  if (!row.ticket) return false;
+  switch (ticket) {
     case "needs_ticket":
+      return stillNeedsTicket(row.thisYear, row.ticket);
+    case "wants_ddt":
       return (
-        row.ticket !== undefined && stillNeedsTicket(row.thisYear, row.ticket)
+        row.ticket.ticketStatus === "needs_directed_ticket" &&
+        row.ticket.ddt === "none"
       );
-    default:
-      return row.thisYear === filter;
+    case "wap_requested":
+      return row.ticket.wap === "requested";
   }
+}
+
+/** The rows the filters keep, in the order given. */
+export function filterApplicationRows(
+  rows: readonly ApplicationRow[],
+  filters: ApplicationFilters,
+): ApplicationRow[] {
+  const q = filters.query.trim().toLowerCase();
+  return rows.filter(
+    (r) =>
+      matchesYearFilter(r, filters.year) &&
+      matchesTicketFilter(r, filters.ticket) &&
+      (q === "" || r.displayName.toLowerCase().includes(q)),
+  );
+}
+
+/**
+ * The count line over the table ("12 members, 2 still need a ticket"), for
+ * the rows showing. The ticket half only on a captain's rows, which carry
+ * the tickets.
+ */
+export function applicationCountLine(rows: readonly ApplicationRow[]): string {
+  const people = `${rows.length} ${rows.length === 1 ? "member" : "members"}`;
+  if (!rows.some((r) => r.ticket)) return people;
+  const need = rows.filter(
+    (r) => r.ticket && stillNeedsTicket(r.thisYear, r.ticket),
+  ).length;
+  return need === 0
+    ? people
+    : `${people}, ${need} still ${need === 1 ? "needs" : "need"} a ticket`;
 }

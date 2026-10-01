@@ -13,6 +13,12 @@ const config: NextConfig = {
     "@camp404/games",
   ],
   typedRoutes: true,
+  // Download PDF (#249, app/print/pdf/route.ts) starts @sparticuz/chromium on
+  // Vercel. Its Chromium is a set of compressed files the package reads at
+  // run time, so they are named here for the route's function to carry them.
+  outputFileTracingIncludes: {
+    "/print/pdf": ["./node_modules/@sparticuz/chromium/bin/**"],
+  },
   // `next dev`'s badge sits bottom-left, over the phone bottom bar's Home
   // button (404 OS, PR C), so Playwright's clicks there land on the badge.
   // Off for the E2E runs only; compile and runtime errors still show.

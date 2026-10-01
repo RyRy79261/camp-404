@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  afrikaburnDate,
+  afrikaburnEventTitle,
   attendanceBoard,
   deadlineCalendarStep,
   logisticsCalendarStep,
@@ -23,6 +25,7 @@ import {
   type ClearLogisticsPhaseInput,
   type EditDeadlineInput,
   type RemoveDeadlineInput,
+  type SetAfrikaburnDateInput,
   type SetAttendanceInput,
   type SetDeadlineDoneInput,
   type SetLogisticsPhaseInput,
@@ -56,8 +59,8 @@ import { logisticsTestStore } from "./test-store-logistics";
 // (catchUpCampCalendar, no cron). Re-saving never makes a second event,
 // because the id never changes.
 //
-// TITLES ARE PLAIN (owner, 2026-09-30): "Build", and a deadline's own title.
-// Every phase is a whole-camp event, so no team tag either: the Calendar and
+// TITLES ARE PLAIN (owner, 2026-09-30): "Build"; an AfrikaBurn date is
+// "AfrikaBurn: Registration closes" (owner, 2026-10-01). Every phase is a whole-camp event, so no team tag either: the Calendar and
 // Home read them as the camp's.
 //
 // Under E2E the store's own event list stands in for Google, so the same
@@ -120,13 +123,17 @@ export function logisticsEventBody(
   };
 }
 
-/** The Google event for a deadline with a date: one all-day event, plain. */
+/**
+ * The Google event for a deadline with a date: one all-day event, titled
+ * "AfrikaBurn: <name>", whole-camp. A standard date says what it is.
+ */
 export function deadlineEventBody(
   row: DeadlineRow & { dueDate: string },
 ): CalendarEventBody {
+  const help = row.kind ? afrikaburnDate(row.kind)?.help : null;
   return {
-    summary: row.title,
-    description: [row.note, APP_NOTE("Camp settings, The camp's year")]
+    summary: afrikaburnEventTitle(row),
+    description: [help, row.note, APP_NOTE("Camp settings, The camp's year")]
       .filter(Boolean)
       .join("\n\n"),
     start: { date: row.dueDate },
@@ -477,6 +484,21 @@ export async function editDeadline(
   const saved = usesTestStore()
     ? logisticsTestStore.editDeadline(args)
     : await deadlinesDb.editDeadline(args);
+  return afterDeadlineWrite(saved, actorId);
+}
+
+/**
+ * Set or change one of AfrikaBurn's standard dates as a captain; its event
+ * follows (off the calendar for "No round this year").
+ */
+export async function setAfrikaburnDate(
+  actorId: string,
+  input: SetAfrikaburnDateInput,
+): Promise<DeadlineSaved> {
+  const args = { ...input, actorId, newEventId: newCalendarEventId() };
+  const saved = usesTestStore()
+    ? logisticsTestStore.setAfrikaburnDate(args)
+    : await deadlinesDb.setAfrikaburnDate(args);
   return afterDeadlineWrite(saved, actorId);
 }
 

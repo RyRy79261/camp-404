@@ -8,9 +8,10 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The logistics days (#247). Every approved member reads them; only a captain
-// or a Transport and Logistics lead edits. Everyone else sees the Edit
-// buttons PRESENT BUT DISABLED, described by the one refusal line. Without a
-// camp calendar the page still works and says the days are only in the app.
+// or a Transport and Logistics lead edits. Everyone else reads the days as
+// content: no Edit buttons, greyed or not, no lock line, and one quiet line
+// saying who sets them (AGENTS.md, "read-only is content"). Without a camp
+// calendar the page still works and says the days are only in the app.
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -35,6 +36,7 @@ vi.mock("@/lib/logistics", () => ({
   listDeadlines: vi.fn(async () => []),
 }));
 
+import { clearLogisticsPhaseAction } from "@/app/(console)/logistics/actions";
 import { captainPageGate } from "@/lib/captain-gate";
 import {
   getAttendanceView,
@@ -44,8 +46,11 @@ import {
   listLogisticsPhases,
   type AttendanceView,
 } from "@/lib/logistics";
+import { ASK_CAPTION } from "@/components/logistics/ask-attendance";
 import {
   CALENDAR_NOT_CONNECTED_NOTE,
+  DEADLINES_SETTINGS_HREF,
+  LOGISTICS_EDITORS_NOTE,
   LOGISTICS_REFUSAL,
 } from "@/lib/logistics-copy";
 import { getLeadTeams } from "@/lib/users";
@@ -127,38 +132,52 @@ describe("logistics page", () => {
         .map((li) => li.getAttribute("aria-label")),
     ).toEqual(["Pack", "Travel", "Build", "Burn", "Strike", "Unpack"]);
     const build = text(within(list).getByRole("listitem", { name: "Build" }));
-    expect(build).toContain("Sat 24 Apr to Mon 26 Apr 2027, 3 days");
-    expect(build).toContain("On site");
-    expect(build).toContain("Bring gloves.");
-    expect(build).toContain("On the camp calendar");
+    expect(build).toContain("Sat 24 Apr to Mon 26 Apr 2027");
+    expect(build).toContain("3 days");
+    expect(build).toContain("On site · Bring gloves.");
     expect(
       text(within(list).getByRole("listitem", { name: "Pack" })),
     ).toContain("Days not set yet.");
   });
 
-  it("gives a member the Edit buttons disabled, pointing at the refusal", async () => {
+  it("says nothing about the calendar on a day that is on it", async () => {
+    signIn("captain");
+    await show();
+    const build = text(screen.getByRole("listitem", { name: "Build" }));
+    // The page description says every day is on the camp calendar; a row
+    // only speaks when it is not.
+    expect(build).not.toContain("camp calendar");
+  });
+
+  it("gives a member the days as content: no Edit, no lock line, one quiet note", async () => {
     signIn("camp_member");
     await show();
-    expect(screen.getByText(LOGISTICS_REFUSAL)).toBeTruthy();
-    const edit = button("Edit Build — not available to you");
-    expect(edit.disabled).toBe(true);
-    expect(edit.getAttribute("aria-describedby")).toBe(
-      "logistics-edit-refusal",
-    );
+    const list = screen.getByRole("list", { name: "Logistics days" });
+    expect(within(list).queryAllByRole("button")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /^Edit/ })).toBeNull();
+    expect(screen.queryByText(LOGISTICS_REFUSAL)).toBeNull();
+    expect(screen.getByText(LOGISTICS_EDITORS_NOTE)).toBeTruthy();
   });
 
   it("refuses a lead of another team the same way", async () => {
     signIn("team_lead", ["kitchen"]);
     await show();
-    expect(screen.getByText(LOGISTICS_REFUSAL)).toBeTruthy();
-    expect(button("Edit Pack — not available to you").disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: /^Edit/ })).toBeNull();
+    expect(screen.getByText(LOGISTICS_EDITORS_NOTE)).toBeTruthy();
   });
 
-  it("lets a Transport and Logistics lead edit", async () => {
+  it("lets a Transport and Logistics lead edit, with Edit on every row", async () => {
     signIn("team_lead", ["transport_and_logistics"]);
     await show();
-    expect(screen.queryByText(LOGISTICS_REFUSAL)).toBeNull();
-    expect(button("Edit Build").disabled).toBe(false);
+    expect(screen.queryByText(LOGISTICS_EDITORS_NOTE)).toBeNull();
+    const list = screen.getByRole("list", { name: "Logistics days" });
+    for (const li of within(list).getAllByRole("listitem")) {
+      const edit = within(li).getByRole("button", {
+        name: `Edit ${li.getAttribute("aria-label")}`,
+      }) as HTMLButtonElement;
+      expect(edit.disabled).toBe(false);
+      expect(edit.closest("[data-slot=row-actions]")).toBeTruthy();
+    }
   });
 
   it("says when a phase is not on the camp calendar yet", async () => {
@@ -195,6 +214,32 @@ describe("logistics page", () => {
     expect(screen.getByRole("button", { name: "Clear days" })).toBeTruthy();
   });
 
+  it("asks before clearing a phase's days", async () => {
+    signIn("captain");
+    await show();
+    fireEvent.click(button("Edit Build"));
+    fireEvent.click(button("Clear days"));
+    const confirm = screen.getByRole("group", { name: "Clear the Build days" });
+    expect(text(confirm)).toContain("Take Build off the camp calendar?");
+    expect(clearLogisticsPhaseAction).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(confirm).getByRole("button", { name: "Keep the days" }),
+    );
+    expect(
+      screen.queryByRole("group", { name: "Clear the Build days" }),
+    ).toBeNull();
+    expect(clearLogisticsPhaseAction).not.toHaveBeenCalled();
+  });
+
+  it("says the picked days back in the page's words", async () => {
+    signIn("captain");
+    await show();
+    fireEvent.click(button("Edit Build"));
+    const dialog = screen.getByRole("dialog", { name: "Build" });
+    expect(text(dialog)).toContain("Sat 24 Apr 2027");
+    expect(text(dialog)).toContain("Mon 26 Apr 2027");
+  });
+
   it("offers no Clear days for a phase with no days and nothing on the calendar", async () => {
     signIn("captain");
     await show();
@@ -209,7 +254,7 @@ describe("logistics page", () => {
     await show();
     expect(screen.getByText(CALENDAR_NOT_CONNECTED_NOTE)).toBeTruthy();
     const build = text(screen.getByRole("listitem", { name: "Build" }));
-    expect(build).toContain("Sat 24 Apr to Mon 26 Apr 2027, 3 days");
+    expect(build).toContain("Sat 24 Apr to Mon 26 Apr 2027");
     expect(build).not.toContain("camp calendar");
   });
 
@@ -217,11 +262,17 @@ describe("logistics page", () => {
     signIn("camp_member");
     await show();
     const pack = screen.getByRole("listitem", { name: "Who can help: Pack" });
-    expect(text(pack)).toContain(
-      "1 going · 1 maybe · 0 can't · 1 not answered",
+    // The counts are said once, in each answer's label; a member gets how
+    // many have not answered, never who.
+    expect(text(pack)).toContain("Going (1)");
+    expect(text(pack)).toContain("Maybe (1)");
+    expect(text(pack)).not.toContain("going ·");
+    expect(screen.getByTestId("attendance-counts-pack").textContent).toBe(
+      "1 not answered.",
     );
     expect(text(pack)).toContain("Dee");
     expect(text(pack)).not.toContain("Quiet Quinn");
+    expect(text(pack)).toContain("Your answer");
     const mine = within(pack).getByRole("group", {
       name: "Your answer for Pack",
     });
@@ -235,22 +286,53 @@ describe("logistics page", () => {
       rank: "camp_member",
       cycle: 2027,
     });
-    // Only a captain asks everyone.
-    expect(screen.queryByRole("button", { name: "Ask everyone" })).toBeNull();
+    // Only a captain asks.
+    expect(
+      screen.queryByRole("button", { name: "Ask who can help" }),
+    ).toBeNull();
   });
 
-  it("names who has not answered to a lead", async () => {
+  it("names who has not answered to a lead, as chips", async () => {
     signIn("team_lead", ["kitchen"]);
     await show();
     const pack = screen.getByRole("listitem", { name: "Who can help: Pack" });
     expect(text(pack)).toContain("Not answered (1)Quiet Quinn");
-    expect(screen.queryByRole("button", { name: "Ask everyone" })).toBeNull();
+    expect(screen.queryByTestId("attendance-counts-pack")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Ask who can help" }),
+    ).toBeNull();
   });
 
-  it("gives a captain Ask everyone", async () => {
+  it("puts Who can help first while the viewer has a day to answer, and the days first once they have answered", async () => {
+    const order = () =>
+      screen
+        .getAllByRole("heading", { level: 2 })
+        .map((h) => h.textContent)
+        .filter((t) => t === "The days" || t === "Who can help");
+    signIn("camp_member");
+    await show();
+    expect(order()).toEqual(["Who can help", "The days"]);
+    cleanup();
+    vi.mocked(getAttendanceView).mockResolvedValue({
+      ...board(false),
+      mine: { pack: "going", build: "maybe", strike: "cant", unpack: "going" },
+    });
+    await show();
+    expect(order()).toEqual(["The days", "Who can help"]);
+  });
+
+  it("gives a captain Ask who can help as the main button, saying who it reaches", async () => {
     signIn("captain");
     await show();
-    expect(screen.getByRole("button", { name: "Ask everyone" })).toBeTruthy();
+    const ask = screen.getByRole("button", { name: "Ask who can help" });
+    expect(ask.getAttribute("aria-describedby")).toBeTruthy();
+    expect(
+      document.getElementById(ask.getAttribute("aria-describedby") ?? "")
+        ?.textContent,
+    ).toBe(ASK_CAPTION);
+    expect(
+      screen.getByRole("link", { name: "Open the calendar" }).className,
+    ).toContain("underline-offset");
   });
 
   it("closes a phase's answers once it has started", async () => {
@@ -270,34 +352,108 @@ describe("logistics page", () => {
     ).toBe(true);
   });
 
-  it("tells an asked member, and lists the AfrikaBurn deadlines for everyone", async () => {
+  it("tells an asked member at the top, in the blue tint, with a way to answer", async () => {
     signIn("camp_member");
     vi.mocked(isAskedForAttendance).mockResolvedValue(true);
+    await show();
+    const asked = screen.getByTestId("attendance-asked");
+    expect(asked.className).toContain("bg-card");
+    expect(asked.className).not.toContain("warning");
+    const answer = within(asked).getByRole("link", { name: "Answer now" });
+    const target = answer.getAttribute("href")?.slice(1) ?? "";
+    expect(document.getElementById(target)?.textContent).toBe("Who can help");
+    // At the top: before every section.
+    const firstSection = screen.getAllByRole("heading", { level: 2 })[0]!;
+    expect(
+      asked.compareDocumentPosition(firstSection) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("lists the AfrikaBurn dates a captain has set, in their groups", async () => {
+    signIn("camp_member");
+    const row = {
+      cycle: 2027,
+      note: null,
+      done: false,
+      skipped: false,
+      calendarEventId: "e1",
+      calendarSyncedVersion: 1,
+      version: 1,
+      removedAt: null,
+    };
     vi.mocked(listDeadlines).mockResolvedValue([
       {
+        ...row,
         id: "d1",
-        cycle: 2027,
-        title: "Theme camp registration closes",
+        kind: "registration_closes",
+        title: "Registration closes",
         dueDate: "2027-01-15",
         note: "On the AfrikaBurn site.",
         done: true,
-        calendarEventId: "e1",
-        calendarSyncedVersion: 1,
-        version: 1,
-        removedAt: null,
+      },
+      // Set, then marked no round.
+      {
+        ...row,
+        id: "d2",
+        kind: "second_ddt_round",
+        title: "Second DDT round",
+        dueDate: null,
+        skipped: true,
+      },
+      // Not announced: a standard date with no day is not shown.
+      {
+        ...row,
+        id: "d3",
+        kind: "wap_requests_open",
+        title: "WAP requests open",
+        dueDate: null,
+      },
+      {
+        ...row,
+        id: "d4",
+        kind: null,
+        title: "Mutant vehicle forms",
+        dueDate: "2027-02-01",
       },
     ]);
     await show();
-    expect(screen.getByTestId("attendance-asked")).toBeTruthy();
-    const list = screen.getByRole("list", { name: "AfrikaBurn deadlines" });
-    const row = text(
-      within(list).getByRole("listitem", {
-        name: "Theme camp registration closes",
+    const registration = screen.getByRole("region", {
+      name: "Theme camp registration",
+    });
+    const closes = text(
+      within(registration).getByRole("listitem", {
+        name: "Registration closes",
       }),
     );
-    expect(row).toContain("Fri 15 Jan 2027 · Done");
-    expect(row).toContain("On the AfrikaBurn site.");
+    expect(closes).toContain("Fri 15 Jan 2027 · Done");
+    expect(closes).toContain("On the AfrikaBurn site.");
+    expect(
+      text(
+        within(screen.getByRole("region", { name: "Tickets (DDT)" })).getByRole(
+          "listitem",
+          { name: "Second DDT round" },
+        ),
+      ),
+    ).toContain("No round this year");
+    expect(
+      within(screen.getByRole("region", { name: "Other" })).getByRole(
+        "listitem",
+        { name: "Mutant vehicle forms" },
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("region", { name: "Work access passes (WAP)" }),
+    ).toBeNull();
     // Members read; only a captain is sent to change them.
-    expect(screen.queryByRole("link", { name: "Change them" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Edit dates/ })).toBeNull();
+  });
+
+  it("sends a captain straight to the dates list on the year page", async () => {
+    signIn("captain");
+    await show();
+    expect(
+      screen.getByRole("link", { name: "Edit dates" }).getAttribute("href"),
+    ).toBe(DEADLINES_SETTINGS_HREF);
   });
 });

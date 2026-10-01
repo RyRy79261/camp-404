@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Fuel, PlugZap, Zap } from "lucide-react";
+import { buttonVariants } from "@camp404/ui/components/button";
 import {
   Card,
   CardContent,
@@ -25,7 +26,9 @@ import {
 // the fuel for the burn and the jerry cans. Every figure arrives worked out on
 // the server with the load list's and the fuel estimate's own calculations.
 // Those who may edit the plan get links into the Power tool that say so;
-// everyone else gets the same pages to read.
+// everyone else gets the same pages to read. With no loads and no generator
+// there is nothing to show: the card is one line, and the editor's link to
+// start the load list.
 
 interface Tile {
   key: string;
@@ -86,6 +89,30 @@ export function PowerGlanceCard({
   /** A captain or a Power & Lighting lead: the links say "Edit". */
   canEdit: boolean;
 }) {
+  if (glance.peak === null && glance.generator === null) {
+    return (
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-2 p-6">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Zap className="h-4 w-4 text-accent" aria-hidden />
+            Power plan
+          </CardTitle>
+          <span className="text-sm text-muted-foreground">
+            No power plan yet.
+          </span>
+          {canEdit ? (
+            <Link
+              href={POWER_LOADS_PATH}
+              className={`ml-auto ${buttonVariants({ variant: "outline", size: "sm" })}`}
+            >
+              <PlugZap aria-hidden />
+              Start the load list
+            </Link>
+          ) : null}
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardHeader className="pb-3">

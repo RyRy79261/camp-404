@@ -180,7 +180,14 @@ function folderSize(key: string): { w: number; h: number } {
 const XL_SIZE = { w: 1040, h: 660 };
 const L_SIZE = { w: 880, h: 600 };
 const S_SIZE = { w: 520, h: 440 };
+const WRITE_SIZE = { w: 1120, h: 800 };
 const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
+  // A team's page opens wide enough for its cards and its people side by side
+  // (audit, 2026-10-01: at M it was seven cards in one column).
+  team: XL_SIZE,
+  // The meeting editor writes its agenda and notes beside their previews.
+  "new-meeting": L_SIZE,
+  "edit-meeting": L_SIZE,
   tasks: XL_SIZE,
   roster: XL_SIZE,
   payments: XL_SIZE,
@@ -193,8 +200,15 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   calendar: L_SIZE,
   power: L_SIZE,
   logistics: L_SIZE,
-  shifts: XL_SIZE,
+  shifts: L_SIZE,
   "my-shifts": L_SIZE,
+  guide: L_SIZE,
+  "guide-chapter": L_SIZE,
+  "guide-version": L_SIZE,
+  // The guide's editor: writing and its preview side by side, as tall as
+  // the screen allows.
+  "new-guide-chapter": WRITE_SIZE,
+  "edit-guide-chapter": WRITE_SIZE,
   "camp-layout": XL_SIZE,
   "inventory-item": L_SIZE,
   transport: L_SIZE,
@@ -203,9 +217,11 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   "gear-rental": XL_SIZE,
   "my-claims": L_SIZE,
   "claim-approvals": L_SIZE,
+  budgets: L_SIZE,
   recipes: L_SIZE,
   recipe: L_SIZE,
-  "meal-plan": L_SIZE,
+  "meal-plan": XL_SIZE,
+  "shopping-list": L_SIZE,
   "recipe-review": L_SIZE,
   overview: L_SIZE,
   questionnaires: L_SIZE,
@@ -818,7 +834,15 @@ function DesktopInner({
         return;
       }
       const open = wm.windows.find((w) => w.id === m.instanceKey);
-      navigateTo(open?.lastUrl ?? href, m.instanceKey, !!open);
+      // A shortcut that names its own filter (a team folder's "Kitchen
+      // tasks", /tasks?team=kitchen) goes there; a plain program comes back
+      // where its window was left.
+      const filtered = href.includes("?");
+      navigateTo(
+        filtered ? href : (open?.lastUrl ?? href),
+        m.instanceKey,
+        !!open,
+      );
     },
     [liveKey, navigateTo, wm.windows],
   );

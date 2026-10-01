@@ -1,11 +1,18 @@
+import { campDayKey } from "@camp404/core";
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
+import { DuesStats, duesStatsFigures } from "@/components/dues/dues-stats";
 import { PaymentsFrame } from "@/components/dues/payments-frame";
 import { captainPageGate } from "@/lib/captain-gate";
+import { getDuesYear, listDuesAccounts } from "@/lib/dues";
 import { PAYMENTS_PATH } from "@/lib/dues-copy";
 import { keepsMoney } from "@/lib/money-gate";
 import { ledgerCycle, listPayments } from "@/lib/payments";
 import { getCampManagementRoster } from "@/lib/roster";
-import { PaymentsManager, type LedgerMember } from "./payments-manager";
+import {
+  PaymentsManager,
+  RecordPaymentDialog,
+  type LedgerMember,
+} from "./payments-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +24,12 @@ export const metadata = { title: "Payments — Camp 404" };
 // records and checks what the bank statement shows. For captains and Finance
 // leads (canManageMoney): the rank gate is team_lead, because clearance is
 // global, and the Finance rule then turns away a lead of any other team.
-// Anyone else sees the heading and a lock, and no payment is read. Laid out
-// like the AfrikaBurn console's ledger pages: the table in the main column,
-// the record form in a side rail.
+// Anyone else sees the heading and a lock, and no payment is read. The year's
+// figures sit on top (the same four as Who owes what: who is paid up from the
+// same accounts, the money from the ledger under them, so it adds up to its
+// rows), then the ledger. "Record a payment"
+// is the page's one main button, in the heading, and opens its form in a
+// dialog.
 
 export default async function PaymentsPage() {
   const gate = await captainPageGate("team_lead");
@@ -28,9 +38,11 @@ export default async function PaymentsPage() {
   const data = cleared
     ? await (async () => {
         const cycle = await ledgerCycle();
-        const [payments, roster] = await Promise.all([
+        const [payments, roster, accounts, year] = await Promise.all([
           listPayments(cycle),
           getCampManagementRoster(),
+          listDuesAccounts(cycle, campDayKey(new Date())),
+          getDuesYear(cycle),
         ]);
         const members: LedgerMember[] = roster
           .filter((m) => m.approvalStatus !== "rejected")
@@ -40,26 +52,37 @@ export default async function PaymentsPage() {
             duesPaid: m.duesPaid,
           }))
           .sort((a, b) => a.name.localeCompare(b.name));
-        return { cycle, payments, members };
+        return {
+          cycle,
+          payments,
+          members,
+          // Who is paid up from the accounts; the money from the ledger
+          // below, so the figures add up to its rows.
+          figures: duesStatsFigures(accounts, payments),
+          deadline: year.deadline,
+        };
       })()
     : null;
 
   return (
     <PaymentsFrame
       active={PAYMENTS_PATH}
-      title="Dues & payments"
+      title="Payments"
       description="Record what the bank statement shows, and check the payments members send in. A member is paid up once what they paid covers what they are charged."
       cleared={data !== null}
+      actions={data ? <RecordPaymentDialog members={data.members} /> : null}
     >
       {data ? (
-        <PaymentsManager
-          // A camp that has not named its founding year is on a placeholder.
-          yearLabel={
-            data.cycle === UNSET_CYCLE ? "this year" : String(data.cycle)
-          }
-          members={data.members}
-          payments={data.payments}
-        />
+        <div className="flex flex-col gap-6">
+          <DuesStats figures={data.figures} deadline={data.deadline} />
+          <PaymentsManager
+            // A camp that has not named its founding year is on a placeholder.
+            yearLabel={
+              data.cycle === UNSET_CYCLE ? "this year" : String(data.cycle)
+            }
+            payments={data.payments}
+          />
+        </div>
       ) : null}
     </PaymentsFrame>
   );

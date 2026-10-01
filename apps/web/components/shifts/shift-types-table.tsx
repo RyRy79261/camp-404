@@ -4,7 +4,7 @@ import type { ShiftsView, ShiftTypeView } from "@/lib/shifts";
 
 // "The shifts" (#248), as the owner approved it with the day table (Option A,
 // 2026-10-01): the same table style (Time | Shift | What it is | Each day |
-// Change) from page-md up, and on a phone one row per shift with its hours
+// Change) when its box is 48rem or wider, and narrower one row per shift with its hours
 // down the left. Change sits in the same right-hand slot; on a row the viewer
 // may not set up, the slot stays and is empty, so the columns never move.
 // Adding a shift, the missing Burn days and removing a shift live in the
@@ -59,9 +59,9 @@ export function ShiftTypesTable({
   return (
     <section
       aria-labelledby="shift-types-title"
-      className="border border-border bg-card"
+      className="@container/types border border-border bg-card"
     >
-      <div className="flex flex-col gap-3 p-4 page-md:flex-row page-md:items-center page-md:justify-between page-md:gap-4 page-md:border-b page-md:border-border">
+      <div className="flex flex-col gap-3 p-4 @min-[48rem]/types:flex-row @min-[48rem]/types:items-center @min-[48rem]/types:justify-between @min-[48rem]/types:gap-4 @min-[48rem]/types:border-b @min-[48rem]/types:border-border">
         <div>
           <h2
             id="shift-types-title"
@@ -74,19 +74,19 @@ export function ShiftTypesTable({
           </p>
         </div>
         {canAdd && (
-          <div className="hidden page-md:block">
+          <div className="hidden @min-[48rem]/types:block">
             <ShiftTypeDialog teams={view.teams} triggerClassName="h-8" />
           </div>
         )}
       </div>
 
       {view.types.length === 0 ? (
-        <p className="border-t border-border p-4 text-sm text-muted-foreground page-md:border-t-0">
+        <p className="border-t border-border p-4 text-sm text-muted-foreground @min-[48rem]/types:border-t-0">
           No shifts set up yet.
         </p>
       ) : (
         <>
-          <table className="hidden w-full table-fixed border-collapse text-sm leading-5 page-md:table">
+          <table className="hidden w-full table-fixed border-collapse text-sm leading-5 @min-[48rem]/types:table">
             <caption className="sr-only">The shifts</caption>
             <colgroup>
               {arrows && <col style={{ width: 44 }} />}
@@ -147,7 +147,7 @@ export function ShiftTypesTable({
 
           <ul
             aria-label="The shifts"
-            className="border-t border-border page-md:hidden"
+            className="border-t border-border @min-[48rem]/types:hidden"
           >
             {view.types.map((t, i) => (
               <li
@@ -190,7 +190,7 @@ export function ShiftTypesTable({
       )}
 
       {canAdd && (
-        <div className="border-t border-border p-4 page-md:hidden">
+        <div className="border-t border-border p-4 @min-[48rem]/types:hidden">
           <ShiftTypeDialog teams={view.teams} triggerClassName="h-8 w-full" />
         </div>
       )}

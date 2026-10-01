@@ -2,13 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   CalendarDays,
-  Circle,
   CircleCheck,
   ClipboardList,
   Gavel,
   ListChecks,
   NotebookPen,
   Pencil,
+  SquareKanban,
   User,
   Users,
 } from "lucide-react";
@@ -199,19 +199,24 @@ export default async function MeetingNotePage({
                 {note.actionItems.map((item) => {
                   const meta = [
                     item.assigneeName ?? "Nobody yet",
-                    item.dueOn ? actionItemDue(item.dueOn) : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ");
+                    item.dueOn ? actionItemDue(item.dueOn) : "No deadline",
+                  ].join(" · ");
                   return (
                     <li
                       key={item.id}
-                      className="grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 page-sm:grid-cols-[1rem_minmax(0,1fr)_auto]"
+                      className="grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 py-3 page-sm:grid-cols-[1rem_minmax(0,1fr)_11rem]"
                     >
-                      <Circle
-                        className="h-4 w-4 text-muted-foreground"
-                        aria-hidden
-                      />
+                      {item.task ? (
+                        <SquareKanban
+                          className="h-4 w-4 text-accent"
+                          aria-hidden
+                        />
+                      ) : (
+                        <span
+                          className="mx-auto h-1.5 w-1.5 rounded-full bg-muted-foreground"
+                          aria-hidden
+                        />
+                      )}
                       <span className="min-w-0">
                         <span className="block text-sm font-medium [overflow-wrap:anywhere]">
                           {item.text}
@@ -220,23 +225,21 @@ export default async function MeetingNotePage({
                           {meta}
                         </span>
                       </span>
-                      {item.task ? (
-                        <span className="col-start-2 flex page-sm:col-start-3 page-sm:row-start-1 page-sm:justify-end">
-                          <Link href="/tasks" className="rounded-md">
-                            <Badge
-                              variant={
-                                item.task.status === "done"
-                                  ? "default"
-                                  : "outline"
-                              }
+                      {/* One slot of one width on every row: the button that
+                          puts the item on the board, or where it stands. */}
+                      {item.task || canMakeTasks ? (
+                        <span className="col-start-2 flex w-44 page-sm:col-start-3 page-sm:row-start-1 page-sm:w-full">
+                          {item.task ? (
+                            <Link
+                              href="/tasks"
+                              className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 text-xs font-medium hover:border-accent/60"
                             >
-                              Task · {TASK_STATUS_LABEL[item.task.status]}
-                            </Badge>
-                          </Link>
-                        </span>
-                      ) : canMakeTasks ? (
-                        <span className="col-start-2 flex page-sm:col-start-3 page-sm:row-start-1 page-sm:justify-end">
-                          <MakeTaskButton itemId={item.id} text={item.text} />
+                              On the board:{" "}
+                              {TASK_STATUS_LABEL[item.task.status]}
+                            </Link>
+                          ) : (
+                            <MakeTaskButton itemId={item.id} text={item.text} />
+                          )}
                         </span>
                       ) : null}
                     </li>

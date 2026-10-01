@@ -170,7 +170,7 @@ const deadlineFields = {
   title: z
     .string()
     .trim()
-    .min(1, "Give the deadline a title.")
+    .min(1, "Give the date a name.")
     .max(
       DEADLINE_TITLE_MAX,
       `Keep the title under ${DEADLINE_TITLE_MAX} characters.`,
@@ -193,11 +193,12 @@ export type AddDeadlineInput = z.infer<typeof AddDeadlineInput>;
 
 const deadlineId = z.guid("That deadline isn't there any more.");
 
-/** A deadline's words and date, changed. */
+/** A deadline's words and date, changed; the done tick too, when sent. */
 export const EditDeadlineInput = z.object({
   ...deadlineFields,
   id: deadlineId,
   expectedVersion: z.number().int().min(1),
+  done: z.boolean().optional(),
 });
 export type EditDeadlineInput = z.infer<typeof EditDeadlineInput>;
 
@@ -215,3 +216,54 @@ export const RemoveDeadlineInput = z.object({
   expectedVersion: z.number().int().min(1),
 });
 export type RemoveDeadlineInput = z.infer<typeof RemoveDeadlineInput>;
+
+// --- AfrikaBurn's standard dates ---------------------------------------------
+// The dates AfrikaBurn sets every year (owner, 2026-10-01, mock-up A): the
+// year page lists them all, each "Not announced yet" until a captain sets it.
+// The names, groups and help lines are @camp404/core's AFRIKABURN_DATES; this
+// is only the stable key each one is stored under (afrikaburn_deadlines.kind).
+// A deadline with no kind is one of "Other": a captain's own title.
+
+export const AFRIKABURN_DATE_KINDS = [
+  "form_1_opens",
+  "form_2",
+  "registration_closes",
+  "art_grants_close",
+  "wap_requests_open",
+  "wap_requests_close",
+  "waps_sent_out",
+  "tickets_open",
+  "ddt_deadline",
+  "second_ddt_round",
+  "tickets_close",
+] as const;
+export const AfrikaburnDateKind = z.enum(AFRIKABURN_DATE_KINDS);
+export type AfrikaburnDateKind = z.infer<typeof AfrikaburnDateKind>;
+
+/**
+ * Setting or changing one of AfrikaBurn's standard dates. `expectedVersion`
+ * is null when it was "Not announced yet" (nothing stored), else the version
+ * the captain saw. `skipped` is "No round this year" (only the dates that
+ * allow it: afrikaburnDateMayBeSkipped in @camp404/core); a skipped date
+ * has no day. `done` is sent only by the Change dialog.
+ */
+export const SetAfrikaburnDateInput = z
+  .object({
+    kind: AfrikaburnDateKind,
+    dueDate: deadlineFields.dueDate,
+    note: deadlineFields.note,
+    skipped: z.boolean().default(false),
+    done: z.boolean().optional(),
+    expectedVersion: z.number().int().min(1).nullable(),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.skipped && !v.dueDate) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["dueDate"],
+        message: "Pick the date.",
+      });
+    }
+  })
+  .transform((v) => (v.skipped ? { ...v, dueDate: null } : v));
+export type SetAfrikaburnDateInput = z.infer<typeof SetAfrikaburnDateInput>;

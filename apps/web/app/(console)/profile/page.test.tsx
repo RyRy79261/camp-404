@@ -120,12 +120,18 @@ describe("profile: This year", () => {
     await renderWith(null);
 
     expect(screen.getByRole("heading", { name: "This year" })).toBeTruthy();
-    expect(screen.getByText("You haven't told us yet.")).toBeTruthy();
+    expect(screen.getByText(/^You haven't told us yet\./)).toBeTruthy();
+    // Not a dead end: where the question will reach them.
+    expect(
+      screen
+        .getByRole("link", { name: "Open Notifications" })
+        .getAttribute("href"),
+    ).toBe("/notifications");
     expect(
       screen.queryByRole("link", { name: "Change your answer" }),
     ).toBeNull();
     expect(
-      screen.queryByRole("radiogroup", { name: "Your Burn ticket" }),
+      screen.queryByRole("radiogroup", { name: "Your ticket" }),
     ).toBeNull();
   });
 });
@@ -137,20 +143,26 @@ describe("profile: the member's own ticket", () => {
       await renderWith(status);
 
       const group = screen.getByRole("radiogroup", {
-        name: "Your Burn ticket",
+        name: "Your ticket",
       });
       expect(group).toBeTruthy();
       expect(
         screen
           .getByRole("radio", {
-            name: "I need a DDT (direct distribution ticket) from the camp",
+            name: "I want a DDT (direct distribution ticket) from the camp",
           })
           .getAttribute("aria-checked"),
       ).toBe("true");
-      // Their own DDT and WAP, read-only (owner, 2026-09-28).
-      const set = screen.getByLabelText("Set by the captains");
+      // Their own DDT and WAP, read-only (owner, 2026-09-28), in words that
+      // answer their request, and what to do next.
+      const set = screen.getByRole("region", { name: "From the captains" });
       expect(set.textContent).toContain("DDT (direct distribution ticket)");
-      expect(set.textContent).toContain("Allocated");
+      expect(set.textContent).toContain("Given");
+      expect(
+        screen.getByText(/The camp has given you a DDT\. Pick/),
+      ).toBeTruthy();
+      // Nothing to save until the choice changes.
+      expect(screen.queryByRole("button", { name: "Save ticket" })).toBeNull();
       expect(set.textContent).toContain("WAP (work access pass)");
       expect(set.textContent).toContain("Issued");
       expect(set.querySelector("select, input")).toBeNull();
@@ -166,7 +178,7 @@ describe("profile: the member's own ticket", () => {
       screen.getByText("You said you're not coming this year."),
     ).toBeTruthy();
     expect(
-      screen.queryByRole("radiogroup", { name: "Your Burn ticket" }),
+      screen.queryByRole("radiogroup", { name: "Your ticket" }),
     ).toBeNull();
   });
 });

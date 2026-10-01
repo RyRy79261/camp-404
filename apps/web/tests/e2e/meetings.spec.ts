@@ -64,7 +64,9 @@ test.describe("meeting notes (test-mode)", () => {
 
     await page.getByLabel("Title").fill("Kitchen kickoff");
     await page.getByLabel("Time").fill("18:30");
-    await page.getByLabel("Agenda").fill("- The menu\n- The gas");
+    await page
+      .getByRole("textbox", { name: "Agenda", exact: true })
+      .fill("The menu and the gas");
     await page.getByText("Kitchen Crew", { exact: true }).click();
     await page.getByRole("button", { name: "Add decision" }).click();
     await page
@@ -102,7 +104,18 @@ test.describe("meeting notes (test-mode)", () => {
       .getByRole("button", { name: "Add “Buy the gas” to the task board" })
       .click();
     await expect(page.getByText("Added to the task board")).toBeVisible();
-    await expect(items.getByText("Task · To do")).toBeVisible();
+    await expect(items.getByText("On the board: To do")).toBeVisible();
+
+    // The agenda reads as written, and the list says who came and what was
+    // decided first.
+    await page.goto(noteUrl);
+    await expect(page.getByText("The menu and the gas")).toBeVisible();
+    await page.goto("/meetings?team=kitchen");
+    const row = page
+      .getByRole("list", { name: "Meetings" })
+      .getByRole("link", { name: /Kitchen kickoff/ });
+    await expect(row).toContainText("2 people there");
+    await expect(row).toContainText("Decided: Dinner is at 19:00");
 
     await page.goto("/tasks");
     const todo = page.getByRole("region", { name: "To do" });
@@ -129,7 +142,7 @@ test.describe("meeting notes (test-mode)", () => {
     await expect(
       page
         .getByRole("list", { name: "Action items" })
-        .getByText("Task · To do"),
+        .getByText("On the board: To do"),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: "Edit" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /task board/ })).toHaveCount(
@@ -149,9 +162,11 @@ test.describe("meeting notes (test-mode)", () => {
     await page.getByRole("link", { name: "Edit" }).click();
     await expect(page).toHaveURL(/\/edit$/);
     await expect(
-      page.getByText("On the task board", { exact: true }),
+      page.getByText("On the task board: change it there."),
     ).toBeVisible();
-    await page.getByLabel("Notes").fill("We met in the kitchen.");
+    await page
+      .getByRole("textbox", { name: "Notes", exact: true })
+      .fill("We met in the kitchen.");
     await page.getByRole("button", { name: "Save meeting" }).click();
     await expect(page).toHaveURL(noteUrl);
     await expect(page.getByText("We met in the kitchen.")).toBeVisible();

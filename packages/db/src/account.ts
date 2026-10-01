@@ -211,6 +211,10 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.workshopRsvps)
       .where(eq(schema.workshopRsvps.userId, userId));
+    // Which Survival Guide chapters they opened (#250): their own reading.
+    await tx
+      .delete(schema.documentReads)
+      .where(eq(schema.documentReads.userId, userId));
     // Lounge offers are the member's own words; their slots go with them.
     await tx
       .delete(schema.loungeOffers)

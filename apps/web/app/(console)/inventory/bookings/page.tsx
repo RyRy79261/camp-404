@@ -110,14 +110,13 @@ export default async function InventoryBookingsPage() {
           description="When a captain or a team lead sets how many can book an item, it shows here."
         />
       ) : (
-        <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
-          <ResponsiveDataTable
-            columns={columns}
-            data={items}
-            getRowKey={(i) => i.itemId}
-            label="Gear to book"
-          />
-        </div>
+        <ResponsiveDataTable
+          columns={columns}
+          data={items}
+          getRowKey={(i) => i.itemId}
+          label="Gear to book"
+          framed
+        />
       )}
     </div>
   );

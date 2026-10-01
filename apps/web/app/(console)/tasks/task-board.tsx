@@ -12,14 +12,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  ArrowRight,
-  CalendarDays,
-  Pencil,
-  Plus,
-  Trash2,
-  User,
-} from "lucide-react";
+import { ArrowRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { TASK_EDITED, type TaskBoardStatus } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -36,6 +29,8 @@ import {
 } from "@camp404/ui/components/dialog";
 import { Field } from "@camp404/ui/components/field";
 import { Input } from "@camp404/ui/components/input";
+import { RowActions } from "@camp404/ui/components/row-actions";
+import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import {
   Select,
   SelectContent,
@@ -86,7 +81,13 @@ export function TaskBoard({
   filterTeams,
   addTeams,
   canAddWithoutTeam,
+  initialTeam,
+  openAdd,
 }: {
+  /** The team the filter starts on (`?team=`). */
+  initialTeam?: string;
+  /** Open Add task on this team at once (a team page's "Add task"). */
+  openAdd?: string;
   cards: TaskCard[];
   viewerId: string;
   members: Member[];
@@ -95,9 +96,11 @@ export function TaskBoard({
   canAddWithoutTeam: boolean;
 }) {
   const router = useRouter();
-  const [team, setTeam] = React.useState(ALL);
+  const [team, setTeam] = React.useState(initialTeam ?? ALL);
   const [person, setPerson] = React.useState(ALL);
-  const [adding, setAdding] = React.useState(false);
+  const [adding, setAdding] = React.useState(openAdd !== undefined);
+  // On a phone (a narrow window) one column shows at a time.
+  const [shown, setShown] = React.useState<TaskBoardStatus>("open");
   // The card being edited. It stays set after the dialog closes, so the dialog
   // can animate out; opening Edit on a card replaces it.
   const [editing, setEditing] = React.useState<TaskCard | null>(null);
@@ -177,56 +180,84 @@ export function TaskBoard({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <Field label="Team" htmlFor="task-filter-team" className="w-48">
-          <Select value={team} onValueChange={setTeam}>
-            <SelectTrigger id="task-filter-team">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All teams</SelectItem>
-              {filterTeams.map((t) => (
-                <SelectItem key={t.value} value={t.value}>
-                  {t.label}
-                </SelectItem>
-              ))}
-              <SelectItem value={NONE}>No team</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field
-          label="Responsible"
-          htmlFor="task-filter-person"
-          className="w-48"
-        >
-          <Select value={person} onValueChange={setPerson}>
-            <SelectTrigger id="task-filter-person">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Everyone</SelectItem>
-              <SelectItem value={ME}>Me</SelectItem>
-              <SelectItem value={NONE}>Nobody yet</SelectItem>
-              {members
-                .filter((m) => m.id !== viewerId)
-                .map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.displayName}
+      {/* The filter bar: the filters on the left, Add task on the same line
+          at the right. On a phone Add task comes first, full width, and the
+          filters take the width too. */}
+      <div className="flex flex-col-reverse gap-3 page-sm:flex-row page-sm:items-end page-sm:justify-between">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 page-sm:flex page-sm:flex-wrap page-sm:items-end">
+          <Field
+            label="Team"
+            htmlFor="task-filter-team"
+            className="w-full page-sm:w-48"
+          >
+            <Select value={team} onValueChange={setTeam}>
+              <SelectTrigger id="task-filter-team">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All teams</SelectItem>
+                {filterTeams.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
                   </SelectItem>
                 ))}
-            </SelectContent>
-          </Select>
-        </Field>
+                <SelectItem value={NONE}>No team</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field
+            label="Responsible"
+            htmlFor="task-filter-person"
+            className="w-full page-sm:w-48"
+          >
+            <Select value={person} onValueChange={setPerson}>
+              <SelectTrigger id="task-filter-person">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Everyone</SelectItem>
+                <SelectItem value={ME}>Me</SelectItem>
+                <SelectItem value={NONE}>Nobody yet</SelectItem>
+                {members
+                  .filter((m) => m.id !== viewerId)
+                  .map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.displayName}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
         {canAdd ? (
-          <Button className="ml-auto" onClick={() => setAdding(true)}>
+          <Button
+            className="w-full page-sm:w-auto"
+            onClick={() => setAdding(true)}
+          >
             <Plus aria-hidden className="size-4" />
             Add task
           </Button>
         ) : null}
       </div>
 
+      {/* A narrow window shows one column at a time, picked here with its
+          count; from a medium window up the three stand side by side. */}
+      <div className="page-md:hidden">
+        <SegmentedControl
+          aria-label="Column"
+          value={shown}
+          onValueChange={(v) => setShown(v as TaskBoardStatus)}
+          options={TASK_COLUMNS.map((column) => ({
+            value: column.status,
+            label: `${column.label} ${
+              visible.filter((c) => c.status === column.status).length
+            }`,
+          }))}
+        />
+      </div>
+
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="grid gap-4 page-lg:grid-cols-3">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 page-md:grid-cols-3">
           {TASK_COLUMNS.map((column) => {
             const inColumn = visible.filter((c) => c.status === column.status);
             return (
@@ -236,6 +267,7 @@ export function TaskBoard({
                 label={column.label}
                 count={inColumn.length}
                 note={column.status === "done" ? DONE_NOTE : null}
+                hiddenNarrow={column.status !== shown}
               >
                 {inColumn.map((card) => (
                   <TaskCardView
@@ -259,6 +291,7 @@ export function TaskBoard({
 
       {canAdd ? (
         <TaskDialog
+          defaultTeam={openAdd}
           open={adding}
           onOpenChange={setAdding}
           members={members}
@@ -308,12 +341,15 @@ function BoardColumn({
   label,
   count,
   note,
+  hiddenNarrow,
   children,
 }: {
   status: TaskBoardStatus;
   label: string;
   count: number;
   note: string | null;
+  /** Not the column picked for a narrow window: shown only side by side. */
+  hiddenNarrow: boolean;
   children: React.ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
@@ -322,7 +358,8 @@ function BoardColumn({
       ref={setNodeRef}
       aria-label={label}
       className={cn(
-        "flex min-h-40 flex-col gap-3 rounded-lg border border-border bg-muted/20 p-3 transition-colors",
+        "flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3 transition-colors",
+        hiddenNarrow ? "hidden page-md:flex" : "flex",
         isOver && "border-primary bg-primary/5",
       )}
     >
@@ -339,9 +376,7 @@ function BoardColumn({
       ) : null}
       {children}
       {count === 0 ? (
-        <p className="px-1 py-6 text-center text-sm text-muted-foreground">
-          Nothing here.
-        </p>
+        <p className="px-1 text-sm text-muted-foreground">Nothing here.</p>
       ) : null}
     </section>
   );
@@ -381,90 +416,95 @@ function TaskCardView({
       )}
       {...(card.canMove ? listeners : {})}
     >
-      <CardContent className="flex flex-col gap-2 p-4">
+      <CardContent className="flex flex-col gap-1.5 p-3">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-medium leading-snug">{card.title}</h3>
+          <h3 className="text-sm font-medium leading-snug">{card.title}</h3>
           {pending ? <Spinner className="size-4 shrink-0" /> : null}
         </div>
         {card.description ? (
-          <p className="line-clamp-3 whitespace-pre-line text-sm text-muted-foreground">
+          <p
+            className="line-clamp-1 text-xs text-muted-foreground"
+            title={card.description}
+          >
             {card.description}
           </p>
         ) : null}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {card.teamLabel ? (
-            <Badge variant="secondary">{card.teamLabel}</Badge>
-          ) : null}
+        {/* One meta line: team · who · when. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span className="min-w-0 truncate">
+            {[
+              card.teamLabel,
+              card.assigneeName
+                ? `${card.assigneeName}${card.mine ? " (you)" : ""}`
+                : "Nobody yet",
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
           {card.due ? (
-            <Badge variant={DUE_VARIANT[card.due.tone]}>
-              <CalendarDays aria-hidden className="mr-1 size-3" />
+            <Badge variant={DUE_VARIANT[card.due.tone]} className="ml-auto">
               {card.due.label}
             </Badge>
           ) : null}
         </div>
-        <p className="flex items-center gap-1.5 text-sm">
-          <User aria-hidden className="size-3.5 text-muted-foreground" />
-          {card.assigneeName ? (
-            <span>
-              {card.assigneeName}
-              {card.mine ? (
-                <span className="text-muted-foreground"> (you)</span>
-              ) : null}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">Nobody yet</span>
-          )}
-        </p>
         {card.canMove || card.canRemove || card.canEdit ? (
           <div
-            className="flex flex-wrap items-center gap-1 border-t border-border pt-2"
             // The buttons are for pressing, not for starting a drag.
             onPointerDown={(e) => e.stopPropagation()}
           >
-            {card.canMove
-              ? others.map((column) => (
-                  <Button
-                    key={column.status}
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 text-xs"
-                    disabled={busy}
-                    aria-label={`Move “${card.title}” to ${column.label}`}
-                    onClick={() => onMove(column.status)}
-                  >
-                    <ArrowRight aria-hidden className="size-3.5" />
-                    {column.label}
-                  </Button>
-                ))
-              : null}
-            {card.canEdit || card.canRemove ? (
-              <div className="ml-auto flex items-center gap-1">
-                {card.canEdit ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 text-muted-foreground hover:text-foreground"
-                    disabled={busy}
-                    aria-label={`Edit “${card.title}”`}
-                    onClick={onEdit}
-                  >
-                    <Pencil aria-hidden className="size-3.5" />
-                  </Button>
-                ) : null}
-                {card.canRemove ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 text-muted-foreground hover:text-destructive"
-                    disabled={busy}
-                    aria-label={`Remove “${card.title}”`}
-                    onClick={onRemove}
-                  >
-                    <Trash2 aria-hidden className="size-3.5" />
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
+            <RowActions
+              label={`Actions for ${card.title}`}
+              primary={
+                card.canMove ? (
+                  <span className="flex items-center gap-0.5">
+                    {others.map((column) => (
+                      <Button
+                        key={column.status}
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 px-1.5 text-xs"
+                        disabled={busy}
+                        aria-label={`Move “${card.title}” to ${column.label}`}
+                        onClick={() => onMove(column.status)}
+                      >
+                        <ArrowRight aria-hidden className="size-3" />
+                        {column.label}
+                      </Button>
+                    ))}
+                  </span>
+                ) : null
+              }
+              secondarySlots={1}
+              secondary={
+                <>
+                  {card.canEdit ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-muted-foreground hover:text-foreground"
+                      disabled={busy}
+                      aria-label={`Edit “${card.title}”`}
+                      onClick={onEdit}
+                    >
+                      <Pencil aria-hidden className="size-3.5" />
+                    </Button>
+                  ) : null}
+                  {card.canRemove ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-muted-foreground hover:text-destructive"
+                      disabled={busy}
+                      aria-label={`Remove “${card.title}”`}
+                      onClick={onRemove}
+                    >
+                      <Trash2 aria-hidden className="size-3.5" />
+                    </Button>
+                  ) : null}
+                </>
+              }
+              className="justify-between"
+            />
           </div>
         ) : null}
       </CardContent>
@@ -484,9 +524,12 @@ function TaskDialog({
   teams,
   canAddWithoutTeam,
   editing,
+  defaultTeam,
   onSaved,
   onStale,
 }: {
+  /** The team a new task starts on, when the viewer may pick it. */
+  defaultTeam?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   members: Member[];
@@ -501,9 +544,11 @@ function TaskDialog({
     description: editing?.description ?? "",
     team: editing
       ? (editing.team ?? NONE)
-      : canAddWithoutTeam
-        ? NONE
-        : (teams[0]?.value ?? NONE),
+      : defaultTeam && teams.some((t) => t.value === defaultTeam)
+        ? defaultTeam
+        : canAddWithoutTeam
+          ? NONE
+          : (teams[0]?.value ?? NONE),
     assignee: editing?.assigneeId ?? NONE,
     due: editing?.dueDay ?? "",
   };

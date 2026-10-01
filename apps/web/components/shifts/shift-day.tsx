@@ -18,7 +18,8 @@ import {
 import type { ShiftDayView } from "@/lib/shifts";
 
 // One day of the shift roster (#248), as the owner approved it (Option A,
-// 2026-10-01): AfrikaBurn's ResponsiveDataTable. A table from page-md up
+// 2026-10-01): AfrikaBurn's ResponsiveDataTable. A table when its own box is
+// 48rem or wider (a container query, as AGENTS.md asks of every table)
 // (Time | Shift | Who is on it | Places | your button), and below it the same
 // rows as stacked cards. The member's own button (Sign up, Leave, Full, Not
 // needed) sits in the same right-hand slot on every row, whoever looks.
@@ -462,9 +463,9 @@ export function ShiftDay({
   const columns = arrows ? 6 : 5;
 
   return (
-    <div data-testid="shift-day">
-      {/* From page-md up: the table, in a card. */}
-      <div className="hidden border border-border bg-card page-md:block">
+    <div data-testid="shift-day" className="@container/shifts">
+      {/* A box 48rem or wider: the table, in a card. */}
+      <div className="hidden border border-border bg-card @min-[48rem]/shifts:block">
         <div className="flex items-center justify-between gap-4 border-b border-border p-4">
           <h2 className="font-sans text-base font-semibold tracking-normal normal-case">
             {day.longLabel}
@@ -585,8 +586,8 @@ export function ShiftDay({
         )}
       </div>
 
-      {/* Below page-md: AfrikaBurn's stacked cards. */}
-      <div className="page-md:hidden">
+      {/* Narrower: AfrikaBurn's stacked cards. */}
+      <div className="@min-[48rem]/shifts:hidden">
         <div className="mb-3 flex flex-col gap-1">
           <h2 className="font-sans text-base font-semibold tracking-normal normal-case">
             {day.longLabel}

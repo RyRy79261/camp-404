@@ -363,3 +363,30 @@ describe("bulkSummary", () => {
     ).toBe("2 were already decided by another captain.");
   });
 });
+
+describe("CampManagementRoster: ?member=", () => {
+  it("opens with that member's panel open (the Applications page links here)", () => {
+    render(
+      <CampManagementRoster
+        rows={rowsOf(
+          member("a", "Ada", "approved"),
+          member("b", "Ben", "approved"),
+        )}
+        teams={[]}
+        initialMember="b"
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Decide on Ben" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Decide on Ada" })).toBeNull();
+  });
+
+  it("opens no panel without one", () => {
+    render(
+      <CampManagementRoster
+        rows={rowsOf(member("a", "Ada", "approved"))}
+        teams={[]}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /^Decide on/ })).toBeNull();
+  });
+});

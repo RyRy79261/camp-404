@@ -1,8 +1,19 @@
 // Words and small shapes the dues screens share (#240). Pure, and safe in a
 // browser: it says nothing about who may see what.
 
-import { formatMoney, type DuesBalance } from "@camp404/core";
-import type { ParticipationStatus, PaymentMethod } from "@camp404/types";
+import {
+  campDayKey,
+  CHARGE_KIND_LABELS,
+  formatMoney,
+  type DuesBalance,
+  type PaymentStatus,
+} from "@camp404/core";
+import type {
+  ChargeKind,
+  ParticipationStatus,
+  PaymentMethod,
+  PaymentSource,
+} from "@camp404/types";
 
 const DAY = new Intl.DateTimeFormat("en-ZA", {
   day: "numeric",
@@ -35,6 +46,68 @@ export function balanceSentence(balance: DuesBalance): string {
   return balance.chargedCents > 0 ? "You're paid up." : "Nothing to pay yet.";
 }
 
+/**
+ * True while the member still owes money that no proof they sent covers: the
+ * proof form stays open. Paid up, or a proof for the rest being checked, and
+ * it folds to a "Send another proof" button.
+ */
+export function owesMoreThanSent(balance: DuesBalance): boolean {
+  return balance.balanceCents - balance.pendingCents > 0;
+}
+
+/**
+ * Where My dues offers the proof of payment: the open form while something is
+ * owed that no proof covers, otherwise a "Send another proof" button. Always
+ * one of the two: a member who paid before anything was charged (before a
+ * captain accepted them) can still tell the Finance team.
+ */
+export function proofPlace(balance: DuesBalance): "form" | "button" {
+  return owesMoreThanSent(balance) ? "form" : "button";
+}
+
+/**
+ * The small line under a charge: its kind, unless the description already
+ * says it ("Camp fee: Base" over "Camp fee"), and the day it was charged.
+ */
+export function chargeSubline(charge: {
+  kind: ChargeKind;
+  description: string;
+  createdAt: Date;
+}): string {
+  const kind = CHARGE_KIND_LABELS[charge.kind];
+  const day = `charged ${formatDay(campDayKey(charge.createdAt))}`;
+  return charge.description.toLowerCase().startsWith(kind.toLowerCase())
+    ? day.charAt(0).toUpperCase() + day.slice(1)
+    : `${kind} · ${day}`;
+}
+
+/**
+ * A payment's state in words. The member reads "Being checked" and
+ * "Received". The Finance team uses one vocabulary on every tab: "In the
+ * bank" (money seen), "Excused" (waived: settles dues, brings in nothing),
+ * "To check" (a member sent proof) and "Promised" (recorded by hand, not in
+ * the bank yet).
+ */
+export const PAYMENT_STATUS_WORDS = {
+  member: {
+    pending: { label: "Being checked", variant: "warning" },
+    reconciled: { label: "Received", variant: "success" },
+    waived: { label: "Excused", variant: "secondary" },
+  },
+} as const;
+
+export function financeStatusWords(
+  status: PaymentStatus,
+  source: PaymentSource,
+): { label: string; variant: "warning" | "success" | "secondary" } {
+  if (status === "reconciled")
+    return { label: "In the bank", variant: "success" };
+  if (status === "waived") return { label: "Excused", variant: "secondary" };
+  return source === "member"
+    ? { label: "To check", variant: "warning" }
+    : { label: "Promised", variant: "warning" };
+}
+
 /** The balance as a short label for a table cell. */
 export function balanceLabel(balance: DuesBalance): {
   text: string;
@@ -60,11 +133,11 @@ export function balanceLabel(balance: DuesBalance): {
  * 2026-09-28: never mix them in one label).
  */
 export const PLACE_WORDS: Readonly<Record<ParticipationStatus, string>> = {
-  applied: "Says coming",
-  maybe: "Says maybe",
+  applied: "Coming",
+  maybe: "Maybe",
   accepted: "Accepted",
   waitlisted: "Waiting list",
-  not_attending: "Says not coming",
+  not_attending: "Not coming",
 };
 
 /** How a member says they paid, for the proof form's picker. */

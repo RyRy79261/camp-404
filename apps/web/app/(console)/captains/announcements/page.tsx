@@ -20,8 +20,13 @@ export const metadata = { title: "Announcements — Camp 404" };
 // anyone else sees the heading + a CaptainLock instead of a redirect, and the
 // server never fetches announcement data for them.
 
-export default async function AnnouncementsPage() {
+export default async function AnnouncementsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ audience?: string }>;
+}) {
   const gate = await captainPageGate("team_lead");
+  const { audience: asked } = await searchParams;
   const { campUser } = gate;
   const isCaptain = gate.rank === "captain";
   const leadTeams =
@@ -76,6 +81,11 @@ export default async function AnnouncementsPage() {
           // Null for a captain: they may address anything, and so pin to
           // anything. A lead gets their own teams, and no pin elsewhere.
           leadTeams={isCaptain ? null : leadTeams}
+          // A team page's "Write announcement" opens the composer on that
+          // team, when this sender may address it; anything else is ignored.
+          preferredAudience={
+            audienceOptions.some((o) => o.value === asked) ? asked : undefined
+          }
         />
       ) : (
         <CaptainLock

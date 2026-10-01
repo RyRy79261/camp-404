@@ -3,7 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, FileUp, Loader2 } from "lucide-react";
-import { formatMoney, type StatementProposal } from "@camp404/core";
+import {
+  formatMoney,
+  STATEMENT_MAX_BYTES,
+  type StatementProposal,
+} from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import {
@@ -15,6 +19,7 @@ import {
 } from "@camp404/ui/components/card";
 import { Label } from "@camp404/ui/components/label";
 import { toast } from "@camp404/ui/components/toast";
+import { ReceiptPicker } from "@/components/claims/receipt-picker";
 import { formatDay } from "@/lib/dues-view";
 import {
   confirmStatementLineAction,
@@ -26,13 +31,22 @@ import {
 // read there and thrown away; what comes back is the lines of money coming
 // in, each with the member its reference names. The Finance team confirms one
 // line at a time (a one-tap row action: a failure is a toast, only that
-// button spins). A line with no reference can be given a member by hand.
+// button spins). A line with no reference can be given a member by hand; one
+// whose amount matches a single proof waiting to be checked names that member
+// in its chip, but is never picked for the team: someone else may have paid
+// the same amount. The button says what a tap does ("Mark received" for a
+// member's pending payment, "Record" for a new one). Every line is one grid of fixed columns (amount and
+// day, what the bank says with one chip, the member, "Record"), so the picker
+// and the button sit in the same place on every row, whatever the chip says.
 
 const selectClass =
-  "h-9 w-full min-w-[10rem] rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+  "h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 interface Line extends StatementProposal {
-  /** The member the Finance team picked, or the one the reference names. */
+  /**
+   * The member the Finance team picked, or the one the reference names. A
+   * member suggested only by the amount starts unpicked.
+   */
   pickedId: string;
   done: string | null;
 }
@@ -65,7 +79,7 @@ export function StatementImport() {
         ...rest,
         lines: proposals.map((p) => ({
           ...p,
-          pickedId: p.member?.id ?? "",
+          pickedId: p.matchedBy === "reference" ? p.member!.id : "",
           done: p.alreadyRecorded ? "Already on the ledger" : null,
         })),
       });
@@ -114,7 +128,23 @@ export function StatementImport() {
     });
   }
 
-  const matched = preview?.lines.filter((l) => l.member).length ?? 0;
+  const matched =
+    preview?.lines.filter((l) => l.matchedBy === "reference").length ?? 0;
+  const summary = preview
+    ? [
+        preview.lines.length === 0
+          ? "No money coming in on this statement."
+          : `${preview.lines.length} ${preview.lines.length === 1 ? "payment" : "payments"} in, ${matched} matched by reference.`,
+        preview.skippedOutgoing > 0
+          ? `${preview.skippedOutgoing} ${preview.skippedOutgoing === 1 ? "payment out was" : "payments out were"} skipped.`
+          : null,
+        preview.skippedUnreadable > 0
+          ? `${preview.skippedUnreadable} ${preview.skippedUnreadable === 1 ? "line" : "lines"} could not be read.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
 
   return (
     <div className="flex flex-col gap-6">
@@ -127,17 +157,21 @@ export function StatementImport() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 p-5 pt-0">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex max-w-xl flex-col gap-1.5">
             <Label htmlFor="statement-file">Statement file</Label>
-            <input
+            <ReceiptPicker
               id="statement-file"
-              type="file"
-              accept=".csv,text/csv,text/plain"
-              className="text-sm file:mr-3 file:rounded-md file:border file:border-border file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-secondary-foreground"
-              onChange={(e) => {
-                setFile(e.currentTarget.files?.[0] ?? null);
+              files={file ? [file] : []}
+              onChange={(files) => {
+                setFile(files[0] ?? null);
                 setError(null);
               }}
+              maxFiles={1}
+              maxBytes={STATEMENT_MAX_BYTES}
+              accept=".csv,text/csv,text/plain"
+              inputLabel="Statement file"
+              addText="Add the statement"
+              kindText="A CSV file"
               disabled={reading}
             />
           </div>
@@ -175,13 +209,7 @@ export function StatementImport() {
               Money coming in
             </h2>
             <p role="status" className="text-sm text-muted-foreground">
-              {preview.lines.length === 0
-                ? "No money coming in on this statement."
-                : `${preview.lines.length} ${preview.lines.length === 1 ? "payment" : "payments"}, ${matched} matched to a member by reference.`}
-              {preview.skippedOutgoing > 0 &&
-                ` ${preview.skippedOutgoing} going out were left alone.`}
-              {preview.skippedUnreadable > 0 &&
-                ` ${preview.skippedUnreadable} could not be read.`}
+              {summary}
             </p>
           </div>
           {preview.lines.length > 0 && (
@@ -189,80 +217,97 @@ export function StatementImport() {
               aria-label="Statement payments"
               className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card"
             >
-              {preview.lines.map((line) => (
-                <li
-                  key={line.row}
-                  className="grid gap-3 p-4 page-md:grid-cols-[minmax(0,1fr)_14rem_auto] page-md:items-center"
-                >
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="flex flex-wrap items-center gap-2">
+              {preview.lines.map((line) => {
+                const closesProof =
+                  !line.done &&
+                  line.pendingPaymentId !== null &&
+                  line.pickedId === line.member?.id;
+                const chip = line.done
+                  ? null
+                  : closesProof
+                    ? `Marks ${line.member!.name}'s pending payment received`
+                    : line.matchedBy === "amount" && !line.pickedId
+                      ? `No reference. Same amount as ${line.member!.name}'s proof: pick them if it is theirs`
+                      : !line.member
+                        ? "No reference found"
+                        : null;
+                return (
+                  <li
+                    key={line.row}
+                    className="grid gap-3 p-4 page-md:grid-cols-[8rem_minmax(0,1fr)_14rem_7rem] page-md:items-start"
+                  >
+                    <span className="flex flex-col">
                       <span className="font-medium tabular-nums">
                         {formatMoney(line.amountCents)}
                       </span>
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {formatDay(line.date)}
+                      </span>
+                    </span>
+                    <span className="flex min-w-0 flex-col items-start gap-1">
+                      <span
+                        className="w-full truncate text-sm"
+                        title={line.description || undefined}
+                      >
+                        {line.description || "No description"}
                       </span>
                       {line.done ? (
                         <Badge variant="success">
                           <Check className="h-3 w-3" aria-hidden />
                           {line.done}
                         </Badge>
-                      ) : line.pendingPaymentId &&
-                        line.pickedId === line.member?.id ? (
-                        <Badge variant="secondary">
-                          Matches a payment they sent in
+                      ) : chip ? (
+                        <Badge
+                          variant="outline"
+                          className="max-w-full whitespace-normal text-left"
+                        >
+                          {chip}
                         </Badge>
-                      ) : !line.member ? (
-                        <Badge variant="warning">No reference found</Badge>
                       ) : null}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {line.description || "No description"}
-                    </span>
-                  </span>
-                  <select
-                    aria-label={`Member for the payment on ${formatDay(line.date)}`}
-                    className={selectClass}
-                    value={line.pickedId}
-                    disabled={Boolean(line.done) || confirming}
-                    onChange={(e) => {
-                      const pickedId = e.target.value;
-                      setPreview((current) =>
-                        current
-                          ? {
-                              ...current,
-                              lines: current.lines.map((l) =>
-                                l.row === line.row ? { ...l, pickedId } : l,
-                              ),
-                            }
-                          : current,
-                      );
-                    }}
-                  >
-                    <option value="">Pick a member</option>
-                    {preview.members.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} ({m.refCode})
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={
-                      Boolean(line.done) || !line.pickedId || confirming
-                    }
-                    onClick={() => confirm(line)}
-                  >
-                    {confirming && busyRow === line.row && (
-                      <Loader2 className="animate-spin" aria-hidden />
-                    )}
-                    {line.pendingPaymentId && line.pickedId === line.member?.id
-                      ? "Mark received"
-                      : "Record"}
-                  </Button>
-                </li>
-              ))}
+                    <select
+                      aria-label={`Member for the payment on ${formatDay(line.date)}`}
+                      className={selectClass}
+                      value={line.pickedId}
+                      disabled={Boolean(line.done) || confirming}
+                      onChange={(e) => {
+                        const pickedId = e.target.value;
+                        setPreview((current) =>
+                          current
+                            ? {
+                                ...current,
+                                lines: current.lines.map((l) =>
+                                  l.row === line.row ? { ...l, pickedId } : l,
+                                ),
+                              }
+                            : current,
+                        );
+                      }}
+                    >
+                      <option value="">Pick a member</option>
+                      {preview.members.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.refCode})
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="w-full"
+                      disabled={
+                        Boolean(line.done) || !line.pickedId || confirming
+                      }
+                      onClick={() => confirm(line)}
+                    >
+                      {confirming && busyRow === line.row && (
+                        <Loader2 className="animate-spin" aria-hidden />
+                      )}
+                      {closesProof ? "Mark received" : "Record"}
+                    </Button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>

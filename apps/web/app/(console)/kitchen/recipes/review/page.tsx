@@ -202,7 +202,6 @@ const RUN_COLUMNS: ResponsiveColumn<ProofreadRunRow>[] = [
 function mealPlates(settings: ReturnType<typeof mealPlanPeaks>): MealPlates[] {
   const byMeal = {
     breakfast: settings.kitchenPlatesBreakfast,
-    lunch: settings.kitchenPlatesLunch,
     dinner: settings.kitchenPlatesDinner,
   };
   return MEALS.flatMap((meal) => {

@@ -52,3 +52,35 @@ export function waitingLine(totals: BudgetTotals): string | null {
     totals.waitingCount === 1 ? "1 claim" : `${totals.waitingCount} claims`;
   return `${claims} waiting for a yes (${formatMoney(totals.waitingCents)})`;
 }
+
+/** "Receipt 1 (PDF)" or "Receipt 2 (photo)": the stored file keeps no name. */
+export function receiptLabel(index: number, contentType: string): string {
+  const kind = contentType === "application/pdf" ? "PDF" : "photo";
+  return `Receipt ${index + 1} (${kind})`;
+}
+
+/**
+ * Who did what to a claim, for the Finance team: "approved by Kit Lead",
+ * "approved by Kit Lead; paid". Null while it waits for the team, and for a
+ * turned-down claim: its section already says so, and a claim stores one
+ * decider, the team's (approver_id), which a claim the Finance team turns
+ * down after the team's yes keeps, so naming them could blame the wrong
+ * person.
+ */
+export function decisionLine(claim: {
+  status: ClaimStatus;
+  approverName: string | null;
+}): string | null {
+  const who = claim.approverName?.trim() || "someone no longer in the camp";
+  switch (claim.status) {
+    case "submitted":
+      return null;
+    case "approved":
+      return `approved by ${who}`;
+    case "paid":
+    case "reconciled":
+      return `approved by ${who}; paid`;
+    case "rejected":
+      return null;
+  }
+}

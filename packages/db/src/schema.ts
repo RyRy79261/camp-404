@@ -55,6 +55,7 @@ import {
   DDT_STATUSES,
   WAP_STATUSES,
   TICKET_STATUSES,
+  GUIDE_CHAPTER_KINDS,
   type CurrentKind,
   type FuelType,
   type GeneratorOwner,
@@ -75,6 +76,8 @@ import {
   type DesktopLayout,
   type DesktopPreferences,
   type DraftReport,
+  type DutyCard,
+  type DutyCardDraft,
   type JoinSiteContent,
   type CampLayout,
   type KitchenRecipe,
@@ -2262,6 +2265,9 @@ export const kitchenMealPlanDays = pgTable(
       .references(() => kitchenMealPlans.cycle, { onDelete: "cascade" }),
     day: integer("day").notNull(),
     breakfast: integer("breakfast").notNull().default(0),
+    // Unused: the camp does no lunch (the owner, 2026-10-01). Kept, not
+    // dropped, because production may hold values here; a later migration
+    // drops it.
     lunch: integer("lunch").notNull().default(0),
     dinner: integer("dinner").notNull().default(0),
   },
@@ -2278,7 +2284,107 @@ export const kitchenMealPlanDays = pgTable(
   }),
 );
 
+// The kitchen's menu (#244, the owner's layout A, 2026-09-30): the recipes on
+// each meal of a year's meal plan, more than one to a meal (a main and a
+// side), each on its own line in `position` order. The plates come from the
+// meal plan's day, never stored twice, and the recipe is read at its book
+// (accepted) version, so a new version counts from its own plate counts. A
+// captain or a Kitchen lead adds and removes (canEditMealPlan), audited.
+// A row for a day past the plan's days on site is kept and left off the
+// page and the shopping list until the days grow back.
+export const kitchenMenuItems = pgTable(
+  "kitchen_menu_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    day: integer("day").notNull(),
+    // breakfast | dinner (MEALS_OF_THE_DAY): the camp does no lunch.
+    meal: text("meal").notNull(),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    addedByUserId: uuid("added_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    // A recipe sits on a meal once.
+    mealRecipeIdx: uniqueIndex("kitchen_menu_items_meal_recipe_idx").on(
+      t.cycle,
+      t.day,
+      t.meal,
+      t.recipeId,
+    ),
+    cycleIdx: index("kitchen_menu_items_cycle_idx").on(t.cycle),
+    dayCheck: check(
+      "kitchen_menu_items_day_check",
+      sql`${t.day} between 1 and 30`,
+    ),
+    mealCheck: check(
+      "kitchen_menu_items_meal_check",
+      sql`${t.meal} in ('breakfast', 'dinner')`,
+    ),
+  }),
+);
+
+// The kitchen's snacks for a year (#244, the owner, 2026-09-30: "their own
+// short list"): a name and, if known, an amount as typed ("6 packets"). They
+// sit at the end of the shopping list. A captain or a Kitchen lead adds and
+// removes, audited.
+export const kitchenSnacks = pgTable(
+  "kitchen_snacks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    name: text("name").notNull(),
+    amount: text("amount"),
+    addedByUserId: uuid("added_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleIdx: index("kitchen_snacks_cycle_idx").on(t.cycle),
+  }),
+);
+
+// The shopping list's ticks for a year (#245), shared by the whole camp: any
+// approved member ticks (the owner, 2026-09-30). A line is named by its key
+// (the ingredient and its unit, or `snack:<id>`), and the tick keeps the
+// amount the ticker saw, so it stops counting as bought when the list needs
+// a different amount. Unticking deletes the row.
+export const kitchenShoppingTicks = pgTable(
+  "kitchen_shopping_ticks",
+  {
+    cycle: integer("cycle").notNull(),
+    itemKey: text("item_key").notNull(),
+    amount: text("amount").notNull(),
+    tickedByUserId: uuid("ticked_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    tickedAt: timestamp("ticked_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.cycle, t.itemKey] }),
+  }),
+);
+
 // --- Documents / manuals -------------------------------------------------
+// --- Documents: the Survival Guide (#250) ---------------------------------
+// A chapter of the camp's Survival Guide. This row is the WORKING COPY its
+// writers edit (title, topic, team, Markdown and, for a duty card, the card);
+// `version` counts its saves and is what an edit compares and sets on. What
+// members read is a published version in `document_versions`: every publish
+// that changed something adds one, and the old ones stay readable.
+// `published_version` is the one members read while `published` is true;
+// taking a chapter off the guide clears `published` and keeps every version.
+// `cycle_reviewed` is the burn year it was last published or kept in. `public`
+// is a captain's mark for chapters the guide's own site may one day show to
+// anyone; nothing serves them signed out yet.
+
+export const documentKindEnum = pgEnum("document_kind", GUIDE_CHAPTER_KINDS);
 
 export const documents = pgTable(
   "documents",
@@ -2288,18 +2394,81 @@ export const documents = pgTable(
     slug: text("slug").notNull(),
     category: text("category").notNull(),
     team: teamEnum("team"),
+    kind: documentKindEnum("kind").notNull().default("chapter"),
     markdown: text("markdown").notNull().default(""),
+    // A duty card's parts as the editor last saved them (DutyCardDraft),
+    // checked in full only when it is published. Null on a plain chapter.
+    card: jsonb("card").$type<DutyCardDraft>(),
     version: integer("version").notNull().default(1),
     authorId: uuid("author_id").references(() => users.id, {
       onDelete: "set null",
     }),
     published: boolean("published").notNull().default(false),
+    publishedVersion: integer("published_version"),
+    cycleReviewed: integer("cycle_reviewed"),
+    public: boolean("public").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
   (d) => ({
     slugIdx: uniqueIndex("documents_slug_idx").on(d.slug),
     categoryIdx: index("documents_category_idx").on(d.category),
+    // A duty card always carries its card; a plain chapter never does.
+    cardCheck: check(
+      "documents_card_check",
+      sql`(${d.kind} = 'duty_card') = (${d.card} is not null)`,
+    ),
+  }),
+);
+
+// One published version of a chapter, as members read it. Never changed after
+// it is written: a later publish adds the next number.
+export const documentVersions = pgTable(
+  "document_versions",
+  {
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    title: text("title").notNull(),
+    category: text("category").notNull(),
+    team: teamEnum("team"),
+    kind: documentKindEnum("kind").notNull(),
+    markdown: text("markdown").notNull(),
+    // The card as it was checked (DutyCard) when this version was published.
+    card: jsonb("card").$type<DutyCard>(),
+    publishedAt: timestamp("published_at", { mode: "date" })
+      .notNull()
+      .defaultNow(),
+    publishedBy: uuid("published_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (v) => ({
+    pk: primaryKey({ columns: [v.documentId, v.version] }),
+    versionCheck: check(
+      "document_versions_version_check",
+      sql`${v.version} >= 1`,
+    ),
+  }),
+);
+
+// The newest version of each chapter a member has opened, for the guide's
+// "New" and "Updated" marks. Their own reading, so erasure deletes it.
+export const documentReads = pgTable(
+  "document_reads",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    readAt: timestamp("read_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    pk: primaryKey({ columns: [r.userId, r.documentId] }),
   }),
 );
 
@@ -3972,16 +4141,25 @@ export const logisticsAttendance = pgTable(
 // date owns ONE camp calendar event for life, claimed like a logistics
 // phase's. A removed deadline keeps its row (removed_at) only until its event
 // is off the calendar.
+//
+// AfrikaBurn's standard dates (owner, 2026-10-01): `kind` names which one
+// (AFRIKABURN_DATES in @camp404/core), at most one row per year each, written
+// when a captain first sets it. A row with no kind is an "Other" date with
+// the captain's own title. A standard date is never removed, only changed.
 export const afrikaburnDeadlines = pgTable(
   "afrikaburn_deadlines",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     cycle: integer("cycle").notNull(),
+    // Which standard AfrikaBurn date; null for an "Other" one.
+    kind: text("kind"),
     title: text("title").notNull(),
     // A camp day; null while the date is not known.
     dueDate: date("due_date", { mode: "string" }),
     note: text("note"),
     done: boolean("done").notNull().default(false),
+    // "No round this year" (only the dates that allow it); never with a day.
+    skipped: boolean("skipped").notNull().default(false),
     // The Google Calendar event this deadline owns (our own id, base32hex).
     calendarEventId: text("calendar_event_id"),
     // The row version the camp calendar last matched; null when it never has.
@@ -3999,6 +4177,15 @@ export const afrikaburnDeadlines = pgTable(
   },
   (d) => ({
     cycleIdx: index("afrikaburn_deadlines_cycle_idx").on(d.cycle),
+    // One row per standard date per year. Partial, so "Other" rows (no kind)
+    // are not limited; an ON CONFLICT against it repeats the WHERE.
+    cycleKindUniq: uniqueIndex("afrikaburn_deadlines_cycle_kind_uniq")
+      .on(d.cycle, d.kind)
+      .where(sql`${d.kind} is not null`),
+    skippedCheck: check(
+      "afrikaburn_deadlines_skipped_check",
+      sql`not ${d.skipped} or ${d.dueDate} is null`,
+    ),
   }),
 );
 

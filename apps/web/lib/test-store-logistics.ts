@@ -2,6 +2,8 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  afrikaburnDate,
+  afrikaburnDateMayBeSkipped,
   ATTENDANCE_ACTION_KEY,
   ATTENDANCE_ACTION_TITLE,
   ATTENDANCE_REF_TYPE,
@@ -15,8 +17,12 @@ import {
   type AttendanceEntry,
 } from "@camp404/core";
 import {
+  CANNOT_SKIP_DATE,
+  DATE_SET_FIRST,
   DEADLINE_CHANGED,
   MAX_DEADLINES,
+  NOT_AN_AFRIKABURN_DATE,
+  PICK_THE_DATE,
   NOT_A_DEADLINE_KEEPER,
   TOO_MANY_DEADLINES,
   type DeadlineRow,
@@ -61,6 +67,22 @@ function state(): LogisticsState {
   const g = globalThis as Record<string, unknown>;
   g[KEY] ??= { answers: new Map(), deadlines: [] } satisfies LogisticsState;
   return g[KEY] as LogisticsState;
+}
+
+/**
+ * The founding year's twin for this store's rows (setFoundingYear's
+ * logistics step): answers and deadlines written before the camp had a year
+ * move onto it. Nothing can hold the founding year yet, so nothing collides.
+ */
+export function adoptLogisticsSentinel(from: number, year: number): void {
+  const s = state();
+  for (const [key, answer] of [...s.answers]) {
+    const [cycle, ...rest] = key.split(":");
+    if (Number(cycle) !== from) continue;
+    s.answers.delete(key);
+    s.answers.set([year, ...rest].join(":"), answer);
+  }
+  for (const d of s.deadlines) if (d.cycle === from) d.cycle = year;
 }
 
 /** Clear every attendance answer and deadline (testStore.reset calls this). */
@@ -150,6 +172,15 @@ function liveDeadline(
   return row && row.version === expectedVersion && row.removedAt === null
     ? row
     : null;
+}
+
+/** An "Other" deadline: the only kind a title edit or a removal touches. */
+function otherDeadline(
+  id: string,
+  expectedVersion: number,
+): (DeadlineRow & { createdAt: number }) | null {
+  const row = liveDeadline(id, expectedVersion);
+  return row && row.kind === null ? row : null;
 }
 
 export const logisticsTestStore = {
@@ -262,10 +293,12 @@ export const logisticsTestStore = {
       const row = {
         id: randomUUID(),
         cycle,
+        kind: null,
         title: input.title,
         dueDate: input.dueDate,
         note: input.note,
         done: false,
+        skipped: false,
         calendarEventId: input.dueDate ? input.newEventId : null,
         calendarSyncedVersion: null,
         version: 1,
@@ -285,16 +318,78 @@ export const logisticsTestStore = {
     note: string | null;
     expectedVersion: number;
     newEventId: string;
+    done?: boolean;
   }): DeadlineWriteResult<{ row: DeadlineRow }> {
     return keeper(input.actorId, () => {
-      const row = liveDeadline(input.id, input.expectedVersion);
+      const row = otherDeadline(input.id, input.expectedVersion);
       if (!row) return DEADLINE_CHANGED;
       row.title = input.title;
       row.dueDate = input.dueDate;
       row.note = input.note;
+      if (input.done !== undefined) row.done = input.done;
       if (input.dueDate) row.calendarEventId ??= input.newEventId;
       row.version += 1;
       return { row: copy(row) };
+    });
+  },
+
+  setAfrikaburnDate(input: {
+    actorId: string;
+    kind: string;
+    dueDate: string | null;
+    note: string | null;
+    skipped: boolean;
+    done?: boolean;
+    expectedVersion: number | null;
+    newEventId: string;
+  }): DeadlineWriteResult<{ row: DeadlineRow }> {
+    return keeper(input.actorId, () => {
+      const standard = afrikaburnDate(input.kind);
+      if (!standard) return NOT_AN_AFRIKABURN_DATE;
+      if (input.skipped && !afrikaburnDateMayBeSkipped(input.kind)) {
+        return CANNOT_SKIP_DATE;
+      }
+      const dueDate = input.skipped ? null : input.dueDate;
+      if (!input.skipped && !dueDate) return PICK_THE_DATE;
+      const cycle = testStore.currentCycleNumber();
+      const existing = state().deadlines.find(
+        (d) => d.cycle === cycle && d.kind === standard.kind,
+      );
+      if (input.expectedVersion === null) {
+        if (existing) return DATE_SET_FIRST;
+        const row = {
+          id: randomUUID(),
+          cycle,
+          kind: standard.kind,
+          title: standard.name,
+          dueDate,
+          note: input.note,
+          done: input.done ?? false,
+          skipped: input.skipped,
+          calendarEventId: dueDate ? input.newEventId : null,
+          calendarSyncedVersion: null,
+          version: 1,
+          removedAt: null,
+          createdAt: Date.now() + state().deadlines.length,
+        };
+        state().deadlines.push(row);
+        return { row: copy(row) };
+      }
+      if (
+        !existing ||
+        existing.version !== input.expectedVersion ||
+        existing.removedAt !== null
+      ) {
+        return DEADLINE_CHANGED;
+      }
+      existing.title = standard.name;
+      existing.dueDate = dueDate;
+      existing.note = input.note;
+      existing.skipped = input.skipped;
+      if (input.done !== undefined) existing.done = input.done;
+      if (dueDate) existing.calendarEventId ??= input.newEventId;
+      existing.version += 1;
+      return { row: copy(existing) };
     });
   },
 
@@ -319,7 +414,7 @@ export const logisticsTestStore = {
     expectedVersion: number;
   }): DeadlineWriteResult<{ row: DeadlineRow }> {
     return keeper(input.actorId, () => {
-      const row = liveDeadline(input.id, input.expectedVersion);
+      const row = otherDeadline(input.id, input.expectedVersion);
       if (!row) return DEADLINE_CHANGED;
       row.removedAt = new Date();
       row.version += 1;

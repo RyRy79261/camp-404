@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { Users } from "lucide-react";
-import { campDayKey, formatMoney, sumMinor } from "@camp404/core";
+import { ChevronRight, Users } from "lucide-react";
+import { campDayKey, formatMoney } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
-import { Card, CardContent } from "@camp404/ui/components/card";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import {
   ResponsiveDataTable,
   type ResponsiveColumn,
 } from "@camp404/ui/components/responsive-data-table";
 import { cn } from "@camp404/ui/lib/utils";
+import { DuesStats, duesStatsFigures } from "@/components/dues/dues-stats";
 import { PaymentsFrame } from "@/components/dues/payments-frame";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getDuesYear, listDuesAccounts, type DuesAccountRow } from "@/lib/dues";
@@ -23,126 +23,184 @@ export const metadata = { title: "Who owes what — Camp 404" };
 
 // Who owes what (#240): every approved member's dues for the year, for the
 // Finance team (captains and Finance leads). The balance is charges less
-// payments received or waived, plus refunds paid out. Filtered in the URL:
-// members who owe, members with something to check (a payment they sent in,
-// or a refund they asked for), or everyone. A row opens the member's account.
+// payments received or excused, plus refunds paid out. Filtered in the URL:
+// members who owe, members with something to check (a proof they sent in, a
+// payment recorded as promised, or a refund they asked for), or everyone. A
+// row opens the member's account. The balance is always a figure (R 0,00
+// dimmed), and what the row needs sits in its own Status chip, so the money
+// lines up down the right edge. The columns keep their widths across the
+// filters, and Next instalment shows only when someone has a plan.
 
 const SHOW = ["owing", "check", "all"] as const;
 type Show = (typeof SHOW)[number];
 
-const TONE = {
-  owes: "warning",
-  clear: "success",
-  credit: "secondary",
-  none: "outline",
-} as const;
-
 function shown(rows: DuesAccountRow[], show: Show): DuesAccountRow[] {
   if (show === "owing") return rows.filter((r) => r.balance.balanceCents > 0);
   if (show === "check") {
-    return rows.filter((r) => r.pendingProofs > 0 || r.openRefunds > 0);
+    return rows.filter(
+      (r) =>
+        r.pendingProofs > 0 || r.figures.promisedCount > 0 || r.openRefunds > 0,
+    );
   }
   return rows;
 }
 
-const COLUMNS: ResponsiveColumn<DuesAccountRow>[] = [
-  {
-    id: "member",
-    header: "Member",
-    role: "title",
-    cellClassName: "whitespace-normal",
-    cell: (r) => (
-      <span className="flex min-w-0 flex-col gap-0.5">
+/** The status chip: what Finance has to do, else where the balance stands. */
+function statusChips(r: DuesAccountRow) {
+  const chips: {
+    text: string;
+    variant: "warning" | "success" | "secondary" | "outline";
+  }[] = [];
+  if (r.pendingProofs > 0) {
+    chips.push({
+      text:
+        r.pendingProofs === 1
+          ? "Proof to check"
+          : `${r.pendingProofs} proofs to check`,
+      variant: "warning",
+    });
+  }
+  if (r.figures.promisedCount > 0) {
+    chips.push({ text: "Promised", variant: "warning" });
+  }
+  if (r.openRefunds > 0)
+    chips.push({ text: "Refund asked", variant: "warning" });
+  if (chips.length === 0) {
+    const label = balanceLabel(r.balance);
+    if (label.tone === "clear")
+      chips.push({ text: "Paid up", variant: "success" });
+    else if (label.tone === "credit")
+      chips.push({ text: "To give back", variant: "secondary" });
+    else if (label.tone === "none")
+      chips.push({ text: "Nothing charged", variant: "outline" });
+  }
+  return chips;
+}
+
+function columns(withPlan: boolean): ResponsiveColumn<DuesAccountRow>[] {
+  return [
+    {
+      id: "member",
+      header: "Member",
+      role: "title",
+      cellClassName: "whitespace-normal",
+      cell: (r) => (
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <Link
+            href={memberDuesPath(r.userId)}
+            className="font-medium hover:text-accent"
+          >
+            {r.name}
+          </Link>
+          {r.refCode && (
+            <span className="font-mono text-xs tracking-normal text-muted-foreground">
+              {r.refCode}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      id: "place",
+      header: "Place",
+      headClassName: "w-32",
+      cell: (r) =>
+        r.participation ? (
+          PLACE_WORDS[r.participation]
+        ) : (
+          <span className="text-muted-foreground">No answer</span>
+        ),
+    },
+    {
+      id: "fee",
+      header: "Camp fee",
+      headClassName: "w-48",
+      cell: (r) =>
+        r.feeCents !== null ? (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="tabular-nums">{formatMoney(r.feeCents)}</span>
+            {r.concession && <Badge variant="outline">Lowered</Badge>}
+          </span>
+        ) : r.pledgeCents !== null ? (
+          <span className="text-muted-foreground">
+            Pledged {formatMoney(r.pledgeCents)}
+            {r.pledgeLabel ? ` (${r.pledgeLabel})` : ""}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">No pledge yet</span>
+        ),
+    },
+    ...(withPlan
+      ? [
+          {
+            id: "next",
+            header: "Next instalment",
+            headClassName: "w-44",
+            cell: (r: DuesAccountRow) =>
+              r.next ? (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="tabular-nums">
+                    {formatMoney(r.next.amountCents)} by{" "}
+                    {formatDay(r.next.dueOn)}
+                  </span>
+                  {r.next.overdue && <Badge variant="destructive">Late</Badge>}
+                </span>
+              ) : null,
+          } satisfies ResponsiveColumn<DuesAccountRow>,
+        ]
+      : []),
+    {
+      id: "status",
+      header: "Status",
+      role: "badge",
+      headClassName: "w-40",
+      cell: (r) => (
+        <span className="flex flex-wrap gap-1.5">
+          {statusChips(r).map((chip) => (
+            <Badge key={chip.text} variant={chip.variant}>
+              {chip.text}
+            </Badge>
+          ))}
+        </span>
+      ),
+    },
+    {
+      id: "balance",
+      header: "Balance",
+      align: "right",
+      headClassName: "w-32",
+      cellClassName: "whitespace-nowrap font-medium tabular-nums",
+      cell: (r) =>
+        r.balance.balanceCents > 0 ? (
+          formatMoney(r.balance.balanceCents)
+        ) : r.balance.balanceCents < 0 ? (
+          <span className="text-muted-foreground">
+            − {formatMoney(-r.balance.balanceCents)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">{formatMoney(0)}</span>
+        ),
+    },
+    {
+      id: "open",
+      header: "Open",
+      role: "actions",
+      hideHeader: true,
+      mobileHidden: true,
+      cell: (r) => (
+        // The row's cue that it opens; the name is the link a reader uses.
         <Link
           href={memberDuesPath(r.userId)}
-          className="font-medium hover:text-accent"
+          aria-hidden
+          tabIndex={-1}
+          className="flex text-muted-foreground hover:text-foreground"
         >
-          {r.name}
+          <ChevronRight className="h-4 w-4" />
         </Link>
-        {r.refCode && (
-          <span className="font-mono text-xs text-muted-foreground">
-            {r.refCode}
-          </span>
-        )}
-      </span>
-    ),
-  },
-  {
-    id: "place",
-    header: "This year",
-    cell: (r) =>
-      r.participation ? (
-        PLACE_WORDS[r.participation]
-      ) : (
-        <span className="text-muted-foreground">No answer</span>
       ),
-  },
-  {
-    id: "fee",
-    header: "Camp fee",
-    cell: (r) =>
-      r.feeCents !== null ? (
-        <span className="flex flex-wrap items-center gap-1.5">
-          <span className="tabular-nums">{formatMoney(r.feeCents)}</span>
-          {r.concession && <Badge variant="outline">Concession</Badge>}
-        </span>
-      ) : r.pledgeCents !== null ? (
-        <span className="text-muted-foreground">
-          Pledged {formatMoney(r.pledgeCents)}
-          {r.pledgeLabel ? ` (${r.pledgeLabel})` : ""}
-        </span>
-      ) : (
-        <span className="text-muted-foreground">No pledge yet</span>
-      ),
-  },
-  {
-    id: "next",
-    header: "Next instalment",
-    cell: (r) =>
-      r.next ? (
-        <span className="flex flex-wrap items-center gap-1.5">
-          <span className="tabular-nums">
-            {formatMoney(r.next.amountCents)} by {formatDay(r.next.dueOn)}
-          </span>
-          {r.next.overdue && <Badge variant="destructive">Late</Badge>}
-        </span>
-      ) : (
-        <span className="text-muted-foreground">None</span>
-      ),
-  },
-  {
-    id: "check",
-    header: "To check",
-    role: "badge",
-    cell: (r) =>
-      r.pendingProofs > 0 || r.openRefunds > 0 ? (
-        <span className="flex flex-wrap gap-1.5">
-          {r.pendingProofs > 0 && (
-            <Badge variant="warning">
-              {r.pendingProofs === 1
-                ? "Payment to check"
-                : `${r.pendingProofs} payments to check`}
-            </Badge>
-          )}
-          {r.openRefunds > 0 && <Badge variant="warning">Refund asked</Badge>}
-        </span>
-      ) : null,
-  },
-  {
-    id: "balance",
-    header: "Balance",
-    align: "right",
-    cellClassName: "whitespace-nowrap font-medium tabular-nums",
-    cell: (r) => {
-      const label = balanceLabel(r.balance);
-      return label.tone === "owes" ? (
-        label.text
-      ) : (
-        <Badge variant={TONE[label.tone]}>{label.text}</Badge>
-      );
     },
-  },
-];
+  ];
+}
 
 export default async function WhoOwesWhatPage({
   searchParams,
@@ -167,7 +225,6 @@ export default async function WhoOwesWhatPage({
       })()
     : null;
 
-  const owing = data?.rows.filter((r) => r.balance.balanceCents > 0) ?? [];
   const visible = data ? shown(data.rows, show) : [];
 
   return (
@@ -179,55 +236,10 @@ export default async function WhoOwesWhatPage({
     >
       {data && (
         <div className="flex flex-col gap-6">
-          <div className="grid gap-3 page-sm:grid-cols-3">
-            <Card>
-              <CardContent className="flex flex-col gap-1 p-4">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Still to come in
-                </span>
-                <span className="text-2xl font-bold tabular-nums">
-                  {formatMoney(
-                    sumMinor(owing.map((r) => r.balance.balanceCents)),
-                  )}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {owing.length === 1
-                    ? "1 member owes money"
-                    : `${owing.length} members owe money`}
-                </span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex flex-col gap-1 p-4">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Received
-                </span>
-                <span className="text-2xl font-bold tabular-nums">
-                  {formatMoney(
-                    sumMinor(data.rows.map((r) => r.balance.paidCents)),
-                  )}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Received or waived this year
-                </span>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex flex-col gap-1 p-4">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Deadline
-                </span>
-                <span className="text-2xl font-bold">
-                  {data.year.deadline
-                    ? formatDay(data.year.deadline)
-                    : "Not set"}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Set it under Fees and dates
-                </span>
-              </CardContent>
-            </Card>
-          </div>
+          <DuesStats
+            figures={duesStatsFigures(data.rows)}
+            deadline={data.year.deadline}
+          />
 
           <nav
             aria-label="Show"
@@ -274,11 +286,11 @@ export default async function WhoOwesWhatPage({
             />
           ) : (
             <ResponsiveDataTable
-              columns={COLUMNS}
+              columns={columns(visible.some((r) => r.next !== null))}
               data={visible}
               getRowKey={(r) => r.userId}
               label="Members' dues"
-              className="page-md:rounded-xl page-md:border page-md:bg-card page-md:shadow-sm"
+              framed
             />
           )}
         </div>

@@ -108,8 +108,9 @@
 //   - logistics: canEditLogistics (a captain or a Transport and Logistics
 //     lead), logisticsEventTitle (plain), logisticsCalendarStep; attendance
 //     (canAskForAttendance, attendanceIsOpen, attendanceBoard, the nudge's
-//     key and notice); AfrikaBurn deadlines (canManageDeadlines,
-//     deadlineCalendarStep) (./logistics)
+//     key and notice); AfrikaBurn dates (canManageDeadlines,
+//     deadlineCalendarStep, the standard AFRIKABURN_DATES and their calendar
+//     title afrikaburnEventTitle) (./logistics)
 //   - shifts: canManageShifts (a captain or a lead of the shift's team),
 //     canAskForShifts (a captain), shiftChangesOpen (until the slot's day
 //     starts), shiftDays, shiftClashes, shiftFairness, the minimum's reminder
@@ -125,6 +126,10 @@
 //     groupStepsByPhase for the recipe page, defaultPlates, and the meal
 //     plan's canEditMealPlan, mealPlanPlateCounts, mealPlanPeaks and
 //     mealPlanDayLabel (./recipes)
+//   - kitchen menu and shopping list: canTickShoppingList (any member),
+//     buildShoppingList (the verified plate counts added up by shop area),
+//     shoppingKey, snackKey, sortMenu and mealPlates
+//     (./kitchen-menu)
 //   - recipe sources: sourceText (the Markdown-like text Claude reads),
 //     sourceFromText (pasted text into sections), emptySourceSections,
 //     sameSections and sameSource (./recipe-source)
@@ -140,6 +145,11 @@
 //     (those, or the rider), seatsLeft, vehicleLabel, transportTotals
 //     (./transport). Who may message a car is canSendToAudience's `car`
 //     scope, not here.
+//   - survival guide: canEditGuideChapter (a captain, or a lead of the
+//     chapter's team; a whole-camp chapter is a captain's; fails closed),
+//     canEditAnyGuideChapter, canSetGuideChapterPublic (a captain),
+//     guideReadMark, guideReviewDue, dutyCardProblem, headcountLabel
+//     (./guide)
 //   - team programs: canEditTeamProgram (a captain, or a lead of that team;
 //     fails closed on an unknown rank or team) (./team-programs)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
@@ -200,9 +210,11 @@ export * from "./power-site";
 export * from "./power-grid";
 export * from "./power-sharing";
 export * from "./recipes";
+export * from "./kitchen-menu";
 export * from "./recipe-source";
 export * from "./calendar-titles";
 export * from "./meeting-notes";
+export * from "./guide";
 export * from "./lounge";
 export * from "./transport";
 export * from "./team-programs";

@@ -6,11 +6,11 @@ import { Info, ListChecks, Plus, Save, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { MEETING_NOTE_PRIVACY_REMINDER } from "@camp404/core";
 import { NewMeetingNoteInput } from "@camp404/types";
-import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@camp404/ui/components/card";
@@ -25,7 +25,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@camp404/ui/components/select";
-import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import {
   DraftRestoredNote,
@@ -33,12 +32,19 @@ import {
   useEditorDraft,
   type EditorDraft,
 } from "@/components/os/editor-draft";
-import type { MeetingEventOption } from "@/lib/meeting-notes-view";
+import { MarkdownField } from "@/components/markdown/markdown-field";
+import {
+  campDayLabel,
+  type MeetingEventOption,
+} from "@/lib/meeting-notes-view";
 import { createMeetingNoteAction, editMeetingNoteAction } from "./actions";
 
 // The meeting-note editor (#268), laid out like the add-event form: the
 // fields in cards, the privacy reminder in the accent box, then the footer
-// with the one button. The form's own check (the Zod shape) is a convenience;
+// with the one button, kept in sight at the bottom of the window (a long note
+// on a phone is four screens). The agenda and the notes are written in the
+// WYSIWYG Markdown editor with a live preview (owner, 2026-10-01: never a raw
+// Markdown textarea). The form's own check (the Zod shape) is a convenience;
 // the action checks the shape, the team and the writer again.
 
 export interface MeetingTeamOption {
@@ -90,8 +96,12 @@ const NOBODY = "__nobody__";
 
 type FieldName = "title" | "date" | "time" | "agenda" | "notes";
 
+// A row's key (and its fields' ids). The rows the form opens with are keyed
+// by their place, the same on the server and in the browser (a module counter
+// gave each render its own ids, and hydration did not match); a row added
+// later takes the next number from the counter, in the browser only.
 let keySerial = 0;
-const nextKey = () => `row-${++keySerial}`;
+const nextKey = () => `row-new-${++keySerial}`;
 
 /**
  * Everything the form holds, as its unsaved draft (editor-draft.tsx): kept in
@@ -229,10 +239,10 @@ function MeetingEditorForm({
     () => new Set(initial.attendeeIds),
   );
   const [decisions, setDecisions] = React.useState(() =>
-    initial.decisions.map((text) => ({ key: nextKey(), text })),
+    initial.decisions.map((text, i) => ({ key: `decision-${i}`, text })),
   );
   const [items, setItems] = React.useState(() =>
-    initial.actionItems.map((item) => ({ ...item, key: nextKey() })),
+    initial.actionItems.map((item, i) => ({ ...item, key: `item-${i}` })),
   );
   const [fieldErrors, setFieldErrors] = React.useState<
     Partial<Record<FieldName, string>>
@@ -373,7 +383,12 @@ function MeetingEditorForm({
 
       <Card>
         <CardContent className="flex flex-col gap-5 p-5">
-          <div className="grid gap-5 page-sm:grid-cols-2">
+          <div
+            className={
+              mode.kind === "new" ? "grid gap-5 page-sm:grid-cols-2" : "grid"
+            }
+          >
+            {/* An edit keeps its team; the page's subtitle names it. */}
             {mode.kind === "new" ? (
               <Field
                 label="Team"
@@ -408,11 +423,7 @@ function MeetingEditorForm({
                   </SelectContent>
                 </Select>
               </Field>
-            ) : (
-              <Field label="Team" help="A note keeps its team.">
-                <p className="flex h-10 items-center text-sm">{teamLabel}</p>
-              </Field>
-            )}
+            ) : null}
             <Field
               label="On the calendar"
               htmlFor="meeting-event"
@@ -471,6 +482,7 @@ function MeetingEditorForm({
               label="Date"
               htmlFor="meeting-date"
               required
+              help={campDayLabel(date) ?? undefined}
               error={fieldErrors.date}
             >
               <DateControl
@@ -485,7 +497,11 @@ function MeetingEditorForm({
               label="Time"
               htmlFor="meeting-time"
               required
-              help="Camp time."
+              help={
+                /^\d{2}:\d{2}$/.test(time)
+                  ? `${time} camp time, on the 24-hour clock.`
+                  : "Camp time, on the 24-hour clock."
+              }
               error={fieldErrors.time}
             >
               <Input
@@ -499,35 +515,24 @@ function MeetingEditorForm({
             </Field>
           </div>
 
-          <Field
-            label="Agenda"
-            htmlFor="meeting-agenda"
-            help="Markdown works: - for a list, **bold**."
-            error={fieldErrors.agenda}
-          >
-            <Textarea
-              id="meeting-agenda"
+          <Field label="Agenda" error={fieldErrors.agenda}>
+            <MarkdownField
+              label="Agenda"
               value={agenda}
-              rows={4}
-              maxLength={10_000}
-              onChange={(e) => setAgenda(e.target.value)}
+              onChange={setAgenda}
               disabled={pending}
+              emptyPreview="No agenda yet."
             />
           </Field>
 
-          <Field
-            label="Notes"
-            htmlFor="meeting-notes"
-            help="What was said. Markdown works here too."
-            error={fieldErrors.notes}
-          >
-            <Textarea
-              id="meeting-notes"
+          <Field label="Notes" error={fieldErrors.notes}>
+            <MarkdownField
+              label="Notes"
               value={notes}
-              rows={8}
-              maxLength={20_000}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={setNotes}
               disabled={pending}
+              minHeight="min-h-48"
+              emptyPreview="What was said goes here."
             />
           </Field>
         </CardContent>
@@ -536,15 +541,16 @@ function MeetingEditorForm({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Who was there</CardTitle>
+          <CardDescription>
+            {teamKey
+              ? `On ${teamLabel} this year first, then anyone else.`
+              : "Anyone in camp."}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <section aria-labelledby="attendees-team">
-            <h2
-              id="attendees-team"
-              className="pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-            >
-              {teamKey ? `On ${teamLabel} this year` : "Whole camp"}
-            </h2>
+          <section
+            aria-label={teamKey ? `On ${teamLabel} this year` : "Whole camp"}
+          >
             {teamKey && teamRows.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Nobody is on this team yet this year.
@@ -682,18 +688,21 @@ function MeetingEditorForm({
                 item.onBoard ? (
                   <li
                     key={item.key}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/30 p-3"
+                    className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/30 p-3"
                   >
-                    <ListChecks
-                      className="h-4 w-4 shrink-0 text-accent"
-                      aria-hidden
-                    />
-                    <span className="min-w-0 flex-1 basis-40 text-sm [overflow-wrap:anywhere]">
+                    <span className="text-sm font-medium leading-none">
+                      Action item {index + 1}
+                    </span>
+                    <span className="flex items-start gap-2 text-sm [overflow-wrap:anywhere]">
+                      <ListChecks
+                        className="mt-0.5 h-4 w-4 shrink-0 text-accent"
+                        aria-hidden
+                      />
                       {item.text}
                     </span>
-                    <Badge variant="outline" className="shrink-0">
-                      On the task board
-                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      On the task board: change it there.
+                    </span>
                   </li>
                 ) : (
                   <li
@@ -821,11 +830,16 @@ function MeetingEditorForm({
         </p>
       ) : null}
 
-      <div className="flex flex-col gap-3 border-t border-border pt-4 page-sm:flex-row page-sm:items-center page-sm:justify-between">
+      {/* Kept at the bottom of the window while the form scrolls, so Save is
+          in reach on a phone without scrolling to the end. */}
+      <div
+        data-testid="meeting-save-bar"
+        className="sticky bottom-0 z-10 -mx-1 flex flex-col gap-2 border-t border-border bg-background px-1 py-3 page-sm:flex-row page-sm:items-center page-sm:justify-between"
+      >
         <p className="text-xs text-muted-foreground">
           {teamKey
-            ? `Every approved member can read it, under Meetings and on the ${teamLabel} page.`
-            : "Every approved member can read it, under Meetings."}
+            ? `Every member can read it under Meetings and on the ${teamLabel} page.`
+            : "Every member can read it under Meetings."}
         </p>
         <Button type="submit" disabled={pending} className="shrink-0">
           <Save aria-hidden />

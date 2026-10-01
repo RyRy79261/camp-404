@@ -20,6 +20,10 @@ export const AUDIT_ACTION_LABELS = {
   "camp.cycle.renamed": "Renamed a year",
   "camp.cycle.burn_dates_set": "Set the Burn's dates",
   "camp.kitchen_meal_plan.changed": "Changed the kitchen's meal plan",
+  "camp.kitchen_menu.added": "Put a recipe on the kitchen's menu",
+  "camp.kitchen_menu.removed": "Took a recipe off the kitchen's menu",
+  "camp.kitchen_snack.added": "Added a snack to the kitchen's list",
+  "camp.kitchen_snack.removed": "Took a snack off the kitchen's list",
   // No longer written (the settings were removed, 2026-09-24); kept so a row
   // written before still reads.
   "camp.kitchen_settings.changed": "Changed the kitchen settings",
@@ -30,7 +34,7 @@ export const AUDIT_ACTION_LABELS = {
   "camp.teams.moved": "Moved a team in the list",
   "camp.teams.renamed": "Renamed a team",
   "camp.teams.unarchived": "Restored a team",
-  "document.created": "Started a camp document",
+  "document.created": "Started a Survival Guide chapter",
   "dues.charge_added": "Added a charge to a member's dues",
   "dues.charge_cancelled": "Cancelled a charge on a member's dues",
   "dues.fee_charged": "Charged a member's camp fee",
@@ -41,9 +45,11 @@ export const AUDIT_ACTION_LABELS = {
   "dues.tier_archived": "Removed a fee tier",
   "dues.tier_changed": "Changed a fee tier",
   "dues.year_saved": "Set the year's dues dates",
-  "document.published": "Published a camp document",
-  "document.unpublished": "Unpublished a camp document",
-  "document.updated": "Edited a camp document",
+  "document.public_set": "Changed whether a Survival Guide chapter is public",
+  "document.published": "Published a Survival Guide chapter",
+  "document.reviewed": "Kept a Survival Guide chapter for this year",
+  "document.unpublished": "Took a Survival Guide chapter off the guide",
+  "document.updated": "Edited another writer's Survival Guide chapter",
   "inventory.booking_cancelled": "Cancelled a member's gear booking",
   "inventory.change_approved": "Approved a change to camp gear",
   "inventory.change_rejected": "Rejected a change to camp gear",
@@ -150,19 +156,19 @@ const TICKET_PASS_WORDS: Record<string, string> = {
 };
 const TICKET_PASS_VALUE_WORDS: Record<string, Record<string, string>> = {
   ticket: {
-    unknown: "not sorted",
+    unknown: "no answer",
     buying_own: "buying own",
     has_ticket: "has ticket",
-    needs_directed_ticket: "needs a DDT",
+    needs_directed_ticket: "wants a DDT",
   },
   ddt: {
-    none: "none",
-    allocated: "allocated",
-    can_transfer: "can transfer",
+    none: "not given",
+    allocated: "given",
+    can_transfer: "can pass on",
   },
   wap: {
     not_needed: "not needed",
-    requested: "asked for",
+    requested: "requested",
     issued: "issued",
   },
 };
@@ -281,6 +287,7 @@ export function auditDetail(
       const title = text(metadata, "title");
       const due = text(metadata, "dueDate");
       if (!title) return null;
+      if (metadata?.skipped === true) return `${title}, no round this year`;
       return due ? `${title}, ${due}` : title;
     }
     case "logistics.deadline_done": {
@@ -487,12 +494,22 @@ export function auditDetail(
       return team ? teamLabel(team) : null;
     }
     case "document.created":
-    case "document.published":
     case "document.unpublished":
+    case "document.reviewed":
+    case "document.updated":
       return text(metadata, "title");
-    case "document.updated": {
+    case "document.published": {
+      const title = text(metadata, "title");
       const version = count(metadata, "version");
-      return version === null ? null : `Now version ${version}`;
+      if (!title) return null;
+      return version === null ? title : `${title}, version ${version}`;
+    }
+    case "document.public_set": {
+      const title = text(metadata, "title");
+      if (!title || !metadata || typeof metadata.public !== "boolean") {
+        return title;
+      }
+      return `${title}: ${metadata.public ? "public" : "members only"}`;
     }
     // A pin puts a message on every recipient's screen and leaves it there, so
     // the receipt names WHO it is on the screen of — the audience is the whole

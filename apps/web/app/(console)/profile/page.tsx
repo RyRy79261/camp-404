@@ -94,8 +94,11 @@ export default async function ProfilePage() {
       <div className="flex flex-col gap-6">
         <ProfileSections active="profile" />
 
-        <div className="grid gap-6 page-lg:grid-cols-3">
-          <div className="flex flex-col gap-6 page-lg:col-span-2">
+        {/* One column until the page is wide; min-w-0 so a long name (which
+            truncates) cannot set the column's width and push the page past
+            a phone's edge. */}
+        <div className="grid grid-cols-1 gap-6 page-lg:grid-cols-3">
+          <div className="flex min-w-0 flex-col gap-6 page-lg:col-span-2">
             <Card>
               <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
                 <div className="flex min-w-0 items-center gap-4">
@@ -161,24 +164,36 @@ export default async function ProfilePage() {
                   <CalendarCheck className="h-4 w-4 text-accent" aria-hidden />
                   This year
                 </CardTitle>
-                <CardDescription>
-                  {participation
-                    ? THIS_YEAR[participation.status]
-                    : "You haven't told us yet."}
-                </CardDescription>
-              </CardHeader>
-              {/* Changing an answer needs one to change: until then the
-                  captains' "Coming this year?" questionnaire asks. */}
-              {participation && (
-                <CardContent className="flex flex-col gap-5">
-                  <div>
-                    <Button asChild variant="secondary" size="sm">
+                {/* The member's answer, and the way to change it, on one
+                    line. With no answer yet, where the question will reach
+                    them: the captains send "Coming this year?". */}
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                  <CardDescription>
+                    {participation
+                      ? THIS_YEAR[participation.status]
+                      : "You haven't told us yet. When the captains ask \u201cComing this year?\u201d, it waits for you in Notifications."}
+                  </CardDescription>
+                  {participation ? (
+                    <Button
+                      asChild
+                      variant="link"
+                      size="sm"
+                      className="h-auto px-0"
+                    >
                       <Link href="/tools/forms/attendance">
                         Change your answer
                       </Link>
                     </Button>
-                  </div>
-                  {asksTicket && <MyTicket ticket={ticket} />}
+                  ) : (
+                    <Button asChild variant="secondary" size="sm">
+                      <Link href="/notifications">Open Notifications</Link>
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              {asksTicket && (
+                <CardContent>
+                  <MyTicket ticket={ticket} />
                 </CardContent>
               )}
             </Card>
