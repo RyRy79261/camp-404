@@ -970,8 +970,21 @@ export interface ProgramManifest {
    * a meeting, …), each at its own bar, so a stored window can be pruned.
    */
   allowedChildren: ProgramId[];
+  /**
+   * Ctrl+K search (issue #326, step 1): every program the member may open, in
+   * the desktop's order, each with the group its row names on the right.
+   * Only ids that are in `programs` or a folder; the browser finds the
+   * program itself there.
+   */
+  search: SearchPlace[];
   /** Changes when what the member may open changes; never with live counts. */
   version: string;
+}
+
+/** One program in Ctrl+K search: its id and where it lives ("Kitchen"). */
+export interface SearchPlace {
+  id: string;
+  where: string;
 }
 
 // --- Building it -----------------------------------------------------------------
@@ -1268,6 +1281,37 @@ export function buildProgramManifest(
     balloon: mode === "restricted" ? "application_submitted" : null,
   };
 
+  // Search lists what the Start menu reaches, a folder's programs at the
+  // folder's place. Each row says where the program lives: its folder
+  // (Kitchen, Captains), else the one team whose tool it is (Power is Power
+  // and Lighting's), else Teams for a team's page, else its group.
+  const groupLabel = new Map(GROUPS.map((g) => [g.id, g.label]));
+  const folderLabel = new Map(FOLDERS.map((f) => [f.id, f.label]));
+  const toolOf = new Map<string, string[]>();
+  for (const [team, tools] of Object.entries(TEAM_TOOLS)) {
+    for (const id of tools ?? []) {
+      toolOf.set(id, [...(toolOf.get(id) ?? []), team]);
+    }
+  }
+  const whereOf = (p: ClientProgram): string => {
+    if (p.folder === "kitchen" || p.folder === "captains") {
+      return folderLabel.get(p.folder)!;
+    }
+    const owners = toolOf.get(p.id) ?? [];
+    const owner = owners.length === 1 ? teamLabel.get(owners[0]!) : undefined;
+    if (owner) return owner;
+    if (p.folder) return folderLabel.get(p.folder)!;
+    return groupLabel.get(p.group) ?? "Camp";
+  };
+  const search: SearchPlace[] = [];
+  for (const item of desktop) {
+    const listed =
+      item.kind === "program"
+        ? [byId.get(item.id)].filter((p) => p !== undefined)
+        : (folders.find((f) => f.id === item.id)?.programs ?? []);
+    for (const p of listed) search.push({ id: p.id, where: whereOf(p) });
+  }
+
   const body = {
     mode,
     desktop,
@@ -1280,7 +1324,7 @@ export function buildProgramManifest(
     pins: mode === "full",
     allowedChildren,
   };
-  return { ...body, version: accessVersion(body) };
+  return { ...body, search, version: accessVersion(body) };
 }
 
 /**
@@ -1289,7 +1333,9 @@ export function buildProgramManifest(
  * drops every last-seen copy when it changes, so a new notice or a new health
  * warning must not bump it.
  */
-function accessVersion(body: Omit<ProgramManifest, "version">): string {
+function accessVersion(
+  body: Omit<ProgramManifest, "version" | "search">,
+): string {
   const noBadge = <T extends { badge?: unknown }>({ badge: _b, ...rest }: T) =>
     rest;
   return hash(

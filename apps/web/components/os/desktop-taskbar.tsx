@@ -19,6 +19,7 @@ import { leadsLine } from "./account-chip";
 import { DesktopTray } from "./desktop-tray";
 import { LineIcon } from "./line-icons";
 import { OsAvatar } from "./os-avatar";
+import { SearchHint } from "./program-search";
 import { folderIcon, programIcon } from "./program-icons";
 import { desktopFolderKey } from "@camp404/types/desktop-keys";
 
@@ -80,6 +81,8 @@ export interface DesktopTaskbarProps {
   onShowDesktop: () => void;
   /** Open the welcome wizard again (a full desktop only). */
   onOpenWelcome?: () => void;
+  /** Open Ctrl+K search: the tray's "Ctrl K · Search" hint. */
+  onOpenSearch?: () => void;
 }
 
 /** Who is signed in: their name, rank label and the teams they lead. */
@@ -107,6 +110,7 @@ export function DesktopTaskbar({
   onLineUpIcons,
   onShowDesktop,
   onOpenWelcome,
+  onOpenSearch,
 }: DesktopTaskbarProps) {
   const programs = new Map(manifest.programs.map((p) => [p.id, p]));
   const folders = new Map(manifest.folders.map((f) => [f.id, f]));
@@ -332,13 +336,16 @@ export function DesktopTaskbar({
       )}
       onShowDesktop={onShowDesktop}
       tray={
-        <DesktopTray
-          tray={manifest.tray}
-          burn={burn}
-          year={year}
-          clockDecoration={clockDecoration}
-          onOpenHref={onOpenHref}
-        />
+        <>
+          {onOpenSearch && <SearchHint onOpen={onOpenSearch} />}
+          <DesktopTray
+            tray={manifest.tray}
+            burn={burn}
+            year={year}
+            clockDecoration={clockDecoration}
+            onOpenHref={onOpenHref}
+          />
+        </>
       }
     />
   );
