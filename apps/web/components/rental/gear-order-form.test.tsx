@@ -237,6 +237,22 @@ describe("the tent question", () => {
     );
   });
 
+  it("sends a hosted member as shared even when an older draft said they need a tent", async () => {
+    form({
+      tent: { choice: "need", people: 3, sharerIds: ["fay"] },
+      hostedBy: ["Dee Member"],
+    });
+    expect(screen.getByTestId("tent-hosted")).toBeTruthy();
+    // No question below the answer for a tent they are not getting.
+    expect(screen.queryByLabelText("For how many people?")).toBeNull();
+    send();
+    await waitFor(() =>
+      expect(saveMyGearAction).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ tent: { choice: "shared" } }),
+      ),
+    );
+  });
+
   it("shows a saved answer again", () => {
     form({ tent: { choice: "need", people: 3, sharerIds: ["fay", "sam"] } });
     expect(tentRadio("I need one").checked).toBe(true);

@@ -121,9 +121,8 @@ export function GearOrderForm({
   const router = useRouter();
   const theirs = forMember !== undefined;
   const hosted = hostedBy.length > 0;
-  const [tent, setTent] = useState<TentState>(() => ({
-    // Already in someone's tent: the question is answered.
-    choice: savedTent?.choice ?? (hosted ? "shared" : ""),
+  const [tentAnswer, setTent] = useState<TentState>(() => ({
+    choice: savedTent?.choice ?? "",
     people: savedTent?.choice === "need" ? savedTent.people : 1,
     ownDescription:
       savedTent?.choice === "own" ? (savedTent.ownDescription ?? "") : "",
@@ -131,6 +130,12 @@ export function GearOrderForm({
     sharerIds:
       savedTent && savedTent.choice !== "shared" ? savedTent.sharerIds : [],
   }));
+  // Already in someone's tent: the question is answered, whatever a draft
+  // saved before that said (the server refuses "need" or "own" then, and the
+  // radios are not shown to change it).
+  const tent: TentState = hosted
+    ? { ...tentAnswer, choice: "shared", sharerIds: [] }
+    : tentAnswer;
   const [answers, setAnswers] = useState<Record<string, Answer>>(() =>
     Object.fromEntries(
       lines.map((l) => [l.itemId, { choice: l.choice, quantity: l.quantity }]),
