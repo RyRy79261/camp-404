@@ -4,6 +4,8 @@ import * as React from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import {
   Bold,
+  Heading2,
+  Heading3,
   Italic,
   Link2,
   List,
@@ -27,7 +29,7 @@ import { editorMarkdown, GUIDE_EDITOR_EXTENSIONS } from "./markdown-extensions";
 // (Tiptap uses the DOM).
 
 const PROSE_CLASS =
-  "min-h-48 min-w-0 max-w-none break-words px-3 py-2 text-sm leading-relaxed focus:outline-none " +
+  "min-h-full min-w-0 max-w-none break-words px-3 py-2 text-sm leading-relaxed focus:outline-none " +
   "[&_h1]:mb-2 [&_h1]:mt-4 [&_h1]:text-lg [&_h1]:font-semibold " +
   "[&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold " +
   "[&_h3]:mb-2 [&_h3]:mt-3 [&_h3]:text-base [&_h3]:font-semibold " +
@@ -41,14 +43,11 @@ function ToolbarButton({
   onClick,
   active,
   label,
-  wide,
   children,
 }: {
   onClick: () => void;
   active?: boolean;
   label: string;
-  /** Shows its name as words, not an icon. */
-  wide?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -60,8 +59,7 @@ function ToolbarButton({
       title={label}
       aria-pressed={active}
       className={cn(
-        "inline-flex h-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        wide ? "px-2 text-xs font-semibold" : "w-8",
+        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active && "bg-primary/15 text-foreground",
       )}
     >
@@ -111,7 +109,7 @@ function LinkRow({ editor, onDone }: { editor: Editor; onDone: () => void }) {
   }
 
   return (
-    <div className="flex flex-col gap-1 border-b border-input px-2 py-2">
+    <div className="flex shrink-0 flex-col gap-1 border-b border-input px-2 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor={inputId} className="text-xs text-muted-foreground">
           Link to
@@ -156,25 +154,23 @@ function Toolbar({ editor }: { editor: Editor }) {
       <div
         role="toolbar"
         aria-label="Text style"
-        className="flex flex-wrap items-center gap-0.5 border-b border-input px-1.5 py-1"
+        className="flex shrink-0 flex-nowrap items-center gap-1 overflow-x-auto border-b border-input px-2 py-1"
       >
         <ToolbarButton
           label="Heading"
-          wide
           active={editor.isActive("heading", { level: 2 })}
           onClick={() => chain().toggleHeading({ level: 2 }).run()}
         >
-          Heading
+          <Heading2 className="h-4 w-4" aria-hidden />
         </ToolbarButton>
         <ToolbarButton
           label="Subheading"
-          wide
           active={editor.isActive("heading", { level: 3 })}
           onClick={() => chain().toggleHeading({ level: 3 }).run()}
         >
-          Subheading
+          <Heading3 className="h-4 w-4" aria-hidden />
         </ToolbarButton>
-        <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+        <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
         <ToolbarButton
           label="Bold"
           active={editor.isActive("bold")}
@@ -189,7 +185,7 @@ function Toolbar({ editor }: { editor: Editor }) {
         >
           <Italic className="h-4 w-4" aria-hidden />
         </ToolbarButton>
-        <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+        <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
         <ToolbarButton
           label="Bullet list"
           active={editor.isActive("bulletList")}
@@ -211,15 +207,13 @@ function Toolbar({ editor }: { editor: Editor }) {
         >
           <Quote className="h-4 w-4" aria-hidden />
         </ToolbarButton>
-        <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+        <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
         <ToolbarButton
           label="Link"
-          wide
           active={editor.isActive("link") || linking}
           onClick={() => setLinking((on) => !on)}
         >
-          <Link2 className="mr-1 h-4 w-4" aria-hidden />
-          Link
+          <Link2 className="h-4 w-4" aria-hidden />
         </ToolbarButton>
         {editor.isActive("link") ? (
           <ToolbarButton
@@ -247,6 +241,12 @@ export interface MarkdownEditorProps {
   /** Tied to the field's help text. */
   describedBy?: string;
   disabled?: boolean;
+  /**
+   * Fill the box it is put in, the text scrolling under a fixed toolbar, with
+   * no frame of its own (the Write pane draws it). Otherwise a framed box at
+   * least eight lines tall that grows with its text.
+   */
+  fill?: boolean;
   className?: string;
 }
 
@@ -256,6 +256,7 @@ export function MarkdownEditor({
   ariaLabel,
   describedBy,
   disabled,
+  fill,
   className,
 }: MarkdownEditorProps) {
   const editor = useEditor({
@@ -284,12 +285,21 @@ export function MarkdownEditor({
   return (
     <div
       className={cn(
-        "min-w-0 rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring",
+        "flex min-w-0 flex-col bg-background",
+        fill
+          ? "h-full min-h-0"
+          : "rounded-md border border-input focus-within:ring-2 focus-within:ring-ring",
         className,
       )}
     >
       {editor ? <Toolbar editor={editor} /> : null}
-      <EditorContent editor={editor} />
+      <EditorContent
+        editor={editor}
+        className={cn(
+          "flex min-h-0 flex-1 flex-col [&>.ProseMirror]:flex-1",
+          fill ? "overflow-y-auto" : "min-h-32",
+        )}
+      />
     </div>
   );
 }

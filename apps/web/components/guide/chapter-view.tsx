@@ -18,12 +18,19 @@ export function ChapterView({
   kind,
   card,
   markdown,
+  bare,
 }: {
   kind: "chapter" | "duty_card";
   card: DutyCard | null;
   markdown: string;
+  /** A chapter's text with no card around it (the editor's preview pane
+   * draws the frame). */
+  bare?: boolean;
 }) {
   const hasText = markdown.trim() !== "";
+  if (bare && kind === "chapter") {
+    return hasText ? <MarkdownBody>{markdown}</MarkdownBody> : null;
+  }
   return (
     <div className="flex flex-col gap-6">
       {kind === "duty_card" && card ? <DutyCardView card={card} /> : null}

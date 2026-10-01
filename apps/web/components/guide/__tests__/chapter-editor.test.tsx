@@ -84,9 +84,11 @@ describe("the guide editor's Write and Preview", () => {
 
   it("hides the tabs from a medium window up", () => {
     editor();
-    expect(
-      screen.getByRole("radiogroup", { name: "Write or preview" }).className,
-    ).toContain("page-md:hidden");
+    // The tabs' bar is sticky on a phone and gone from a medium window up.
+    const bar = screen.getByRole("radiogroup", { name: "Write or preview" })
+      .parentElement!;
+    expect(bar.className).toContain("page-md:hidden");
+    expect(bar.className).toContain("sticky");
   });
 
   it("previews the chapter as members read it, not as Markdown", () => {

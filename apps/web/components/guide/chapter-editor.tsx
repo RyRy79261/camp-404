@@ -7,6 +7,7 @@ import {
   CircleCheck,
   Eye,
   Globe,
+  PenLine,
   Plus,
   Save,
   Send,
@@ -118,6 +119,30 @@ function headcount(text: string): number {
   return Number.isFinite(n)
     ? Math.max(0, Math.min(n, DUTY_CARD_MAX.headcount))
     : 0;
+}
+
+/**
+ * The Write and Preview panes: the same frame and the same height, side by
+ * side from a medium window up, where together they fill what the window has
+ * left under the details (at least 18rem). On a phone the open tab fills the
+ * screen under its sticky tabs. Each scrolls inside itself.
+ */
+const PANE =
+  "h-[calc(100dvh-10rem)] min-w-0 page-md:h-[max(18rem,calc(100dvh-38rem))] flex-col overflow-hidden rounded-lg border border-border bg-card";
+
+function PaneLabel({
+  icon,
+  children,
+}: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <p className="flex h-9 shrink-0 items-center gap-1.5 border-b border-border px-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+      {icon}
+      {children}
+    </p>
+  );
 }
 
 export function ChapterEditor({
@@ -334,7 +359,7 @@ export function ChapterEditor({
       className="flex min-w-0 flex-col gap-6"
     >
       <Card>
-        <CardContent className="flex flex-col gap-5 p-5">
+        <CardContent className="flex flex-col gap-3 p-4">
           {mode.kind === "new" ? (
             <Field
               label="What are you writing?"
@@ -380,14 +405,14 @@ export function ChapterEditor({
             />
           </Field>
 
-          <div className="grid gap-5 page-sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3">
             <Field label="Topic" htmlFor="chapter-topic" required>
               <Select
                 value={category}
                 onValueChange={setCategory}
                 disabled={pending}
               >
-                <SelectTrigger id="chapter-topic">
+                <SelectTrigger id="chapter-topic" className="text-left">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -399,18 +424,9 @@ export function ChapterEditor({
                 </SelectContent>
               </Select>
             </Field>
-            <Field
-              label="Team"
-              htmlFor="chapter-team"
-              required
-              help={
-                canPickWholeCamp
-                  ? "Its team's leads can edit it too. A whole-camp chapter is the captains'."
-                  : "A team you lead this year."
-              }
-            >
+            <Field label="Team" htmlFor="chapter-team" required>
               <Select value={team} onValueChange={setTeam} disabled={pending}>
-                <SelectTrigger id="chapter-team">
+                <SelectTrigger id="chapter-team" className="text-left">
                   <SelectValue>{teamLabel}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -428,285 +444,285 @@ export function ChapterEditor({
               </Select>
             </Field>
           </div>
+          <p className="text-xs text-muted-foreground">
+            {canPickWholeCamp
+              ? "A team's leads can edit its chapters too. A whole-camp chapter is the captains'."
+              : "You can write chapters for the teams you lead this year."}
+          </p>
         </CardContent>
       </Card>
 
       <section
         aria-label="Write and preview"
-        className="flex min-w-0 flex-col gap-4"
+        className="flex min-w-0 flex-col gap-3"
       >
-        {/* On a phone the writing and the preview are two tabs; from a
-            medium window up they sit side by side and the tabs go. */}
-        <SegmentedControl
-          aria-label="Write or preview"
-          className="page-md:hidden"
-          value={view}
-          onValueChange={(v) => setView(v === "preview" ? "preview" : "write")}
-          options={[
-            { value: "write", label: "Write" },
-            { value: "preview", label: "Preview" },
-          ]}
-        />
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 page-md:grid-cols-2">
+        {/* On a phone the writing and the preview are two tabs, kept at the
+            top while the page scrolls; from a medium window up the two panes
+            sit side by side and the tabs go. */}
+        <div className="sticky top-0 z-10 bg-background py-1 page-md:hidden">
+          <SegmentedControl
+            aria-label="Write or preview"
+            value={view}
+            onValueChange={(v) =>
+              setView(v === "preview" ? "preview" : "write")
+            }
+            options={[
+              { value: "write", label: "Write" },
+              { value: "preview", label: "Preview" },
+            ]}
+          />
+        </div>
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 page-md:grid-cols-2">
           <div
             data-testid="write-panel"
             className={cn(
-              "min-w-0 flex-col gap-6",
+              PANE,
               view === "write" ? "flex" : "hidden page-md:flex",
             )}
           >
+            <PaneLabel icon={<PenLine className="h-3 w-3" aria-hidden />}>
+              Write
+            </PaneLabel>
             {kind === "duty_card" ? (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">The duty card</CardTitle>
-                  <CardDescription>
-                    Name roles, never phone numbers: the card is pinned up where
-                    anyone can read it.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-5">
-                  <div className="grid gap-5 page-sm:grid-cols-2">
-                    <Field
-                      label="Shift type"
-                      htmlFor="card-shift"
-                      required
-                      help="The shift's short name, like morning-clean."
-                    >
-                      <Input
-                        id="card-shift"
-                        value={shiftKey}
-                        maxLength={DUTY_CARD_MAX.shiftTypeKey}
-                        onChange={(e) => setShiftKey(e.target.value)}
-                        disabled={pending}
-                      />
-                    </Field>
-                    <Field
-                      label="Who to ask"
-                      htmlFor="card-ask"
-                      required
-                      help="A role, like the Sanitation lead."
-                    >
-                      <Input
-                        id="card-ask"
-                        value={askRole}
-                        maxLength={DUTY_CARD_MAX.askRole}
-                        onChange={(e) => setAskRole(e.target.value)}
-                        disabled={pending}
-                      />
-                    </Field>
-                  </div>
-
-                  <section
-                    aria-labelledby="card-roles"
-                    className="flex flex-col gap-2"
-                  >
-                    <h2
-                      id="card-roles"
-                      className="text-sm font-medium leading-none text-foreground"
-                    >
-                      Sub-roles
-                    </h2>
-                    {subRoles.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Add the jobs on this shift, like Dishes for 2 to 3
-                        people.
-                      </p>
-                    ) : (
-                      <ol className="flex flex-col gap-2">
-                        {subRoles.map((r, index) => (
-                          <li
-                            key={r.key}
-                            className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_auto] items-end gap-2"
-                          >
-                            <Field
-                              label="Job"
-                              htmlFor={`${rowIds}-role-name-${r.key}`}
-                            >
-                              <Input
-                                id={`${rowIds}-role-name-${r.key}`}
-                                value={r.name}
-                                maxLength={DUTY_CARD_MAX.name}
-                                onChange={(e) =>
-                                  setSubRoles((all) =>
-                                    all.map((x) =>
-                                      x.key === r.key
-                                        ? { ...x, name: e.target.value }
-                                        : x,
-                                    ),
-                                  )
-                                }
-                                disabled={pending}
-                              />
-                            </Field>
-                            <Field
-                              label="Fewest"
-                              htmlFor={`${rowIds}-role-min-${r.key}`}
-                            >
-                              <Input
-                                id={`${rowIds}-role-min-${r.key}`}
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                max={DUTY_CARD_MAX.headcount}
-                                value={r.min}
-                                onChange={(e) =>
-                                  setSubRoles((all) =>
-                                    all.map((x) =>
-                                      x.key === r.key
-                                        ? { ...x, min: e.target.value }
-                                        : x,
-                                    ),
-                                  )
-                                }
-                                disabled={pending}
-                              />
-                            </Field>
-                            <Field
-                              label="Most"
-                              htmlFor={`${rowIds}-role-max-${r.key}`}
-                            >
-                              <Input
-                                id={`${rowIds}-role-max-${r.key}`}
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                max={DUTY_CARD_MAX.headcount}
-                                value={r.max}
-                                onChange={(e) =>
-                                  setSubRoles((all) =>
-                                    all.map((x) =>
-                                      x.key === r.key
-                                        ? { ...x, max: e.target.value }
-                                        : x,
-                                    ),
-                                  )
-                                }
-                                disabled={pending}
-                              />
-                            </Field>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              aria-label={`Remove sub-role ${index + 1}`}
-                              onClick={() =>
-                                setSubRoles((all) =>
-                                  all.filter((x) => x.key !== r.key),
-                                )
-                              }
-                              disabled={pending}
-                            >
-                              <Trash2 aria-hidden />
-                            </Button>
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-                    {subRoles.length < DUTY_CARD_MAX.subRoles ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="self-start"
-                        onClick={() =>
-                          setSubRoles((all) => [
-                            ...all,
-                            { key: nextKey(), name: "", min: "1", max: "1" },
-                          ])
-                        }
-                        disabled={pending}
-                      >
-                        <Plus aria-hidden />
-                        Add sub-role
-                      </Button>
-                    ) : null}
-                  </section>
-
+              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+                <p className="text-xs text-muted-foreground">
+                  The card is pinned up where anyone can read it: name roles,
+                  never phone numbers.
+                </p>
+                <div className="grid gap-4 page-sm:grid-cols-2">
                   <Field
-                    label="Steps"
-                    htmlFor="card-steps"
+                    label="Shift type"
+                    htmlFor="card-shift"
                     required
-                    help="One step per line, in order."
+                    help="The shift's short name, like morning-clean."
                   >
-                    <Textarea
-                      id="card-steps"
-                      value={steps}
-                      rows={6}
-                      onChange={(e) => setSteps(e.target.value)}
+                    <Input
+                      id="card-shift"
+                      value={shiftKey}
+                      maxLength={DUTY_CARD_MAX.shiftTypeKey}
+                      onChange={(e) => setShiftKey(e.target.value)}
                       disabled={pending}
                     />
                   </Field>
                   <Field
-                    label="Hard rules"
-                    htmlFor="card-rules"
-                    help="One per line. They are shown in red."
+                    label="Who to ask"
+                    htmlFor="card-ask"
+                    required
+                    help="A role, like the Sanitation lead."
                   >
-                    <Textarea
-                      id="card-rules"
-                      value={rules}
-                      rows={3}
-                      onChange={(e) => setRules(e.target.value)}
+                    <Input
+                      id="card-ask"
+                      value={askRole}
+                      maxLength={DUTY_CARD_MAX.askRole}
+                      onChange={(e) => setAskRole(e.target.value)}
                       disabled={pending}
                     />
                   </Field>
-                  <Field
-                    label="Lead's end-of-shift checklist"
-                    htmlFor="card-checklist"
-                    help="One per line: what the shift lead checks before handing over."
-                  >
-                    <Textarea
-                      id="card-checklist"
-                      value={checklist}
-                      rows={4}
-                      onChange={(e) => setChecklist(e.target.value)}
-                      disabled={pending}
-                    />
-                  </Field>
-                </CardContent>
-              </Card>
-            ) : null}
+                </div>
 
-            <Card>
-              <CardContent className="flex flex-col gap-2 p-5">
+                <section
+                  aria-labelledby="card-roles"
+                  className="flex flex-col gap-2"
+                >
+                  <h2
+                    id="card-roles"
+                    className="text-sm font-medium leading-none text-foreground"
+                  >
+                    Sub-roles
+                  </h2>
+                  {subRoles.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Add the jobs on this shift, like Dishes for 2 to 3 people.
+                    </p>
+                  ) : (
+                    <ol className="flex flex-col gap-2">
+                      <li
+                        aria-hidden
+                        className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_2.25rem] gap-2 text-xs font-medium text-muted-foreground"
+                      >
+                        <span>Job</span>
+                        <span>Fewest</span>
+                        <span>Most</span>
+                        <span />
+                      </li>
+                      {subRoles.map((r, index) => (
+                        <li
+                          key={r.key}
+                          className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_2.25rem] items-center gap-2"
+                        >
+                          <Input
+                            id={`${rowIds}-role-name-${r.key}`}
+                            aria-label="Job"
+                            value={r.name}
+                            maxLength={DUTY_CARD_MAX.name}
+                            onChange={(e) =>
+                              setSubRoles((all) =>
+                                all.map((x) =>
+                                  x.key === r.key
+                                    ? { ...x, name: e.target.value }
+                                    : x,
+                                ),
+                              )
+                            }
+                            disabled={pending}
+                          />
+
+                          <Input
+                            id={`${rowIds}-role-min-${r.key}`}
+                            aria-label="Fewest"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={DUTY_CARD_MAX.headcount}
+                            value={r.min}
+                            onChange={(e) =>
+                              setSubRoles((all) =>
+                                all.map((x) =>
+                                  x.key === r.key
+                                    ? { ...x, min: e.target.value }
+                                    : x,
+                                ),
+                              )
+                            }
+                            disabled={pending}
+                          />
+
+                          <Input
+                            id={`${rowIds}-role-max-${r.key}`}
+                            aria-label="Most"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={DUTY_CARD_MAX.headcount}
+                            value={r.max}
+                            onChange={(e) =>
+                              setSubRoles((all) =>
+                                all.map((x) =>
+                                  x.key === r.key
+                                    ? { ...x, max: e.target.value }
+                                    : x,
+                                ),
+                              )
+                            }
+                            disabled={pending}
+                          />
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Remove sub-role ${index + 1}`}
+                            onClick={() =>
+                              setSubRoles((all) =>
+                                all.filter((x) => x.key !== r.key),
+                              )
+                            }
+                            disabled={pending}
+                          >
+                            <Trash2 aria-hidden />
+                          </Button>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  {subRoles.length < DUTY_CARD_MAX.subRoles ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="self-start"
+                      onClick={() =>
+                        setSubRoles((all) => [
+                          ...all,
+                          { key: nextKey(), name: "", min: "1", max: "1" },
+                        ])
+                      }
+                      disabled={pending}
+                    >
+                      <Plus aria-hidden />
+                      Add sub-role
+                    </Button>
+                  ) : null}
+                </section>
+
                 <Field
-                  label={
-                    kind === "duty_card"
-                      ? "Good to know (optional)"
-                      : "The chapter"
-                  }
+                  label="Steps"
+                  htmlFor="card-steps"
+                  required
+                  help="One step per line, in order."
+                >
+                  <Textarea
+                    id="card-steps"
+                    value={steps}
+                    rows={6}
+                    onChange={(e) => setSteps(e.target.value)}
+                    disabled={pending}
+                  />
+                </Field>
+                <Field
+                  label="Hard rules"
+                  htmlFor="card-rules"
+                  help="One per line. They are shown in red."
+                >
+                  <Textarea
+                    id="card-rules"
+                    value={rules}
+                    rows={3}
+                    onChange={(e) => setRules(e.target.value)}
+                    disabled={pending}
+                  />
+                </Field>
+                <Field
+                  label="Lead's end-of-shift checklist"
+                  htmlFor="card-checklist"
+                  help="One per line: what the shift lead checks before handing over."
+                >
+                  <Textarea
+                    id="card-checklist"
+                    value={checklist}
+                    rows={4}
+                    onChange={(e) => setChecklist(e.target.value)}
+                    disabled={pending}
+                  />
+                </Field>
+                <Field
+                  label="Good to know (optional)"
                   htmlFor="chapter-body"
-                  help={
-                    kind === "duty_card"
-                      ? "Anything else the shift should know. Use the buttons for lists and bold."
-                      : "Use the buttons above the text for headings, lists, bold and links."
-                  }
+                  help="Anything else the shift should know."
                 >
                   <MarkdownEditor
                     value={initial.markdown}
                     onChange={setMarkdown}
-                    ariaLabel={
-                      kind === "duty_card" ? "Good to know" : "The chapter"
-                    }
+                    ariaLabel="Good to know"
                     describedBy="chapter-body-help"
                     disabled={pending}
                   />
                 </Field>
-              </CardContent>
-            </Card>
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1">
+                <MarkdownEditor
+                  fill
+                  value={initial.markdown}
+                  onChange={setMarkdown}
+                  ariaLabel="The chapter"
+                  disabled={pending}
+                />
+              </div>
+            )}
           </div>
           <div
             data-testid="preview-panel"
             className={cn(
-              "min-w-0 flex-col gap-3",
+              PANE,
               view === "preview" ? "flex" : "hidden page-md:flex",
             )}
           >
-            <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              <Eye className="h-3 w-3" aria-hidden />
-              Preview: as members will read it
-            </p>
-            <div className="page-md:sticky page-md:top-4">
+            <PaneLabel icon={<Eye className="h-3 w-3" aria-hidden />}>
+              Preview: as members read it
+            </PaneLabel>
+            <div className="min-h-0 flex-1 overflow-y-auto bg-background p-4">
               {previewEmpty ? (
-                <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Nothing to show yet. Start writing and it appears here.
                 </p>
               ) : (
@@ -714,6 +730,7 @@ export function ChapterEditor({
                   kind={kind}
                   card={previewCard}
                   markdown={markdown}
+                  bare
                 />
               )}
             </div>

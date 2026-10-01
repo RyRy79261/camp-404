@@ -1,13 +1,10 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Eye } from "lucide-react";
 import {
   canEditAnyGuideChapter,
   canEditGuideChapter,
   canSetGuideChapterPublic,
 } from "@camp404/core";
 import { Team } from "@camp404/types";
-import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ChapterEditor, WHOLE_CAMP } from "@/components/guide/chapter-editor";
@@ -15,7 +12,7 @@ import { VersionsCard } from "@/components/guide/versions-card";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getGuideDraft, listChapterVersions } from "@/lib/guide";
-import { guideChapterPath, KIND_LABEL } from "@/lib/guide-copy";
+import { KIND_LABEL } from "@/lib/guide-copy";
 import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
@@ -92,16 +89,6 @@ export default async function EditGuideChapterPage({
             : draft.publishedVersion !== null
               ? "Off the guide. Publish to put it back."
               : "A draft: members can't read it yet."
-        }
-        actions={
-          draft.published ? (
-            <Button asChild variant="outline">
-              <Link href={guideChapterPath(draft.slug)}>
-                <Eye aria-hidden />
-                As members read it
-              </Link>
-            </Button>
-          ) : null
         }
       />
       <div className="flex min-w-0 flex-col gap-6">
