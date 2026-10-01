@@ -14,7 +14,9 @@ import * as schema from "./schema";
 
 // The kitchen's meal plan (the owner's sketch, 2026-09-24): for the camp's
 // current year, the days on site, the date of day 1 and the plates at
-// breakfast, lunch and dinner on each.
+// breakfast and dinner on each. The camp does no lunch (the owner,
+// 2026-10-01): the table's lunch column is never read, and a save keeps
+// whatever it already held, untouched, until a migration drops it.
 //
 //  - Anyone approved reads it (the page gates that). A recipe in the book is
 //    shown at each distinct count in it (mealPlanPlateCounts), and the
@@ -61,7 +63,7 @@ export interface MealPlan {
   updatedAt: Date | null;
 }
 
-const EMPTY_DAY: MealPlanDay = { breakfast: 0, lunch: 0, dinner: 0 };
+const EMPTY_DAY: MealPlanDay = { breakfast: 0, dinner: 0 };
 
 /** The plan a year has before anyone saves one: 11 days, no plates. */
 export function defaultMealPlan(cycle: number): MealPlan {
@@ -88,7 +90,7 @@ export function mealPlanDays(
   return Array.from({ length: daysOnSite }, (_, i) => {
     const row = rows.find((r) => r.day === i + 1);
     return row
-      ? { breakfast: row.breakfast, lunch: row.lunch, dinner: row.dinner }
+      ? { breakfast: row.breakfast, dinner: row.dinner }
       : { ...EMPTY_DAY };
   });
 }
@@ -135,7 +137,6 @@ export async function readMealPlan(
     .select({
       day: schema.kitchenMealPlanDays.day,
       breakfast: schema.kitchenMealPlanDays.breakfast,
-      lunch: schema.kitchenMealPlanDays.lunch,
       dinner: schema.kitchenMealPlanDays.dinner,
     })
     .from(schema.kitchenMealPlanDays)
@@ -230,6 +231,19 @@ export async function setMealPlan(
         if (!row) refuse(MEAL_PLAN_CHANGED);
         version = row.version;
       }
+      // The unused lunch column keeps what it held (it is dropped later,
+      // never wiped by a save).
+      const lunches = new Map(
+        (
+          await tx
+            .select({
+              day: schema.kitchenMealPlanDays.day,
+              lunch: schema.kitchenMealPlanDays.lunch,
+            })
+            .from(schema.kitchenMealPlanDays)
+            .where(eq(schema.kitchenMealPlanDays.cycle, cycle))
+        ).map((r) => [r.day, r.lunch]),
+      );
       await tx
         .delete(schema.kitchenMealPlanDays)
         .where(eq(schema.kitchenMealPlanDays.cycle, cycle));
@@ -238,7 +252,7 @@ export async function setMealPlan(
           cycle,
           day: i + 1,
           breakfast: d.breakfast,
-          lunch: d.lunch,
+          lunch: lunches.get(i + 1) ?? 0,
           dinner: d.dinner,
         })),
       );

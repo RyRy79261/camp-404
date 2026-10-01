@@ -156,6 +156,7 @@ describe("buildProgramManifest: the personas", () => {
     expect(folder(m, "kitchen")?.programs.map((p) => p.id)).toEqual([
       "recipes",
       "meal-plan",
+      "shopping-list",
     ]);
     expect(m.pins).toBe(true);
     expect(m.allowedChildren).not.toContain(pid("results"));
@@ -203,6 +204,7 @@ describe("buildProgramManifest: the personas", () => {
     expect(folder(m, "kitchen")?.programs.map((p) => p.id)).toEqual([
       "recipes",
       "meal-plan",
+      "shopping-list",
       "recipe-review",
     ]);
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
@@ -504,6 +506,7 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
       `tasks:${KITCHEN}`,
       "recipes",
       "meal-plan",
+      "shopping-list",
       "recipe-review",
     ]);
   });

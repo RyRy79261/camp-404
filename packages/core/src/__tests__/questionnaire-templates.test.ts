@@ -74,8 +74,8 @@ describe("mealPlanRatingRows", () => {
     const rows = mealPlanRatingRows({
       firstDay: "2027-04-26",
       days: [
-        { breakfast: 0, lunch: 0, dinner: 40 },
-        { breakfast: 40, lunch: 0, dinner: 0 },
+        { breakfast: 0, dinner: 40 },
+        { breakfast: 40, dinner: 0 },
       ],
     });
     expect(rows).toEqual([
@@ -88,15 +88,15 @@ describe("mealPlanRatingRows", () => {
     expect(
       mealPlanRatingRows({
         firstDay: null,
-        days: [{ breakfast: 0, lunch: 12, dinner: 0 }],
+        days: [{ breakfast: 0, dinner: 12 }],
       }),
-    ).toEqual([{ id: "meal_d1_lunch", label: "Day 1 lunch" }]);
+    ).toEqual([{ id: "meal_d1_dinner", label: "Day 1 dinner" }]);
   });
 
   it("gives the same row ids when filled again from the same plan", () => {
     const plan = {
       firstDay: null,
-      days: [{ breakfast: 1, lunch: 1, dinner: 1 }],
+      days: [{ breakfast: 1, dinner: 1 }],
     };
     expect(mealPlanRatingRows(plan).map((r) => r.id)).toEqual(
       mealPlanRatingRows(plan).map((r) => r.id),

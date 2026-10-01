@@ -59,6 +59,7 @@ export type ProgramId =
   | "recipe-version"
   | "recipe-source"
   | "meal-plan"
+  | "shopping-list"
   | "questionnaires"
   | "edit-questionnaire"
   | "preview-questionnaire"
@@ -133,6 +134,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "recipe-version": "Recipe version",
   "recipe-source": "Recipe source",
   "meal-plan": "Meal plan",
+  "shopping-list": "Shopping list",
   questionnaires: "Questionnaires",
   "edit-questionnaire": "Edit questionnaire",
   "preview-questionnaire": "Preview",
@@ -313,6 +315,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
     keyed("recipe-source"),
   ),
   route("/kitchen/meal-plan", "meal-plan", "MEALPLAN.XLS"),
+  route("/kitchen/shopping", "shopping-list", "SHOPPING.LST"),
 
   // Captains and leads
   route("/captains/questionnaires", "questionnaires", "FORMS.EXE"),

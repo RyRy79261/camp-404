@@ -546,13 +546,13 @@ describe("the review inputs", () => {
 });
 
 describe("MealPlanInput", () => {
-  const day = { breakfast: 20, lunch: 0, dinner: 25 };
+  const day = { breakfast: 20, dinner: 25 };
 
   it("takes one row of whole plates, 0 to 500, for each day on site", () => {
     expect(
       MealPlanInput.safeParse({
         daysOnSite: 2,
-        days: [day, { breakfast: 500, lunch: 0, dinner: 0 }],
+        days: [day, { breakfast: 500, dinner: 0 }],
         expectedVersion: 0,
       }).success,
     ).toBe(true);
@@ -583,7 +583,7 @@ describe("MealPlanInput", () => {
 
   it("refuses plates outside 0 to 500, a part plate, and rows that do not match the days", () => {
     for (const bad of [
-      { daysOnSite: 1, days: [{ ...day, lunch: -1 }] },
+      { daysOnSite: 1, days: [{ ...day, breakfast: -1 }] },
       { daysOnSite: 1, days: [{ ...day, dinner: 501 }] },
       { daysOnSite: 1, days: [{ ...day, breakfast: 2.5 }] },
       { daysOnSite: 2, days: [day] },

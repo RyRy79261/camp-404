@@ -16,6 +16,8 @@
 import {
   starScaleLabels,
   type GridRow,
+  MEALS,
+  type Meal,
   type MealPlanDay,
   type Question,
   type Questionnaire,
@@ -42,11 +44,9 @@ export const TRUE_FALSE_SCALE = [
   "Definitely true",
 ] as const;
 
-const MEALS = ["breakfast", "lunch", "dinner"] as const;
-type Meal = (typeof MEALS)[number];
+// The camp does no lunch (the owner, 2026-10-01): breakfast and dinner.
 const MEAL_WORD: Record<Meal, string> = {
   breakfast: "breakfast",
-  lunch: "lunch",
   dinner: "dinner",
 };
 
@@ -93,7 +93,6 @@ export function mealPlanRatingRows(plan: {
 /** The meal rows to use when the year's meal plan serves nothing yet. */
 export const FALLBACK_MEAL_ROWS: readonly GridRow[] = [
   { id: "meal_breakfasts", label: "Breakfasts" },
-  { id: "meal_lunches", label: "Lunches" },
   { id: "meal_dinners", label: "Dinners" },
 ];
 

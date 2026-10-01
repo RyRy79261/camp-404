@@ -136,20 +136,25 @@ test.describe("windows fit their own width (test-mode)", () => {
       .poll(() => borderTop(kitchenFrame(win, "Suggestions")))
       .toBe(1);
 
-    // The meal plan: narrower plate boxes and no frame in a narrow window.
+    // The meal plan: one card per day and no frame in a narrow window (the
+    // owner's approved mock-up, design/approved-kmp.html A, 2026-10-01), the
+    // framed week table with its meal columns in a wide one.
     win = await openWindow(page, "/kitchen/meal-plan", "Meal plan");
-    const plates = win.getByRole("spinbutton", { name: "Day 1 breakfast" });
-    // The table's own scroll box, then the frame around it.
-    const frame = win
-      .getByRole("table", { name: "Plates per day" })
-      .locator("xpath=../..");
+    const breakfastColumn = win.getByRole("columnheader", {
+      name: "Breakfast",
+    });
+    // The week is its own frame.
+    const frame = win.getByRole("table", { name: "Plates per day" });
     await resizeWindowTo(page, win, NARROW);
     await expectFits(win);
-    expect((await plates.boundingBox())!.width).toBe(64);
+    await expect(breakfastColumn).toBeHidden();
+    await expect(
+      win.getByRole("spinbutton", { name: "Day 1 breakfast" }),
+    ).toBeVisible();
     await expect.poll(() => borderTop(frame)).toBe(0);
     await resizeWindowTo(page, win, WIDE);
     await expectFits(win);
-    expect((await plates.boundingBox())!.width).toBe(80);
+    await expect(breakfastColumn).toBeVisible();
     await expect.poll(() => borderTop(frame)).toBe(1);
   });
 

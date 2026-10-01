@@ -405,6 +405,15 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     rank: "camp_member",
   },
   {
+    id: "shopping-list",
+    label: "Shopping list",
+    fileName: "SHOPPING.LST",
+    href: "/kitchen/shopping",
+    icon: "shopping-list",
+    place: KITCHEN,
+    rank: "camp_member",
+  },
+  {
     id: "recipe-review",
     label: "Recipe review",
     fileName: "REVIEW.EXE",
@@ -819,7 +828,7 @@ const GROUPS: readonly { id: ProgramGroup; label: string }[] = [
  */
 export const TEAM_TOOLS: Readonly<Partial<Record<Team, readonly ProgramId[]>>> =
   {
-    kitchen: ["recipes", "meal-plan", "recipe-review"],
+    kitchen: ["recipes", "meal-plan", "shopping-list", "recipe-review"],
     structures: ["camp-layout"],
     power_and_lighting: ["power"],
     ministry_of_vibes: ["lounge"],

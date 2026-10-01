@@ -20,6 +20,10 @@ export const AUDIT_ACTION_LABELS = {
   "camp.cycle.renamed": "Renamed a year",
   "camp.cycle.burn_dates_set": "Set the Burn's dates",
   "camp.kitchen_meal_plan.changed": "Changed the kitchen's meal plan",
+  "camp.kitchen_menu.added": "Put a recipe on the kitchen's menu",
+  "camp.kitchen_menu.removed": "Took a recipe off the kitchen's menu",
+  "camp.kitchen_snack.added": "Added a snack to the kitchen's list",
+  "camp.kitchen_snack.removed": "Took a snack off the kitchen's list",
   // No longer written (the settings were removed, 2026-09-24); kept so a row
   // written before still reads.
   "camp.kitchen_settings.changed": "Changed the kitchen settings",
