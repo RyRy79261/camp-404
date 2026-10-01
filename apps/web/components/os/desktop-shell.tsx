@@ -180,6 +180,7 @@ function folderSize(key: string): { w: number; h: number } {
 const XL_SIZE = { w: 1040, h: 660 };
 const L_SIZE = { w: 880, h: 600 };
 const S_SIZE = { w: 520, h: 440 };
+const WRITE_SIZE = { w: 1120, h: 800 };
 const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   tasks: XL_SIZE,
   roster: XL_SIZE,
@@ -193,6 +194,13 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   calendar: L_SIZE,
   power: L_SIZE,
   logistics: L_SIZE,
+  guide: L_SIZE,
+  "guide-chapter": L_SIZE,
+  "guide-version": L_SIZE,
+  // The guide's editor: writing and its preview side by side, as tall as
+  // the screen allows.
+  "new-guide-chapter": WRITE_SIZE,
+  "edit-guide-chapter": WRITE_SIZE,
   "camp-layout": XL_SIZE,
   "inventory-item": L_SIZE,
   transport: L_SIZE,

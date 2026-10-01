@@ -869,6 +869,35 @@ describe("setFoundingYear", () => {
     });
   });
 
+  it("counts a guide chapter checked before there was a year as checked for the founding year", async () => {
+    const db = h.db();
+    await db.insert(schema.documents).values([
+      {
+        title: "Drive in",
+        slug: "drive-in",
+        category: "before_you_come",
+        published: true,
+        cycleReviewed: UNSET_CYCLE,
+      },
+      { title: "Draft", slug: "draft", category: "on_site" },
+    ]);
+
+    expect((await setFoundingYear({ year: 2027, actorUserId: null })).ok).toBe(
+      true,
+    );
+
+    const rows = await db
+      .select({
+        slug: schema.documents.slug,
+        cycle: schema.documents.cycleReviewed,
+      })
+      .from(schema.documents);
+    expect(Object.fromEntries(rows.map((r) => [r.slug, r.cycle]))).toEqual({
+      "drive-in": 2027,
+      draft: null,
+    });
+  });
+
   it("hands the rollover a camp it can advance", async () => {
     const db = h.db();
     await seedCamp(db);

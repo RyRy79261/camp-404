@@ -145,6 +145,8 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "transport" },
       { kind: "program", id: "family-tree" },
       { kind: "program", id: "about" },
+      // The Survival Guide (#250): every member reads it.
+      { kind: "program", id: "guide" },
       // No Captains column for them: the Terminal ends Camp.
       { kind: "program", id: "terminal" },
     ]);
@@ -661,5 +663,21 @@ describe("buildProgramManifest: what reaches the browser", () => {
     expect(buildProgramManifest(facts({ rank: CAPTAIN })).version).not.toBe(
       a.version,
     );
+  });
+
+  it("offers writing the Survival Guide to leads and captains, never to a plain member", () => {
+    const member = buildProgramManifest(facts());
+    expect(member.programs.map((p) => p.id)).toContain("guide");
+    expect(member.allowedChildren).toContain(pid("guide-chapter"));
+    expect(member.allowedChildren).not.toContain(pid("new-guide-chapter"));
+    expect(member.allowedChildren).not.toContain(pid("edit-guide-chapter"));
+    const lead = buildProgramManifest(
+      facts({
+        rank: "team_lead",
+        memberships: [{ team: Team.enum.kitchen, isLead: true }],
+      }),
+    );
+    expect(lead.allowedChildren).toContain(pid("new-guide-chapter"));
+    expect(lead.allowedChildren).toContain(pid("edit-guide-chapter"));
   });
 });

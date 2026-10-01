@@ -34,6 +34,11 @@ export type ProgramId =
   | "roster"
   | "family-tree"
   | "about"
+  | "guide"
+  | "guide-chapter"
+  | "guide-version"
+  | "new-guide-chapter"
+  | "edit-guide-chapter"
   | "meetings"
   | "meeting"
   | "new-meeting"
@@ -102,6 +107,11 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   roster: "Roster",
   "family-tree": "Family tree",
   about: "About Camp 404",
+  guide: "Survival Guide",
+  "guide-chapter": "Chapter",
+  "guide-version": "Chapter version",
+  "new-guide-chapter": "New chapter",
+  "edit-guide-chapter": "Edit chapter",
   meetings: "Meetings",
   meeting: "Meeting",
   "new-meeting": "New meeting",
@@ -222,6 +232,28 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/captains/camp-management", "roster", "ROSTER.DB"),
   route("/family-tree", "family-tree", "LINEAGE.EXE"),
   route("/about", "about", "README.TXT"),
+  // The Survival Guide (#250): its contents, then each chapter in its own
+  // window; "new" is listed before the chapter beside it.
+  route("/guide", "guide", "GUIDE.HLP"),
+  route("/guide/new", "new-guide-chapter", "CHAPTER.WRI"),
+  route(
+    "/guide/[slug]",
+    "guide-chapter",
+    "CHAPTER.HLP",
+    keyed("guide-chapter"),
+  ),
+  route(
+    "/guide/[slug]/edit",
+    "edit-guide-chapter",
+    "CHAPTER.WRI",
+    keyed("edit-guide-chapter"),
+  ),
+  route(
+    "/guide/[slug]/versions/[version]",
+    "guide-version",
+    "CHAPTER.VER",
+    keyed("guide-version"),
+  ),
   route("/meetings", "meetings", "MINUTES.EXE"),
   route("/meetings/new", "new-meeting", "NEWMEET.TXT"),
   route("/meetings/[id]", "meeting", "MEETING.TXT", keyed("meeting")),
