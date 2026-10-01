@@ -1,9 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import { DesktopIcon, IconGroup } from "@camp404/os";
 import { APPS } from "@/lib/apps";
 import { DESKTOP } from "@/lib/content";
+import { readmeSeen, subscribeReadmeSeen } from "@/lib/readme-seen";
 import type { AppId, JoinWindow } from "@/lib/window-manager";
 import { AppIcon } from "./icons";
 import { useJoinData } from "./join-data";
@@ -66,6 +67,13 @@ function Footer({ onReboot }: { onReboot: () => void }) {
 export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
   const { year } = useJoinData();
   const open = new Set(windows.map((w) => w.id));
+  // The server cannot know, so it draws the glow; the boot screen covers the
+  // desktop while a returning visitor's icon goes quiet.
+  const seen = useSyncExternalStore(
+    subscribeReadmeSeen,
+    readmeSeen,
+    () => false,
+  );
   const icons = APPS.map((app) => (
     <DesktopIcon
       key={app.id}
@@ -75,6 +83,7 @@ export function Desktop({ windows, phone, onOpen, onReboot, children }: Props) {
       open={open.has(app.id)}
       onOpen={() => onOpen(app.id)}
       size={phone ? "md" : "sm"}
+      hint={app.id === "readme" && !seen ? DESKTOP.readmeHint : undefined}
     />
   ));
 

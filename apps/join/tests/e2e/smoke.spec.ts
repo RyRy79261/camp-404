@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { SIGNUP_URL } from "../../lib/content";
 
 // The four promises of the brief: the boot skips, an icon opens its window,
@@ -11,12 +11,61 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible();
   await page.keyboard.press("Space");
   await expect(page.getByRole("status")).toHaveCount(0);
-  // README.TXT opens once the boot ends.
+});
+
+const README_HINT = "Open README.TXT, start here";
+
+// In the taskbar: README's "start here" would match a bare name "Start" too.
+const startButton = (page: Page) =>
+  page
+    .getByRole("toolbar", { name: "Taskbar" })
+    .getByRole("button", { name: "Start" });
+
+test("README.TXT waits, glowing, until it is opened once on this device", async ({
+  page,
+}) => {
+  // Nothing opens by itself; the README icon says "start here" instead.
+  const hinted = page.getByRole("button", { name: README_HINT });
+  await expect(hinted).toBeVisible();
+  await expect(hinted).toHaveAttribute("data-hint", "");
+  await expect(page.getByRole("region", { name: "README.TXT" })).toHaveCount(0);
+
+  await hinted.click();
   await expect(page.getByRole("region", { name: "README.TXT" })).toBeVisible();
+  const plain = page.getByRole("button", {
+    name: "Open README.TXT",
+    exact: true,
+  });
+  await expect(plain).not.toHaveAttribute("data-hint");
+
+  // A returning visitor (and a reboot) gets a quiet desktop.
+  await page.reload();
+  await expect(
+    page.getByRole("status", { name: "Starting Camp 404 OS" }),
+  ).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(plain).toBeVisible();
+  await expect(page.getByRole("button", { name: README_HINT })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "README.TXT" })).toHaveCount(0);
+});
+
+test("opening README from the Start menu also stops the glow", async ({
+  page,
+}) => {
+  await startButton(page).click();
+  await page
+    .getByRole("menu", { name: "Start" })
+    .getByRole("menuitem", { name: "README.TXT" })
+    .click();
+  await expect(page.getByRole("region", { name: "README.TXT" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open README.TXT", exact: true }),
+  ).toBeAttached();
+  await expect(page.getByRole("button", { name: README_HINT })).toHaveCount(0);
 });
 
 test("an icon opens its window and Esc closes it", async ({ page }) => {
-  await page.getByRole("button", { name: "Close README.TXT" }).click();
   await expect(page.getByRole("region", { name: "README.TXT" })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Open CREW.DB" }).click();
@@ -34,7 +83,6 @@ test("an icon opens its window and Esc closes it", async ({ page }) => {
 });
 
 test("the terminal runs commands and opens APPLY.EXE", async ({ page }) => {
-  await page.getByRole("button", { name: "Close README.TXT" }).click();
   await page.getByRole("button", { name: "Open TERMINAL" }).click();
   const prompt = page.getByLabel("burner@404:~$");
   await expect(prompt).toBeFocused();
@@ -49,7 +97,6 @@ test("the terminal runs commands and opens APPLY.EXE", async ({ page }) => {
 });
 
 test("APPLY links to sign-up and asks for an invite code", async ({ page }) => {
-  await page.getByRole("button", { name: "Close README.TXT" }).click();
   await page.getByRole("button", { name: "Open APPLY.EXE" }).click();
   const apply = page
     .getByRole("region", { name: "APPLY.EXE" })
@@ -61,7 +108,6 @@ test("APPLY links to sign-up and asks for an invite code", async ({ page }) => {
 });
 
 test("the fee scale moves between tiers", async ({ page }) => {
-  await page.getByRole("button", { name: "Close README.TXT" }).click();
   await page.getByRole("button", { name: "Open FEE.CALC" }).click();
   const fee = page.getByRole("region", { name: "FEE.CALC" });
   const slider = fee.getByRole("slider", {
@@ -80,7 +126,9 @@ test("the fee scale moves between tiers", async ({ page }) => {
 test("a window minimises to the taskbar, comes back, goes full screen and resizes", async ({
   page,
 }, testInfo) => {
+  await page.getByRole("button", { name: README_HINT }).click();
   const readme = page.getByRole("region", { name: "README.TXT" });
+  await expect(readme).toBeVisible();
 
   await page.getByRole("button", { name: "Minimise README.TXT" }).click();
   await expect(readme).toBeHidden();
@@ -122,14 +170,14 @@ test("a window minimises to the taskbar, comes back, goes full screen and resize
 });
 
 test("the Start menu opens any program", async ({ page }) => {
-  await page.getByRole("button", { name: "Start" }).click();
+  await startButton(page).click();
   const menu = page.getByRole("menu", { name: "Start" });
   await expect(menu.getByRole("menuitem").first()).toBeFocused();
   await menu.getByRole("menuitem", { name: "MAP.GPS" }).click();
   await expect(menu).toHaveCount(0);
   await expect(page.getByRole("region", { name: "MAP.GPS" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Start" }).click();
+  await startButton(page).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu", { name: "Start" })).toHaveCount(0);
   // Esc shut the menu, not the window under it.
@@ -137,10 +185,9 @@ test("the Start menu opens any program", async ({ page }) => {
 });
 
 test("the terminal hides a game behind jinn-is-best", async ({ page }) => {
-  await page.getByRole("button", { name: "Close README.TXT" }).click();
   // Not on the desktop, not in the Start menu.
   await expect(page.getByRole("button", { name: /INKBLOT/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "Start" }).click();
+  await startButton(page).click();
   const menu = page.getByRole("menu", { name: "Start" });
   await expect(menu.getByRole("menuitem", { name: "TERMINAL" })).toBeVisible();
   await expect(menu.getByRole("menuitem", { name: /INKBLOT/ })).toHaveCount(0);
@@ -161,7 +208,6 @@ test("the terminal hides a game behind jinn-is-best", async ({ page }) => {
 test("clearing INKBLOT.EXE says GOODEST BOI and keeps a speed-of-chaos board", async ({
   page,
 }) => {
-  await page.getByRole("button", { name: "Close README.TXT" }).click();
   await page.getByRole("button", { name: "Open TERMINAL" }).click();
   const prompt = page.getByLabel("burner@404:~$");
   await prompt.fill("jinn-is-best");
