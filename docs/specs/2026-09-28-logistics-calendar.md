@@ -122,5 +122,11 @@ read by members on Logistics. Items 1 and 5 below are done.
    shows who has not answered yet.
 4. **AfrikaBurn deadlines:** captains add them one at a time, because the
    dates are not all known at once. They live on the year's settings page.
+   [CORRECTION 2026-10-01] The owner rejected the bare "Add a deadline"
+   dialog ("What deadline is this talking about") and approved mock-up A:
+   the page lists AfrikaBurn's standard dates every year (Theme camp
+   registration, Art, WAP, Tickets (DDT), then Other), each "Not announced
+   yet" until a captain sets it; each set one goes on the calendar as
+   "AfrikaBurn: <name>".
 5. **Phone calendars:** no link from the app. Members use the camp's Google
    calendar.

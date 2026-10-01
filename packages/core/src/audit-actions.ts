@@ -251,6 +251,7 @@ export function auditDetail(
       const title = text(metadata, "title");
       const due = text(metadata, "dueDate");
       if (!title) return null;
+      if (metadata?.skipped === true) return `${title}, no round this year`;
       return due ? `${title}, ${due}` : title;
     }
     case "logistics.deadline_done": {

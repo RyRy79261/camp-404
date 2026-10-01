@@ -7,6 +7,10 @@ import {
   MapPin,
 } from "lucide-react";
 import {
+  AFRIKABURN_DATE_GROUPS,
+  AFRIKABURN_DATES,
+  AFRIKABURN_OTHER_GROUP_LABEL,
+  NO_ROUND_THIS_YEAR,
   attendanceIsOpen,
   campDayKey,
   canAskForAttendance,
@@ -41,6 +45,7 @@ import {
   CALENDAR_NOT_CONNECTED_NOTE,
   deadlineDateText,
   LOGISTICS_REFUSAL,
+  NOT_ANNOUNCED_YET,
   phaseDaysText,
   YEAR_SETTINGS_PATH,
 } from "@/lib/logistics-copy";
@@ -68,8 +73,8 @@ export const metadata = { title: "Logistics — Camp 404" };
 // list of members who are coming, and whether someone is coming reads at
 // team lead, so a plain member sees how many, and leads and captains see who.
 // A captain's "Ask everyone" nudges them, as the gear rental's does. Then the
-// year's AfrikaBurn deadlines, read-only here; captains keep them on the
-// camp's year page.
+// year's AfrikaBurn dates, read-only here and grouped as on the camp's year
+// page, where captains keep them; only the ones a captain has set show.
 
 const REFUSAL_ID = "logistics-edit-refusal";
 
@@ -220,6 +225,30 @@ function WhoCanHelp({
   );
 }
 
+/** The dates to show members, grouped as the year page groups them. */
+function dateGroups(deadlines: DeadlineRow[]) {
+  const byKind = new Map(
+    deadlines.filter((d) => d.kind).map((d) => [d.kind as string, d]),
+  );
+  const groups = AFRIKABURN_DATE_GROUPS.map((group) => ({
+    key: group.key as string,
+    label: group.label,
+    rows: AFRIKABURN_DATES.filter((d) => d.group === group.key).flatMap((d) => {
+      const row = byKind.get(d.kind);
+      // Only what a captain has set: a date, or "No round this year".
+      return row && (row.dueDate || row.skipped)
+        ? [{ ...row, title: d.name }]
+        : [];
+    }),
+  }));
+  groups.push({
+    key: "other",
+    label: AFRIKABURN_OTHER_GROUP_LABEL,
+    rows: deadlines.filter((d) => d.kind === null),
+  });
+  return groups.filter((g) => g.rows.length > 0);
+}
+
 function Deadlines({
   deadlines,
   canManage,
@@ -227,15 +256,16 @@ function Deadlines({
   deadlines: DeadlineRow[];
   canManage: boolean;
 }) {
+  const groups = dateGroups(deadlines);
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 p-0">
         <div className="flex flex-col gap-3 px-4 pt-4 page-sm:flex-row page-sm:items-start page-sm:justify-between">
           <div className="flex flex-col gap-1">
-            <h2 className="text-base font-semibold">AfrikaBurn deadlines</h2>
+            <h2 className="text-base font-semibold">AfrikaBurn dates</h2>
             <p className="text-sm text-muted-foreground">
-              The dates AfrikaBurn sets for the camp. The ones with a date are
-              on the camp calendar too.
+              The dates AfrikaBurn sets for the camp this year. The ones with a
+              date are on the camp calendar too.
             </p>
           </div>
           {canManage && (
@@ -244,47 +274,53 @@ function Deadlines({
             </Button>
           )}
         </div>
-        {deadlines.length === 0 ? (
+        {groups.length === 0 ? (
           <p className="px-4 pb-4 text-sm text-muted-foreground">
-            No deadlines yet. The captains add them as AfrikaBurn publishes
+            No dates yet. The captains fill them in as AfrikaBurn announces
             them.
           </p>
         ) : (
-          <ol
-            aria-label="AfrikaBurn deadlines"
-            className="divide-y divide-border border-t border-border"
-          >
-            {deadlines.map((d) => (
-              <li
-                key={d.id}
-                aria-label={d.title}
-                className="flex flex-col gap-1 px-4 py-3"
+          <div className="flex flex-col">
+            {groups.map((group) => (
+              <section
+                key={group.key}
+                aria-label={group.label}
+                className="flex flex-col"
               >
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <h3
-                    className={
-                      d.done
-                        ? "text-sm font-semibold text-muted-foreground line-through"
-                        : "text-sm font-semibold"
-                    }
-                  >
-                    {d.title}
-                  </h3>
-                  <span className="text-sm tabular-nums text-muted-foreground">
-                    {d.dueDate
-                      ? deadlineDateText(d.dueDate)
-                      : "Date not known yet"}
-                    {d.done ? " · Done" : ""}
-                  </span>
-                </div>
-                {d.note && (
-                  <p className="whitespace-pre-line text-sm text-muted-foreground">
-                    {d.note}
-                  </p>
-                )}
-              </li>
+                <h3 className="border-t border-border bg-muted/40 px-4 py-2 font-pixel text-[10px] font-normal uppercase tracking-[0.2em] text-muted-foreground">
+                  {group.label}
+                </h3>
+                <ul className="flex flex-col">
+                  {group.rows.map((d) => (
+                    <li
+                      key={d.id}
+                      aria-label={d.title}
+                      className="flex flex-col gap-1 border-t border-border px-4 py-3"
+                    >
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                        <span className="text-sm font-semibold">{d.title}</span>
+                        <span
+                          className={`text-sm tabular-nums text-muted-foreground ${d.dueDate ? "" : "italic"}`}
+                        >
+                          {d.skipped
+                            ? NO_ROUND_THIS_YEAR
+                            : d.dueDate
+                              ? deadlineDateText(d.dueDate)
+                              : NOT_ANNOUNCED_YET}
+                          {d.done ? " · Done" : ""}
+                        </span>
+                      </div>
+                      {d.note && (
+                        <p className="whitespace-pre-line text-sm text-muted-foreground">
+                          {d.note}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ol>
+          </div>
         )}
       </CardContent>
     </Card>

@@ -32,9 +32,11 @@ export const metadata = { title: "The camp's year — Camp 404" };
 // load is safe by construction; that is what lets the confirm screen show the
 // captain the real numbers before anything happens.
 //
-// The year's AfrikaBurn deadlines live here too (owner, 2026-09-30: "this
-// should be under the years settings page"): captains add them one at a
-// time, and each with a date goes on the camp calendar. Members read them on
+// The year's AfrikaBurn dates live here too (owner, 2026-09-30: "this
+// should be under the years settings page"), first on the page (owner,
+// 2026-10-01, mock-up A): AfrikaBurn's standard dates are listed every year,
+// each "Not announced yet" until a captain sets it, and each with a date goes
+// on the camp calendar as "AfrikaBurn: <name>". Members read them on
 // Logistics.
 
 export default async function CycleRolloverPage() {
@@ -49,10 +51,12 @@ export default async function CycleRolloverPage() {
           const connected = isLogisticsCalendarConnected();
           return rows.map((row) => ({
             id: row.id,
+            kind: row.kind,
             title: row.title,
             dueDate: row.dueDate,
             note: row.note,
             done: row.done,
+            skipped: row.skipped,
             version: row.version,
             calendar: deadlineCalendarState(row, connected),
           }));
@@ -68,11 +72,13 @@ export default async function CycleRolloverPage() {
     <div className="flex flex-col">
       <PageHeading
         eyebrow="Captains / Camp settings / Year"
-        title="The camp’s year"
+        title={
+          founded ? `The camp’s year · ${plan.from!.year}` : "The camp’s year"
+        }
         description={
           founded
-            ? "This year’s AfrikaBurn deadlines, and starting a new year when the camp moves on to the next burn. Some questionnaires go out again on a blank form; most stay exactly as they are. Nothing is ever deleted — every previous year’s answers stay readable."
-            : "Every questionnaire sent and every answer given is filed under a year. The camp hasn’t said which year this is yet, so nothing is filed under one. Say so here and it will be, the AfrikaBurn deadlines too."
+            ? "AfrikaBurn’s dates for this year. Fill each one in when AfrikaBurn announces it: it goes on the camp calendar, and members see it on Logistics."
+            : "Every questionnaire sent and every answer given is filed under a year. The camp hasn’t said which year this is yet, so nothing is filed under one. Say so here and it will be, AfrikaBurn’s dates too."
         }
       />
 

@@ -6,6 +6,7 @@ import {
   AddDeadlineInput,
   EditDeadlineInput,
   RemoveDeadlineInput,
+  SetAfrikaburnDateInput,
   SetDeadlineDoneInput,
 } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
@@ -17,6 +18,7 @@ import {
   addDeadline,
   editDeadline,
   removeDeadline,
+  setAfrikaburnDate,
   setDeadlineDone,
   type LogisticsCalendarOutcome,
 } from "@/lib/logistics";
@@ -78,6 +80,23 @@ export async function editDeadlineAction(input: unknown): Promise<Result> {
     const parsed = EditDeadlineInput.safeParse(input);
     if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
     const result = await editDeadline(gate.campUser.id, parsed.data);
+    if (!result.ok) return result;
+    revalidateDeadlines();
+    return { ok: true, data: { calendar: result.calendar } };
+  });
+}
+
+/**
+ * Set or change one of AfrikaBurn's standard dates (owner, 2026-10-01); with
+ * a date it goes onto the camp calendar, "No round this year" takes it off.
+ */
+export async function setAfrikaburnDateAction(input: unknown): Promise<Result> {
+  return runAction("setAfrikaburnDateAction", async () => {
+    const gate = await keeperGate();
+    if (!gate.ok) return gate;
+    const parsed = SetAfrikaburnDateInput.safeParse(input);
+    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+    const result = await setAfrikaburnDate(gate.campUser.id, parsed.data);
     if (!result.ok) return result;
     revalidateDeadlines();
     return { ok: true, data: { calendar: result.calendar } };

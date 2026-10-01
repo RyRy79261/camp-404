@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  AFRIKABURN_DATE_KINDS,
   ATTENDANCE_PHASES,
   LOGISTICS_PHASES,
   LOGISTICS_PHASE_LABELS,
   Team,
 } from "@camp404/types";
 import {
+  AFRIKABURN_DATES,
+  AFRIKABURN_DATE_GROUPS,
   LOGISTICS_TEAM,
+  afrikaburnDate,
+  afrikaburnDateMayBeSkipped,
+  afrikaburnEventTitle,
   attendanceAnswered,
   attendanceAskNotification,
   attendanceBoard,
@@ -215,5 +221,66 @@ describe("AfrikaBurn deadlines", () => {
         calendarEventId: null,
       }),
     ).toBe("none");
+  });
+});
+
+describe("AfrikaBurn's standard dates", () => {
+  it("list every kind exactly once, in the owner's groups and order", () => {
+    const kinds = AFRIKABURN_DATES.map((d) => d.kind);
+    expect(new Set(kinds).size).toBe(kinds.length);
+    expect([...kinds].sort()).toEqual([...AFRIKABURN_DATE_KINDS].sort());
+    const groups = AFRIKABURN_DATE_GROUPS.map((g) => g.key);
+    expect(
+      groups.map((g) =>
+        AFRIKABURN_DATES.filter((d) => d.group === g).map((d) => d.name),
+      ),
+    ).toEqual([
+      [
+        "Form 1 registration opens",
+        "Form 2 registration",
+        "Registration closes",
+      ],
+      ["Art grant applications close"],
+      ["WAP requests open", "WAP requests close", "WAPs sent out"],
+      [
+        "Ticket distribution opens",
+        "DDT deadline",
+        "Second DDT round",
+        "Ticket distribution closes",
+      ],
+    ]);
+    // In group order, so a page walks the list once.
+    expect(AFRIKABURN_DATES.map((d) => groups.indexOf(d.group))).toEqual(
+      [...AFRIKABURN_DATES.map((d) => groups.indexOf(d.group))].sort(),
+    );
+  });
+
+  it("let only the second DDT round be skipped, failing closed", () => {
+    expect(
+      AFRIKABURN_DATES.filter((d) => d.mayBeSkipped).map((d) => d.kind),
+    ).toEqual(["second_ddt_round"]);
+    expect(afrikaburnDateMayBeSkipped("second_ddt_round")).toBe(true);
+    expect(afrikaburnDateMayBeSkipped("ddt_deadline")).toBe(false);
+    expect(afrikaburnDateMayBeSkipped("nope")).toBe(false);
+    expect(afrikaburnDate("nope")).toBeUndefined();
+    expect(afrikaburnDate("form_2")?.help).toBe(
+      "Size, placement, sound, layout; art projects register here too.",
+    );
+  });
+
+  it("title a calendar event AfrikaBurn: <name>, never twice", () => {
+    expect(
+      afrikaburnEventTitle({ kind: "registration_closes", title: "x" }),
+    ).toBe("AfrikaBurn: Registration closes");
+    expect(
+      afrikaburnEventTitle({ kind: null, title: "Mutant vehicle forms" }),
+    ).toBe("AfrikaBurn: Mutant vehicle forms");
+    expect(
+      afrikaburnEventTitle({ kind: null, title: "AfrikaBurn site opens" }),
+    ).toBe("AfrikaBurn site opens");
+    // An unknown key keeps its stored title.
+    expect(afrikaburnEventTitle({ kind: "gone", title: "Old date" })).toBe(
+      "AfrikaBurn: Old date",
+    );
   });
 });

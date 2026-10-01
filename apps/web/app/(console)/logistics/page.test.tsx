@@ -270,33 +270,83 @@ describe("logistics page", () => {
     ).toBe(true);
   });
 
-  it("tells an asked member, and lists the AfrikaBurn deadlines for everyone", async () => {
+  it("tells an asked member, and lists the AfrikaBurn dates in their groups", async () => {
     signIn("camp_member");
     vi.mocked(isAskedForAttendance).mockResolvedValue(true);
+    const row = {
+      cycle: 2027,
+      note: null,
+      done: false,
+      skipped: false,
+      calendarEventId: "e1",
+      calendarSyncedVersion: 1,
+      version: 1,
+      removedAt: null,
+    };
     vi.mocked(listDeadlines).mockResolvedValue([
       {
+        ...row,
         id: "d1",
-        cycle: 2027,
-        title: "Theme camp registration closes",
+        kind: "registration_closes",
+        title: "Registration closes",
         dueDate: "2027-01-15",
         note: "On the AfrikaBurn site.",
         done: true,
-        calendarEventId: "e1",
-        calendarSyncedVersion: 1,
-        version: 1,
-        removedAt: null,
+      },
+      // Set, then marked no round.
+      {
+        ...row,
+        id: "d2",
+        kind: "second_ddt_round",
+        title: "Second DDT round",
+        dueDate: null,
+        skipped: true,
+      },
+      // Not announced: a standard date with no day is not shown.
+      {
+        ...row,
+        id: "d3",
+        kind: "wap_requests_open",
+        title: "WAP requests open",
+        dueDate: null,
+      },
+      {
+        ...row,
+        id: "d4",
+        kind: null,
+        title: "Mutant vehicle forms",
+        dueDate: "2027-02-01",
       },
     ]);
     await show();
     expect(screen.getByTestId("attendance-asked")).toBeTruthy();
-    const list = screen.getByRole("list", { name: "AfrikaBurn deadlines" });
-    const row = text(
-      within(list).getByRole("listitem", {
-        name: "Theme camp registration closes",
+    const registration = screen.getByRole("region", {
+      name: "Theme camp registration",
+    });
+    const closes = text(
+      within(registration).getByRole("listitem", {
+        name: "Registration closes",
       }),
     );
-    expect(row).toContain("Fri 15 Jan 2027 · Done");
-    expect(row).toContain("On the AfrikaBurn site.");
+    expect(closes).toContain("Fri 15 Jan 2027 · Done");
+    expect(closes).toContain("On the AfrikaBurn site.");
+    expect(
+      text(
+        within(screen.getByRole("region", { name: "Tickets (DDT)" })).getByRole(
+          "listitem",
+          { name: "Second DDT round" },
+        ),
+      ),
+    ).toContain("No round this year");
+    expect(
+      within(screen.getByRole("region", { name: "Other" })).getByRole(
+        "listitem",
+        { name: "Mutant vehicle forms" },
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("region", { name: "Work access passes (WAP)" }),
+    ).toBeNull();
     // Members read; only a captain is sent to change them.
     expect(screen.queryByRole("link", { name: "Change them" })).toBeNull();
   });

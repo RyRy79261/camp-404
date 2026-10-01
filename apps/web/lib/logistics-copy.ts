@@ -23,6 +23,9 @@ export const CHECK_DEADLINE = "Check the deadline and try again.";
 /** Where captains keep the deadlines: the camp's year. */
 export const YEAR_SETTINGS_PATH = "/captains/camp-settings/cycle";
 
+/** A date AfrikaBurn has not given yet. */
+export const NOT_ANNOUNCED_YET = "Not announced yet";
+
 /** After a deadline save that Google did not take. */
 export const DEADLINE_NOT_ON_CALENDAR =
   "Saved, but it couldn't be put on the camp calendar. It will be tried again.";

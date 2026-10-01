@@ -4049,16 +4049,25 @@ export const logisticsAttendance = pgTable(
 // date owns ONE camp calendar event for life, claimed like a logistics
 // phase's. A removed deadline keeps its row (removed_at) only until its event
 // is off the calendar.
+//
+// AfrikaBurn's standard dates (owner, 2026-10-01): `kind` names which one
+// (AFRIKABURN_DATES in @camp404/core), at most one row per year each, written
+// when a captain first sets it. A row with no kind is an "Other" date with
+// the captain's own title. A standard date is never removed, only changed.
 export const afrikaburnDeadlines = pgTable(
   "afrikaburn_deadlines",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     cycle: integer("cycle").notNull(),
+    // Which standard AfrikaBurn date; null for an "Other" one.
+    kind: text("kind"),
     title: text("title").notNull(),
     // A camp day; null while the date is not known.
     dueDate: date("due_date", { mode: "string" }),
     note: text("note"),
     done: boolean("done").notNull().default(false),
+    // "No round this year" (only the dates that allow it); never with a day.
+    skipped: boolean("skipped").notNull().default(false),
     // The Google Calendar event this deadline owns (our own id, base32hex).
     calendarEventId: text("calendar_event_id"),
     // The row version the camp calendar last matched; null when it never has.
@@ -4076,6 +4085,15 @@ export const afrikaburnDeadlines = pgTable(
   },
   (d) => ({
     cycleIdx: index("afrikaburn_deadlines_cycle_idx").on(d.cycle),
+    // One row per standard date per year. Partial, so "Other" rows (no kind)
+    // are not limited; an ON CONFLICT against it repeats the WHERE.
+    cycleKindUniq: uniqueIndex("afrikaburn_deadlines_cycle_kind_uniq")
+      .on(d.cycle, d.kind)
+      .where(sql`${d.kind} is not null`),
+    skippedCheck: check(
+      "afrikaburn_deadlines_skipped_check",
+      sql`not ${d.skipped} or ${d.dueDate} is null`,
+    ),
   }),
 );
 

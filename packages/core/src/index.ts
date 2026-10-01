@@ -108,8 +108,9 @@
 //   - logistics: canEditLogistics (a captain or a Transport and Logistics
 //     lead), logisticsEventTitle (plain), logisticsCalendarStep; attendance
 //     (canAskForAttendance, attendanceIsOpen, attendanceBoard, the nudge's
-//     key and notice); AfrikaBurn deadlines (canManageDeadlines,
-//     deadlineCalendarStep) (./logistics)
+//     key and notice); AfrikaBurn dates (canManageDeadlines,
+//     deadlineCalendarStep, the standard AFRIKABURN_DATES and their calendar
+//     title afrikaburnEventTitle) (./logistics)
 //   - gear rental: canManageRental (a captain), checkRentalOrder, tentConflict,
 //     rentalEstimate, priceRentalOrder and rentalSummary (./rental)
 //   - camp layout: canEditLayout (a captain or a Structures lead),

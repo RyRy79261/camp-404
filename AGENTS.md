@@ -400,6 +400,7 @@ activation_id)` would allow any number of duplicates whose
   `recipe_proofread_runs_open_plates_idx`,
   `questionnaire_activations_one_open_per_key_idx`,
   `notification_deliveries_broadcast_user_uniq`, `dues_charges_one_fee_idx`,
+  `afrikaburn_deadlines_cycle_kind_uniq`,
   `payment_refunds_one_live_idx`. A bare `ON CONFLICT DO
 NOTHING`, with no target, is not affected.
 
@@ -651,13 +652,21 @@ Decisions baked into the schema — keep new code consistent with them:
     `openNudges`/`closeNudge` (`packages/db/src/nudges.ts`): captains only
     (`canAskForAttendance`), a `logistics_attendance` required action,
     completed once every open phase has an answer.
-  - **AfrikaBurn deadlines** (`afrikaburn_deadlines`) live on the camp's year
+  - **AfrikaBurn dates** (`afrikaburn_deadlines`) live on the camp's year
     page (`/captains/camp-settings/cycle`): captains only
-    (`canManageDeadlines`), added one at a time, date optional, a done tick,
-    each change a compare-and-set on `version`, audited. A dated deadline is
-    one plain-titled Google event by the same mirror; a removed one keeps its
-    row (`removed_at`) until its event is gone. Members read them on
-    Logistics.
+    (`canManageDeadlines`), a done tick, each change a compare-and-set on
+    `version`, audited. [CORRECTION 2026-10-01] The page lists AfrikaBurn's
+    standard dates every year (`AFRIKABURN_DATES` in
+    `packages/core/src/logistics.ts`, grouped, owner's approved mock-up A),
+    each "Not announced yet" until a captain sets it
+    (`setAfrikaburnDate`): a row with a `kind`, at most one per year
+    (`afrikaburn_deadlines_cycle_kind_uniq`), changed but never removed;
+    only the second DDT round may be "No round this year" (`skipped`, no
+    day). "Other" ones (no `kind`) keep the old free title and may be
+    removed. A dated one is one Google event, "AfrikaBurn: <name>"
+    (`afrikaburnEventTitle`), by the same mirror; a removed one keeps its row
+    (`removed_at`) until its event is gone. Members read the set ones on
+    Logistics, in the same groups.
 - **Gear rental (#241).** The year's sleeping gear is `rental_items`; a
   member's order is one `rental_orders` row per member per year, with
   `rental_order_lines` and `rental_order_sharers`. Owner's rulings

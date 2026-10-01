@@ -1,5 +1,9 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
-import { canManageDeadlines } from "@camp404/core";
+import {
+  afrikaburnDate,
+  afrikaburnDateMayBeSkipped,
+  canManageDeadlines,
+} from "@camp404/core";
 import { writeAuditEvent } from "./audit";
 import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
@@ -25,6 +29,11 @@ import * as schema from "./schema";
 //    event is off the calendar, so a failed delete is not lost; one that
 //    never had an event goes at once.
 //
+//  - AfrikaBurn's standard dates (owner, 2026-10-01) are rows with a `kind`,
+//    at most one per year each (a partial unique index), written the first
+//    time a captain sets one (setAfrikaburnDate). They are changed, never
+//    removed: editDeadline and removeDeadline touch "Other" rows only.
+//
 // PGlite has ONE connection: everything inside a transaction goes through
 // `tx`, never createHttpDb().
 
@@ -39,6 +48,11 @@ export const DEADLINE_CHANGED =
 /** The most deadlines one year may hold: a guard, not a plan. */
 export const MAX_DEADLINES = 60;
 export const TOO_MANY_DEADLINES = `A year holds at most ${MAX_DEADLINES} deadlines.`;
+export const DATE_SET_FIRST = "Someone set this date first. Reload the page.";
+export const NOT_AN_AFRIKABURN_DATE = "That isn't one of AfrikaBurn's dates.";
+export const CANNOT_SKIP_DATE =
+  "Only the second DDT round can be marked as no round this year.";
+export const PICK_THE_DATE = "Pick the date.";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -46,10 +60,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export interface DeadlineRow {
   id: string;
   cycle: number;
+  /** Which standard AfrikaBurn date; null for an "Other" one. */
+  kind: string | null;
   title: string;
   dueDate: string | null;
   note: string | null;
   done: boolean;
+  /** "No round this year": no day, and nothing on the calendar. */
+  skipped: boolean;
   calendarEventId: string | null;
   calendarSyncedVersion: number | null;
   version: number;
@@ -60,10 +78,12 @@ export interface DeadlineRow {
 const COLUMNS = {
   id: schema.afrikaburnDeadlines.id,
   cycle: schema.afrikaburnDeadlines.cycle,
+  kind: schema.afrikaburnDeadlines.kind,
   title: schema.afrikaburnDeadlines.title,
   dueDate: schema.afrikaburnDeadlines.dueDate,
   note: schema.afrikaburnDeadlines.note,
   done: schema.afrikaburnDeadlines.done,
+  skipped: schema.afrikaburnDeadlines.skipped,
   calendarEventId: schema.afrikaburnDeadlines.calendarEventId,
   calendarSyncedVersion: schema.afrikaburnDeadlines.calendarSyncedVersion,
   version: schema.afrikaburnDeadlines.version,
@@ -189,8 +209,114 @@ function live(id: string, expectedVersion: number) {
   );
 }
 
+/** An "Other" deadline: the only kind a title edit or a removal touches. */
+function other(id: string, expectedVersion: number) {
+  return and(
+    live(id, expectedVersion),
+    isNull(schema.afrikaburnDeadlines.kind),
+  );
+}
+
 /**
- * Change a deadline's title, date and note, as a captain. A date claims an
+ * Set or change one of AfrikaBurn's standard dates for this year, as a
+ * captain. `expectedVersion` null means it was "Not announced yet": the row
+ * is written then, and a captain who set it first wins (DATE_SET_FIRST).
+ * Otherwise a compare-and-set on the version seen. A date claims an event id
+ * as editDeadline does; "No round this year" (`skipped`) clears the day, so
+ * its event comes off the calendar. `done` is kept unless sent.
+ */
+export async function setAfrikaburnDate(input: {
+  actorId: string;
+  kind: string;
+  dueDate: string | null;
+  note: string | null;
+  skipped: boolean;
+  done?: boolean;
+  expectedVersion: number | null;
+  newEventId: string;
+}): Promise<DeadlineWriteResult<{ row: DeadlineRow }>> {
+  return write(async (tx) => {
+    await assertKeeper(tx, input.actorId);
+    const standard = afrikaburnDate(input.kind);
+    if (!standard) refuse(NOT_AN_AFRIKABURN_DATE);
+    if (input.skipped && !afrikaburnDateMayBeSkipped(input.kind)) {
+      refuse(CANNOT_SKIP_DATE);
+    }
+    const dueDate = input.skipped ? null : input.dueDate;
+    if (!input.skipped && !dueDate) refuse(PICK_THE_DATE);
+    const cycle = await currentCycleNumber(tx);
+    const d = schema.afrikaburnDeadlines;
+    let row: DeadlineRow | undefined;
+    if (input.expectedVersion === null) {
+      [row] = await tx
+        .insert(d)
+        .values({
+          cycle,
+          kind: standard.kind,
+          title: standard.name,
+          dueDate,
+          note: input.note,
+          skipped: input.skipped,
+          done: input.done ?? false,
+          calendarEventId: dueDate ? input.newEventId : null,
+          createdByUserId: input.actorId,
+          updatedByUserId: input.actorId,
+        })
+        .onConflictDoNothing({
+          target: [d.cycle, d.kind],
+          where: sql`${d.kind} is not null`,
+        })
+        .returning(COLUMNS);
+      if (!row) refuse(DATE_SET_FIRST);
+    } else {
+      [row] = await tx
+        .update(d)
+        .set({
+          title: standard.name,
+          dueDate,
+          note: input.note,
+          skipped: input.skipped,
+          ...(input.done === undefined ? {} : { done: input.done }),
+          calendarEventId: dueDate
+            ? sql`coalesce(${d.calendarEventId}, ${input.newEventId})`
+            : sql`${d.calendarEventId}`,
+          version: sql`${d.version} + 1`,
+          updatedByUserId: input.actorId,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(d.cycle, cycle),
+            eq(d.kind, standard.kind),
+            eq(d.version, input.expectedVersion),
+            isNull(d.removedAt),
+          ),
+        )
+        .returning(COLUMNS);
+      if (!row) refuse(DEADLINE_CHANGED);
+    }
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action:
+        input.expectedVersion === null
+          ? "logistics.deadline_added"
+          : "logistics.deadline_changed",
+      target: `afrikaburn_deadline:${row.id}`,
+      metadata: {
+        cycle,
+        kind: standard.kind,
+        title: standard.name,
+        dueDate,
+        skipped: input.skipped,
+        ...(input.done === undefined ? {} : { done: input.done }),
+      },
+    });
+    return { row };
+  });
+}
+
+/**
+ * Change an "Other" deadline's title, date and note, as a captain. A date claims an
  * event id when it has none; one that loses its date keeps its id until the
  * event is off the calendar.
  */
@@ -200,6 +326,7 @@ export async function editDeadline(
     id: string;
     expectedVersion: number;
     newEventId: string;
+    done?: boolean;
   },
 ): Promise<DeadlineWriteResult<{ row: DeadlineRow }>> {
   return write(async (tx) => {
@@ -212,6 +339,7 @@ export async function editDeadline(
         title: input.title,
         dueDate: input.dueDate,
         note: input.note,
+        ...(input.done === undefined ? {} : { done: input.done }),
         calendarEventId: input.dueDate
           ? sql`coalesce(${d.calendarEventId}, ${input.newEventId})`
           : sql`${d.calendarEventId}`,
@@ -219,7 +347,7 @@ export async function editDeadline(
         updatedByUserId: input.actorId,
         updatedAt: new Date(),
       })
-      .where(live(input.id, input.expectedVersion))
+      .where(other(input.id, input.expectedVersion))
       .returning(COLUMNS);
     if (!row) refuse(DEADLINE_CHANGED);
     await writeAuditEvent(tx, {
@@ -230,6 +358,7 @@ export async function editDeadline(
         cycle: row.cycle,
         title: input.title,
         dueDate: input.dueDate,
+        ...(input.done === undefined ? {} : { done: input.done }),
       },
     });
     return { row };
@@ -269,7 +398,7 @@ export async function setDeadlineDone(input: {
 }
 
 /**
- * Remove a deadline, as a captain. One with no calendar event goes at once;
+ * Remove an "Other" deadline, as a captain (a standard one is only changed). One with no calendar event goes at once;
  * one with an event is marked removed and goes when the event is off the
  * calendar (markDeadlineCalendarSynced).
  */
@@ -291,7 +420,7 @@ export async function removeDeadline(input: {
         updatedByUserId: input.actorId,
         updatedAt: now,
       })
-      .where(live(input.id, input.expectedVersion))
+      .where(other(input.id, input.expectedVersion))
       .returning(COLUMNS);
     if (!row) refuse(DEADLINE_CHANGED);
     if (row.calendarEventId === null) {

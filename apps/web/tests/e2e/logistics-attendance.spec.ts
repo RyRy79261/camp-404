@@ -24,10 +24,24 @@ import {
 //     sees how many have not answered, never who, and cannot ask or edit. A
 //     lead of another team sees who has not answered, but cannot change the
 //     phase days or ask.
-//  2. A captain adds an AfrikaBurn deadline on the camp's year page; it is
-//     on Logistics for members and on the Calendar as a whole-camp event,
-//     once, moved in place when the date changes, and gone when removed. A
-//     Transport and Logistics lead is refused the page.
+//  2. AfrikaBurn's standard dates are listed on the camp's year page before
+//     anyone sets one. A captain sets "Registration closes" (on the Calendar
+//     once, as "AfrikaBurn: Registration closes", whole-camp), marks the
+//     second DDT round as no round this year, and adds and removes an
+//     "Other" one. A member reads the set ones on Logistics, in the same
+//     groups. A Transport and Logistics lead is refused the page.
+
+/** A camp day (YYYY-MM-DD) as the pages write it: "Fri 15 Jan 2027". */
+function dateText(day: string): string {
+  const at = new Date(`${day}T00:00:00Z`);
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(at);
+  return `${parts} ${at.getUTCFullYear()}`;
+}
 
 /** The camp's day `days` from now (YYYY-MM-DD). */
 function campDay(days: number): string {
@@ -99,15 +113,6 @@ async function answer(page: Page, phase: string, choice: string) {
         timeout: 3_000,
       }),
   );
-}
-
-async function openAddDeadline(page: Page) {
-  const dialog = page.getByRole("dialog", { name: "Add a deadline" });
-  await pressUntil(
-    () => page.getByRole("button", { name: "Add a deadline" }).click(),
-    () => expect(dialog).toBeVisible({ timeout: 2_000 }),
-  );
-  return dialog;
 }
 
 test.describe("logistics attendance and deadlines (test-mode)", () => {
@@ -200,16 +205,16 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
     ).toHaveCount(0);
   });
 
-  test("a captain keeps the AfrikaBurn deadlines; members read them; a T&L lead is refused", async ({
+  test("a captain sets AfrikaBurn's dates; members read them in groups; a T&L lead is refused", async ({
     page,
     request,
   }) => {
     const DUE = campDay(30);
-    const LATER = campDay(32);
+    const DUE_TEXT = dateText(DUE);
 
     await approvedMember(page, request, "att-truck", "Tess Truck");
     await seedTeam(request, "att-truck", "transport_and_logistics", true);
-    // A Transport and Logistics lead sets the days, but not the deadlines.
+    // A Transport and Logistics lead sets the days, but not AfrikaBurn's.
     await page.goto("/captains/camp-settings/cycle");
     await expect(
       page.getByRole("heading", { level: 1, name: "The camp’s year" }),
@@ -220,106 +225,148 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
       ),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Add a deadline" }),
+      page.getByRole("button", {
+        name: "Set the date for Registration closes",
+      }),
     ).toHaveCount(0);
 
-    // The captain adds one with a date, and one whose date is not known.
+    // The standard dates are listed before anyone sets one.
     await asCaptain(page, request);
     await page.goto("/captains/camp-settings/cycle");
     await expect(
       page.getByRole("heading", { level: 1, name: "The camp’s year" }),
     ).toBeVisible();
-    let dialog = await openAddDeadline(page);
-    await dialog.getByRole("button", { name: "Add" }).click();
-    await expect(dialog.getByText("Give the deadline a title.")).toBeVisible();
-    await dialog.getByLabel("Title").fill("Theme camp registration closes");
-    await dialog.getByLabel("Date (optional)").fill(DUE);
-    await dialog.getByLabel("Note (optional)").fill("On the AfrikaBurn site.");
-    await dialog.getByRole("button", { name: "Add" }).click();
-    await expect(page.getByText("Deadline added")).toBeVisible();
-    dialog = await openAddDeadline(page);
-    await dialog.getByLabel("Title").fill("DDT sale opens");
-    await dialog.getByRole("button", { name: "Add" }).click();
-    const list = page.getByRole("list", { name: "AfrikaBurn deadlines" });
-    await expect(list.getByRole("listitem")).toHaveCount(2);
-    const registration = list.getByRole("listitem", {
-      name: "Theme camp registration closes",
+    const registration = page.getByRole("region", {
+      name: "Theme camp registration",
     });
-    await expect(registration).toContainText("On the camp calendar");
+    const closes = registration.getByRole("listitem", {
+      name: "Registration closes",
+    });
+    await expect(closes).toContainText("Not announced yet");
     await expect(
-      list.getByRole("listitem", { name: "DDT sale opens" }),
-    ).toContainText("Date not known yet.");
+      page
+        .getByRole("region", { name: "Work access passes (WAP)" })
+        .getByRole("listitem"),
+    ).toHaveCount(3);
 
-    // On the Calendar once, as the camp's (no team).
-    const onCalendar = async () => {
-      await page.goto("/calendar");
-      await expect(
-        page.getByRole("heading", { level: 1, name: "Calendar" }),
-      ).toBeVisible();
-      return page
-        .getByRole("listitem")
-        .filter({ hasText: "Theme camp registration closes" });
-    };
-    let events = await onCalendar();
-    await expect(events).toHaveCount(1);
-    await expect(events.getByRole("link")).toHaveCount(0);
-
-    // A new date moves the same event; the tick marks it done.
-    await page.goto("/captains/camp-settings/cycle");
-    dialog = page.getByRole("dialog", { name: "Edit deadline" });
+    // "Set the date": it says the calendar title, and needs a date.
+    let dialog = page.getByRole("dialog", {
+      name: "Set the date · Registration closes",
+    });
     await pressUntil(
       () =>
-        registration
-          .getByRole("button", { name: "Edit Theme camp registration closes" })
+        closes
+          .getByRole("button", { name: "Set the date for Registration closes" })
           .click(),
       () => expect(dialog).toBeVisible({ timeout: 2_000 }),
     );
-    await dialog.getByLabel("Date (optional)").fill(LATER);
+    await expect(dialog).toContainText(
+      "Goes on the camp calendar as “AfrikaBurn: Registration closes”.",
+    );
     await dialog.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByText("Deadline saved")).toBeVisible();
-    await registration
-      .getByRole("checkbox", { name: "Theme camp registration closes done" })
+    await expect(dialog.getByText("Pick the date.")).toBeVisible();
+    await dialog.getByLabel("Date", { exact: true }).fill(DUE);
+    await dialog
+      .getByLabel("Note (optional)")
+      .fill("Wrangler said they will not extend it.");
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Date saved")).toBeVisible();
+    await expect(closes).toContainText(DUE_TEXT);
+    await closes
+      .getByRole("checkbox", { name: "Registration closes done" })
       .click();
     await expect(
-      registration.getByRole("checkbox", {
-        name: "Theme camp registration closes done",
-      }),
+      closes.getByRole("checkbox", { name: "Registration closes done" }),
     ).toBeChecked();
-    events = await onCalendar();
-    await expect(events).toHaveCount(1);
+    await expect(
+      closes.getByRole("button", { name: "Change Registration closes" }),
+    ).toBeVisible();
 
-    // A member reads them on Logistics.
+    // The second DDT round: no round this year.
+    const second = page
+      .getByRole("region", { name: "Tickets (DDT)" })
+      .getByRole("listitem", { name: "Second DDT round" });
+    dialog = page.getByRole("dialog", {
+      name: "Set the date · Second DDT round",
+    });
+    await pressUntil(
+      () =>
+        second
+          .getByRole("button", { name: "Set the date for Second DDT round" })
+          .click(),
+      () => expect(dialog).toBeVisible({ timeout: 2_000 }),
+    );
+    await dialog.getByRole("checkbox", { name: "No round this year" }).click();
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(second).toContainText("No round this year");
+
+    // Anything else, under Other.
+    dialog = page.getByRole("dialog", { name: "Add a date" });
+    await pressUntil(
+      () => page.getByRole("button", { name: "Add a date" }).click(),
+      () => expect(dialog).toBeVisible({ timeout: 2_000 }),
+    );
+    await dialog.getByRole("button", { name: "Add" }).click();
+    await expect(dialog.getByText("Give the date a name.")).toBeVisible();
+    await dialog.getByLabel("Name").fill("Mutant vehicle forms");
+    await dialog.getByRole("button", { name: "Add" }).click();
+    await expect(page.getByText("Date added")).toBeVisible();
+    const other = page
+      .getByRole("region", { name: "Other" })
+      .getByRole("listitem", { name: "Mutant vehicle forms" });
+    await expect(other).toContainText("Not announced yet");
+
+    // On the Calendar once, as the camp's (no team), titled AfrikaBurn: ….
+    await page.goto("/calendar");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Calendar" }),
+    ).toBeVisible();
+    const events = page
+      .getByRole("listitem")
+      .filter({ hasText: "AfrikaBurn: Registration closes" });
+    await expect(events).toHaveCount(1);
+    await expect(events.getByRole("link")).toHaveCount(0);
+
+    // A member reads them on Logistics, in the same groups; only set ones.
     await approvedMember(page, request, "att-reader", "Rae Reader");
     await openLogistics(page);
-    const read = page.getByRole("list", { name: "AfrikaBurn deadlines" });
+    const read = page
+      .getByRole("region", { name: "Theme camp registration" })
+      .getByRole("listitem", { name: "Registration closes" });
+    await expect(read).toContainText(`${DUE_TEXT} · Done`);
+    await expect(read).toContainText("Wrangler said they will not extend it.");
     await expect(
-      read.getByRole("listitem", { name: "Theme camp registration closes" }),
-    ).toContainText("Done");
-    await expect(read.getByRole("listitem")).toHaveCount(2);
+      page
+        .getByRole("region", { name: "Tickets (DDT)" })
+        .getByRole("listitem", { name: "Second DDT round" }),
+    ).toContainText("No round this year");
+    await expect(
+      page.getByRole("region", { name: "Work access passes (WAP)" }),
+    ).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Change them" })).toHaveCount(
       0,
     );
 
-    // The captain removes it: off the list and off the calendar.
+    // The captain removes the Other one; the standard ones stay.
     await asCaptain(page, request);
     await page.goto("/captains/camp-settings/cycle");
-    const confirm = page.getByRole("dialog", { name: "Remove this deadline?" });
+    dialog = page.getByRole("dialog", {
+      name: "Set the date · Mutant vehicle forms",
+    });
     await pressUntil(
       () =>
-        registration
+        other
           .getByRole("button", {
-            name: "Remove Theme camp registration closes",
+            name: "Set the date for Mutant vehicle forms",
           })
           .click(),
-      () => expect(confirm).toBeVisible({ timeout: 2_000 }),
+      () => expect(dialog).toBeVisible({ timeout: 2_000 }),
     );
+    await dialog.getByRole("button", { name: "Remove" }).click();
+    const confirm = page.getByRole("dialog", { name: "Remove this date?" });
     await confirm.getByRole("button", { name: "Remove" }).click();
-    await expect(page.getByText("Deadline removed")).toBeVisible();
-    await expect(list.getByRole("listitem")).toHaveCount(1);
-    events = await onCalendar();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Calendar" }),
-    ).toBeVisible();
-    await expect(events).toHaveCount(0);
+    await expect(page.getByText("Date removed")).toBeVisible();
+    await expect(other).toHaveCount(0);
+    await expect(closes).toContainText(DUE_TEXT);
   });
 });
