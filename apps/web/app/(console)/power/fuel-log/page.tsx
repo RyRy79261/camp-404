@@ -1,93 +1,54 @@
-import type { ReactNode } from "react";
-import { AlertTriangle, Fuel, Lock, Printer } from "lucide-react";
 import {
   CAMP_TIME_ZONE,
   actualAgainstEstimate,
-  burnRate,
   campLocalText,
-  canEditPower,
-  daysOfFuelLeft,
   effectiveRefuels,
-  fuelForPlan,
-  lowFuelWarning,
-  remainingBurnDays,
 } from "@camp404/core";
-import { Alert } from "@camp404/ui/components/alert";
-import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@camp404/ui/components/card";
-import { EmptyState } from "@camp404/ui/components/empty-state";
-import { PageHeading } from "@camp404/ui/components/page-heading";
-import {
-  ResponsiveDataTable,
-  type ResponsiveColumn,
-} from "@camp404/ui/components/responsive-data-table";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@camp404/ui/components/table";
+import { cn } from "@camp404/ui/lib/utils";
 import {
   AddCansButton,
   CanRowActions,
+  CountCansButton,
   LogRefuelButton,
-  LowFuelForm,
   RefuelRowActions,
+  type EditableCan,
   type EditableEntry,
   type RefuelOptions,
 } from "@/components/power/fuel-log-controls";
-import { PowerKpiCards, type PowerKpi } from "@/components/power/load-panels";
-import { PowerTabs } from "@/components/power/power-tabs";
-import { captainPageGate } from "@/lib/captain-gate";
+import { PowerFrame } from "@/components/power/power-frame";
 import {
-  getGenerator,
-  getPowerPlan,
-  listGenerators,
-  listPowerLoads,
-} from "@/lib/power";
+  Bar,
+  CardHead,
+  Chip,
+  EmptyNote,
+  PowerCard,
+  Row,
+  RowName,
+  SectionHead,
+  Verdict,
+} from "@/components/power/power-ui";
 import {
-  CAN_LOCATION_LABELS,
-  POWER_REFUSAL,
   PRINT_REFUEL_SHEET_PATH,
   formatNumber,
   litres,
 } from "@/lib/power-copy";
-import {
-  listFuelCans,
-  listRefuelEntries,
-  type FuelCanRow,
-  type RefuelEntryRow,
-} from "@/lib/power-site";
+import { getPowerOverview, powerViewer } from "@/lib/power-overview";
+import type { RefuelEntryRow } from "@/lib/power-site";
+import { fuelSummary, stockSummary } from "@/lib/power-summary";
 import { listAssignableMembers } from "@/lib/tasks";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Refuelling — Camp 404" };
 
-// Fuel on site (#255). Every approved member reads it; a captain or a Power &
-// Lighting lead adds cans, logs refuellings and sets the warning. Composed as
-// the other power pages, from AfrikaBurn's console: the status board's KPI row
-// for the stock and the days left, the categories screen for the cans and the
-// log (a table in a card, Add opening a dialog, a row's own buttons, and for
-// everyone else the controls PRESENT BUT DISABLED with one Lock line).
-//
-// The log is append-only: a correction or a strike-out is a new entry, and
-// the old one stays, marked. Every figure is worked out here on the server
-// with the core functions. The member who filled the generator is named, as
-// the task board names who a task is for; there is no other member data and
-// no money here.
-
-const REFUSAL_ID = "power-fuel-log-refusal";
+// Fuel (#255) in the Power program's answer rail. There is no signal at the
+// burn, so the paper log sheet taped to the generator is the record on site
+// and the page's main button prints it; an editor types the lines in after.
+// The answer is the fuel in stock against what the burn needs; then the cans,
+// then the log. The log is append-only: a correction or a strike-out is a new
+// entry, and the old one stays, marked. The member who filled the generator
+// is named, as the task board names who a task is for; no money here.
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
@@ -103,7 +64,7 @@ function whenText(at: Date): string {
   return WHEN.format(at);
 }
 
-/** "25 Apr 2027" from a YYYY-MM-DD day. */
+/** "Fri 10 Apr" from a YYYY-MM-DD day. */
 function dayText(day: string): string {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "short",
@@ -115,161 +76,15 @@ function dayText(day: string): string {
 
 type EntryStatus = "counts" | "replaced" | "struck";
 
-function canColumns(canEdit: boolean): ResponsiveColumn<FuelCanRow>[] {
-  return [
-    {
-      id: "label",
-      header: "Can",
-      role: "title",
-      cellClassName: "font-medium",
-      cell: (c) => c.label,
-    },
-    {
-      id: "litres",
-      header: "Litres",
-      align: "right",
-      cellClassName: "tabular-nums whitespace-nowrap",
-      cell: (c) =>
-        `${formatNumber(c.litres, 1)} of ${formatNumber(c.capacityLitres, 1)} L`,
-    },
-    {
-      id: "where",
-      header: "Where",
-      cellClassName: "text-muted-foreground",
-      cell: (c) => CAN_LOCATION_LABELS[c.location],
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      role: "actions",
-      hideHeader: true,
-      align: "right",
-      cell: (c) => (
-        <CanRowActions
-          can={{
-            id: c.id,
-            version: c.version,
-            label: c.label,
-            capacityLitres: c.capacityLitres,
-            litres: c.litres,
-            location: c.location,
-          }}
-          canEdit={canEdit}
-          refusalId={REFUSAL_ID}
-        />
-      ),
-    },
-  ];
-}
-
-function entryColumns(
-  canEdit: boolean,
-  status: Map<string, EntryStatus>,
-  options: RefuelOptions | null,
-): ResponsiveColumn<RefuelEntryRow>[] {
-  const muted = (e: RefuelEntryRow) =>
-    status.get(e.id) !== "counts" ? "text-muted-foreground line-through" : "";
-  return [
-    {
-      id: "when",
-      header: "When",
-      role: "title",
-      cellClassName: "whitespace-nowrap font-medium",
-      cell: (e) => <span className={muted(e)}>{whenText(e.refuelledAt)}</span>,
-    },
-    {
-      id: "badges",
-      header: "Marks",
-      role: "badge",
-      hideHeader: true,
-      cell: (e) => {
-        const marks: ReactNode[] = [];
-        if (e.voided) {
-          marks.push(
-            <Badge key="struck" variant="destructive">
-              Strike-out
-            </Badge>,
-          );
-        } else if (e.correctsEntryId) {
-          marks.push(
-            <Badge key="fix" variant="warning">
-              Correction
-            </Badge>,
-          );
-        }
-        if (status.get(e.id) === "replaced") {
-          marks.push(
-            <Badge key="replaced" variant="outline">
-              Replaced
-            </Badge>,
-          );
-        }
-        if (e.fromPaper) {
-          marks.push(
-            <Badge key="paper" variant="secondary">
-              From paper
-            </Badge>,
-          );
-        }
-        return marks.length > 0 ? (
-          <span className="flex flex-wrap gap-1">{marks}</span>
-        ) : null;
-      },
-    },
-    {
-      id: "litres",
-      header: "Litres",
-      align: "right",
-      cellClassName: "tabular-nums whitespace-nowrap",
-      cell: (e) => <span className={muted(e)}>{litres(e.litres, 1)}</span>,
-    },
-    {
-      id: "generator",
-      header: "Generator",
-      cellClassName: "text-muted-foreground",
-      cell: (e) => e.generatorModel ?? "—",
-    },
-    {
-      id: "can",
-      header: "From can",
-      cellClassName: "text-muted-foreground",
-      cell: (e) => e.fromCanLabel ?? "—",
-    },
-    {
-      id: "who",
-      header: "Filled by",
-      cell: (e) => e.doneByName ?? "—",
-    },
-    {
-      id: "meter",
-      header: "Hour meter",
-      align: "right",
-      cellClassName: "tabular-nums text-muted-foreground",
-      cell: (e) => (e.hourMeter === null ? "—" : formatNumber(e.hourMeter, 1)),
-    },
-    {
-      id: "note",
-      header: "Note",
-      cellClassName: "text-muted-foreground",
-      cell: (e) => e.note ?? "—",
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      role: "actions",
-      hideHeader: true,
-      align: "right",
-      cell: (e) =>
-        status.get(e.id) === "counts" ? (
-          <RefuelRowActions
-            entry={editableEntry(e)}
-            canEdit={canEdit}
-            refusalId={REFUSAL_ID}
-            options={options}
-          />
-        ) : null,
-    },
-  ];
+/** Each entry: it counts, a later one replaced it, or it is a strike-out. */
+function statuses(entries: readonly RefuelEntryRow[]) {
+  const counting = new Set(effectiveRefuels(entries).map((e) => e.id));
+  return new Map<string, EntryStatus>(
+    entries.map((e) => [
+      e.id,
+      e.voided ? "struck" : counting.has(e.id) ? "counts" : "replaced",
+    ]),
+  );
 }
 
 function editableEntry(e: RefuelEntryRow): EditableEntry {
@@ -287,304 +102,258 @@ function editableEntry(e: RefuelEntryRow): EditableEntry {
   };
 }
 
-/** Each entry: it counts, a later one replaced it, or it is a strike-out. */
-function statuses(entries: readonly RefuelEntryRow[]) {
-  const counting = new Set(effectiveRefuels(entries).map((e) => e.id));
-  return new Map<string, EntryStatus>(
-    entries.map((e) => [
-      e.id,
-      e.voided ? "struck" : counting.has(e.id) ? "counts" : "replaced",
-    ]),
-  );
-}
-
-function daysWord(n: number) {
-  return `${formatNumber(n, 1)} day${n === 1 ? "" : "s"}`;
-}
-
-export default async function PowerFuelLogPage() {
-  // Every approved member reads it.
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
-  const canEdit = canEditPower(rank, leadTeams);
-
-  const [loads, plan, generators, cans, entries, members] = await Promise.all([
-    listPowerLoads(),
-    getPowerPlan(),
-    listGenerators(),
-    listFuelCans(),
-    listRefuelEntries(),
-    // Only an editor picks who filled the generator.
-    canEdit ? listAssignableMembers() : Promise.resolve([]),
+async function RefuellingSection() {
+  const [{ canEdit, campUser }, o] = await Promise.all([
+    powerViewer(),
+    getPowerOverview(),
   ]);
-  const generator = plan.generatorId
-    ? (generators.find((g) => g.id === plan.generatorId) ??
-      (await getGenerator(plan.generatorId)))
-    : null;
-
-  const now = new Date();
-  const estimate =
-    generator && loads.length > 0
-      ? fuelForPlan({
-          loads,
-          generator,
-          plan: {
-            powerFactor: plan.powerFactor,
-            daysOnSite: plan.daysOnSite,
-            lowLoadFactor: plan.lowLoadFactor,
-            safetyMarginPct: plan.safetyMarginPct,
-          },
-          schedule: { fromHour: plan.runFromHour, toHour: plan.runToHour },
-        })
-      : null;
-  const estimatePerDay = estimate
-    ? Math.max(0, ...estimate.perDay.map((d) => d.litres))
-    : null;
-
-  const onHand = cans.reduce((sum, c) => sum + c.litres, 0);
-  const rate = burnRate(entries);
-  const using = rate?.litresPerDay ?? estimatePerDay;
-  const daysLeft = using ? daysOfFuelLeft(onHand, using) : null;
-  const remaining = remainingBurnDays(
-    plan.firstPoweredDay,
-    plan.daysOnSite,
-    now,
-  );
-  const warn = lowFuelWarning({
-    daysLeft,
-    thresholdDays: plan.lowFuelDays,
-    remainingDays: remaining,
-  });
-
-  const kpis: PowerKpi[] = [
-    {
-      key: "on-hand",
-      label: "Fuel on hand",
-      value: litres(onHand, 1),
-      hint: `in ${cans.length} can${cans.length === 1 ? "" : "s"}`,
-    },
-    {
-      key: "using",
-      label: "Using",
-      value: using === null ? "—" : `${formatNumber(using, 1)} L`,
-      hint: rate
-        ? `a day, from the last ${rate.refuels} refuellings over ${formatNumber(rate.hours, 1)} h`
-        : using === null
-          ? "Log two refuellings, or set up the fuel estimate."
-          : "a day, from the fuel estimate until two refuellings are logged",
-    },
-    {
-      key: "days-left",
-      label: "Days of fuel left",
-      value: daysLeft === null ? "—" : formatNumber(daysLeft, 1),
-      hint: [
-        plan.lowFuelDays > 0
-          ? `warns below ${daysWord(plan.lowFuelDays)}`
-          : "the warning is off",
-        remaining !== null ? `${daysWord(remaining)} of the burn to go` : null,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-    },
-    {
-      key: "estimate",
-      label: "Estimate",
-      value:
-        estimatePerDay === null ? "—" : `${formatNumber(estimatePerDay, 1)} L`,
-      hint:
-        estimatePerDay === null
-          ? "Choose a generator and list the loads on the fuel estimate."
-          : "a day on the busiest day, from the fuel estimate",
-    },
-  ];
+  // Only an editor picks who filled the generator.
+  const members = canEdit ? await listAssignableMembers() : [];
+  const fuel = fuelSummary(o);
+  const stock = stockSummary(o, fuel);
+  const status = statuses(o.entries);
 
   const options: RefuelOptions | null = canEdit
     ? {
-        generators: generators.map((g) => ({ id: g.id, label: g.model })),
-        cans: cans.map((c) => ({ id: c.id, label: c.label, litres: c.litres })),
-        members: members.map((m) => ({ id: m.id, displayName: m.displayName })),
+        generators: o.generators.map((g) => ({ id: g.id, label: g.model })),
+        cans: o.cans.map((c) => ({
+          id: c.id,
+          label: c.label,
+          litres: c.litres,
+        })),
+        members: members.map((m) => ({
+          id: m.id,
+          displayName: m.displayName,
+        })),
         defaultGeneratorId:
-          generator?.archivedAt === null ? generator.id : null,
+          o.generator?.archivedAt === null ? o.generator.id : null,
         selfId: campUser.id,
-        now: campLocalText(now),
+        now: campLocalText(new Date()),
       }
     : null;
-
-  const status = statuses(entries);
+  const cans: EditableCan[] = o.cans.map((c) => ({
+    id: c.id,
+    version: c.version,
+    label: c.label,
+    capacityLitres: c.capacityLitres,
+    litres: c.litres,
+    location: c.location,
+  }));
   const compare = actualAgainstEstimate({
-    entries,
-    estimate: estimate?.perDay ?? [],
-    firstPoweredDay: plan.firstPoweredDay,
+    entries: o.entries,
+    estimate: fuel?.fuel.perDay ?? [],
+    firstPoweredDay: o.plan.firstPoweredDay,
   });
+  const pct =
+    stock.need && stock.need > 0 ? (stock.onHand / stock.need) * 100 : null;
 
   return (
-    <div className="flex flex-col">
-      <PageHeading
-        eyebrow="Power & Lighting"
+    <>
+      <SectionHead
         title="Refuelling"
-        description="The fuel in the cans and every time the generator is filled. Everyone can read it; captains and Power & Lighting leads keep it."
+        sentence="No signal on site."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline">
+          <>
+            {options && <LogRefuelButton options={options} />}
+            <Button asChild>
               <a href={PRINT_REFUEL_SHEET_PATH} target="_blank" rel="noopener">
-                <Printer aria-hidden />
-                Paper log sheet
+                Print the log sheet
               </a>
             </Button>
-            <LogRefuelButton
-              canEdit={canEdit}
-              refusalId={REFUSAL_ID}
-              options={options}
-            />
-          </div>
+          </>
         }
       />
-      <PowerTabs tab="fuel-log" />
 
-      <div className="flex flex-col gap-6">
-        {!canEdit && (
-          <p
-            id={REFUSAL_ID}
-            className="flex items-start gap-2 rounded-lg border border-border bg-card/40 px-3 py-2.5 text-xs text-muted-foreground"
+      <Verdict
+        gauge={
+          pct !== null
+            ? {
+                pct,
+                tone: pct >= 100 ? "ok" : "neutral",
+                label: `${formatNumber(pct, 0)}%`,
+              }
+            : undefined
+        }
+        legend={
+          o.cans.length > 0
+            ? [
+                { tone: "neutral", text: `Full ${stock.full}` },
+                { tone: "neutral", text: `Part full ${stock.part}` },
+                { tone: "mute", text: `Empty ${stock.empty}` },
+              ]
+            : undefined
+        }
+      >
+        <b>{litres(stock.onHand, 0)}</b> in stock
+        {stock.need !== null
+          ? ` of the ${litres(stock.need, 0)} the burn needs.`
+          : ". The fuel estimate has no figure yet to set it against."}
+      </Verdict>
+
+      <PowerCard label="Cans">
+        <CardHead
+          title="Cans"
+          meta={`${o.cans.length} can${o.cans.length === 1 ? "" : "s"} · ${litres(stock.onHand, 0)}`}
+          actions={
+            canEdit ? (
+              <>
+                <AddCansButton />
+                <CountCansButton
+                  key={cans.map((c) => c.version).join(",")}
+                  cans={cans}
+                />
+              </>
+            ) : undefined
+          }
+        />
+        {o.cans.length === 0 ? (
+          <EmptyNote title="No cans yet.">
+            The jerry cans the camp brings, with the litres in each.
+          </EmptyNote>
+        ) : (
+          <ul
+            aria-label="Cans"
+            className="grid grid-cols-1 page-sm:grid-cols-2 [&>li]:border-t [&>li]:border-border [&>li:first-child]:border-t-0 page-sm:[&>li:nth-child(2)]:border-t-0 page-sm:[&>li:nth-child(odd)]:border-r"
           >
-            <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-            {POWER_REFUSAL}
-          </p>
+            {cans.map((c) => (
+              <li
+                key={c.id}
+                aria-label={c.label}
+                className="grid min-h-[52px] grid-cols-[64px_minmax(0,1fr)_88px] items-center gap-3 px-3 py-3 text-sm page-sm:px-4"
+              >
+                {canEdit ? (
+                  <CanRowActions can={c} />
+                ) : (
+                  <span className="truncate font-semibold">{c.label}</span>
+                )}
+                <Bar
+                  pct={(c.litres / c.capacityLitres) * 100}
+                  tone={c.litres <= 0 ? "mute" : "neutral"}
+                />
+                <span className="whitespace-nowrap text-right tabular-nums">
+                  {formatNumber(c.litres, 1)} of{" "}
+                  {formatNumber(c.capacityLitres, 1)} L
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
+      </PowerCard>
 
-        {warn && daysLeft !== null && (
-          <Alert variant="warning">
-            <AlertTriangle aria-hidden />
-            <span>
-              Fuel is running low: {formatNumber(daysLeft, 1)} days left at{" "}
-              {formatNumber(using ?? 0, 1)} L a day. Fetch more fuel, or cut
-              what runs.
-            </span>
-          </Alert>
-        )}
-
-        <PowerKpiCards kpis={kpis} label="Fuel on site at a glance" />
-
-        <section aria-labelledby="fuel-stock" className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-col gap-0.5">
-              <h2 id="fuel-stock" className="text-base font-semibold">
-                Fuel stock
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                This year&apos;s cans and what is in them. A refuelling from a
-                can takes its litres out; count a can to set it by hand.
-              </p>
-            </div>
-            <AddCansButton canEdit={canEdit} refusalId={REFUSAL_ID} />
+      <PowerCard label="Refuelling log">
+        <CardHead
+          title="Refuelling log"
+          meta="Typed in from the paper sheet after the burn. Newest first."
+        />
+        {o.entries.length === 0 ? (
+          <EmptyNote title="Nothing typed in yet.">
+            The sheet taped to the generator is the record on site. After the
+            burn, type in each line; a mistake gets a correction, nothing is
+            deleted.
+          </EmptyNote>
+        ) : (
+          <div role="list" aria-label="Refuelling log">
+            {o.entries.map((e) => {
+              const st = status.get(e.id);
+              const counts = st === "counts";
+              return (
+                <Row
+                  key={e.id}
+                  label={whenText(e.refuelledAt)}
+                  cols={
+                    canEdit
+                      ? "grid-cols-[minmax(0,1fr)_64px_88px] page-sm:grid-cols-[minmax(0,1fr)_80px_96px]"
+                      : "grid-cols-[minmax(0,1fr)_64px] page-sm:grid-cols-[minmax(0,1fr)_80px]"
+                  }
+                >
+                  <RowName
+                    muted={!counts}
+                    name={
+                      <span className={cn(!counts && "line-through")}>
+                        {whenText(e.refuelledAt)}
+                      </span>
+                    }
+                    sub={
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span>
+                          {[
+                            e.generatorModel,
+                            e.fromCanLabel ? `from ${e.fromCanLabel}` : null,
+                            e.doneByName,
+                            e.hourMeter !== null
+                              ? `meter ${formatNumber(e.hourMeter, 1)} h`
+                              : null,
+                            e.note,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                        {e.voided ? (
+                          <Chip tone="bad">Strike-out</Chip>
+                        ) : e.correctsEntryId ? (
+                          <Chip tone="warn">Correction</Chip>
+                        ) : null}
+                        {st === "replaced" && <Chip>Replaced</Chip>}
+                      </span>
+                    }
+                  />
+                  <div
+                    className={cn(
+                      "text-right tabular-nums whitespace-nowrap",
+                      !counts && "text-muted-foreground line-through",
+                    )}
+                  >
+                    {litres(e.litres, 1)}
+                  </div>
+                  {options && (
+                    <div className="flex justify-end">
+                      {counts && (
+                        <RefuelRowActions
+                          entry={editableEntry(e)}
+                          options={options}
+                        />
+                      )}
+                    </div>
+                  )}
+                </Row>
+              );
+            })}
           </div>
-          {cans.length === 0 ? (
-            <EmptyState
-              icon={<Fuel />}
-              title="No cans yet"
-              description="Add the jerry cans the camp brings, with the litres in each."
-            />
-          ) : (
-            <ResponsiveDataTable
-              columns={canColumns(canEdit)}
-              data={cans}
-              getRowKey={(c) => c.id}
-              label="Fuel stock"
-              framed
-            />
-          )}
-        </section>
-
-        <section aria-labelledby="refuel-log" className="flex flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
-            <h2 id="refuel-log" className="text-base font-semibold">
-              Refuelling log
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Newest first. Nothing is changed or deleted: a correction or a
-              strike-out is a new entry, and the old one stays, marked.
-            </p>
-          </div>
-          {entries.length === 0 ? (
-            <EmptyState
-              icon={<Fuel />}
-              title="Nothing logged yet"
-              description="Log each time the generator is filled. With two or more, the page works out the litres a day and the days of fuel left."
-            />
-          ) : (
-            <ResponsiveDataTable
-              columns={entryColumns(canEdit, status, options)}
-              data={entries}
-              getRowKey={(e) => e.id}
-              label="Refuelling log"
-              framed
-            />
-          )}
-        </section>
-
-        {compare.length > 0 && (
-          <Card role="article" aria-labelledby="actual-vs-estimate">
-            <CardHeader>
-              <CardTitle id="actual-vs-estimate" className="text-base">
-                Put in against the estimate
-              </CardTitle>
-              <CardDescription>
-                {plan.firstPoweredDay
-                  ? "Litres put in each day beside the fuel estimate for that day."
-                  : "Litres put in each day. Set the first powered day on the load list to see the estimate beside them."}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0 pb-2">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="pl-6">Day</TableHead>
-                    <TableHead className="text-right">Estimate</TableHead>
-                    <TableHead className="pr-6 text-right">Put in</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {compare.map((row) => (
-                    <TableRow key={row.label}>
-                      <TableCell className="pl-6 whitespace-nowrap">
-                        {row.day !== null ? `Day ${row.day} · ` : ""}
-                        {dayText(row.label)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {row.estimate === null ? "—" : litres(row.estimate, 1)}
-                      </TableCell>
-                      <TableCell className="pr-6 text-right tabular-nums">
-                        {litres(row.actual, 1)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
         )}
+      </PowerCard>
 
-        <Card role="article" aria-labelledby="low-fuel">
-          <CardHeader>
-            <CardTitle id="low-fuel" className="text-base">
-              Low-fuel warning
-            </CardTitle>
-            <CardDescription>
-              The page warns everyone who opens it when the fuel left runs
-              short.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <LowFuelForm
-              key={plan.version}
-              lowFuelDays={plan.lowFuelDays}
-              version={plan.version}
-              canEdit={canEdit}
-              refusalId={REFUSAL_ID}
-            />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      {compare.length > 0 && (
+        <details className="mb-4 border border-border bg-card">
+          <summary className="cursor-pointer p-4 text-sm font-semibold">
+            Put in against the estimate, day by day
+          </summary>
+          <ul aria-label="Put in against the estimate" className="px-4 pb-4">
+            {compare.map((row) => (
+              <li
+                key={row.label}
+                className="grid grid-cols-[minmax(0,1fr)_80px_80px] gap-3 border-t border-border py-2 text-sm tabular-nums first:border-t-0"
+              >
+                <span>
+                  {row.day !== null ? `Day ${row.day} · ` : ""}
+                  {dayText(row.label)}
+                </span>
+                <span className="text-right text-muted-foreground">
+                  {row.estimate === null ? "—" : litres(row.estimate, 1)}
+                </span>
+                <span className="text-right">{litres(row.actual, 1)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </>
+  );
+}
+
+export default function PowerFuelLogPage() {
+  return (
+    <PowerFrame section="fuel-log">
+      <RefuellingSection />
+    </PowerFrame>
   );
 }

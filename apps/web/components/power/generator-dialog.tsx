@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Archive, Pencil, Plus } from "lucide-react";
 import {
   EditGeneratorInput,
   FUEL_TYPES,
@@ -40,9 +39,8 @@ import { FUEL_LABELS, GENERATOR_OWNER_LABELS } from "@/lib/power-copy";
 
 // Add a generator to the camp's gear or, given `editing`, change one (#254),
 // laid out as AfrikaBurn's categories manager: Add opens this dialog, and each
-// row has Edit and a one-tap Archive whose failure is a toast. For a viewer
-// who may not edit, the buttons are PRESENT BUT DISABLED and describe to the
-// page's one refusal line. The fields follow GeneratorInput; a problem with
+// row has one Edit, with Archive at the foot of the dialog (a one-tap change
+// whose failure is a toast). Only an editor is shown any of them. The fields follow GeneratorInput; a problem with
 // what was typed shows beside its field, a refusal from the server at the
 // foot of the dialog. A generator names no member: a lent one is only "Lent
 // by a member".
@@ -79,7 +77,8 @@ interface FormState {
   runtime50Hours: string;
   runtime100Hours: string;
   fuelType: FuelType;
-  owner: GeneratorOwner;
+  /** Empty until someone says: a hired one is not the camp's by default. */
+  owner: GeneratorOwner | "";
   inventoryItemId: string;
   noiseNote: string;
 }
@@ -95,7 +94,7 @@ function initialState(gen?: EditableGenerator): FormState {
     runtime50Hours: text(gen?.runtime50Hours),
     runtime100Hours: text(gen?.runtime100Hours),
     fuelType: gen?.fuelType ?? "petrol",
-    owner: gen?.owner ?? "camp",
+    owner: gen?.owner ?? "",
     inventoryItemId: gen?.inventoryItemId ?? NO_ITEM,
     noiseNote: gen?.noiseNote ?? "",
   };
@@ -106,6 +105,10 @@ function figure(value: string): number {
   const n = Number(value);
   return value.trim() === "" || !Number.isFinite(n) ? 0 : n;
 }
+
+/** Said when a new generator is saved with nobody saying whose it is. */
+const OWNER_MISSING =
+  "Say whose it is: the camp's, lent by a member, or hired.";
 
 function toInput(form: FormState) {
   return {
@@ -128,11 +131,14 @@ export function GeneratorDialog({
   onOpenChange,
   editing,
   inventory,
+  onArchive,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing?: EditableGenerator;
   inventory: GeneratorInventoryOption[];
+  /** Offers Archive at the foot of the dialog, for a generator already kept. */
+  onArchive?: () => void;
 }) {
   const router = useRouter();
   const [form, setForm] = React.useState<FormState>(() =>
@@ -163,9 +169,10 @@ export function GeneratorDialog({
     const check = editing
       ? EditGeneratorInput.safeParse(payload)
       : GeneratorInput.safeParse(payload);
-    if (!check.success) {
+    if (!check.success || form.owner === "") {
       const next: Record<string, string> = {};
-      for (const issue of check.error.issues) {
+      if (form.owner === "") next.owner = OWNER_MISSING;
+      for (const issue of check.success ? [] : check.error.issues) {
         next[String(issue.path[0] ?? "form")] ??= issue.message;
       }
       setErrors(next);
@@ -229,7 +236,10 @@ export function GeneratorDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        data-window-tint
+        className="max-h-[90svh] overflow-y-auto sm:max-w-xl"
+      >
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
             <DialogTitle>
@@ -289,13 +299,21 @@ export function GeneratorDialog({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Whose it is" htmlFor={id("owner")}>
+            <Field
+              label="Whose it is"
+              htmlFor={id("owner")}
+              required
+              error={errors.owner}
+            >
               <Select
                 value={form.owner}
                 onValueChange={(v) => set("owner", v as GeneratorOwner)}
               >
-                <SelectTrigger id={id("owner")}>
-                  <SelectValue />
+                <SelectTrigger
+                  id={id("owner")}
+                  aria-invalid={errors.owner ? true : undefined}
+                >
+                  <SelectValue placeholder="Choose…" />
                 </SelectTrigger>
                 <SelectContent>
                   {GENERATOR_OWNERS.map((o) => (
@@ -352,11 +370,7 @@ export function GeneratorDialog({
                 </SelectContent>
               </Select>
             </Field>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Nothing in the inventory to link it to yet.
-            </p>
-          )}
+          ) : null}
 
           {error ? (
             <p role="alert" className="text-sm font-medium text-destructive">
@@ -365,6 +379,21 @@ export function GeneratorDialog({
           ) : null}
 
           <DialogFooter>
+            {onArchive && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                className="text-destructive sm:mr-auto"
+                onClick={() => {
+                  reset();
+                  onOpenChange(false);
+                  onArchive();
+                }}
+              >
+                Archive generator
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -392,66 +421,42 @@ export function GeneratorDialog({
   );
 }
 
-/** What a disabled control says it is, and where it points for the reason. */
-function refusalProps(canEdit: boolean, name: string, refusalId: string) {
-  return canEdit
-    ? { "aria-label": name }
-    : {
-        "aria-label": `${name} — not available to you`,
-        "aria-describedby": refusalId,
-      };
-}
-
+/** Adds a generator. Only an editor is shown it. */
 export function AddGeneratorButton({
-  canEdit,
-  refusalId,
   inventory,
 }: {
-  canEdit: boolean;
-  refusalId: string;
   inventory: GeneratorInventoryOption[];
 }) {
   const [open, setOpen] = React.useState(false);
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!canEdit}
-        onClick={() => setOpen(true)}
-        {...refusalProps(canEdit, "Add generator", refusalId)}
-      >
-        <Plus aria-hidden />
-        Add generator
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        Add a generator
       </Button>
-      {canEdit && (
-        <GeneratorDialog
-          open={open}
-          onOpenChange={setOpen}
-          inventory={inventory}
-        />
-      )}
+      <GeneratorDialog
+        open={open}
+        onOpenChange={setOpen}
+        inventory={inventory}
+      />
     </>
   );
 }
 
-/** Edit and Archive for one row. Only the control that was used spins. */
+/**
+ * One Edit button for a generator; Archive sits at the foot of the edit
+ * dialog. A one-tap change once chosen: its failure is a toast.
+ */
 export function GeneratorRowActions({
   generator,
-  canEdit,
-  refusalId,
   inventory,
 }: {
   generator: EditableGenerator;
-  canEdit: boolean;
-  refusalId: string;
   inventory: GeneratorInventoryOption[];
 }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = React.useState(false);
   const [archiving, startArchive] = React.useTransition();
 
-  // A one-tap change on a list row: its failure is a toast.
   function archive() {
     startArchive(async () => {
       const result = await archiveGeneratorAction({
@@ -467,38 +472,25 @@ export function GeneratorRowActions({
   }
 
   return (
-    <span className="flex items-center justify-end gap-1">
+    <>
       <Button
-        variant="ghost"
-        size="icon"
-        disabled={!canEdit || archiving}
+        variant="outline"
+        size="sm"
+        className="h-7 px-2.5 text-[10px]"
+        disabled={archiving}
         onClick={() => setEditOpen(true)}
-        {...refusalProps(canEdit, `Edit ${generator.model}`, refusalId)}
+        aria-label={`Edit ${generator.model}`}
       >
-        <Pencil aria-hidden />
+        {archiving ? <Spinner size="sm" label="Archiving…" /> : "Edit"}
       </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={!canEdit || archiving}
-        onClick={archive}
-        {...refusalProps(canEdit, `Archive ${generator.model}`, refusalId)}
-      >
-        {archiving ? (
-          <Spinner size="sm" label="Archiving…" />
-        ) : (
-          <Archive aria-hidden />
-        )}
-      </Button>
-      {canEdit && (
-        <GeneratorDialog
-          key={`${generator.id}:${generator.version}`}
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          editing={generator}
-          inventory={inventory}
-        />
-      )}
-    </span>
+      <GeneratorDialog
+        key={`${generator.id}:${generator.version}`}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        editing={generator}
+        inventory={inventory}
+        onArchive={archive}
+      />
+    </>
   );
 }

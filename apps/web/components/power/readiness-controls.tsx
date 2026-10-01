@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ListPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { ListPlus } from "lucide-react";
 import {
   AddReadinessItemInput,
   EditReadinessItemInput,
@@ -45,19 +45,11 @@ import {
   updateReadinessItemAction,
 } from "@/app/(console)/power/readiness/actions";
 
-// The readiness page's controls (#257), laid out as the other power pages':
-// buttons on each row, a dialog for what needs typing, and for a viewer who
-// may not edit every control PRESENT BUT DISABLED, describing to the page's
-// one refusal line. A tick is a one-tap change: its failure is a toast.
-
-function refusalProps(canEdit: boolean, name: string, refusalId: string) {
-  return canEdit
-    ? { "aria-label": name }
-    : {
-        "aria-label": `${name} — not available to you`,
-        "aria-describedby": refusalId,
-      };
-}
+// The readiness and sharing controls (#257): a tick and one Edit on each
+// checklist row (Remove at the foot of the edit dialog), Add a check, and the
+// sharing agreement behind one button. Only an editor is shown any of them
+// (the owner's approved redesign, 2026-10-01). A tick is a one-tap change:
+// its failure is a toast.
 
 function ServerError({ error }: { error: string | null }) {
   return error ? (
@@ -77,21 +69,17 @@ export interface MemberOption {
 export function StartChecklistButton({
   generatorId,
   model,
-  canEdit,
-  refusalId,
 }: {
   generatorId: string;
   model: string;
-  canEdit: boolean;
-  refusalId: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   return (
     <Button
       variant="outline"
-      disabled={!canEdit || pending}
-      {...refusalProps(canEdit, `Start the checklist for ${model}`, refusalId)}
+      disabled={pending}
+      aria-label={`Start the checklist for ${model}`}
       onClick={() =>
         startTransition(async () => {
           const result = await startChecklistAction({ generatorId });
@@ -131,11 +119,13 @@ function ItemDialog({
   members,
   open,
   onOpenChange,
+  onRemove,
 }: {
   item: EditableItem;
   members: MemberOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onRemove: () => void;
 }) {
   const router = useRouter();
   const [owner, setOwner] = React.useState(item.ownerUserId ?? NOBODY);
@@ -186,7 +176,7 @@ function ItemDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent data-window-tint className="sm:max-w-lg">
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
             <DialogTitle>{item.label}</DialogTitle>
@@ -229,12 +219,24 @@ function ItemDialog({
               type="button"
               variant="ghost"
               disabled={pending}
+              className="text-destructive sm:mr-auto"
+              onClick={() => {
+                onOpenChange(false);
+                onRemove();
+              }}
+            >
+              Remove check
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={pending}
               onClick={() => onOpenChange(false)}
             >
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? "Saving…" : "Save item"}
+              {pending ? "Saving…" : "Save check"}
             </Button>
           </DialogFooter>
         </form>
@@ -243,24 +245,10 @@ function ItemDialog({
   );
 }
 
-/** One item's tick, Edit and Remove. Only the control that was used spins. */
-function useItemControls({
-  item,
-  members,
-  canEdit,
-  refusalId,
-}: {
-  item: EditableItem;
-  members: MemberOption[];
-  canEdit: boolean;
-  refusalId: string;
-}) {
+/** An item's tick: a one-tap change whose failure is a toast. */
+export function ItemTick({ item }: { item: EditableItem }) {
   const router = useRouter();
-  const [editOpen, setEditOpen] = React.useState(false);
-  const [confirming, setConfirming] = React.useState(false);
   const [ticking, startTick] = React.useTransition();
-  const [removing, startRemove] = React.useTransition();
-  const busy = ticking || removing;
 
   function tick(done: boolean) {
     startTick(async () => {
@@ -273,6 +261,37 @@ function useItemControls({
     });
   }
 
+  return (
+    <span className="flex size-5 shrink-0 items-center justify-center">
+      {ticking ? (
+        <Spinner size="sm" label="Saving…" />
+      ) : (
+        <Checkbox
+          className="size-5 rounded-none border-2 border-[var(--color-choice-edge)] bg-[var(--color-choice)] data-[state=checked]:border-primary"
+          checked={item.done}
+          onCheckedChange={(v) => tick(v === true)}
+          aria-label={
+            item.done ? `${item.label}: done` : `${item.label}: not done`
+          }
+        />
+      )}
+    </span>
+  );
+}
+
+/** One Edit button for a check; Remove sits at the foot of its dialog. */
+export function ItemEdit({
+  item,
+  members,
+}: {
+  item: EditableItem;
+  members: MemberOption[];
+}) {
+  const router = useRouter();
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [confirming, setConfirming] = React.useState(false);
+  const [removing, startRemove] = React.useTransition();
+
   function confirmRemove() {
     startRemove(async () => {
       const result = await removeReadinessItemAction({
@@ -284,115 +303,57 @@ function useItemControls({
         toast.error(result.error);
         return;
       }
-      toast.success("Item removed");
+      toast.success("Check removed");
       router.refresh();
     });
   }
 
-  return {
-    tick: (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-        {ticking ? (
-          <Spinner size="sm" label="Saving…" />
-        ) : (
-          <Checkbox
-            checked={item.done}
-            disabled={!canEdit || busy}
-            onCheckedChange={(v) => tick(v === true)}
-            {...refusalProps(
-              canEdit,
-              item.done ? `${item.label}: done` : `${item.label}: not done`,
-              refusalId,
-            )}
-          />
-        )}
-      </span>
-    ),
-    actions: (
-      <span className="flex shrink-0 items-center justify-end gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={!canEdit || busy}
-          onClick={() => setEditOpen(true)}
-          {...refusalProps(canEdit, `Edit ${item.label}`, refusalId)}
-        >
-          <Pencil aria-hidden />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={!canEdit || busy}
-          onClick={() => setConfirming(true)}
-          {...refusalProps(canEdit, `Remove ${item.label}`, refusalId)}
-        >
-          {removing ? (
-            <Spinner size="sm" label="Removing…" />
-          ) : (
-            <Trash2 aria-hidden />
-          )}
-        </Button>
-        {canEdit && (
-          <>
-            <ItemDialog
-              key={`${item.id}:${item.version}`}
-              item={item}
-              members={members}
-              open={editOpen}
-              onOpenChange={setEditOpen}
-            />
-            <ConfirmDialog
-              open={confirming}
-              onOpenChange={setConfirming}
-              title={`Remove "${item.label}"?`}
-              description="It comes off this generator's checklist for this year."
-              confirmLabel="Remove item"
-              destructive
-              pending={removing}
-              onConfirm={confirmRemove}
-            />
-          </>
-        )}
-      </span>
-    ),
-  };
-}
-
-/** A row of the checklist: its tick, its words, and its buttons. */
-export function ReadinessItemRow({
-  item,
-  members,
-  canEdit,
-  refusalId,
-  children,
-}: {
-  item: EditableItem;
-  members: MemberOption[];
-  canEdit: boolean;
-  refusalId: string;
-  /** The item's words and details, drawn on the server. */
-  children: React.ReactNode;
-}) {
-  const parts = useItemControls({ item, members, canEdit, refusalId });
   return (
-    <li aria-label={item.label} className="flex items-start gap-3 px-4 py-3">
-      <span className="mt-0.5">{parts.tick}</span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</div>
-      {parts.actions}
-    </li>
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 px-2.5 text-[10px]"
+        disabled={removing}
+        onClick={() => setEditOpen(true)}
+        aria-label={`Edit ${item.label}`}
+      >
+        {removing ? <Spinner size="sm" label="Removing…" /> : "Edit"}
+      </Button>
+      <ItemDialog
+        key={`${item.id}:${item.version}`}
+        item={item}
+        members={members}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onRemove={() => setConfirming(true)}
+      />
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Remove "${item.label}"?`}
+        description="It comes off this generator's checklist for this year."
+        confirmLabel="Remove check"
+        destructive
+        pending={removing}
+        onConfirm={confirmRemove}
+      />
+    </>
   );
 }
 
-export function AddReadinessItemForm({
+/** Adds a check to a generator's checklist, in a small dialog. */
+export function AddCheckButton({
   generatorId,
-  canEdit,
-  refusalId,
+  model,
+  variant = "default",
 }: {
   generatorId: string;
-  canEdit: boolean;
-  refusalId: string;
+  model: string;
+  variant?: "default" | "outline";
 }) {
   const router = useRouter();
+  const [open, setOpen] = React.useState(false);
   const [label, setLabel] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
@@ -414,45 +375,68 @@ export function AddReadinessItemForm({
         return;
       }
       setLabel("");
-      toast.success("Item added");
+      toast.success("Check added");
+      setOpen(false);
       router.refresh();
     });
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-2 px-4 py-3 page-sm:flex-row page-sm:items-start"
-      noValidate
-    >
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <label htmlFor={`${idBase}-label`} className="sr-only">
-          Another item
-        </label>
-        <Input
-          id={`${idBase}-label`}
-          value={label}
-          maxLength={80}
-          placeholder="Another item, such as 'Borrow the trailer'"
-          disabled={!canEdit}
-          onChange={(e) => setLabel(e.target.value)}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={canEdit ? undefined : refusalId}
-        />
-        {error && (
-          <p className="text-xs font-medium text-destructive">{error}</p>
-        )}
-      </div>
-      <Button
-        type="submit"
-        variant="outline"
-        disabled={!canEdit || pending}
-        {...refusalProps(canEdit, "Add item", refusalId)}
-      >
-        <Plus aria-hidden />
-        {pending ? "Adding…" : "Add item"}
+    <>
+      <Button variant={variant} onClick={() => setOpen(true)}>
+        Add a check
       </Button>
-    </form>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (pending) return;
+          if (!next) {
+            setLabel("");
+            setError(null);
+          }
+          setOpen(next);
+        }}
+      >
+        <DialogContent data-window-tint className="sm:max-w-lg">
+          <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+            <DialogHeader>
+              <DialogTitle>Add a check</DialogTitle>
+              <DialogDescription>
+                Something to see to on the {model} before the burn.
+              </DialogDescription>
+            </DialogHeader>
+            <Field
+              label="What needs doing"
+              htmlFor={`${idBase}-label`}
+              required
+              error={error ?? undefined}
+              help="Such as 'Borrow the trailer'."
+            >
+              <Input
+                id={`${idBase}-label`}
+                value={label}
+                maxLength={80}
+                onChange={(e) => setLabel(e.target.value)}
+                aria-invalid={error ? true : undefined}
+              />
+            </Field>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                onClick={() => setOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={pending}>
+                {pending ? "Adding…" : "Add check"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -460,13 +444,9 @@ export function AddReadinessItemForm({
 
 export function AddWorkPlanButton({
   fromCycle,
-  canEdit,
-  refusalId,
 }: {
   /** The year it copies from, or null for the template. */
   fromCycle: number | null;
-  canEdit: boolean;
-  refusalId: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -476,8 +456,8 @@ export function AddWorkPlanButton({
       : `Copy ${fromCycle}'s work plan to the task board`;
   return (
     <Button
-      disabled={!canEdit || pending}
-      {...refusalProps(canEdit, name, refusalId)}
+      variant="outline"
+      disabled={pending}
       onClick={() =>
         startTransition(async () => {
           const result = await addWorkPlanAction();
@@ -523,32 +503,42 @@ const SOURCE_LABELS: Record<ShareGeneratorSource, string> = {
 /** The Select's value for "none chosen". */
 const NO_GENERATOR = "none";
 
-export function SharingForm({
+/**
+ * The year's sharing agreement behind one button: "Set up sharing" with none,
+ * "Change the agreement" with one. Save closes the dialog; Remove sits at its
+ * foot and asks first.
+ */
+export function ChangeAgreementButton({
   agreement,
   generators,
   proposedTheirPct,
-  canEdit,
-  refusalId,
+  defaultGeneratorId,
 }: {
   agreement: SharingValues | null;
   generators: { id: string; label: string }[];
   /** Their share from each camp's kWh, to one place. */
   proposedTheirPct: number;
-  canEdit: boolean;
-  refusalId: string;
+  /** The fuel plan's generator: the one a new agreement shares. */
+  defaultGeneratorId: string | null;
 }) {
   const router = useRouter();
-  const [form, setForm] = React.useState({
+  const initial = () => ({
     partnerCamp: agreement?.partnerCamp ?? "",
     contactRole: agreement?.contactRole ?? "",
     generatorSource:
       agreement?.generatorSource ?? ("ours" as ShareGeneratorSource),
-    generatorId: agreement?.generatorId ?? generators[0]?.id ?? NO_GENERATOR,
+    generatorId:
+      agreement?.generatorId ??
+      (defaultGeneratorId && generators.some((g) => g.id === defaultGeneratorId)
+        ? defaultGeneratorId
+        : (generators[0]?.id ?? NO_GENERATOR)),
     theirGenerator: agreement?.theirGenerator ?? "",
     partnerFuelPct:
       agreement?.partnerFuelPct != null ? String(agreement.partnerFuelPct) : "",
     watchCover: agreement?.watchCover ?? "",
   });
+  const [open, setOpen] = React.useState(false);
+  const [form, setForm] = React.useState(initial);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
@@ -556,9 +546,16 @@ export function SharingForm({
   const [removing, startRemove] = React.useTransition();
   const idBase = React.useId();
   const id = (n: string) => `${idBase}-${n}`;
-  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
-    setForm((f) => ({ ...f, [key]: value }));
-  const locked = !canEdit;
+  const set = <K extends keyof ReturnType<typeof initial>>(
+    key: K,
+    value: ReturnType<typeof initial>[K],
+  ) => setForm((f) => ({ ...f, [key]: value }));
+
+  function reset() {
+    setForm(initial());
+    setErrors({});
+    setError(null);
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -594,6 +591,7 @@ export function SharingForm({
         return;
       }
       toast.success("Sharing agreement saved");
+      setOpen(false);
       router.refresh();
     });
   }
@@ -614,174 +612,201 @@ export function SharingForm({
     });
   }
 
-  const describe = locked ? { "aria-describedby": refusalId } : {};
-
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-      <div className="grid gap-4 page-sm:grid-cols-2">
-        <Field
-          label="Neighbouring camp"
-          htmlFor={id("camp")}
-          required
-          error={errors.partnerCamp}
-        >
-          <Input
-            id={id("camp")}
-            value={form.partnerCamp}
-            maxLength={80}
-            disabled={locked}
-            onChange={(e) => set("partnerCamp", e.target.value)}
-            {...describe}
-          />
-        </Field>
-        <Field
-          label="Who to speak to there"
-          htmlFor={id("role")}
-          error={errors.contactRole}
-          help="A role, such as 'their power lead'. No phone numbers or emails."
-        >
-          <Input
-            id={id("role")}
-            value={form.contactRole}
-            maxLength={60}
-            disabled={locked}
-            onChange={(e) => set("contactRole", e.target.value)}
-            {...describe}
-          />
-        </Field>
-      </div>
-
-      <div className="grid gap-4 page-sm:grid-cols-2">
-        <Field label="Whose generator" htmlFor={id("source")}>
-          <Select
-            value={form.generatorSource}
-            onValueChange={(v) =>
-              set("generatorSource", v as ShareGeneratorSource)
-            }
-            disabled={locked}
-          >
-            <SelectTrigger id={id("source")} {...describe}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SHARE_GENERATOR_SOURCES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {SOURCE_LABELS[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        {form.generatorSource === "ours" ? (
-          <Field
-            label="Which of ours"
-            htmlFor={id("gen")}
-            required
-            error={errors.generatorId}
-          >
-            <Select
-              value={form.generatorId}
-              onValueChange={(v) => set("generatorId", v)}
-              disabled={locked}
-            >
-              <SelectTrigger id={id("gen")} {...describe}>
-                <SelectValue placeholder="Pick a generator" />
-              </SelectTrigger>
-              <SelectContent>
-                {generators.length === 0 && (
-                  <SelectItem value={NO_GENERATOR} disabled>
-                    Add a generator on the fuel estimate first
-                  </SelectItem>
-                )}
-                {generators.map((g) => (
-                  <SelectItem key={g.id} value={g.id}>
-                    {g.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+    <>
+      <Button disabled={removing} onClick={() => setOpen(true)}>
+        {removing ? (
+          <Spinner size="sm" label="Removing…" />
+        ) : agreement ? (
+          "Change the agreement"
         ) : (
-          <Field
-            label="Their generator"
-            htmlFor={id("theirs")}
-            error={errors.theirGenerator}
-          >
-            <Input
-              id={id("theirs")}
-              value={form.theirGenerator}
-              maxLength={80}
-              disabled={locked}
-              onChange={(e) => set("theirGenerator", e.target.value)}
-              {...describe}
-            />
-          </Field>
+          "Set up sharing"
         )}
-      </div>
-
-      <Field
-        label="Their share of the fuel (%)"
-        htmlFor={id("pct")}
-        error={errors.partnerFuelPct}
-        help={`Blank uses ${proposedTheirPct}%, their share of the energy from the load list's neighbour loads.`}
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (pending) return;
+          if (!next) reset();
+          setOpen(next);
+        }}
       >
-        <Input
-          id={id("pct")}
-          type="number"
-          inputMode="decimal"
-          min={0}
-          max={100}
-          step="any"
-          value={form.partnerFuelPct}
-          placeholder={String(proposedTheirPct)}
-          disabled={locked}
-          onChange={(e) => set("partnerFuelPct", e.target.value)}
-          className="page-sm:max-w-40"
-          {...describe}
-        />
-      </Field>
-
-      <Field
-        label="Who covers which watches"
-        htmlFor={id("watch")}
-        error={errors.watchCover}
-        help="Camps and times, such as 'They cover 00:00–08:00'. No names or phone numbers."
-      >
-        <Textarea
-          id={id("watch")}
-          value={form.watchCover}
-          maxLength={300}
-          rows={2}
-          disabled={locked}
-          onChange={(e) => set("watchCover", e.target.value)}
-          {...describe}
-        />
-      </Field>
-
-      <ServerError error={error} />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="submit"
-          disabled={locked || pending}
-          {...refusalProps(canEdit, "Save agreement", refusalId)}
+        <DialogContent
+          data-window-tint
+          className="max-h-[90svh] overflow-y-auto sm:max-w-2xl"
         >
-          {pending ? "Saving…" : "Save agreement"}
-        </Button>
-        {agreement && (
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={locked || removing}
-            onClick={() => setConfirming(true)}
-            {...refusalProps(canEdit, "Remove agreement", refusalId)}
-          >
-            <Trash2 aria-hidden />
-            Remove agreement
-          </Button>
-        )}
-      </div>
-      {canEdit && agreement && (
+          <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+            <DialogHeader>
+              <DialogTitle>Sharing with a neighbouring camp</DialogTitle>
+              <DialogDescription>
+                Who, whose generator, the fuel split and the watches. Litres
+                only: how they pay for their share is agreed between the camps.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid items-start gap-4 sm:grid-cols-2">
+              <Field
+                label="Neighbouring camp"
+                htmlFor={id("camp")}
+                required
+                error={errors.partnerCamp}
+              >
+                <Input
+                  id={id("camp")}
+                  value={form.partnerCamp}
+                  maxLength={80}
+                  onChange={(e) => set("partnerCamp", e.target.value)}
+                />
+              </Field>
+              <Field
+                label="Who to speak to there"
+                htmlFor={id("role")}
+                error={errors.contactRole}
+                help="A role, such as 'their power lead'. No phone numbers or emails."
+              >
+                <Input
+                  id={id("role")}
+                  value={form.contactRole}
+                  maxLength={60}
+                  onChange={(e) => set("contactRole", e.target.value)}
+                />
+              </Field>
+              <Field label="Whose generator" htmlFor={id("source")}>
+                <Select
+                  value={form.generatorSource}
+                  onValueChange={(v) =>
+                    set("generatorSource", v as ShareGeneratorSource)
+                  }
+                >
+                  <SelectTrigger id={id("source")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SHARE_GENERATOR_SOURCES.map((src) => (
+                      <SelectItem key={src} value={src}>
+                        {SOURCE_LABELS[src]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              {form.generatorSource === "ours" ? (
+                <Field
+                  label="Which of ours"
+                  htmlFor={id("gen")}
+                  required
+                  error={errors.generatorId}
+                >
+                  <Select
+                    value={form.generatorId}
+                    onValueChange={(v) => set("generatorId", v)}
+                  >
+                    <SelectTrigger id={id("gen")}>
+                      <SelectValue placeholder="Pick a generator" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {generators.length === 0 && (
+                        <SelectItem value={NO_GENERATOR} disabled>
+                          Add a generator on the fuel estimate first
+                        </SelectItem>
+                      )}
+                      {generators.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              ) : (
+                <Field
+                  label="Their generator"
+                  htmlFor={id("theirs")}
+                  error={errors.theirGenerator}
+                >
+                  <Input
+                    id={id("theirs")}
+                    value={form.theirGenerator}
+                    maxLength={80}
+                    onChange={(e) => set("theirGenerator", e.target.value)}
+                  />
+                </Field>
+              )}
+            </div>
+
+            <Field
+              label="Their share of the fuel (%)"
+              htmlFor={id("pct")}
+              error={errors.partnerFuelPct}
+              help={
+                proposedTheirPct > 0
+                  ? `Leave it empty to split by what each camp plugs in: ${proposedTheirPct}% from their loads on the load list.`
+                  : "Leave it empty to split by what each camp plugs in (their loads go on the load list, marked Neighbour)."
+              }
+            >
+              <Input
+                id={id("pct")}
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={100}
+                step="any"
+                value={form.partnerFuelPct}
+                onChange={(e) => set("partnerFuelPct", e.target.value)}
+                className="sm:max-w-40"
+              />
+            </Field>
+
+            <Field
+              label="Who covers which watches"
+              htmlFor={id("watch")}
+              error={errors.watchCover}
+              help="Camps and times, such as 'They cover 00:00–06:00'. No names or phone numbers."
+            >
+              <Textarea
+                id={id("watch")}
+                value={form.watchCover}
+                maxLength={300}
+                rows={2}
+                onChange={(e) => set("watchCover", e.target.value)}
+              />
+            </Field>
+
+            <ServerError error={error} />
+            <DialogFooter>
+              {agreement && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={pending}
+                  className="text-destructive sm:mr-auto"
+                  onClick={() => {
+                    reset();
+                    setOpen(false);
+                    setConfirming(true);
+                  }}
+                >
+                  Remove agreement
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                onClick={() => {
+                  reset();
+                  setOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving…" : "Save agreement"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {agreement && (
         <ConfirmDialog
           open={confirming}
           onOpenChange={setConfirming}
@@ -793,6 +818,6 @@ export function SharingForm({
           onConfirm={remove}
         />
       )}
-    </form>
+    </>
   );
 }

@@ -64,7 +64,7 @@ export default async function GridSheetPage() {
                   ? `${formatNumber(point.cableLengthM, 1)} m`
                   : null,
                 point.cableRatedAmps !== null
-                  ? `${formatNumber(point.cableRatedAmps, 1)} A`
+                  ? `rated ${formatNumber(point.cableRatedAmps, 1)} A`
                   : point.parentId !== null
                     ? "rating unknown"
                     : null,
@@ -77,23 +77,34 @@ export default async function GridSheetPage() {
                     {point.parentId !== null
                       ? `${names.get(point.parentId)} → ${point.name}`
                       : `${point.name} (${GRID_KIND_LABELS[point.kind]})`}
-                    {point.parentId !== null && !point.haveCable && (
+                    {point.parentId !== null && point.haveCable === false && (
                       <span className="font-semibold">
                         {" "}
                         · cable still to get
                       </span>
                     )}
+                    {point.parentId !== null && point.haveCable === null && (
+                      <span> · cable not checked</span>
+                    )}
                   </td>
                   <td>{cable || "—"}</td>
                   <td>
                     {point.adapter ?? "—"}
-                    {point.adapter && !point.haveAdapter && (
+                    {point.adapter && point.haveAdapter === false && (
                       <span className="font-semibold"> · still to get</span>
+                    )}
+                    {point.adapter && point.haveAdapter === null && (
+                      <span> · not checked</span>
                     )}
                   </td>
                   <td>{pluggedAt(point.id).join(", ") || "—"}</td>
                   <td className="text-right tabular-nums">
                     {run ? formatNumber(run.amps, 1) : "—"}
+                    {run?.band === "over" && (
+                      <span className="block font-bold">
+                        OVER {formatNumber(point.cableRatedAmps ?? 0, 1)} A
+                      </span>
+                    )}
                   </td>
                   <td />
                 </tr>

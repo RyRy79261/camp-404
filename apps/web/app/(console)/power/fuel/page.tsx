@@ -1,79 +1,62 @@
-import type { ReactNode } from "react";
-import { AlertTriangle, Fuel, Lock, Zap } from "lucide-react";
-import {
-  burnRate,
-  canEditPower,
-  dayLabel,
-  fuelForPlan,
-  fuelLine,
-  jerryCansNeeded,
-  type FuelPlan,
-} from "@camp404/core";
+import { AlertTriangle, Zap } from "lucide-react";
+import { burnRate, dayLabel, fuelLine } from "@camp404/core";
 import { Alert } from "@camp404/ui/components/alert";
-import { Badge } from "@camp404/ui/components/badge";
-import { EmptyState } from "@camp404/ui/components/empty-state";
-import { PageHeading } from "@camp404/ui/components/page-heading";
+import { FuelDayByDay, FuelMethod } from "@/components/power/fuel-panels";
 import {
-  ResponsiveDataTable,
-  type ResponsiveColumn,
-} from "@camp404/ui/components/responsive-data-table";
-import {
-  FuelDayByDayCard,
-  FuelMethodCard,
-} from "@/components/power/fuel-panels";
-import {
+  ChangePlanButton,
   CopyLastYearPlanButton,
-  FuelPlanForm,
   type GeneratorOption,
 } from "@/components/power/fuel-plan-form";
 import {
   AddGeneratorButton,
   GeneratorRowActions,
   type EditableGenerator,
-  type GeneratorInventoryOption,
 } from "@/components/power/generator-dialog";
-import { PowerKpiCards, type PowerKpi } from "@/components/power/load-panels";
-import { PowerTabs } from "@/components/power/power-tabs";
-import { captainPageGate } from "@/lib/captain-gate";
+import { PowerFrame } from "@/components/power/power-frame";
 import {
-  getGenerator,
-  getPowerPlan,
-  listGenerators,
+  CardHead,
+  Chip,
+  EmptyNote,
+  Facts,
+  Ledger,
+  PowerCard,
+  Row,
+  RowName,
+  SectionHead,
+  Verdict,
+} from "@/components/power/power-ui";
+import {
   listPowerInventory,
-  listPowerLoads,
   previousPlanCycle,
   type GeneratorRow,
-  type PowerPlan,
 } from "@/lib/power";
 import {
   FUEL_LABELS,
   GENERATOR_OWNER_LABELS,
-  POWER_REFUSAL,
   formatNumber,
+  hourText,
   litres,
-  runText,
 } from "@/lib/power-copy";
+import { getPowerOverview, powerViewer } from "@/lib/power-overview";
+import {
+  fuelSummary,
+  kvaText,
+  refillText,
+  type PowerOverview,
+  railName,
+} from "@/lib/power-summary";
 import { listRefuelEntries, previousRefuelCycle } from "@/lib/power-site";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Fuel estimate — Camp 404" };
 
-// The fuel estimate (#254). Every approved member reads it; a captain or a
-// Power & Lighting lead edits the plan and the generators. Composed like the
-// load list, from the AfrikaBurn console: the status board's KPI row for the
-// outputs, a table in a card for the days, and the categories
-// screen for the generators (the table, Add opening a dialog, Edit and a
-// one-tap Archive per row; for everyone else the controls PRESENT BUT
-// DISABLED, described by one Lock line).
-//
-// Every figure is worked out here, on the server, with the core fuel
-// functions, from the same loads the load list shows. There is no money on
-// this page: litres, cans and refills only.
-
-/** The one refusal line every disabled control on this page describes to. */
-const REFUSAL_ID = "power-fuel-refusal";
+// The fuel estimate (#254) in the Power program's answer rail. It opens on
+// the answer, the jerry cans to fill, then how the figure is reached, then the
+// plan as a list of facts; the plan's settings sit behind "Change the plan"
+// for an editor (a captain or a Power & Lighting lead). Every figure is worked
+// out on the server with the core fuel functions, from the same loads the
+// load list shows. No money here: litres and cans only.
 
 function editable(row: GeneratorRow): EditableGenerator {
   return {
@@ -92,144 +75,18 @@ function editable(row: GeneratorRow): EditableGenerator {
   };
 }
 
-function generatorColumns(
-  canEdit: boolean,
-  inventory: GeneratorInventoryOption[],
-  chosenId: string | null,
-): ResponsiveColumn<GeneratorRow>[] {
-  return [
-    {
-      id: "model",
-      header: "Model",
-      role: "title",
-      cellClassName: "font-medium",
-      cell: (g) => g.model,
-    },
-    {
-      id: "chosen",
-      header: "In the plan",
-      role: "badge",
-      hideHeader: true,
-      cell: (g) =>
-        g.id === chosenId ? <Badge variant="outline">In the plan</Badge> : null,
-    },
-    {
-      id: "kva",
-      header: "Rated / max",
-      cellClassName: "tabular-nums whitespace-nowrap",
-      cell: (g) =>
-        `${formatNumber(g.ratedKva, 1)} / ${formatNumber(g.maxKva, 1)} kVA`,
-    },
-    {
-      id: "tank",
-      header: "Tank",
-      align: "right",
-      cellClassName: "tabular-nums whitespace-nowrap",
-      cell: (g) => `${formatNumber(g.tankLitres, 1)} L`,
-    },
-    {
-      id: "runtime",
-      header: "Runtime 50% / 100%",
-      cellClassName: "tabular-nums whitespace-nowrap",
-      cell: (g) =>
-        `${formatNumber(g.runtime50Hours, 1)} h / ${formatNumber(g.runtime100Hours, 1)} h`,
-    },
-    {
-      id: "fuel",
-      header: "Fuel",
-      cell: (g) => FUEL_LABELS[g.fuelType],
-    },
-    {
-      id: "owner",
-      header: "Owner",
-      cellClassName: "text-muted-foreground",
-      cell: (g) => GENERATOR_OWNER_LABELS[g.owner],
-    },
-    {
-      id: "noise",
-      header: "Noise",
-      cellClassName: "text-muted-foreground",
-      cell: (g) => g.noiseNote ?? "—",
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      role: "actions",
-      hideHeader: true,
-      align: "right",
-      cell: (g) => (
-        <GeneratorRowActions
-          generator={editable(g)}
-          canEdit={canEdit}
-          refusalId={REFUSAL_ID}
-          inventory={inventory}
-        />
-      ),
-    },
-  ];
-}
-
-/** The litres of the thirstiest day. */
-function busiestDay(fuel: FuelPlan): number {
-  return Math.max(0, ...fuel.perDay.map((d) => d.litres));
-}
-
-/** Hours a full tank lasts on the thirstiest day, or null with no burn. */
-function hoursPerTank(fuel: FuelPlan): number | null {
-  return fuel.refillsPerDay > 0
-    ? fuel.runningHoursPerDay / fuel.refillsPerDay
-    : null;
-}
-
-/** What is still needed before there is an estimate, or null when ready. */
-function missing(
-  generator: GeneratorRow | null,
-  loadCount: number,
-): { title: string; description: string } | null {
-  if (!generator && loadCount === 0) {
-    return {
-      title: "No generator and no loads yet",
-      description:
-        "Add the generator in Generators below and choose it in the plan, and list what the camp plugs in on the load list.",
-    };
+/** What is still needed before there is an estimate. */
+function missing(o: PowerOverview): string {
+  if (!o.generator && o.loads.length === 0) {
+    return "Add the generator below and choose it in the plan, and list what the camp plugs in on the load list.";
   }
-  if (!generator) {
-    return {
-      title: "No generator chosen",
-      description:
-        "Choose a generator in the plan above, or add one in Generators below.",
-    };
+  if (!o.generator) {
+    return "Choose a generator in the plan, or add one below.";
   }
-  if (loadCount === 0) {
-    return {
-      title: "No loads yet",
-      description:
-        "The estimate needs the load list: add what the camp plugs in there.",
-    };
-  }
-  return null;
+  return "The estimate needs the load list: add what the camp plugs in there.";
 }
 
-function planValues(plan: PowerPlan) {
-  return {
-    generatorId: plan.generatorId,
-    secondGeneratorNote: plan.secondGeneratorNote,
-    runFromHour: plan.runFromHour,
-    runToHour: plan.runToHour,
-    daysOnSite: plan.daysOnSite,
-    powerFactor: plan.powerFactor,
-    lowLoadFactor: plan.lowLoadFactor,
-    safetyMarginPct: plan.safetyMarginPct,
-    canLitres: plan.canLitres,
-    cansOwned: plan.cansOwned,
-    version: plan.version,
-  };
-}
-
-/**
- * The litres a day last year's refuelling log shows, over the whole log, or
- * null with no earlier year or fewer than two refuellings (#255).
- */
+/** The litres a day last year's refuelling log shows, if it shows any. */
 async function lastYearRate(): Promise<{
   cycle: number;
   litresPerDay: number;
@@ -240,257 +97,345 @@ async function lastYearRate(): Promise<{
   return rate ? { cycle, litresPerDay: rate.litresPerDay } : null;
 }
 
-export default async function PowerFuelPage() {
-  // Every approved member reads the estimate.
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
-  const canEdit = canEditPower(rank, leadTeams);
+function runsText(from: number | null, to: number | null): string {
+  return from === null || to === null
+    ? "All day and night · 24 h"
+    : `${hourText(from)}–${hourText(to)} each day`;
+}
 
-  const [loads, plan, generators, inventory, earlier, lastYear] =
-    await Promise.all([
-      listPowerLoads(),
-      getPowerPlan(),
-      listGenerators(),
-      // Only an editor links a generator to the inventory.
-      canEdit ? listPowerInventory() : Promise.resolve([]),
-      previousPlanCycle(),
-      // Last year's refuelling log, for its litres a day beside the estimate.
-      lastYearRate(),
-    ]);
-  // The plan may name a generator archived since; it still reads.
-  const generator = plan.generatorId
-    ? (generators.find((g) => g.id === plan.generatorId) ??
-      (await getGenerator(plan.generatorId)))
-    : null;
+async function FuelSection() {
+  const [{ canEdit }, o] = await Promise.all([
+    powerViewer(),
+    getPowerOverview(),
+  ]);
+  const [inventory, earlier, lastYear] = await Promise.all([
+    // Only an editor links a generator to the inventory.
+    canEdit ? listPowerInventory() : Promise.resolve([]),
+    canEdit && o.plan.version === 0
+      ? previousPlanCycle()
+      : Promise.resolve(null),
+    lastYearRate(),
+  ]);
+  const plan = o.plan;
+  const generator = o.generator;
+  const summary = fuelSummary(o);
+  const fuelWord = generator
+    ? FUEL_LABELS[generator.fuelType].toLowerCase()
+    : "fuel";
 
-  const options: GeneratorOption[] = generators.map((g) => ({
+  const options: GeneratorOption[] = o.generators.map((g) => ({
     id: g.id,
     label: `${g.model} (${formatNumber(g.ratedKva, 1)} kVA)`,
   }));
   if (generator && generator.archivedAt !== null) {
     options.push({ id: generator.id, label: `${generator.model} (archived)` });
   }
-  const inventoryOptions: GeneratorInventoryOption[] = inventory.map((i) => ({
-    id: i.id,
-    name: i.name,
-  }));
+  const inventoryOptions = inventory.map((i) => ({ id: i.id, name: i.name }));
 
-  const planSchedule = runText(plan.runFromHour, plan.runToHour);
-  const gap = missing(generator, loads.length);
+  const days = plan.daysOnSite;
 
-  let results: ReactNode = null;
-  if (generator && !gap) {
-    const settings = {
-      powerFactor: plan.powerFactor,
-      daysOnSite: plan.daysOnSite,
-      lowLoadFactor: plan.lowLoadFactor,
-      safetyMarginPct: plan.safetyMarginPct,
-    };
-    const main = fuelForPlan({
-      loads,
-      generator,
-      plan: settings,
-      schedule: { fromHour: plan.runFromHour, toHour: plan.runToHour },
-    });
-    const cans = jerryCansNeeded(
-      main.litresWithMargin,
-      plan.canLitres,
-      plan.cansOwned,
-    );
-    const days = plan.daysOnSite;
-    const every = hoursPerTank(main);
+  return (
+    <>
+      <SectionHead
+        title="Fuel estimate"
+        sentence={`How much ${fuelWord} the generator needs for the burn.`}
+        actions={
+          canEdit ? (
+            <>
+              {earlier !== null && (
+                <CopyLastYearPlanButton fromCycle={earlier} />
+              )}
+              <ChangePlanButton
+                key={plan.version}
+                plan={{
+                  generatorId: plan.generatorId,
+                  secondGeneratorNote: plan.secondGeneratorNote,
+                  runFromHour: plan.runFromHour,
+                  runToHour: plan.runToHour,
+                  daysOnSite: plan.daysOnSite,
+                  firstPoweredDay: plan.firstPoweredDay,
+                  powerFactor: plan.powerFactor,
+                  lowLoadFactor: plan.lowLoadFactor,
+                  safetyMarginPct: plan.safetyMarginPct,
+                  canLitres: plan.canLitres,
+                  cansOwned: plan.cansOwned,
+                  version: plan.version,
+                }}
+                generators={options}
+              />
+            </>
+          ) : undefined
+        }
+      />
 
-    const kpis: PowerKpi[] = [
-      {
-        key: "litres-day",
-        label: "Litres a day",
-        value: litres(busiestDay(main), 2),
-        hint: [
-          `on the busiest day, running ${planSchedule}`,
-          lastYear
-            ? `${lastYear.cycle} used ${formatNumber(lastYear.litresPerDay, 1)} L a day`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      },
-      {
-        key: "litres-burn",
-        label: "Litres for the burn",
-        value: litres(main.burnLitres),
-        hint: `over ${days} day${days === 1 ? "" : "s"} on site`,
-      },
-      {
-        key: "litres-margin",
-        label: "With margin",
-        value: litres(main.litresWithMargin),
-        hint: `plus the ${formatNumber(plan.safetyMarginPct, 1)}% safety margin`,
-      },
-      {
-        key: "cans",
-        label: "Jerry cans needed",
-        value: String(cans),
-        hint:
-          plan.cansOwned > 0
-            ? `${formatNumber(plan.canLitres, 1)} L cans, after the ${plan.cansOwned} already owned`
-            : `${formatNumber(plan.canLitres, 1)} L cans`,
-      },
-      {
-        key: "refills",
-        label: "Tank refills a day",
-        value: formatNumber(main.refillsPerDay, 1, true),
-        hint:
-          every === null
-            ? `${formatNumber(generator.tankLitres, 1)} L tank`
-            : `about every ${formatNumber(every, 1)} h · ${formatNumber(generator.tankLitres, 1)} L tank`,
-      },
-    ];
+      {summary && generator ? (
+        <FuelAnswer
+          o={o}
+          summary={summary}
+          fuelWord={fuelWord}
+          lastYear={lastYear}
+        />
+      ) : (
+        <PowerCard label="The answer">
+          <EmptyNote title="No estimate yet.">{missing(o)}</EmptyNote>
+        </PowerCard>
+      )}
 
-    const offKwh = Math.max(0, ...main.perDay.map((d) => d.unservedWh)) / 1000;
-    results = (
-      <>
-        {(offKwh > 0 || main.overloaded) && (
-          <div className="flex flex-col gap-2">
-            {offKwh > 0 && (
-              <Alert variant="warning">
-                <AlertTriangle aria-hidden />
-                <span>
-                  {formatNumber(offKwh, 2, true)} kWh a day falls in hours the
-                  generator is off. The litres leave it out: plan for it another
-                  way (a battery, ice) or run the generator longer.
-                </span>
-              </Alert>
-            )}
-            {main.overloaded && (
-              <Alert variant="error">
-                <Zap aria-hidden />
-                <span>
-                  Load goes over the generator&apos;s rating in some hours. The
-                  litres past 100% load are a guess; choose a bigger generator
-                  or move loads.
-                </span>
-              </Alert>
-            )}
+      <PowerCard className="p-4" label="The plan">
+        <CardHead title="The plan" flat />
+        <Facts
+          items={[
+            {
+              label: "Generator",
+              value: generator
+                ? `${generator.model} · ${kvaText(generator.ratedKva)} kVA`
+                : "None chosen yet",
+            },
+            {
+              label: "Runs",
+              value: runsText(plan.runFromHour, plan.runToHour),
+            },
+            {
+              label: "Days on site",
+              value: plan.firstPoweredDay
+                ? `${days}, from ${dayLabel(plan.firstPoweredDay, 1)}`
+                : String(days),
+            },
+            {
+              label: "Safety margin",
+              value: `${formatNumber(plan.safetyMarginPct, 1)}%`,
+            },
+            {
+              label: "Jerry can size",
+              value: `${formatNumber(plan.canLitres, 1)} L`,
+            },
+            { label: "Power factor", value: formatNumber(plan.powerFactor, 2) },
+            ...(plan.lowLoadFactor !== 1
+              ? [
+                  {
+                    label: "Extra fuel when lightly loaded",
+                    value: `× ${formatNumber(plan.lowLoadFactor, 2)}`,
+                  },
+                ]
+              : []),
+            ...(plan.secondGeneratorNote
+              ? [
+                  {
+                    label: "Spare generator",
+                    value: `${plan.secondGeneratorNote.trim()} Not in the sums.`,
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </PowerCard>
+
+      <PowerCard label="Generators">
+        <CardHead
+          title="Generators"
+          meta="The camp's own, lent by a member, or hired. They carry from year to year."
+          actions={
+            canEdit ? (
+              <AddGeneratorButton inventory={inventoryOptions} />
+            ) : undefined
+          }
+        />
+        {o.generators.length === 0 ? (
+          <EmptyNote title="No generators yet.">
+            Add one from its datasheet: the rated and most kVA, the tank, and
+            how long a tank lasts at half and full load.
+          </EmptyNote>
+        ) : (
+          <div role="list" aria-label="Generators">
+            {o.generators.map((g) => (
+              <Row
+                key={g.id}
+                label={g.model}
+                cols={
+                  canEdit
+                    ? "grid-cols-[minmax(0,1fr)_56px] page-sm:grid-cols-[minmax(0,1fr)_64px]"
+                    : "grid-cols-1"
+                }
+              >
+                <RowName
+                  name={g.model}
+                  sub={
+                    <>
+                      {g.id === plan.generatorId && (
+                        <span className="mb-1 block">
+                          <Chip tone="info">In the plan</Chip>
+                        </span>
+                      )}
+                      {[
+                        `${kvaText(g.ratedKva)} kVA (most ${kvaText(g.maxKva)})`,
+                        `${formatNumber(g.tankLitres, 1)} L tank`,
+                        FUEL_LABELS[g.fuelType],
+                        GENERATOR_OWNER_LABELS[g.owner],
+                        g.noiseNote,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </>
+                  }
+                />
+                {canEdit && (
+                  <div className="flex justify-end">
+                    <GeneratorRowActions
+                      generator={editable(g)}
+                      inventory={inventoryOptions}
+                    />
+                  </div>
+                )}
+              </Row>
+            ))}
           </div>
         )}
+      </PowerCard>
 
-        <PowerKpiCards
-          kpis={kpis}
-          label="Fuel at a glance"
-          className="page-lg:grid-cols-3 page-xl:grid-cols-5"
+      <FuelMethod
+        generator={
+          generator
+            ? {
+                model: generator.model,
+                tankLitres: generator.tankLitres,
+                runtime50Hours: generator.runtime50Hours,
+                runtime100Hours: generator.runtime100Hours,
+                line: fuelLine(generator),
+              }
+            : null
+        }
+      />
+    </>
+  );
+}
+
+function FuelAnswer({
+  o,
+  summary,
+  fuelWord,
+  lastYear,
+}: {
+  o: PowerOverview;
+  summary: NonNullable<ReturnType<typeof fuelSummary>>;
+  fuelWord: string;
+  lastYear: { cycle: number; litresPerDay: number } | null;
+}) {
+  const { fuel, totalCans, toBuy } = summary;
+  const plan = o.plan;
+  const generator = o.generator!;
+  const days = plan.daysOnSite;
+  const daysWord = `${days} day${days === 1 ? "" : "s"}`;
+  const avgLitres = days > 0 ? fuel.burnLitres / days : 0;
+  const avgKwh =
+    days > 0 ? fuel.perDay.reduce((sum, d) => sum + d.kWh, 0) / days : 0;
+  const offKwh = Math.max(0, ...fuel.perDay.map((d) => d.unservedWh)) / 1000;
+  const refills = refillText(fuel.refillsPerDay);
+
+  return (
+    <>
+      <Verdict
+        legend={[
+          {
+            tone: "neutral",
+            text: `${formatNumber(summary.daysDiffer ? summary.busiestDayLitres : avgLitres, 1, true)} L a day${summary.daysDiffer ? " at the busiest" : ""}`,
+          },
+          plan.cansOwned > 0
+            ? {
+                tone: toBuy > 0 ? "warn" : "ok",
+                text:
+                  toBuy > 0
+                    ? `We own ${plan.cansOwned} cans: buy ${toBuy}`
+                    : `We own ${plan.cansOwned} cans: enough`,
+              }
+            : { tone: "warn", text: `Buy ${toBuy} cans` },
+          ...(refills ? [{ tone: "neutral" as const, text: refills }] : []),
+          ...(lastYear
+            ? [
+                {
+                  tone: "neutral" as const,
+                  text: `${lastYear.cycle} used ${formatNumber(lastYear.litresPerDay, 1)} L a day`,
+                },
+              ]
+            : []),
+        ]}
+      >
+        Fill <b>{`${totalCans} jerry can${totalCans === 1 ? "" : "s"}`}</b>:{" "}
+        {formatNumber(fuel.litresWithMargin, 0)} L of {fuelWord} for {daysWord}.
+      </Verdict>
+
+      {(offKwh > 0 || fuel.overloaded) && (
+        <div className="mb-4 flex flex-col gap-2">
+          {offKwh > 0 && (
+            <Alert variant="warning">
+              <AlertTriangle aria-hidden />
+              <span>
+                {formatNumber(offKwh, 2, true)} kWh a day falls in hours the
+                generator is off. The litres leave it out: plan for it another
+                way (a battery, ice) or run the generator longer.
+              </span>
+            </Alert>
+          )}
+          {fuel.overloaded && (
+            <Alert variant="error">
+              <Zap aria-hidden />
+              <span>
+                The load goes over the generator&apos;s rating in some hours.
+                The litres past full load are a guess: choose a bigger generator
+                or move loads.
+              </span>
+            </Alert>
+          )}
+        </div>
+      )}
+
+      <PowerCard className="p-4" label="How we get there">
+        <CardHead title="How we get there" flat />
+        <Ledger
+          rows={[
+            {
+              label: `Fuel a day for ${formatNumber(avgKwh, 1, true)} kWh on the ${railName(generator.model)}${summary.daysDiffer ? " (on average)" : ""}`,
+              figure: litres(avgLitres, 1),
+            },
+            {
+              label: `× ${daysWord} on site`,
+              figure: litres(fuel.burnLitres, 1),
+            },
+            {
+              label: `+ ${formatNumber(plan.safetyMarginPct, 1)}% safety margin`,
+              figure: litres(fuel.litresWithMargin - fuel.burnLitres, 1),
+            },
+            {
+              label: "Litres for the burn",
+              figure: litres(fuel.litresWithMargin, 1),
+              total: true,
+            },
+            {
+              label: `÷ ${formatNumber(plan.canLitres, 1)} L a can, rounded up`,
+              figure: `${totalCans} can${totalCans === 1 ? "" : "s"}`,
+            },
+            { label: "− cans we already own", figure: String(plan.cansOwned) },
+            { label: "Cans to buy", figure: String(toBuy), total: true },
+          ]}
         />
+      </PowerCard>
 
-        <FuelDayByDayCard
-          days={main.perDay.map((d) => ({
+      {summary.daysDiffer && (
+        <FuelDayByDay
+          days={fuel.perDay.map((d) => ({
             label: dayLabel(plan.firstPoweredDay, d.day),
             litres: d.litres,
             kWh: d.kWh,
           }))}
         />
-      </>
-    );
-  }
+      )}
+    </>
+  );
+}
 
-  const copyPlan =
-    plan.version === 0 && earlier !== null ? (
-      <CopyLastYearPlanButton
-        fromCycle={earlier}
-        canEdit={canEdit}
-        refusalId={REFUSAL_ID}
-      />
-    ) : null;
-
+export default function PowerFuelPage() {
   return (
-    <div className="flex flex-col">
-      <PageHeading
-        eyebrow="Power & Lighting"
-        title="Fuel estimate"
-        description="The litres and jerry cans the camp's generator needs for the load list. Everyone can read it; captains and Power & Lighting leads edit it."
-        actions={copyPlan}
-      />
-      <PowerTabs tab="fuel" />
-
-      <div className="flex flex-col gap-6">
-        {!canEdit && (
-          <p
-            id={REFUSAL_ID}
-            className="flex items-start gap-2 rounded-lg border border-border bg-card/40 px-3 py-2.5 text-xs text-muted-foreground"
-          >
-            <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-            {POWER_REFUSAL}
-          </p>
-        )}
-
-        <FuelPlanForm
-          key={plan.version}
-          plan={planValues(plan)}
-          generators={options}
-          canEdit={canEdit}
-          refusalId={REFUSAL_ID}
-        />
-
-        {gap ? (
-          <EmptyState
-            icon={<Fuel />}
-            title={gap.title}
-            description={gap.description}
-          />
-        ) : (
-          results
-        )}
-
-        <FuelMethodCard
-          generator={
-            generator
-              ? {
-                  model: generator.model,
-                  tankLitres: generator.tankLitres,
-                  runtime50Hours: generator.runtime50Hours,
-                  runtime100Hours: generator.runtime100Hours,
-                  line: fuelLine(generator),
-                }
-              : null
-          }
-        />
-
-        <section aria-labelledby="generators" className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-col gap-0.5">
-              <h2 id="generators" className="text-base font-semibold">
-                Generators
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                The camp&apos;s own, lent by a member, or hired. They carry from
-                year to year; archive one that is gone.
-              </p>
-            </div>
-            <AddGeneratorButton
-              canEdit={canEdit}
-              refusalId={REFUSAL_ID}
-              inventory={inventoryOptions}
-            />
-          </div>
-          {generators.length === 0 ? (
-            <EmptyState
-              icon={<Zap />}
-              title="No generators yet"
-              description="Add one from its datasheet: the rated and maximum kVA, the tank and how long it lasts at half and full load."
-            />
-          ) : (
-            <ResponsiveDataTable
-              columns={generatorColumns(
-                canEdit,
-                inventoryOptions,
-                plan.generatorId,
-              )}
-              data={generators}
-              getRowKey={(g) => g.id}
-              label="Generators"
-              framed
-            />
-          )}
-        </section>
-      </div>
-    </div>
+    <PowerFrame section="fuel">
+      <FuelSection />
+    </PowerFrame>
   );
 }

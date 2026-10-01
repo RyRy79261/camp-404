@@ -3,7 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Link2Off, Plus, X } from "lucide-react";
-import { bulbs, hoursOn, ledStrip, loadWatts } from "@camp404/core";
+import {
+  MAINS_VOLTS,
+  bulbs,
+  hoursOn,
+  ledStrip,
+  loadWatts,
+} from "@camp404/core";
 import {
   CURRENT_KINDS,
   EditLoadInput,
@@ -98,10 +104,42 @@ const HELPERS = [
 ];
 
 const SCHEDULES = [
-  { value: "full_time", label: "All day" },
+  { value: "full_time", label: "24 hours" },
   { value: "hours_per_day", label: "Hours a day" },
-  { value: "windows", label: "Time windows" },
+  { value: "windows", label: "Set times" },
 ];
+
+/** The fields under "More detail": most loads never need them. */
+const MORE_DETAIL_FIELDS = [
+  "dutyPct",
+  "surgeWattsEach",
+  "fromDay",
+  "toDay",
+  "volts",
+  "current",
+  "circuit",
+] as const;
+
+/** Whether a load sets anything under "More detail", so it opens shown. */
+function setsMoreDetail(form: {
+  dutyPct: string;
+  surgeWattsEach: string;
+  fromDay: string;
+  toDay: string;
+  volts: string;
+  current: string;
+  circuit: string;
+}): boolean {
+  return (
+    (form.dutyPct.trim() !== "" && Number(form.dutyPct) !== 100) ||
+    form.surgeWattsEach.trim() !== "" ||
+    form.fromDay.trim() !== "" ||
+    form.toDay.trim() !== "" ||
+    (form.volts.trim() !== "" && Number(form.volts) !== MAINS_VOLTS) ||
+    form.current !== "ac" ||
+    form.circuit.trim() !== ""
+  );
+}
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
@@ -237,11 +275,14 @@ export function LoadEditorDialog({
   onOpenChange,
   editing,
   inventory,
+  onRemove,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing?: EditableLoad;
   inventory: InventoryOption[];
+  /** Offers Remove at the foot of the dialog, for a load already listed. */
+  onRemove?: () => void;
 }) {
   const router = useRouter();
   const [form, setForm] = React.useState<FormState>(() =>
@@ -257,6 +298,7 @@ export function LoadEditorDialog({
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
+  const [moreOpen, setMoreOpen] = React.useState(false);
   const idBase = React.useId();
   const id = (name: string) => `${idBase}-${name}`;
 
@@ -270,6 +312,7 @@ export function LoadEditorDialog({
     setBulb({ count: "", each: "" });
     setErrors({});
     setError(null);
+    setMoreOpen(false);
   }
 
   const ledVolts = numberOrNull(led.volts) ?? 0;
@@ -330,7 +373,10 @@ export function LoadEditorDialog({
       ? EditLoadInput.safeParse(payload)
       : LoadInput.safeParse(payload);
     if (!check.success) {
-      setErrors(fieldErrors(check.error.issues));
+      const found = fieldErrors(check.error.issues);
+      setErrors(found);
+      // A problem under "More detail" is shown, never left folded away.
+      if (MORE_DETAIL_FIELDS.some((key) => found[key])) setMoreOpen(true);
       return;
     }
     setErrors({});
@@ -364,7 +410,10 @@ export function LoadEditorDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        data-window-tint
+        className="max-h-[90svh] overflow-y-auto sm:max-w-2xl"
+      >
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
             <DialogTitle>{editing ? "Edit load" : "Add a load"}</DialogTitle>
@@ -628,7 +677,7 @@ export function LoadEditorDialog({
             )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field
               label="Quantity"
               htmlFor={id("quantity")}
@@ -662,41 +711,6 @@ export function LoadEditorDialog({
                 aria-invalid={errors.wattsEach ? true : undefined}
               />
             </Field>
-            <Field
-              label="Duty cycle (%)"
-              htmlFor={id("duty")}
-              error={errors.dutyPct}
-              help="How much of the time it draws, such as a fridge's compressor."
-            >
-              <Input
-                id={id("duty")}
-                type="number"
-                inputMode="decimal"
-                min={1}
-                max={100}
-                value={form.dutyPct}
-                onChange={(e) => set("dutyPct", e.target.value)}
-                aria-invalid={errors.dutyPct ? true : undefined}
-              />
-            </Field>
-            <Field
-              label="Start-up spike, watts each (optional)"
-              htmlFor={id("surge")}
-              error={errors.surgeWattsEach}
-              help="Fridges and freezers draw a short burst when their motor starts, about 3 times their normal draw. Leave it empty to use that."
-              className="sm:col-span-3"
-            >
-              <Input
-                id={id("surge")}
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="any"
-                value={form.surgeWattsEach}
-                onChange={(e) => set("surgeWattsEach", e.target.value)}
-                aria-invalid={errors.surgeWattsEach ? true : undefined}
-              />
-            </Field>
           </div>
 
           <fieldset className="flex flex-col gap-3">
@@ -712,7 +726,7 @@ export function LoadEditorDialog({
                 label="Hours it runs each day"
                 htmlFor={id("hours")}
                 error={errors.hoursPerDay}
-                help="How long, not when. The peak counts it as on at the busiest hour; use time windows if you know when it runs."
+                help="How long, not when. The peak counts it as on at the busiest hour; use Set times if you know when it runs."
               >
                 <Input
                   id={id("hours")}
@@ -806,81 +820,135 @@ export function LoadEditorDialog({
             )}
           </fieldset>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              label="First day"
-              htmlFor={id("from-day")}
-              error={errors.fromDay}
-              help="Day numbers on site. Leave both empty for every day."
-            >
-              <Input
-                id={id("from-day")}
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={MAX_DAYS_ON_SITE}
-                value={form.fromDay}
-                onChange={(e) => set("fromDay", e.target.value)}
-                aria-invalid={errors.fromDay ? true : undefined}
-              />
-            </Field>
-            <Field label="Last day" htmlFor={id("to-day")} error={errors.toDay}>
-              <Input
-                id={id("to-day")}
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={MAX_DAYS_ON_SITE}
-                value={form.toDay}
-                onChange={(e) => set("toDay", e.target.value)}
-                aria-invalid={errors.toDay ? true : undefined}
-              />
-            </Field>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Volts" htmlFor={id("volts")} error={errors.volts}>
-              <Input
-                id={id("volts")}
-                type="number"
-                inputMode="decimal"
-                min={1}
-                value={form.volts}
-                onChange={(e) => set("volts", e.target.value)}
-                aria-invalid={errors.volts ? true : undefined}
-              />
-            </Field>
-            <Field label="Current" htmlFor={id("current")}>
-              <Select
-                value={form.current}
-                onValueChange={(v) => set("current", v as CurrentKind)}
-              >
-                <SelectTrigger id={id("current")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENT_KINDS.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c.toUpperCase()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field
-              label="Circuit (optional)"
-              htmlFor={id("circuit")}
-              error={errors.circuit}
-              help="A label of your own. Where it plugs in is set on the grid plan."
-            >
-              <Input
-                id={id("circuit")}
-                value={form.circuit}
-                onChange={(e) => set("circuit", e.target.value)}
-                maxLength={40}
-              />
-            </Field>
-          </div>
+          <details
+            className="border border-border"
+            open={moreOpen || setsMoreDetail(form)}
+            onToggle={(e) => setMoreOpen(e.currentTarget.open)}
+          >
+            <summary className="cursor-pointer px-3 py-2.5 text-sm font-medium">
+              More detail
+              <span className="ml-2 font-normal text-muted-foreground">
+                Duty cycle, start-up spike, some days only, volts, circuit
+              </span>
+            </summary>
+            <div className="flex flex-col gap-4 border-t border-border p-3">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Duty cycle (%)"
+                  htmlFor={id("duty")}
+                  error={errors.dutyPct}
+                  help="How much of the time it draws, such as a fridge's compressor."
+                >
+                  <Input
+                    id={id("duty")}
+                    type="number"
+                    inputMode="decimal"
+                    min={1}
+                    max={100}
+                    value={form.dutyPct}
+                    onChange={(e) => set("dutyPct", e.target.value)}
+                    aria-invalid={errors.dutyPct ? true : undefined}
+                  />
+                </Field>
+                <Field
+                  label="Start-up spike, watts each (optional)"
+                  htmlFor={id("surge")}
+                  error={errors.surgeWattsEach}
+                  help="Fridges and freezers draw a short burst when their motor starts, about 3 times their normal draw. Leave it empty to use that."
+                  className="sm:col-span-2"
+                >
+                  <Input
+                    id={id("surge")}
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="any"
+                    value={form.surgeWattsEach}
+                    onChange={(e) => set("surgeWattsEach", e.target.value)}
+                    aria-invalid={errors.surgeWattsEach ? true : undefined}
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="First day"
+                  htmlFor={id("from-day")}
+                  error={errors.fromDay}
+                  help="Day numbers on site, for a load that runs on some days only. Leave both empty for every day."
+                >
+                  <Input
+                    id={id("from-day")}
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={MAX_DAYS_ON_SITE}
+                    value={form.fromDay}
+                    onChange={(e) => set("fromDay", e.target.value)}
+                    aria-invalid={errors.fromDay ? true : undefined}
+                  />
+                </Field>
+                <Field
+                  label="Last day"
+                  htmlFor={id("to-day")}
+                  error={errors.toDay}
+                >
+                  <Input
+                    id={id("to-day")}
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={MAX_DAYS_ON_SITE}
+                    value={form.toDay}
+                    onChange={(e) => set("toDay", e.target.value)}
+                    aria-invalid={errors.toDay ? true : undefined}
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Field label="Volts" htmlFor={id("volts")} error={errors.volts}>
+                  <Input
+                    id={id("volts")}
+                    type="number"
+                    inputMode="decimal"
+                    min={1}
+                    value={form.volts}
+                    onChange={(e) => set("volts", e.target.value)}
+                    aria-invalid={errors.volts ? true : undefined}
+                  />
+                </Field>
+                <Field label="Current" htmlFor={id("current")}>
+                  <Select
+                    value={form.current}
+                    onValueChange={(v) => set("current", v as CurrentKind)}
+                  >
+                    <SelectTrigger id={id("current")}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CURRENT_KINDS.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c.toUpperCase()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field
+                  label="Circuit (optional)"
+                  htmlFor={id("circuit")}
+                  error={errors.circuit}
+                  help="A label of your own. Where it plugs in is set on the grid plan."
+                >
+                  <Input
+                    id={id("circuit")}
+                    value={form.circuit}
+                    onChange={(e) => set("circuit", e.target.value)}
+                    maxLength={40}
+                  />
+                </Field>
+              </div>
+            </div>
+          </details>
 
           <p
             className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm tabular-nums"
@@ -898,6 +966,21 @@ export function LoadEditorDialog({
           ) : null}
 
           <DialogFooter>
+            {onRemove && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                className="text-destructive sm:mr-auto"
+                onClick={() => {
+                  reset();
+                  onOpenChange(false);
+                  onRemove();
+                }}
+              >
+                Remove load
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"

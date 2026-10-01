@@ -267,12 +267,13 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
-  // /power sends on to the load list, so the icon goes straight there.
+  // /power is the program's home: the answer rail (a phone's list of the six
+  // sections), with the load list beside it in a wide window.
   {
     id: "power",
     label: "Power",
     fileName: "POWER.EXE",
-    href: "/power/loads",
+    href: "/power",
     icon: "power",
     place: CAMP,
     rank: "camp_member",

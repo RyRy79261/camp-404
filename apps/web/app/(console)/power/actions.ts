@@ -54,8 +54,9 @@ const PlanSettingsFields = z.object({
 });
 
 /**
- * The plan fields the fuel page edits; the date of day 1 is the load list's
- * and is kept. Types only, every field required, as PlanSettingsFields.
+ * The plan fields the fuel page's plan dialog edits. Types only, every field
+ * required, as PlanSettingsFields, but the date of day 1: an older form that
+ * does not send it keeps the one saved.
  */
 const hourOrNull = z.number().nullable();
 const FuelPlanFields = z.object({
@@ -64,6 +65,7 @@ const FuelPlanFields = z.object({
   runFromHour: hourOrNull,
   runToHour: hourOrNull,
   daysOnSite: z.number(),
+  firstPoweredDay: z.string().nullable().optional(),
   powerFactor: z.number(),
   lowLoadFactor: z.number(),
   safetyMarginPct: z.number(),
@@ -197,18 +199,21 @@ export async function saveFuelPlanAction(
       updatedAt: _u,
       ...current
     } = await getPowerPlan();
-    const parsed = PowerPlanInput.safeParse({ ...current, ...fields.data });
+    const sent = fields.data;
+    const parsed = PowerPlanInput.safeParse({ ...current, ...sent });
     if (!parsed.success) {
       return { ok: false, error: firstIssue(parsed.error, CHECK_PLAN) };
     }
-    // The date of day 1 is the load list's and the low-fuel warning the
-    // refuelling page's: neither is sent from here.
+    // The low-fuel warning is the refuelling page's: never sent from here.
+    // The date of day 1 only when the dialog sent it.
     const {
-      firstPoweredDay: _day,
+      firstPoweredDay,
       lowFuelDays: _low,
       expectedVersion,
-      ...patch
+      ...rest
     } = parsed.data;
+    const patch =
+      sent.firstPoweredDay === undefined ? rest : { ...rest, firstPoweredDay };
     const result = await setPowerPlan({
       actorId: gate.campUser.id,
       patch,
