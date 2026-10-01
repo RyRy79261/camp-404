@@ -455,7 +455,7 @@ export function ShiftDay({
       {/* From page-md up: the table, in a card. */}
       <div className="hidden border border-border bg-card page-md:block">
         <div className="flex items-center justify-between gap-4 border-b border-border p-4">
-          <h2 className="font-sans text-base font-semibold tracking-normal">
+          <h2 className="font-sans text-base font-semibold tracking-normal normal-case">
             {day.longLabel}
           </h2>
           <span className="text-[13px] leading-5 tabular-nums text-muted-foreground">
@@ -577,7 +577,7 @@ export function ShiftDay({
       {/* Below page-md: AfrikaBurn's stacked cards. */}
       <div className="page-md:hidden">
         <div className="mb-3 flex flex-col gap-1">
-          <h2 className="font-sans text-base font-semibold tracking-normal">
+          <h2 className="font-sans text-base font-semibold tracking-normal normal-case">
             {day.longLabel}
           </h2>
           <span className="text-[13px] leading-5 tabular-nums text-muted-foreground">

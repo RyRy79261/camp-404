@@ -85,7 +85,7 @@ function Fairness({ view }: { view: ShiftsView }) {
     <section className="border border-border bg-card">
       <div className="flex flex-col gap-3 p-4">
         <div className="flex flex-col gap-1">
-          <h2 className="font-sans text-base font-semibold tracking-normal">
+          <h2 className="font-sans text-base font-semibold tracking-normal normal-case">
             Who has how many
           </h2>
           <p className="text-[13px] leading-5 text-muted-foreground">

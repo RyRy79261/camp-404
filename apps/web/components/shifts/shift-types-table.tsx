@@ -65,7 +65,7 @@ export function ShiftTypesTable({
         <div>
           <h2
             id="shift-types-title"
-            className="font-sans text-base font-semibold tracking-normal"
+            className="font-sans text-base font-semibold tracking-normal normal-case"
           >
             The shifts
           </h2>
