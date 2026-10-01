@@ -240,7 +240,6 @@ describe("buildProgramManifest: the personas", () => {
       "transport",
       "logistics",
     ]);
-    expect(m.allowedChildren).toContain(pid("inventory-item"));
   });
 
   it("gives a Power lead no Recipe review, but the lead programs", () => {

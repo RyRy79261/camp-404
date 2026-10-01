@@ -19,6 +19,8 @@ export interface InventoryViewer {
   teamLabel: (team: string) => string;
   /** The active teams this viewer may put gear or needs under. */
   editableTeams: { value: string; label: string }[];
+  /** Where a team sits in the camp's own team order (unknown teams last). */
+  teamOrder: (team: string) => number;
 }
 
 /**
@@ -35,6 +37,7 @@ export async function inventoryViewer({
   ]);
   const labels = teamLabelMap(config);
   const canEdit = (team: string) => canEditInventory(rank, ledTeams, team);
+  const order = new Map(activeTeams(config).map((t, i) => [t.key, i]));
   return {
     userId: campUser.id,
     rank,
@@ -43,5 +46,6 @@ export async function inventoryViewer({
     editableTeams: activeTeams(config)
       .filter((t) => Team.safeParse(t.key).success && canEdit(t.key))
       .map((t) => ({ value: t.key, label: t.label })),
+    teamOrder: (team) => order.get(team) ?? order.size,
   };
 }

@@ -51,10 +51,10 @@ vi.mock("@/lib/inventory", () => ({
 import { captainPageGate } from "@/lib/captain-gate";
 import {
   getInventoryItem,
+  listInventoryLoans,
   listItemBookings,
   listItemUpdates,
 } from "@/lib/inventory";
-import { INVENTORY_REFUSAL } from "@/lib/inventory-copy";
 import { getLeadTeams } from "@/lib/users";
 import InventoryItemPage from "./page";
 
@@ -97,7 +97,7 @@ const PROPOSAL = {
   location: "storage_unit",
   custodianUserId: null,
   custodianName: null,
-  storageLocation: null,
+  storageLocation: "Shelf 3",
   maintenancePerformedAt: null,
   note: "One lid cracked",
   proposedById: "u-2",
@@ -125,6 +125,7 @@ async function renderPage() {
 beforeEach(() => {
   vi.mocked(getInventoryItem).mockResolvedValue(ITEM as never);
   vi.mocked(listItemUpdates).mockResolvedValue([PROPOSAL] as never);
+  vi.mocked(listInventoryLoans).mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -139,17 +140,19 @@ describe("inventory item page", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Cooler box" }),
     ).toBeTruthy();
-    expect(screen.getByText("Storage unit, Shelf 3")).toBeTruthy();
+    expect(screen.getByText("Kitchen · Storage unit, Shelf 3")).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Suggest a change" }),
     ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Book Cooler box" }),
     ).toBeTruthy();
-    expect(screen.getByText(INVENTORY_REFUSAL)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^More for/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Lend out" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Approve/ })).toBeNull();
+    // Their suggestion waits, said beside the author line.
+    expect(screen.getByText("Waiting for review")).toBeTruthy();
     // Names are not asked for.
     expect(listItemBookings).toHaveBeenCalledWith(ITEM_ID, "viewer", false);
   });
@@ -165,31 +168,96 @@ describe("inventory item page", () => {
       screen.getByText("It can't be booked: the camp no longer keeps it."),
     ).toBeTruthy();
     expect(screen.queryByText(/fully booked/)).toBeNull();
+    expect(screen.queryByText(/Nobody has booked/)).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Book Cooler box" }),
     ).toBeNull();
+  });
+
+  it("offers no Book on a broken item, and says why", async () => {
+    vi.mocked(getInventoryItem).mockResolvedValue({
+      ...ITEM,
+      condition: "broken",
+    } as never);
+    as("camp_member");
+    await renderPage();
+    expect(
+      screen.getByText(
+        "It's marked broken, so it can't be booked until it's fixed.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Book Cooler box" }),
+    ).toBeNull();
+  });
+
+  it("takes units lent to another camp off what can be booked", async () => {
+    vi.mocked(getInventoryItem).mockResolvedValue({
+      ...ITEM,
+      bookableCount: 4,
+    } as never);
+    vi.mocked(listInventoryLoans).mockResolvedValue([
+      {
+        id: "l-1",
+        itemId: ITEM_ID,
+        itemName: "Cooler box",
+        team: "kitchen",
+        quantity: 3,
+        borrowerCamp: "Camp Sunshine Disco",
+        borrowerAddress: "7:30 & Binnekring",
+        lentAt: new Date("2026-09-20T08:00:00Z"),
+        lentByName: "Kim",
+        returnedAt: null,
+      },
+    ] as never);
+    as("camp_member");
+    await renderPage();
+    const facts = screen.getByRole("region", { name: "What we have" });
+    expect(within(facts).getByText("3, to Camp Sunshine Disco")).toBeTruthy();
+    expect(
+      within(facts).getByText("Can be booked").nextSibling?.textContent,
+    ).toContain("1 of 4");
   });
 
   it("refuses a lead of another team the same way", async () => {
     as("team_lead", ["sound"]);
     await renderPage();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^More for/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Approve/ })).toBeNull();
-    expect(screen.getByText(INVENTORY_REFUSAL)).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Suggest a change" }),
+    ).toBeTruthy();
     expect(listItemBookings).toHaveBeenCalledWith(ITEM_ID, "viewer", false);
   });
 
-  it("gives the item's own team lead Edit, Lend out, Archive and the review", async () => {
+  it("gives the item's own team lead Edit, the menu, Lend out and the review as a before and after", async () => {
     as("team_lead", ["kitchen"]);
     await renderPage();
     expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Lend out" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Archive" })).toBeTruthy();
-    const suggested = screen.getByRole("region", { name: "Suggested changes" });
     expect(
-      within(suggested).getByRole("button", { name: "Approve Cooler box: 3" }),
+      screen.getByRole("button", {
+        name: "More for Cooler box: Lend out, Archive",
+      }),
     ).toBeTruthy();
-    expect(screen.queryByText(INVENTORY_REFUSAL)).toBeNull();
+    expect(screen.getByRole("button", { name: "Lend out" })).toBeTruthy();
+    // An editor edits; they are not offered a suggestion.
+    expect(
+      screen.queryByRole("button", { name: "Suggest a change" }),
+    ).toBeNull();
+    const suggested = screen.getByRole("region", { name: "Suggested change" });
+    expect(
+      within(suggested).getByRole("button", {
+        name: "Approve the change to Cooler box",
+      }),
+    ).toBeTruthy();
+    // Only what changes, before and after.
+    expect(within(suggested).getByText("How many")).toBeTruthy();
+    expect(within(suggested).getByText("4")).toBeTruthy();
+    expect(within(suggested).getByText("3")).toBeTruthy();
+    expect(within(suggested).getByText("Needs repair")).toBeTruthy();
+    expect(within(suggested).queryByText("Where")).toBeNull();
+    expect(screen.queryByText("Waiting for review")).toBeNull();
     expect(listItemBookings).toHaveBeenCalledWith(ITEM_ID, "viewer", true);
   });
 

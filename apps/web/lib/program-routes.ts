@@ -48,7 +48,6 @@ export type ProgramId =
   | "camp-layout"
   | "lounge"
   | "inventory"
-  | "inventory-item"
   | "transport"
   | "recipes"
   | "new-recipe"
@@ -121,7 +120,6 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "camp-layout": "Camp layout",
   lounge: "Lounge",
   inventory: "Inventory",
-  "inventory-item": "Item",
   transport: "Transport",
   recipes: "Recipes",
   "new-recipe": "New recipe",
@@ -269,17 +267,14 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/logistics", "logistics", "LOGISTICS.EXE"),
   route("/camp-layout", "camp-layout", "SITEPLAN.DWG"),
   route("/lounge", "lounge", "LOUNGE.EXE"),
-  // The inventory's four views share one window; an item opens its own.
+  // The inventory's four views and each item's page share one window: an
+  // item opens inside it, with a link back (owner's pick, 2026-10-01), so
+  // opening items never stacks windows titled "Item".
   route("/inventory", "inventory", "INVENTRY.DB"),
   route("/inventory/needs", "inventory", "INVENTRY.DB"),
   route("/inventory/bookings", "inventory", "INVENTRY.DB"),
   route("/inventory/lent", "inventory", "INVENTRY.DB"),
-  route(
-    "/inventory/[id]",
-    "inventory-item",
-    "ITEM.DAT",
-    keyed("inventory-item"),
-  ),
+  route("/inventory/[id]", "inventory", "INVENTRY.DB"),
   route("/power/fuel-log", "power", "POWER.EXE"),
   route("/power/grid", "power", "POWER.EXE"),
   route("/power/readiness", "power", "POWER.EXE"),

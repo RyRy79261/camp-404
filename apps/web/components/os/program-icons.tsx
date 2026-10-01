@@ -36,7 +36,6 @@ const LINE: Readonly<Record<string, IconKey>> = {
   "camp-layout": "siteplan",
   lounge: "lounge",
   inventory: "inventory",
-  "inventory-item": "inventory",
   transport: "lift",
   recipes: "cookbook",
   recipe: "cookbook",
