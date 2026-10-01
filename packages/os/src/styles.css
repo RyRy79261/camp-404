@@ -568,6 +568,54 @@
   }
 }
 
+/* "Start here": a DesktopIcon with a hint. A square halo in the primary
+   colour behind the picture, and the name framed in it, so the icon reads as
+   the first thing to open. The halo breathes in four steps each way (about
+   three changes a second, on its own layer, opacity only), not 60 frames a
+   second; under reduced motion it holds, lit. The app takes the hint away. */
+.os-icon-hint {
+  position: relative;
+  isolation: isolate;
+}
+.os-icon-hint::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  /* Centred on the picture (size-10 at "sm", size-14 at "md", under p-1). */
+  top: -6px;
+  left: 50%;
+  width: 3.75rem;
+  height: 3.75rem;
+  translate: -50% 0;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklch, var(--os-primary) 45%, transparent),
+    color-mix(in oklch, var(--os-primary) 18%, transparent) 60%,
+    transparent
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--os-primary) 70%, transparent),
+    0 0 22px 4px color-mix(in oklch, var(--os-primary) 55%, transparent);
+  will-change: opacity;
+  animation: os-icon-hint 3.2s steps(4, jump-none) infinite alternate;
+}
+.os-icon-hint[data-size="md"]::before {
+  width: 4.75rem;
+  height: 4.75rem;
+}
+.os-icon-hint [data-label] {
+  outline: 1px solid var(--os-primary);
+  box-shadow: 0 0 10px color-mix(in oklch, var(--os-primary) 60%, transparent);
+}
+@keyframes os-icon-hint {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* Reduced motion: stills, as Join and the landing page draw them. Placed with
    !important because the kit's blanket rule (packages/ui globals.css) would
    otherwise stop each loop on its last keyframe instead of on these. */
@@ -579,6 +627,10 @@
   .os-glitch-shake,
   .os-slide-in {
     animation: none !important;
+  }
+  .os-icon-hint::before {
+    animation: none !important;
+    opacity: 0.85;
   }
   .os-glitch-magenta {
     animation: none !important;

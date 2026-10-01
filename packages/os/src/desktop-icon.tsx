@@ -10,6 +10,12 @@ type Props = {
   open: boolean;
   onOpen: () => void;
   size?: "sm" | "md";
+  /**
+   * Says "start here": the icon glows (calmly, a slow pulse; still under
+   * reduced motion) and the words join its name, "Open README.TXT, start
+   * here". The app decides when it stops.
+   */
+  hint?: string;
 };
 
 /** A program on the desktop: a picture over a label, one click to open. */
@@ -20,20 +26,26 @@ export function DesktopIcon({
   open,
   onOpen,
   size = "md",
+  hint,
 }: Props) {
+  const lit = open || !!hint;
   return (
     <button
       type="button"
       data-icon={id}
       onClick={onOpen}
-      aria-label={`Open ${label}`}
+      aria-label={hint ? `Open ${label}, ${hint}` : `Open ${label}`}
+      data-hint={hint ? "" : undefined}
+      data-size={hint ? size : undefined}
       // Two lines at most; a longer name is whole in the tooltip.
       title={label}
-      className="group flex w-28 flex-col items-center gap-2 p-1 text-os-accent outline-none"
+      className={`group flex w-28 flex-col items-center gap-2 p-1 text-os-accent outline-none ${
+        hint ? "os-icon-hint" : ""
+      }`}
     >
       {icon(
         `${size === "sm" ? "size-10" : "size-14"} transition-colors group-hover:text-os-primary group-focus-visible:text-os-primary ${
-          open ? "text-os-primary drop-shadow-[0_0_8px_var(--os-primary)]" : ""
+          lit ? "text-os-primary drop-shadow-[0_0_8px_var(--os-primary)]" : ""
         }`,
       )}
       {/* Drawn by CSS from data-label, not written into the page, so a

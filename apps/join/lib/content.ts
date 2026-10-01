@@ -36,6 +36,8 @@ export const DESKTOP = {
   ],
   location: "Tankwa Town · AfrikaBurn",
   reboot: "[REBOOT]",
+  /** Joins README.TXT's name while its icon glows: "Open README.TXT, start here". */
+  readmeHint: "start here",
 } as const;
 
 /** Headings around CREW.DB's live data. */
