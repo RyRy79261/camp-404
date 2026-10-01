@@ -197,7 +197,7 @@ export default async function RecipeCardPage({
                     data-testid="card-line"
                     className={ROW}
                   >
-                    <td className="w-32 py-1.5 pr-3 text-right font-mono tabular-nums">
+                    <td className="w-24 whitespace-nowrap py-1.5 pr-4 text-right align-top tabular-nums">
                       {amountOf(line, amounts[index]) ?? ""}
                     </td>
                     <td className="py-1.5">

@@ -37,8 +37,13 @@ export function PrintSheet({
 }) {
   const landscape = orientation === "landscape";
   return (
-    <div className="min-h-svh bg-neutral-200 text-neutral-900 print:min-h-0 print:bg-white">
-      {/* White paper on screen and on paper, whatever the app's theme. */}
+    <div className="min-h-svh bg-neutral-200 text-neutral-900 [text-rendering:geometricPrecision] print:min-h-0 print:bg-white">
+      {/* White paper on screen and on paper, whatever the app's theme.
+          geometricPrecision: Chromium on Linux (the PDF route's, and a
+          phone's scaled sheet) otherwise rounds each letter's width to a
+          whole pixel, and with the headings' letter-spacing the error
+          gathers into gaps inside words ("MET HOD", "rins ed") and swallows
+          spaces ("tbspGround"). Exact widths keep the words whole. */}
       <style>
         {`@page { size: A4${landscape ? " landscape" : ""}; margin: 14mm; } html, body { background: #fff; color-scheme: light; }`}
       </style>

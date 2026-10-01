@@ -55,6 +55,13 @@ async function sheetWithoutDesktop(page: Page, heading: string) {
   await expect(page.getByRole("button", { name: "Print" })).toBeVisible();
   await expect(osBar(page)).toHaveCount(0);
   await expect(page.locator("[data-os-skin]")).toHaveCount(0);
+  // Exact letter widths: without them Chromium on Linux (the PDF route's)
+  // rounds each letter to a whole pixel and words break apart ("MET HOD").
+  expect(
+    await page
+      .locator("[data-print-sheet]")
+      .evaluate((el) => getComputedStyle(el).textRendering),
+  ).toBe("geometricprecision");
   await staysA4(page);
 }
 
