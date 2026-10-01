@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { CHOICE_OFF, CHOICE_ON_FILL } from "../lib/choice";
 import { cn } from "../lib/utils";
 
 // A row of equal-width segments. Two shapes share one skin:
@@ -20,13 +21,18 @@ export interface SegmentedOption {
   label: React.ReactNode;
 }
 
-/** The shared segment skin, so both shapes stay one control. */
+/**
+ * The shared segment skin, so both shapes stay one control. Each segment
+ * shows the soft colour of a choice and the picked one is filled
+ * (lib/choice.ts); a small gap keeps the tinted segments apart.
+ */
 const SEGMENT =
-  "flex-1 rounded-sm px-3 py-2 text-center text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const SEGMENT_ON = "bg-primary text-primary-foreground shadow-sm";
-const SEGMENT_OFF = "text-muted-foreground hover:text-foreground";
-const SEGMENT_DISABLED = "cursor-not-allowed text-muted-foreground/60";
-const SEGMENT_GROUP = "inline-flex w-full rounded-md border p-1";
+  "flex-1 rounded-sm border px-3 py-2 text-center text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const SEGMENT_ON = cn(CHOICE_ON_FILL, "shadow-sm");
+const SEGMENT_OFF = CHOICE_OFF;
+const SEGMENT_DISABLED =
+  "cursor-not-allowed border-transparent text-muted-foreground/60";
+const SEGMENT_GROUP = "inline-flex w-full gap-1 rounded-md border p-1";
 
 export interface SegmentedControlProps {
   options: SegmentedOption[];

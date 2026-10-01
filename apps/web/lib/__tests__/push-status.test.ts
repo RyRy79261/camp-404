@@ -9,7 +9,9 @@ import {
 
 describe("shouldPruneToken", () => {
   it("prunes the dead-token error codes", () => {
-    expect(shouldPruneToken("messaging/registration-token-not-registered")).toBe(true);
+    expect(
+      shouldPruneToken("messaging/registration-token-not-registered"),
+    ).toBe(true);
     expect(shouldPruneToken("messaging/invalid-registration-token")).toBe(true);
     expect(shouldPruneToken("messaging/invalid-argument")).toBe(true);
   });

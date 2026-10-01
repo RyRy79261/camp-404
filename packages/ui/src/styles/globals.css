@@ -8,6 +8,9 @@
    miss the utilities baked into this package's CVA variants. Point at the
    components dir so those classes get generated. */
 @source "../components/**/*.{ts,tsx}";
+/* The shared class strings in lib/ (lib/choice.ts): without this the picked
+   and hover tints of a choice were never generated. */
+@source "../lib/**/*.ts";
 
 /* ===========================================================================
    Page-width variants: page-sm, page-md, page-lg, page-xl.

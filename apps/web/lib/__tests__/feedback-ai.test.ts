@@ -76,7 +76,11 @@ describe("structureWithAi", () => {
   it("returns null when the tool input fails schema validation", async () => {
     vi.mocked(anthropic).mockReturnValue(
       clientReturning([
-        { type: "tool_use", name: "format_report", input: { summary: "no title" } },
+        {
+          type: "tool_use",
+          name: "format_report",
+          input: { summary: "no title" },
+        },
       ]) as never,
     );
     expect(await structureWithAi("bug", "x")).toBeNull();
