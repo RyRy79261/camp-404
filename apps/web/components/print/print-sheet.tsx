@@ -12,7 +12,7 @@ import { DownloadPdfButton, PrintButton } from "./print-actions";
 //
 // There is no signal on site, so paper is how these reach the camp. Rules for
 // every print: first names, with a surname initial only to tell two apart; no
-// phone, email, ID, bank or medical details; allergies as counts only. The
+// phone, email, ID, bank or medical details; a food allergy only as a count. The
 // page that uses the shell keeps the same permission gate as its screen; a
 // refusal is drawn WITHOUT the shell, so it can never be saved as a PDF.
 

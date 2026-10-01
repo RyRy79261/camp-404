@@ -73,17 +73,16 @@ describe("PrintSheet", () => {
   });
 
   it("Download PDF asks the server for THIS page and saves the file", async () => {
-    fetchMock.mockResolvedValue(
-      new Response(new Blob(["%PDF-1.7"], { type: "application/pdf" }), {
-        status: 200,
-      }),
-    );
+    // A stand-in for the route's answer: jsdom's Blob is not one Node's own
+    // Response can read, so the test hands the button what it reads.
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(["%PDF-1.7"], { type: "application/pdf" }),
+    });
     const createObjectURL = vi.fn(() => "blob:pdf");
     const revokeObjectURL = vi.fn();
-    vi.stubGlobal(
-      "URL",
-      Object.assign(URL, { createObjectURL, revokeObjectURL }),
-    );
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
     const clicks: string[] = [];
     const click = vi
       .spyOn(HTMLAnchorElement.prototype, "click")
@@ -104,7 +103,7 @@ describe("PrintSheet", () => {
   });
 
   it("a refused PDF says so beside the button, and saves nothing", async () => {
-    fetchMock.mockResolvedValue(new Response("no", { status: 403 }));
+    fetchMock.mockResolvedValue({ ok: false, status: 403 });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click");
     sheet();
     fireEvent.click(screen.getByRole("button", { name: "Download PDF" }));
