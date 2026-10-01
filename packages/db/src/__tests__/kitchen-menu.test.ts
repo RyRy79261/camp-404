@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildShoppingList, POWER_TEAM } from "@camp404/core";
 import { KitchenRecipe, MAX_RECIPES_PER_MEAL, type Team } from "@camp404/types";
 import type { CampConfig } from "../camp-config";
@@ -371,6 +371,68 @@ describe("kitchen menu and shopping list", () => {
     ).toEqual({ ok: false, error: SNACK_GONE });
     expect(await audit("camp.kitchen_snack.added")).toHaveLength(1);
     expect(await audit("camp.kitchen_snack.removed")).toHaveLength(1);
+  });
+
+  /**
+   * The SQL each write sends inside its transaction. PGlite has one
+   * connection, so two writes cannot race here; what can be checked is that
+   * each write takes the year's lock BEFORE it counts what is there.
+   */
+  async function sqlOf(run: () => Promise<unknown>): Promise<string[]> {
+    const pg = h.client();
+    const seen: string[] = [];
+    const original = pg.transaction.bind(pg);
+    const spy = vi.spyOn(pg, "transaction").mockImplementation((callback) =>
+      original(async (inner) => {
+        const query = inner.query.bind(inner);
+        inner.query = ((text: string, ...rest: unknown[]) => {
+          seen.push(text);
+          return (query as (...a: unknown[]) => unknown)(text, ...rest);
+        }) as typeof inner.query;
+        return callback(inner);
+      }),
+    );
+    try {
+      await run();
+    } finally {
+      spy.mockRestore();
+    }
+    return seen;
+  }
+
+  const lockBeforeCount = (statements: string[], table: string) => {
+    const lock = statements.findIndex((q) =>
+      q.includes("pg_advisory_xact_lock"),
+    );
+    const count = statements.findIndex(
+      (q) => q.includes("count(*)") && q.includes(`"${table}"`),
+    );
+    expect(count).toBeGreaterThan(-1);
+    expect(lock).toBeGreaterThan(-1);
+    expect(lock).toBeLessThan(count);
+  };
+
+  it("takes the year's lock before counting a meal or the snacks, so two editors cannot both pass the cap", async () => {
+    const { kitchenLead, dal } = await setUp();
+    const menu = await sqlOf(async () => {
+      const added = await addMenuItem({
+        actorId: kitchenLead.id,
+        day: 1,
+        meal: "dinner",
+        recipeId: dal.recipeId,
+      });
+      expect(added.ok).toBe(true);
+    });
+    lockBeforeCount(menu, "kitchen_menu_items");
+    const snacks = await sqlOf(async () => {
+      const added = await addSnack({
+        actorId: kitchenLead.id,
+        name: "Rusks",
+        amount: null,
+      });
+      expect(added.ok).toBe(true);
+    });
+    lockBeforeCount(snacks, "kitchen_snacks");
   });
 
   it("lets any approved member tick for the whole camp, and refuses an applicant", async () => {

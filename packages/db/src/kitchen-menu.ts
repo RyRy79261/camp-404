@@ -136,6 +136,21 @@ async function write<T extends object>(
   }
 }
 
+/**
+ * Serialises the writes that count a year's list before adding to it (the
+ * menu's recipes per meal, the snacks), so two at once cannot both pass the
+ * cap. Held to the end of the transaction.
+ */
+async function lockKitchenList(
+  tx: Tx,
+  list: "kitchen_menu_items" | "kitchen_snacks",
+  cycle: number,
+): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${list}), ${cycle})`,
+  );
+}
+
 /** An approved, current member, locked so an approval change waits. */
 async function isApprovedMember(tx: Tx, userId: string): Promise<boolean> {
   if (!UUID.test(userId)) return false;
@@ -340,6 +355,9 @@ export async function addMenuItem(input: {
       .for("share");
     if (!recipe?.versionId) refuse(MENU_RECIPE_NOT_IN_BOOK);
 
+    // Two editors adding to one meal at once would both count the same
+    // recipes and both pass the cap: the year's menu is written one at a time.
+    await lockKitchenList(tx, "kitchen_menu_items", cycle);
     const onMeal = and(
       eq(schema.kitchenMenuItems.cycle, cycle),
       eq(schema.kitchenMenuItems.day, input.day),
@@ -449,6 +467,8 @@ export async function addSnack(input: {
       refuse(NOT_A_SNACK_KEEPER);
     }
     const cycle = await currentCycleNumber(tx);
+    // As on the menu: the count and the insert must not interleave.
+    await lockKitchenList(tx, "kitchen_snacks", cycle);
     const [held] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(schema.kitchenSnacks)
