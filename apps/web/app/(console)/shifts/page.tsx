@@ -51,13 +51,7 @@ function pickDay(
   );
 }
 
-function DayTabs({
-  days,
-  current,
-}: {
-  days: ShiftDayView[];
-  current: string;
-}) {
+function DayTabs({ days, current }: { days: ShiftDayView[]; current: string }) {
   return (
     <nav aria-label="Burn days" className="flex gap-1 overflow-x-auto">
       {days.map((d) => {
@@ -91,7 +85,9 @@ function Fairness({ view }: { view: ShiftsView }) {
     <section className="border border-border bg-card">
       <div className="flex flex-col gap-3 p-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-base font-semibold">Who has how many</h2>
+          <h2 className="font-sans text-base font-semibold tracking-normal">
+            Who has how many
+          </h2>
           <p className="text-[13px] leading-5 text-muted-foreground">
             Everyone who is coming, counted from the roster. The camp asks for
             at least {SHIFT_MINIMUM} each. Leads and captains see this.

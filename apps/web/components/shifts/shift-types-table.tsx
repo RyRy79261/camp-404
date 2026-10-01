@@ -34,7 +34,8 @@ function Change({
   t: ShiftTypeView;
   className: string;
 }) {
-  if (!t.canManage) return <span aria-hidden className={cn("inline-block", className)} />;
+  if (!t.canManage)
+    return <span aria-hidden className={cn("inline-block", className)} />;
   return (
     <ShiftTypeDialog
       type={t}
@@ -62,7 +63,10 @@ export function ShiftTypesTable({
     >
       <div className="flex flex-col gap-3 p-4 page-md:flex-row page-md:items-center page-md:justify-between page-md:gap-4 page-md:border-b page-md:border-border">
         <div>
-          <h2 id="shift-types-title" className="text-base font-semibold">
+          <h2
+            id="shift-types-title"
+            className="font-sans text-base font-semibold tracking-normal"
+          >
             The shifts
           </h2>
           <p className="text-[13px] leading-5 text-muted-foreground">
@@ -132,9 +136,7 @@ export function ShiftTypesTable({
                   <td className={cn(TX, "text-muted-foreground")}>
                     {t.note ?? "–"}
                   </td>
-                  <td className={cn(TX, "tabular-nums")}>
-                    {perDay(t.places)}
-                  </td>
+                  <td className={cn(TX, "tabular-nums")}>{perDay(t.places)}</td>
                   <td className="p-3 pr-4 text-right align-top">
                     <Change view={view} t={t} className="h-8 w-28" />
                   </td>
@@ -171,7 +173,10 @@ export function ShiftTypesTable({
                   <Change view={view} t={t} className="h-8 w-24" />
                 </div>
                 <div className="col-span-2 mt-1 flex flex-wrap items-center gap-2">
-                  <span data-slot="badge" className={cn(BADGE, "whitespace-normal")}>
+                  <span
+                    data-slot="badge"
+                    className={cn(BADGE, "whitespace-normal")}
+                  >
                     {t.teamLabel}
                   </span>
                   <span className="text-[13px] leading-5 tabular-nums text-muted-foreground">

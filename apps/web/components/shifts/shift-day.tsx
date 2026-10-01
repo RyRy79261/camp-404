@@ -309,7 +309,10 @@ function LeadPanel({
                     placeholder="Pick a member"
                     searchPlaceholder="Type a name"
                     emptyMessage="Nobody by that name."
-                    className={cn("h-8", phone ? "min-w-0 flex-1" : "w-56")}
+                    className={cn(
+                      "h-8 font-sans! text-sm! font-normal! tracking-normal! normal-case!",
+                      phone ? "min-w-0 flex-1" : "w-56",
+                    )}
                   />
                   <Button
                     type="button"
@@ -384,7 +387,7 @@ function LeadPanel({
                 type="button"
                 size="sm"
                 variant="outline"
-                className="h-8"
+                className="h-8 disabled:border-dashed"
                 disabled={tap.pending || (needed && slot.taken > 0)}
                 onClick={() =>
                   tap.run(() =>
@@ -452,7 +455,9 @@ export function ShiftDay({
       {/* From page-md up: the table, in a card. */}
       <div className="hidden border border-border bg-card page-md:block">
         <div className="flex items-center justify-between gap-4 border-b border-border p-4">
-          <h2 className="text-base font-semibold">{day.longLabel}</h2>
+          <h2 className="font-sans text-base font-semibold tracking-normal">
+            {day.longLabel}
+          </h2>
           <span className="text-[13px] leading-5 tabular-nums text-muted-foreground">
             {summary}
             {day.outsideBurn ? " · Not a Burn day any more" : ""}
@@ -551,7 +556,7 @@ export function ShiftDay({
                       >
                         <td
                           colSpan={columns}
-                          className="border-l-2 border-l-primary bg-background/60 py-4 pr-4 pl-14"
+                          className="border-l-2 border-l-primary bg-background/60 py-4 pr-4 pl-4"
                         >
                           <LeadPanel
                             slot={slot}
@@ -572,7 +577,9 @@ export function ShiftDay({
       {/* Below page-md: AfrikaBurn's stacked cards. */}
       <div className="page-md:hidden">
         <div className="mb-3 flex flex-col gap-1">
-          <h2 className="text-base font-semibold">{day.longLabel}</h2>
+          <h2 className="font-sans text-base font-semibold tracking-normal">
+            {day.longLabel}
+          </h2>
           <span className="text-[13px] leading-5 tabular-nums text-muted-foreground">
             {summary}
           </span>
@@ -616,10 +623,7 @@ export function ShiftDay({
                       )}
                     </div>
                     <dl
-                      className={cn(
-                        "flex flex-col gap-2",
-                        off && "opacity-60",
-                      )}
+                      className={cn("flex flex-col gap-2", off && "opacity-60")}
                     >
                       {(
                         [
