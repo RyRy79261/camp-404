@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { PaymentSource } from "@camp404/types";
 import {
   canManageMoney,
   duesBalance,
@@ -376,6 +377,7 @@ describe("proposeStatementMatches", () => {
         userId: "u1",
         amountCents: 125_000,
         status: "pending",
+        source: "member",
         paidOn: "2027-01-14",
       },
     ]);
@@ -395,6 +397,7 @@ describe("proposeStatementMatches", () => {
           userId: "u1",
           amountCents: 125_000,
           status: "pending",
+          source: "member",
           paidOn: null,
         },
       ],
@@ -409,6 +412,7 @@ describe("proposeStatementMatches", () => {
         userId: "u1",
         amountCents: 125_000,
         status: "reconciled",
+        source: "statement",
         paidOn: "2027-01-15",
       },
     ]);
@@ -427,11 +431,16 @@ describe("proposeStatementMatches", () => {
   });
 
   it("suggests the member whose one pending payment has the same amount, when the line has no reference", () => {
-    const pending = (id: string, userId: string, amountCents = 125_000) => ({
+    const pending = (
+      id: string,
+      userId: string,
+      source: PaymentSource = "member",
+    ) => ({
       id,
       userId,
-      amountCents,
+      amountCents: 125_000,
       status: "pending" as const,
+      source,
       paidOn: null,
     });
     const membersWithRefs = [
@@ -461,5 +470,14 @@ describe("proposeStatementMatches", () => {
       [pending("p2", "u1")],
     );
     expect(after!.member).toBeNull();
+
+    // A payment a captain recorded as promised is not money the member said
+    // they sent: never suggested.
+    for (const source of ["captain", "statement"] as const) {
+      const [promised] = proposeStatementMatches([noRef], membersWithRefs, [
+        pending("p1", "u3", source),
+      ]);
+      expect(promised!.member).toBeNull();
+    }
   });
 });

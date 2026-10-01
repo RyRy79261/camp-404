@@ -854,6 +854,7 @@ export const duesTestStore = {
         userId: p.userId,
         amountCents: p.amountCents,
         status: p.status,
+        source: p.source,
         paidOn: p.paidOn,
       })),
     };

@@ -1539,6 +1539,7 @@ export async function statementContext(cycle: number): Promise<{
     userId: string;
     amountCents: number;
     status: PaymentStatus;
+    source: PaymentSource;
     paidOn: string | null;
   }[];
 }> {
@@ -1563,6 +1564,7 @@ export async function statementContext(cycle: number): Promise<{
         userId: schema.payments.userId,
         amountCents: schema.payments.amountCents,
         status: schema.payments.status,
+        source: schema.payments.source,
         paidOn: schema.payments.paidOn,
       })
       .from(schema.payments)

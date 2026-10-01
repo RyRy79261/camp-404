@@ -31,9 +31,11 @@ import {
 // read there and thrown away; what comes back is the lines of money coming
 // in, each with the member its reference names. The Finance team confirms one
 // line at a time (a one-tap row action: a failure is a toast, only that
-// button spins). A line with no reference can be given a member by hand, and
-// one whose amount matches a single payment waiting to be checked comes with
-// that member suggested. Every line is one grid of fixed columns (amount and
+// button spins). A line with no reference can be given a member by hand; one
+// whose amount matches a single proof waiting to be checked names that member
+// in its chip, but is never picked for the team: someone else may have paid
+// the same amount. The button says what a tap does ("Mark received" for a
+// member's pending payment, "Record" for a new one). Every line is one grid of fixed columns (amount and
 // day, what the bank says with one chip, the member, "Record"), so the picker
 // and the button sit in the same place on every row, whatever the chip says.
 
@@ -41,7 +43,10 @@ const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 interface Line extends StatementProposal {
-  /** The member the Finance team picked, or the one the reference names. */
+  /**
+   * The member the Finance team picked, or the one the reference names. A
+   * member suggested only by the amount starts unpicked.
+   */
   pickedId: string;
   done: string | null;
 }
@@ -74,7 +79,7 @@ export function StatementImport() {
         ...rest,
         lines: proposals.map((p) => ({
           ...p,
-          pickedId: p.member?.id ?? "",
+          pickedId: p.matchedBy === "reference" ? p.member!.id : "",
           done: p.alreadyRecorded ? "Already on the ledger" : null,
         })),
       });
@@ -220,12 +225,12 @@ export function StatementImport() {
                 const chip = line.done
                   ? null
                   : closesProof
-                    ? line.matchedBy === "amount"
-                      ? `Same amount as ${line.member!.name}'s pending payment`
-                      : `Marks ${line.member!.name}'s pending payment received`
-                    : !line.member
-                      ? "No reference found"
-                      : null;
+                    ? `Marks ${line.member!.name}'s pending payment received`
+                    : line.matchedBy === "amount" && !line.pickedId
+                      ? `No reference. Same amount as ${line.member!.name}'s proof: pick them if it is theirs`
+                      : !line.member
+                        ? "No reference found"
+                        : null;
                 return (
                   <li
                     key={line.row}
@@ -298,7 +303,7 @@ export function StatementImport() {
                       {confirming && busyRow === line.row && (
                         <Loader2 className="animate-spin" aria-hidden />
                       )}
-                      Record
+                      {closesProof ? "Mark received" : "Record"}
                     </Button>
                   </li>
                 );

@@ -667,6 +667,8 @@ export interface StatementLedgerPayment {
   userId: string;
   amountCents: number;
   status: PaymentStatus;
+  /** Who recorded it: only a proof the member sent is ever suggested. */
+  source: PaymentSource;
   /** The day the money was paid, YYYY-MM-DD, when known. */
   paidOn: string | null;
 }
@@ -737,13 +739,17 @@ export function proposeStatementMatches(
       alreadyRecorded,
     };
   });
-  // Then a line with no reference: when exactly one pending payment left has
-  // the same amount, suggest its member (someone who forgot the reference).
+  // Then a line with no reference: when exactly one proof a member sent, still
+  // waiting, has the same amount, suggest that member (someone who forgot the
+  // reference). Only a suggestion: the import never picks it for the Finance
+  // team, who choose the member before the line can be recorded. A payment a
+  // captain recorded by hand as promised is never suggested.
   return proposals.map((proposal) => {
     if (proposal.member) return proposal;
     const same = payments.filter(
       (p) =>
         p.status === "pending" &&
+        p.source === "member" &&
         p.amountCents === proposal.amountCents &&
         !claimed.has(p.id),
     );
