@@ -49,4 +49,30 @@ describe("migration journal", () => {
       .sort();
     expect(files).toEqual(entries.map((entry) => `${entry.tag}.sql`).sort());
   });
+
+  // drizzle-kit reads every snapshot on the next `db:generate` and on
+  // `drizzle-kit check`; one empty or cut-off file (a write interrupted by a
+  // crash) breaks both with "Unexpected end of JSON input". Each snapshot
+  // also names the one before it, so the chain shows a file left behind.
+  it("has a readable snapshot for each entry, each pointing at the one before it", () => {
+    const snapshots = entries.map((entry) => {
+      const name = `meta/${String(entry.idx).padStart(4, "0")}_snapshot.json`;
+      const text = readFileSync(new URL(name, MIGRATIONS_DIR), "utf8");
+      let parsed: { id?: string; prevId?: string } = {};
+      try {
+        parsed = JSON.parse(text) as { id?: string; prevId?: string };
+      } catch {
+        throw new Error(`${name} is not valid JSON; regenerate the migration`);
+      }
+      return { name, ...parsed };
+    });
+    const broken = snapshots
+      .slice(1)
+      .filter((snapshot, i) => snapshot.prevId !== snapshots[i]!.id)
+      .map((snapshot) => snapshot.name);
+    expect(snapshots.every((snapshot) => typeof snapshot.id === "string")).toBe(
+      true,
+    );
+    expect(broken).toEqual([]);
+  });
 });
