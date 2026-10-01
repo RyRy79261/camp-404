@@ -258,29 +258,43 @@ async function lockType(
   return row;
 }
 
-/** A slot of this year and its type, the slot's row locked for the write. */
+/**
+ * A slot of this year and its type, for a write: the type's row locked FOR
+ * SHARE, then the slot's row FOR UPDATE. The share lock makes a sign-up and
+ * a change to the type (fewer places, or removing it, both FOR UPDATE on the
+ * type) wait for each other, so neither counts sign-ups the other is still
+ * writing. Type before slot, the same order saveShiftType and removeShiftType
+ * take, so the two cannot deadlock.
+ */
 async function lockSlot(
   tx: Tx,
   slotId: string,
   cycle: number,
 ): Promise<{ slot: ShiftSlotRow; type: ShiftTypeRow } | undefined> {
   if (!UUID.test(slotId)) return undefined;
-  const [slot] = await tx
-    .select(SLOT_COLUMNS)
+  // A slot never changes type, so its type can be read before the lock.
+  const [owner] = await tx
+    .select({ typeId: schema.shiftSlots.typeId })
     .from(schema.shiftSlots)
-    .where(eq(schema.shiftSlots.id, slotId))
-    .for("update");
-  if (!slot) return undefined;
+    .where(eq(schema.shiftSlots.id, slotId));
+  if (!owner) return undefined;
   const [type] = await tx
     .select(TYPE_COLUMNS)
     .from(schema.shiftTypes)
     .where(
       and(
-        eq(schema.shiftTypes.id, slot.typeId),
+        eq(schema.shiftTypes.id, owner.typeId),
         eq(schema.shiftTypes.cycle, cycle),
       ),
-    );
-  return type ? { slot, type } : undefined;
+    )
+    .for("share");
+  if (!type) return undefined;
+  const [slot] = await tx
+    .select(SLOT_COLUMNS)
+    .from(schema.shiftSlots)
+    .where(eq(schema.shiftSlots.id, slotId))
+    .for("update");
+  return slot ? { slot, type } : undefined;
 }
 
 async function takenOn(tx: Tx, slotId: string): Promise<number> {

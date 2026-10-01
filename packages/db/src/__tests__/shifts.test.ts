@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CLEANING_TEAM,
   SHIFTS_ACTION_KEY,
@@ -43,6 +43,7 @@ import {
   takeMemberOffShift,
 } from "../shifts";
 import { sanitiseAccount } from "../account";
+import { setUserApproval } from "../burner-profile";
 import { assignTeam, setLead } from "../team-memberships";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
@@ -506,6 +507,105 @@ describe("taking places", () => {
     expect((await sanitiseAccount(dee.id)).ok).toBe(true);
     expect((await readShiftRoster(YEAR)).signups).toHaveLength(0);
     expect(await h.db().select().from(schema.volunteerShifts)).toHaveLength(0);
+  });
+});
+
+describe("leaving approved", () => {
+  const h = useTestDb();
+  const { people, audits, cleaning } = helpers(h);
+
+  it("a member who is rejected or re-opened comes off this year's shifts, so the place is free again", async () => {
+    const { captain, sanitationLead, dee, sam } = await people();
+    const { type, first } = await cleaning(sanitationLead.id, 1);
+    for (const to of ["rejected", "pending"] as const) {
+      await h
+        .db()
+        .update(schema.users)
+        .set({ approvalStatus: "approved" })
+        .where(eq(schema.users.id, dee.id));
+      expect(
+        await signUpForShift({ userId: dee.id, slotId: first.id, now: BEFORE }),
+      ).toEqual({ ok: true, mine: 1 });
+      expect(
+        await setUserApproval({
+          userId: dee.id,
+          from: "approved",
+          to,
+          decidedByUserId: captain.id,
+        }),
+      ).toBe(true);
+      expect(
+        await h
+          .db()
+          .select()
+          .from(schema.shiftSignups)
+          .where(eq(schema.shiftSignups.userId, dee.id)),
+      ).toHaveLength(0);
+    }
+    expect(await audits("shifts.member_removed")).toHaveLength(2);
+    // The place is free, and the shift can go.
+    expect(
+      await signUpForShift({ userId: sam.id, slotId: first.id, now: BEFORE }),
+    ).toEqual({ ok: true, mine: 1 });
+    await leaveShift({ userId: sam.id, slotId: first.id, now: BEFORE });
+    expect(
+      await removeShiftType({
+        id: type.id,
+        expectedVersion: 1,
+        actorId: sanitationLead.id,
+      }),
+    ).toEqual({ ok: true });
+  });
+});
+
+describe("locks", () => {
+  const h = useTestDb();
+  const { people, cleaning } = helpers(h);
+
+  /** The SQL each write's transaction sends, in order. */
+  function recordTransactionSql(): string[] {
+    const client = h.client();
+    const seen: string[] = [];
+    const original = client.transaction.bind(client);
+    vi.spyOn(client, "transaction").mockImplementation((async (
+      fn: (tx: Parameters<Parameters<typeof original>[0]>[0]) => unknown,
+    ) =>
+      original(async (tx) => {
+        const query = tx.query.bind(tx);
+        tx.query = ((text: string, ...rest: unknown[]) => {
+          seen.push(text.toLowerCase());
+          return (query as (...a: unknown[]) => unknown)(text, ...rest);
+        }) as typeof tx.query;
+        return fn(tx);
+      })) as typeof client.transaction);
+    return seen;
+  }
+
+  it("a sign-up holds the shift type's row FOR SHARE before it locks the slot, so a change to places waits for it", async () => {
+    const { sanitationLead, dee } = await people();
+    const { first } = await cleaning(sanitationLead.id);
+    const seen = recordTransactionSql();
+    try {
+      expect(
+        (
+          await signUpForShift({
+            userId: dee.id,
+            slotId: first.id,
+            now: BEFORE,
+          })
+        ).ok,
+      ).toBe(true);
+    } finally {
+      vi.restoreAllMocks();
+    }
+    const typeShare = seen.findIndex(
+      (q) => q.includes('from "shift_types"') && q.endsWith("for share"),
+    );
+    const slotUpdate = seen.findIndex(
+      (q) => q.includes('from "shift_slots"') && q.endsWith("for update"),
+    );
+    expect(typeShare).toBeGreaterThanOrEqual(0);
+    expect(slotUpdate).toBeGreaterThan(typeShare);
   });
 });
 
