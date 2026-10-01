@@ -2261,6 +2261,9 @@ export const kitchenMealPlanDays = pgTable(
       .references(() => kitchenMealPlans.cycle, { onDelete: "cascade" }),
     day: integer("day").notNull(),
     breakfast: integer("breakfast").notNull().default(0),
+    // Unused: the camp does no lunch (the owner, 2026-10-01). Kept, not
+    // dropped, because production may hold values here; a later migration
+    // drops it.
     lunch: integer("lunch").notNull().default(0),
     dinner: integer("dinner").notNull().default(0),
   },
@@ -2291,7 +2294,7 @@ export const kitchenMenuItems = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     cycle: integer("cycle").notNull(),
     day: integer("day").notNull(),
-    // breakfast | lunch | dinner (MEALS_OF_THE_DAY).
+    // breakfast | dinner (MEALS_OF_THE_DAY): the camp does no lunch.
     meal: text("meal").notNull(),
     recipeId: uuid("recipe_id")
       .notNull()
@@ -2317,7 +2320,7 @@ export const kitchenMenuItems = pgTable(
     ),
     mealCheck: check(
       "kitchen_menu_items_meal_check",
-      sql`${t.meal} in ('breakfast', 'lunch', 'dinner')`,
+      sql`${t.meal} in ('breakfast', 'dinner')`,
     ),
   }),
 );

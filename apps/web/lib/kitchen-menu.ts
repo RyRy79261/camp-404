@@ -5,9 +5,11 @@ import type {
   KitchenMenu,
   KitchenMenuWriteResult,
   KitchenSnack,
+  MenuBookRecipe,
   ShoppingFacts,
 } from "@camp404/db/kitchen-menu";
 import { usesTestStore } from "./test-mode";
+import { testStore } from "./test-store";
 import {
   storeAddMenuItem,
   storeAddSnack,
@@ -28,12 +30,18 @@ export type {
   KitchenMenu,
   KitchenMenuWriteResult,
   KitchenSnack,
+  MenuBookRecipe,
   ShoppingFacts,
 };
 
 /** This year's menu. */
 export async function getKitchenMenu(): Promise<KitchenMenu> {
   return usesTestStore() ? storeKitchenMenu() : db.getKitchenMenu();
+}
+
+/** The recipe book as the menu's picker lists it. */
+export async function listMenuBook(): Promise<MenuBookRecipe[]> {
+  return usesTestStore() ? testStore.menuBook() : db.listMenuBook();
 }
 
 /** This year's snacks. */

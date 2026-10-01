@@ -290,7 +290,7 @@ import {
   type MealPlanSave,
   type MealPlanWriteResult,
 } from "@camp404/db/meal-plan";
-import type { MenuRecipeFacts } from "@camp404/db/kitchen-menu";
+import type { MenuBookRecipe, MenuRecipeFacts } from "@camp404/db/kitchen-menu";
 import {
   calendarEventRefusal,
   type AddCalendarEventResult,
@@ -5706,6 +5706,128 @@ export const testStore = {
     });
   },
 
+  /**
+   * Test only: recipes straight into the book, for the Kitchen's specs and
+   * screenshots (/api/test/seed-kitchen-book). Each is written for its first
+   * plate count; each further count gets lines of its own (the amounts in
+   * proportion: seed data, not the kitchen's maths, which never multiplies),
+   * and Claude is "on" each of `open`. Returns the recipes' ids by title.
+   */
+  seedKitchenBook(input: {
+    authorId: string;
+    recipes: {
+      title: string;
+      summary?: string | null;
+      totalMinutes?: number | null;
+      plates: number[];
+      open?: number[];
+      ingredients: {
+        name: string;
+        category: KitchenRecipe["ingredients"][number]["category"];
+        quantity: number | null;
+        unit: KitchenRecipe["ingredients"][number]["unit"];
+      }[];
+    }[];
+  }): Record<string, string> {
+    const ids: Record<string, string> = {};
+    for (const seed of input.recipes) {
+      const [first, ...more] = seed.plates;
+      if (first === undefined) throw new Error(`${seed.title}: no plates`);
+      const now = new Date();
+      const id = crypto.randomUUID();
+      recipes.push({
+        id,
+        submitterId: input.authorId,
+        source: "text",
+        status: "accepted",
+        title: seed.title,
+        sourceUrl: null,
+        rawText: seed.title,
+        suitabilityNote: null,
+        textAuthorId: input.authorId,
+        aiConsentAt: now,
+        changesNote: null,
+        rejectionReason: null,
+        lastError: null,
+        latestRunId: null,
+        acceptedVersionId: null,
+        rerunRequest: null,
+        rerunRequestedBy: null,
+        rerunRequestedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      const body = KitchenRecipe.parse({
+        title: seed.title,
+        summary: seed.summary ?? null,
+        plates: first,
+        totalTimeMinutes: seed.totalMinutes ?? null,
+        ingredients: seed.ingredients,
+        steps: [
+          {
+            instruction: "Cook it.",
+            uses: seed.ingredients.map((l) => l.name),
+          },
+        ],
+      });
+      const { versionId } = addStoreVersion(findRecipe(id)!, {
+        authorId: input.authorId,
+        runId: null,
+        reason: "Seeded",
+        body,
+        report: null,
+      });
+      for (const plates of more) {
+        const k = plates / first;
+        recipePlateCounts.push({
+          versionId,
+          plates,
+          lines: baseLines(body).map((line) => ({
+            ...line,
+            quantity:
+              line.quantity === null
+                ? null
+                : Math.round(line.quantity * k * 10) / 10,
+          })),
+          pots: null,
+          notes: [],
+          report: null,
+          source: "proofread",
+          runId: null,
+          createdAt: now,
+        });
+      }
+      for (const plates of seed.open ?? []) {
+        recipeRuns.push({
+          id: crypto.randomUUID(),
+          recipeId: id,
+          requestedBy: input.authorId,
+          requestedAt: now,
+          note: null,
+          startedAt: now,
+          finishedAt: null,
+          promptVersion: "seeded",
+          model: "seeded",
+          inputTokens: null,
+          outputTokens: null,
+          outcome: "running",
+          error: null,
+          result: null,
+          kind: "plates",
+          plates,
+          versionId,
+          sourceId: null,
+          stage: null,
+          exchange: null,
+          previousStatus: "accepted",
+          previousRunId: null,
+        });
+      }
+      ids[seed.title] = id;
+    }
+    return ids;
+  },
+
   /** The twin of addLesson: on one of the recipe's versions. */
   addLesson(input: {
     recipeId: string;
@@ -6049,6 +6171,36 @@ export const testStore = {
       };
     }
     return out;
+  },
+
+  /** The recipe book as the menu's picker lists it (the twin of listMenuBook). */
+  menuBook(): MenuBookRecipe[] {
+    return recipes
+      .filter((r) => r.acceptedVersionId !== null)
+      .map((r) => {
+        const version = recipeVersions.find(
+          (v) => v.id === r.acceptedVersionId,
+        )!;
+        return {
+          id: r.id,
+          title: r.title?.trim() || UNTITLED_RECIPE,
+          summary: version.body.summary?.trim() || null,
+          totalMinutes: version.body.totalTimeMinutes ?? null,
+          readyPlates: storePlateCounts(version.id).map((p) => p.plates),
+          openPlates: recipeRuns
+            .filter(
+              (run) =>
+                run.kind === "plates" &&
+                run.versionId === version.id &&
+                (run.outcome === "queued" || run.outcome === "running") &&
+                run.plates !== null,
+            )
+            .map((run) => run.plates!),
+        };
+      })
+      .sort((a, b) =>
+        a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
+      );
   },
 
   /** Whether a recipe is in the book (it has an accepted version). */

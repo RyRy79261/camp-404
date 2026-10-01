@@ -9,10 +9,12 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShoppingFacts } from "@camp404/db/kitchen-menu";
 
-// The shopping list page (#245, the owner's layout A, 2026-09-30): worked
-// out from the menu; one list grouped by shop area; each line with its
-// amount and where it comes from; a recipe not verified for its meal's
-// plates listed at the top, never guessed; snacks last; any member ticks.
+// The shopping list page (#245; the owner's approved mock-up,
+// design/approved-ks.html, Option A, 2026-10-01): worked out from the menu;
+// one checklist with every shop area on one page; a tap on a line ticks it,
+// its arrow opens where its amount comes from; a recipe not verified for its
+// meal's plates listed at the top, never guessed; snacks last; a filter by
+// name and All / To buy / Bought; "Tick all" per area; any member ticks.
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/kitchen-menu", () => ({ getShoppingFacts: vi.fn() }));
@@ -41,8 +43,8 @@ function facts(ticks: ShoppingFacts["ticks"] = []): ShoppingFacts {
       daysOnSite: 2,
       firstDay: "2026-04-25",
       days: [
-        { breakfast: 0, lunch: 0, dinner: 50 },
-        { breakfast: 30, lunch: 0, dinner: 50 },
+        { breakfast: 0, dinner: 50 },
+        { breakfast: 30, dinner: 50 },
       ],
       version: 1,
       updatedAt: null,
@@ -93,6 +95,10 @@ async function renderAs(
 }
 
 const group = (name: string) => screen.getByRole("region", { name });
+/** A line's tick: the line itself, named by its name and amount. */
+const box = (name: string) =>
+  screen.getByRole("checkbox", { name: (n) => n.split(",")[0] === name });
+const isTicked = (name: string) => box(name).getAttribute("aria-checked");
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -106,32 +112,55 @@ describe("shopping list page", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Shopping list" }),
     ).toBeTruthy();
-    expect(screen.getByText("From 2 meals on the menu.")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "From 2 meals on the menu. Ticks are shared: everyone sees what is already bought.",
+      ),
+    ).toBeTruthy();
 
     const notCounted = screen.getByRole("region", {
       name: "Not counted yet: proofread first",
     });
+    expect(notCounted.textContent).toContain("1 recipe not counted yet");
     expect(notCounted.textContent).toContain("Camp dal");
     expect(notCounted.textContent).toContain(
       "Day 2 · Sun 26 Apr, breakfast · 30 plates",
+    );
+    expect(
+      within(notCounted).getByRole("link", { name: "Open Camp dal" }),
+    ).toHaveProperty(
+      "href",
+      expect.stringContaining(`/kitchen/recipes/${DAL}?plates=30`),
     );
 
     // Shop order: Produce, Legumes, Spices, then Snacks.
     expect(
       screen
-        .getAllByRole("heading", { level: 2 })
-        .map((h) => h.textContent)
-        .slice(1),
-    ).toEqual(["Produce", "Legumes", "Spices", "Snacks"]);
-    expect(group("Produce").textContent).toContain("Onions1.6 kg");
-    expect(group("Produce").textContent).toContain(
-      "Day 1 dinner, Day 2 dinner",
-    );
-    expect(group("Legumes").textContent).toContain("Red lentils5 kg");
-    expect(group("Spices").textContent).toContain("SaltTo taste");
-    expect(group("Snacks").textContent).toContain("Rusks4 boxes");
+        .getAllByRole("region")
+        .slice(1)
+        .map((r) => r.getAttribute("aria-labelledby")),
+    ).toEqual(["group-produce", "group-legume", "group-spice", "group-snacks"]);
+    expect(group("Produce").textContent).toContain("0 of 1 bought");
+    expect(box("Onions").textContent).toBe("Onions1.6 kg");
+    expect(box("Red lentils").textContent).toBe("Red lentils5 kg");
+    expect(box("Salt").textContent).toBe("SaltTo taste");
+    expect(box("Rusks").textContent).toBe("Rusks4 boxes");
+    // A snack has nowhere it comes from.
+    expect(
+      screen.queryByRole("button", { name: "Where the Rusks comes from" }),
+    ).toBeNull();
 
-    // The line opens to where its amount comes from.
+    // The arrow opens where the amount comes from, each meal's amount under
+    // the total.
+    const arrow = screen.getByRole("button", {
+      name: "Where the Onions comes from",
+    });
+    expect(arrow.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      screen.queryByRole("list", { name: "Where the Onions comes from" }),
+    ).toBeNull();
+    fireEvent.click(arrow);
+    expect(arrow.getAttribute("aria-expanded")).toBe("true");
     const from = screen.getByRole("list", {
       name: "Where the Onions comes from",
     });
@@ -140,9 +169,11 @@ describe("shopping list page", () => {
         .getAllByRole("listitem")
         .map((li) => li.textContent),
     ).toEqual([
-      "Day 1 · Sat 25 Apr, dinner·Camp dalfor 50 plates: 800 g",
-      "Day 2 · Sun 26 Apr, dinner·Camp dalfor 50 plates: 800 g",
+      "Camp dalDay 1 · Sat 25 Apr, dinner · 50 plates800 g",
+      "Camp dalDay 2 · Sun 26 Apr, dinner · 50 plates800 g",
     ]);
+    // Opening it ticks nothing.
+    expect(setShoppingTicksAction).not.toHaveBeenCalled();
   });
 
   it("shows the camp's ticks, and a tick at another amount as not bought", async () => {
@@ -153,36 +184,61 @@ describe("shopping list page", () => {
         { key: "onions|g", amount: "1 kg" },
       ]),
     );
-    expect(
-      screen.getByRole("checkbox", { name: "Red lentils" }).dataset.state,
-    ).toBe("checked");
-    expect(screen.getByRole("checkbox", { name: "Onions" }).dataset.state).toBe(
-      "unchecked",
+    expect(isTicked("Red lentils")).toBe("true");
+    expect(isTicked("Onions")).toBe("false");
+    expect(group("Produce").textContent).toContain(
+      "Ticked when it was 1 kg. The list now needs 1.6 kg.",
     );
-    expect(group("Produce").textContent).toContain("Ticked when it was 1 kg");
+    expect(group("Legumes").textContent).toContain("1 of 1 bought");
   });
 
-  it("lets a plain member tick a line and a whole shop area", async () => {
+  it("lets a plain member tick a line with a tap, and a whole shop area", async () => {
     await renderAs("camp_member");
     await act(async () => {
-      fireEvent.click(screen.getByRole("checkbox", { name: "Onions" }));
+      fireEvent.click(box("Onions"));
     });
     expect(setShoppingTicksAction).toHaveBeenCalledWith({
       lines: [{ key: "onions|g", amount: "1.6 kg" }],
       ticked: true,
     });
-    expect(screen.getByRole("checkbox", { name: "Onions" }).dataset.state).toBe(
-      "checked",
-    );
+    expect(isTicked("Onions")).toBe("true");
+    // Every line in Produce is bought: its button unticks them.
+    expect(
+      within(group("Produce")).getByRole("button", {
+        name: "Untick all Produce",
+      }).textContent,
+    ).toBe("Untick all");
+    const snacks = within(group("Snacks")).getByRole("button", {
+      name: "Tick all Snacks",
+    });
+    expect(snacks.textContent).toBe("Tick all 1");
     await act(async () => {
-      fireEvent.click(
-        screen.getByRole("checkbox", { name: "Tick all Snacks" }),
-      );
+      fireEvent.click(snacks);
     });
     expect(setShoppingTicksAction).toHaveBeenLastCalledWith({
       lines: [{ key: "snack:s1", amount: "4 boxes" }],
       ticked: true,
     });
+  });
+
+  it("shows all, what is left to buy, or what is bought", async () => {
+    await renderAs(
+      "camp_member",
+      facts([{ key: "red lentils|g", amount: "5 kg" }]),
+    );
+    const show = screen.getByRole("group", { name: "Show" });
+    expect(
+      within(show)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["All4", "To buy3", "Bought1"]);
+    fireEvent.click(within(show).getByRole("button", { name: /^To buy/ }));
+    expect(screen.queryByRole("region", { name: "Legumes" })).toBeNull();
+    expect(box("Onions")).toBeTruthy();
+    fireEvent.click(within(show).getByRole("button", { name: /^Bought/ }));
+    expect(
+      screen.getAllByRole("checkbox").map((c) => c.getAttribute("aria-label")),
+    ).toEqual(["Red lentils, 5 kg"]);
   });
 
   it("takes the ticks from a refreshed list, not the ones it first drew", async () => {
@@ -194,11 +250,9 @@ describe("shopping list page", () => {
     vi.mocked(getShoppingFacts).mockResolvedValue(facts());
     const { rerender } = render(await ShoppingListPage());
     await act(async () => {
-      fireEvent.click(screen.getByRole("checkbox", { name: "Onions" }));
+      fireEvent.click(box("Onions"));
     });
-    expect(screen.getByRole("checkbox", { name: "Onions" }).dataset.state).toBe(
-      "checked",
-    );
+    expect(isTicked("Onions")).toBe("true");
 
     // The menu grew: the onions were ticked at another amount, and someone
     // else ticked the lentils.
@@ -211,13 +265,9 @@ describe("shopping list page", () => {
     await act(async () => {
       rerender(await ShoppingListPage());
     });
-    expect(screen.getByRole("checkbox", { name: "Onions" }).dataset.state).toBe(
-      "unchecked",
-    );
+    expect(isTicked("Onions")).toBe("false");
     expect(group("Produce").textContent).toContain("Ticked when it was 1 kg");
-    expect(
-      screen.getByRole("checkbox", { name: "Red lentils" }).dataset.state,
-    ).toBe("checked");
+    expect(isTicked("Red lentils")).toBe("true");
   });
 
   it("puts a refused tick back, with a toast", async () => {
@@ -227,11 +277,9 @@ describe("shopping list page", () => {
     });
     await renderAs("camp_member");
     await act(async () => {
-      fireEvent.click(screen.getByRole("checkbox", { name: "Onions" }));
+      fireEvent.click(box("Onions"));
     });
-    expect(screen.getByRole("checkbox", { name: "Onions" }).dataset.state).toBe(
-      "unchecked",
-    );
+    expect(isTicked("Onions")).toBe("false");
     expect(toast.error).toHaveBeenCalledWith(
       "Only approved camp members can tick the shopping list.",
     );

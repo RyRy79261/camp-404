@@ -110,7 +110,7 @@ export interface ShoppingFacts {
 }
 
 const isMeal = (meal: string): meal is MealOfTheDay =>
-  meal === "breakfast" || meal === "lunch" || meal === "dinner";
+  meal === "breakfast" || meal === "dinner";
 
 // --- Transactions ------------------------------------------------------------
 
@@ -265,6 +265,82 @@ export async function readKitchenMenu(
 export async function getKitchenMenu(cycle?: number): Promise<KitchenMenu> {
   const db = createHttpDb();
   return readKitchenMenu(db, cycle ?? (await currentCycleNumber(db)));
+}
+
+/** A recipe in the book, as the menu's recipe picker lists it. */
+export interface MenuBookRecipe {
+  id: string;
+  title: string;
+  /** The book version's one-line summary, or null. */
+  summary: string | null;
+  /** From the first step to the plate, in minutes, or null when not known. */
+  totalMinutes: number | null;
+  /** Every plate count the book version has, smallest first. */
+  readyPlates: number[];
+  /** Counts Claude is working on. */
+  openPlates: number[];
+}
+
+/**
+ * Every recipe in the book (it has an accepted version), by name, with what
+ * the picker shows: its summary, its time and where its plate counts stand.
+ */
+export async function listMenuBook(): Promise<MenuBookRecipe[]> {
+  const db = createHttpDb();
+  const rows = await db
+    .select({
+      id: schema.recipes.id,
+      title: schema.recipes.title,
+      versionId: schema.recipeVersions.id,
+      summary: sql<string | null>`${schema.recipeVersions.body}->>'summary'`,
+      totalMinutes: sql<
+        number | null
+      >`(${schema.recipeVersions.body}->>'totalTimeMinutes')::int`,
+    })
+    .from(schema.recipes)
+    .innerJoin(
+      schema.recipeVersions,
+      eq(schema.recipeVersions.id, schema.recipes.acceptedVersionId),
+    )
+    .orderBy(asc(sql`lower(${schema.recipes.title})`));
+  const versionIds = rows.map((r) => r.versionId);
+  if (versionIds.length === 0) return [];
+  const [counts, open] = await Promise.all([
+    db
+      .select({
+        versionId: schema.recipePlateCounts.versionId,
+        plates: schema.recipePlateCounts.plates,
+      })
+      .from(schema.recipePlateCounts)
+      .where(inArray(schema.recipePlateCounts.versionId, versionIds))
+      .orderBy(asc(schema.recipePlateCounts.plates)),
+    db
+      .select({
+        versionId: schema.recipeProofreadRuns.versionId,
+        plates: schema.recipeProofreadRuns.plates,
+      })
+      .from(schema.recipeProofreadRuns)
+      .where(
+        and(
+          inArray(schema.recipeProofreadRuns.versionId, versionIds),
+          eq(schema.recipeProofreadRuns.kind, "plates"),
+          inArray(schema.recipeProofreadRuns.outcome, ["queued", "running"]),
+        ),
+      ),
+  ]);
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title?.trim() || "Untitled recipe",
+    summary: row.summary?.trim() || null,
+    totalMinutes:
+      typeof row.totalMinutes === "number" ? row.totalMinutes : null,
+    readyPlates: counts
+      .filter((c) => c.versionId === row.versionId)
+      .map((c) => c.plates),
+    openPlates: open
+      .filter((o) => o.versionId === row.versionId && o.plates !== null)
+      .map((o) => o.plates!),
+  }));
 }
 
 /** A year's snacks, oldest first. */

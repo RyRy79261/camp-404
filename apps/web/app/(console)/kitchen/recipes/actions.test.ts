@@ -33,8 +33,8 @@ vi.mock("@/lib/meal-plan", () => ({
     cycle: 2026,
     daysOnSite: 2,
     days: [
-      { breakfast: 60, lunch: 0, dinner: 45 },
-      { breakfast: 50, lunch: 20, dinner: 45 },
+      { breakfast: 60, dinner: 45 },
+      { breakfast: 50, dinner: 45 },
     ],
     version: 3,
     firstDay: null,
@@ -775,7 +775,7 @@ describe("proofreadRecipeAction", () => {
     vi.mocked(getMealPlan).mockResolvedValueOnce({
       cycle: 2026,
       daysOnSite: 1,
-      days: [{ breakfast: 0, lunch: 0, dinner: 0 }],
+      days: [{ breakfast: 0, dinner: 0 }],
       version: 0,
       firstDay: null,
       updatedAt: null,

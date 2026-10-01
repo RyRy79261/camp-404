@@ -1,10 +1,10 @@
 import { canEditMealPlan, mealPlates } from "@camp404/core";
 import { captainPageGate } from "@/lib/captain-gate";
-import { getKitchenMenu, getSnacks } from "@/lib/kitchen-menu";
+import { getKitchenMenu, getSnacks, listMenuBook } from "@/lib/kitchen-menu";
 import { getMealPlan } from "@/lib/meal-plan";
-import { listRecipeBook } from "@/lib/recipes";
 import { getLeadTeams } from "@/lib/users";
 import { MealPlanEditor } from "./meal-plan-editor";
+import { MemberMenu } from "./member-menu";
 import type { MenuLine } from "./menu-cell";
 import { SnackList } from "./snack-list";
 
@@ -13,20 +13,22 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Meal plan — Camp 404" };
 
 // The kitchen's meal plan (the owner's sketch, 2026-09-24): this year's days
-// on site, and the plates at breakfast, lunch and dinner on each. A recipe in
-// the book is shown at each distinct count here, and the largest is what
-// Claude writes a new recipe for.
+// on site, and the plates at breakfast and dinner on each (the camp does no
+// lunch, the owner, 2026-10-01). A recipe in the book is shown at each
+// distinct count here, and the largest is what Claude writes a new recipe
+// for.
 //
-// The menu sits inside it (#244, the owner's layout A, 2026-09-30): under
-// each meal's plates, the recipes on that meal, each on its own line with
-// where its plate count stands, and the year's snacks under the table. The
-// shopping list (/kitchen/shopping) is worked out from both.
-//
-// Every approved member reads it. A captain or a Kitchen lead edits it
-// (canEditMealPlan, decided here on the server); every write checks again
-// inside its own transaction and writes an audit row. The plan holds the date
-// of day 1 (the owner, 2026-09-24), so each day is named with its date; with
-// no date set yet it is "Day 1", "Day 2".
+// The menu sits inside it (#244): under each meal's plates, the recipes on
+// that meal, and the year's snacks under the week. The shopping list
+// (/kitchen/shopping) is worked out from both. Two views, both approved by
+// the owner on 2026-10-01: a captain or a Kitchen lead (canEditMealPlan,
+// decided here on the server) gets the week as a table to edit
+// (design/approved-kmp.html, Option A), with the recipe picker
+// (approved-rp.html, Option B); every other member reads the menu as a card
+// per day (approved-kmenu.html, Option A), and is never sent the book.
+// Every write checks again inside its own transaction and writes an audit
+// row. The plan holds the date of day 1 (the owner, 2026-09-24), so each day
+// is named with its date; with no date set yet it is "Day 1", "Day 2".
 
 export default async function MealPlanPage() {
   const { campUser, rank } = await captainPageGate("camp_member");
@@ -36,7 +38,7 @@ export default async function MealPlanPage() {
     getMealPlan(),
     getKitchenMenu(),
     getSnacks(),
-    canEdit ? listRecipeBook() : Promise.resolve([]),
+    canEdit ? listMenuBook() : Promise.resolve([]),
   ]);
 
   // Each recipe on a day of the plan, with where its count stands for the
@@ -60,8 +62,20 @@ export default async function MealPlanPage() {
     ];
   });
 
+  if (!canEdit) {
+    return (
+      <MemberMenu
+        daysOnSite={plan.daysOnSite}
+        firstDay={plan.firstDay}
+        days={plan.days}
+        lines={lines}
+        snacks={snacks}
+      />
+    );
+  }
+
   return (
-    <div className="flex min-w-0 flex-col gap-8">
+    <div className="flex min-w-0 flex-col">
       <MealPlanEditor
         // A saved plan comes back with a new version: start from it.
         key={plan.version}
@@ -69,11 +83,10 @@ export default async function MealPlanPage() {
         firstDay={plan.firstDay}
         days={plan.days}
         version={plan.version}
-        canEdit={canEdit}
         menu={lines}
-        book={book.map((r) => ({ id: r.id, title: r.title }))}
+        book={book}
       />
-      <SnackList snacks={snacks} canEdit={canEdit} />
+      <SnackList snacks={snacks} />
     </div>
   );
 }

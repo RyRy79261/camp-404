@@ -149,14 +149,13 @@ export interface ShoppingList {
   groups: ShoppingGroup[];
   /** Menu recipes with no count for their meal's plates yet. */
   notCounted: NotCounted[];
-  /** How many meals (a day's breakfast, lunch or dinner) the list is from. */
+  /** How many meals (a day's breakfast or dinner) the list is from. */
   meals: number;
 }
 
 const MEAL_ORDER: Record<MealOfTheDay, number> = {
   breakfast: 0,
-  lunch: 1,
-  dinner: 2,
+  dinner: 1,
 };
 
 /** The menu in reading order: day, meal, then the order on the meal. */
@@ -347,23 +346,4 @@ export function buildShoppingList(input: {
   })).filter((group) => group.lines.length > 0);
 
   return { groups, notCounted, meals: meals.size };
-}
-
-/** "Day 3 dinner". */
-export function mealName(day: number, meal: MealOfTheDay): string {
-  return `Day ${day} ${meal}`;
-}
-
-/**
- * Where a line's amount comes from, in a few words: the meals by name when
- * there are one or two ("Day 1 dinner, Day 2 dinner"), otherwise how many
- * ("5 meals"). The full breakdown opens under the line.
- */
-export function sourcesSummary(sources: readonly ShoppingSource[]): string {
-  const seen: string[] = [];
-  for (const s of sources) {
-    const name = mealName(s.day, s.meal);
-    if (!seen.includes(name)) seen.push(name);
-  }
-  return seen.length <= 2 ? seen.join(", ") : `${seen.length} meals`;
 }

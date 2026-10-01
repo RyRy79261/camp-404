@@ -56,8 +56,8 @@ function actAs(rank: ViewerRank, led: string[] = [], id = "user-1") {
 const PLAN = {
   daysOnSite: 2,
   days: [
-    { breakfast: 20, lunch: 0, dinner: 25 },
-    { breakfast: 45, lunch: 0, dinner: 50 },
+    { breakfast: 20, dinner: 25 },
+    { breakfast: 45, dinner: 50 },
   ],
   expectedVersion: 1,
 };
@@ -95,6 +95,20 @@ describe("saveMealPlanAction", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/kitchen/meal-plan");
   });
 
+  it("drops a lunch an older page still sends: the camp does no lunch", async () => {
+    expect(
+      (
+        await saveMealPlanAction({
+          ...PLAN,
+          days: PLAN.days.map((d) => ({ ...d, lunch: 300 })),
+        })
+      ).ok,
+    ).toBe(true);
+    expect(setMealPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ days: PLAN.days }),
+    );
+  });
+
   it("passes the date of day 1 through, and refuses one that is not a date", async () => {
     expect(
       (await saveMealPlanAction({ ...PLAN, firstDay: "2026-04-25" })).ok,
@@ -118,7 +132,7 @@ describe("saveMealPlanAction", () => {
     expect(
       await saveMealPlanAction({
         ...PLAN,
-        days: [PLAN.days[0], { breakfast: 501, lunch: 0, dinner: 0 }],
+        days: [PLAN.days[0], { breakfast: 501, dinner: 0 }],
       }),
     ).toEqual({ ok: false, error: "Give at most 500 plates." });
     expect(setMealPlan).not.toHaveBeenCalled();

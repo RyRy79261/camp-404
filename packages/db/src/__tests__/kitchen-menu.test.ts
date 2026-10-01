@@ -19,6 +19,7 @@ import {
   getKitchenMenu,
   getShoppingFacts,
   getSnacks,
+  listMenuBook,
   removeMenuItem,
   removeSnack,
   setShoppingTicks,
@@ -102,7 +103,7 @@ describe("kitchen menu and shopping list", () => {
     return { recipeId: row!.id, versionId };
   }
 
-  /** Two days: 50 at dinner on both, 30 at breakfast on day 2, no lunch. */
+  /** Two days: 50 at dinner on both, 30 at breakfast on day 2. */
   async function setUp() {
     await campYear(h.db(), 2026);
     const captain = await makeUser(h.db(), {
@@ -118,8 +119,8 @@ describe("kitchen menu and shopping list", () => {
         actorId: captain.id,
         daysOnSite: 2,
         days: [
-          { breakfast: 0, lunch: 0, dinner: 50 },
-          { breakfast: 30, lunch: 0, dinner: 50 },
+          { breakfast: 0, dinner: 50 },
+          { breakfast: 30, dinner: 50 },
         ],
         expectedVersion: 0,
       }),
@@ -135,6 +136,78 @@ describe("kitchen menu and shopping list", () => {
       .select()
       .from(schema.auditLog)
       .where(eq(schema.auditLog.action, action));
+
+  it("lists the book for the picker: by name, with each recipe's summary, time and where its counts stand", async () => {
+    const { captain, dal, rice } = await setUp();
+    // Camp dal is also counted for 30 plates, and Claude is on 40 for it.
+    await h.db().insert(schema.recipePlateCounts).values({
+      versionId: dal.versionId,
+      plates: 30,
+      lines: [],
+      source: "proofread",
+    });
+    await h
+      .db()
+      .insert(schema.recipeProofreadRuns)
+      .values([
+        {
+          recipeId: dal.recipeId,
+          requestedBy: captain.id,
+          promptVersion: "test",
+          model: "test",
+          kind: "plates",
+          plates: 40,
+          versionId: dal.versionId,
+          outcome: "running",
+        },
+        // A finished run is not open.
+        {
+          recipeId: rice.recipeId,
+          requestedBy: captain.id,
+          promptVersion: "test",
+          model: "test",
+          kind: "plates",
+          plates: 40,
+          versionId: rice.versionId,
+          outcome: "failed",
+        },
+      ]);
+    // A suggestion with no version is not in the book.
+    await h
+      .db()
+      .insert(schema.recipes)
+      .values({ source: "text", title: "Aardvark stew" });
+    await h
+      .db()
+      .update(schema.recipeVersions)
+      .set({
+        body: {
+          ...DAL,
+          summary: "Red lentils and onions",
+          totalTimeMinutes: 70,
+        },
+      })
+      .where(eq(schema.recipeVersions.id, dal.versionId));
+
+    expect(await listMenuBook()).toEqual([
+      {
+        id: dal.recipeId,
+        title: "Camp dal",
+        summary: "Red lentils and onions",
+        totalMinutes: 70,
+        readyPlates: [30, 50],
+        openPlates: [40],
+      },
+      {
+        id: rice.recipeId,
+        title: "Rice",
+        summary: null,
+        totalMinutes: null,
+        readyPlates: [50],
+        openPlates: [],
+      },
+    ]);
+  });
 
   it("lets a Kitchen lead put two recipes on one meal, in order, each audited", async () => {
     const { kitchenLead, captain, dal, rice } = await setUp();
@@ -205,7 +278,7 @@ describe("kitchen menu and shopping list", () => {
     const { captain, dal } = await setUp();
     const add = (
       day: number,
-      meal: "breakfast" | "lunch" | "dinner",
+      meal: "breakfast" | "dinner",
       recipeId = dal.recipeId,
     ) => addMenuItem({ actorId: captain.id, day, meal, recipeId });
     expect((await add(1, "dinner")).ok).toBe(true);
@@ -217,7 +290,7 @@ describe("kitchen menu and shopping list", () => {
       ok: false,
       error: MENU_DAY_NOT_ON_PLAN,
     });
-    expect(await add(1, "lunch")).toEqual({
+    expect(await add(1, "breakfast")).toEqual({
       ok: false,
       error: MENU_MEAL_HAS_NO_PLATES,
     });
@@ -447,8 +520,8 @@ describe("kitchen menu and shopping list", () => {
         actorId: captain.id,
         daysOnSite: 2,
         days: [
-          { breakfast: 0, lunch: 0, dinner: 50 },
-          { breakfast: 30, lunch: 0, dinner: 50 },
+          { breakfast: 0, dinner: 50 },
+          { breakfast: 30, dinner: 50 },
         ],
         expectedVersion: 0,
       }),
@@ -485,7 +558,7 @@ describe("kitchen menu and shopping list", () => {
       daysOnSite: 2,
       version: 1,
     });
-    expect(facts.plan.days[1]).toEqual({ breakfast: 30, lunch: 0, dinner: 50 });
+    expect(facts.plan.days[1]).toEqual({ breakfast: 30, dinner: 50 });
     expect(facts.menu.items.map((i) => [i.day, i.meal, i.recipeId])).toEqual([
       [1, "dinner", dal.recipeId],
     ]);

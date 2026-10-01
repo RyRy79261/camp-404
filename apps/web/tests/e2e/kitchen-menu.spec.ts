@@ -13,14 +13,16 @@ import {
 } from "./_helpers";
 import { acceptedAt50, DISH } from "./lib/kitchen";
 
-// The Kitchen's menu (#244) and shopping list (#245), the layouts the owner
-// approved on 2026-09-30 (test-mode). Recipes sit inside the meal plan table:
-// a Kitchen lead puts the book's recipes on meals with "+ Add a recipe", each
-// on its own line with where its plate count stands; the shopping list adds
-// up the verified counts by shop area, lists a recipe not verified for its
-// meal's plates at the top ("Not counted yet: proofread first"), and puts the
-// snacks last. Any member ticks, for the whole camp; a lead of another team
-// reads the menu and changes nothing.
+// The Kitchen's menu (#244) and shopping list (#245), in the mock-ups the
+// owner approved on 2026-10-01 (test-mode). Recipes sit inside the meal
+// plan's week table: a Kitchen lead puts the book's recipes on meals with
+// "+ Add a recipe", which opens the picker (it stays open; Done closes it),
+// each recipe on its own line with where its plate count stands; a member
+// reads the menu as a card per day. The shopping list adds up the verified
+// counts by shop area, lists a recipe not verified for its meal's plates at
+// the top ("Not counted yet: proofread first"), and puts the snacks last.
+// Any member ticks a line with a tap, for the whole camp; a lead of another
+// team reads the menu and changes nothing.
 //
 // acceptedAt50 leaves a meal plan of 2 days, 45 at breakfast and 50 at
 // dinner, and Camp dal in the book written for 50 plates: 4 onions, 2.5 kg
@@ -41,11 +43,15 @@ const recipesOn = (page: Page, meal: string) =>
   page.getByRole("list", { name: `Recipes for ${meal}` });
 
 async function addRecipe(page: Page, meal: string) {
+  const word = meal.split(", ")[1]!;
   await page.getByRole("button", { name: `Add a recipe to ${meal}` }).click();
-  const picker = page.getByRole("dialog", { name: `Add a recipe to ${meal}` });
+  const picker = page.getByRole("dialog", { name: `Add recipes to ${word}` });
   await picker.getByLabel("Search the recipe book").fill("dal");
-  await picker.getByRole("button", { name: DISH }).click();
-  await expect(page.getByText(`${DISH} is on ${meal}`)).toBeVisible();
+  await picker.getByRole("button", { name: `Add ${DISH} to ${meal}` }).click();
+  // The picker stays open: the row now says the recipe is on the meal.
+  await expect(picker.getByText(`On ${word}`, { exact: true })).toBeVisible();
+  await expect(picker.getByText(`On ${word}:`)).toBeVisible();
+  await picker.getByRole("button", { name: "Done" }).click();
   await expect(picker).toHaveCount(0);
   await expect(recipesOn(page, meal).getByText(DISH)).toBeVisible();
 }
@@ -77,22 +83,22 @@ test.describe("kitchen menu and shopping list (test-mode)", () => {
     await addRecipe(page, "Day 1, breakfast");
     await expect(
       recipesOn(page, "Day 1, breakfast").getByRole("button", {
-        name: "Proofread for 45",
+        name: "Proofread for 45 plates",
       }),
     ).toBeVisible();
     // A recipe sits on a meal once: the picker no longer offers it there.
     await page
       .getByRole("button", { name: "Add a recipe to Day 1, dinner" })
       .click();
+    const picker = page.getByRole("dialog", { name: "Add recipes to dinner" });
+    await expect(picker.getByText("On dinner", { exact: true })).toBeVisible();
     await expect(
-      page
-        .getByRole("dialog", { name: "Add a recipe to Day 1, dinner" })
-        .getByText("No recipe in the book matches."),
-    ).toBeVisible();
+      picker.getByRole("button", { name: `Add ${DISH} to Day 1, dinner` }),
+    ).toHaveCount(0);
     await page.keyboard.press("Escape");
 
-    // A snack, under the table.
-    await page.getByLabel("Snack", { exact: true }).fill("Rusks");
+    // A snack, under the week.
+    await page.getByLabel("New snack").fill("Rusks");
     await page.getByLabel("Amount").fill("4 boxes");
     await page.getByRole("button", { name: "Add snack" }).click();
     await expect(
@@ -113,7 +119,15 @@ test.describe("kitchen menu and shopping list (test-mode)", () => {
     const legumes = page.getByRole("region", { name: "Legumes" });
     await expect(legumes).toContainText("Red lentils");
     await expect(legumes).toContainText("5 kg");
-    await expect(legumes).toContainText("Day 1 dinner, Day 2 dinner");
+    await legumes
+      .getByRole("button", { name: "Where the Red lentils comes from" })
+      .click();
+    const from = legumes.getByRole("list", {
+      name: "Where the Red lentils comes from",
+    });
+    await expect(from.getByRole("listitem")).toHaveCount(2);
+    await expect(from).toContainText("Day 1, dinner");
+    await expect(from).toContainText("Day 2, dinner");
     await expect(page.getByRole("region", { name: "Snacks" })).toContainText(
       "4 boxes",
     );
@@ -122,18 +136,19 @@ test.describe("kitchen menu and shopping list (test-mode)", () => {
     await member(page, request, "km-member");
     await page.goto("/kitchen/meal-plan");
     await expect(
-      recipesOn(page, "Day 1, dinner").getByText(DISH),
+      recipesOn(page, "Day 1, dinner").getByRole("link", { name: DISH }),
     ).toBeVisible();
     await expect(
-      recipesOn(page, "Day 1, breakfast").getByText("Not proofread yet"),
+      recipesOn(page, "Day 1, breakfast").getByRole("link", { name: DISH }),
     ).toBeVisible();
+    await expect(page.getByText(/Verified|Proofread/)).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /Add a recipe/ }),
     ).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^Take / })).toHaveCount(0);
 
     await page.goto("/kitchen/shopping");
-    const lentils = page.getByRole("checkbox", { name: "Red lentils" });
+    const lentils = page.getByRole("checkbox", { name: /^Red lentils/ });
     await expect(lentils).not.toBeChecked();
     await lentils.click();
     await expect(lentils).toBeChecked();
@@ -144,7 +159,7 @@ test.describe("kitchen menu and shopping list (test-mode)", () => {
     await seedTeam(request, "km-struct", "structures", true);
     await page.goto("/kitchen/shopping");
     await expect(
-      page.getByRole("checkbox", { name: "Red lentils" }),
+      page.getByRole("checkbox", { name: /^Red lentils/ }),
     ).toBeChecked();
     await page.goto("/kitchen/meal-plan");
     await expect(
@@ -168,7 +183,9 @@ test.describe("kitchen menu and shopping list (test-mode)", () => {
     await page
       .getByRole("button", { name: `Take ${DISH} off Day 1, breakfast` })
       .click();
-    await expect(recipesOn(page, "Day 1, breakfast")).toHaveCount(0);
+    await expect(
+      recipesOn(page, "Day 1, breakfast").getByText(DISH),
+    ).toHaveCount(0);
     await page.goto("/kitchen/shopping");
     await expect(
       page.getByRole("heading", { level: 1, name: "Shopping list" }),

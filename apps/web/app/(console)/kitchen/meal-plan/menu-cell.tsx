@@ -1,36 +1,28 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Plus, Sparkles, X } from "lucide-react";
 import type { MealOfTheDay } from "@camp404/types";
-import { Button } from "@camp404/ui/components/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@camp404/ui/components/dialog";
-import { Input } from "@camp404/ui/components/input";
+import { cn } from "@camp404/ui/lib/utils";
 import { toast } from "@camp404/ui/components/toast";
+import { Spin, TickGlyph } from "@/components/kitchen/kit";
+import { mealName } from "@/components/kitchen/labels";
 import { recipePath, UNREACHABLE } from "@/lib/recipe-copy";
 import { platesLabel } from "@/lib/recipe-labels";
 import { proofreadPlatesAction } from "../recipes/actions";
-import { addMenuItemAction, removeMenuItemAction } from "./actions";
+import { removeMenuItemAction } from "./actions";
+import { RecipePicker, type PickerRecipe } from "./recipe-picker";
 
-// The recipes on one meal of the meal plan (#244, the owner's layout A,
-// 2026-09-30): each on its own line, under the meal's plates, with where its
-// plate count stands. The same one-count pattern the owner approved for the
-// recipe page: "Verified" when Claude has proofread the recipe for the meal's
-// plates, "With Claude…" while it does, and otherwise "Proofread for N" for a
-// captain or a Kitchen lead (each run costs money) or "Not proofread yet" for
-// everyone else. The shopping list reads only verified counts.
+// One meal of the meal plan for a Kitchen lead or a captain (the owner's
+// approved mock-up, design/approved-kmp.html, Option A, 2026-10-01): the
+// meal's plates, then each recipe on its own line with where its plate count
+// stands in a fixed column, and "+ Add a recipe", which opens the recipe
+// picker. A meal with no plates says so instead. On a phone the status sits
+// under the recipe's name and the × stays on the right.
 //
-// A captain or a Kitchen lead adds a recipe with "+ Add a recipe", which opens
-// a picker over the recipe book, and takes one off with its ×. Each is a
-// one-tap change: a refusal shows as a toast, and only the control used spins.
+// Each change is a one-tap change: a refusal shows as a toast, and only the
+// control used is busy.
 
 /** A recipe on a meal, as the page read it for the meal's saved plates. */
 export interface MenuLine {
@@ -47,67 +39,44 @@ export interface MenuLine {
   withClaude: boolean;
 }
 
-/** A recipe in the book, for the picker. */
-export interface BookRecipe {
-  id: string;
-  title: string;
-}
+const CHIP =
+  "inline-flex h-7 items-center gap-2 justify-self-start px-2 text-xs font-semibold whitespace-nowrap";
 
-const MEAL_WORD: Record<MealOfTheDay, string> = {
-  breakfast: "breakfast",
-  lunch: "lunch",
-  dinner: "dinner",
-};
-
-/**
- * "Day 1, dinner": how the menu's controls name a meal. The comma keeps the
- * name apart from the plates box's own label ("Day 1 dinner").
- */
-function mealName(day: number, meal: MealOfTheDay): string {
-  return `Day ${day}, ${MEAL_WORD[meal]}`;
-}
-
-function LineStatus({
-  line,
-  plates,
-  canEdit,
-}: {
-  line: MenuLine;
-  plates: number;
-  canEdit: boolean;
-}) {
+function LineStatus({ line, plates }: { line: MenuLine; plates: number }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   if (line.verified) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-        <Check className="h-3.5 w-3.5" aria-hidden />
+      <span className={cn(CHIP, "bg-success/15 text-success")}>
+        <TickGlyph />
         Verified
       </span>
     );
   }
-  if (line.withClaude) {
+  if (line.withClaude || pending) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+      <span className={cn(CHIP, "bg-foreground/5 text-muted-foreground")}>
+        <Spin />
         With Claude…
       </span>
     );
   }
-  if (!canEdit || !line.versionId) {
+  if (!line.versionId) {
     return (
-      <span className="text-xs text-muted-foreground">Not proofread yet</span>
+      <span className={cn(CHIP, "bg-foreground/5 text-muted-foreground")}>
+        Not in the book
+      </span>
     );
   }
   const versionId = line.versionId;
   return (
-    <Button
+    <button
       type="button"
-      variant="outline"
-      size="sm"
-      className="h-7 px-2 text-xs"
-      disabled={pending}
+      className={cn(
+        CHIP,
+        "border border-primary bg-transparent text-foreground hover:bg-primary/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+      )}
       onClick={() =>
         startTransition(async () => {
           let result: Awaited<ReturnType<typeof proofreadPlatesAction>>;
@@ -131,13 +100,8 @@ function LineStatus({
         })
       }
     >
-      {pending ? (
-        <Loader2 className="animate-spin" aria-hidden />
-      ) : (
-        <Sparkles aria-hidden />
-      )}
-      Proofread for {plates}
-    </Button>
+      Proofread for {platesLabel(plates)}
+    </button>
   );
 }
 
@@ -145,13 +109,11 @@ function RemoveButton({ line }: { line: MenuLine }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   return (
-    <Button
+    <button
       type="button"
-      variant="ghost"
-      size="icon"
-      className="-my-1 h-8 w-8 shrink-0 text-muted-foreground"
       aria-label={`Take ${line.title} off ${mealName(line.day, line.meal)}`}
       disabled={pending}
+      className="col-start-2 row-span-2 row-start-1 grid h-8 w-8 place-items-center self-center text-xl leading-none text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50 page-md:col-start-3 page-md:row-span-1 page-md:h-7 page-md:w-7"
       onClick={() =>
         startTransition(async () => {
           let result: Awaited<ReturnType<typeof removeMenuItemAction>>;
@@ -169,185 +131,93 @@ function RemoveButton({ line }: { line: MenuLine }) {
         })
       }
     >
-      {pending ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-      ) : (
-        <X className="h-3.5 w-3.5" aria-hidden />
-      )}
-    </Button>
-  );
-}
-
-function RecipePicker({
-  open,
-  onOpenChange,
-  day,
-  meal,
-  plates,
-  book,
-  taken,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  day: number;
-  meal: MealOfTheDay;
-  plates: number;
-  book: readonly BookRecipe[];
-  taken: readonly string[];
-}) {
-  const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [adding, setAdding] = useState<string | null>(null);
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return book.filter(
-      (r) => !taken.includes(r.id) && (!q || r.title.toLowerCase().includes(q)),
-    );
-  }, [book, taken, query]);
-  const name = mealName(day, meal);
-
-  async function add(recipe: BookRecipe) {
-    setAdding(recipe.id);
-    let result: Awaited<ReturnType<typeof addMenuItemAction>>;
-    try {
-      result = await addMenuItemAction({ day, meal, recipeId: recipe.id });
-    } catch {
-      toast.error(UNREACHABLE);
-      return;
-    } finally {
-      setAdding(null);
-    }
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success(`${recipe.title} is on ${name}`);
-    onOpenChange(false);
-    setQuery("");
-    router.refresh();
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add a recipe to {name}</DialogTitle>
-          <DialogDescription>{platesLabel(plates)}</DialogDescription>
-        </DialogHeader>
-        <Input
-          type="search"
-          aria-label="Search the recipe book"
-          placeholder="Search the recipe book"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        {shown.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            {book.length === 0
-              ? "The recipe book is empty. A recipe shows here once it is in the book."
-              : "No recipe in the book matches."}
-          </p>
-        ) : (
-          <ul
-            aria-label="Recipe book"
-            className="-mx-2 flex max-h-72 flex-col overflow-y-auto"
-          >
-            {shown.map((recipe) => (
-              <li key={recipe.id}>
-                <button
-                  type="button"
-                  disabled={adding !== null}
-                  onClick={() => add(recipe)}
-                  className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-60"
-                >
-                  <span className="min-w-0 break-words">{recipe.title}</span>
-                  {adding === recipe.id ? (
-                    <Loader2
-                      className="h-4 w-4 shrink-0 animate-spin"
-                      aria-hidden
-                    />
-                  ) : null}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </DialogContent>
-    </Dialog>
+      {pending ? <Spin /> : <span aria-hidden>×</span>}
+    </button>
   );
 }
 
 /**
- * One meal's recipes, and for an editor "+ Add a recipe" when the meal has
- * plates saved. `plates` is the meal's SAVED count: the one a recipe is
- * proofread for and the list reads.
+ * One meal's recipes for an editor. `plates` is the meal's SAVED count: the
+ * one a recipe is proofread for and the list reads. `platesControl` is the
+ * plates box the editor draws above them.
  */
 export function MenuCell({
   day,
+  dayLabel,
   meal,
   plates,
   lines,
+  allLines,
   book,
-  canEdit,
+  platesControl,
 }: {
   day: number;
+  /** "Day 3 · Sat 24 Apr", for the picker's heading. */
+  dayLabel: string;
   meal: MealOfTheDay;
   plates: number;
   lines: readonly MenuLine[];
-  book: readonly BookRecipe[];
-  canEdit: boolean;
+  /** Every recipe on the menu, for the picker's "Also on". */
+  allLines: readonly MenuLine[];
+  book: readonly PickerRecipe[];
+  platesControl: ReactNode;
 }) {
   const [picking, setPicking] = useState(false);
-  if (lines.length === 0 && (!canEdit || plates <= 0)) return null;
+  const row = "flex min-h-10 items-center border-t border-border/60";
   return (
-    <div className="mt-2 flex flex-col gap-2 pl-[5.75rem] page-md:pl-0">
-      {lines.length > 0 && (
-        <ul
-          aria-label={`Recipes for ${mealName(day, meal)}`}
-          className="flex flex-col gap-2"
-        >
-          {lines.map((line) => (
-            <li key={line.id} className="flex flex-col items-start gap-0.5">
-              <span className="flex w-full items-start justify-between gap-1">
-                <Link
-                  href={`${recipePath(line.recipeId)}?plates=${plates}`}
-                  className="min-w-0 break-words font-medium leading-snug hover:underline"
-                >
-                  {line.title}
-                </Link>
-                {canEdit && <RemoveButton line={line} />}
-              </span>
-              {plates > 0 && (
-                <LineStatus line={line} plates={plates} canEdit={canEdit} />
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {canEdit && plates > 0 && (
-        <>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 self-start px-1.5 text-xs text-muted-foreground"
-            aria-label={`Add a recipe to ${mealName(day, meal)}`}
-            onClick={() => setPicking(true)}
+    <>
+      {platesControl}
+      <ul
+        aria-label={`Recipes for ${mealName(day, meal)}`}
+        className="mt-2 flex flex-col"
+      >
+        {lines.map((line) => (
+          <li
+            key={line.id}
+            className="grid min-h-10 grid-cols-[minmax(0,1fr)_32px] items-center gap-x-2 gap-y-1 border-t border-border/60 py-2 page-md:grid-cols-[minmax(0,1fr)_160px_28px] page-md:py-1"
           >
-            <Plus aria-hidden />
-            Add a recipe
-          </Button>
-          <RecipePicker
-            open={picking}
-            onOpenChange={setPicking}
-            day={day}
-            meal={meal}
-            plates={plates}
-            book={book}
-            taken={lines.map((l) => l.recipeId)}
-          />
-        </>
+            <Link
+              href={`${recipePath(line.recipeId)}?plates=${plates}`}
+              className="col-start-1 row-start-1 min-w-0 break-words text-sm font-medium leading-5 hover:text-primary hover:underline"
+            >
+              {line.title}
+            </Link>
+            <span className="col-start-1 row-start-2 page-md:col-start-2 page-md:row-start-1">
+              {plates > 0 ? <LineStatus line={line} plates={plates} /> : null}
+            </span>
+            <RemoveButton line={line} />
+          </li>
+        ))}
+        {plates > 0 ? (
+          <li className={row}>
+            <button
+              type="button"
+              aria-label={`Add a recipe to ${mealName(day, meal)}`}
+              className="h-7 text-[13px] font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              onClick={() => setPicking(true)}
+            >
+              + Add a recipe
+            </button>
+          </li>
+        ) : lines.length === 0 ? (
+          <li className={cn(row, "text-[13px] text-muted-foreground")}>
+            No {meal} this day. Set plates to add a recipe.
+          </li>
+        ) : null}
+      </ul>
+      {plates > 0 && (
+        <RecipePicker
+          open={picking}
+          onOpenChange={setPicking}
+          day={day}
+          dayLabel={dayLabel}
+          meal={meal}
+          plates={plates}
+          book={book}
+          onMeal={lines}
+          allLines={allLines}
+        />
       )}
-    </div>
+    </>
   );
 }

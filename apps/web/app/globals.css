@@ -100,8 +100,11 @@
    fonts and the square corners stay the OS look. The last-seen copies
    (`:host`) are window bodies too. Each theme sets the --os-win-* values
    (lib/os-themes.ts); 404 Night keeps these soft ones. The copies read them
-   from the desktop they sit in: custom properties inherit into a shadow root. */
+   from the desktop they sit in: custom properties inherit into a shadow root.
+   `.os-window-colours` gives the same colours to a dialog a window opens
+   (portalled into <body>, outside the window), so it reads as part of it. */
 [data-window-body],
+.os-window-colours,
 :host,
 :host > div {
   --color-background: var(--os-win-bg);

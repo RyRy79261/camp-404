@@ -272,7 +272,7 @@ describe("processRuns with a queued source run", () => {
       testStore.setMealPlan({
         actorId: captainId,
         daysOnSite: 1,
-        days: [{ breakfast: 30, lunch: 0, dinner: 45 }],
+        days: [{ breakfast: 30, dinner: 45 }],
         expectedVersion: 0,
       }).ok,
     ).toBe(true);

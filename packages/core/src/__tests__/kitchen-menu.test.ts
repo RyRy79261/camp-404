@@ -6,7 +6,6 @@ import {
   shoppingKey,
   snackKey,
   sortMenu,
-  sourcesSummary,
   type MenuEntry,
   type MenuRecipe,
 } from "../kitchen-menu";
@@ -16,13 +15,8 @@ import {
 // ingredient and unit, grouped by shop area. A count that is not there is
 // "not counted yet", never guessed; food is never scaled by multiplying.
 
-const day = (
-  breakfast: number,
-  lunch: number,
-  dinner: number,
-): MealPlanDay => ({
+const day = (breakfast: number, dinner: number): MealPlanDay => ({
   breakfast,
-  lunch,
   dinner,
 });
 
@@ -76,7 +70,7 @@ const entry = (
 describe("buildShoppingList", () => {
   it("adds the verified counts up by ingredient and unit, grams into kilograms", () => {
     const list = buildShoppingList({
-      days: [day(20, 0, 50), day(20, 0, 50)],
+      days: [day(20, 50), day(20, 50)],
       menu: [
         entry(1, "dinner", "dal"),
         entry(2, "dinner", "dal"),
@@ -134,7 +128,7 @@ describe("buildShoppingList", () => {
 
   it("uses the count for each meal's own plates, and keeps a range a range", () => {
     const list = buildShoppingList({
-      days: [day(20, 0, 50)],
+      days: [day(20, 50)],
       menu: [entry(1, "breakfast", "dal"), entry(1, "dinner", "dal")],
       recipes: RECIPES,
     });
@@ -158,7 +152,7 @@ describe("buildShoppingList", () => {
 
   it("lists a recipe with no count for its meal's plates as not counted, and adds nothing for it", () => {
     const list = buildShoppingList({
-      days: [day(45, 0, 50)],
+      days: [day(45, 50)],
       menu: [entry(1, "breakfast", "dal"), entry(1, "dinner", "dal")],
       recipes: RECIPES,
     });
@@ -179,7 +173,7 @@ describe("buildShoppingList", () => {
 
   it("leaves out a meal with no plates, a day past the plan, and a recipe it knows nothing of", () => {
     const list = buildShoppingList({
-      days: [day(0, 0, 50)],
+      days: [day(0, 50)],
       menu: [
         entry(1, "breakfast", "dal"),
         entry(2, "dinner", "dal"),
@@ -206,27 +200,9 @@ describe("the list's helpers", () => {
         entry(2, "breakfast", "a"),
         entry(1, "dinner", "b", 2),
         entry(1, "dinner", "c", 1),
-        entry(1, "lunch", "d"),
+        entry(1, "breakfast", "d"),
       ]).map((e) => e.recipeId),
     ).toEqual(["d", "c", "b", "a"]);
-  });
-
-  it("names one or two meals, and counts more", () => {
-    const s = (dayNo: number, meal: MenuEntry["meal"]) => ({
-      day: dayNo,
-      meal,
-      recipeId: "x",
-      title: "X",
-      plates: 1,
-      amount: { quantity: 1, quantityMax: null, unit: null, toTaste: false },
-    });
-    expect(sourcesSummary([s(1, "dinner")])).toBe("Day 1 dinner");
-    expect(
-      sourcesSummary([s(1, "dinner"), s(1, "dinner"), s(2, "lunch")]),
-    ).toBe("Day 1 dinner, Day 2 lunch");
-    expect(
-      sourcesSummary([s(1, "dinner"), s(2, "dinner"), s(3, "breakfast")]),
-    ).toBe("3 meals");
   });
 
   it("lets any approved rank tick, and fails closed on anything else", () => {

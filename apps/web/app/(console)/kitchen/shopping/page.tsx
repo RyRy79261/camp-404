@@ -4,7 +4,6 @@ import {
   canTickShoppingList,
   mealPlanDayLabel,
   snackKey,
-  sourcesSummary,
   type ShoppingAmount,
 } from "@camp404/core";
 import { PageHeading } from "@camp404/ui/components/page-heading";
@@ -12,14 +11,19 @@ import { captainPageGate } from "@/lib/captain-gate";
 import { getShoppingFacts } from "@/lib/kitchen-menu";
 import { MEAL_PLAN_PATH, recipePath } from "@/lib/recipe-copy";
 import { CATEGORY_LABEL, formatAmount, platesLabel } from "@/lib/recipe-labels";
-import { ShoppingListView, type ShoppingGroupView } from "./shopping-list";
+import {
+  NotCountedBox,
+  ShoppingListView,
+  type ShoppingGroupView,
+} from "./shopping-list";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Shopping list — Camp 404" };
 
-// The Kitchen's shopping list (#245, the owner's layout A, 2026-09-30): one
-// list grouped by shop area, like Noble Notations' list, worked out on every
+// The Kitchen's shopping list (#245; the owner's approved mock-up,
+// design/approved-ks.html, Option A, 2026-10-01): one checklist with every
+// shop area on one page, like Noble Notations' list, worked out on every
 // load from the menu inside the meal plan. For each recipe on a meal, the
 // plate count Claude proofread for that meal's plates, added up by
 // ingredient and unit; each line opens to show where its amount comes from.
@@ -30,8 +34,6 @@ export const metadata = { title: "Shopping list — Camp 404" };
 // Every approved member reads it and may tick (the owner: ticks are shared
 // by the whole camp, and any member may tick). No prices, suppliers, stock or
 // allergen check: each is its own step, not asked for yet.
-
-const MEAL_WORD = { breakfast: "breakfast", lunch: "lunch", dinner: "dinner" };
 
 /** "2.5 kg", "1–1.5 kg", "10 g + to taste", "To taste". */
 function amountLabel(amount: ShoppingAmount): string {
@@ -68,9 +70,8 @@ export default async function ShoppingListPage() {
         key: line.key,
         name: line.name,
         amount,
-        summary: sourcesSummary(line.sources),
         sources: line.sources.map((s) => ({
-          meal: `${dayName(s.day)}, ${MEAL_WORD[s.meal]}`,
+          meal: `${dayName(s.day)}, ${s.meal}`,
           title: s.title,
           plates: platesLabel(s.plates),
           amount: amountLabel(s.amount),
@@ -91,7 +92,6 @@ export default async function ShoppingListPage() {
           key,
           name: snack.name,
           amount,
-          summary: "",
           sources: [],
           ...tickState(key, amount),
         };
@@ -109,35 +109,19 @@ export default async function ShoppingListPage() {
         description={
           empty
             ? undefined
-            : `From ${list.meals} meal${list.meals === 1 ? "" : "s"} on the menu.`
+            : `From ${list.meals} meal${list.meals === 1 ? "" : "s"} on the menu. Ticks are shared: everyone sees what is already bought.`
         }
       />
 
       {list.notCounted.length > 0 && (
-        <section
-          aria-labelledby="not-counted-heading"
-          className="mb-6 rounded-xl border border-warning/40 bg-warning/10 p-4"
-        >
-          <h2 id="not-counted-heading" className="text-sm font-semibold">
-            Not counted yet: proofread first
-          </h2>
-          <ul className="mt-2 flex flex-col gap-1 text-sm">
-            {list.notCounted.map((n) => (
-              <li key={`${n.day}:${n.meal}:${n.recipeId}`}>
-                <Link
-                  href={`${recipePath(n.recipeId)}?plates=${n.plates}`}
-                  className="font-medium hover:underline"
-                >
-                  {n.title}
-                </Link>{" "}
-                <span className="text-muted-foreground">
-                  {dayName(n.day)}, {MEAL_WORD[n.meal]} ·{" "}
-                  {platesLabel(n.plates)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <NotCountedBox
+          items={list.notCounted.map((n) => ({
+            key: `${n.day}:${n.meal}:${n.recipeId}`,
+            title: n.title,
+            meta: `${dayName(n.day)}, ${n.meal} · ${platesLabel(n.plates)}`,
+            href: `${recipePath(n.recipeId)}?plates=${n.plates}`,
+          }))}
+        />
       )}
 
       {empty ? (

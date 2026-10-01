@@ -628,6 +628,16 @@ Decisions baked into the schema — keep new code consistent with them:
   the whole camp and any approved member ticks (`canTickShoppingList`); a tick
   keeps the amount it was given at and stops counting when the list needs
   another. No prices, suppliers, stock or allergen check on the list yet.
+  [2026-10-01] **The camp does no lunch** (owner: "we dont do lunch"): meals
+  are breakfast and dinner only (`MEALS` in `@camp404/types`), everywhere.
+  `kitchen_meal_plan_days.lunch` is left in the table, unread, because
+  production may hold values; a save keeps it as it was, and it counts
+  nowhere. Dropping it is a follow-up migration. The screens follow the
+  owner's approved mock-ups of 2026-10-01: a Kitchen lead or a captain edits
+  the week as a table (Day | Breakfast | Dinner, a card per day on a phone)
+  with a recipe picker that stays open; every other member reads the menu as
+  a card per day; the shopping list is one checklist with every shop area on
+  one page.
 
 - **Camp layout (#271).** This year's site plan is one Zod-checked document
   (`CampLayout`, `@camp404/types`) saved as numbered versions in

@@ -127,16 +127,14 @@ test.describe("windows fit their own width (test-mode)", () => {
     await expect.poll(() => borderTop(tableFrame(win, "Suggestions"))).toBe(1);
 
     // The meal plan: one card per day and no frame in a narrow window (the
-    // owner's phone layout for the menu, 2026-09-30), the framed table with
-    // its meal columns in a wide one.
+    // owner's approved mock-up, design/approved-kmp.html A, 2026-10-01), the
+    // framed week table with its meal columns in a wide one.
     win = await openWindow(page, "/kitchen/meal-plan", "Meal plan");
     const breakfastColumn = win.getByRole("columnheader", {
       name: "Breakfast",
     });
-    // The table's own scroll box, then the frame around it.
-    const frame = win
-      .getByRole("table", { name: "Plates per day" })
-      .locator("xpath=../..");
+    // The week is its own frame.
+    const frame = win.getByRole("table", { name: "Plates per day" });
     await resizeWindowTo(page, win, NARROW);
     await expectFits(win);
     await expect(breakfastColumn).toBeHidden();

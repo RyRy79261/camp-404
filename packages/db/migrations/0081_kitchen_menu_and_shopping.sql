@@ -8,7 +8,7 @@ CREATE TABLE "kitchen_menu_items" (
 	"added_by_user_id" uuid,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "kitchen_menu_items_day_check" CHECK ("kitchen_menu_items"."day" between 1 and 30),
-	CONSTRAINT "kitchen_menu_items_meal_check" CHECK ("kitchen_menu_items"."meal" in ('breakfast', 'lunch', 'dinner'))
+	CONSTRAINT "kitchen_menu_items_meal_check" CHECK ("kitchen_menu_items"."meal" in ('breakfast', 'dinner'))
 );
 --> statement-breakpoint
 CREATE TABLE "kitchen_shopping_ticks" (

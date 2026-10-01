@@ -123,7 +123,7 @@
 //     mealPlanDayLabel (./recipes)
 //   - kitchen menu and shopping list: canTickShoppingList (any member),
 //     buildShoppingList (the verified plate counts added up by shop area),
-//     shoppingKey, snackKey, sortMenu, mealPlates, sourcesSummary
+//     shoppingKey, snackKey, sortMenu and mealPlates
 //     (./kitchen-menu)
 //   - recipe sources: sourceText (the Markdown-like text Claude reads),
 //     sourceFromText (pasted text into sections), emptySourceSections,

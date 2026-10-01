@@ -1,5 +1,5 @@
 {
-  "id": "f267a186-05c6-4c22-aac6-8a2b85c2d8b2",
+  "id": "615b2a2b-777f-48a1-b4e4-2013e908e828",
   "prevId": "05f1e1c4-2e07-4697-98ac-1f0356245edb",
   "version": "7",
   "dialect": "postgresql",
@@ -4985,7 +4985,7 @@
         },
         "kitchen_menu_items_meal_check": {
           "name": "kitchen_menu_items_meal_check",
-          "value": "\"kitchen_menu_items\".\"meal\" in ('breakfast', 'lunch', 'dinner')"
+          "value": "\"kitchen_menu_items\".\"meal\" in ('breakfast', 'dinner')"
         }
       },
       "isRLSEnabled": false

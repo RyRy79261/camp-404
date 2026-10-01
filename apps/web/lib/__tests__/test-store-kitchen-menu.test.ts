@@ -73,7 +73,7 @@ describe("kitchen menu twins", () => {
       testStore.setMealPlan({
         actorId: cook.id,
         daysOnSite: 1,
-        days: [{ breakfast: 0, lunch: 0, dinner: 20 }],
+        days: [{ breakfast: 0, dinner: 20 }],
         expectedVersion: 0,
       }),
     ).toEqual({ ok: true, version: 1 });
@@ -138,5 +138,69 @@ describe("kitchen menu twins", () => {
       }),
     ).toEqual({ ok: true });
     expect(storeShoppingFacts().ticks).toEqual([]);
+  });
+
+  it("list the book for the picker by name, with where each recipe's counts stand (the twin of listMenuBook)", () => {
+    const cook = lead("cook", "kitchen");
+    const ids = testStore.seedKitchenBook({
+      authorId: cook.id,
+      recipes: [
+        {
+          title: "Rice",
+          plates: [50],
+          ingredients: [
+            { name: "Rice", category: "grain", quantity: 4, unit: "kg" },
+          ],
+        },
+        {
+          title: "Camp dal",
+          summary: "Red lentils",
+          totalMinutes: 70,
+          plates: [50, 30],
+          open: [40],
+          ingredients: [
+            {
+              name: "Red lentils",
+              category: "legume",
+              quantity: 5,
+              unit: "kg",
+            },
+          ],
+        },
+      ],
+    });
+    expect(testStore.menuBook()).toEqual([
+      {
+        id: ids["Camp dal"],
+        title: "Camp dal",
+        summary: "Red lentils",
+        totalMinutes: 70,
+        readyPlates: [30, 50],
+        openPlates: [40],
+      },
+      {
+        id: ids["Rice"],
+        title: "Rice",
+        summary: null,
+        totalMinutes: null,
+        readyPlates: [50],
+        openPlates: [],
+      },
+    ]);
+    // A seeded recipe is in the book: it can go on the menu.
+    testStore.setMealPlan({
+      actorId: cook.id,
+      daysOnSite: 1,
+      days: [{ breakfast: 0, dinner: 30 }],
+      expectedVersion: 0,
+    });
+    expect(
+      storeAddMenuItem({
+        actorId: cook.id,
+        day: 1,
+        meal: "dinner",
+        recipeId: ids["Camp dal"]!,
+      }).ok,
+    ).toBe(true);
   });
 });

@@ -16,7 +16,12 @@ until asked: prices, suppliers, stock, the allergen cross-check and a PDF
   width; nothing cut off; plain words.
 - Plates per day and meal already come from the **meal plan**
   (`/kitchen/meal-plan`: rows = days with real dates, columns = Breakfast,
-  Lunch, Dinner). The menu builds on that page, it does not replace it.
+  Dinner). The menu builds on that page, it does not replace it.
+  [CORRECTION 2026-10-01] The camp does no lunch (owner: "we dont do lunch,
+  remove that"); the sketches below still draw a Lunch column. The built
+  screens follow the owner's approved mock-ups of 2026-10-01
+  (`approved-kmp.html` A, `approved-rp.html` B, `approved-kmenu.html` A,
+  `approved-ks.html` A), not these sketches.
 - A recipe at a plate count is **proofread by Claude once per count** and
   cached (`recipe_plate_counts`). The menu reuses those counts; a count that
   isn't verified shows "Proofread for N" (captains and Kitchen leads), the
