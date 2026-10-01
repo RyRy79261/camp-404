@@ -265,6 +265,31 @@ describe("shift types", () => {
     expect(saved.ok).toBe(true);
   });
 
+  it("two shifts at the same time keep the order they were added in, not the alphabet", async () => {
+    const { captain } = await people();
+    for (const name of ["Brunch: head chef", "Brunch: cooks"]) {
+      const saved = await saveShiftType({
+        ...CLEANING,
+        team: "kitchen",
+        name,
+        startMinute: 9 * 60,
+        actorId: captain.id,
+      });
+      expect(saved.ok).toBe(true);
+    }
+    const early = await saveShiftType({
+      ...CLEANING,
+      name: "Morning clean",
+      actorId: captain.id,
+    });
+    expect(early.ok).toBe(true);
+    expect((await readShiftRoster(YEAR)).types.map((t) => t.name)).toEqual([
+      "Morning clean",
+      "Brunch: head chef",
+      "Brunch: cooks",
+    ]);
+  });
+
   it("a change is a compare-and-set, and keeps places for who is already on", async () => {
     const { sanitationLead, dee, sam } = await people();
     const { type, first } = await cleaning(sanitationLead.id);

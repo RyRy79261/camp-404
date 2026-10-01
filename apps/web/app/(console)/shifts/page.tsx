@@ -177,10 +177,18 @@ export default async function ShiftsPage({
           <>
             {view.canAsk && <AskShifts />}
             {/* On a phone, My shifts and Print share the row half and half. */}
-            <Button asChild variant="outline" className="flex-1 page-sm:flex-none">
+            <Button
+              asChild
+              variant="outline"
+              className="flex-1 page-sm:flex-none"
+            >
               <Link href={MY_SHIFTS_PATH}>My shifts</Link>
             </Button>
-            <Button asChild variant="outline" className="flex-1 page-sm:flex-none">
+            <Button
+              asChild
+              variant="outline"
+              className="flex-1 page-sm:flex-none"
+            >
               <Link
                 href={`${SHIFTS_PRINT_PATH}${day ? `?day=${day.day}` : ""}`}
               >
