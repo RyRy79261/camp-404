@@ -58,9 +58,12 @@ export function PaymentsFrame({
   actions,
   cleared,
   refusal = MONEY_REFUSAL,
+  below = false,
   children,
 }: {
   active: PaymentsTab;
+  /** A page below the active tab: a phone gets a link back to it. */
+  below?: boolean;
   title: string;
   description: string;
   actions?: ReactNode;
@@ -81,7 +84,11 @@ export function PaymentsFrame({
       {cleared ? (
         <>
           <PaymentsTabs active={active} />
-          <PaymentsTabMenu active={active} className="page-sm:hidden" />
+          <PaymentsTabMenu
+            active={active}
+            below={below}
+            className="page-sm:hidden"
+          />
           {children}
         </>
       ) : (

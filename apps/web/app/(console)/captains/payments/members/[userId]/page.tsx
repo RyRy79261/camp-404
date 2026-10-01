@@ -17,7 +17,8 @@ export const metadata = { title: "Member's dues — Camp 404" };
 // One member's dues for the year (#240), for the Finance team: their balance,
 // payments and charges on the left, and their camp fee, a new charge and their
 // payment plan in a rail on the right. The tabs above ("Who owes what" lit)
-// are the way back; there is no second back link. A concession's reason is read here and nowhere a member
+// are the way back; on a phone, where the tabs are one menu, a link back sits
+// beside it. A concession's reason is read here and nowhere a member
 // can see it. Captains and Finance leads only; anyone else sees a lock and
 // nothing is read, not even the member's name.
 
@@ -53,6 +54,7 @@ export default async function MemberDuesPage({
     <div className="flex flex-col">
       <PaymentsFrame
         active={PAYMENTS_OWING_PATH}
+        below
         title={dues.name}
         description="Their camp fee, other charges, payments and payment plan for this year."
         cleared
