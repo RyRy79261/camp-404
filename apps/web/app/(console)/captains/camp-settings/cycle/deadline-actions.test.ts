@@ -15,6 +15,7 @@ vi.mock("@/lib/logistics", () => ({
   editDeadline: vi.fn(async () => ({ ok: true, calendar: "synced" })),
   setDeadlineDone: vi.fn(async () => ({ ok: true, calendar: "synced" })),
   removeDeadline: vi.fn(async () => ({ ok: true, calendar: "synced" })),
+  setAfrikaburnDate: vi.fn(async () => ({ ok: true, calendar: "synced" })),
 }));
 
 import { revalidatePath } from "next/cache";
@@ -24,6 +25,7 @@ import {
   addDeadline,
   editDeadline,
   removeDeadline,
+  setAfrikaburnDate,
   setDeadlineDone,
 } from "@/lib/logistics";
 import { DEADLINES_REFUSAL } from "@/lib/logistics-copy";
@@ -31,6 +33,7 @@ import {
   addDeadlineAction,
   editDeadlineAction,
   removeDeadlineAction,
+  setAfrikaburnDateAction,
   setDeadlineDoneAction,
 } from "./deadline-actions";
 
@@ -109,11 +112,49 @@ describe("deadline actions", () => {
     actAs("captain");
     expect(await addDeadlineAction({ title: "", dueDate: "" })).toEqual({
       ok: false,
-      error: "Give the deadline a title.",
+      error: "Give the date a name.",
     });
     expect(
       await addDeadlineAction({ title: "WAP", dueDate: "2027-02-30" }),
     ).toEqual({ ok: false, error: "Pick a real date." });
     expect(addDeadline).not.toHaveBeenCalled();
+  });
+
+  it("sets one of AfrikaBurn's dates for a captain only, checking it first", async () => {
+    for (const rank of ["team_lead", "camp_member"] as const) {
+      actAs(rank);
+      expect(
+        await setAfrikaburnDateAction({
+          kind: "registration_closes",
+          dueDate: "2027-02-27",
+          expectedVersion: null,
+        }),
+      ).toEqual({ ok: false, error: DEADLINES_REFUSAL });
+    }
+    expect(setAfrikaburnDate).not.toHaveBeenCalled();
+    actAs("captain", "cap-1");
+    expect(
+      await setAfrikaburnDateAction({
+        kind: "registration_closes",
+        dueDate: "",
+        expectedVersion: null,
+      }),
+    ).toEqual({ ok: false, error: "Pick the date." });
+    expect(setAfrikaburnDate).not.toHaveBeenCalled();
+    expect(
+      await setAfrikaburnDateAction({
+        kind: "second_ddt_round",
+        dueDate: "2027-04-01",
+        skipped: true,
+        expectedVersion: 2,
+      }),
+    ).toEqual({ ok: true, data: { calendar: "synced" } });
+    expect(setAfrikaburnDate).toHaveBeenCalledWith("cap-1", {
+      kind: "second_ddt_round",
+      dueDate: null,
+      note: null,
+      skipped: true,
+      expectedVersion: 2,
+    });
   });
 });

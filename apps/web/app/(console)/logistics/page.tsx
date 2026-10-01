@@ -1,13 +1,11 @@
 import Link from "next/link";
 import type * as React from "react";
+import { CalendarDays, CalendarX, MapPin, Pencil } from "lucide-react";
 import {
-  CalendarDays,
-  CalendarX,
-  ChevronRight,
-  MapPin,
-  Pencil,
-} from "lucide-react";
-import {
+  AFRIKABURN_DATE_GROUPS,
+  AFRIKABURN_DATES,
+  AFRIKABURN_OTHER_GROUP_LABEL,
+  NO_ROUND_THIS_YEAR,
   attendanceIsOpen,
   campDayKey,
   canAskForAttendance,
@@ -45,6 +43,7 @@ import {
   DEADLINES_SETTINGS_HREF,
   deadlineDateText,
   LOGISTICS_EDITORS_NOTE,
+  NOT_ANNOUNCED_YET,
   phaseLengthText,
   phaseRangeText,
 } from "@/lib/logistics-copy";
@@ -77,8 +76,9 @@ const WHO_CAN_HELP_ID = "who-can-help";
 // viewer still has a day to answer, Who can help comes first: answering is
 // their job, the dates are reference. A captain's "Ask who can help" nudges
 // them, as the gear rental's does, and an asked member is told at the top.
-// Then the year's AfrikaBurn deadlines, read-only here; captains keep them on
-// the camp's year page.
+// Then the year's AfrikaBurn dates, read-only here and grouped as on the
+// camp's year page, where captains keep them (owner, 2026-10-01, mock-up A);
+// only the ones a captain has set show.
 
 type CalendarState = "pending" | "lingering";
 
@@ -386,23 +386,46 @@ function WhoCanHelp({
   );
 }
 
+/** The dates to show members, grouped as the year page groups them. */
+function dateGroups(deadlines: DeadlineRow[]) {
+  const byKind = new Map(
+    deadlines.filter((d) => d.kind).map((d) => [d.kind as string, d]),
+  );
+  const groups = AFRIKABURN_DATE_GROUPS.map((group) => ({
+    key: group.key as string,
+    label: group.label,
+    rows: AFRIKABURN_DATES.filter((d) => d.group === group.key).flatMap((d) => {
+      const row = byKind.get(d.kind);
+      // Only what a captain has set: a date, or "No round this year".
+      return row && (row.dueDate || row.skipped)
+        ? [{ ...row, title: d.name }]
+        : [];
+    }),
+  }));
+  groups.push({
+    key: "other",
+    label: AFRIKABURN_OTHER_GROUP_LABEL,
+    rows: deadlines.filter((d) => d.kind === null),
+  });
+  return groups.filter((g) => g.rows.length > 0);
+}
+
 function DeadlineItem({ d }: { d: DeadlineRow }) {
   return (
     <li
       aria-label={d.title}
-      className="grid gap-x-4 gap-y-0.5 px-4 py-3 page-sm:grid-cols-[minmax(0,1fr)_11rem]"
+      className="grid gap-x-4 gap-y-0.5 border-t border-border px-4 py-3 page-sm:grid-cols-[minmax(0,1fr)_11rem]"
     >
-      <h3
-        className={
-          d.done
-            ? "text-sm font-semibold text-muted-foreground"
-            : "text-sm font-semibold"
-        }
+      <span className="text-sm font-semibold">{d.title}</span>
+      <p
+        className={`text-sm tabular-nums text-muted-foreground page-sm:row-span-2 page-sm:text-right ${d.dueDate ? "" : "italic"}`}
       >
-        {d.title}
-      </h3>
-      <p className="text-sm tabular-nums text-muted-foreground page-sm:row-span-2 page-sm:text-right">
-        {d.dueDate ? deadlineDateText(d.dueDate) : "Date not known yet"}
+        {d.skipped
+          ? NO_ROUND_THIS_YEAR
+          : d.dueDate
+            ? deadlineDateText(d.dueDate)
+            : NOT_ANNOUNCED_YET}
+        {d.done ? " · Done" : ""}
       </p>
       {d.note && (
         <p className="whitespace-pre-line text-sm text-muted-foreground">
@@ -420,63 +443,48 @@ function Deadlines({
   deadlines: DeadlineRow[];
   canManage: boolean;
 }) {
-  // Open ones first, in date order; done ones fold away at the end.
-  const open = deadlines.filter((d) => !d.done);
-  const done = deadlines.filter((d) => d.done);
+  const groups = dateGroups(deadlines);
   return (
     <Card>
       <CardContent className="p-0">
         <SectionHead
-          title="AfrikaBurn deadlines"
-          description="The dates AfrikaBurn sets for the camp. The ones with a date are on the camp calendar too."
+          title="AfrikaBurn dates"
+          description="The dates AfrikaBurn sets for the camp this year. The ones with a date are on the camp calendar too."
           action={
             canManage ? (
               <Button asChild variant="outline" size="sm">
                 <Link href={DEADLINES_SETTINGS_HREF}>
                   <Pencil aria-hidden />
-                  Edit deadlines
+                  Edit dates
                 </Link>
               </Button>
             ) : undefined
           }
         />
-        {deadlines.length === 0 ? (
+        {groups.length === 0 ? (
           <p className="border-t border-border px-4 py-4 text-sm text-muted-foreground">
-            No deadlines yet. The captains add them as AfrikaBurn publishes
+            No dates yet. The captains fill them in as AfrikaBurn announces
             them.
           </p>
         ) : (
-          <>
-            {open.length > 0 && (
-              <ol
-                aria-label="AfrikaBurn deadlines"
-                className="divide-y divide-border border-t border-border"
+          <div className="flex flex-col">
+            {groups.map((group) => (
+              <section
+                key={group.key}
+                aria-label={group.label}
+                className="flex flex-col"
               >
-                {open.map((d) => (
-                  <DeadlineItem key={d.id} d={d} />
-                ))}
-              </ol>
-            )}
-            {done.length > 0 && (
-              <details className="group border-t border-border">
-                <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
-                  <ChevronRight
-                    aria-hidden
-                    className="h-4 w-4 transition-transform group-open:rotate-90"
-                  />
-                  Done ({done.length})
-                </summary>
-                <ol
-                  aria-label="Done AfrikaBurn deadlines"
-                  className="divide-y divide-border border-t border-border"
-                >
-                  {done.map((d) => (
+                <h3 className="border-t border-border bg-muted/40 px-4 py-2 font-pixel text-[10px] font-normal uppercase tracking-[0.2em] text-muted-foreground">
+                  {group.label}
+                </h3>
+                <ul className="flex flex-col">
+                  {group.rows.map((d) => (
                     <DeadlineItem key={d.id} d={d} />
                   ))}
-                </ol>
-              </details>
-            )}
-          </>
+                </ul>
+              </section>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>
