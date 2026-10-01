@@ -216,7 +216,7 @@ function Arrow({
       onClick={onToggle}
       className={cn(
         "inline-flex h-7 w-7 items-center justify-center text-muted-foreground hover:bg-foreground/10 hover:text-foreground",
-        open && "text-primary",
+        open && "text-primary hover:text-primary",
       )}
     >
       <ChevronRight
