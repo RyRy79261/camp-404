@@ -115,6 +115,30 @@ describe("ClaimForm", () => {
     expect(screen.getByText(/1 of 5 files/)).toBeTruthy();
   });
 
+  it("keeps the receipts control when too many are picked, and takes focus to it", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    fill();
+    const six = Array.from(
+      { length: 6 },
+      (_, i) => new File(["x"], `r${i}.jpg`, { type: "image/jpeg" }),
+    );
+    fireEvent.change(screen.getByLabelText("Receipts"), {
+      target: { files: six },
+    });
+    expect(screen.getByText(/6 of 5 files/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Send my claim" }));
+    const input = screen.getByLabelText("Receipts");
+    expect(input.id).toBe("claim-receipts");
+    expect(input.getAttribute("aria-describedby")).toBe("claim-receipts-error");
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("shows where keyboard focus is on the hidden file input", () => {
+    fill();
+    const zone = screen.getByLabelText("Receipts").closest("label");
+    expect(zone?.className).toContain("focus-within:ring-2");
+  });
+
   it("sends the claim in cents with every receipt", async () => {
     const fetch = vi.fn(async () => ({
       ok: true,

@@ -118,51 +118,71 @@ export function ReceiptPicker({
           })}
         </ul>
       )}
-      {!full && (
-        <label
-          htmlFor={inputId}
-          onDragOver={(e) => {
-            e.preventDefault();
-            if (!disabled) setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-          className={cn(
-            "flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed px-4 py-5 text-center text-sm transition-colors",
-            dragging
-              ? "border-primary bg-primary/5 text-foreground"
-              : invalid
-                ? "border-destructive text-muted-foreground"
+      {/* Always there, full or not, so the field's label, its error's
+          aria-describedby and the form's "focus the first problem" all
+          reach a control. A full picker takes no more files. */}
+      <label
+        htmlFor={inputId}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!disabled && !full) setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        className={cn(
+          "flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed px-4 text-center text-sm transition-colors",
+          // The input inside is visually hidden: the zone shows its focus.
+          "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background",
+          full ? "cursor-default py-3" : "cursor-pointer py-5",
+          dragging
+            ? "border-primary bg-primary/5 text-foreground"
+            : invalid
+              ? "border-destructive text-muted-foreground"
+              : full
+                ? "border-input text-muted-foreground"
                 : "border-input text-muted-foreground hover:border-primary/60 hover:text-foreground",
-            disabled && "pointer-events-none opacity-70",
-          )}
-        >
-          <Upload className="h-5 w-5" aria-hidden />
+          disabled && "pointer-events-none opacity-70",
+        )}
+      >
+        {full ? (
           <span>
-            <span className="font-medium text-foreground">
-              {addText ??
-                (files.length === 0 ? "Add a receipt" : "Add another")}
-            </span>{" "}
-            or drop it here
+            {single
+              ? "Remove the file to pick another."
+              : "Remove a file to add another."}
           </span>
-          <span className="text-xs">{kindText}</span>
-          <input
-            id={inputId}
-            type="file"
-            multiple={!single}
-            accept={accept}
-            aria-label={inputLabel}
-            aria-invalid={invalid ? true : undefined}
-            aria-describedby={describedBy}
-            className="sr-only"
-            disabled={disabled}
-            onChange={(e) => {
-              add(Array.from(e.currentTarget.files ?? []));
-              e.currentTarget.value = "";
-            }}
-          />
-        </label>
-      )}
+        ) : (
+          <>
+            <Upload className="h-5 w-5" aria-hidden />
+            <span>
+              <span className="font-medium text-foreground">
+                {addText ??
+                  (files.length === 0 ? "Add a receipt" : "Add another")}
+              </span>{" "}
+              or drop it here
+            </span>
+            <span className="text-xs">{kindText}</span>
+          </>
+        )}
+        <input
+          id={inputId}
+          type="file"
+          multiple={!single}
+          accept={accept}
+          aria-label={inputLabel}
+          aria-invalid={invalid ? true : undefined}
+          aria-describedby={describedBy}
+          aria-disabled={full ? true : undefined}
+          className="sr-only"
+          disabled={disabled}
+          onClick={(e) => {
+            if (full) e.preventDefault();
+          }}
+          onChange={(e) => {
+            add(Array.from(e.currentTarget.files ?? []));
+            e.currentTarget.value = "";
+          }}
+        />
+      </label>
       <p className="text-xs tabular-nums text-muted-foreground">
         {single
           ? `One file, up to ${limit}.`
