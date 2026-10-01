@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { Printer } from "lucide-react";
+import { ChevronRight, Printer } from "lucide-react";
 import { formatMoney, RENTAL_SOURCE_LABELS } from "@camp404/core";
-import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import {
   Card,
@@ -10,6 +9,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@camp404/ui/components/card";
+import {
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "@camp404/ui/components/responsive-data-table";
 import { RentalFrame } from "@/components/rental/rental-frame";
 import { captainPageGate } from "@/lib/captain-gate";
 import { ledgerCycle } from "@/lib/payments";
@@ -18,14 +21,142 @@ import {
   RENTAL_PATH,
   RENTAL_PRINT_PATH,
   RENTAL_SUMMARY_PATH,
+  rentalOrderPath,
 } from "@/lib/rental-copy";
 import { runsRental } from "@/lib/rental-gate";
 import { nameList, ownTentText, tentNeedText } from "@/lib/rental-view";
-import { rentalOrderPath } from "@/lib/rental-copy";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Gear rental summary — Camp 404" };
+
+type SummaryRow = Awaited<
+  ReturnType<typeof getRentalOverview>
+>["summary"]["rows"][number];
+
+type TentRow = Awaited<ReturnType<typeof getRentalOverview>>["tents"][number];
+
+const count = (n: number) => (
+  <span className={n === 0 ? "text-muted-foreground" : undefined}>{n}</span>
+);
+
+/** A short one-line header, with what it means as its tooltip. */
+const head = (short: string, full: string) => <span title={full}>{short}</span>;
+
+/** Number columns: narrow, right-aligned, figures in one width. */
+const NUMBER = {
+  align: "right",
+  headClassName: "w-20 whitespace-nowrap",
+  cellClassName: "w-20 whitespace-nowrap tabular-nums",
+} as const;
+
+// Seven columns, in the shared table: a table where the window has room for
+// it, and a card per item where it has not (a phone), never a table scrolled
+// sideways. The item's name is the wide column and stays on one line; the
+// numbers are narrow, with short headers whose tooltip says the whole thing.
+const BY_ITEM_COLUMNS: ResponsiveColumn<SummaryRow>[] = [
+  {
+    id: "item",
+    header: "Item",
+    role: "title",
+    cellClassName: "whitespace-nowrap font-medium",
+    cell: (row) => row.name,
+  },
+  {
+    id: "camp",
+    header: head("Camp", "Members, from camp stock"),
+    ...NUMBER,
+    cell: (row) => count(row.campCount),
+  },
+  {
+    id: "supplier",
+    header: head("Supplier", "Members, from the supplier"),
+    ...NUMBER,
+    cell: (row) => count(row.supplierCount),
+  },
+  {
+    id: "reserve",
+    header: head("Spares", "Spares kept for on site"),
+    ...NUMBER,
+    cell: (row) =>
+      row.reserveCount === 0 ? (
+        count(0)
+      ) : (
+        <span
+          title={`From ${RENTAL_SOURCE_LABELS[row.reserveSource].toLowerCase()}`}
+        >
+          {row.reserveCount}
+        </span>
+      ),
+  },
+  {
+    id: "storage",
+    header: head("From storage", "Take out of storage"),
+    ...NUMBER,
+    cellClassName: `${NUMBER.cellClassName} font-semibold`,
+    cell: (row) => row.fromStorage,
+  },
+  {
+    id: "left",
+    header: head("Left", "Camp stock left after this"),
+    ...NUMBER,
+    cell: (row) =>
+      row.campStockCount === null ? (
+        <span
+          className="text-muted-foreground"
+          title="The camp owns none of these"
+        >
+          &ndash;
+        </span>
+      ) : (
+        `${row.campStockLeft} of ${row.campStockCount}`
+      ),
+  },
+  {
+    id: "order",
+    header: head("To order", "Order from the supplier"),
+    ...NUMBER,
+    cellClassName: `${NUMBER.cellClassName} font-semibold`,
+    cell: (row) => row.toOrder,
+  },
+];
+
+// The confirmed tents: the label in a column of its own (the one thing a
+// member writes down), then the tent and who sleeps in it.
+const TENT_COLUMNS: ResponsiveColumn<TentRow>[] = [
+  {
+    id: "label",
+    header: "Label",
+    headClassName: "w-24",
+    cellClassName: "w-24 whitespace-nowrap text-lg font-bold",
+    cell: (tent) =>
+      tent.tentLabel ?? (
+        <span className="text-sm font-normal text-muted-foreground">
+          No label
+        </span>
+      ),
+  },
+  {
+    id: "tent",
+    header: "Tent",
+    role: "title",
+    cell: (tent) => (
+      <span className="flex flex-col gap-1">
+        {tent.itemName}
+        {tent.people !== null && tent.people > tent.sleeps && (
+          <span className="text-xs font-normal text-warning">
+            Sleeps {tent.sleeps}, for {tent.people}
+          </span>
+        )}
+      </span>
+    ),
+  },
+  {
+    id: "sleepers",
+    header: "Who sleeps in it",
+    cell: (tent) => nameList([tent.ownerName, ...tent.sharers]),
+  },
+];
 
 // What the camp orders and what comes out of storage (#241), for captains:
 // totals by item across the CONFIRMED orders, split by source, with the
@@ -87,7 +218,7 @@ export default async function GearRentalSummaryPage() {
                   {summary.toOrder}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Items, with the on-site reserve
+                  Items, with the spares for on site
                 </span>
               </CardContent>
             </Card>
@@ -135,89 +266,60 @@ export default async function GearRentalSummaryPage() {
                   No items in the catalogue yet.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table
-                    aria-label="Totals by item"
-                    className="w-full min-w-[40rem] border-collapse text-sm"
-                  >
-                    <thead>
-                      <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="py-2 pr-3 font-medium">Item</th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          Members, camp stock
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          Members, supplier
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          On-site reserve
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          Out of storage
-                        </th>
-                        <th className="px-3 py-2 text-right font-medium">
-                          Camp stock left
-                        </th>
-                        <th className="py-2 pl-3 text-right font-medium">
-                          Order from supplier
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {summary.rows.map((row) => (
-                        <tr
-                          key={row.itemId}
-                          className="border-b border-border/60 last:border-0"
-                        >
-                          <th
-                            scope="row"
-                            className="py-2.5 pr-3 text-left font-medium"
-                          >
-                            {row.name}
-                          </th>
-                          <td className="px-3 py-2.5 text-right tabular-nums">
-                            {row.campCount}
-                          </td>
-                          <td className="px-3 py-2.5 text-right tabular-nums">
-                            {row.supplierCount}
-                          </td>
-                          <td className="px-3 py-2.5 text-right tabular-nums">
-                            {row.reserveCount === 0 ? (
-                              <span className="text-muted-foreground">0</span>
-                            ) : (
-                              <>
-                                {row.reserveCount}{" "}
-                                <span className="text-xs text-muted-foreground">
-                                  {RENTAL_SOURCE_LABELS[
-                                    row.reserveSource
-                                  ].toLowerCase()}
-                                </span>
-                              </>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5 text-right font-semibold tabular-nums">
-                            {row.fromStorage}
-                          </td>
-                          <td className="px-3 py-2.5 text-right tabular-nums">
-                            {row.campStockCount === null ? (
-                              <span className="text-muted-foreground">
-                                None owned
-                              </span>
-                            ) : (
-                              `${row.campStockLeft} of ${row.campStockCount}`
-                            )}
-                          </td>
-                          <td className="py-2.5 pl-3 text-right font-semibold tabular-nums">
-                            {row.toOrder}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <ResponsiveDataTable
+                  columns={BY_ITEM_COLUMNS}
+                  data={summary.rows}
+                  getRowKey={(row) => row.itemId}
+                  label="Totals by item"
+                />
               )}
             </CardContent>
           </Card>
+
+          {overview.unassigned.length > 0 && (
+            <Card>
+              <CardHeader className="p-5 pb-3">
+                <CardTitle className="text-base">
+                  Tents not assigned yet ({overview.unassigned.length})
+                </CardTitle>
+                <CardDescription>
+                  Sent orders that need a tent. Open one to pick the tent and
+                  confirm it.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-5 pt-0">
+                <ul
+                  aria-label="Needs a tent, not assigned yet"
+                  className="divide-y divide-border"
+                >
+                  {overview.unassigned.map((need) => (
+                    <li key={need.orderId}>
+                      <Link
+                        href={rentalOrderPath(need.userId)}
+                        className="group/need flex items-center justify-between gap-4 py-2.5 text-sm"
+                      >
+                        <span className="flex min-w-0 flex-col gap-0.5 page-sm:flex-row page-sm:items-baseline page-sm:gap-4">
+                          <span className="font-medium group-hover/need:text-accent group-hover/need:underline">
+                            {need.ownerName}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {tentNeedText(need.people)}
+                            {need.sharers.length > 0
+                              ? `, with ${nameList(need.sharers)}`
+                              : ""}
+                          </span>
+                        </span>
+                        <ChevronRight
+                          className="h-4 w-4 shrink-0 text-muted-foreground group-hover/need:text-accent"
+                          aria-hidden
+                        />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="p-5 pb-3">
@@ -228,65 +330,18 @@ export default async function GearRentalSummaryPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5 pt-0">
-              {overview.unassigned.length > 0 && (
-                <ul
-                  aria-label="Needs a tent, not assigned yet"
-                  className="mb-3 flex flex-col gap-2"
-                >
-                  {overview.unassigned.map((need) => (
-                    <li
-                      key={need.orderId}
-                      className="flex flex-col gap-0.5 rounded-lg border border-warning/40 bg-warning/10 px-4 py-2.5 text-sm page-sm:flex-row page-sm:items-center page-sm:justify-between page-sm:gap-4"
-                    >
-                      <span className="font-medium">
-                        <Link
-                          href={rentalOrderPath(need.userId)}
-                          className="hover:text-accent"
-                        >
-                          {need.ownerName}
-                        </Link>{" "}
-                        needs a tent, not assigned yet
-                      </span>
-                      <span className="text-muted-foreground">
-                        {tentNeedText(need.people)}
-                        {need.sharers.length > 0
-                          ? `, with ${nameList(need.sharers)}`
-                          : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
               {overview.tents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No confirmed tents yet.
                 </p>
               ) : (
-                <ul aria-label="Tents" className="divide-y divide-border">
-                  {overview.tents.map((tent) => (
-                    <li
-                      key={tent.lineId}
-                      className="flex flex-col gap-0.5 py-2.5 text-sm page-sm:flex-row page-sm:items-center page-sm:justify-between page-sm:gap-4"
-                    >
-                      <span className="flex flex-wrap items-center gap-2 font-medium">
-                        {tent.tentLabel ? (
-                          <Badge>{tent.tentLabel}</Badge>
-                        ) : (
-                          <Badge variant="outline">No label</Badge>
-                        )}
-                        {tent.itemName}
-                        {tent.people !== null && tent.people > tent.sleeps && (
-                          <Badge variant="warning">
-                            Sleeps {tent.sleeps}, for {tent.people}
-                          </Badge>
-                        )}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {nameList([tent.ownerName, ...tent.sharers])}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <ResponsiveDataTable
+                  columns={TENT_COLUMNS}
+                  data={overview.tents}
+                  getRowKey={(tent) => tent.lineId}
+                  label="Tents"
+                  stackBelow="sm"
+                />
               )}
             </CardContent>
           </Card>

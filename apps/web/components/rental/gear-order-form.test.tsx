@@ -80,6 +80,7 @@ function form(
   props: {
     tent?: GearTent | null;
     hostedBy?: string[];
+    hostedLabel?: string | null;
     forMember?: { userId: string; name: string };
   } = {},
 ) {
@@ -91,6 +92,7 @@ function form(
       tent={props.tent ?? null}
       lines={[]}
       hostedBy={props.hostedBy ?? []}
+      hostedLabel={props.hostedLabel ?? null}
       forMember={props.forMember}
     />,
   );
@@ -214,14 +216,18 @@ describe("the tent question", () => {
     );
   });
 
-  it("is already answered for a member someone put in their tent, and cannot be contradicted", async () => {
-    form({ hostedBy: ["Dee Member"] });
-    expect(screen.getByTestId("tent-hosted").textContent).toContain(
-      "Dee Member put you in their tent, so this is answered.",
+  it("shows a member someone put in their tent as content, with no locked radios", async () => {
+    form({ hostedBy: ["Dee Member"], hostedLabel: "T3" });
+    const hosted = screen.getByTestId("tent-hosted");
+    expect(hosted.textContent).toContain(
+      "You\u2019re in Dee Member\u2019s tent.",
     );
-    expect(tentRadio("I.m in someone else.s tent").checked).toBe(true);
-    expect(tentRadio("I have my own").disabled).toBe(true);
-    expect(tentRadio("I need one").disabled).toBe(true);
+    expect(hosted.textContent).toContain(
+      "Ask Dee Member to take you off if that\u2019s wrong.",
+    );
+    expect(screen.getByTestId("tent-label").textContent).toBe("T3");
+    // The answer is content: no radio, greyed or not, to contradict it.
+    expect(screen.queryByRole("radiogroup", { name: "Tent" })).toBeNull();
     expect(screen.queryByTestId("tent-not-hosted")).toBeNull();
     send();
     await waitFor(() =>
