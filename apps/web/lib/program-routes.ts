@@ -27,6 +27,7 @@ export type ProgramId =
   | "my-lift"
   | "my-dues"
   | "my-gear"
+  | "my-shifts"
   | "my-claims"
   | "tasks"
   | "calendar"
@@ -46,6 +47,7 @@ export type ProgramId =
   | "edit-meeting"
   | "power"
   | "logistics"
+  | "shifts"
   | "camp-layout"
   | "lounge"
   | "inventory"
@@ -102,6 +104,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "my-lift": "My lift",
   "my-dues": "My dues",
   "my-gear": "My gear",
+  "my-shifts": "My shifts",
   "my-claims": "My claims",
   tasks: "Tasks",
   calendar: "Calendar",
@@ -121,6 +124,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "edit-meeting": "Edit meeting",
   power: "Power",
   logistics: "Logistics",
+  shifts: "Shifts",
   "camp-layout": "Camp layout",
   lounge: "Lounge",
   inventory: "Inventory",
@@ -227,6 +231,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/lift", "my-lift", "MY_LIFT.EXE"),
   route("/dues", "my-dues", "MY_DUES.TXT"),
   route("/gear", "my-gear", "MY_GEAR.TXT"),
+  route("/shifts/mine", "my-shifts", "MY_SHIFTS.TXT"),
   route("/claims", "my-claims", "CLAIMS.TXT"),
 
   // Camp
@@ -273,6 +278,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/power/loads", "power", "POWER.EXE"),
   route("/power/fuel", "power", "POWER.EXE"),
   route("/logistics", "logistics", "LOGISTICS.EXE"),
+  route("/shifts", "shifts", "ROSTER.EXE"),
   route("/camp-layout", "camp-layout", "SITEPLAN.DWG"),
   route("/lounge", "lounge", "LOUNGE.EXE"),
   // The inventory's four views share one window; an item opens its own.

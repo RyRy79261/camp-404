@@ -39,6 +39,32 @@ describe("auditDetail", () => {
     expect(auditDetail("logistics.phase_set", { phase: "party" })).toBeNull();
   });
 
+  it("names the shift, and the day a member or a slot changed on", () => {
+    expect(auditActionLabel("shifts.member_placed")).toBe(
+      "Put a member on a shift",
+    );
+    expect(
+      auditDetail("shifts.member_placed", {
+        name: "Morning clean",
+        day: "2027-04-29",
+      }),
+    ).toBe("Morning clean, 2027-04-29");
+    expect(
+      auditDetail("shifts.slot_needed_set", {
+        name: "Ice run",
+        day: "2027-04-30",
+        needed: false,
+      }),
+    ).toBe("Ice run, 2027-04-30, not needed");
+    expect(auditDetail("shifts.type_added", { name: "Brunch: cooks" })).toBe(
+      "Brunch: cooks",
+    );
+    expect(auditDetail("shifts.asked", { asked: 1 })).toBe("1 member");
+    expect(
+      auditDetail("shifts.member_removed", { name: "Ice run" }),
+    ).toBeNull();
+  });
+
   it("labels and says a captain's decision on a member's place", () => {
     expect(auditActionLabel("participation.decided")).toBe(
       "Decided a member's place this year",

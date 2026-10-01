@@ -171,16 +171,18 @@ function PhoneFoot() {
   );
 }
 
-/** The bottom bar: Home, Open programs, the inbox bell, Today and the clock. */
+/** The bottom bar: Home, Open programs, Search, the inbox bell, Today and the clock. */
 export function PhoneBar({
   hidden,
   openCount,
   switcherOpen,
   todayOpen,
   todayCount,
+  searchOpen = false,
   onHome,
   onSwitcher,
   onToday,
+  onSearch,
   bell,
   clock,
 }: {
@@ -191,9 +193,13 @@ export function PhoneBar({
   todayOpen: boolean;
   /** Things due today, when the page said. */
   todayCount?: number;
+  /** The search sheet is open. */
+  searchOpen?: boolean;
   onHome: () => void;
   onSwitcher: () => void;
   onToday: () => void;
+  /** Open program search (issue #326); no Search cell without it. */
+  onSearch?: () => void;
   /** The inbox bell, as the tray draws it. */
   bell: ReactNode;
   /** The clock cell's contents (the time, the days to the Burn). */
@@ -211,7 +217,7 @@ export function PhoneBar({
       aria-label="Bottom bar"
       hidden={hidden}
       data-os-phone-bar
-      className="fixed inset-x-0 bottom-0 z-[90] flex select-none items-center gap-1 border-t border-os-primary/60 bg-os-chrome px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-[90] flex select-none items-center gap-1 max-[380px]:gap-0.5 border-t border-os-primary/60 bg-os-chrome px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
     >
       <button
         type="button"
@@ -239,7 +245,20 @@ export function PhoneBar({
         </span>
         Programs
       </button>
-      <div className="flex h-12 min-w-11 flex-1 items-center justify-center border border-os-line bg-os-panel">
+      {onSearch && (
+        <button
+          type="button"
+          onClick={onSearch}
+          aria-expanded={searchOpen}
+          aria-label="Search programs"
+          className={`${cell} ${searchOpen ? on : idle}`}
+        >
+          <LineIcon name="search" className="size-4" />
+          Search
+        </button>
+      )}
+      {/* Only an icon: it gives way first, so six cells fit at 360 px. */}
+      <div className="flex h-12 min-w-11 flex-[0.75] items-center justify-center border border-os-line bg-os-panel">
         {bell}
       </div>
       <button

@@ -90,6 +90,7 @@ import {
   adoptLogisticsSentinel,
   resetLogisticsStore,
 } from "./test-store-logistics";
+import { dropMemberShifts, resetShiftsStore } from "./test-store-shifts";
 import type { MyLift } from "@camp404/db/cars";
 import {
   ALREADY_SEATED,
@@ -1769,6 +1770,11 @@ export const testStore = {
             broadcastId: null,
             presentation: "popup",
           });
+        }
+        // As in production: a member who leaves approved comes off this
+        // year's shifts.
+        if (input.from === "approved") {
+          dropMemberShifts(user.id, currentCycleNumber());
         }
         // As in production: a rejected member leaves this year's teams.
         if (input.to === "rejected") {
@@ -6412,6 +6418,7 @@ export const testStore = {
     resetRentalStore();
     resetLogisticsStore();
     resetGuideStore();
+    resetShiftsStore();
     resetClaimsStore();
     resetKitchenMenuStore();
   },

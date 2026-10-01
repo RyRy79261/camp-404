@@ -1,6 +1,6 @@
 {
-  "id": "e0bbd955-323f-41f4-9e83-ac66df8cb31b",
-  "prevId": "f814e5a6-a55e-4735-862a-509a9688cf7b",
+  "id": "b0d4af35-4eb8-4404-964a-65bed3278d2e",
+  "prevId": "e0bbd955-323f-41f4-9e83-ac66df8cb31b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -7971,15 +7971,13 @@
           "name": "have_cable",
           "type": "boolean",
           "primaryKey": false,
-          "notNull": true,
-          "default": true
+          "notNull": false
         },
         "have_adapter": {
           "name": "have_adapter",
           "type": "boolean",
           "primaryKey": false,
-          "notNull": true,
-          "default": true
+          "notNull": false
         },
         "sort": {
           "name": "sort",
