@@ -58,13 +58,12 @@ describe("migration journal", () => {
     const snapshots = entries.map((entry) => {
       const name = `meta/${String(entry.idx).padStart(4, "0")}_snapshot.json`;
       const text = readFileSync(new URL(name, MIGRATIONS_DIR), "utf8");
-      let parsed: { id?: string; prevId?: string } = {};
       try {
-        parsed = JSON.parse(text) as { id?: string; prevId?: string };
+        const parsed = JSON.parse(text) as { id?: string; prevId?: string };
+        return { name, ...parsed };
       } catch {
         throw new Error(`${name} is not valid JSON; regenerate the migration`);
       }
-      return { name, ...parsed };
     });
     const broken = snapshots
       .slice(1)
