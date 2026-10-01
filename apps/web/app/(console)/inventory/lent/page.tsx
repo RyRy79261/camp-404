@@ -103,14 +103,13 @@ export default async function InventoryLoansPage() {
           <p className="text-xs text-muted-foreground">
             {out} still out · {loans.length - out} back
           </p>
-          <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
-            <ResponsiveDataTable
-              columns={columns}
-              data={loans}
-              getRowKey={(l) => l.id}
-              label="Gear lent out"
-            />
-          </div>
+          <ResponsiveDataTable
+            columns={columns}
+            data={loans}
+            getRowKey={(l) => l.id}
+            label="Gear lent out"
+            framed
+          />
         </div>
       )}
     </div>

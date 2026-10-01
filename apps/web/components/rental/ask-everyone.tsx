@@ -7,7 +7,7 @@ import { Button } from "@camp404/ui/components/button";
 import { toast } from "@camp404/ui/components/toast";
 import { askForGearOrdersAction } from "@/app/(console)/captains/gear-rental/actions";
 
-// "Ask everyone" (#241): a captain nudges each member who is coming this year
+// "Ask the N who haven't answered" (#241): a captain nudges each member who is coming this year
 // and has not sent their gear order. A nudge, never a block. Pressing it again
 // reaches only the members who still have not answered, and a member whose
 // notice is still unread gets no second one. A one-tap action: what happened,
@@ -26,13 +26,23 @@ export function askedText(asked: number, notified: number): string {
     : `Asked ${people}. ${quiet} already had the ask unread and got no second notice.`;
 }
 
-export function AskEveryone() {
+/** The button's words: who it reaches, by count. */
+export function askLabel(count: number): string {
+  return count === 1
+    ? "Ask the 1 who hasn\u2019t answered"
+    : `Ask the ${count} who haven\u2019t answered`;
+}
+
+/** The ask, inside the "Not answered yet" card it acts on. */
+export function AskEveryone({ count }: { count: number }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   return (
     <Button
       type="button"
       variant="outline"
+      size="sm"
+      className="self-start"
       disabled={pending}
       onClick={() =>
         start(async () => {
@@ -51,7 +61,7 @@ export function AskEveryone() {
       ) : (
         <Megaphone aria-hidden />
       )}
-      Ask everyone
+      {askLabel(count)}
     </Button>
   );
 }

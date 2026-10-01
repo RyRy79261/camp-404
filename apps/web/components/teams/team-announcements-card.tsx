@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Megaphone } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import {
@@ -11,7 +12,8 @@ import type { TeamAnnouncement } from "@/lib/team-programs";
 // What a team has sent (owner's ruling 3, 2026-09-27): every member may read
 // a team's announcements on its program, newest first. Who RECEIVES them does
 // not change. The server hands this only what went out: no draft, nothing
-// waiting for its time, and no pin, audience count or read receipt.
+// waiting for its time, and no pin, audience count or read receipt. A captain
+// or a lead of the team gets "Write announcement" in the header (`action`).
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -23,18 +25,22 @@ const WHEN = new Intl.DateTimeFormat("en-GB", {
 export function TeamAnnouncementsCard({
   items,
   more,
+  action,
 }: {
   items: readonly TeamAnnouncement[];
   /** The team has sent more than the card lists. */
   more: boolean;
+  /** The header's one action, for those who may write to the team. */
+  action?: ReactNode;
 }) {
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-x-3 gap-y-2 space-y-0 pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Megaphone className="h-4 w-4 text-accent" aria-hidden />
           Announcements
         </CardTitle>
+        {action}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {items.length === 0 ? (

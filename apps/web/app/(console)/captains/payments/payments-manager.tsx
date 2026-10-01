@@ -3,27 +3,33 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, Loader2, Wallet } from "lucide-react";
+import {
+  FileText,
+  HandCoins,
+  Loader2,
+  Plus,
+  Undo2,
+  Wallet,
+} from "lucide-react";
 import {
   CAMP_TIME_ZONE,
   formatMoney,
   PAYMENT_METHOD_LABELS,
-  readRate,
   REFUND_STATUS_LABELS,
-  sumMinor,
   type PaymentStatus,
 } from "@camp404/core";
 import type { PaymentRow } from "@camp404/db/payments";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@camp404/ui/components/card";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@camp404/ui/components/dialog";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
@@ -31,23 +37,28 @@ import {
   ResponsiveDataTable,
   type ResponsiveColumn,
 } from "@camp404/ui/components/responsive-data-table";
+import { RowActions } from "@camp404/ui/components/row-actions";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { memberDuesPath, paymentProofPath } from "@/lib/dues-copy";
-import { formatDay, SOURCE_WORDS } from "@/lib/dues-view";
+import { financeStatusWords, formatDay, SOURCE_WORDS } from "@/lib/dues-view";
 import { recordPaymentAction, setPaymentStatusAction } from "./actions";
 
-// The payments ledger island: record a payment, and move one between pending,
-// received and waived. A payment a member sent in carries its proof file,
-// opened through the audited proof route. Every write goes through the
-// Finance-gated actions and the page re-renders from the server.
+// The payments ledger island: the year's payments as a table, and recording
+// one. A payment a member sent in carries its proof file, opened through the
+// audited proof route. Every write goes through the Finance-gated actions and
+// the page re-renders from the server.
 //
-// Feedback, as on every captain screen: a refused payment shows inline on the
-// form; a failed one-tap move on a ledger row is a toast. Only the control that
-// was used spins, and no second change starts while one runs.
+// Each row keeps its buttons in one place (RowActions): "Mark received" is the
+// one main button, on a payment not yet in the bank; the quieter move sits in
+// a fixed slot on the far right of every row: "Excuse this amount" on a
+// payment not in the bank, "Back to pending" on one that is. Both ask first,
+// and the excuse names the money, because it settles a member's dues with no
+// money coming in.
 //
-// Money is in rands only (owner's call, 2026-09-24), so the "Dues paid" card's
-// totals are plain rand totals.
+// Feedback, as on every captain screen: a refused payment shows inline in the
+// record dialog; a failed one-tap move on a ledger row is a toast. Only the
+// control that was used spins, and no second move starts while one runs.
 
 export interface LedgerMember {
   id: string;
@@ -56,19 +67,10 @@ export interface LedgerMember {
   duesPaid: boolean;
 }
 
-const STATUS: Record<
-  PaymentStatus,
-  { label: string; variant: "warning" | "success" | "secondary" }
-> = {
-  pending: { label: "Pending", variant: "warning" },
-  reconciled: { label: "Received", variant: "success" },
-  waived: { label: "Waived", variant: "secondary" },
-};
-
 const STATUS_CHOICES: { value: PaymentStatus; label: string }[] = [
-  { value: "reconciled", label: "Received: I can see it in the bank" },
-  { value: "pending", label: "Pending: promised, not in the bank yet" },
-  { value: "waived", label: "Waived: they don't have to pay" },
+  { value: "reconciled", label: "In the bank: I can see it" },
+  { value: "pending", label: "Promised: not in the bank yet" },
+  { value: "waived", label: "Excused: they don't have to pay it" },
 ];
 
 const when = new Intl.DateTimeFormat("en-ZA", {
@@ -76,53 +78,19 @@ const when = new Intl.DateTimeFormat("en-ZA", {
   timeZone: CAMP_TIME_ZONE,
 });
 
-/** This year's rows with one status, and their rand total in cents. */
-function totalOf(payments: readonly PaymentRow[], status: PaymentStatus) {
-  const rows = payments.filter((p) => p.status === status);
-  return {
-    count: rows.length,
-    cents: sumMinor(rows.map((p) => p.amountCents)),
-  };
-}
-
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
-export function PaymentsManager({
-  yearLabel,
-  members,
-  payments,
-}: {
-  yearLabel: string;
-  members: LedgerMember[];
-  payments: PaymentRow[];
-}) {
+/** "Record a payment": the page's main button, with its form in a dialog. */
+export function RecordPaymentDialog({ members }: { members: LedgerMember[] }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [recording, startRecord] = useTransition();
-  // A one-tap move on a ledger row: which payment, and which button spins.
-  const [moving, startMove] = useTransition();
-  const [busy, setBusy] = useState<{ id: string; to: PaymentStatus } | null>(
-    null,
-  );
-  const pending = recording || moving;
-  const [confirm, confirmDialog] = useConfirm();
   const [userId, setUserId] = useState("");
   const [amount, setAmount] = useState("");
   const [status, setStatus] = useState<PaymentStatus>("reconciled");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  const paid = readRate(
-    members.filter((m) => m.duesPaid).length,
-    members.length,
-  );
-  // Received counts only money seen in the bank: a waived payment settles dues
-  // but brings nothing in, and a pending one has not arrived.
-  const received = totalOf(payments, "reconciled");
-  const promised = totalOf(payments, "pending");
-  const toCheck = payments.filter(
-    (p) => p.status === "pending" && p.source === "member",
-  ).length;
 
   function record() {
     setError(null);
@@ -136,16 +104,141 @@ export function PaymentsManager({
       setUserId("");
       setAmount("");
       setNote("");
+      setOpen(false);
       router.refresh();
     });
   }
 
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setError(null);
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button type="button" size="sm">
+          <Plus aria-hidden />
+          Record a payment
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:max-w-full max-sm:rounded-none max-sm:border-0">
+        <DialogHeader>
+          <DialogTitle>Record a payment</DialogTitle>
+          <DialogDescription>
+            What the bank statement shows, against the member who paid.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="payment-member">Member</Label>
+            <select
+              id="payment-member"
+              className={selectClass}
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              disabled={recording}
+            >
+              <option value="">Pick the member who paid</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.duesPaid ? `${m.name} (paid)` : m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
+            <InputField
+              label="Amount (R)"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.currentTarget.value)}
+              disabled={recording}
+            />
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="payment-status">Status</Label>
+              <select
+                id="payment-status"
+                className={selectClass}
+                value={status}
+                onChange={(e) => setStatus(e.target.value as PaymentStatus)}
+                disabled={recording}
+              >
+                {STATUS_CHOICES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="payment-note">Note (optional)</Label>
+            <Textarea
+              id="payment-note"
+              value={note}
+              onChange={(e) => setNote(e.currentTarget.value)}
+              rows={2}
+              maxLength={500}
+              disabled={recording}
+            />
+            <p className="text-xs text-muted-foreground">
+              What the bank statement says, for example.
+            </p>
+          </div>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <Button
+            type="button"
+            className="self-start"
+            disabled={recording || !userId || !amount.trim()}
+            onClick={record}
+          >
+            {recording && <Loader2 className="animate-spin" aria-hidden />}
+            Record payment
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function PaymentsManager({
+  yearLabel,
+  payments,
+}: {
+  yearLabel: string;
+  payments: PaymentRow[];
+}) {
+  const router = useRouter();
+  // A one-tap move on a ledger row: which payment, and which button spins.
+  const [moving, startMove] = useTransition();
+  const [busy, setBusy] = useState<{ id: string; to: PaymentStatus } | null>(
+    null,
+  );
+  const [confirm, confirmDialog] = useConfirm();
+
   async function move(payment: PaymentRow, to: PaymentStatus) {
+    const who = payment.memberName ?? "the member";
+    const amount = formatMoney(payment.amountCents, payment.currency);
     if (to === "pending") {
       const sure = await confirm({
         title: "Put this payment back to pending?",
-        description: `${payment.reference} stops counting toward ${payment.memberName ?? "the member"}'s dues until it is received or waived again.`,
+        description: `${amount} stops counting toward ${who}'s dues until it is in the bank or excused again.`,
         confirmLabel: "Back to pending",
+      });
+      if (!sure) return;
+    }
+    if (to === "waived") {
+      const sure = await confirm({
+        title: `Excuse ${amount}?`,
+        description: `${who} won't have to pay it: it counts toward their dues as paid, and no money comes in. Only do this when the camp has agreed to let them off.`,
+        confirmLabel: `Excuse ${amount}`,
+        destructive: true,
       });
       if (!sure) return;
     }
@@ -162,9 +255,7 @@ export function PaymentsManager({
   }
 
   const spins = (payment: PaymentRow, to: PaymentStatus) =>
-    moving && busy?.id === payment.id && busy.to === to ? (
-      <Loader2 className="animate-spin" aria-hidden />
-    ) : null;
+    moving && busy?.id === payment.id && busy.to === to;
 
   const columns: ResponsiveColumn<PaymentRow>[] = [
     {
@@ -180,13 +271,13 @@ export function PaymentsManager({
           >
             {p.memberName ?? "A former member"}
           </Link>
-          <span className="font-mono text-xs text-muted-foreground">
-            {p.reference}
+          <span className="whitespace-nowrap font-mono text-xs font-normal tracking-normal text-muted-foreground">
+            Receipt no. {p.reference}
           </span>
-          {(p.source !== "captain" || p.paidOn || p.method) && (
+          {(p.source !== "captain" || p.method || p.paidOn) && (
             <span className="text-xs font-normal text-muted-foreground">
               {[
-                SOURCE_WORDS[p.source],
+                p.source !== "captain" ? SOURCE_WORDS[p.source] : null,
                 p.method ? PAYMENT_METHOD_LABELS[p.method] : null,
                 p.paidOn ? `paid ${formatDay(p.paidOn)}` : null,
               ]
@@ -195,7 +286,7 @@ export function PaymentsManager({
             </span>
           )}
           {p.note && (
-            <span className="max-w-xs whitespace-pre-line text-xs font-normal text-muted-foreground">
+            <span className="whitespace-pre-line text-xs font-normal text-muted-foreground">
               {p.note}
             </span>
           )}
@@ -226,22 +317,24 @@ export function PaymentsManager({
       id: "status",
       header: "Status",
       role: "badge",
-      cell: (p) => (
-        <Badge variant={STATUS[p.status].variant}>
-          {STATUS[p.status].label}
-        </Badge>
-      ),
+      headClassName: "w-32",
+      cell: (p) => {
+        const words = financeStatusWords(p.status, p.source);
+        return <Badge variant={words.variant}>{words.label}</Badge>;
+      },
     },
     {
       id: "amount",
       header: "Amount",
       align: "right",
+      headClassName: "w-32",
       cellClassName: "whitespace-nowrap font-medium tabular-nums",
       cell: (p) => formatMoney(p.amountCents, p.currency),
     },
     {
       id: "recorded",
       header: "Recorded",
+      headClassName: "w-44",
       cell: (p) => (
         <span className="flex flex-col">
           <span>{p.recordedByName ?? "a former captain"}</span>
@@ -256,209 +349,91 @@ export function PaymentsManager({
       header: "Actions",
       role: "actions",
       hideHeader: true,
-      align: "right",
-      cell: (p) =>
-        p.status === "pending" ? (
-          <span className="flex justify-end gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={pending}
-              onClick={() => void move(p, "reconciled")}
-            >
-              {spins(p, "reconciled")}
-              Mark received
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={pending}
-              onClick={() => void move(p, "waived")}
-            >
-              {spins(p, "waived")}
-              Waive
-            </Button>
-          </span>
-        ) : (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={pending}
-            onClick={() => void move(p, "pending")}
-          >
-            {spins(p, "pending")}
-            Back to pending
-          </Button>
-        ),
+      cell: (p) => (
+        <RowActions
+          label={`Actions for ${p.reference}`}
+          primary={
+            p.status === "pending" ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={moving}
+                onClick={() => void move(p, "reconciled")}
+              >
+                {spins(p, "reconciled") && (
+                  <Loader2 className="animate-spin" aria-hidden />
+                )}
+                Mark received
+              </Button>
+            ) : null
+          }
+          secondary={
+            p.status === "pending" ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label="Excuse this amount"
+                title="Excuse this amount"
+                disabled={moving}
+                onClick={() => void move(p, "waived")}
+              >
+                {spins(p, "waived") ? (
+                  <Loader2 className="animate-spin" aria-hidden />
+                ) : (
+                  <HandCoins aria-hidden />
+                )}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label="Back to pending"
+                title="Back to pending"
+                disabled={moving}
+                onClick={() => void move(p, "pending")}
+              >
+                {spins(p, "pending") ? (
+                  <Loader2 className="animate-spin" aria-hidden />
+                ) : (
+                  <Undo2 aria-hidden />
+                )}
+              </Button>
+            )
+          }
+        />
+      ),
     },
   ];
 
   return (
-    <div className="grid items-start gap-6 page-lg:grid-cols-3">
+    <section
+      aria-labelledby="payments-ledger-heading"
+      className="flex min-w-0 flex-col gap-3"
+    >
       {confirmDialog}
-
-      <section
-        aria-labelledby="payments-ledger-heading"
-        className="flex min-w-0 flex-col gap-3 page-lg:col-span-2"
+      <h2
+        id="payments-ledger-heading"
+        className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground"
       >
-        <h2
-          id="payments-ledger-heading"
-          className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground"
-        >
-          Payments for {yearLabel}
-        </h2>
-        {payments.length === 0 ? (
-          <EmptyState
-            icon={<Wallet aria-hidden />}
-            title="No payments recorded yet."
-            description="Record one from the bank statement and it shows here, with its reference and who recorded it."
-          />
-        ) : (
-          <ResponsiveDataTable
-            columns={columns}
-            data={payments}
-            getRowKey={(p) => p.id}
-            label={`Payments for ${yearLabel}`}
-            className="page-md:rounded-xl page-md:border page-md:bg-card page-md:shadow-sm"
-          />
-        )}
-      </section>
-
-      <aside className="flex flex-col gap-6">
-        <Card>
-          <CardContent className="flex flex-col gap-2 p-5">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Dues paid
-            </span>
-            <span className="text-3xl font-bold tabular-nums">
-              {paid.read}
-              <span className="text-base font-medium text-muted-foreground">
-                {" "}
-                / {paid.of}
-              </span>
-            </span>
-            <div
-              className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-              role="progressbar"
-              aria-valuenow={paid.percent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Members who have paid"
-            >
-              <div
-                className="h-full rounded-full bg-primary transition-all"
-                style={{ width: `${paid.percent}%` }}
-              />
-            </div>
-            <p role="status" className="text-xs text-muted-foreground">
-              {paid.read} of {paid.of} members have paid for {yearLabel}.
-            </p>
-            <div className="mt-1 flex flex-col gap-1 border-t border-border pt-3 text-sm">
-              <p role="status">
-                <span className="text-muted-foreground">Received: </span>
-                <span className="font-medium tabular-nums">
-                  {formatMoney(received.cents)}
-                </span>
-              </p>
-              {promised.count > 0 && (
-                <p role="status">
-                  <span className="text-muted-foreground">Pending: </span>
-                  <span className="font-medium tabular-nums">
-                    {formatMoney(promised.cents)}
-                  </span>
-                </p>
-              )}
-              {toCheck > 0 && (
-                <p role="status" className="text-xs text-muted-foreground">
-                  {toCheck === 1
-                    ? "1 payment a member sent in is waiting to be checked against the bank."
-                    : `${toCheck} payments members sent in are waiting to be checked against the bank.`}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="p-5 pb-4">
-            <CardTitle className="text-base">Record a payment</CardTitle>
-            <CardDescription>
-              What the bank statement shows, against the member who paid.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 p-5 pt-0">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="payment-member">Member</Label>
-              <select
-                id="payment-member"
-                className={selectClass}
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                disabled={pending}
-              >
-                <option value="">Pick the member who paid</option>
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.duesPaid ? `${m.name} (paid)` : m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <InputField
-              label="Amount (R)"
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.currentTarget.value)}
-              placeholder="1250"
-              disabled={pending}
-            />
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="payment-status">Status</Label>
-              <select
-                id="payment-status"
-                className={selectClass}
-                value={status}
-                onChange={(e) => setStatus(e.target.value as PaymentStatus)}
-                disabled={pending}
-              >
-                {STATUS_CHOICES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="payment-note">Note (optional)</Label>
-              <Textarea
-                id="payment-note"
-                value={note}
-                onChange={(e) => setNote(e.currentTarget.value)}
-                rows={2}
-                maxLength={500}
-                disabled={pending}
-                placeholder="What the bank statement says"
-              />
-            </div>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <Button
-              type="button"
-              className="w-full"
-              disabled={pending || !userId || !amount.trim()}
-              onClick={record}
-            >
-              {recording && <Loader2 className="animate-spin" aria-hidden />}
-              Record payment
-            </Button>
-          </CardContent>
-        </Card>
-      </aside>
-    </div>
+        Payments for {yearLabel}
+      </h2>
+      {payments.length === 0 ? (
+        <EmptyState
+          icon={<Wallet aria-hidden />}
+          title="No payments recorded yet."
+          description="Record one from the bank statement and it shows here, with its receipt number and who recorded it."
+        />
+      ) : (
+        <ResponsiveDataTable
+          columns={columns}
+          data={payments}
+          getRowKey={(p) => p.id}
+          label={`Payments for ${yearLabel}`}
+          framed
+        />
+      )}
+    </section>
   );
 }

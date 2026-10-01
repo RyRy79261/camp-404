@@ -63,6 +63,22 @@ function state(): LogisticsState {
   return g[KEY] as LogisticsState;
 }
 
+/**
+ * The founding year's twin for this store's rows (setFoundingYear's
+ * logistics step): answers and deadlines written before the camp had a year
+ * move onto it. Nothing can hold the founding year yet, so nothing collides.
+ */
+export function adoptLogisticsSentinel(from: number, year: number): void {
+  const s = state();
+  for (const [key, answer] of [...s.answers]) {
+    const [cycle, ...rest] = key.split(":");
+    if (Number(cycle) !== from) continue;
+    s.answers.delete(key);
+    s.answers.set([year, ...rest].join(":"), answer);
+  }
+  for (const d of s.deadlines) if (d.cycle === from) d.cycle = year;
+}
+
 /** Clear every attendance answer and deadline (testStore.reset calls this). */
 export function resetLogisticsStore(): void {
   const s = state();

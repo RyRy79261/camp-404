@@ -85,6 +85,7 @@ export function CampManagementRoster({
   teams,
   teamLabels = {},
   initialTeam = null,
+  initialMember = null,
 }: {
   rows: RosterRow[];
   teams: readonly { key: string; label: string }[];
@@ -96,6 +97,8 @@ export function CampManagementRoster({
    * here that way.
    */
   initialTeam?: string | null;
+  /** The member whose panel opens first: `?member=`, checked by the page. */
+  initialMember?: string | null;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -108,7 +111,9 @@ export function CampManagementRoster({
   // documented adjust-state-on-prop-change, rather than an effect — it settles
   // before the stale list is ever painted.
   const [urlTeam, setUrlTeam] = useState(initialTeam);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialMember ?? null,
+  );
   const [sort, setSort] = useState<RosterSort>(DEFAULT_ROSTER_SORT);
   // Members decided since the filters last changed.
   const [pinned, setPinned] = useState<ReadonlySet<string>>(new Set());

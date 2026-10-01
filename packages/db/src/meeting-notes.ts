@@ -78,6 +78,10 @@ export interface MeetingNoteSummary {
   heldAt: Date;
   decisions: number;
   actionItems: number;
+  /** How many people were ticked as there. */
+  attendees: number;
+  /** The first thing decided, for a hint of the content; null for none. */
+  firstDecision: string | null;
 }
 
 /**
@@ -105,6 +109,10 @@ export async function listMeetingNotes(
       // table, which the subquery would read as its own row's id.
       decisions: sql<number>`(select count(*)::int from meeting_note_decisions d where d.note_id = meeting_notes.id)`,
       actionItems: sql<number>`(select count(*)::int from meeting_note_action_items i where i.note_id = meeting_notes.id)`,
+      attendees: sql<number>`(select count(*)::int from meeting_note_attendees a where a.note_id = meeting_notes.id)`,
+      firstDecision: sql<
+        string | null
+      >`(select d.text from meeting_note_decisions d where d.note_id = meeting_notes.id order by d.position limit 1)`,
     })
     .from(n)
     .where(where)

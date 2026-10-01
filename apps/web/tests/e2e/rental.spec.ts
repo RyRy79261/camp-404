@@ -2,6 +2,7 @@ import {
   test,
   expect,
   type APIRequestContext,
+  type Locator,
   type Page,
 } from "@playwright/test";
 import {
@@ -62,7 +63,11 @@ async function captainListsGear(page: Page, request: APIRequestContext) {
   await asCaptain(page, request);
   await page.goto("/captains/gear-rental/catalogue");
   await heading(page, "Catalogue");
-  const items = page.getByRole("list", { name: "Rental items" });
+  // A table where the window has room for it, a card per item where not.
+  const items = page
+    .getByRole("table", { name: "Rental items" })
+    .or(page.getByRole("list", { name: "Rental items" }))
+    .filter({ visible: true });
 
   // A small tent: the supplier rents it, and the camp has one of its own.
   await page.getByLabel("Name").fill("2-person tent");
@@ -76,7 +81,11 @@ async function captainListsGear(page: Page, request: APIRequestContext) {
   await page.getByLabel("How many the camp has").fill("1");
   await page.getByRole("button", { name: "Add item" }).click();
   await expect(items.getByText("2-person tent")).toBeVisible();
-  await expect(items.getByText(/the camp has 1$/)).toBeVisible();
+  // Its prices and count in their own columns: sleeps 2, the supplier's
+  // R250, camp stock R100, and the camp has 1.
+  await expect(
+    items.getByRole("row", { name: /2-person tent/ }).getByRole("cell"),
+  ).toHaveText(["2-person tent", "2", /R\s250,00/, /R\s100,00/, "1", "–", ""]);
 
   // A big tent: the supplier only.
   await page.getByLabel("Name").fill("4-person tent");
@@ -145,19 +154,55 @@ async function openOrder(page: Page, member: string) {
   await heading(page, member);
 }
 
-/** The captain picks the tent a member gets, and where it comes from. */
-async function assignTent(page: Page, tent: RegExp, source: RegExp) {
+/**
+ * The captain picks the tent a member gets, and where it comes from. A tent
+ * with one source has nothing to pick (`source` left out): it says so.
+ */
+async function assignTent(page: Page, tent: RegExp, source?: RegExp) {
   await page
     .getByRole("radiogroup", { name: "Which tent" })
     .getByRole("radio", { name: tent })
     .click();
-  await page
-    .getByRole("radiogroup", { name: "Where the tent comes from" })
-    .getByRole("radio", { name: source })
-    .click();
+  if (source) {
+    await page
+      .getByRole("radiogroup", { name: "Where the tent comes from" })
+      .getByRole("radio", { name: source })
+      .click();
+  }
 }
 
 const total = (page: Page) => page.getByRole("status", { name: "Order total" });
+
+/** The summary's "By item" columns, in the order the table draws them. */
+const BY_ITEM = [
+  "Item",
+  "Camp",
+  "Supplier",
+  "Spares",
+  "From storage",
+  "Left",
+  "To order",
+];
+
+/**
+ * One figure of the summary's "By item" table, from whichever form shows: the
+ * table where the window has room for it, a card per item where it has not.
+ */
+function byItem(page: Page, item: RegExp, column: string): Locator {
+  const row = page
+    .getByRole("table", { name: "Totals by item" })
+    .getByRole("row", { name: item })
+    .getByRole("cell")
+    .nth(BY_ITEM.indexOf(column));
+  const card = page
+    .getByRole("list", { name: "Totals by item" })
+    .getByRole("listitem")
+    .filter({ hasText: item })
+    .locator("div")
+    .filter({ has: page.locator("dt", { hasText: new RegExp(`^${column}$`) }) })
+    .locator("dd");
+  return row.or(card).filter({ visible: true });
+}
 
 test.describe("gear rental (test-mode)", () => {
   test.beforeEach(async ({ request }) => {
@@ -203,30 +248,25 @@ test.describe("gear rental (test-mode)", () => {
     await login(page, { id: "rent-friend", email: "rent-friend@example.com" });
     await page.goto("/gear");
     await heading(page, "My gear");
+    // It reads as content: whose tent, and who to ask. No locked radios.
     await expect(page.getByTestId("tent-hosted")).toContainText(
-      "Dee Member put you in their tent, so this is answered.",
+      "You\u2019re in Dee Member\u2019s tent.",
     );
-    await expect(
-      tentQuestion(page).getByRole("radio", {
-        name: /^I.m in someone else.s tent/,
-      }),
-    ).toBeChecked();
-    await expect(
-      tentQuestion(page).getByRole("radio", { name: /^I have my own/ }),
-    ).toBeDisabled();
-    await expect(
-      tentQuestion(page).getByRole("radio", { name: /^I need one/ }),
-    ).toBeDisabled();
-    await expect(page.getByText("Not confirmed yet")).toBeVisible();
+    await expect(page.getByTestId("tent-hosted")).toContainText(
+      "Ask Dee Member to take you off if that\u2019s wrong.",
+    );
+    await expect(tentQuestion(page)).toHaveCount(0);
     // Nothing of Dee's order but the tent.
     await expect(page.getByRole("list", { name: "Your order" })).toHaveCount(0);
     await sendMyOrder(page);
+    // Her order names the tent once, with no second banner saying it again.
     await expect(page.getByTestId("tent-answer")).toContainText(
       "Dee Member\u2019s tent",
     );
-    await expect(page.getByTestId("in-a-tent")).toHaveText(
-      /in Dee Member.s tent\. You don.t need a tent of your own\./,
+    await expect(page.getByTestId("tent-answer")).toContainText(
+      "Not confirmed yet",
     );
+    await expect(page.getByTestId("in-a-tent")).toHaveCount(0);
 
     // A lead of another team and a Finance lead: a lock, and no member named.
     for (const id of ["rent-kit", "rent-fin"]) {
@@ -258,9 +298,7 @@ test.describe("gear rental (test-mode)", () => {
       page
         .getByRole("list", { name: "Needs a tent, not assigned yet" })
         .getByRole("listitem"),
-    ).toHaveText([
-      /Dee Member needs a tent, not assigned yet.*A tent for 2 people, with Fay Friend/,
-    ]);
+    ).toHaveText([/Dee Member.*A tent for 2 people, with Fay Friend/]);
 
     // The captain opens the order and picks the actual tent and its source.
     await openOrder(page, "Dee Member");
@@ -269,8 +307,13 @@ test.describe("gear rental (test-mode)", () => {
     await expect(panel).toContainText("A tent for 2 people");
     // The sharer has no place yet, and the captain is told.
     await expect(panel.getByText("Not accepted yet")).toBeVisible();
-    await expect(total(page)).toHaveText("Not yet");
-    await assignTent(page, /4-person tent/, /Supplier/);
+    // No total until the tent is picked, and it says so.
+    await expect(total(page)).toHaveText("Pick their tent");
+    // The big tent comes from the supplier only: words, not a button.
+    await assignTent(page, /4-person tent/);
+    await expect(
+      page.getByTestId("tent-panel").getByTestId("only-source"),
+    ).toContainText(/Supplier · R\s700,00 each/);
     await expect(total(page)).toHaveText(/R\s860,00/);
     await assignTent(page, /2-person tent/, /Camp stock\s*R\s100,00 each/);
     await expect(panel.getByText("1 left in camp stock.")).toBeVisible();
@@ -288,18 +331,21 @@ test.describe("gear rental (test-mode)", () => {
     // The summary counts the tent the captain picked: out of storage, none left.
     await page.goto("/captains/gear-rental/summary");
     await heading(page, "Summary");
-    const totals = page.getByRole("table", { name: "Totals by item" });
-    const tentRow = totals.getByRole("row", { name: /2-person tent/ });
-    await expect(tentRow.getByRole("cell").nth(3)).toHaveText("1");
-    await expect(tentRow.getByRole("cell").nth(4)).toHaveText("0 of 1");
-    await expect(tentRow.getByRole("cell").nth(5)).toHaveText("0");
-    const bigRow = totals.getByRole("row", { name: /4-person tent/ });
-    await expect(bigRow.getByRole("cell").nth(5)).toHaveText("0");
-    const mattressRow = totals.getByRole("row", { name: /Mattress/ });
-    await expect(mattressRow.getByRole("cell").nth(5)).toHaveText("2");
+    await expect(byItem(page, /2-person tent/, "From storage")).toHaveText("1");
+    await expect(byItem(page, /2-person tent/, "Left")).toHaveText("0 of 1");
+    await expect(byItem(page, /2-person tent/, "To order")).toHaveText("0");
+    await expect(byItem(page, /4-person tent/, "To order")).toHaveText("0");
+    // The camp owns no mattresses: a dash, not words, in a number column.
+    await expect(byItem(page, /Mattress/, "Left")).toHaveText("–");
+    await expect(byItem(page, /Mattress/, "To order")).toHaveText("2");
+    // The label has a column of its own.
     await expect(
-      page.getByRole("list", { name: "Tents" }).getByRole("listitem"),
-    ).toContainText(["T3"]);
+      page
+        .getByRole("table", { name: "Tents" })
+        .getByRole("row", { name: /2-person tent/ })
+        .getByRole("cell")
+        .first(),
+    ).toHaveText("T3");
     await expect(
       page.getByRole("list", { name: "Needs a tent, not assigned yet" }),
     ).toHaveCount(0);
@@ -336,7 +382,7 @@ test.describe("gear rental (test-mode)", () => {
     const answer = page.getByTestId("tent-answer");
     await expect(answer).toContainText("2-person tent");
     await expect(answer).toContainText("from camp stock");
-    await expect(answer).toContainText("Tent label: T3");
+    await expect(answer.getByTestId("tent-label")).toHaveText("T3");
     await expect(
       page.getByRole("button", { name: "Send my order" }),
     ).toHaveCount(0);
@@ -346,8 +392,8 @@ test.describe("gear rental (test-mode)", () => {
     await page.goto("/gear");
     await heading(page, "My gear");
     await expect(
-      page.getByRole("list", { name: "Your tent" }).getByText("T3"),
-    ).toBeVisible();
+      page.getByTestId("tent-answer").getByTestId("tent-label"),
+    ).toHaveText("T3");
   });
 
   test("a member with their own tent is charged nothing for it; the camp's one tent is not given out twice; a reopened order comes off the dues", async ({
@@ -497,9 +543,7 @@ test.describe("gear rental (test-mode)", () => {
     await expect(
       page.getByText("Captains only", { exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Ask everyone" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Ask the/ })).toHaveCount(0);
     await expect(page.getByText("Dee Member")).toHaveCount(0);
     // Nobody has been asked yet.
     await page.goto("/gear");
@@ -518,7 +562,10 @@ test.describe("gear rental (test-mode)", () => {
     ]);
     // Said Maybe: not coming, so not asked.
     await expect(page.getByText("Mo Maybe")).toHaveCount(0);
-    await page.getByRole("button", { name: "Ask everyone" }).click();
+    // The ask sits in the card it acts on, and says how many it reaches.
+    await page
+      .getByRole("button", { name: "Ask the 3 who haven\u2019t answered" })
+      .click();
     await expect(page.getByText("Asked 3 members.")).toBeVisible();
     await expect(waiting.getByRole("link")).toHaveText([
       "Dee MemberAsked",
@@ -526,7 +573,9 @@ test.describe("gear rental (test-mode)", () => {
       "Kit LeadAsked",
     ]);
     // Pressed again: no second notice while the first is unread.
-    await page.getByRole("button", { name: "Ask everyone" }).click();
+    await page
+      .getByRole("button", { name: "Ask the 3 who haven\u2019t answered" })
+      .click();
     await expect(
       page.getByText(
         "3 members already have the ask unread. No second notice was sent.",
@@ -569,13 +618,9 @@ test.describe("gear rental (test-mode)", () => {
     await heading(page, "Fay Friend");
     await expect(page.getByText("No order yet", { exact: true })).toBeVisible();
     await expect(page.getByTestId("tent-hosted")).toContainText(
-      "Dee Member put them in their tent, so this is answered.",
+      "They\u2019re in Dee Member\u2019s tent.",
     );
-    await expect(
-      tentQuestion(page).getByRole("radio", {
-        name: /^They.re in someone else.s tent/,
-      }),
-    ).toBeChecked();
+    await expect(tentQuestion(page)).toHaveCount(0);
     await needMattresses(page, 1, false);
     await page.getByRole("button", { name: "Save for them" }).click();
     await expect(
@@ -608,7 +653,9 @@ test.describe("gear rental (test-mode)", () => {
       "A captain filled this in for you.",
     );
     await expect(page.getByTestId("gear-asked")).toHaveCount(0);
-    await expect(page.getByTestId("in-a-tent")).toContainText("Dee Member");
+    await expect(page.getByTestId("tent-answer")).toContainText(
+      "Dee Member\u2019s tent",
+    );
     await page.goto("/dues");
     await heading(page, "My dues");
     await expect(page.getByText(/You owe R\s80,00\./)).toBeVisible();

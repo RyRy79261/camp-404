@@ -57,7 +57,10 @@ export function AttendancePicker({
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
+      <p aria-hidden className="text-xs font-medium text-muted-foreground">
+        Your answer
+      </p>
       <div
         role="group"
         aria-label={`Your answer for ${label}`}

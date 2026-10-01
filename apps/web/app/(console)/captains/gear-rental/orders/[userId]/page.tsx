@@ -82,7 +82,8 @@ export default async function GearOrderPage({
 
   return (
     <div className="flex flex-col">
-      <div className="mb-4">
+      {/* A phone has the window's own Back: one way back is enough there. */}
+      <div className="mb-4 hidden page-sm:block">
         <Button asChild variant="ghost" size="sm">
           <Link href={RENTAL_PATH}>
             <ArrowLeft aria-hidden />
@@ -96,7 +97,11 @@ export default async function GearOrderPage({
         description={
           filling
             ? "This member has not sent an order. Fill it in for them, then pick their tent and where each thing comes from, and confirm."
-            : "Pick their tent and where each thing comes from, then confirm. The member sees the total on their dues."
+            : order?.status === "confirmed"
+              ? order.chargeId
+                ? "Confirmed. The total is on their dues."
+                : "Confirmed. There is nothing for them to pay."
+              : "Pick their tent and where each thing comes from, then confirm. The member sees the total on their dues."
         }
         actions={
           <span className="flex flex-wrap items-center gap-2">

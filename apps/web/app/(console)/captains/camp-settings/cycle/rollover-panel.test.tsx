@@ -128,15 +128,23 @@ describe("RolloverPanel — naming the founding year", () => {
     expect(screen.queryByText(/You're in/)).toBeNull();
   });
 
-  it("refuses anything that isn't a plausible four-digit year", () => {
+  it("refuses anything that isn't a plausible four-digit year, beside the box", () => {
     render(<RolloverPanel plan={unfounded} />);
     const button = () =>
-      screen.getByRole("button", { name: /camp is in|Type the year/ });
-    expect(button()).toHaveProperty("disabled", true);
+      screen.getByRole("button", { name: /^Save (\d{4} as )?the year$/ });
+    const typo = /Type the year as four digits/;
+    // The button names its action and stays pressable; it never reads as an
+    // instruction ("Type the year") greyed out.
+    expect(button().textContent).toBe("Save the year");
+    expect(button()).toHaveProperty("disabled", false);
+    fireEvent.click(button());
+    expect(screen.getByText(typo)).toBeTruthy();
 
     // Too short.
     type("This year", "202");
-    expect(button()).toHaveProperty("disabled", true);
+    expect(screen.queryByText(typo)).toBeNull();
+    fireEvent.click(button());
+    expect(screen.getByText(typo)).toBeTruthy();
 
     // Not a year at all — the input strips everything but digits, so what is
     // left is still refused rather than coerced into something plausible.
@@ -145,12 +153,19 @@ describe("RolloverPanel — naming the founding year", () => {
 
     // Outside the plausible range.
     type("This year", "1899");
-    expect(button()).toHaveProperty("disabled", true);
+    fireEvent.click(button());
+    expect(screen.getByText(typo)).toBeTruthy();
+    expect(setFoundingYearAction).not.toHaveBeenCalled();
 
     type("This year", "2026");
     expect(
-      screen.getByRole("button", { name: "The camp is in 2026" }),
+      screen.getByRole("button", { name: "Save 2026 as the year" }),
     ).toHaveProperty("disabled", false);
+  });
+
+  it("does not pull the window down to the year box when the page opens", () => {
+    render(<RolloverPanel plan={unfounded} />);
+    expect(document.activeElement).not.toBe(screen.getByLabelText("This year"));
   });
 
   it("sends the year as a number and reports what it adopted", async () => {
@@ -176,7 +191,7 @@ describe("RolloverPanel — naming the founding year", () => {
     render(<RolloverPanel plan={unfounded} />);
     type("This year", "2026");
     fireEvent.click(
-      screen.getByRole("button", { name: "The camp is in 2026" }),
+      screen.getByRole("button", { name: "Save 2026 as the year" }),
     );
 
     await waitFor(() =>
@@ -205,7 +220,7 @@ describe("RolloverPanel — naming the founding year", () => {
     render(<RolloverPanel plan={unfounded} />);
     type("This year", "2026");
     fireEvent.click(
-      screen.getByRole("button", { name: "The camp is in 2026" }),
+      screen.getByRole("button", { name: "Save 2026 as the year" }),
     );
 
     await waitFor(() =>

@@ -22,6 +22,8 @@ import {
 import { captainActionGate } from "@/lib/captain-gate";
 import { mutateTeamsConfig } from "@/lib/camp-config";
 import { deliverAfterResponse } from "@/lib/background-work";
+import { usesTestStore } from "@/lib/test-mode";
+import { testStore } from "@/lib/test-store";
 
 // Captain-only team-settings mutations (Phase 2). Each does a captain-gate, a
 // Zod boundary parse, then a locked read-modify-write via mutateTeamsConfig.
@@ -286,10 +288,12 @@ export async function setFoundingYearAction(
     };
   }
 
-  const result = await setFoundingYear({
-    year: parsed.data.year,
-    actorUserId: gate.captainId,
-  });
+  const founding = { year: parsed.data.year, actorUserId: gate.captainId };
+  // Under E2E the store stands in for the database (its twin says what it
+  // does not adopt).
+  const result = usesTestStore()
+    ? testStore.setFoundingYear(founding)
+    : await setFoundingYear(founding);
   if (!result.ok) {
     return {
       ok: false,

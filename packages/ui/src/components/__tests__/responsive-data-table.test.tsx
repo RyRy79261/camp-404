@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -125,5 +126,114 @@ describe("ResponsiveDataTable", () => {
     ).getAllByRole("listitem")[0]!;
     const pair = within(card).getByText("Any dietary needs?").parentElement!;
     expect(pair.className).toContain("flex-col");
+  });
+});
+
+describe("ResponsiveDataTable inside a window", () => {
+  function renderTable(
+    extra: Partial<React.ComponentProps<typeof ResponsiveDataTable<Row>>> = {},
+  ) {
+    return render(
+      <ResponsiveDataTable
+        columns={columns}
+        data={rows}
+        getRowKey={(r) => r.id}
+        label="Answers"
+        {...extra}
+      />,
+    );
+  }
+
+  it("switches on the table's own width, not the screen's", () => {
+    const { container } = renderTable();
+    const root = container.querySelector(
+      '[data-slot="responsive-data-table"]',
+    )!;
+    expect(root.className).toContain("@container/rdt");
+    const table = root.querySelector('[data-rdt-layout="table"]')!;
+    const cards = root.querySelector('[data-rdt-layout="cards"]')!;
+    expect(table.className).toContain("@min-[48rem]/rdt:block");
+    expect(cards.className).toContain("@min-[48rem]/rdt:hidden");
+    // Never the screen's (md:) or the page's (page-md:) breakpoints.
+    expect(table.className).not.toMatch(/(^|\s)(page-)?md:/);
+    expect(cards.className).not.toMatch(/(^|\s)(page-)?md:/);
+  });
+
+  it("asks for a wider box when told to", () => {
+    const { container } = renderTable({ stackBelow: "lg" });
+    const table = container.querySelector('[data-rdt-layout="table"]')!;
+    expect(table.className).toContain("@min-[64rem]/rdt:block");
+  });
+
+  it("frames only the table, never the cards", () => {
+    const { container } = renderTable({ framed: true });
+    const table = container.querySelector('[data-rdt-layout="table"]')!;
+    const cards = container.querySelector('[data-rdt-layout="cards"]')!;
+    expect(table.className).toContain("rounded-xl");
+    expect(table.className).toContain("border");
+    expect(cards.className).not.toContain("border");
+  });
+
+  it("keeps the actions column narrow and lets text wrap", () => {
+    renderTable();
+    const table = screen.getByRole("table", { name: "Answers" });
+    const cells = within(within(table).getAllByRole("row")[1]!).getAllByRole(
+      "cell",
+    );
+    const diet = cells[2]!;
+    const open = cells[4]!;
+    expect(diet.className).toContain("whitespace-normal");
+    expect(diet.className).not.toContain("whitespace-nowrap");
+    expect(open.className).toContain("w-px");
+    expect(open.className).toContain("whitespace-nowrap");
+  });
+
+  it("cuts a truncated column with its full text as the tooltip", () => {
+    const long = "Bringing my two igloos and a spare lid";
+    render(
+      <ResponsiveDataTable
+        columns={[
+          { id: "name", header: "Member", role: "title", cell: (r) => r.name },
+          {
+            id: "note",
+            header: "Note",
+            cell: () => long,
+            truncate: () => long,
+          },
+        ]}
+        data={rows}
+        getRowKey={(r) => r.id}
+        label="Notes"
+      />,
+    );
+    const table = screen.getByRole("table", { name: "Notes" });
+    const note = within(table).getAllByText(long)[0]!;
+    expect(note.className).toContain("truncate");
+    expect(note.getAttribute("title")).toBe(long);
+  });
+
+  it("lets an actions column span the card's footer", () => {
+    const { container } = render(
+      <ResponsiveDataTable
+        columns={[
+          { id: "name", header: "Member", role: "title", cell: (r) => r.name },
+          {
+            id: "decide",
+            header: "Decision",
+            role: "actions",
+            cardClassName: "w-full",
+            cell: (r) => <button type="button">Decide {r.name}</button>,
+          },
+        ]}
+        data={rows}
+        getRowKey={(r) => r.id}
+        label="Decisions"
+      />,
+    );
+    const cards = container.querySelector('[data-rdt-layout="cards"]')!;
+    const button = within(cards as HTMLElement).getByRole("button", {
+      name: "Decide Ada",
+    });
+    expect(button.parentElement!.className).toBe("w-full");
   });
 });

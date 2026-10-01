@@ -6,10 +6,6 @@ export const TRANSPORT_PATH = "/transport";
 
 export const CHECK_FORM = "Check the form and try again.";
 
-/** The one line every disabled team-only control points at. */
-export const TRANSPORT_REFUSAL =
-  "Captains and Transport & Logistics leads match people and keep the trailers. Drivers manage their own car.";
-
 /** Seats as people say them: "2 of 3 seats taken", or who rides. */
 export function seatsText(seatsOffered: number | null, riders: number): string {
   if (seatsOffered === null) {

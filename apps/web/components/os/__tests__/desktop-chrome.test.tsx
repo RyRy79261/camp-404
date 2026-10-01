@@ -156,8 +156,9 @@ describe("the Start menu", () => {
     const groups = menu
       .getAllByRole("group")
       .map((g) => g.getAttribute("aria-label"));
-    // Me with My teams under it, Camp with the Kitchen under it, Captains.
-    expect(groups).toEqual(["Me", "My teams", "Camp", "Kitchen", "Captains"]);
+    // My teams over Me (at the top, so a short screen never hides it under
+    // the footer), Camp with the Kitchen under it, Captains.
+    expect(groups).toEqual(["My teams", "Me", "Camp", "Kitchen", "Captains"]);
     // The member's own team is a row in My teams, tagged as theirs to lead,
     // and the Teams folder follows it.
     const myTeams = within(menu.getByRole("group", { name: "My teams" }));

@@ -40,9 +40,9 @@ export function sourcePriceText(
   return price === null ? "No price" : `${formatMoney(price)} each`;
 }
 
-/** "2 × Mattress", or just the name for one. */
+/** "2 × Mattress", and "1 × Mattress" for one, so every line reads alike. */
 export function quantityText(quantity: number, name: string): string {
-  return quantity === 1 ? name : `${quantity} × ${name}`;
+  return `${quantity} × ${name}`;
 }
 
 /** "Sleeps 2", for a tent. */
@@ -128,4 +128,19 @@ export function orderBadge(order: {
   chargeId: string | null;
 }): (typeof STATE_BADGE)[RentalOrderState] {
   return STATE_BADGE[rentalOrderState(order)];
+}
+
+/**
+ * The line a printed sheet carries under its title: the burn year it is for
+ * and the day it was printed, in the camp's time ("Burn 2026 · printed 1
+ * October 2026"). A camp with no year set yet prints only the day.
+ */
+export function printedOnText(cycle: number, now: Date): string {
+  const day = new Intl.DateTimeFormat("en-ZA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Africa/Johannesburg",
+  }).format(now);
+  return cycle >= 1000 ? `Burn ${cycle} · printed ${day}` : `Printed ${day}`;
 }

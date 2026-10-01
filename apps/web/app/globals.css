@@ -247,8 +247,11 @@
    fonts and the square corners stay the OS look. The last-seen copies
    (`:host`) are window bodies too. Each theme sets the --os-win-* values
    (lib/os-themes.ts); 404 Night keeps these soft ones. The copies read them
-   from the desktop they sit in: custom properties inherit into a shadow root. */
+   from the desktop they sit in: custom properties inherit into a shadow root.
+   `data-window-tint` gives a dialog a window opens (portalled into <body>) the
+   same colours, so it reads as part of the program, not the desktop. */
 [data-window-body],
+[data-window-tint],
 :host,
 :host > div {
   --color-background: var(--os-win-bg);
@@ -278,6 +281,11 @@
   --color-ring: var(--os-win-primary);
   background-color: var(--color-background);
   color: var(--color-foreground);
+}
+/* A tinted dialog is a card on the window's colours, not a window body. */
+[data-slot="dialog-content"][data-window-tint] {
+  background-color: var(--color-card);
+  color: var(--color-card-foreground);
 }
 
 @layer base {

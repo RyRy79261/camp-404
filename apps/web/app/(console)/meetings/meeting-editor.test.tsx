@@ -148,7 +148,39 @@ describe("MeetingEditor", () => {
     expect(sent.attendeeIds).toEqual(["crew"]);
     expect(sent.version).toBe(2);
     expect(sent.actionItems.map((i) => i.id)).toEqual(["item-1"]);
-    expect(screen.getByText("On the task board")).toBeTruthy();
+    expect(
+      screen.getByText("On the task board: change it there."),
+    ).toBeTruthy();
     expect(screen.queryByDisplayValue("Buy the gas")).toBeNull();
+  });
+
+  it("numbers every action item, the one already on the board too", () => {
+    editor();
+    fireEvent.click(screen.getByRole("button", { name: "Add action item" }));
+    expect(screen.getByText("Action item 1")).toBeTruthy();
+    expect(screen.getByLabelText("Action item 2")).toBeTruthy();
+  });
+
+  it("writes the agenda and notes in the WYSIWYG editor, never a raw textarea", () => {
+    editor();
+    expect(document.querySelector("textarea")).toBeNull();
+    expect(screen.queryByText(/Markdown works/)).toBeNull();
+    expect(
+      screen.getAllByText("Preview: as members read it").length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("names an edited note's team only in the page, not as a field", () => {
+    editor();
+    expect(screen.queryByText("Team")).toBeNull();
+    expect(screen.queryByText("A note keeps its team.")).toBeNull();
+  });
+
+  it("says the picked day in words and the time on the 24-hour clock", () => {
+    editor();
+    expect(screen.getByText("Fri 2 Oct 2026")).toBeTruthy();
+    expect(
+      screen.getByText("18:30 camp time, on the 24-hour clock."),
+    ).toBeTruthy();
   });
 });

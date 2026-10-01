@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardList, Lock } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 import { stillNeeded } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { EmptyState } from "@camp404/ui/components/empty-state";
@@ -8,11 +8,13 @@ import {
   ResponsiveDataTable,
   type ResponsiveColumn,
 } from "@camp404/ui/components/responsive-data-table";
+import { RowActions } from "@camp404/ui/components/row-actions";
 import { InventoryTabs } from "@/components/inventory/inventory-tabs";
 import {
   AddNeedButton,
   NeedRowActions,
   PledgeButton,
+  WithdrawPledgeButton,
 } from "@/components/inventory/need-controls";
 import {
   listInventoryItems,
@@ -143,28 +145,39 @@ export default async function InventoryNeedsPage() {
       role: "actions",
       hideHeader: true,
       align: "right",
+      // One main button (pledge) in the same place on every row; taking a
+      // pledge back, Edit and Remove are quiet icons in a slot that keeps its
+      // width on every row of the team's table.
       cell: (n) => {
         const mine = n.pledges.find((p) => p.userId === viewer.userId) ?? null;
+        const edits = viewer.canEdit(n.team);
         return (
-          <span className="flex flex-wrap items-center justify-end gap-1">
-            <PledgeButton needId={n.id} name={n.name} mine={mine} />
-            {viewer.canEdit(n.team) && (
-              <NeedRowActions
-                need={{
-                  id: n.id,
-                  version: n.version,
-                  team: n.team,
-                  name: n.name,
-                  quantity: n.quantity,
-                  itemId: n.itemId,
-                  boughtQuantity: n.boughtQuantity,
-                  note: n.note,
-                }}
-                teams={viewer.editableTeams}
-                items={itemOptions}
-              />
-            )}
-          </span>
+          <RowActions
+            label={`Actions for ${n.name}`}
+            primary={<PledgeButton needId={n.id} name={n.name} mine={mine} />}
+            secondarySlots={edits ? 3 : 1}
+            secondary={
+              <>
+                {mine && <WithdrawPledgeButton needId={n.id} name={n.name} />}
+                {edits && (
+                  <NeedRowActions
+                    need={{
+                      id: n.id,
+                      version: n.version,
+                      team: n.team,
+                      name: n.name,
+                      quantity: n.quantity,
+                      itemId: n.itemId,
+                      boughtQuantity: n.boughtQuantity,
+                      note: n.note,
+                    }}
+                    teams={viewer.editableTeams}
+                    items={itemOptions}
+                  />
+                )}
+              </>
+            }
+          />
         );
       },
     },
@@ -177,26 +190,18 @@ export default async function InventoryNeedsPage() {
         title="Needs this year"
         description="What each team needs at the burn, what the camp already has, and who is bringing the rest. Pledge to bring something; captains and each team's leads keep their team's list."
         actions={
-          <AddNeedButton
-            teams={viewer.editableTeams}
-            items={itemOptions}
-            refusalId={REFUSAL_ID}
-          />
+          canAdd ? (
+            <AddNeedButton
+              teams={viewer.editableTeams}
+              items={itemOptions}
+              refusalId={REFUSAL_ID}
+            />
+          ) : undefined
         }
       />
       <InventoryTabs current="needs" />
 
       <div className="flex flex-col gap-6">
-        {!canAdd && (
-          <p
-            id={REFUSAL_ID}
-            className="flex items-start gap-2 rounded-lg border border-border bg-card/40 px-3 py-2.5 text-xs text-muted-foreground"
-          >
-            <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-            Only captains and team leads add needs, each for a team they lead.
-            Anyone can pledge.
-          </p>
-        )}
         {rows.length === 0 ? (
           <EmptyState
             icon={<ClipboardList />}
@@ -213,14 +218,13 @@ export default async function InventoryNeedsPage() {
               <h2 id={`needs-${team}`} className="text-base font-semibold">
                 {viewer.teamLabel(team)}
               </h2>
-              <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
-                <ResponsiveDataTable
-                  columns={columns}
-                  data={rows.filter((r) => r.team === team)}
-                  getRowKey={(r) => r.id}
-                  label={`${viewer.teamLabel(team)} needs`}
-                />
-              </div>
+              <ResponsiveDataTable
+                columns={columns}
+                data={rows.filter((r) => r.team === team)}
+                getRowKey={(r) => r.id}
+                label={`${viewer.teamLabel(team)} needs`}
+                framed
+              />
             </section>
           ))
         )}

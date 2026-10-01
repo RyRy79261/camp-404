@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import {
@@ -14,7 +14,6 @@ import {
   RENTAL_MAX_SLEEPS,
   type RentalSource,
 } from "@camp404/types";
-import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import {
   Card,
@@ -27,9 +26,13 @@ import { AckRow } from "@camp404/ui/components/checkbox";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
+import {
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "@camp404/ui/components/responsive-data-table";
+import { RowActions } from "@camp404/ui/components/row-actions";
 import { toast } from "@camp404/ui/components/toast";
 import { typedRands } from "@/lib/dues-view";
-import { sleepsText } from "@/lib/rental-view";
 import {
   addRentalItemAction,
   archiveRentalItemAction,
@@ -104,11 +107,14 @@ export function CatalogueManager({ items }: { items: RentalItem[] }) {
   const [removePending, startRemove] = useTransition();
   const busy = pending || removePending;
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
+  const formRef = useRef<HTMLDivElement>(null);
 
   function startEdit(item: RentalItem | null) {
     setEditing(item?.id ?? null);
     setDraft(item ? draftOf(item) : BLANK);
     setError(null);
+    // The form sits under the list: bring it into view to change an item.
+    if (item) formRef.current?.scrollIntoView?.({ block: "nearest" });
   }
 
   function save() {
@@ -167,8 +173,115 @@ export function CatalogueManager({ items }: { items: RentalItem[] }) {
 
   const full = !editing && items.length >= RENTAL_MAX_ITEMS;
 
+  const dash = <span className="text-muted-foreground">&ndash;</span>;
+  const money = (cents: number | null) =>
+    cents === null ? dash : formatMoney(cents);
+  // One row per item, its prices in columns that line up from row to row;
+  // change and remove in a fixed slot on the right. Every cell sits on the
+  // row's middle, level with the icon buttons.
+  const columns: ResponsiveColumn<RentalItem>[] = [
+    {
+      id: "item",
+      header: "Item",
+      role: "title",
+      cellClassName: "align-middle font-medium",
+      cell: (item) => item.name,
+    },
+    {
+      id: "sleeps",
+      header: "Sleeps",
+      align: "right",
+      cellClassName: "whitespace-nowrap align-middle tabular-nums",
+      cell: (item) => (item.isTent ? item.sleeps : dash),
+    },
+    {
+      id: "supplier",
+      header: "Supplier",
+      align: "right",
+      cellClassName: "whitespace-nowrap align-middle tabular-nums",
+      cell: (item) => money(item.supplierPriceCents),
+    },
+    {
+      id: "camp",
+      header: "Camp stock",
+      align: "right",
+      cellClassName: "whitespace-nowrap align-middle tabular-nums",
+      cell: (item) =>
+        item.campStockCount === null ? dash : money(item.campPriceCents),
+    },
+    {
+      id: "has",
+      header: "Camp has",
+      align: "right",
+      cellClassName: "whitespace-nowrap align-middle tabular-nums",
+      cell: (item) => item.campStockCount ?? dash,
+    },
+    {
+      id: "spares",
+      header: "Spares",
+      align: "right",
+      cellClassName: "whitespace-nowrap align-middle tabular-nums",
+      cell: (item) =>
+        item.reserveCount > 0 ? (
+          <span
+            title={`From ${RENTAL_SOURCE_LABELS[item.reserveSource].toLowerCase()}`}
+          >
+            {item.reserveCount}{" "}
+            <span className="text-xs text-muted-foreground">
+              {RENTAL_SOURCE_LABELS[item.reserveSource].toLowerCase()}
+            </span>
+          </span>
+        ) : (
+          dash
+        ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      role: "actions",
+      hideHeader: true,
+      cellClassName: "py-1 align-middle",
+      cell: (item) => (
+        <RowActions
+          label={`Actions for ${item.name}`}
+          secondarySlots={2}
+          secondary={
+            <>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label={`Change ${item.name}`}
+                title="Change"
+                disabled={busy}
+                onClick={() => startEdit(item)}
+              >
+                <Pencil aria-hidden />
+              </Button>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label={`Remove ${item.name}`}
+                title="Remove"
+                disabled={busy}
+                onClick={() => void remove(item)}
+              >
+                {removePending && removing === item.id ? (
+                  <Loader2 className="animate-spin" aria-hidden />
+                ) : (
+                  <Trash2 aria-hidden />
+                )}
+              </Button>
+            </>
+          }
+        />
+      ),
+    },
+  ];
+
   return (
-    <div className="grid items-start gap-6 page-lg:grid-cols-2">
+    <div className="flex flex-col gap-6">
       {confirmDialog}
       <Card>
         <CardHeader className="p-5 pb-3">
@@ -184,73 +297,17 @@ export function CatalogueManager({ items }: { items: RentalItem[] }) {
               No items yet. Members can order once there is at least one.
             </p>
           ) : (
-            <ul aria-label="Rental items" className="divide-y divide-border">
-              {items.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-start justify-between gap-3 py-3"
-                >
-                  <span className="flex min-w-0 flex-col gap-1">
-                    <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                      {item.name}
-                      {item.isTent && (
-                        <Badge variant="outline">
-                          {sleepsText(item.sleeps)}
-                        </Badge>
-                      )}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {item.supplierPriceCents === null
-                        ? "Not from the supplier"
-                        : `Supplier ${formatMoney(item.supplierPriceCents)}`}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {item.campStockCount === null ||
-                      item.campPriceCents === null
-                        ? "No camp stock"
-                        : `Camp stock ${formatMoney(item.campPriceCents)}, the camp has ${item.campStockCount}`}
-                    </span>
-                    {item.reserveCount > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        {item.reserveCount} reserved for on site, from{" "}
-                        {RENTAL_SOURCE_LABELS[item.reserveSource].toLowerCase()}
-                      </span>
-                    )}
-                  </span>
-                  <span className="flex gap-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Change ${item.name}`}
-                      disabled={busy}
-                      onClick={() => startEdit(item)}
-                    >
-                      <Pencil aria-hidden />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Remove ${item.name}`}
-                      disabled={busy}
-                      onClick={() => void remove(item)}
-                    >
-                      {removePending && removing === item.id ? (
-                        <Loader2 className="animate-spin" aria-hidden />
-                      ) : (
-                        <Trash2 aria-hidden />
-                      )}
-                    </Button>
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <ResponsiveDataTable
+              columns={columns}
+              data={items}
+              getRowKey={(item) => item.id}
+              label="Rental items"
+            />
           )}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card ref={formRef}>
         <CardHeader className="p-5 pb-3">
           <CardTitle className="text-base">
             {editing ? "Change the item" : "Add an item"}
@@ -264,7 +321,7 @@ export function CatalogueManager({ items }: { items: RentalItem[] }) {
             label="Name"
             value={draft.name}
             maxLength={60}
-            placeholder="2-person tent"
+            placeholder="e.g. 2-person tent"
             disabled={busy}
             onChange={(e) => set({ name: e.currentTarget.value })}
           />
@@ -335,17 +392,17 @@ export function CatalogueManager({ items }: { items: RentalItem[] }) {
           )}
           <div className="grid gap-4 page-sm:grid-cols-2">
             <InputField
-              label="Reserved for on site"
+              label="Spares for on site (adoptees, late arrivals)"
               type="number"
               inputMode="numeric"
               min={0}
               value={draft.reserveCount}
-              helper="Spare ones kept back for the site: adoptees and late arrivals."
+              helper="Kept back on site, on top of the members' orders."
               disabled={busy}
               onChange={(e) => set({ reserveCount: e.currentTarget.value })}
             />
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="reserve-source">Reserve comes from</Label>
+              <Label htmlFor="reserve-source">Spares come from</Label>
               <select
                 id="reserve-source"
                 className={selectClass}

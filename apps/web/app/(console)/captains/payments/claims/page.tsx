@@ -38,9 +38,11 @@ export default async function FinanceClaimsPage() {
           amountCents: c.amountCents,
           spentOn: c.spentOn,
           status: c.status,
+          accountType: c.accountType,
           decisionNote: c.decisionNote,
           approverName: c.approverName,
-          files: c.files.map((f) => f.id),
+          approvedAt: c.approvedAt,
+          files: c.files.map((f) => ({ id: f.id, contentType: f.contentType })),
           own: c.submitterId === gate.campUser.id,
         }));
         return { cycle, rows };

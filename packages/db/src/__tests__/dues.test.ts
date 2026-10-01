@@ -521,6 +521,16 @@ describe("dues", () => {
         (r) => r.userId === member.id,
       );
       expect(row!.balance.balanceCents).toBe(130_000);
+      // A captain's pending payment is promised, not a proof to check, and the
+      // waived money is excused, not in the bank.
+      expect(row!.figures).toEqual({
+        inBankCents: 100_000,
+        excusedCents: 20_000,
+        toCheckCents: 0,
+        toCheckCount: 0,
+        promisedCents: 30_000,
+        promisedCount: 1,
+      });
     });
 
     it("drives the roster's paid state: settled only once the balance is paid", async () => {
