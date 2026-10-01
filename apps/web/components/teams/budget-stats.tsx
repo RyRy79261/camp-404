@@ -33,9 +33,15 @@ export function BudgetStats({
   showBar?: boolean;
   className?: string;
 }) {
+  // The bar fills by what was spent against the budget (budget less left),
+  // which for the year's totals leaves out the teams that have no budget.
   const percent =
-    showBar && totals.budgetCents !== null
-      ? budgetSpentPercent({ ...totals, over: false })
+    showBar && totals.budgetCents !== null && totals.leftCents !== null
+      ? budgetSpentPercent({
+          ...totals,
+          spentCents: totals.budgetCents - totals.leftCents,
+          over: false,
+        })
       : null;
   const over = totals.leftCents !== null && totals.leftCents < 0;
   const waitingHint =

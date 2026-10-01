@@ -67,7 +67,12 @@ export function yearTotals(rows: readonly BudgetRow[]): YearTotals {
   return {
     budgetCents,
     spentCents,
-    leftCents: budgetCents === null ? null : budgetCents - spentCents,
+    // Left only over the teams that have a budget: a team with none spends
+    // nobody else's, so its spend never makes the year read "Over".
+    leftCents:
+      budgetCents === null
+        ? null
+        : budgetCents - sumMinor(budgeted.map((r) => r.spentCents)),
     waitingCents: sumMinor(rows.map((r) => r.waitingCents)),
     waitingCount: rows.reduce((n, r) => n + r.waitingCount, 0),
   };
