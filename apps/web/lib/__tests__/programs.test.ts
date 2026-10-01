@@ -131,6 +131,8 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "my-dues" },
       // Their own gear order (#241).
       { kind: "program", id: "my-gear" },
+      // Their own shifts (#248).
+      { kind: "program", id: "my-shifts" },
       // Their own claims (#242).
       { kind: "program", id: "my-claims" },
       { kind: "program", id: "roster" },
@@ -139,6 +141,8 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "folder", id: "kitchen" },
       { kind: "program", id: "power" },
       { kind: "program", id: "logistics" },
+      // The shift roster (#248), for every member.
+      { kind: "program", id: "shifts" },
       { kind: "program", id: "camp-layout" },
       { kind: "program", id: "lounge" },
       { kind: "program", id: "inventory" },
@@ -156,6 +160,7 @@ describe("buildProgramManifest: the personas", () => {
     expect(folder(m, "kitchen")?.programs.map((p) => p.id)).toEqual([
       "recipes",
       "meal-plan",
+      "shopping-list",
     ]);
     expect(m.pins).toBe(true);
     expect(m.allowedChildren).not.toContain(pid("results"));
@@ -203,6 +208,7 @@ describe("buildProgramManifest: the personas", () => {
     expect(folder(m, "kitchen")?.programs.map((p) => p.id)).toEqual([
       "recipes",
       "meal-plan",
+      "shopping-list",
       "recipe-review",
     ]);
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
@@ -503,6 +509,7 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
       `tasks:${KITCHEN}`,
       "recipes",
       "meal-plan",
+      "shopping-list",
       "recipe-review",
     ]);
   });

@@ -1,9 +1,10 @@
 # Kitchen menu planner (#244) and shopping list (#245): layouts for approval
 
-Status: **layout proposal. No Kitchen UI is built until the owner approves a
-layout in writing** (owner, 2026-09-24: "You no longer have authority to do
-the kitchen things without my express consent of what layout you want to come
-up with"). This doc only proposes.
+Status: **approved 2026-09-30 (layouts A and A, see "Owner's answers"
+below) and built** in the kitchen menu PR (2026-10-01): the menu inside the
+meal plan, the shopping list at `/kitchen/shopping`, and the snacks. Left out
+until asked: prices, suppliers, stock, the allergen cross-check and a PDF
+(#249). The proposal below is kept as it was approved.
 
 ## Rules these layouts follow
 
@@ -15,7 +16,12 @@ up with"). This doc only proposes.
   width; nothing cut off; plain words.
 - Plates per day and meal already come from the **meal plan**
   (`/kitchen/meal-plan`: rows = days with real dates, columns = Breakfast,
-  Lunch, Dinner). The menu builds on that page, it does not replace it.
+  Dinner). The menu builds on that page, it does not replace it.
+  [CORRECTION 2026-10-01] The camp does no lunch (owner: "we dont do lunch,
+  remove that"); the sketches below still draw a Lunch column. The built
+  screens follow the owner's approved mock-ups of 2026-10-01
+  (`approved-kmp.html` A, `approved-rp.html` B, `approved-kmenu.html` A,
+  `approved-ks.html` A), not these sketches.
 - A recipe at a plate count is **proofread by Claude once per count** and
   cached (`recipe_plate_counts`). The menu reuses those counts; a count that
   isn't verified shows "Proofread for N" (captains and Kitchen leads), the

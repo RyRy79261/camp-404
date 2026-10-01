@@ -119,8 +119,11 @@ export const PlateCount = z
   .max(MAX_PLATES, `Cook for at most ${MAX_PLATES} plates.`);
 export type PlateCount = z.infer<typeof PlateCount>;
 
-/** The camp's meals; mornings usually feed more plates than evenings. */
-export const MEALS = ["breakfast", "lunch", "dinner"] as const;
+/**
+ * The camp's meals: breakfast and dinner. The camp does no lunch (the owner,
+ * 2026-10-01). Mornings usually feed more plates than evenings.
+ */
+export const MEALS = ["breakfast", "dinner"] as const;
 export type Meal = (typeof MEALS)[number];
 
 /** The plate count offered when no meal has one set. */
@@ -828,14 +831,18 @@ const MealPlates = z
   .min(0, "Plates cannot be below 0.")
   .max(MAX_PLATES, `Give at most ${MAX_PLATES} plates.`);
 
+/**
+ * One day's plates: breakfast and dinner. There is no lunch (the owner,
+ * 2026-10-01); a lunch sent by an older page is dropped, and the database's
+ * unused lunch column is never read.
+ */
 export const MealPlanDay = z.object({
   breakfast: MealPlates,
-  lunch: MealPlates,
   dinner: MealPlates,
 });
 export type MealPlanDay = z.infer<typeof MealPlanDay>;
 
-export const MEALS_OF_THE_DAY = ["breakfast", "lunch", "dinner"] as const;
+export const MEALS_OF_THE_DAY = MEALS;
 export type MealOfTheDay = (typeof MEALS_OF_THE_DAY)[number];
 
 /** A calendar day, typed as YYYY-MM-DD. */

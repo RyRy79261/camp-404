@@ -187,7 +187,7 @@ export function defaultPlates(settings: {
 export function mealPlanPlateCounts(days: readonly MealPlanDay[]): number[] {
   const counts = new Set<number>();
   for (const day of days) {
-    for (const plates of [day.breakfast, day.lunch, day.dinner]) {
+    for (const plates of [day.breakfast, day.dinner]) {
       if (Number.isInteger(plates) && plates > 0) counts.add(plates);
     }
   }
@@ -237,7 +237,9 @@ export function mealPlanPeaks(days: readonly MealPlanDay[]): {
   };
   return {
     kitchenPlatesBreakfast: peak("breakfast"),
-    kitchenPlatesLunch: peak("lunch"),
+    // The camp does no lunch (the owner, 2026-10-01). The shape keeps the
+    // field because the pinned prompts name it; it is always unset.
+    kitchenPlatesLunch: null,
     kitchenPlatesDinner: peak("dinner"),
   };
 }

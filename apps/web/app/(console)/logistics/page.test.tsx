@@ -370,12 +370,13 @@ describe("logistics page", () => {
     ).toBeTruthy();
   });
 
-  it("lists the open AfrikaBurn deadlines first and folds the done ones away", async () => {
+  it("lists the AfrikaBurn dates a captain has set, in their groups", async () => {
     signIn("camp_member");
     const row = {
       cycle: 2027,
       note: null,
       done: false,
+      skipped: false,
       calendarEventId: "e1",
       calendarSyncedVersion: 1,
       version: 1,
@@ -385,40 +386,74 @@ describe("logistics page", () => {
       {
         ...row,
         id: "d1",
-        title: "Theme camp registration closes",
+        kind: "registration_closes",
+        title: "Registration closes",
         dueDate: "2027-01-15",
         note: "On the AfrikaBurn site.",
         done: true,
       },
+      // Set, then marked no round.
       {
         ...row,
         id: "d2",
-        title: "WAP applications close",
-        dueDate: "2027-03-01",
+        kind: "second_ddt_round",
+        title: "Second DDT round",
+        dueDate: null,
+        skipped: true,
+      },
+      // Not announced: a standard date with no day is not shown.
+      {
+        ...row,
+        id: "d3",
+        kind: "wap_requests_open",
+        title: "WAP requests open",
+        dueDate: null,
+      },
+      {
+        ...row,
+        id: "d4",
+        kind: null,
+        title: "Mutant vehicle forms",
+        dueDate: "2027-02-01",
       },
     ]);
     await show();
-    const open = screen.getByRole("list", { name: "AfrikaBurn deadlines" });
-    expect(
-      within(open)
-        .getAllByRole("listitem")
-        .map((li) => li.getAttribute("aria-label")),
-    ).toEqual(["WAP applications close"]);
-    expect(text(open)).toContain("Mon 1 Mar 2027");
-    const done = screen.getByRole("list", {
-      name: "Done AfrikaBurn deadlines",
+    const registration = screen.getByRole("region", {
+      name: "Theme camp registration",
     });
-    expect(done.closest("details")?.textContent).toContain("Done (1)");
-    expect(text(done)).toContain("On the AfrikaBurn site.");
+    const closes = text(
+      within(registration).getByRole("listitem", {
+        name: "Registration closes",
+      }),
+    );
+    expect(closes).toContain("Fri 15 Jan 2027 · Done");
+    expect(closes).toContain("On the AfrikaBurn site.");
+    expect(
+      text(
+        within(screen.getByRole("region", { name: "Tickets (DDT)" })).getByRole(
+          "listitem",
+          { name: "Second DDT round" },
+        ),
+      ),
+    ).toContain("No round this year");
+    expect(
+      within(screen.getByRole("region", { name: "Other" })).getByRole(
+        "listitem",
+        { name: "Mutant vehicle forms" },
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("region", { name: "Work access passes (WAP)" }),
+    ).toBeNull();
     // Members read; only a captain is sent to change them.
-    expect(screen.queryByRole("link", { name: /Edit deadlines/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Edit dates/ })).toBeNull();
   });
 
-  it("sends a captain straight to the deadlines list on the year page", async () => {
+  it("sends a captain straight to the dates list on the year page", async () => {
     signIn("captain");
     await show();
     expect(
-      screen.getByRole("link", { name: "Edit deadlines" }).getAttribute("href"),
+      screen.getByRole("link", { name: "Edit dates" }).getAttribute("href"),
     ).toBe(DEADLINES_SETTINGS_HREF);
   });
 });

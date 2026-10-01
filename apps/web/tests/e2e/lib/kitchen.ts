@@ -32,7 +32,9 @@ export async function acceptedAt50(
   await page.getByLabel("Days on site").fill("2");
   await page.getByLabel("Day 1 breakfast").fill("45");
   await page.getByLabel("Day 1 dinner").fill("50");
-  await page.getByRole("button", { name: "Copy Day 1 to every day" }).click();
+  await page
+    .getByRole("button", { name: "Copy Day 1’s plates to every day" })
+    .click();
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Meal plan saved")).toBeVisible();
 

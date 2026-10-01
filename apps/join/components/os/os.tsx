@@ -11,6 +11,7 @@ import {
   type Viewport,
 } from "@camp404/os";
 import { appById } from "@/lib/apps";
+import { markReadmeSeen } from "@/lib/readme-seen";
 import { BOOT_ERROR, bootLines } from "@/lib/content";
 import type { AppId } from "@/lib/window-manager";
 import { Desktop } from "./desktop";
@@ -35,13 +36,16 @@ export function Os({ data }: { data: JoinData }) {
   }, []);
 
   const openApp = useCallback(
-    (id: AppId) =>
+    (id: AppId) => {
+      // However it opens (icon, Start, terminal), README stops glowing.
+      if (id === "readme") markReadmeSeen();
       dispatch({
         type: "open",
         id,
         size: appById(id).size,
         viewport: viewport(),
-      }),
+      });
+    },
     [viewport],
   );
 
@@ -58,10 +62,9 @@ export function Os({ data }: { data: JoinData }) {
 
   const finishBoot = useCallback(() => setBooting(false), []);
 
-  // README.TXT opens as the boot ends (and after every reboot).
-  useEffect(() => {
-    if (!booting) openApp("readme");
-  }, [booting, openApp]);
+  // README.TXT does not open by itself (owner, 2026-10-01: visitors did not
+  // see they had to close it); its icon glows "start here" instead
+  // (desktop.tsx) until it has been opened once.
 
   // Esc with focus on the desktop (not in a window) closes the top window.
   // A window answers its own Esc, and one already used is left alone.

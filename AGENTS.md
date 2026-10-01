@@ -426,6 +426,7 @@ activation_id)` would allow any number of duplicates whose
   `recipe_proofread_runs_open_plates_idx`,
   `questionnaire_activations_one_open_per_key_idx`,
   `notification_deliveries_broadcast_user_uniq`, `dues_charges_one_fee_idx`,
+  `afrikaburn_deadlines_cycle_kind_uniq`,
   `payment_refunds_one_live_idx`. A bare `ON CONFLICT DO
 NOTHING`, with no target, is not affected.
 
@@ -609,6 +610,15 @@ Decisions baked into the schema — keep new code consistent with them:
   `/captains/applications` (Applications: team lead and up, no tickets below
   captain), and the overview's "This year" card counts accepted members with
   no ticket yet and WAPs issued.
+- **Shift roster (#248).** Members sign up before the burn; the roster is
+  printed for site and changed there on paper, never typed back in (owner,
+  2026-09-30: no internet on site). So a slot takes changes only until its
+  day starts, for everyone (`shiftChangesOpen`). A shift type belongs to one
+  team; a captain or a lead of THAT team sets it up (`canManageShifts`,
+  `packages/core/src/shifts.ts`); cleaning is Sanitation's. Filling a place
+  counts under the slot's row lock, so the last place goes to one member.
+  The minimum of 3 is a reminder and a captain's nudge, never a
+  `required_actions` block. The Burn days come from the logistics Burn phase.
 - **Notifications.** `broadcasts` are composed messages fanned out into
   per-user `notification_deliveries` (a queue). [CORRECTION 2026-09-29] There
   is no worker: `deliverDue` fans out and drains the queue in `after()` (see
@@ -639,6 +649,31 @@ Decisions baked into the schema — keep new code consistent with them:
   already in the book is revised, not rewritten: the run carries its accepted
   version and the questions and answers that settled it
   (`recipeSourceRevisionPrompt`, recorded as `PROMPT_VERSIONS.recipeSourceRevision`).
+  [2026-10-01] The menu (#244) sits inside the meal plan table (the owner's
+  layout A, 2026-09-30): `kitchen_menu_items` holds the recipes on each meal,
+  more than one to a meal, read at the recipe's book (accepted) version; the
+  plates stay on the meal plan, never stored twice. The shopping list (#245,
+  `/kitchen/shopping`) is worked out on each load by `buildShoppingList`
+  (`packages/core/src/kitchen-menu.ts`): for each recipe on a meal, the
+  `recipe_plate_counts` row for that meal's plates, added up by ingredient and
+  unit and grouped by shop area. A recipe with no row for its meal's plates is
+  "Not counted yet: proofread first" and adds nothing; nothing is scaled by
+  multiplying. The same people as the meal plan edit the menu and the year's
+  snacks (`kitchen_snacks`, a name and an amount as typed, listed last on the
+  shopping list). The list's ticks (`kitchen_shopping_ticks`) are shared by
+  the whole camp and any approved member ticks (`canTickShoppingList`); a tick
+  keeps the amount it was given at and stops counting when the list needs
+  another. No prices, suppliers, stock or allergen check on the list yet.
+  [2026-10-01] **The camp does no lunch** (owner: "we dont do lunch"): meals
+  are breakfast and dinner only (`MEALS` in `@camp404/types`), everywhere.
+  `kitchen_meal_plan_days.lunch` is left in the table, unread, because
+  production may hold values; a save keeps it as it was, and it counts
+  nowhere. Dropping it is a follow-up migration. The screens follow the
+  owner's approved mock-ups of 2026-10-01: a Kitchen lead or a captain edits
+  the week as a table (Day | Breakfast | Dinner, a card per day on a phone)
+  with a recipe picker that stays open; every other member reads the menu as
+  a card per day; the shopping list is one checklist with every shop area on
+  one page.
 
 - **Camp layout (#271).** This year's site plan is one Zod-checked document
   (`CampLayout`, `@camp404/types`) saved as numbered versions in
@@ -677,13 +712,21 @@ Decisions baked into the schema — keep new code consistent with them:
     `openNudges`/`closeNudge` (`packages/db/src/nudges.ts`): captains only
     (`canAskForAttendance`), a `logistics_attendance` required action,
     completed once every open phase has an answer.
-  - **AfrikaBurn deadlines** (`afrikaburn_deadlines`) live on the camp's year
+  - **AfrikaBurn dates** (`afrikaburn_deadlines`) live on the camp's year
     page (`/captains/camp-settings/cycle`): captains only
-    (`canManageDeadlines`), added one at a time, date optional, a done tick,
-    each change a compare-and-set on `version`, audited. A dated deadline is
-    one plain-titled Google event by the same mirror; a removed one keeps its
-    row (`removed_at`) until its event is gone. Members read them on
-    Logistics.
+    (`canManageDeadlines`), a done tick, each change a compare-and-set on
+    `version`, audited. [CORRECTION 2026-10-01] The page lists AfrikaBurn's
+    standard dates every year (`AFRIKABURN_DATES` in
+    `packages/core/src/logistics.ts`, grouped, owner's approved mock-up A),
+    each "Not announced yet" until a captain sets it
+    (`setAfrikaburnDate`): a row with a `kind`, at most one per year
+    (`afrikaburn_deadlines_cycle_kind_uniq`), changed but never removed;
+    only the second DDT round may be "No round this year" (`skipped`, no
+    day). "Other" ones (no `kind`) keep the old free title and may be
+    removed. A dated one is one Google event, "AfrikaBurn: <name>"
+    (`afrikaburnEventTitle`), by the same mirror; a removed one keeps its row
+    (`removed_at`) until its event is gone. Members read the set ones on
+    Logistics, in the same groups.
 - **Gear rental (#241).** The year's sleeping gear is `rental_items`; a
   member's order is one `rental_orders` row per member per year, with
   `rental_order_lines` and `rental_order_sharers`. Owner's rulings

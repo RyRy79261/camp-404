@@ -70,3 +70,14 @@ export const CHECK_MEAL_PLAN = "Check the meal plan and try again.";
 export const ANSWER_QUESTIONS_LABEL = "Claude needs more details — answer here";
 /** A send or a save that never reached the server (the network dropped). */
 export const UNREACHABLE = "Could not reach the server. Try again.";
+
+/** The year's shopping list, worked out from the menu (#245). */
+export const SHOPPING_LIST_PATH = "/kitchen/shopping";
+
+export const MENU_REFUSAL =
+  "Only a Kitchen lead or a captain can change the menu.";
+export const SNACK_REFUSAL =
+  "Only a Kitchen lead or a captain can change the snacks.";
+export const TICK_REFUSAL =
+  "Only approved camp members can tick the shopping list.";
+export const CHECK_MENU = "Check the menu and try again.";

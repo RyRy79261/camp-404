@@ -1,8 +1,10 @@
 import {
+  AFRIKABURN_DATE_KINDS,
   ATTENDANCE_ANSWERS,
   ATTENDANCE_PHASES,
   LOGISTICS_PHASE_LABELS,
   ViewerRank,
+  type AfrikaburnDateKind,
   type AttendanceAnswer,
   type AttendancePhase,
   type LogisticsPhase,
@@ -33,8 +35,10 @@ import { isComingThisYear } from "./participation";
 // themselves until the phase starts. A captain's "Ask everyone" is a nudge,
 // never a block.
 //
-// AFRIKABURN DEADLINES. Captains keep the year's AfrikaBurn dates, one at a
-// time; each with a date is one plain-titled event on the camp calendar.
+// AFRIKABURN DATES. The year page lists AfrikaBurn's standard dates
+// (AFRIKABURN_DATES), each "Not announced yet" until a captain sets it, and
+// "Other" ones a captain adds with a title of their own. Each with a date is
+// one whole-camp event on the camp calendar, "AfrikaBurn: <name>".
 
 /** The team whose leads keep the logistics calendar. */
 export const LOGISTICS_TEAM = "transport_and_logistics";
@@ -228,4 +232,157 @@ export function deadlineCalendarStep(deadline: {
     endDate: date,
     calendarEventId: deadline.calendarEventId,
   });
+}
+
+// --- AfrikaBurn's standard dates ---------------------------------------------
+// The dates AfrikaBurn sets every year, grouped as the year page and
+// Logistics show them (owner, 2026-10-01, mock-up A: "The year's standard
+// AfrikaBurn dates are already listed; a captain fills in each date when
+// AfrikaBurn announces it"). Stored one row per (year, kind) at most, and
+// only once a captain sets it.
+
+export type AfrikaburnDateGroup = "registration" | "art" | "wap" | "tickets";
+
+/** The groups, in the order the year runs; "Other" follows them. */
+export const AFRIKABURN_DATE_GROUPS: readonly {
+  key: AfrikaburnDateGroup;
+  /** On a wide page. */
+  label: string;
+  /** On a phone. */
+  shortLabel: string;
+}[] = [
+  {
+    key: "registration",
+    label: "Theme camp registration",
+    shortLabel: "Registration",
+  },
+  { key: "art", label: "Art", shortLabel: "Art" },
+  { key: "wap", label: "Work access passes (WAP)", shortLabel: "WAP" },
+  { key: "tickets", label: "Tickets (DDT)", shortLabel: "Tickets" },
+];
+
+/** The heading of the captain's own dates, after the standard groups. */
+export const AFRIKABURN_OTHER_GROUP_LABEL = "Other";
+
+export interface AfrikaburnDate {
+  kind: AfrikaburnDateKind;
+  group: AfrikaburnDateGroup;
+  /** Its name, on a wide page and on the camp calendar. */
+  name: string;
+  /** Its name on a phone, under its group's heading. */
+  shortName: string;
+  /** What it is, in a line, where it is not obvious. */
+  help: string | null;
+  /** Whether a year may have none ("No round this year"). */
+  mayBeSkipped: boolean;
+}
+
+const date = (
+  kind: AfrikaburnDateKind,
+  group: AfrikaburnDateGroup,
+  name: string,
+  shortName: string,
+  help: string | null = null,
+  mayBeSkipped = false,
+): AfrikaburnDate => ({ kind, group, name, shortName, help, mayBeSkipped });
+
+/** AfrikaBurn's standard dates, in the order the year runs. */
+export const AFRIKABURN_DATES: readonly AfrikaburnDate[] = [
+  date(
+    "form_1_opens",
+    "registration",
+    "Form 1 registration opens",
+    "Form 1 opens",
+    "The camp says what it is and what it gifts.",
+  ),
+  date(
+    "form_2",
+    "registration",
+    "Form 2 registration",
+    "Form 2",
+    "Size, placement, sound, layout; art projects register here too.",
+  ),
+  date(
+    "registration_closes",
+    "registration",
+    "Registration closes",
+    "Registration closes",
+  ),
+  date(
+    "art_grants_close",
+    "art",
+    "Art grant applications close",
+    "Grant applications close",
+  ),
+  date("wap_requests_open", "wap", "WAP requests open", "Requests open"),
+  date("wap_requests_close", "wap", "WAP requests close", "Requests close"),
+  date("waps_sent_out", "wap", "WAPs sent out", "WAPs sent out"),
+  date(
+    "tickets_open",
+    "tickets",
+    "Ticket distribution opens",
+    "Distribution opens",
+  ),
+  date(
+    "ddt_deadline",
+    "tickets",
+    "DDT deadline",
+    "DDT deadline",
+    "Direct distribution tickets for the camp.",
+  ),
+  date(
+    "second_ddt_round",
+    "tickets",
+    "Second DDT round",
+    "Second DDT round",
+    "Only some years.",
+    true,
+  ),
+  date(
+    "tickets_close",
+    "tickets",
+    "Ticket distribution closes",
+    "Distribution closes",
+  ),
+];
+
+const BY_KIND = new Map(AFRIKABURN_DATES.map((d) => [d.kind, d]));
+
+/** Whether a stored key is one of AfrikaBurn's standard dates. */
+export function isAfrikaburnDateKind(
+  kind: unknown,
+): kind is AfrikaburnDateKind {
+  return (
+    typeof kind === "string" &&
+    (AFRIKABURN_DATE_KINDS as readonly string[]).includes(kind)
+  );
+}
+
+/** A standard date by its key; undefined for an unknown key. */
+export function afrikaburnDate(kind: string): AfrikaburnDate | undefined {
+  return isAfrikaburnDateKind(kind) ? BY_KIND.get(kind) : undefined;
+}
+
+/** Whether a year may say "No round this year" for this date. Fails closed. */
+export function afrikaburnDateMayBeSkipped(kind: string): boolean {
+  return afrikaburnDate(kind)?.mayBeSkipped === true;
+}
+
+/** The plain words for a skipped date, on every page. */
+export const NO_ROUND_THIS_YEAR = "No round this year";
+
+const EVENT_PREFIX = "AfrikaBurn: ";
+
+/**
+ * A date's title on the camp calendar: "AfrikaBurn: Registration closes".
+ * Plain and whole-camp, like the logistics phases. A standard date's name
+ * comes from the list, so it follows a rename; an "Other" one is the
+ * captain's title, not prefixed twice when they typed "AfrikaBurn" already.
+ */
+export function afrikaburnEventTitle(row: {
+  kind: string | null;
+  title: string;
+}): string {
+  const name = (row.kind && afrikaburnDate(row.kind)?.name) || row.title;
+  return /^afrikaburn\b/i.test(name) ? name : `${EVENT_PREFIX}${name}`;
 }

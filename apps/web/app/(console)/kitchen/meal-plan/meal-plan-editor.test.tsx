@@ -43,11 +43,10 @@ function editor(version = 3) {
         daysOnSite={2}
         firstDay={null}
         days={[
-          { breakfast: 10, lunch: 10, dinner: 10 },
-          { breakfast: 10, lunch: 10, dinner: 10 },
+          { breakfast: 10, dinner: 10 },
+          { breakfast: 10, dinner: 10 },
         ]}
         version={version}
-        canEdit
       />
     </DraftWindow>,
   );
@@ -90,5 +89,17 @@ describe("MealPlanEditor's unsaved numbers", () => {
     await waitFor(() => expect(saveMealPlanAction).toHaveBeenCalled());
     await waitFor(() => expect(refresh).toHaveBeenCalled());
     expect(unloadIsAsked()).toBe(false);
+  });
+});
+
+describe("MealPlanEditor's Day 1 date", () => {
+  it("reads in the camp's words, not the browser's, and follows the box", () => {
+    editor();
+    expect(screen.getByText("Pick a date")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Day 1 date"), {
+      target: { value: "2027-04-22" },
+    });
+    expect(screen.getByText("Thu 22 Apr 2027")).toBeTruthy();
+    expect(screen.queryByText("Pick a date")).toBeNull();
   });
 });

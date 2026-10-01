@@ -37,6 +37,11 @@ export function notificationLink(
   if (refType === "logistics_attendance") {
     return "/logistics";
   }
+  // A captain's ask to take the minimum shifts opens the roster, where the
+  // member signs up.
+  if (refType === "shift_minimum") {
+    return "/shifts";
+  }
   // A required action has no page of its own; home sends the member on to
   // whatever still blocks them (requireMemberPage).
   if (refType === "required_action" && refId && UUID.test(refId)) {

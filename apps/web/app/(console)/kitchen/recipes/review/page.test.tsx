@@ -22,8 +22,8 @@ vi.mock("@/lib/meal-plan", () => ({
     cycle: 2026,
     daysOnSite: 2,
     days: [
-      { breakfast: 0, lunch: 55, dinner: 40 },
-      { breakfast: 0, lunch: 30, dinner: 45 },
+      { breakfast: 55, dinner: 40 },
+      { breakfast: 30, dinner: 45 },
     ],
     version: 1,
     firstDay: null,
@@ -190,7 +190,7 @@ describe("recipe review page", () => {
     ).not.toHaveLength(0);
     expect(
       (within(ready).getByLabelText("Plates") as HTMLSelectElement).value,
-    ).toBe("lunch");
+    ).toBe("breakfast");
     expect(
       within(ready).getByRole("button", {
         name: "Turn into recipes with Claude",
@@ -222,11 +222,11 @@ describe("recipe review page", () => {
     // The meals that are set, then Other; the largest meal is chosen.
     const plates = within(ready).getByLabelText("Plates") as HTMLSelectElement;
     expect(Array.from(plates.options).map((o) => o.text)).toEqual([
-      "Lunch · 55 plates",
+      "Breakfast · 55 plates",
       "Dinner · 45 plates",
       "Other",
     ]);
-    expect(plates.value).toBe("lunch");
+    expect(plates.value).toBe("breakfast");
     expect(
       within(ready).getByText("Claude writes every amount for 55 plates."),
     ).toBeTruthy();
@@ -331,7 +331,7 @@ describe("recipe review page", () => {
     vi.mocked(getMealPlan).mockResolvedValueOnce({
       cycle: 2026,
       daysOnSite: 1,
-      days: [{ breakfast: 0, lunch: 0, dinner: 0 }],
+      days: [{ breakfast: 0, dinner: 0 }],
       version: 0,
       firstDay: null,
       updatedAt: null,

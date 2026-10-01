@@ -186,26 +186,24 @@ describe("defaultPlates", () => {
 
 describe("the meal plan", () => {
   const days = [
-    { breakfast: 20, lunch: 0, dinner: 25 },
-    { breakfast: 45, lunch: 0, dinner: 50 },
-    { breakfast: 45, lunch: 12, dinner: 60 },
+    { breakfast: 20, dinner: 25 },
+    { breakfast: 45, dinner: 50 },
+    { breakfast: 45, dinner: 60 },
   ];
 
   it("lists each distinct plate count once, smallest first, and no 0", () => {
-    expect(mealPlanPlateCounts(days)).toEqual([12, 20, 25, 45, 50, 60]);
+    expect(mealPlanPlateCounts(days)).toEqual([20, 25, 45, 50, 60]);
     expect(mealPlanPlateCounts([])).toEqual([]);
-    expect(
-      mealPlanPlateCounts([{ breakfast: 0, lunch: 0, dinner: 0 }]),
-    ).toEqual([]);
+    expect(mealPlanPlateCounts([{ breakfast: 0, dinner: 0 }])).toEqual([]);
   });
 
   it("peaks each meal over the days, null for a meal that never happens", () => {
     expect(mealPlanPeaks(days)).toEqual({
       kitchenPlatesBreakfast: 45,
-      kitchenPlatesLunch: 12,
+      kitchenPlatesLunch: null,
       kitchenPlatesDinner: 60,
     });
-    expect(mealPlanPeaks([{ breakfast: 30, lunch: 0, dinner: 0 }])).toEqual({
+    expect(mealPlanPeaks([{ breakfast: 30, dinner: 0 }])).toEqual({
       kitchenPlatesBreakfast: 30,
       kitchenPlatesLunch: null,
       kitchenPlatesDinner: null,
@@ -213,6 +211,12 @@ describe("the meal plan", () => {
     // The largest count in the plan is what Claude writes a recipe for.
     expect(defaultPlates(mealPlanPeaks(days))).toBe(60);
     expect(defaultPlates(mealPlanPeaks([]))).toBe(DEFAULT_PLATES);
+  });
+
+  it("counts no lunch: the camp does none, and a lunch left in old data is ignored", () => {
+    const old = [{ breakfast: 20, lunch: 12, dinner: 25 }] as never[];
+    expect(mealPlanPlateCounts(old)).toEqual([20, 25]);
+    expect(mealPlanPeaks(old).kitchenPlatesLunch).toBeNull();
   });
 
   it("labels each day with its date when day 1 has one, across a month end and a leap day", () => {

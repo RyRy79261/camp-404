@@ -134,8 +134,8 @@ function mealPlanWith(counts: number[]) {
     cycle: 2026,
     daysOnSite: counts.length || 1,
     days: counts.length
-      ? counts.map((n) => ({ breakfast: n, lunch: 0, dinner: n }))
-      : [{ breakfast: 0, lunch: 0, dinner: 0 }],
+      ? counts.map((n) => ({ breakfast: n, dinner: n }))
+      : [{ breakfast: 0, dinner: 0 }],
     version: 1,
     firstDay: null,
     updatedAt: null,

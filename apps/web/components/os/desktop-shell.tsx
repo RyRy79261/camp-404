@@ -106,6 +106,7 @@ import {
   PhoneClock,
 } from "./phone-chrome";
 import { PinnedList, PinnedStrip, type PinnedItem } from "./pinned-strip";
+import { ProgramSearch } from "./program-search";
 import { folderIcon, iconFor, programIcon } from "./program-icons";
 import { ConsoleBoot } from "./console-boot";
 import {
@@ -200,6 +201,8 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   calendar: L_SIZE,
   power: L_SIZE,
   logistics: L_SIZE,
+  shifts: L_SIZE,
+  "my-shifts": L_SIZE,
   guide: L_SIZE,
   "guide-chapter": L_SIZE,
   "guide-version": L_SIZE,
@@ -217,7 +220,8 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   budgets: L_SIZE,
   recipes: L_SIZE,
   recipe: L_SIZE,
-  "meal-plan": L_SIZE,
+  "meal-plan": XL_SIZE,
+  "shopping-list": L_SIZE,
   "recipe-review": L_SIZE,
   overview: L_SIZE,
   questionnaires: L_SIZE,
@@ -615,6 +619,8 @@ function DesktopInner({
   // The phone's sheets (open programs, Today) and its soft keyboard.
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [todayOpen, setTodayOpen] = useState(false);
+  // Ctrl+K program search (program-search.tsx), on every screen.
+  const [searchOpen, setSearchOpen] = useState(false);
   const [keyboard, setKeyboard] = useState(false);
   const layer = useRef<HTMLDivElement>(null);
 
@@ -1950,7 +1956,11 @@ function DesktopInner({
   // so both see one live window (design doc, section 6). The Today sheet
   // covers only part of it, and leaves it be.
   const phoneCovered =
-    held || switcherOpen || !!page || (!!top && !top.minimized && !top.lastUrl);
+    held ||
+    switcherOpen ||
+    (phoneNow && searchOpen) ||
+    !!page ||
+    (!!top && !top.minimized && !top.lastUrl);
   // Nobody can see the CRT surface or the wordmark: a blocking form over
   // everything, a maximised window over the desktop, or on a phone a program
   // or sheet over the home screen. Their loops hold still (data-os-paused),
@@ -2167,15 +2177,26 @@ function DesktopInner({
               switcherOpen={switcherOpen}
               todayOpen={todayOpen && !page}
               todayCount={today?.count}
+              searchOpen={searchOpen}
               onHome={() => {
                 setTodayOpen(false);
+                setSearchOpen(false);
                 goHome();
               }}
               onSwitcher={() => {
                 setTodayOpen(false);
+                setSearchOpen(false);
                 setSwitcherOpen((open) => !open);
               }}
-              onToday={toggleToday}
+              onToday={() => {
+                setSearchOpen(false);
+                toggleToday();
+              }}
+              onSearch={() => {
+                setTodayOpen(false);
+                setSwitcherOpen(false);
+                setSearchOpen((open) => !open);
+              }}
               bell={
                 manifest.tray.inbox ? (
                   <NotificationPanel
@@ -2240,8 +2261,18 @@ function DesktopInner({
                 onLineUpIcons={() => changeLayout(lineUpIcons(layout))}
                 onShowDesktop={showDesktop}
                 onOpenWelcome={display.openWelcome}
+                onOpenSearch={() => setSearchOpen(true)}
               />
             </div>
+            <ProgramSearch
+              manifest={manifest}
+              userId={userId}
+              liveKey={liveKey}
+              open={searchOpen}
+              onOpenChange={setSearchOpen}
+              onOpenProgram={openProgram}
+              phone={phoneNow}
+            />
           </>
         )}
         <ContextMenu menu={held ? null : menu} onClose={() => setMenu(null)} />

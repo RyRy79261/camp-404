@@ -248,9 +248,11 @@
    (`:host`) are window bodies too. Each theme sets the --os-win-* values
    (lib/os-themes.ts); 404 Night keeps these soft ones. The copies read them
    from the desktop they sit in: custom properties inherit into a shadow root.
-   `data-window-tint` gives a dialog a window opens (portalled into <body>) the
-   same colours, so it reads as part of the program, not the desktop. */
+   `.os-window-colours` and `data-window-tint` give a dialog a window opens
+   (portalled into <body>, outside the window) the same colours, so it reads
+   as part of the program, not the desktop. */
 [data-window-body],
+.os-window-colours,
 [data-window-tint],
 :host,
 :host > div {

@@ -1,17 +1,22 @@
 import { readFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { LOGISTICS_TEAM } from "@camp404/core";
+import { AFRIKABURN_DATES, LOGISTICS_TEAM } from "@camp404/core";
 import type { Team } from "@camp404/types";
 import type { CampConfig } from "../camp-config";
 import {
+  CANNOT_SKIP_DATE,
+  DATE_SET_FIRST,
   DEADLINE_CHANGED,
+  NOT_AN_AFRIKABURN_DATE,
   NOT_A_DEADLINE_KEEPER,
+  PICK_THE_DATE,
   addDeadline,
   editDeadline,
   listDeadlines,
   markDeadlineCalendarSynced,
   removeDeadline,
+  setAfrikaburnDate,
   setDeadlineDone,
 } from "../deadlines";
 import { setFoundingYear } from "../cycle-rollover";
@@ -321,6 +326,245 @@ describe("AfrikaBurn deadlines", () => {
     const [answer] = await h.db().select().from(schema.logisticsAttendance);
     expect(phase!.cycle).toBe(2027);
     expect(answer!.cycle).toBe(2027);
+  });
+});
+
+// AfrikaBurn's standard dates (owner, 2026-10-01, mock-up A): one row per
+// (year, kind) at most, written when a captain first sets it, changed as a
+// compare-and-set, "No round this year" only where the list allows it, and
+// never edited or removed as an "Other" one.
+describe("AfrikaBurn's standard dates", () => {
+  const h = useTestDb();
+  const byKind = (kind: string) =>
+    AFRIKABURN_DATES.find((d) => d.kind === kind)!;
+  const CLOSES = byKind("registration_closes");
+  const SECOND = byKind("second_ddt_round");
+
+  async function audits(action: string) {
+    return h
+      .db()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, action));
+  }
+
+  function set(
+    actorId: string,
+    over: Partial<Parameters<typeof setAfrikaburnDate>[0]> = {},
+  ) {
+    return setAfrikaburnDate({
+      actorId,
+      kind: CLOSES.kind,
+      dueDate: "2027-02-27",
+      note: "Wrangler said they will not extend it.",
+      skipped: false,
+      expectedVersion: null,
+      newEventId: "abdate0001",
+      ...over,
+    });
+  }
+
+  it("a captain sets one: named from the list, audited, claiming an event id", async () => {
+    await campYear(h.db(), 2027);
+    const captain = await makeUser(h.db(), { rank: "captain" });
+    const result = await set(captain.id);
+    expect(result.ok && result.row).toMatchObject({
+      cycle: 2027,
+      kind: "registration_closes",
+      title: CLOSES.name,
+      dueDate: "2027-02-27",
+      skipped: false,
+      done: false,
+      calendarEventId: "abdate0001",
+      version: 1,
+    });
+    const [audit] = await audits("logistics.deadline_added");
+    expect(audit).toMatchObject({
+      actorId: captain.id,
+      metadata: expect.objectContaining({
+        kind: "registration_closes",
+        dueDate: "2027-02-27",
+      }),
+    });
+  });
+
+  it("holds one per year: a second first-set loses, and next year starts fresh", async () => {
+    await campYear(h.db(), 2027);
+    const captain = await makeUser(h.db(), { rank: "captain" });
+    expect((await set(captain.id)).ok).toBe(true);
+    expect(await set(captain.id, { dueDate: "2027-03-01" })).toEqual({
+      ok: false,
+      error: DATE_SET_FIRST,
+    });
+    expect(await listDeadlines()).toHaveLength(1);
+    expect((await listDeadlines())[0]!.dueDate).toBe("2027-02-27");
+    // The index itself, past the function.
+    await expect(
+      h.db().insert(schema.afrikaburnDeadlines).values({
+        cycle: 2027,
+        kind: CLOSES.kind,
+        title: CLOSES.name,
+      }),
+    ).rejects.toThrow();
+    // "Other" ones, with no kind, are not limited by it.
+    for (const title of [
+      "Mutant vehicle registration",
+      "Mutant vehicle registration",
+    ]) {
+      expect(
+        (
+          await addDeadline({
+            title,
+            dueDate: null,
+            note: null,
+            actorId: captain.id,
+            newEventId: "other00001",
+          })
+        ).ok,
+      ).toBe(true);
+    }
+    await campYear(h.db(), 2028);
+    expect((await set(captain.id, { dueDate: "2028-02-25" })).ok).toBe(true);
+    expect((await listDeadlines(2028)).map((d) => d.kind)).toEqual([
+      "registration_closes",
+    ]);
+  });
+
+  it("changes it as a compare-and-set, keeping its event id and the done tick", async () => {
+    await campYear(h.db(), 2027);
+    const captain = await makeUser(h.db(), { rank: "captain" });
+    const first = await set(captain.id);
+    if (!first.ok) throw new Error(first.error);
+    await setDeadlineDone({
+      id: first.row.id,
+      done: true,
+      expectedVersion: 1,
+      actorId: captain.id,
+    });
+    const changed = await set(captain.id, {
+      dueDate: "2027-03-06",
+      note: null,
+      expectedVersion: 2,
+      newEventId: "different1",
+    });
+    expect(changed.ok && changed.row).toMatchObject({
+      dueDate: "2027-03-06",
+      note: null,
+      done: true,
+      calendarEventId: "abdate0001",
+      version: 3,
+    });
+    // Someone else's older screen.
+    expect(
+      await set(captain.id, { dueDate: "2027-03-07", expectedVersion: 2 }),
+    ).toEqual({ ok: false, error: DEADLINE_CHANGED });
+    // The Change dialog's tick goes with the date.
+    const undone = await set(captain.id, {
+      dueDate: "2027-03-06",
+      done: false,
+      expectedVersion: 3,
+    });
+    expect(undone.ok && undone.row.done).toBe(false);
+    expect(await audits("logistics.deadline_changed")).toHaveLength(2);
+  });
+
+  it("marks the second DDT round as no round this year, and only that one", async () => {
+    await campYear(h.db(), 2027);
+    const captain = await makeUser(h.db(), { rank: "captain" });
+    const dated = await set(captain.id, { kind: SECOND.kind });
+    if (!dated.ok) throw new Error(dated.error);
+    const none = await set(captain.id, {
+      kind: SECOND.kind,
+      skipped: true,
+      dueDate: "2027-04-01",
+      expectedVersion: 1,
+    });
+    // No day; the event id stays so the catch-up takes the event off.
+    expect(none.ok && none.row).toMatchObject({
+      skipped: true,
+      dueDate: null,
+      calendarEventId: "abdate0001",
+      version: 2,
+    });
+    const [audit] = await audits("logistics.deadline_changed");
+    expect(audit!.metadata).toMatchObject({ skipped: true, dueDate: null });
+    expect(await set(captain.id, { skipped: true })).toEqual({
+      ok: false,
+      error: CANNOT_SKIP_DATE,
+    });
+    expect(await set(captain.id, { dueDate: null })).toEqual({
+      ok: false,
+      error: PICK_THE_DATE,
+    });
+    expect(await set(captain.id, { kind: "burn_starts" })).toEqual({
+      ok: false,
+      error: NOT_AN_AFRIKABURN_DATE,
+    });
+    // The database refuses a skipped date with a day too.
+    await expect(
+      h.db().insert(schema.afrikaburnDeadlines).values({
+        cycle: 2027,
+        title: "Skipped with a day",
+        skipped: true,
+        dueDate: "2027-04-01",
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("refuses a Transport and Logistics lead and a member", async () => {
+    await campYear(h.db(), 2027);
+    const lead = await makeUser(h.db());
+    await assignTeam({ userId: lead.id, team: LOGISTICS_TEAM as Team });
+    await setLead({
+      userId: lead.id,
+      team: LOGISTICS_TEAM as Team,
+      isLead: true,
+    });
+    for (const actor of [lead, await makeUser(h.db())]) {
+      expect(await set(actor.id)).toEqual({
+        ok: false,
+        error: NOT_A_DEADLINE_KEEPER,
+      });
+    }
+    expect(await listDeadlines()).toEqual([]);
+  });
+
+  it("is never retitled or removed as an Other one", async () => {
+    await campYear(h.db(), 2027);
+    const captain = await makeUser(h.db(), { rank: "captain" });
+    const first = await set(captain.id);
+    if (!first.ok) throw new Error(first.error);
+    expect(
+      await editDeadline({
+        id: first.row.id,
+        title: "Something else",
+        dueDate: "2027-02-27",
+        note: null,
+        expectedVersion: 1,
+        actorId: captain.id,
+        newEventId: "nope000001",
+      }),
+    ).toEqual({ ok: false, error: DEADLINE_CHANGED });
+    expect(
+      await removeDeadline({
+        id: first.row.id,
+        expectedVersion: 1,
+        actorId: captain.id,
+      }),
+    ).toEqual({ ok: false, error: DEADLINE_CHANGED });
+    expect((await listDeadlines())[0]!.title).toBe(CLOSES.name);
+  });
+
+  it("is adopted by the founding year", async () => {
+    const captain = await makeUser(h.db(), { rank: "captain" });
+    const result = await set(captain.id);
+    expect(result.ok && result.row.cycle).toBe(1);
+    expect(
+      (await setFoundingYear({ year: 2027, actorUserId: captain.id })).ok,
+    ).toBe(true);
+    expect((await listDeadlines(2027)).map((d) => d.kind)).toEqual([
+      "registration_closes",
+    ]);
   });
 });
 
