@@ -42,6 +42,8 @@ import {
   NEED_LABELS,
   bandLabel,
 } from "@/lib/lounge-copy";
+import { MarkdownBody } from "@/components/announcements/markdown-body";
+import { NoteBox } from "./lounge-parts";
 
 // Offer an activity or a DJ set for the lounge, or, given `editing`, change
 // your own offer (#269). The fields follow LoungeOfferInput. A DJ set shows
@@ -107,15 +109,22 @@ export function OfferDialog({
   open,
   onOpenChange,
   editing,
+  askedNote = null,
   days,
   musicPolicy,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing?: EditableOffer;
+  /**
+   * What the Ministry asked to change (an offer sent back): pinned at the top
+   * of the form, and the form sends it back.
+   */
+  askedNote?: string | null;
   days: readonly DayOption[];
   musicPolicy: string | null;
 }) {
+  const sendingBack = editing !== undefined && askedNote !== null;
   const router = useRouter();
   const uid = React.useId();
   const id = (name: string) => `${uid}-${name}`;
@@ -192,7 +201,11 @@ export function OfferDialog({
         return;
       }
       toast.success(
-        editing ? "Offer changed" : "Offer sent to the Ministry of Vibes",
+        sendingBack
+          ? "Sent back to the Ministry of Vibes"
+          : editing
+            ? "Offer changed"
+            : "Offer sent to the Ministry of Vibes",
       );
       onOpenChange(false);
       router.refresh();
@@ -201,18 +214,28 @@ export function OfferDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        data-window-tint
+        className="max-h-[90vh] overflow-y-auto sm:max-w-xl"
+      >
         <DialogHeader>
           <DialogTitle>
             {editing ? "Change your offer" : "Offer something"}
           </DialogTitle>
           <DialogDescription>
-            An activity, a workshop or a DJ set for the lounge. The Ministry of
-            Vibes answers here, and you can change it until they do.
+            {sendingBack
+              ? "Change what they asked for and send it back."
+              : "An activity, a workshop or a DJ set for the lounge. The Ministry of Vibes answers here, and you can change it until they do."}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+        {sendingBack && (
+          <NoteBox title="The Ministry asked" testId="asked-note">
+            {askedNote}
+          </NoteBox>
+        )}
+
+        <form onSubmit={submit} className="flex flex-col gap-6" noValidate>
           <Field label="What is it?" htmlFor={id("kind")}>
             <Select
               value={kind}
@@ -242,10 +265,16 @@ export function OfferDialog({
               />
               <div className="flex flex-col gap-1">
                 <p className="font-medium">Music in the lounge</p>
-                <p className="whitespace-pre-line text-muted-foreground">
-                  {musicPolicy ??
-                    "The Ministry of Vibes hasn't written its music note yet. Say what you play in the description."}
-                </p>
+                {musicPolicy ? (
+                  <MarkdownBody className="text-sm text-muted-foreground">
+                    {musicPolicy}
+                  </MarkdownBody>
+                ) : (
+                  <p className="text-muted-foreground">
+                    The Ministry of Vibes hasn&apos;t written its music note
+                    yet. Say what you play in the description.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -260,7 +289,9 @@ export function OfferDialog({
               id={id("title")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={kind === "dj_set" ? "Sunset set" : "Sunrise yoga"}
+              placeholder={
+                kind === "dj_set" ? "e.g. Sunset set" : "e.g. Sunrise yoga"
+              }
               aria-invalid={errors.title ? true : undefined}
             />
           </Field>
@@ -302,7 +333,7 @@ export function OfferDialog({
           </Field>
 
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-2 text-sm font-medium">What it needs</legend>
+            <legend className="mb-1 text-sm font-medium">What it needs</legend>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {LOUNGE_NEEDS.map((n) => (
                 <CheckRow
@@ -336,7 +367,7 @@ export function OfferDialog({
             <p className="text-xs text-muted-foreground">
               Tick none for any day.
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {days.map((d) => (
                 <CheckRow
                   key={d.day}
@@ -376,7 +407,7 @@ export function OfferDialog({
           <div className="flex flex-col gap-2">
             <CheckRow
               id={id("recurring")}
-              label="It can run on more than one day"
+              label="I can do this more than once (on different days)"
               checked={recurring}
               onChange={setRecurring}
             />
@@ -404,7 +435,13 @@ export function OfferDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? "Sending…" : editing ? "Save changes" : "Send offer"}
+              {pending
+                ? "Sending…"
+                : sendingBack
+                  ? "Send it back"
+                  : editing
+                    ? "Save changes"
+                    : "Send offer"}
             </Button>
           </DialogFooter>
         </form>
