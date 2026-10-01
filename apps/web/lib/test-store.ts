@@ -84,6 +84,7 @@ import {
 } from "./test-store-dues";
 import { resetClaimsStore } from "./test-store-claims";
 import { resetRentalStore } from "./test-store-rental";
+import { resetGuideStore } from "./test-store-guide";
 import {
   adoptLogisticsSentinel,
   resetLogisticsStore,
@@ -6209,6 +6210,7 @@ export const testStore = {
     resetDuesStore();
     resetRentalStore();
     resetLogisticsStore();
+    resetGuideStore();
     resetClaimsStore();
   },
 

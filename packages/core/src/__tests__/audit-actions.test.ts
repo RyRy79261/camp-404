@@ -267,13 +267,24 @@ describe("auditDetail", () => {
     ).toBe("Kitchen");
   });
 
-  it("names a document and its new version", () => {
+  it("names a Survival Guide chapter, its version and whether it is public", () => {
     expect(auditDetail("document.published", { title: "Kitchen safety" })).toBe(
       "Kitchen safety",
     );
-    expect(auditDetail("document.updated", { version: 3 })).toBe(
-      "Now version 3",
-    );
+    expect(
+      auditDetail("document.published", {
+        title: "Kitchen safety",
+        version: 3,
+      }),
+    ).toBe("Kitchen safety, version 3");
+    expect(auditDetail("document.updated", { title: "Dishes" })).toBe("Dishes");
+    expect(
+      auditDetail("document.public_set", { title: "Drive in", public: true }),
+    ).toBe("Drive in: public");
+    expect(
+      auditDetail("document.public_set", { title: "Drive in", public: false }),
+    ).toBe("Drive in: members only");
+    expect(auditDetail("document.reviewed", { title: "MOOP" })).toBe("MOOP");
   });
 
   it("marks a private read made through Claude", () => {
