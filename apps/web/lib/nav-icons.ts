@@ -76,6 +76,8 @@ const PAGE_ICONS: Record<string, LucideIcon> = {
   "/guide": BookMarked,
   "/power": Plug,
   "/logistics": Truck,
+  "/shifts": ClipboardList,
+  "/shifts/mine": ClipboardList,
   "/camp-layout": LayoutGrid,
   "/inventory": Boxes,
   "/transport": CarFront,

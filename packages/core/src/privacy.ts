@@ -314,6 +314,27 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "logisticsAttendance.answer": "camp_member",
   "logisticsAttendance.updatedAt": "captain",
 
+  // shift_signups — who is on which shift (#248). The roster is the whole
+  // camp's, printed for site, so every member reads who is on a shift (shown
+  // as a first name and a surname initial). Who put them there is for the
+  // leads who run shifts.
+  "shiftSignups.slotId": "camp_member",
+  "shiftSignups.userId": "camp_member",
+  "shiftSignups.addedByUserId": "team_lead",
+  "shiftSignups.createdAt": "captain",
+
+  // volunteer_shifts — a member's own AfrikaBurn volunteer shifts, kept only
+  // so their camp shifts can warn about a clash (#248). Nobody else reads
+  // them.
+  "volunteerShifts.id": "captain",
+  "volunteerShifts.cycle": "captain",
+  "volunteerShifts.userId": "captain",
+  "volunteerShifts.department": "captain",
+  "volunteerShifts.day": "captain",
+  "volunteerShifts.startMinute": "captain",
+  "volunteerShifts.durationMinutes": "captain",
+  "volunteerShifts.createdAt": "captain",
+
   // rental_orders, rental_order_lines, rental_order_sharers — gear rental
   // (#241). A member reads only their own order; captains read all; a team
   // lead gets nothing extra. A member named as a sharer also reads that one

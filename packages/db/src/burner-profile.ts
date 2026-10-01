@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { approvalNotification, isReviewTransition } from "@camp404/core";
 import type {
   ApprovalStatus,
@@ -182,6 +182,10 @@ export async function setUserApprovalStatus(
  * - on rejection, the member comes off every team for this year (offboarding,
  *   owner's call). Past years stay on file, and approving them again does not
  *   put them back on a team.
+ * - leaving approved (rejected, or re-opened to pending), the member comes off
+ *   this year's shifts: only an approved member is on the roster, so a place
+ *   kept for them would be full with nobody on it, and no lead could take
+ *   them off. Approving them again does not put them back.
  */
 export async function setUserApproval(input: {
   userId: string;
@@ -201,7 +205,9 @@ export async function setUserApproval(input: {
   const reason = input.to === "pending" ? null : input.reason?.trim() || null;
   // Resolved BEFORE the transaction: currentCycleNumber() reads camp_settings
   // on its own handle (see team-memberships.ts).
-  const cycle = input.to === "rejected" ? await currentCycleNumber() : null;
+  const leaving = input.from === "approved";
+  const cycle =
+    input.to === "rejected" || leaving ? await currentCycleNumber() : null;
   return await withTransaction(async (tx) => {
     const rows = await tx
       .update(schema.users)
@@ -222,7 +228,7 @@ export async function setUserApproval(input: {
     if (rows.length === 0) return false;
 
     const removedTeams =
-      cycle === null
+      cycle === null || input.to !== "rejected"
         ? []
         : await tx
             .delete(schema.teamMemberships)
@@ -261,6 +267,33 @@ export async function setUserApproval(input: {
           because: "rejected",
         },
       });
+    }
+    if (leaving && cycle !== null) {
+      const thisYearsSlots = tx
+        .select({ id: schema.shiftSlots.id })
+        .from(schema.shiftSlots)
+        .innerJoin(
+          schema.shiftTypes,
+          eq(schema.shiftTypes.id, schema.shiftSlots.typeId),
+        )
+        .where(eq(schema.shiftTypes.cycle, cycle));
+      const removedShifts = await tx
+        .delete(schema.shiftSignups)
+        .where(
+          and(
+            eq(schema.shiftSignups.userId, input.userId),
+            inArray(schema.shiftSignups.slotId, thisYearsSlots),
+          ),
+        )
+        .returning({ slotId: schema.shiftSignups.slotId });
+      for (const removed of removedShifts) {
+        await writeAuditEvent(tx, {
+          actorId: input.decidedByUserId,
+          action: "shifts.member_removed",
+          target: input.userId,
+          metadata: { cycle, slotId: removed.slotId, because: input.to },
+        });
+      }
     }
     if (input.to === "approved") {
       await tx.insert(schema.notificationDeliveries).values(

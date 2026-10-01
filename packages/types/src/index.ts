@@ -24,6 +24,7 @@ export * from "./participation";
 export * from "./tickets";
 export * from "./power";
 export * from "./logistics";
+export * from "./shifts";
 export * from "./camp-layout";
 export * from "./inventory";
 export * from "./power-site";
