@@ -25,8 +25,9 @@ import { BudgetStats } from "./budget-stats";
 // viewer may do: a lead of this team (or a captain) always sees "Claims to
 // approve" with its count, so the row never reshuffles; the Finance team sets
 // the budgets, and everyone else reads every team's on the same page. With no
-// budget set and nothing waiting the card is one line, not a row of dashes:
-// the claim for the team's people, and "Set budgets" for those who set them.
+// budget set, nothing spent and nothing waiting the card is one line, not a
+// row of dashes: the claim for the team's people, and "Set budgets" for those
+// who set them.
 
 export function TeamBudgetCard({
   team,
@@ -71,7 +72,11 @@ export function TeamBudgetCard({
     </Link>
   );
 
-  if (totals.budgetCents === null && totals.waitingCount === 0) {
+  if (
+    totals.budgetCents === null &&
+    totals.waitingCount === 0 &&
+    totals.spentCents === 0
+  ) {
     return (
       <Card>
         <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-2 p-6">
