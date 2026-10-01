@@ -84,6 +84,7 @@ import {
 } from "./test-store-dues";
 import { resetClaimsStore } from "./test-store-claims";
 import { resetRentalStore } from "./test-store-rental";
+import { resetGuideStore } from "./test-store-guide";
 import { resetLogisticsStore } from "./test-store-logistics";
 import type { MyLift } from "@camp404/db/cars";
 import {
@@ -6113,6 +6114,7 @@ export const testStore = {
     resetDuesStore();
     resetRentalStore();
     resetLogisticsStore();
+    resetGuideStore();
     resetClaimsStore();
   },
 

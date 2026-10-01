@@ -25,27 +25,28 @@ vi.mock("@camp404/db/mcp", () => ({
   appendMcpAuditLog: vi.fn(async () => {}),
 }));
 vi.mock("@camp404/db/documents", () => ({
-  createDocument: vi.fn(async (input: { slug: string }) => ({
+  createGuideChapter: vi.fn(async (input: { slug: string }) => ({
     ok: true,
     document: { slug: input.slug, version: 1 },
   })),
   getDocumentBySlug: vi.fn(async () => null),
+  getPublishedChapter: vi.fn(async () => null),
   listDocumentDrafts: vi.fn(async () => []),
-  setDocumentPublished: vi.fn(
-    async (input: { slug: string; published: boolean }) => ({
-      slug: input.slug,
-      published: input.published,
-      version: 2,
-    }),
-  ),
-  updateDocument: vi.fn(async () => ({ ok: true, document: { version: 2 } })),
+  listPublishedChapters: vi.fn(async () => []),
+  publishGuideChapter: vi.fn(async () => ({
+    ok: true,
+    version: 2,
+    created: true,
+  })),
+  unpublishGuideChapter: vi.fn(async () => ({ ok: true })),
+  saveGuideChapter: vi.fn(async () => ({ ok: true, document: { version: 2 } })),
 }));
 
 import {
-  createDocument,
+  createGuideChapter as createDocument,
   getDocumentBySlug,
   listDocumentDrafts,
-  updateDocument,
+  saveGuideChapter as updateDocument,
 } from "@camp404/db/documents";
 import { registerDocumentTools } from "../tools/documents";
 
@@ -94,7 +95,7 @@ describe("document authoring tools", () => {
       expect.objectContaining({
         slug: "kitchen-safety",
         team: "kitchen",
-        authorId: LEAD,
+        actorId: LEAD,
       }),
     );
   });
@@ -135,7 +136,7 @@ describe("document authoring tools", () => {
   it("says a taken slug in words", async () => {
     vi.mocked(createDocument).mockResolvedValueOnce({
       ok: false,
-      reason: "slug_taken",
+      error: "A chapter with that name already exists. Pick another title.",
     });
     expect(
       await call(
@@ -143,7 +144,9 @@ describe("document authoring tools", () => {
         { title: "Rules", category: "rules", markdown: "" },
         CAPTAIN,
       ),
-    ).toEqual({ error: 'The slug "rules" is taken. Pick another.' });
+    ).toEqual({
+      error: "A chapter with that name already exists. Pick another title.",
+    });
   });
 
   it("refuses a member everywhere, and a lead on another team's document", async () => {
@@ -181,7 +184,7 @@ describe("document authoring tools", () => {
     vi.mocked(getDocumentBySlug).mockResolvedValue(kitchenDoc as never);
     vi.mocked(updateDocument).mockResolvedValueOnce({
       ok: false,
-      reason: "stale",
+      error: "Someone saved this document since you read it. Read it again.",
     });
     expect(
       await call(

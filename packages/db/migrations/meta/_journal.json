@@ -568,6 +568,20 @@
       "when": 1790803506301,
       "tag": "0080_logistics_plain_titles",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1790813691104,
+      "tag": "0081_survival_guide",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1790813700482,
+      "tag": "0082_survival_guide_published_versions",
+      "breakpoints": true
     }
   ]
 }

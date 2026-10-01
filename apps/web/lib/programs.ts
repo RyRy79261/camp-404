@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   canApproveRecipe,
+  canEditAnyGuideChapter,
   canManageMoney,
   canManageRental,
   canWorkInTeam,
@@ -347,6 +348,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // The Survival Guide (#250): every approved member reads it; captains and
+  // a team's leads write it (canEditGuideChapter, checked in each write).
+  {
+    id: "guide",
+    label: "Survival Guide",
+    fileName: "GUIDE.HLP",
+    href: "/guide",
+    icon: "guide",
+    place: CAMP,
+    rank: "camp_member",
+  },
   // Every team's page, for every approved member (owner's decision 2,
   // 2026-09-26: every member sees every team's dashboard, read-only; the
   // actions on it keep their own gates).
@@ -589,6 +601,46 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     icon: "meetings",
     place: null,
     rank: "camp_member",
+  },
+  {
+    id: "guide-chapter",
+    label: "Chapter",
+    fileName: "CHAPTER.HLP",
+    href: null,
+    icon: "guide",
+    place: null,
+    rank: "camp_member",
+  },
+  {
+    id: "guide-version",
+    label: "Chapter version",
+    fileName: "CHAPTER.VER",
+    href: null,
+    icon: "guide",
+    place: null,
+    rank: "camp_member",
+  },
+  // Writing opens for captains and leads; the page locks a lead out of
+  // another team's chapter, and every write checks again.
+  {
+    id: "new-guide-chapter",
+    label: "New chapter",
+    fileName: "CHAPTER.WRI",
+    href: null,
+    icon: "guide",
+    place: null,
+    rank: "team_lead",
+    requires: (ctx) => canEditAnyGuideChapter(ctx.rank, ctx.ledTeams),
+  },
+  {
+    id: "edit-guide-chapter",
+    label: "Edit chapter",
+    fileName: "CHAPTER.WRI",
+    href: null,
+    icon: "guide",
+    place: null,
+    rank: "team_lead",
+    requires: (ctx) => canEditAnyGuideChapter(ctx.rank, ctx.ledTeams),
   },
   {
     id: "new-recipe",
