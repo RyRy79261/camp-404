@@ -30,13 +30,18 @@ import {
   clearLogisticsPhaseAction,
   saveLogisticsPhaseAction,
 } from "@/app/(console)/logistics/actions";
-import { SAVED_NOT_ON_CALENDAR } from "@/lib/logistics-copy";
+import { SAVED_NOT_ON_CALENDAR, deadlineDateText } from "@/lib/logistics-copy";
 
 // Editing one logistics phase (#247): a dialog with the first and last day,
 // the place and a note, as the load list's editor. A problem with what was
-// typed shows beside it; a refusal or a lost race shows in the dialog. For a
-// viewer who may not edit, the Edit button is PRESENT BUT DISABLED and points
-// at the one refusal line on the page. The server re-checks regardless.
+// typed shows beside it; a refusal or a lost race shows in the dialog. Only an
+// editor gets the button at all: a reader sees the days as content
+// (AGENTS.md, "read-only is content"). The server re-checks regardless.
+//
+// The date boxes are the browser's own, so they follow its language; each
+// says the picked day back in the page's words ("Sat 24 Apr 2027") under it.
+// Clearing takes the phase off the camp calendar for everyone, so it asks
+// first, in the dialog.
 
 export interface EditablePhase {
   phase: LogisticsPhase;
@@ -67,15 +72,18 @@ function reportCalendar(
   else toast.success(done);
 }
 
+/** A picked day in the page's words, or nothing while the box is empty. */
+export function pickedDayText(value: string): string | undefined {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? deadlineDateText(value)
+    : undefined;
+}
+
 export function PhaseEditButton({
   phase,
-  canEdit,
-  refusalId,
   suggestion,
 }: {
   phase: EditablePhase;
-  canEdit: boolean;
-  refusalId: string;
   /** Days to start from when the phase has none (the Burn's own dates). */
   suggestion?: { startDate: string; endDate: string } | null;
 }) {
@@ -95,12 +103,14 @@ export function PhaseEditButton({
   const [error, setError] = React.useState<string | null>(null);
   const [saving, startSave] = React.useTransition();
   const [clearing, startClear] = React.useTransition();
+  const [confirmClear, setConfirmClear] = React.useState(false);
   const pending = saving || clearing;
 
   function reset() {
     setForm(initial);
     setErrors({});
     setError(null);
+    setConfirmClear(false);
   }
 
   function submit(e: React.FormEvent) {
@@ -161,116 +171,146 @@ export function PhaseEditButton({
       <Button
         variant="outline"
         size="sm"
-        disabled={!canEdit}
         onClick={() => setOpen(true)}
-        aria-label={
-          canEdit ? `Edit ${label}` : `Edit ${label} — not available to you`
-        }
-        {...(canEdit ? {} : { "aria-describedby": refusalId })}
+        aria-label={`Edit ${label}`}
       >
         <Pencil aria-hidden />
-        Edit
+        {/* A narrow window keeps the dates on one line: the icon alone. */}
+        <span className="hidden page-sm:inline">Edit</span>
       </Button>
-      {canEdit && (
-        <Dialog
-          open={open}
-          onOpenChange={(next) => {
-            if (pending) return;
-            if (!next) reset();
-            setOpen(next);
-          }}
-        >
-          <DialogContent>
-            <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-              <DialogHeader>
-                <DialogTitle>{label}</DialogTitle>
-                <DialogDescription>
-                  {LOGISTICS_PHASE_HINTS[phase.phase]} Saving puts it on the
-                  camp calendar.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 page-sm:grid-cols-2">
-                <Field
-                  label="First day"
-                  htmlFor={id("start")}
-                  error={errors.startDate}
-                >
-                  <DateControl
-                    id={id("start")}
-                    value={form.startDate}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        startDate: e.target.value,
-                        // A one-day phase is the usual start.
-                        endDate: f.endDate || e.target.value,
-                      }))
-                    }
-                    aria-invalid={errors.startDate ? true : undefined}
-                  />
-                </Field>
-                <Field
-                  label="Last day"
-                  htmlFor={id("end")}
-                  error={errors.endDate}
-                >
-                  <DateControl
-                    id={id("end")}
-                    value={form.endDate}
-                    min={form.startDate || undefined}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, endDate: e.target.value }))
-                    }
-                    aria-invalid={errors.endDate ? true : undefined}
-                  />
-                </Field>
-              </div>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (pending) return;
+          if (!next) reset();
+          setOpen(next);
+        }}
+      >
+        <DialogContent data-window-tint>
+          <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+            <DialogHeader>
+              <DialogTitle>{label}</DialogTitle>
+              <DialogDescription>
+                {LOGISTICS_PHASE_HINTS[phase.phase]} Saving puts it on the camp
+                calendar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 page-sm:grid-cols-2">
               <Field
-                label="Place (optional)"
-                htmlFor={id("place")}
-                error={errors.place}
-                help="A place everyone knows, like the storage unit. Never a home address."
+                label="First day"
+                htmlFor={id("start")}
+                error={errors.startDate}
+                help={pickedDayText(form.startDate)}
               >
-                <Input
-                  id={id("place")}
-                  value={form.place}
-                  maxLength={LOGISTICS_PLACE_MAX}
+                <DateControl
+                  id={id("start")}
+                  aria-describedby={`${id("start")}-${errors.startDate ? "error" : "help"}`}
+                  value={form.startDate}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, place: e.target.value }))
+                    setForm((f) => ({
+                      ...f,
+                      startDate: e.target.value,
+                      // A one-day phase is the usual start.
+                      endDate: f.endDate || e.target.value,
+                    }))
                   }
-                  aria-invalid={errors.place ? true : undefined}
+                  aria-invalid={errors.startDate ? true : undefined}
                 />
               </Field>
               <Field
-                label="Note (optional)"
-                htmlFor={id("note")}
-                error={errors.note}
+                label="Last day"
+                htmlFor={id("end")}
+                error={errors.endDate}
+                help={pickedDayText(form.endDate)}
               >
-                <Textarea
-                  id={id("note")}
-                  rows={3}
-                  value={form.note}
-                  maxLength={LOGISTICS_NOTE_MAX}
+                <DateControl
+                  id={id("end")}
+                  aria-describedby={`${id("end")}-${errors.endDate ? "error" : "help"}`}
+                  value={form.endDate}
+                  min={form.startDate || undefined}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, note: e.target.value }))
+                    setForm((f) => ({ ...f, endDate: e.target.value }))
                   }
-                  aria-invalid={errors.note ? true : undefined}
+                  aria-invalid={errors.endDate ? true : undefined}
                 />
               </Field>
-              {error && (
-                <p role="alert" className="text-sm text-destructive">
-                  {error}
+            </div>
+            <Field
+              label="Place (optional)"
+              htmlFor={id("place")}
+              error={errors.place}
+              help="A place everyone knows, like the storage unit. Never a home address."
+            >
+              <Input
+                id={id("place")}
+                value={form.place}
+                maxLength={LOGISTICS_PLACE_MAX}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, place: e.target.value }))
+                }
+                aria-invalid={errors.place ? true : undefined}
+              />
+            </Field>
+            <Field
+              label="Note (optional)"
+              htmlFor={id("note")}
+              error={errors.note}
+            >
+              <Textarea
+                id={id("note")}
+                rows={3}
+                value={form.note}
+                maxLength={LOGISTICS_NOTE_MAX}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, note: e.target.value }))
+                }
+                aria-invalid={errors.note ? true : undefined}
+              />
+            </Field>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+            {confirmClear ? (
+              <div
+                role="group"
+                aria-label={`Clear the ${label} days`}
+                className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4"
+              >
+                <p className="text-sm">
+                  Take {label} off the camp calendar? Its days, place and note
+                  are cleared for everyone.
                 </p>
-              )}
+                <div className="flex flex-col-reverse gap-2 page-sm:flex-row page-sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => setConfirmClear(false)}
+                  >
+                    Keep the days
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={pending}
+                    onClick={clear}
+                  >
+                    {clearing && <Spinner size="sm" label="Clearing…" />}
+                    Yes, clear the days
+                  </Button>
+                </div>
+              </div>
+            ) : (
               <DialogFooter className="gap-2 page-sm:justify-between">
                 {canClear ? (
                   <Button
                     type="button"
                     variant="ghost"
                     disabled={pending}
-                    onClick={clear}
+                    onClick={() => setConfirmClear(true)}
                   >
-                    {clearing && <Spinner size="sm" label="Clearing…" />}
                     Clear days
                   </Button>
                 ) : (
@@ -281,10 +321,10 @@ export function PhaseEditButton({
                   Save
                 </Button>
               </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      )}
+            )}
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
