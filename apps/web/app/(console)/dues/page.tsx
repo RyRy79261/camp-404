@@ -20,8 +20,8 @@ import {
   balanceSentence,
   chargeSubline,
   formatDay,
-  owesMoreThanSent,
   PAYMENT_STATUS_WORDS,
+  proofPlace,
 } from "@/lib/dues-view";
 import { requireMemberPage } from "@/lib/member-gate";
 import { getMemberRefCode, ledgerCycle } from "@/lib/payments";
@@ -50,8 +50,9 @@ export const metadata = { title: "My dues — Camp 404" };
 // do next comes straight after the balance: picking what they can pay (no
 // pledge yet), or telling us they paid (something left to pay). Once pledged,
 // the pledge is one line in the balance card; once nothing is left to send
-// proof for, the proof form is a "Send another proof" button. Empty cards
-// (nothing charged, no payments) are left out.
+// proof for, the proof form is a "Send another proof" button, there even
+// before anything is charged (a member may pay before a captain accepts
+// them). Empty cards (nothing charged, no payments) are left out.
 
 export default async function MyDuesPage() {
   const { campUser } = await requireMemberPage();
@@ -76,7 +77,7 @@ export default async function MyDuesPage() {
   // The pledge form is the next step only for a member who has not pledged.
   const mustPledge = !dues.pledge && !feeCharged;
   // Something left to pay that no proof covers yet: the form stays open.
-  const proofOpen = owesMoreThanSent(dues.balance);
+  const proofOpen = proofPlace(dues.balance) === "form";
 
   const proof = proofOpen ? (
     <Card>
@@ -95,16 +96,23 @@ export default async function MyDuesPage() {
         <ProofForm today={today} />
       </CardContent>
     </Card>
-  ) : dues.balance.chargedCents > 0 ? (
+  ) : (
     <Card>
       <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5">
         <p className="text-sm text-muted-foreground">
-          Paid more, or for someone else? Send the Finance team your proof.
+          {dues.balance.chargedCents > 0
+            ? "Paid more, or for someone else? Send the Finance team your proof."
+            : "Paid already? Send the Finance team your proof."}
         </p>
-        <ProofDialog today={today} />
+        <ProofDialog
+          today={today}
+          label={
+            dues.payments.length > 0 ? "Send another proof" : "Send a proof"
+          }
+        />
       </CardContent>
     </Card>
-  ) : null;
+  );
 
   return (
     <div className="flex flex-col">

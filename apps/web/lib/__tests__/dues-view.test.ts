@@ -4,6 +4,7 @@ import {
   chargeSubline,
   financeStatusWords,
   owesMoreThanSent,
+  proofPlace,
   typedRands,
 } from "../dues-view";
 
@@ -37,6 +38,32 @@ describe("owesMoreThanSent", () => {
   it("folds it once a proof covers the rest, or nothing is owed", () => {
     expect(owesMoreThanSent(balance(250000, 250000))).toBe(false);
     expect(owesMoreThanSent(balance(0, 0))).toBe(false);
+  });
+});
+
+describe("proofPlace", () => {
+  const balance = (
+    chargedCents: number,
+    balanceCents: number,
+    pendingCents = 0,
+  ) => ({
+    chargedCents,
+    paidCents: 0,
+    pendingCents,
+    refundedCents: 0,
+    balanceCents,
+  });
+
+  it("opens the form while something owed has no proof", () => {
+    expect(proofPlace(balance(250000, 250000))).toBe("form");
+  });
+
+  it("still offers a proof before anything is charged", () => {
+    expect(proofPlace(balance(0, 0))).toBe("button");
+  });
+
+  it("folds to the button once a proof covers the rest", () => {
+    expect(proofPlace(balance(250000, 250000, 250000))).toBe("button");
   });
 });
 

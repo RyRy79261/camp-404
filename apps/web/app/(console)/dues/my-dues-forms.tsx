@@ -197,15 +197,24 @@ export function PledgeDialog({
   );
 }
 
-/** "Send another proof" once nothing is left to pay: the form in a dialog. */
-export function ProofDialog({ today }: { today: string }) {
+/**
+ * "Send another proof" once nothing is left to pay (or "Send a proof" before
+ * any payment): the form in a dialog.
+ */
+export function ProofDialog({
+  today,
+  label = "Send another proof",
+}: {
+  today: string;
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" size="sm" variant="outline">
           <ReceiptText aria-hidden />
-          Send another proof
+          {label}
         </Button>
       </DialogTrigger>
       <DialogContent className={DIALOG_CLASS}>

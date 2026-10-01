@@ -56,6 +56,16 @@ export function owesMoreThanSent(balance: DuesBalance): boolean {
 }
 
 /**
+ * Where My dues offers the proof of payment: the open form while something is
+ * owed that no proof covers, otherwise a "Send another proof" button. Always
+ * one of the two: a member who paid before anything was charged (before a
+ * captain accepted them) can still tell the Finance team.
+ */
+export function proofPlace(balance: DuesBalance): "form" | "button" {
+  return owesMoreThanSent(balance) ? "form" : "button";
+}
+
+/**
  * The small line under a charge: its kind, unless the description already
  * says it ("Camp fee: Base" over "Camp fee"), and the day it was charged.
  */
