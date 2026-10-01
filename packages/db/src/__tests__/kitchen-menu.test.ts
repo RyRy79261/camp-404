@@ -23,6 +23,7 @@ import {
   removeSnack,
   setShoppingTicks,
 } from "../kitchen-menu";
+import { setFoundingYear } from "../cycle-rollover";
 import { setMealPlan } from "../meal-plan";
 import * as schema from "../schema";
 import { assignTeam, setLead } from "../team-memberships";
@@ -433,6 +434,64 @@ describe("kitchen menu and shopping list", () => {
       expect(added.ok).toBe(true);
     });
     lockBeforeCount(snacks, "kitchen_snacks");
+  });
+
+  it("is adopted by the founding year: the plan and its days, the menu, the snacks and the ticks", async () => {
+    // No year yet: everything is written under the sentinel.
+    const captain = await makeUser(h.db(), {
+      rank: "captain",
+      approvalStatus: "approved",
+    });
+    expect(
+      await setMealPlan({
+        actorId: captain.id,
+        daysOnSite: 2,
+        days: [
+          { breakfast: 0, lunch: 0, dinner: 50 },
+          { breakfast: 30, lunch: 0, dinner: 50 },
+        ],
+        expectedVersion: 0,
+      }),
+    ).toEqual({ ok: true, version: 1 });
+    const dal = await recipe(DAL, captain.id);
+    expect(
+      (
+        await addMenuItem({
+          actorId: captain.id,
+          day: 1,
+          meal: "dinner",
+          recipeId: dal.recipeId,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (await addSnack({ actorId: captain.id, name: "Rusks", amount: null })).ok,
+    ).toBe(true);
+    expect(
+      await setShoppingTicks({
+        actorId: captain.id,
+        lines: [{ key: "onions|g", amount: "800 g" }],
+        ticked: true,
+      }),
+    ).toEqual({ ok: true });
+
+    expect(
+      (await setFoundingYear({ year: 2027, actorUserId: captain.id })).ok,
+    ).toBe(true);
+
+    const facts = await getShoppingFacts();
+    expect(facts.plan).toMatchObject({
+      cycle: 2027,
+      daysOnSite: 2,
+      version: 1,
+    });
+    expect(facts.plan.days[1]).toEqual({ breakfast: 30, lunch: 0, dinner: 50 });
+    expect(facts.menu.items.map((i) => [i.day, i.meal, i.recipeId])).toEqual([
+      [1, "dinner", dal.recipeId],
+    ]);
+    expect(facts.snacks.map((s) => s.name)).toEqual(["Rusks"]);
+    expect(facts.ticks).toEqual([{ key: "onions|g", amount: "800 g" }]);
+    expect(await h.db().select().from(schema.kitchenMealPlans)).toHaveLength(1);
   });
 
   it("lets any approved member tick for the whole camp, and refuses an applicant", async () => {
