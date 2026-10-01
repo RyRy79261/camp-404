@@ -185,6 +185,41 @@ describe("shopping list page", () => {
     });
   });
 
+  it("takes the ticks from a refreshed list, not the ones it first drew", async () => {
+    vi.mocked(captainPageGate).mockResolvedValue({
+      campUser: { id: "viewer" },
+      rank: "camp_member",
+      cleared: true,
+    } as never);
+    vi.mocked(getShoppingFacts).mockResolvedValue(facts());
+    const { rerender } = render(await ShoppingListPage());
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox", { name: "Onions" }));
+    });
+    expect(screen.getByRole("checkbox", { name: "Onions" }).dataset.state).toBe(
+      "checked",
+    );
+
+    // The menu grew: the onions were ticked at another amount, and someone
+    // else ticked the lentils.
+    vi.mocked(getShoppingFacts).mockResolvedValue(
+      facts([
+        { key: "onions|g", amount: "1 kg" },
+        { key: "red lentils|g", amount: "5 kg" },
+      ]),
+    );
+    await act(async () => {
+      rerender(await ShoppingListPage());
+    });
+    expect(screen.getByRole("checkbox", { name: "Onions" }).dataset.state).toBe(
+      "unchecked",
+    );
+    expect(group("Produce").textContent).toContain("Ticked when it was 1 kg");
+    expect(
+      screen.getByRole("checkbox", { name: "Red lentils" }).dataset.state,
+    ).toBe("checked");
+  });
+
   it("puts a refused tick back, with a toast", async () => {
     vi.mocked(setShoppingTicksAction).mockResolvedValue({
       ok: false,

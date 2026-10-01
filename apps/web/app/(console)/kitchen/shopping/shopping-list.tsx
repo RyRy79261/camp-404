@@ -51,11 +51,23 @@ export function ShoppingListView({
 }) {
   const [query, setQuery] = useState("");
   const [ticked, setTicked] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      groups.flatMap((g) => g.lines.map((l) => [l.key, l.ticked])),
-    ),
+    ticksOf(groups),
   );
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  // A refreshed list (after any tick or menu change, here or by someone
+  // else) is the truth: its ticks replace the ones shown, except a line
+  // whose own tick is still being saved.
+  const [seen, setSeen] = useState(groups);
+  if (seen !== groups) {
+    setSeen(groups);
+    const fresh = ticksOf(groups);
+    setTicked((t) => {
+      for (const key of Object.keys(busy)) {
+        if (busy[key] && key in t) fresh[key] = t[key]!;
+      }
+      return fresh;
+    });
+  }
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -164,6 +176,14 @@ export function ShoppingListView({
         );
       })}
     </div>
+  );
+}
+
+function ticksOf(
+  groups: readonly ShoppingGroupView[],
+): Record<string, boolean> {
+  return Object.fromEntries(
+    groups.flatMap((g) => g.lines.map((l) => [l.key, l.ticked])),
   );
 }
 
