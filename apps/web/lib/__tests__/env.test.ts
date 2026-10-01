@@ -19,9 +19,7 @@ describe("assertServerEnv", () => {
   });
 
   it("throws when PGCRYPTO_KEY is too short", () => {
-    expect(() => assertServerEnv({ [KEY]: "tooshort" })).toThrow(
-      /too short/,
-    );
+    expect(() => assertServerEnv({ [KEY]: "tooshort" })).toThrow(/too short/);
   });
 
   it("treats an empty string as not set", () => {
@@ -41,9 +39,7 @@ describe("assertServerEnv", () => {
   });
 
   it("is a no-op under E2E test mode (the in-memory backend never encrypts)", () => {
-    expect(() =>
-      assertServerEnv({ E2E_TEST_MODE: "1" }),
-    ).not.toThrow();
+    expect(() => assertServerEnv({ E2E_TEST_MODE: "1" })).not.toThrow();
   });
 
   describe("E2E test mode", () => {
@@ -53,7 +49,11 @@ describe("assertServerEnv", () => {
         assertServerEnv({ E2E_TEST_MODE: "1", NODE_ENV: "development" }),
       ).not.toThrow();
       expect(() =>
-        assertServerEnv({ E2E_TEST_MODE: "1", NODE_ENV: "production", CI: "true" }),
+        assertServerEnv({
+          E2E_TEST_MODE: "1",
+          NODE_ENV: "production",
+          CI: "true",
+        }),
       ).not.toThrow();
     });
 

@@ -155,3 +155,21 @@ export function mixOklch(a: string, b: string, p: number): string {
   const H = (h1 + d * (1 - p) + 360) % 360;
   return `oklch(${L.toFixed(5)} ${C.toFixed(5)} ${H.toFixed(3)})`;
 }
+
+/**
+ * `color-mix(in oklab, a p%, b)` as the browser mixes it: each of L, a and b
+ * mixed in a straight line, as an `oklch()` string this module reads. The
+ * console's soft tints use it: a grey with a faint hue of its own (the window
+ * card's blue-grey) would pull an oklch mix round to its own hue, and a
+ * magenta tint would come out blue. `p` is 0 to 1.
+ */
+export function mixOklab(a: string, b: string, p: number): string {
+  const [l1, a1, b1] = linearToOklab(parseColour(a));
+  const [l2, a2, b2] = linearToOklab(parseColour(b));
+  const L = l1 * p + l2 * (1 - p);
+  const A = a1 * p + a2 * (1 - p);
+  const B = b1 * p + b2 * (1 - p);
+  const C = Math.hypot(A, B);
+  const H = ((Math.atan2(B, A) * 180) / Math.PI + 360) % 360;
+  return `oklch(${L.toFixed(5)} ${C.toFixed(5)} ${H.toFixed(3)})`;
+}
