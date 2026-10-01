@@ -29,7 +29,7 @@ import {
   updateTrailer,
   withdrawLiftRequest,
 } from "@/lib/transport";
-import { CHECK_FORM, TRANSPORT_PATH } from "@/lib/transport-copy";
+import { CHECK_FORM, LIFT_PATH, TRANSPORT_PATH } from "@/lib/transport-copy";
 
 // The Transport page's writes (#270). Each action: the member gate (any
 // approved member reaches it), the Zod boundary (every shape is strict, so a
@@ -50,6 +50,7 @@ async function memberGate() {
 function done(result: { ok: boolean; error?: string }): ActionResult {
   if (!result.ok) return { ok: false, error: result.error ?? CHECK_FORM };
   revalidatePath(TRANSPORT_PATH);
+  revalidatePath(LIFT_PATH);
   return { ok: true };
 }
 
