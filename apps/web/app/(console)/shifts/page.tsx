@@ -125,10 +125,24 @@ function Fairness({ view }: { view: ShiftsView }) {
           </>
         )}
         {view.days.length > 0 && (
-          <p className="text-xs text-muted-foreground tabular-nums">
-            Places still open:{" "}
-            {view.days.map((d) => `${d.tab} (${d.openPlaces})`).join(" · ")}
-          </p>
+          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+            <p id="open-places-title">Places still open each day</p>
+            {/* One day per item, never split, so a wrapped line never starts
+                with a stray separator. */}
+            <ul
+              aria-labelledby="open-places-title"
+              className="flex flex-wrap gap-x-4 gap-y-1 tabular-nums"
+            >
+              {view.days.map((d) => (
+                <li key={d.day} className="whitespace-nowrap">
+                  {d.tab}:{" "}
+                  <span className="font-semibold text-foreground">
+                    {d.openPlaces}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </section>
