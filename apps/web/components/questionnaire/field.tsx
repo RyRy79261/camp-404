@@ -34,6 +34,7 @@ import {
 } from "@camp404/ui/components/select";
 import { Slider } from "@camp404/ui/components/slider";
 import { TextareaWithCount } from "@camp404/ui/components/textarea-with-count";
+import { CHOICE_OFF, CHOICE_ON, CHOICE_ON_FILL } from "@camp404/ui/lib/choice";
 import { cn } from "@camp404/ui/lib/utils";
 import { isFieldLocked, isSafetyVisible } from "@camp404/core";
 import { RecorderPanel } from "../voice/recorder-panel";
@@ -363,9 +364,7 @@ function Control({
               onClick={() => onChange(v)}
               className={cn(
                 "flex-1 rounded-md border px-3 py-2 text-sm transition-colors",
-                value === v
-                  ? "border-primary bg-primary/10 text-foreground"
-                  : "border-input bg-background text-muted-foreground hover:bg-muted",
+                value === v ? CHOICE_ON : CHOICE_OFF,
               )}
             >
               {label}
@@ -413,9 +412,7 @@ function Control({
                     onClick={() => onChange(n)}
                     className={cn(
                       "h-9 w-9 rounded-md border text-sm tabular-nums transition-colors",
-                      current === n
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-input bg-background hover:bg-muted",
+                      current === n ? CHOICE_ON_FILL : CHOICE_OFF,
                     )}
                   >
                     {n}
@@ -547,9 +544,7 @@ function Control({
               onClick={() => onChange(opt.value)}
               className={cn(
                 "flex items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors",
-                raw === opt.value
-                  ? "border-primary bg-primary/10"
-                  : "border-input bg-background hover:bg-muted",
+                raw === opt.value ? CHOICE_ON : CHOICE_OFF,
               )}
             >
               {opt.imageUrl && isAllowedBuilderImageUrl(opt.imageUrl) && (
@@ -659,9 +654,7 @@ function Control({
                   onClick={() => toggle(opt.value)}
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
-                    on
-                      ? "border-primary bg-primary/10 text-foreground"
-                      : "border-input bg-background text-muted-foreground hover:bg-muted",
+                    on ? CHOICE_ON : CHOICE_OFF,
                   )}
                 >
                   {on && (
@@ -725,9 +718,7 @@ function Control({
                 onClick={() => toggle(key)}
                 className={cn(
                   "flex min-w-14 flex-col items-center rounded-md border px-2.5 py-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                  on
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-input bg-background text-muted-foreground hover:bg-muted",
+                  on ? CHOICE_ON : CHOICE_OFF,
                 )}
               >
                 <span className="text-sm tabular-nums">{year}</span>
@@ -953,9 +944,7 @@ function GridControl({
                         className={cn(
                           "inline-flex h-6 w-6 items-center justify-center border transition-colors",
                           single ? "rounded-full" : "rounded",
-                          on
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-input bg-background hover:bg-muted",
+                          on ? CHOICE_ON_FILL : CHOICE_OFF,
                         )}
                       >
                         {on && <Check className="h-3.5 w-3.5" aria-hidden />}
@@ -1087,9 +1076,7 @@ function RatingGridControl({
                     key={position}
                     className={cn(
                       "cursor-pointer rounded-md border px-2.5 py-1.5 text-xs transition-colors",
-                      checked
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-input bg-background text-muted-foreground hover:bg-muted",
+                      checked ? CHOICE_ON : CHOICE_OFF,
                       focusRing,
                     )}
                   >
@@ -1102,9 +1089,7 @@ function RatingGridControl({
                 <label
                   className={cn(
                     "cursor-pointer rounded-md border border-dashed px-2.5 py-1.5 text-xs transition-colors",
-                    cell === RATING_GRID_NA
-                      ? "border-primary bg-primary/10 text-foreground"
-                      : "border-input bg-background text-muted-foreground hover:bg-muted",
+                    cell === RATING_GRID_NA ? CHOICE_ON : CHOICE_OFF,
                     stars && "ml-1",
                     focusRing,
                   )}
@@ -1175,9 +1160,7 @@ function ScaleCells({
             <span
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-full border transition-colors",
-                value === n
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-input bg-background hover:bg-muted",
+                value === n ? CHOICE_ON_FILL : CHOICE_OFF,
               )}
               aria-hidden
             >
@@ -1256,7 +1239,7 @@ function RadioDot({ on }: { on: boolean }) {
     <span
       className={cn(
         "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-        on ? "border-primary" : "border-input",
+        on ? "border-primary" : "border-primary bg-card",
       )}
       aria-hidden
     >
@@ -1304,9 +1287,7 @@ function ImageOption({
       onClick={onToggle}
       className={cn(
         "flex flex-col gap-2 rounded-md border p-2 text-left text-sm transition-colors",
-        selected
-          ? "border-primary bg-primary/10"
-          : "border-input bg-background hover:bg-muted",
+        selected ? CHOICE_ON : CHOICE_OFF,
       )}
     >
       {url ? (
@@ -1365,9 +1346,7 @@ function OtherChoiceRow({
         onClick={onSelect}
         className={cn(
           "flex items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors",
-          selected
-            ? "border-primary bg-primary/10"
-            : "border-input bg-background text-muted-foreground hover:bg-muted",
+          selected ? CHOICE_ON : CHOICE_OFF,
         )}
       >
         {selected && (

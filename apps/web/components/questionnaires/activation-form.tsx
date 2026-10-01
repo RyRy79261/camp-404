@@ -37,6 +37,7 @@ import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
 import { Switch } from "@camp404/ui/components/switch";
 import { toast } from "@camp404/ui/components/toast";
+import { CHOICE_OFF, CHOICE_ON } from "@camp404/ui/lib/choice";
 import { cn } from "@camp404/ui/lib/utils";
 import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
@@ -664,16 +665,14 @@ function AudienceModeCard({
     <span
       className={cn(
         "flex h-full flex-col gap-1.5 rounded-lg border p-4 text-left transition-colors",
-        active
-          ? "border-accent bg-accent/10"
-          : "border-input bg-background hover:bg-muted",
+        active ? CHOICE_ON : CHOICE_OFF,
       )}
     >
       <span className="flex items-center gap-2 text-sm font-medium">
         {icon}
         {title}
         {active && (
-          <Check className="ml-auto h-4 w-4 text-accent" aria-hidden />
+          <Check className="ml-auto h-4 w-4 text-primary" aria-hidden />
         )}
       </span>
       <span className="text-xs text-muted-foreground">{caption}</span>
@@ -686,12 +685,10 @@ function Chip({ active, label }: { active: boolean; label: string }) {
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
-        active
-          ? "border-accent bg-accent/10 text-foreground"
-          : "border-input bg-background text-muted-foreground hover:bg-muted",
+        active ? CHOICE_ON : CHOICE_OFF,
       )}
     >
-      {active && <Check className="h-3.5 w-3.5 text-accent" aria-hidden />}
+      {active && <Check className="h-3.5 w-3.5 text-primary" aria-hidden />}
       {label}
     </span>
   );

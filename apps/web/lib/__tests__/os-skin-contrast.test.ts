@@ -3,6 +3,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   contrastRatio,
+  mixOklab,
+  luminance,
+  parseColour as parse,
+  toOklch,
   mixOklch,
   oklabDistance,
   simulate,
@@ -21,6 +25,113 @@ import { OS_THEMES_DEF, type OsThemeDef } from "../os-themes";
 // contrast, which promises it. An icon or a focus ring meets 3:1 (WCAG 1.4.11).
 
 const css = readFileSync(path.join(__dirname, "../../app/globals.css"), "utf8");
+const choiceSource = readFileSync(
+  path.join(__dirname, "../../../../packages/ui/src/lib/choice.ts"),
+  "utf8",
+);
+
+// The colour that stays on (owner, 2026-09-30), read from where it is written,
+// so a change to a percentage is measured again here:
+// `--name: color-mix(in oklab, var(--a) N%, var(--b))` in app/globals.css,
+// from the theme's own rule when it has one, else from the rule every theme
+// shares.
+function cssBlock(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(css);
+  return m?.[1] ?? "";
+}
+function cssMix(
+  name: string,
+  themeId: string,
+): { a: string; b: string; p: number } {
+  const re = new RegExp(
+    `${name}:\\s*color-mix\\(\\s*in oklab,\\s*var\\((--[\\w-]+)\\)\\s+(\\d+)%,\\s*var\\((--[\\w-]+)\\)\\s*\\)`,
+  );
+  const m =
+    re.exec(cssBlock(`[data-os-theme="${themeId}"]`)) ??
+    re.exec(cssBlock(":root,\n[data-os-theme]"));
+  if (!m) throw new Error(`No oklab mix for ${name} in app/globals.css`);
+  return { a: m[1]!, p: Number(m[2]) / 100, b: m[3]! };
+}
+
+/** How far a choice lifts its quiet text toward the text colour (0 to 1),
+ * read from a constant of packages/ui/src/lib/choice.ts. */
+function choiceLift(constant: string): number {
+  const body = new RegExp(`export const ${constant} =\\s*"([^"]+)"`).exec(
+    choiceSource,
+  )?.[1];
+  const m =
+    /\[&_\.text-muted-foreground\]:text-\[color-mix\(in_oklab,var\(--color-muted-foreground\)_(\d+)%,var\(--color-foreground\)\)\]/.exec(
+      body ?? "",
+    );
+  if (!m) throw new Error(`${constant} does not lift its quiet text`);
+  return Number(m[1]) / 100;
+}
+
+/** A choice's tint, N% of the main colour in the card: the Nth such mix in a
+ * constant of packages/ui/src/lib/choice.ts. */
+function choicePct(constant: string, nth = 0): number {
+  const body = new RegExp(`export const ${constant} =\\s*"([^"]+)"`).exec(
+    choiceSource,
+  )?.[1];
+  if (!body) throw new Error(`No ${constant} in lib/choice.ts`);
+  const all = [
+    ...body.matchAll(
+      /color-mix\(in_oklab,var\(--color-primary\)_(\d+)%,var\(--color-card\)\)/g,
+    ),
+  ];
+  if (!all[nth]) throw new Error(`No tint #${nth} in ${constant}`);
+  return Number(all[nth]![1]) / 100;
+}
+
+/**
+ * A theme's value for a mix read from the CSS. A colour the stylesheet itself
+ * derives (the tinted card a picked choice is mixed into) is worked out the
+ * same way, from that theme's rule.
+ */
+function themed(
+  theme: OsThemeDef,
+  mix: { a: string; b: string; p: number },
+): string {
+  const value = (name: string): string => {
+    const v = (theme.colours as Record<string, string>)[name];
+    if (v) return v;
+    return themed(theme, cssMix(name, theme.id));
+  };
+  return mixOklab(value(mix.a), value(mix.b), mix.p);
+}
+
+/** The colour a theme's rule gives a derived variable. */
+function derived(theme: OsThemeDef, name: string): string {
+  return themed(theme, cssMix(name, theme.id));
+}
+
+/**
+ * The surfaces the colour that stays on draws in one theme: the chrome's
+ * tints, a window's card, and a choice (not picked, under the pointer,
+ * picked) in each place a choice sits: in a window, where the console sets
+ * its colours (app/globals.css), and on the OS skin (a dialog, the blocking
+ * form), where lib/choice.ts mixes the main colour into the panel.
+ */
+function softSurfaces(theme: OsThemeDef) {
+  const c = theme.colours;
+  const off = choicePct("CHOICE_OFF");
+  const hover = choicePct("CHOICE_OFF", 1);
+  const on = choicePct("CHOICE_ON");
+  const onSkin = (p: number) => mixOklab(c["--os-primary"], c["--os-panel"], p);
+  return {
+    barIdle: derived(theme, "--os-bar-idle"),
+    label: derived(theme, "--os-label"),
+    winCard: derived(theme, "--os-win-card-tinted"),
+    winChoice: {
+      off: derived(theme, "--os-win-choice"),
+      hover: derived(theme, "--os-win-choice-hover"),
+      on: derived(theme, "--os-win-pick"),
+    },
+    winChoiceEdge: derived(theme, "--os-win-choice-edge"),
+    skinChoice: { off: onSkin(off), hover: onSkin(hover), on: onSkin(on) },
+  };
+}
 
 type Pair = [what: string, text: string, surface: string, least: number];
 
@@ -31,8 +142,7 @@ function pairs(theme: OsThemeDef): Pair[] {
   const primaryText = mixOklch(c["--os-primary"], c["--os-fg"], 0.7);
   /** The blue lifted: color-mix(accent 65%, fg), the skin's --color-accent. */
   const accentText = mixOklch(c["--os-accent"], c["--os-fg"], 0.65);
-  /** The quiet colour lifted, for an unfocused title: color-mix(muted 60%, fg). */
-  const mutedLifted = mixOklch(c["--os-muted"], c["--os-fg"], 0.6);
+  const soft = softSurfaces(theme);
   const list: Pair[] = [
     ["body text on the desktop", c["--os-fg"], c["--os-bg"], text],
     ["body text on a panel", c["--os-fg"], c["--os-panel"], text],
@@ -45,11 +155,12 @@ function pairs(theme: OsThemeDef): Pair[] {
       text,
     ],
     [
-      "an unfocused window's title on the chrome",
-      mutedLifted,
-      c["--os-chrome"],
+      "an unfocused window's title on its tinted bar",
+      c["--os-fg"],
+      soft.barIdle,
       text,
     ],
+    ["an icon's name at rest, on its tint", c["--os-fg"], soft.label, text],
     ["the taskbar's text on the chrome", c["--os-fg"], c["--os-chrome"], text],
     ["small magenta text on a panel", primaryText, c["--os-panel"], text],
     ["small magenta text on the desktop", primaryText, c["--os-bg"], text],
@@ -67,14 +178,15 @@ function pairs(theme: OsThemeDef): Pair[] {
     ["the focus ring on the chrome", c["--os-fg"], c["--os-chrome"], 3],
     // Inside a program window.
     ["a window's body text", c["--os-win-fg"], c["--os-win-bg"], text],
-    ["a window's text on a card", c["--os-win-fg"], c["--os-win-card"], text],
+    ["a window's text on a card", c["--os-win-fg"], soft.winCard, text],
     ["a window's quiet text", c["--os-win-muted-fg"], c["--os-win-bg"], text],
     [
       "a window's quiet text on a card",
       c["--os-win-muted-fg"],
-      c["--os-win-card"],
+      soft.winCard,
       text,
     ],
+    ["a window's link on a card", c["--os-win-primary"], soft.winCard, text],
     [
       "a window's quiet text on a muted strip",
       c["--os-win-muted-fg"],
@@ -94,8 +206,52 @@ function pairs(theme: OsThemeDef): Pair[] {
       text,
     ],
     ["a window's link", c["--os-win-primary"], c["--os-win-bg"], text],
-    ["a window's focus ring", c["--os-win-primary"], c["--os-win-card"], 3],
+    ["a window's focus ring", c["--os-win-primary"], soft.winCard, 3],
   ];
+  // A choice, in a window and on the OS skin: its label and its description
+  // on the soft colour, not picked, under the pointer and picked (a picked
+  // segment is the main button's pair, above), and the tick or dot in the
+  // main colour on a picked card.
+  const places = [
+    [
+      "in a window",
+      soft.winChoice,
+      c["--os-win-fg"],
+      c["--os-win-muted-fg"],
+      c["--os-win-primary"],
+    ],
+    [
+      "on the OS skin",
+      soft.skinChoice,
+      c["--os-fg"],
+      c["--os-muted"],
+      c["--os-primary"],
+    ],
+  ] as const;
+  const lift = { off: choiceLift("CHOICE_OFF"), on: choiceLift("CHOICE_ON") };
+  for (const [where, choice, fg, plainQuiet, primary] of places) {
+    for (const state of ["off", "hover", "on"] as const) {
+      // A choice lifts its quiet text toward the text colour (lib/choice.ts).
+      const quiet = mixOklab(
+        plainQuiet,
+        fg,
+        state === "on" ? lift.on : lift.off,
+      );
+      list.push([
+        `a choice's label ${where} (${state})`,
+        fg,
+        choice[state],
+        text,
+      ]);
+      list.push([
+        `a choice's description ${where} (${state})`,
+        quiet,
+        choice[state],
+        text,
+      ]);
+    }
+    list.push([`a picked card's tick ${where}`, primary, choice.on, 3]);
+  }
   // The title bar: the one recorded exception is 404 Night's (below).
   if (theme.id !== "night") {
     list.push([
@@ -116,6 +272,84 @@ describe.each(OS_THEMES_DEF.map((t) => [t.label, t] as const))(
     });
   },
 );
+
+// The colour that stays on must not blur which window has focus, or which
+// icon is lit or picked: the full-colour state stands clearly apart. Measured
+// as a contrast between the two fills: 1.5:1 at least for the bar and the
+// name (404 Night's is the closest, about 1.6:1, with the stronger tint the
+// owner asked for), and each also changes more than its fill: the focused
+// window gains its glow and its edge in the main colour, and a lit name turns
+// its text dark (checked below). A picked segment stays 2:1 from the rest.
+describe.each(OS_THEMES_DEF.map((t) => [t.label, t] as const))(
+  "%s: the soft colour keeps the strong state apart",
+  (_label, theme) => {
+    const c = theme.colours;
+    const soft = softSurfaces(theme);
+    it("the focused title bar against one without focus", () => {
+      expect(
+        contrastRatio(c["--os-primary"], soft.barIdle),
+      ).toBeGreaterThanOrEqual(1.5);
+    });
+    it("a lit icon's name against one at rest", () => {
+      expect(
+        contrastRatio(c["--os-primary"], soft.label),
+      ).toBeGreaterThanOrEqual(1.5);
+    });
+    it("a picked segment against one not picked", () => {
+      expect(
+        contrastRatio(c["--os-win-primary"], soft.winChoice.off),
+      ).toBeGreaterThanOrEqual(2);
+    });
+    it("a lit name and a focused bar change their text too", () => {
+      // Resting and unfocused: the full text colour. Lit: the dark
+      // background colour on the main colour; focused: the title-bar text.
+      expect(c["--os-bg"]).not.toBe(c["--os-fg"]);
+      expect(contrastRatio(c["--os-bg"], c["--os-fg"])).toBeGreaterThanOrEqual(
+        7,
+      );
+      expect(css).toMatch(/--os-bar-idle-fg:\s*var\(--os-fg\)/);
+    });
+    it("makes a picked choice the brightest of its group", () => {
+      const lum = (v: string) => luminance(parse(v));
+      for (const choice of [soft.winChoice, soft.skinChoice]) {
+        expect(lum(choice.on)).toBeGreaterThan(lum(choice.off) * 1.2);
+        expect(lum(choice.on)).toBeGreaterThan(lum(choice.hover) * 1.1);
+      }
+    });
+    it("tints nothing brown: the chrome's tints and everything in a window (owner, 2026-10-01)", () => {
+      // Brown is a dark orange: a hue from red-orange to yellow at low
+      // lightness. A grey (almost no chroma) is not brown.
+      const window = [
+        soft.barIdle,
+        soft.label,
+        soft.winCard,
+        soft.winChoice.off,
+        soft.winChoice.hover,
+        soft.winChoice.on,
+      ];
+      for (const v of window) {
+        const [L, C, H] = toOklch(v);
+        const brown = C >= 0.02 && H >= 20 && H <= 110 && L < 0.6;
+        expect([v, brown]).toEqual([v, false]);
+      }
+    });
+    it("tints each surface: none is the plain grey it was", () => {
+      expect(soft.barIdle).not.toBe(c["--os-chrome"]);
+      expect(
+        oklabDistance(parse(soft.winCard), parse(c["--os-win-card"])),
+      ).toBeGreaterThan(0.01);
+      expect(
+        oklabDistance(parse(soft.label), parse(c["--os-chrome"])),
+      ).toBeGreaterThan(0.05);
+    });
+  },
+);
+
+describe("the soft colour's text", () => {
+  it("is the full text colour on a title bar without focus", () => {
+    expect(css).toMatch(/--os-bar-idle-fg:\s*var\(--os-fg\)/);
+  });
+});
 
 describe("High contrast", () => {
   it("promises AAA, and its borders and field edges reach 7:1 too", () => {

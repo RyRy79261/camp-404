@@ -22,6 +22,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
+import { CHOICE_OFF, CHOICE_ON } from "@camp404/ui/lib/choice";
 import { cn } from "@camp404/ui/lib/utils";
 import { RecorderPanel } from "../voice/recorder-panel";
 import { useDictationToggle } from "../voice/use-dictation-toggle";
@@ -358,9 +359,7 @@ function KindOption({
       onClick={onSelect}
       className={cn(
         "flex-1 rounded-lg border p-3.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        selected
-          ? "border-primary bg-primary/10"
-          : "border-input bg-card hover:border-muted-foreground/40",
+        selected ? CHOICE_ON : CHOICE_OFF,
       )}
     >
       <span className="flex items-center justify-between gap-2">
@@ -378,7 +377,7 @@ function KindOption({
           aria-hidden
           className={cn(
             "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-            selected ? "border-primary bg-primary" : "border-input",
+            selected ? "border-primary bg-primary" : "border-primary bg-card",
           )}
         >
           {selected && (

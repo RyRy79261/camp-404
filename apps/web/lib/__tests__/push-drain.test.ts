@@ -74,11 +74,7 @@ describe("planPushDrain", () => {
       calls++;
       return toks.map((t) => ({ token: t, success: true }));
     };
-    await planPushDrain(
-      [delivery("d1", "u1")],
-      new Map([["u1", many]]),
-      send,
-    );
+    await planPushDrain([delivery("d1", "u1")], new Map([["u1", many]]), send);
     expect(calls).toBe(3); // 500 + 500 + 100
   });
 
@@ -112,7 +108,11 @@ describe("planPushDrain", () => {
     const activation = "3f2b8a4e-6c1d-4e9a-9b7f-2d5c8e1a0b44";
     await planPushDrain(
       [
-        { ...delivery("d1", "u1"), refType: "questionnaire_activation", refId: activation },
+        {
+          ...delivery("d1", "u1"),
+          refType: "questionnaire_activation",
+          refId: activation,
+        },
         delivery("d2", "u1"),
       ],
       new Map([["u1", ["tA"]]]),
