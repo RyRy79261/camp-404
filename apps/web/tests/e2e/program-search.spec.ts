@@ -70,7 +70,7 @@ test.describe("Ctrl+K program search (test-mode)", () => {
     await page.keyboard.press("Enter");
 
     await expect(searchBox(page)).toHaveCount(0);
-    await expect(page).toHaveURL(/\/power\/loads$/);
+    await expect(page).toHaveURL(/\/power$/);
     await expect(liveWindow(page)).toHaveAttribute(
       "data-window-title",
       "Power",
@@ -152,7 +152,7 @@ test.describe("Ctrl+K program search (test-mode)", () => {
 
     await searchBox(page).getByRole("combobox").fill("pow");
     await result(page, /^Power,/).click();
-    await expect(page).toHaveURL(/\/power\/loads$/);
+    await expect(page).toHaveURL(/\/power$/);
     await expect(searchBox(page)).toHaveCount(0);
 
     // Cancel shuts it.
