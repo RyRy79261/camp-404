@@ -55,6 +55,40 @@ async function sheetWithoutDesktop(page: Page, heading: string) {
   await expect(page.getByRole("button", { name: "Print" })).toBeVisible();
   await expect(osBar(page)).toHaveCount(0);
   await expect(page.locator("[data-os-skin]")).toHaveCount(0);
+  await staysA4(page);
+}
+
+/** A4 is 210 mm: 793.7 CSS pixels. */
+const A4_PX = (210 * 96) / 25.4;
+
+/**
+ * A print is A4 paper, never a phone layout (owner, 2026-10-01): on a 390 px
+ * screen the sheet keeps its A4 width, scaled down to fit, and the page
+ * never scrolls sideways.
+ */
+async function staysA4(page: Page) {
+  const size = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const sheet = page.locator("[data-print-sheet]");
+  await expect(sheet).toBeVisible();
+  // Its own width is A4's, whatever the screen.
+  expect(
+    await sheet.evaluate((el) => parseFloat(getComputedStyle(el).width)),
+  ).toBeCloseTo(A4_PX, 0);
+  // Scaled to fit: on screen it is no wider than the phone.
+  await expect
+    .poll(async () => (await sheet.boundingBox())?.width ?? Infinity)
+    .toBeLessThanOrEqual(390);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true);
+  if (size) await page.setViewportSize(size);
 }
 
 /** Press Download PDF and return the saved file's bytes. */
