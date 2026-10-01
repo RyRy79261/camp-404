@@ -142,19 +142,19 @@ const TICKET_PASS_WORDS: Record<string, string> = {
 };
 const TICKET_PASS_VALUE_WORDS: Record<string, Record<string, string>> = {
   ticket: {
-    unknown: "not sorted",
+    unknown: "no answer",
     buying_own: "buying own",
     has_ticket: "has ticket",
-    needs_directed_ticket: "needs a DDT",
+    needs_directed_ticket: "wants a DDT",
   },
   ddt: {
-    none: "none",
-    allocated: "allocated",
-    can_transfer: "can transfer",
+    none: "not given",
+    allocated: "given",
+    can_transfer: "can pass on",
   },
   wap: {
     not_needed: "not needed",
-    requested: "asked for",
+    requested: "requested",
     issued: "issued",
   },
 };

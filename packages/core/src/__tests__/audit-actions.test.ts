@@ -113,7 +113,7 @@ describe("auditDetail", () => {
         from: "none",
         to: "can_transfer",
       }),
-    ).toBe("DDT: can transfer");
+    ).toBe("DDT: can pass on");
     // A value of the other pass, an unknown pass, or a prototype key adds
     // nothing.
     expect(

@@ -20,32 +20,64 @@ import type {
 
 /** The member's own ticket, in the member's words (the form's options). */
 export const TICKET_STATUS_OPTION: Readonly<Record<TicketStatus, string>> = {
-  unknown: "Not sorted yet",
+  unknown: "I haven't sorted it yet",
   buying_own: "I'll buy my own",
   has_ticket: "I have my ticket",
   needs_directed_ticket:
-    "I need a DDT (direct distribution ticket) from the camp",
+    "I want a DDT (direct distribution ticket) from the camp",
 };
 
-/** The member's ticket, as a captain reads it in a column. */
+/**
+ * The member's ticket, as a captain reads it in a column: the member's own
+ * answer, so "Wants a DDT" (their request), never a word that could be read as
+ * the camp's DDT itself.
+ */
 export const TICKET_STATUS_LABEL: Readonly<Record<TicketStatus, string>> = {
-  unknown: "Not sorted",
+  unknown: "No answer",
   buying_own: "Buying own",
   has_ticket: "Has ticket",
-  needs_directed_ticket: "Needs DDT",
+  needs_directed_ticket: "Wants a DDT",
 };
 
+/** The camp's DDT for a member, as the captains set it. */
 export const DDT_LABEL: Readonly<Record<DdtStatus, string>> = {
-  none: "None",
-  allocated: "Allocated",
-  can_transfer: "Can transfer",
+  none: "Not given",
+  allocated: "Given",
+  can_transfer: "Can pass on",
 };
 
+/** The member's WAP (work access pass), as the captains set it. */
 export const WAP_LABEL: Readonly<Record<WapStatus, string>> = {
   not_needed: "Not needed",
-  requested: "Asked for",
+  requested: "Requested",
   issued: "Issued",
 };
+
+/**
+ * The member's own DDT, in words that answer what they asked for: a member
+ * who wants a DDT and has none yet reads "Asked for, not given yet", not a
+ * bare "Not given" that sounds like a refusal.
+ */
+export function myDdtLabel(ticket: TicketFacts): string {
+  if (ticket.ddt === "none") {
+    return ticket.ticketStatus === "needs_directed_ticket"
+      ? "Asked for, not given yet"
+      : DDT_LABEL.none;
+  }
+  return ticket.ddt === "can_transfer"
+    ? "Given, and you may pass it on"
+    : DDT_LABEL.allocated;
+}
+
+/**
+ * Whether the member asked the camp for a DDT and the camp has given one, so
+ * their own answer is met: they still buy it, then say they have their ticket.
+ */
+export function ddtRequestMet(ticket: TicketFacts): boolean {
+  return (
+    ticket.ticketStatus === "needs_directed_ticket" && ticket.ddt !== "none"
+  );
+}
 
 /** What each captain-only pass is called. */
 export const TICKET_PASS_LABEL: Readonly<Record<TicketPass, string>> = {
