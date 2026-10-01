@@ -20,7 +20,7 @@ const SURVEY = { title: "Post-burn survey", key: "post-burn-survey" };
 /** Answer the survey this page is held at: rate the two meals, then submit. */
 async function answerSurvey(
   page: Page,
-  ratings: { dinner: number; lunch: number },
+  ratings: { dinner: number; breakfast: number },
   seesLeads: boolean,
 ): Promise<void> {
   await expect(page).toHaveURL(/\/questionnaires\/[0-9a-f-]{36}$/, {
@@ -42,9 +42,9 @@ async function answerSurvey(
 
   // Kitchen: one star row per meal the plan serves.
   const dinner = page.getByRole("group", { name: "Day 1 dinner" });
-  const lunch = page.getByRole("group", { name: "Day 2 lunch" });
+  const breakfast = page.getByRole("group", { name: "Day 2 breakfast" });
   await expect(dinner).toBeVisible();
-  await expect(lunch).toBeVisible();
+  await expect(breakfast).toBeVisible();
   // A star is a native radio: pick it by keyboard, as a screen reader would.
   await dinner.getByRole("radio", { name: /, 1 of 5$/ }).focus();
   for (let i = 1; i < ratings.dinner; i += 1) {
@@ -56,11 +56,11 @@ async function answerSurvey(
     }),
   ).toBeChecked();
   // And by pointer: a tap on the star (the radio's label).
-  const lunchStar = lunch.getByRole("radio", {
-    name: new RegExp(`, ${ratings.lunch} of 5$`),
+  const breakfastStar = breakfast.getByRole("radio", {
+    name: new RegExp(`, ${ratings.breakfast} of 5$`),
   });
-  await lunchStar.locator("xpath=..").click();
-  await expect(lunchStar).toBeChecked();
+  await breakfastStar.locator("xpath=..").click();
+  await expect(breakfastStar).toBeChecked();
 
   // Water and waste, communication, general: nothing required.
   for (let i = 0; i < 3; i += 1) {
@@ -81,11 +81,11 @@ test("a captain sends the post-burn survey, members rate two meals, results show
   await resetTestState(request);
   const captain = await signInCaptain(browser, request);
 
-  // This year's meal plan serves dinner on day 1 and lunch on day 2.
+  // This year's meal plan serves dinner on day 1 and breakfast on day 2.
   await captain.goto("/kitchen/meal-plan");
   await captain.getByLabel("Days on site").fill("2");
   await captain.getByLabel("Day 1 dinner").fill("30");
-  await captain.getByLabel("Day 2 lunch").fill("30");
+  await captain.getByLabel("Day 2 breakfast").fill("30");
   await captain.getByRole("button", { name: "Save" }).click();
   await expect(captain.getByText("Meal plan saved")).toBeVisible();
 
@@ -103,7 +103,7 @@ test("a captain sends the post-burn survey, members rate two meals, results show
 
   await sendBlockingToEveryone(captain, SURVEY.title);
   // A blocking send gates the captain too; a captain sees the leads' part.
-  await answerSurvey(captain, { dinner: 4, lunch: 2 }, true);
+  await answerSurvey(captain, { dinner: 4, breakfast: 2 }, true);
 
   // A plain member: never sees the team leads' questions.
   const memberContext = await browser.newContext();
@@ -118,7 +118,7 @@ test("a captain sends the post-burn survey, members rate two meals, results show
   await expect(member).toHaveURL(/\/(questionnaires\/|onboarding\/)/);
   await completeOnboarding(request, "db-member");
   await member.goto("/tools/forms");
-  await answerSurvey(member, { dinner: 5, lunch: 3 }, false);
+  await answerSurvey(member, { dinner: 5, breakfast: 3 }, false);
 
   // A lead of any team (here Structures) sees them: clearance is global.
   const leadContext = await browser.newContext();
@@ -134,7 +134,7 @@ test("a captain sends the post-burn survey, members rate two meals, results show
   await completeOnboarding(request, "db-lead");
   await seedTeam(request, "db-lead", "structures", true);
   await lead.goto("/tools/forms");
-  await answerSurvey(lead, { dinner: 4, lunch: 1 }, true);
+  await answerSurvey(lead, { dinner: 4, breakfast: 1 }, true);
 
   // The results: each meal's average and how many rated it.
   await captain.goto(`/captains/questionnaires/${SURVEY.key}/metrics`);
@@ -150,7 +150,7 @@ test("a captain sends the post-burn survey, members rate two meals, results show
   ).toHaveText(/^4\.33\s*of 5$/);
   await expect(
     meals
-      .getByRole("row", { name: /Day 2 lunch/ })
+      .getByRole("row", { name: /Day 2 breakfast/ })
       .getByRole("cell")
       .first(),
   ).toHaveText(/^2\s*of 5$/);

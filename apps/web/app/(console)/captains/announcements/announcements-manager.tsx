@@ -195,6 +195,7 @@ function savedForm(
   editingId: string | null,
   announcements: readonly AnnouncementSummary[],
   audienceOptions: readonly AudienceOption[],
+  preferredAudience?: string,
 ): FormState {
   const editing =
     editingId === null
@@ -206,7 +207,7 @@ function savedForm(
       title: "",
       body: "",
       presentation: "acknowledge",
-      audience: audienceOptions[0]?.value ?? "everyone",
+      audience: preferredAudience ?? audienceOptions[0]?.value ?? "everyone",
       pinned: false,
     };
   }
@@ -232,6 +233,8 @@ type AnnouncementsManagerProps = {
    * so pin to, anything). Decides which published cards offer a pin.
    */
   leadTeams: string[] | null;
+  /** The audience a blank composer starts on (one of `audienceOptions`). */
+  preferredAudience?: string;
 };
 
 /**
@@ -242,10 +245,15 @@ type AnnouncementsManagerProps = {
  * window never leaves it listening.
  */
 export function AnnouncementsManager(props: AnnouncementsManagerProps) {
-  const { announcements, audienceOptions } = props;
+  const { announcements, audienceOptions, preferredAudience } = props;
   const draft = useEditorDraft<FormState>({
     editor: "announcement",
-    baseline: savedForm(null, announcements, audienceOptions),
+    baseline: savedForm(
+      null,
+      announcements,
+      audienceOptions,
+      preferredAudience,
+    ),
     parse: (raw) => {
       const parsed = ComposerDraft.safeParse(raw);
       if (!parsed.success) return null;
@@ -276,10 +284,16 @@ function AnnouncementsManagerView({
   audienceOptions,
   teamLabels,
   leadTeams,
+  preferredAudience,
   draft,
 }: AnnouncementsManagerProps & { draft: EditorDraft<FormState> }) {
   const router = useRouter();
-  const emptyForm: FormState = savedForm(null, announcements, audienceOptions);
+  const emptyForm: FormState = savedForm(
+    null,
+    announcements,
+    audienceOptions,
+    preferredAudience,
+  );
   const [form, setForm] = useState<FormState>(draft.start);
   // Unsaved: the composer differs from what it holds when saved (blank, or
   // the draft it edits).
@@ -288,7 +302,14 @@ function AnnouncementsManagerView({
   useDraftAutosave(draft, form, {
     clean:
       stableJson(form) ===
-      stableJson(savedForm(form.editingId, announcements, audienceOptions)),
+      stableJson(
+        savedForm(
+          form.editingId,
+          announcements,
+          audienceOptions,
+          preferredAudience,
+        ),
+      ),
   });
   const [error, setError] = useState<string | null>(null);
   const dictation = useDictationToggle();

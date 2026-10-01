@@ -20,6 +20,10 @@ export const AUDIT_ACTION_LABELS = {
   "camp.cycle.renamed": "Renamed a year",
   "camp.cycle.burn_dates_set": "Set the Burn's dates",
   "camp.kitchen_meal_plan.changed": "Changed the kitchen's meal plan",
+  "camp.kitchen_menu.added": "Put a recipe on the kitchen's menu",
+  "camp.kitchen_menu.removed": "Took a recipe off the kitchen's menu",
+  "camp.kitchen_snack.added": "Added a snack to the kitchen's list",
+  "camp.kitchen_snack.removed": "Took a snack off the kitchen's list",
   // No longer written (the settings were removed, 2026-09-24); kept so a row
   // written before still reads.
   "camp.kitchen_settings.changed": "Changed the kitchen settings",
@@ -144,19 +148,19 @@ const TICKET_PASS_WORDS: Record<string, string> = {
 };
 const TICKET_PASS_VALUE_WORDS: Record<string, Record<string, string>> = {
   ticket: {
-    unknown: "not sorted",
+    unknown: "no answer",
     buying_own: "buying own",
     has_ticket: "has ticket",
-    needs_directed_ticket: "needs a DDT",
+    needs_directed_ticket: "wants a DDT",
   },
   ddt: {
-    none: "none",
-    allocated: "allocated",
-    can_transfer: "can transfer",
+    none: "not given",
+    allocated: "given",
+    can_transfer: "can pass on",
   },
   wap: {
     not_needed: "not needed",
-    requested: "asked for",
+    requested: "requested",
     issued: "issued",
   },
 };

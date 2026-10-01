@@ -2,12 +2,22 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Loader2, Plus, Trash2 } from "lucide-react";
+import {
+  Check,
+  FileText,
+  HandCoins,
+  Loader2,
+  Plus,
+  RotateCcw,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   CHARGE_KIND_LABELS,
   formatMoney,
   PAYMENT_METHOD_LABELS,
   parseMoneyToMinor,
+  paymentFigures,
   proposeRefund,
   REFUND_STATUS_LABELS,
   sumMinor,
@@ -31,11 +41,14 @@ import {
 import { DateControl } from "@camp404/ui/components/date-control";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
+import { RowActions } from "@camp404/ui/components/row-actions";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { paymentProofPath } from "@/lib/dues-copy";
 import {
   balanceSentence,
+  chargeSubline,
+  financeStatusWords,
   formatDay,
   SOURCE_WORDS,
   typedRands,
@@ -50,38 +63,35 @@ import {
   setPaymentPlanAction,
 } from "../../dues-actions";
 
-// One member's dues, for the Finance team (#240). Typing problems show beside
-// the field; a one-tap change on a row (cancel a charge, mark a payment
-// received) reports a failure as a toast, and only that control spins. Every
-// write goes through the Finance-gated actions, and the page re-renders from
-// the server.
+// One member's dues, for the Finance team (#240), laid out like AfrikaBurn's
+// registration review: what Finance came to read on the left (the balance
+// first, then payments and charges as lists), and the forms in a 360px rail
+// on the right (camp fee, a new charge, the payment plan). In a narrow window
+// the rail goes under the lists, so the balance still comes first. Typing
+// problems show beside the field; a one-tap change on a row (cancel a charge,
+// mark a payment received) reports a failure as a toast, and only that
+// control spins. A payment row keeps its main button and its quiet move in
+// fixed slots (RowActions); excusing a payment asks first and names the
+// money. Every write goes through the Finance-gated actions, and the page
+// re-renders from the server.
 
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
-const STATUS = {
-  pending: { label: "Pending", variant: "warning" },
-  reconciled: { label: "Received", variant: "success" },
-  waived: { label: "Waived", variant: "secondary" },
-} as const;
-
 const TYPE_AMOUNT = "Type the amount in rands, like 1250 or 1250,50.";
 
-function Row({
-  label,
-  value,
-  strong,
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-}) {
+/** One figure under the balance: its label over its amount. */
+function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={strong ? "font-semibold tabular-nums" : "tabular-nums"}>
-        {value}
-      </span>
+    <div
+      role="group"
+      aria-label={label}
+      className="flex min-w-0 flex-col gap-0.5"
+    >
+      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="text-sm font-medium tabular-nums">{value}</dd>
     </div>
   );
 }
@@ -114,6 +124,11 @@ export function MemberDuesManager({
         : "",
   );
   const [feeReason, setFeeReason] = useState(liveFee?.concessionReason ?? "");
+  // "Change fee" is the main button only once something was changed.
+  const feeDirty =
+    !liveFee ||
+    parseMoneyToMinor(feeAmount) !== liveFee.amountCents ||
+    feeReason.trim() !== (liveFee.concessionReason ?? "").trim();
   const [feeError, setFeeError] = useState<string | null>(null);
   const [feePending, startFee] = useTransition();
 
@@ -191,6 +206,16 @@ export function MemberDuesManager({
 
   // --- Payments and refunds --------------------------------------------------------------
   async function movePayment(p: DuesPaymentRow, to: "reconciled" | "waived") {
+    if (to === "waived") {
+      const amount = formatMoney(p.amountCents);
+      const sure = await confirm({
+        title: `Excuse ${amount}?`,
+        description: `${dues.name} won't have to pay it: it counts toward their dues as paid, and no money comes in. Only do this when the camp has agreed to let them off.`,
+        confirmLabel: `Excuse ${amount}`,
+        destructive: true,
+      });
+      if (!sure) return;
+    }
     setRowBusy(`payment:${p.id}:${to}`);
     startRow(async () => {
       const res = await setPaymentStatusAction({
@@ -343,6 +368,15 @@ export function MemberDuesManager({
     });
   }
 
+  const planDirty =
+    JSON.stringify(plan) !==
+    JSON.stringify(
+      dues.instalments.map((i) => ({
+        dueOn: i.dueOn,
+        amount: typedRands(i.amountCents),
+      })),
+    );
+  const figures = paymentFigures(dues.payments);
   const planTotal = sumMinor(
     plan.map((row) => parseMoneyToMinor(row.amount) ?? 0),
   );
@@ -354,7 +388,7 @@ export function MemberDuesManager({
     rowPending || feePending || chargePending || planPending || dialogPending;
 
   return (
-    <div className="grid items-start gap-6 page-lg:grid-cols-3">
+    <div className="flex flex-col gap-6 page-lg:flex-row page-lg:items-start">
       {confirmDialog}
       <ConfirmDialog
         open={dialog !== null}
@@ -416,125 +450,55 @@ export function MemberDuesManager({
         </div>
       </ConfirmDialog>
 
-      <div className="flex min-w-0 flex-col gap-6 page-lg:col-span-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
         <Card>
           <CardHeader className="p-5 pb-3">
-            <CardTitle className="text-base">Charges</CardTitle>
-            <CardDescription>
-              What {dues.name} is charged this year.
-            </CardDescription>
+            <CardTitle className="text-base">Balance</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4 p-5 pt-0">
-            {dues.charges.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No charges yet. Their camp fee is charged when a captain accepts
-                them, from what they pledged, or set it on the right.
-              </p>
-            ) : (
-              <ul aria-label="Charges" className="divide-y divide-border">
-                {dues.charges.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex flex-wrap items-center justify-between gap-2 py-2.5"
-                  >
-                    <span
-                      className={
-                        c.cancelled
-                          ? "min-w-0 text-muted-foreground line-through"
-                          : "min-w-0"
-                      }
-                    >
-                      <span className="block text-sm font-medium">
-                        {c.description}
-                      </span>
-                      <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        {CHARGE_KIND_LABELS[c.kind]}
-                        {c.concession && (
-                          <Badge variant="outline">Concession</Badge>
-                        )}
-                        {c.cancelled && <span>Cancelled</span>}
-                      </span>
-                      {c.concessionReason && !c.cancelled && (
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          Reason (Finance only): {c.concessionReason}
-                        </span>
-                      )}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <span className="text-sm font-medium tabular-nums">
-                        {c.amountCents < 0
-                          ? `− ${formatMoney(-c.amountCents)}`
-                          : formatMoney(c.amountCents)}
-                      </span>
-                      {!c.cancelled && c.kind !== "fee" && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          disabled={anyPending}
-                          aria-label={`Cancel ${c.description}`}
-                          onClick={() => void cancelCharge(c.id, c.description)}
-                        >
-                          {busy(`charge:${c.id}`) ?? <Trash2 aria-hidden />}
-                        </Button>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border p-4">
-              <p className="text-sm font-medium">Add a charge</p>
-              <div className="grid gap-3 page-sm:grid-cols-[10rem_minmax(0,1fr)_8rem]">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="charge-kind">For</Label>
-                  <select
-                    id="charge-kind"
-                    className={selectClass}
-                    value={chargeKind}
-                    onChange={(e) =>
-                      setChargeKind(e.target.value as "rental" | "other")
-                    }
-                    disabled={anyPending}
-                  >
-                    <option value="rental">{CHARGE_KIND_LABELS.rental}</option>
-                    <option value="other">{CHARGE_KIND_LABELS.other}</option>
-                  </select>
-                </div>
-                <InputField
-                  label="What it is"
-                  value={chargeText}
-                  maxLength={200}
-                  onChange={(e) => setChargeText(e.currentTarget.value)}
-                  placeholder="Tent hire, or a transfer fee"
-                  disabled={anyPending}
+          <CardContent className="flex flex-col gap-2 p-5 pt-0">
+            <span className="text-3xl font-bold tabular-nums">
+              {formatMoney(Math.abs(dues.balance.balanceCents))}
+            </span>
+            <p role="status" className="text-sm text-muted-foreground">
+              {balanceSentence(dues.balance)
+                .replace(/^You owe/, "Owes")
+                .replace(/^The camp owes you/, "The camp owes them")
+                .replace(/^You're paid up/, "Paid up")}
+            </p>
+            <dl className="mt-1 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 page-sm:grid-cols-4">
+              <Row
+                label="Charged"
+                value={formatMoney(dues.balance.chargedCents)}
+              />
+              <Row
+                label="In the bank"
+                value={formatMoney(figures.inBankCents)}
+              />
+              {figures.excusedCents > 0 && (
+                <Row
+                  label="Excused"
+                  value={formatMoney(figures.excusedCents)}
                 />
-                <InputField
-                  label="Amount (R)"
-                  inputMode="decimal"
-                  value={chargeAmount}
-                  onChange={(e) => setChargeAmount(e.currentTarget.value)}
-                  disabled={anyPending}
-                />
-              </div>
-              {chargeError && (
-                <p role="alert" className="text-sm text-destructive">
-                  {chargeError}
-                </p>
               )}
-              <Button
-                type="button"
-                variant="secondary"
-                className="self-start"
-                disabled={anyPending || !chargeText.trim() || !chargeAmount}
-                onClick={addCharge}
-              >
-                {chargePending && (
-                  <Loader2 className="animate-spin" aria-hidden />
-                )}
-                Add charge
-              </Button>
-            </div>
+              {figures.toCheckCents > 0 && (
+                <Row
+                  label="Proofs to check"
+                  value={formatMoney(figures.toCheckCents)}
+                />
+              )}
+              {figures.promisedCents > 0 && (
+                <Row
+                  label="Promised"
+                  value={formatMoney(figures.promisedCents)}
+                />
+              )}
+              {dues.balance.refundedCents > 0 && (
+                <Row
+                  label="Refunded"
+                  value={formatMoney(dues.balance.refundedCents)}
+                />
+              )}
+            </dl>
           </CardContent>
         </Card>
 
@@ -552,125 +516,215 @@ export function MemberDuesManager({
               </p>
             ) : (
               <ul aria-label="Payments" className="divide-y divide-border">
-                {dues.payments.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex flex-col gap-2 py-3 page-sm:flex-row page-sm:items-start page-sm:justify-between"
-                  >
-                    <span className="flex min-w-0 flex-col gap-0.5">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium tabular-nums">
-                          {formatMoney(p.amountCents)}
+                {dues.payments.map((p) => {
+                  const words = financeStatusWords(p.status, p.source);
+                  const refundable =
+                    p.status === "reconciled" &&
+                    (!p.refund || p.refund.status === "declined");
+                  return (
+                    <li
+                      key={p.id}
+                      className="flex flex-col gap-2 py-3 page-sm:flex-row page-sm:items-start page-sm:justify-between"
+                    >
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium tabular-nums">
+                            {formatMoney(p.amountCents)}
+                          </span>
+                          <Badge variant={words.variant}>{words.label}</Badge>
+                          {p.refund && (
+                            <Badge
+                              variant={
+                                p.refund.status === "declined"
+                                  ? "outline"
+                                  : "secondary"
+                              }
+                            >
+                              {REFUND_STATUS_LABELS[p.refund.status]}
+                              {p.refund.status !== "declined"
+                                ? ` · ${formatMoney(p.refund.amountCents)}`
+                                : ""}
+                            </Badge>
+                          )}
                         </span>
-                        <Badge variant={STATUS[p.status].variant}>
-                          {STATUS[p.status].label}
-                        </Badge>
-                        {p.refund && (
-                          <Badge
-                            variant={
-                              p.refund.status === "declined"
-                                ? "outline"
-                                : "secondary"
-                            }
+                        <span className="text-xs text-muted-foreground">
+                          {[
+                            SOURCE_WORDS[p.source],
+                            p.method ? PAYMENT_METHOD_LABELS[p.method] : null,
+                            p.paidOn ? `paid ${formatDay(p.paidOn)}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                        <span className="font-mono text-xs tracking-normal text-muted-foreground">
+                          Receipt no. {p.reference}
+                        </span>
+                        {p.note && (
+                          <span className="whitespace-pre-line text-xs text-muted-foreground">
+                            {p.note}
+                          </span>
+                        )}
+                        {p.refund?.note && (
+                          <span className="text-xs text-muted-foreground">
+                            Their note: {p.refund.note}
+                          </span>
+                        )}
+                        {p.hasProof && (
+                          <a
+                            href={paymentProofPath(p.id)}
+                            target="_blank"
+                            rel="noopener"
+                            className="mt-1 inline-flex items-center gap-1 self-start text-xs font-medium text-accent hover:underline"
                           >
-                            {REFUND_STATUS_LABELS[p.refund.status]}
-                            {p.refund.status !== "declined"
-                              ? ` · ${formatMoney(p.refund.amountCents)}`
-                              : ""}
-                          </Badge>
+                            <FileText className="h-3.5 w-3.5" aria-hidden />
+                            Proof of payment
+                          </a>
                         )}
                       </span>
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {p.reference}
+                      <RowActions
+                        label={`Actions for ${p.reference}`}
+                        className="page-sm:justify-end"
+                        primary={
+                          p.status === "pending" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={anyPending}
+                              onClick={() => void movePayment(p, "reconciled")}
+                            >
+                              {busy(`payment:${p.id}:reconciled`)}
+                              Mark received
+                            </Button>
+                          ) : p.refund?.status === "requested" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={anyPending}
+                              onClick={() => openDecision(p, "refunded")}
+                            >
+                              <Check aria-hidden />
+                              Mark refunded
+                            </Button>
+                          ) : null
+                        }
+                        secondary={
+                          p.status === "pending" ? (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              aria-label="Excuse this amount"
+                              title="Excuse this amount"
+                              disabled={anyPending}
+                              onClick={() => void movePayment(p, "waived")}
+                            >
+                              {busy(`payment:${p.id}:waived`) ?? (
+                                <HandCoins aria-hidden />
+                              )}
+                            </Button>
+                          ) : p.refund?.status === "requested" ? (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              aria-label="Decline the refund"
+                              title="Decline the refund"
+                              disabled={anyPending}
+                              onClick={() => openDecision(p, "declined")}
+                            >
+                              <X aria-hidden />
+                            </Button>
+                          ) : refundable ? (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              aria-label="Refund"
+                              title="Refund"
+                              disabled={anyPending}
+                              onClick={() => openRefund(p)}
+                            >
+                              <RotateCcw aria-hidden />
+                            </Button>
+                          ) : null
+                        }
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="p-5 pb-3">
+            <CardTitle className="text-base">Charges</CardTitle>
+            <CardDescription>
+              What {dues.name} is charged this year.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 pt-0">
+            {dues.charges.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No charges yet. Their camp fee is charged when a captain accepts
+                them, from what they pledged, or set it under Camp fee.
+              </p>
+            ) : (
+              <ul aria-label="Charges" className="divide-y divide-border">
+                {dues.charges.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-center justify-between gap-2 py-2.5"
+                  >
+                    <span
+                      className={
+                        c.cancelled
+                          ? "min-w-0 text-muted-foreground line-through"
+                          : "min-w-0"
+                      }
+                    >
+                      <span className="block text-sm font-medium">
+                        {c.description}
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {[
-                          SOURCE_WORDS[p.source],
-                          p.method ? PAYMENT_METHOD_LABELS[p.method] : null,
-                          p.paidOn ? `paid ${formatDay(p.paidOn)}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
+                      <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        {chargeSubline(c)}
+                        {c.concession && (
+                          <Badge variant="outline">Lowered</Badge>
+                        )}
+                        {c.cancelled && <span>Cancelled</span>}
                       </span>
-                      {p.note && (
-                        <span className="whitespace-pre-line text-xs text-muted-foreground">
-                          {p.note}
+                      {c.concessionReason && !c.cancelled && (
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          Why (Finance only): {c.concessionReason}
                         </span>
-                      )}
-                      {p.refund?.note && (
-                        <span className="text-xs text-muted-foreground">
-                          Their note: {p.refund.note}
-                        </span>
-                      )}
-                      {p.hasProof && (
-                        <a
-                          href={paymentProofPath(p.id)}
-                          target="_blank"
-                          rel="noopener"
-                          className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
-                        >
-                          <FileText className="h-3.5 w-3.5" aria-hidden />
-                          Proof of payment
-                        </a>
                       )}
                     </span>
-                    <span className="flex flex-wrap gap-2 page-sm:justify-end">
-                      {p.status === "pending" && (
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={anyPending}
-                            onClick={() => void movePayment(p, "reconciled")}
-                          >
-                            {busy(`payment:${p.id}:reconciled`)}
-                            Mark received
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={anyPending}
-                            onClick={() => void movePayment(p, "waived")}
-                          >
-                            {busy(`payment:${p.id}:waived`)}
-                            Waive
-                          </Button>
-                        </>
-                      )}
-                      {p.status === "reconciled" &&
-                        (!p.refund || p.refund.status === "declined") && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={anyPending}
-                            onClick={() => openRefund(p)}
-                          >
-                            Refund
-                          </Button>
-                        )}
-                      {p.refund?.status === "requested" && (
-                        <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={anyPending}
-                            onClick={() => openDecision(p, "refunded")}
-                          >
-                            Mark refunded
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={anyPending}
-                            onClick={() => openDecision(p, "declined")}
-                          >
-                            Decline
-                          </Button>
-                        </>
-                      )}
+                    <span className="flex items-center gap-1">
+                      <span className="text-sm font-medium tabular-nums">
+                        {c.amountCents < 0
+                          ? `− ${formatMoney(-c.amountCents)}`
+                          : formatMoney(c.amountCents)}
+                      </span>
+                      <RowActions
+                        secondary={
+                          !c.cancelled && c.kind !== "fee" ? (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              disabled={anyPending}
+                              aria-label={`Cancel ${c.description}`}
+                              title="Cancel this charge"
+                              onClick={() =>
+                                void cancelCharge(c.id, c.description)
+                              }
+                            >
+                              {busy(`charge:${c.id}`) ?? <Trash2 aria-hidden />}
+                            </Button>
+                          ) : null
+                        }
+                      />
                     </span>
                   </li>
                 ))}
@@ -680,46 +734,10 @@ export function MemberDuesManager({
         </Card>
       </div>
 
-      <aside className="flex flex-col gap-6">
-        <Card>
-          <CardContent className="flex flex-col gap-2 p-5">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Balance
-            </span>
-            <span className="text-3xl font-bold tabular-nums">
-              {formatMoney(Math.abs(dues.balance.balanceCents))}
-            </span>
-            <p role="status" className="text-sm text-muted-foreground">
-              {balanceSentence(dues.balance)
-                .replace(/^You owe/, "Owes")
-                .replace(/^The camp owes you/, "The camp owes them")
-                .replace(/^You're paid up/, "Paid up")}
-            </p>
-            <div className="mt-1 flex flex-col gap-1 border-t border-border pt-3">
-              <Row
-                label="Charged"
-                value={formatMoney(dues.balance.chargedCents)}
-              />
-              <Row
-                label="Received or waived"
-                value={formatMoney(dues.balance.paidCents)}
-              />
-              {dues.balance.pendingCents > 0 && (
-                <Row
-                  label="Waiting to be checked"
-                  value={formatMoney(dues.balance.pendingCents)}
-                />
-              )}
-              {dues.balance.refundedCents > 0 && (
-                <Row
-                  label="Refunded"
-                  value={formatMoney(dues.balance.refundedCents)}
-                />
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
+      <aside
+        aria-label="Change their dues"
+        className="flex w-full shrink-0 flex-col gap-6 page-lg:sticky page-lg:top-6 page-lg:w-[360px]"
+      >
         <Card>
           <CardHeader className="p-5 pb-3">
             <CardTitle className="text-base">Camp fee</CardTitle>
@@ -749,12 +767,13 @@ export function MemberDuesManager({
             <InputField
               label="Fee (R)"
               inputMode="decimal"
+              className="max-w-48"
               value={feeAmount}
               onChange={(e) => setFeeAmount(e.currentTarget.value)}
               disabled={feePending}
             />
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="fee-reason">Concession reason (optional)</Label>
+              <Label htmlFor="fee-reason">Why it is lowered (optional)</Label>
               <Textarea
                 id="fee-reason"
                 rows={2}
@@ -762,8 +781,11 @@ export function MemberDuesManager({
                 value={feeReason}
                 onChange={(e) => setFeeReason(e.currentTarget.value)}
                 disabled={feePending}
-                placeholder="Only the Finance team reads this."
+                aria-describedby="fee-reason-note"
               />
+              <p id="fee-reason-note" className="text-xs text-muted-foreground">
+                Only the Finance team reads this.
+              </p>
             </div>
             {feeError && (
               <p role="alert" className="text-sm text-destructive">
@@ -772,11 +794,75 @@ export function MemberDuesManager({
             )}
             <Button
               type="button"
-              disabled={anyPending || !feeAmount.trim()}
+              className="self-start"
+              variant={feeDirty ? "default" : "outline"}
+              disabled={anyPending || !feeAmount.trim() || !feeDirty}
               onClick={saveFee}
             >
               {feePending && <Loader2 className="animate-spin" aria-hidden />}
               {liveFee ? "Change fee" : "Set fee"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="p-5 pb-3">
+            <CardTitle className="text-base">Add a charge</CardTitle>
+            <CardDescription>
+              Gear hire or anything else they owe on top of the fee.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 p-5 pt-0">
+            <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="charge-kind">For</Label>
+                <select
+                  id="charge-kind"
+                  className={selectClass}
+                  value={chargeKind}
+                  onChange={(e) =>
+                    setChargeKind(e.target.value as "rental" | "other")
+                  }
+                  disabled={anyPending}
+                >
+                  <option value="rental">{CHARGE_KIND_LABELS.rental}</option>
+                  <option value="other">{CHARGE_KIND_LABELS.other}</option>
+                </select>
+              </div>
+              <InputField
+                label="Amount (R)"
+                inputMode="decimal"
+                value={chargeAmount}
+                onChange={(e) => setChargeAmount(e.currentTarget.value)}
+                disabled={anyPending}
+              />
+            </div>
+            <InputField
+              label="What it is"
+              value={chargeText}
+              maxLength={200}
+              onChange={(e) => setChargeText(e.currentTarget.value)}
+              helper="For example: tent hire, or a transfer fee."
+              disabled={anyPending}
+            />
+            {chargeError && (
+              <p role="alert" className="text-sm text-destructive">
+                {chargeError}
+              </p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              className="self-start"
+              disabled={anyPending || !chargeText.trim() || !chargeAmount}
+              onClick={addCharge}
+            >
+              {chargePending ? (
+                <Loader2 className="animate-spin" aria-hidden />
+              ) : (
+                <Plus aria-hidden />
+              )}
+              Add charge
             </Button>
           </CardContent>
         </Card>
@@ -791,7 +877,9 @@ export function MemberDuesManager({
           </CardHeader>
           <CardContent className="flex flex-col gap-3 p-5 pt-0">
             {plan.length === 0 && (
-              <p className="text-sm text-muted-foreground">No plan.</p>
+              <p className="text-sm text-muted-foreground">
+                No plan. Add instalments if they pay in parts.
+              </p>
             )}
             {plan.map((row, i) => (
               <div
@@ -826,7 +914,7 @@ export function MemberDuesManager({
                 />
                 <Button
                   type="button"
-                  size="sm"
+                  size="icon"
                   variant="ghost"
                   aria-label={`Remove instalment ${i + 1}`}
                   disabled={planPending}
@@ -862,17 +950,19 @@ export function MemberDuesManager({
                 <Plus aria-hidden />
                 Add instalment
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={anyPending}
-                onClick={savePlan}
-              >
-                {planPending && (
-                  <Loader2 className="animate-spin" aria-hidden />
-                )}
-                Save plan
-              </Button>
+              {planDirty && (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={anyPending}
+                  onClick={savePlan}
+                >
+                  {planPending && (
+                    <Loader2 className="animate-spin" aria-hidden />
+                  )}
+                  {plan.length === 0 ? "Remove the plan" : "Save plan"}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

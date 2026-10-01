@@ -12,6 +12,7 @@ export * from "./promotion";
 export * from "./referral";
 export * from "./recipe";
 export * from "./recipe-source";
+export * from "./kitchen-menu";
 export * from "./money";
 export * from "./dues";
 export * from "./rental";

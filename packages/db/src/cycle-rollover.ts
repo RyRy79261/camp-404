@@ -682,6 +682,32 @@ export async function setFoundingYear(input: {
         .set({ cycle: input.year })
         .where(eq(table.cycle, UNSET_CYCLE));
     }
+    // The Kitchen (#244, #245): the meal plan, the recipes on its meals, the
+    // snacks and the shopping list's ticks. The plan's days point at the
+    // plan's year with no ON UPDATE CASCADE, so the plan is copied to the
+    // founding year, its days follow, and the sentinel plan goes.
+    await tx.execute(sql`
+      insert into kitchen_meal_plans
+        (cycle, days_on_site, first_day, version, updated_by_user_id, updated_at)
+      select ${input.year}, days_on_site, first_day, version,
+             updated_by_user_id, updated_at
+      from kitchen_meal_plans where cycle = ${UNSET_CYCLE}
+      on conflict (cycle) do nothing
+    `);
+    for (const table of [
+      schema.kitchenMealPlanDays,
+      schema.kitchenMenuItems,
+      schema.kitchenSnacks,
+      schema.kitchenShoppingTicks,
+    ]) {
+      await tx
+        .update(table)
+        .set({ cycle: input.year })
+        .where(eq(table.cycle, UNSET_CYCLE));
+    }
+    await tx
+      .delete(schema.kitchenMealPlans)
+      .where(eq(schema.kitchenMealPlans.cycle, UNSET_CYCLE));
     // The Survival Guide (#250): a chapter published or marked reviewed
     // before the camp had a year was checked for the founding year, not for
     // "year 1", or every one of them would wait for review again.

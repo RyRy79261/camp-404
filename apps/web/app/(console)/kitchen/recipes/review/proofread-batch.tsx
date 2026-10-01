@@ -49,7 +49,6 @@ export interface MealPlates {
 
 const MEAL_LABEL: Record<Meal, string> = {
   breakfast: "Breakfast",
-  lunch: "Lunch",
   dinner: "Dinner",
 };
 

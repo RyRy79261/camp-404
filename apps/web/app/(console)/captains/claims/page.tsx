@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { formatMoney } from "@camp404/core";
+import { ReceiptText } from "lucide-react";
+import { formatMoney, sumMinor } from "@camp404/core";
 import { Team } from "@camp404/types";
+import { buttonVariants } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import {
   Card,
@@ -14,7 +16,7 @@ import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
 import { listBudgetTotals, listClaimsForApproval } from "@/lib/claims";
 import { APPROVALS_REFUSAL, MY_CLAIMS_PATH } from "@/lib/claims-copy";
-import { budgetHeadline, budgetLeftLine } from "@/lib/claims-view";
+import { BudgetStats } from "@/components/teams/budget-stats";
 import { ledgerCycle } from "@/lib/payments";
 import { getLeadTeams } from "@/lib/users";
 import { ClaimApprovals, type ApprovalRow } from "./claim-approvals";
@@ -30,7 +32,10 @@ export const metadata = { title: "Claims to approve — Camp 404" };
 // heading and a lock, and nothing is read. What a lead reads is who, how
 // much, when and what for, never the receipts or the bank details (those are
 // the Finance team's and the member's). Each team's budget sits above its
-// claims, so a yes is said knowing what is left.
+// claims, as the same four figures and bar as the team's page, so a yes is
+// said knowing what is left.
+
+const EYEBROW = "Teams / Claims to approve";
 
 export default async function ClaimApprovalsPage() {
   const gate = await captainPageGate("team_lead");
@@ -56,7 +61,7 @@ export default async function ClaimApprovalsPage() {
     return (
       <div className="flex flex-col">
         <PageHeading
-          eyebrow="Captains / Claims"
+          eyebrow={EYEBROW}
           title="Claims to approve"
           description="Claims members made for a team, waiting for the team's yes."
         />
@@ -82,12 +87,21 @@ export default async function ClaimApprovalsPage() {
   return (
     <div className="flex flex-col">
       <PageHeading
-        eyebrow="Captains / Claims"
+        eyebrow={EYEBROW}
         title="Claims to approve"
         description={
           data.scope === "all"
             ? "Claims members made for a team, waiting for a yes. A lead of the team or a captain says yes; then the Finance team pays it."
             : "Claims members made for the teams you lead. Say yes if it was a team purchase; then the Finance team pays it."
+        }
+        actions={
+          <Link
+            href={MY_CLAIMS_PATH}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <ReceiptText aria-hidden />
+            Claim money back
+          </Link>
         }
       />
       {byTeam.size === 0 ? (
@@ -104,26 +118,33 @@ export default async function ClaimApprovalsPage() {
             const totals = Team.safeParse(key).success
               ? data.totals[key as Team]
               : null;
-            const left = totals ? budgetLeftLine(totals) : null;
             const label = key === "general" ? "No team" : (labels[key] ?? key);
+            const waitingCents = sumMinor(claims.map((c) => c.amountCents));
             return (
               <Card key={key}>
                 <CardHeader className="p-5 pb-3">
                   <CardTitle className="text-base">{label}</CardTitle>
-                  {totals && (
-                    <CardDescription>
-                      Budget: {budgetHeadline(totals)}
-                      {left ? `, ${left}` : ""}.
+                  {claims.length > 0 && (
+                    <CardDescription className="tabular-nums">
+                      {claims.length} waiting · {formatMoney(waitingCents)}
                     </CardDescription>
                   )}
                 </CardHeader>
-                <CardContent className="p-5 pt-0">
+                <CardContent className="flex flex-col gap-5 p-5 pt-0">
+                  {totals && (
+                    <BudgetStats
+                      totals={totals}
+                      label={`${label} budget`}
+                      className="border-b border-border pb-5"
+                    />
+                  )}
                   {claims.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       Nothing is waiting for {label}.
                     </p>
                   ) : (
                     <ClaimApprovals
+                      label={`Claims waiting for ${label}`}
                       rows={claims.map(
                         (c): ApprovalRow => ({
                           id: c.id,
@@ -137,28 +158,12 @@ export default async function ClaimApprovalsPage() {
                       )}
                     />
                   )}
-                  {claims.length > 1 && (
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      {claims.length} claims,{" "}
-                      {formatMoney(
-                        claims.reduce((sum, c) => sum + c.amountCents, 0),
-                      )}{" "}
-                      in all.
-                    </p>
-                  )}
                 </CardContent>
               </Card>
             );
           })}
         </div>
       )}
-      <p className="mt-6 text-xs text-muted-foreground">
-        Spent something yourself?{" "}
-        <Link href={MY_CLAIMS_PATH} className="text-accent hover:underline">
-          Claim it on My claims
-        </Link>
-        .
-      </p>
     </div>
   );
 }

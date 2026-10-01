@@ -36,21 +36,24 @@ export default async function ApplicationsPage() {
   return (
     <div className="flex flex-col">
       <PageHeading
-        eyebrow="Captains / Applications"
+        eyebrow="Camp / Applications"
         title="Applications"
         description={
           isCaptain
-            ? "Who is coming this year. Give places, and keep track of tickets, DDTs and WAPs."
+            ? "Says is the member's answer. Decision, ticket, DDT and WAP are set by captains."
             : cleared
-              ? "What each member says about this year, and what the captains decided. Only captains give places and see tickets."
-              : "Who is coming this year."
+              ? "Says is the member's answer; Decision is the captains'. Only captains give places and see tickets."
+              : undefined
         }
       />
 
       {rows ? (
         <ApplicationsBoard rows={rows} canEdit={isCaptain} />
       ) : (
-        <CaptainLock message="Applications are for captains and team leads. Your rank doesn't have clearance for this." />
+        <CaptainLock
+          title="For captains and team leads"
+          message="Ask a captain if you need to know who is coming."
+        />
       )}
     </div>
   );

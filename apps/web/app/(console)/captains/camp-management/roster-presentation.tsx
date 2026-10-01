@@ -151,12 +151,16 @@ export function RosterStatusBadge({
   );
 }
 
-/** What the member said → Badge variant: a Yes the primary tint, a Maybe
- * quiet, a No quieter still. */
-const SAYS_VARIANT: Record<ParticipationIntent, BadgeVariant> = {
-  yes: "default",
-  maybe: "secondary",
-  no: "outline",
+/**
+ * What the member said, as an outlined chip in its own colour: Coming green,
+ * Maybe amber, Not coming quiet. Every answer has the same weight (an outline,
+ * never a fill), so the captains' decision, which is filled, reads apart from
+ * the member's word at a glance.
+ */
+const SAYS_TINT: Record<ParticipationIntent, string> = {
+  yes: "border-success/60 text-success",
+  maybe: "border-warning/60 text-warning",
+  no: "",
 };
 
 /** The captains' decision → Badge variant: a place is success, the waiting
@@ -188,7 +192,7 @@ export function SaysBadge({
     );
   }
   return (
-    <Badge variant={SAYS_VARIANT[says]} className={className}>
+    <Badge variant="outline" className={cn(SAYS_TINT[says], className)}>
       {prefix ? `Says: ${INTENT_LABEL[says]}` : INTENT_LABEL[says]}
     </Badge>
   );
@@ -197,15 +201,17 @@ export function SaysBadge({
 /**
  * The captains' decision this year: Accepted, Waiting list, or "Not decided
  * yet" for a member who said Coming or Maybe. Nothing for a member who said
- * No or has not answered: there is nothing to decide until they say Coming
- * or Maybe.
+ * No or has not answered (there is nothing to decide until they say Coming
+ * or Maybe), or `empty` in its place where an empty cell would look broken.
  */
 export function DecisionBadge({
   status,
   className,
+  empty = null,
 }: {
   status: ParticipationStatus | null;
   className?: string;
+  empty?: ReactNode;
 }) {
   const decision = participationDecision(status);
   if (decision) {
@@ -225,7 +231,7 @@ export function DecisionBadge({
       </Badge>
     );
   }
-  return null;
+  return empty;
 }
 
 /**

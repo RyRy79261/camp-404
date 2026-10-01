@@ -47,17 +47,12 @@ async function campYear(db: DB, year: number, earlier: number[] = []) {
     .where(eq(schema.campSettings.id, true));
 }
 
-const day = (
-  breakfast: number,
-  lunch: number,
-  dinner: number,
-): MealPlanDay => ({
+const day = (breakfast: number, dinner: number): MealPlanDay => ({
   breakfast,
-  lunch,
   dinner,
 });
 
-const THREE_DAYS = [day(20, 0, 25), day(45, 0, 50), day(45, 0, 60)];
+const THREE_DAYS = [day(20, 25), day(45, 50), day(45, 60)];
 
 describe("meal plan", () => {
   const h = useTestDb();
@@ -92,9 +87,7 @@ describe("meal plan", () => {
     const plan = await getMealPlan();
     expect(plan).toMatchObject({ cycle: 2026, daysOnSite: 11, version: 0 });
     expect(plan.days).toHaveLength(11);
-    expect(plan.days.every((d) => d.breakfast + d.lunch + d.dinner === 0)).toBe(
-      true,
-    );
+    expect(plan.days.every((d) => d.breakfast + d.dinner === 0)).toBe(true);
   });
 
   it("lets a Kitchen lead and a captain save, each audited in the same write", async () => {
@@ -113,7 +106,7 @@ describe("meal plan", () => {
       version: 1,
     });
 
-    const two = [day(30, 10, 30), day(30, 10, 30)];
+    const two = [day(30, 30), day(30, 30)];
     expect(
       await setMealPlan({
         actorId: captain.id,
@@ -227,7 +220,7 @@ describe("meal plan", () => {
       await setMealPlan({
         actorId: kitchenLead.id,
         daysOnSite: 1,
-        days: [day(99, 99, 99)],
+        days: [day(99, 99)],
         expectedVersion: 0,
       }),
     ).toEqual({ ok: false, error: MEAL_PLAN_CHANGED });
@@ -242,7 +235,7 @@ describe("meal plan", () => {
       await setMealPlan({
         actorId: kitchenLead.id,
         daysOnSite: 1,
-        days: [day(99, 99, 99)],
+        days: [day(99, 99)],
         expectedVersion: 1,
       }),
     ).toEqual({ ok: false, error: MEAL_PLAN_CHANGED });
@@ -253,11 +246,11 @@ describe("meal plan", () => {
   it("refuses plates outside 0 to 500, and days that do not match the days on site", async () => {
     const { captain } = await people();
     for (const bad of [
-      { daysOnSite: 1, days: [day(501, 0, 0)] },
-      { daysOnSite: 1, days: [day(-1, 0, 0)] },
-      { daysOnSite: 1, days: [day(2.5, 0, 0)] },
-      { daysOnSite: 2, days: [day(1, 1, 1)] },
-      { daysOnSite: 31, days: Array.from({ length: 31 }, () => day(1, 1, 1)) },
+      { daysOnSite: 1, days: [day(501, 0)] },
+      { daysOnSite: 1, days: [day(-1, 0)] },
+      { daysOnSite: 1, days: [day(2.5, 0)] },
+      { daysOnSite: 2, days: [day(1, 1)] },
+      { daysOnSite: 31, days: Array.from({ length: 31 }, () => day(1, 1)) },
     ]) {
       const result = await setMealPlan({
         actorId: captain.id,
@@ -295,5 +288,45 @@ describe("meal plan", () => {
       kitchenPlatesLunch: null,
       kitchenPlatesDinner: 60,
     });
+  });
+
+  it("never reads a lunch a row still holds, and a save leaves that column as it was", async () => {
+    const { captain } = await people();
+    await setMealPlan({
+      actorId: captain.id,
+      daysOnSite: 3,
+      days: THREE_DAYS,
+      expectedVersion: 0,
+    });
+    // A row from before the camp dropped lunch (the owner, 2026-10-01).
+    await h
+      .db()
+      .update(schema.kitchenMealPlanDays)
+      .set({ lunch: 300 })
+      .where(eq(schema.kitchenMealPlanDays.day, 2));
+    const plan = await getMealPlan();
+    expect(plan.days).toEqual(THREE_DAYS);
+    expect(plan.days.every((d) => !("lunch" in d))).toBe(true);
+    expect((await readMealPlanPeaks()).kitchenPlatesLunch).toBeNull();
+
+    await setMealPlan({
+      actorId: captain.id,
+      daysOnSite: 3,
+      days: THREE_DAYS,
+      expectedVersion: 1,
+    });
+    const rows = await h
+      .db()
+      .select({
+        day: schema.kitchenMealPlanDays.day,
+        lunch: schema.kitchenMealPlanDays.lunch,
+      })
+      .from(schema.kitchenMealPlanDays)
+      .orderBy(schema.kitchenMealPlanDays.day);
+    expect(rows).toEqual([
+      { day: 1, lunch: 0 },
+      { day: 2, lunch: 300 },
+      { day: 3, lunch: 0 },
+    ]);
   });
 });

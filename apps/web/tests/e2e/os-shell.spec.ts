@@ -243,9 +243,12 @@ test.describe("404 OS desktop (test-mode)", () => {
     expect(box.height).toBeLessThanOrEqual(page.viewportSize()!.height / 2 + 1);
     const rows = menu.getByRole("menuitem");
     await expect(rows.first()).toBeFocused();
-    await expect(rows.first()).toHaveAccessibleName(/^Inbox/);
+    // My teams comes first (its Teams folder, for a member on no team yet),
+    // then Me: Inbox, and Tasks after it, the prototype's order.
+    await expect(rows.first()).toHaveAccessibleName("Teams");
     await page.keyboard.press("ArrowDown");
-    // The prototype's order: Tasks follows Inbox in Me.
+    await expect(menu.getByRole("menuitem", { name: /^Inbox/ })).toBeFocused();
+    await page.keyboard.press("ArrowDown");
     await expect(menu.getByRole("menuitem", { name: "Tasks" })).toBeFocused();
     await page.keyboard.press("End");
     await expect(menu.getByRole("menuitem", { name: "Log off" })).toBeFocused();
@@ -258,6 +261,7 @@ test.describe("404 OS desktop (test-mode)", () => {
     // Enter on a row opens its program in a window.
     await page.keyboard.press("Enter");
     await expect(rows.first()).toBeFocused();
+    await page.keyboard.press("ArrowDown");
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL("/tasks");
@@ -1027,14 +1031,21 @@ test.describe("404 OS desktop (test-mode)", () => {
     expect(k.y).toBeLessThan(s.y);
     expect(k.x).toBeGreaterThan(me.x + 5 * CELL);
 
-    // The folder holds the team's page.
+    // The folder holds the team's page, then its own meetings and tasks.
     await kitchen.dblclick();
     const folder = osWindow(page, "Kitchen team");
     await expect(folder).toBeVisible();
-    await folder
-      .getByRole("button", { name: /^Open Kitchen/ })
-      .first()
+    for (const name of ["Kitchen page", "Kitchen meetings", "Kitchen tasks"]) {
+      await expect(
+        folder.getByRole("button", { name: `Open ${name}` }),
+      ).toBeVisible();
+    }
+    await folder.getByRole("button", { name: "Open Kitchen tasks" }).click();
+    await expect(page).toHaveURL("/tasks?team=kitchen");
+    await osWindow(page, "Tasks")
+      .getByRole("button", { name: "Close Tasks" })
       .click();
+    await folder.getByRole("button", { name: "Open Kitchen page" }).click();
     await expect(page).toHaveURL("/teams/kitchen");
 
     // One team led: its name on the chip.

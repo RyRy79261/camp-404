@@ -2,9 +2,9 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The load list (#253). Every approved member reads it; only a captain or a
-// Power & Lighting lead edits it. Everyone else sees the same controls
-// PRESENT BUT DISABLED, each described by the one refusal line above the
-// table (AfrikaBurn's categories screen). A lead of another team stands on the
+// Power & Lighting lead edits it. Everyone else reads the same list as
+// content: no Add, no Edit or Remove, no greyed controls and no lock line (the
+// heading already says who edits). A lead of another team stands on the
 // team_lead rung everywhere, and still may not edit here. The inventory is
 // read only for an editor.
 
@@ -127,34 +127,18 @@ beforeEach(() => {
 });
 
 describe("the load list", () => {
-  it("shows a member the controls disabled, each pointing at the one refusal line", async () => {
+  it("shows a member the list as content, with no controls, greyed or not", async () => {
     await renderAs("camp_member");
-    const refusal = screen.getByText(POWER_REFUSAL);
-    const add = screen.getByRole("button", { name: /^Add load/ });
-    expect(add).toHaveProperty("disabled", true);
-    expect(add.getAttribute("aria-describedby")).toBe(refusal.id);
-    for (const edit of screen.getAllByRole("button", {
-      name: "Edit Deep freeze — not available to you",
-    })) {
-      expect(edit).toHaveProperty("disabled", true);
-      expect(edit.getAttribute("aria-describedby")).toBe(refusal.id);
-    }
-    expect(
-      screen.getAllByRole("button", {
-        name: "Remove Fairy lights — not available to you",
-      })[0],
-    ).toHaveProperty("disabled", true);
-    expect(screen.queryByRole("button", { name: /Plan settings/ })).toBeNull();
+    expect(screen.getAllByText("Deep freeze").length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.queryByText(POWER_REFUSAL)).toBeNull();
     expect(listPowerInventory).not.toHaveBeenCalled();
   });
 
   it("refuses a Kitchen lead the same way, though their rung is team_lead", async () => {
     await renderAs("team_lead", ["kitchen"]);
-    expect(screen.getByText(POWER_REFUSAL)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^Add load/ })).toHaveProperty(
-      "disabled",
-      true,
-    );
+    expect(screen.getAllByText("Deep freeze").length).toBeGreaterThan(0);
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
   it("gives a Power & Lighting lead the controls, enabled, and no refusal line", async () => {

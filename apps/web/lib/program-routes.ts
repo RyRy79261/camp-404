@@ -31,6 +31,7 @@ export type ProgramId =
   | "tasks"
   | "calendar"
   | "team"
+  | "budgets"
   | "roster"
   | "family-tree"
   | "about"
@@ -58,6 +59,7 @@ export type ProgramId =
   | "recipe-version"
   | "recipe-source"
   | "meal-plan"
+  | "shopping-list"
   | "questionnaires"
   | "edit-questionnaire"
   | "preview-questionnaire"
@@ -104,6 +106,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   tasks: "Tasks",
   calendar: "Calendar",
   team: "Team",
+  budgets: "Budgets",
   roster: "Roster",
   "family-tree": "Family tree",
   about: "About Camp 404",
@@ -131,6 +134,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "recipe-version": "Recipe version",
   "recipe-source": "Recipe source",
   "meal-plan": "Meal plan",
+  "shopping-list": "Shopping list",
   questionnaires: "Questionnaires",
   "edit-questionnaire": "Edit questionnaire",
   "preview-questionnaire": "Preview",
@@ -228,6 +232,8 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   // Camp
   route("/tasks", "tasks", "TASKS.EXE"),
   route("/calendar", "calendar", "CALENDAR.EXE"),
+  // Before the team pages, so /teams/budgets is not read as a team's key.
+  route("/teams/budgets", "budgets", "BUDGETS.XLS"),
   route("/teams/[key]", "team", "TEAM.EXE", keyed("team")),
   route("/captains/camp-management", "roster", "ROSTER.DB"),
   route("/family-tree", "family-tree", "LINEAGE.EXE"),
@@ -309,6 +315,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
     keyed("recipe-source"),
   ),
   route("/kitchen/meal-plan", "meal-plan", "MEALPLAN.XLS"),
+  route("/kitchen/shopping", "shopping-list", "SHOPPING.LST"),
 
   // Captains and leads
   route("/captains/questionnaires", "questionnaires", "FORMS.EXE"),

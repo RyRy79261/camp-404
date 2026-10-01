@@ -23,13 +23,16 @@ import {
 //     everyone's answers by name. A member who said Maybe may only read: she
 //     sees how many have not answered, never who, and cannot ask or edit. A
 //     lead of another team sees who has not answered, but cannot change the
-//     phase days or ask.
+//     phase days or ask. Readers get the days as content: no Edit at all.
 //  2. AfrikaBurn's standard dates are listed on the camp's year page before
 //     anyone sets one. A captain sets "Registration closes" (on the Calendar
 //     once, as "AfrikaBurn: Registration closes", whole-camp), marks the
 //     second DDT round as no round this year, and adds and removes an
 //     "Other" one. A member reads the set ones on Logistics, in the same
-//     groups. A Transport and Logistics lead is refused the page.
+//     groups. A Transport and Logistics lead is refused the page and sent to
+//     Logistics.
+//  3. A captain names the camp's year under test mode (the store's twin of
+//     setFoundingYear), and the dates written before it stay listed.
 
 /** A camp day (YYYY-MM-DD) as the pages write it: "Fri 15 Jan 2027". */
 function dateText(day: string): string {
@@ -85,8 +88,11 @@ const helpCard = (page: Page, phase: string) =>
     .getByRole("list", { name: "Who can help" })
     .getByRole("listitem", { name: `Who can help: ${phase}` });
 
+/** How many have not answered, as a plain member reads it. */
 const counts = (page: Page, phase: string) =>
   page.getByTestId(`attendance-counts-${phase.toLowerCase()}`);
+
+const EDITORS_NOTE = "Captains and Transport and Logistics leads set the days.";
 
 /**
  * Press a control until what it opens or sets shows: a click that lands
@@ -137,9 +143,9 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
     await asCaptain(page, request);
     await openLogistics(page);
     // Not pressUntil: a second press is a real second ask.
-    await page.getByRole("button", { name: "Ask everyone" }).click();
+    await page.getByRole("button", { name: "Ask who can help" }).click();
     await expect(page.getByText("Asked 2 members.")).toBeVisible();
-    await page.getByRole("button", { name: "Ask everyone" }).click();
+    await page.getByRole("button", { name: "Ask who can help" }).click();
     await expect(
       page.getByText(
         "2 members already have the ask unread. No second notice was sent.",
@@ -152,10 +158,14 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
     await expect(page).toHaveURL(/\/$/);
     await openLogistics(page);
     await expect(page.getByTestId("attendance-asked")).toBeVisible();
+    await expect(
+      page.getByTestId("attendance-asked").getByRole("link", {
+        name: "Answer now",
+      }),
+    ).toHaveAttribute("href", "#who-can-help");
     await answer(page, "Pack", "Going");
-    await expect(counts(page, "Pack")).toHaveText(
-      "1 going · 0 maybe · 0 can't · 1 not answered",
-    );
+    await expect(helpCard(page, "Pack")).toContainText("Going (1)");
+    await expect(counts(page, "Pack")).toHaveText("1 not answered.");
     await expect(helpCard(page, "Pack")).toContainText("Dee Member");
     // Maybe is a real answer, and hers to change.
     await answer(page, "Build", "Maybe");
@@ -163,27 +173,24 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
     await answer(page, "Strike", "Maybe");
     await answer(page, "Unpack", "Can't");
     await openLogistics(page);
-    await expect(counts(page, "Build")).toHaveText(
-      "1 going · 0 maybe · 0 can't · 1 not answered",
-    );
+    await expect(helpCard(page, "Build")).toContainText("Going (1)");
+    await expect(counts(page, "Build")).toHaveText("1 not answered.");
     await expect(page.getByTestId("attendance-asked")).toHaveCount(0);
 
     // Mo said Maybe: not asked, and may only read. She sees Dee's answer and
     // how many have not answered, never who.
     await login(page, { id: "att-mo", email: "att-mo@example.com" });
     await openLogistics(page);
-    await expect(counts(page, "Pack")).toHaveText(
-      "1 going · 0 maybe · 0 can't · 1 not answered",
-    );
+    await expect(helpCard(page, "Pack")).toContainText("Going (1)");
+    await expect(counts(page, "Pack")).toHaveText("1 not answered.");
     await expect(helpCard(page, "Strike")).toContainText("Dee Member");
     await expect(page.getByTestId("attendance-asked")).toHaveCount(0);
     await expect(page.getByText("Quinn Quiet")).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: "Ask everyone" }),
+      page.getByRole("button", { name: "Ask who can help" }),
     ).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: /^Edit Build/ }),
-    ).toBeDisabled();
+    await expect(page.getByText(EDITORS_NOTE)).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Edit/ })).toHaveCount(0);
 
     // A lead of Kitchen sees who has not answered, but cannot change the
     // phase days or ask.
@@ -192,16 +199,10 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
     await expect(helpCard(page, "Pack")).toContainText(
       "Not answered (1)Quinn Quiet",
     );
+    await expect(page.getByText(EDITORS_NOTE)).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Edit/ })).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: /^Edit Build/ }),
-    ).toBeDisabled();
-    await expect(
-      page.getByText(
-        "Only captains and Transport and Logistics leads can change the logistics days.",
-      ),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Ask everyone" }),
+      page.getByRole("button", { name: "Ask who can help" }),
     ).toHaveCount(0);
   });
 
@@ -221,9 +222,12 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Starting a new year is captain-only. Your rank doesn't have clearance for this.",
+        "The camp's year and the AfrikaBurn deadlines are kept by captains. You can read the deadlines on Logistics.",
       ),
     ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Open Logistics" }),
+    ).toHaveAttribute("href", "/logistics");
     await expect(
       page.getByRole("button", {
         name: "Set the date for Registration closes",
@@ -343,12 +347,17 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
     await expect(
       page.getByRole("region", { name: "Work access passes (WAP)" }),
     ).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Change them" })).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole("link", { name: "Edit dates" })).toHaveCount(0);
 
-    // The captain removes the Other one; the standard ones stay.
+    // A captain's "Edit dates" on Logistics lands on the list.
     await asCaptain(page, request);
+    await openLogistics(page);
+    await expect(
+      page.getByRole("link", { name: "Edit dates" }),
+    ).toHaveAttribute("href", "/captains/camp-settings/cycle#deadlines");
+
+    // The captain removes the Other one, from its dialog; the standard ones
+    // stay.
     await page.goto("/captains/camp-settings/cycle");
     dialog = page.getByRole("dialog", {
       name: "Set the date · Mutant vehicle forms",
@@ -368,5 +377,51 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
     await expect(page.getByText("Date removed")).toBeVisible();
     await expect(other).toHaveCount(0);
     await expect(closes).toContainText(DUE_TEXT);
+  });
+
+  test("a captain names the camp's year, and the dates set before it stay", async ({
+    page,
+    request,
+  }) => {
+    const DUE = campDay(30);
+    await asCaptain(page, request);
+    await page.goto("/captains/camp-settings/cycle");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "The camp’s year" }),
+    ).toBeVisible();
+    // The page opens at its top: the year box does not take the focus.
+    await expect(page.getByLabel("This year")).not.toBeFocused();
+    const closes = page
+      .getByRole("region", { name: "Theme camp registration" })
+      .getByRole("listitem", { name: "Registration closes" });
+    const dialog = page.getByRole("dialog", {
+      name: "Set the date · Registration closes",
+    });
+    await pressUntil(
+      () =>
+        closes
+          .getByRole("button", { name: "Set the date for Registration closes" })
+          .click(),
+      () => expect(dialog).toBeVisible({ timeout: 2_000 }),
+    );
+    await dialog.getByLabel("Date", { exact: true }).fill(DUE);
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Date saved")).toBeVisible();
+
+    const save = page.getByRole("button", {
+      name: /^Save (\d{4} as )?the year$/,
+    });
+    await pressUntil(
+      () => save.click(),
+      () =>
+        expect(page.getByText(/Type the year as four digits/)).toBeVisible({
+          timeout: 2_000,
+        }),
+    );
+    await page.getByLabel("This year").fill("2026");
+    await page.getByRole("button", { name: "Save 2026 as the year" }).click();
+    await expect(page.getByText("The camp is in 2026").first()).toBeVisible();
+    await expect(page.getByText("You're in 2026")).toBeVisible();
+    await expect(closes).toContainText(dateText(DUE));
   });
 });

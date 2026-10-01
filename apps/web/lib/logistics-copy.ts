@@ -11,6 +11,13 @@ export const LOGISTICS_REFUSAL =
   "Only captains and Transport and Logistics leads can change the logistics days.";
 export const CHECK_PHASE = "Check the days and try again.";
 
+/**
+ * The one quiet line a reader gets in place of the old lock line and greyed
+ * Edit buttons: who sets the days (AGENTS.md, "read-only is content").
+ */
+export const LOGISTICS_EDITORS_NOTE =
+  "Captains and Transport and Logistics leads set the days.";
+
 /** Who may ask everyone about the logistics days. */
 export const ASK_REFUSAL =
   "Only captains can ask everyone about the logistics days.";
@@ -25,6 +32,19 @@ export const YEAR_SETTINGS_PATH = "/captains/camp-settings/cycle";
 
 /** A date AfrikaBurn has not given yet. */
 export const NOT_ANNOUNCED_YET = "Not announced yet";
+
+/** The deadlines' own anchor on the camp's year page. */
+export const DEADLINES_ANCHOR = "deadlines";
+
+/** Where "Edit deadlines" on Logistics lands: the list, not the rollover. */
+export const DEADLINES_SETTINGS_HREF = `${YEAR_SETTINGS_PATH}#${DEADLINES_ANCHOR}`;
+
+/**
+ * The camp's year page for anyone below captain. The page also holds the
+ * deadlines, so it says where to read them.
+ */
+export const YEAR_LOCK_MESSAGE =
+  "The camp's year and the AfrikaBurn deadlines are kept by captains. You can read the deadlines on Logistics.";
 
 /** After a deadline save that Google did not take. */
 export const DEADLINE_NOT_ON_CALENDAR =
@@ -67,18 +87,26 @@ function dayText(day: string): string {
   return DAY_FORMAT.format(new Date(`${day}T00:00:00Z`));
 }
 
+/** A phase's first to last day: "Sat 24 Apr to Mon 26 Apr 2027". */
+export function phaseRangeText(start: string, end: string): string {
+  const year = YEAR_FORMAT.format(new Date(`${end}T00:00:00Z`));
+  return start === end
+    ? `${dayText(start)} ${year}`
+    : `${dayText(start)} to ${dayText(end)} ${year}`;
+}
+
+/** How many days a phase runs, both ends counted: "3 days". */
+export function phaseLengthText(start: string, end: string): string {
+  const days = logisticsPhaseDays(start, end);
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
 /**
  * A phase's days in plain words: "Sat 24 Apr 2027, 1 day" or "Sat 24 Apr to
  * Mon 26 Apr 2027, 3 days".
  */
 export function phaseDaysText(start: string, end: string): string {
-  const days = logisticsPhaseDays(start, end);
-  const year = YEAR_FORMAT.format(new Date(`${end}T00:00:00Z`));
-  const range =
-    start === end
-      ? `${dayText(start)} ${year}`
-      : `${dayText(start)} to ${dayText(end)} ${year}`;
-  return `${range}, ${days} day${days === 1 ? "" : "s"}`;
+  return `${phaseRangeText(start, end)}, ${phaseLengthText(start, end)}`;
 }
 
 /** A deadline's date in plain words: "Fri 15 Jan 2027". */

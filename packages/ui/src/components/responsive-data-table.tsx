@@ -9,14 +9,26 @@ import {
   TableHeader,
   TableRow,
 } from "./table";
+import { TableFit } from "./table-fit";
 
 // ResponsiveDataTable: declare the columns once, get two layouts. A real
-// <table> from md up, and below md the same rows as stacked cards, so a phone
-// reads a row down the screen instead of scrolling a wide table sideways.
+// <table> when the TABLE's own box is wide enough, and otherwise the same rows
+// as stacked cards, so a phone or a narrow window reads a row down the screen
+// instead of scrolling a wide table sideways.
 //
-// No state, so it stays server-safe: a server component can pass cell
-// functions straight in. Both layouts are in the DOM and CSS hides one, so a
-// Playwright locator needs `.filter({ visible: true })`.
+// The switch asks how wide the table's box is (a container query on the
+// table itself), never the screen: a program window is narrower than the
+// screen, and a table laid out by the screen ran past the window's edge with
+// its row buttons out of sight. `stackBelow` names the box width a table
+// needs; TableFit then measures, and stacks the rows whenever the table would
+// still run past its box. Text columns wrap (or cut with an ellipsis and a
+// tooltip, `truncate`), and the actions column keeps its own width on the
+// right (put a RowActions in it).
+//
+// Server-safe: a server component can pass cell functions straight in (only
+// the small TableFit guard is a client component). Both layouts are in the
+// DOM and CSS hides one, so a Playwright locator needs
+// `.filter({ visible: true })`.
 
 /**
  * Where a column goes in the phone card. The table always shows every column in
@@ -41,8 +53,19 @@ export interface ResponsiveColumn<T> {
   /** Keep the <th> for screen readers only (an actions column). */
   hideHeader?: boolean;
   align?: "left" | "right" | "center";
+  /**
+   * Keep the cell to one line, cut with an ellipsis, with the full text as
+   * its tooltip. Returns that full text. Without it a text cell wraps.
+   */
+  truncate?: (row: T) => string;
   cellClassName?: string;
   headClassName?: string;
+  /**
+   * Classes for the column's box in the card: `w-full` lets an actions
+   * column's control span the card's footer (a two-way choice under the
+   * thumb).
+   */
+  cardClassName?: string;
 }
 
 /** Which columns go in which card slot. Pure data, so it is tested directly. */
@@ -84,6 +107,52 @@ const alignText = {
   center: "text-center",
 } as const;
 
+/**
+ * The table's box width below which the rows are cards (the kit's widths:
+ * sm 40rem, md 48rem, lg 64rem, xl 80rem). Literal class names, so Tailwind
+ * generates them.
+ */
+export type StackBelow = "sm" | "md" | "lg" | "xl";
+
+const SHOW_TABLE: Record<StackBelow, string> = {
+  sm: "@min-[40rem]/rdt:block",
+  md: "@min-[48rem]/rdt:block",
+  lg: "@min-[64rem]/rdt:block",
+  xl: "@min-[80rem]/rdt:block",
+};
+const HIDE_CARDS: Record<StackBelow, string> = {
+  sm: "@min-[40rem]/rdt:hidden",
+  md: "@min-[48rem]/rdt:hidden",
+  lg: "@min-[64rem]/rdt:hidden",
+  xl: "@min-[80rem]/rdt:hidden",
+};
+
+/** The card frame a table sits in (only the table: cards are their own). */
+const TABLE_FRAME = "rounded-xl border bg-card text-card-foreground shadow-sm";
+
+/** How a cell wraps, by its column. */
+function cellWrapClass<T>(column: ResponsiveColumn<T>): string {
+  if (column.role === "actions") return "w-px whitespace-nowrap";
+  if (column.role === "badge") return "whitespace-nowrap";
+  if (column.truncate) return "max-w-56";
+  return "whitespace-normal break-words";
+}
+
+function CellContent<T>({
+  column,
+  row,
+}: {
+  column: ResponsiveColumn<T>;
+  row: T;
+}) {
+  if (!column.truncate) return <>{column.cell(row)}</>;
+  return (
+    <span className="block truncate" title={column.truncate(row)}>
+      {column.cell(row)}
+    </span>
+  );
+}
+
 export interface ResponsiveDataTableProps<T> {
   columns: readonly ResponsiveColumn<T>[];
   data: readonly T[];
@@ -95,6 +164,14 @@ export interface ResponsiveDataTableProps<T> {
   pairLayout?: "inline" | "stacked";
   /** Names the table (as a caption) and the card list. */
   label?: string;
+  /**
+   * The table's box width below which rows are cards. A table with many
+   * columns asks for more (`lg`) so the window it opens in shows cards.
+   * Whatever this says, rows become cards when the table would not fit.
+   */
+  stackBelow?: StackBelow;
+  /** Draw the table in a card frame (the cards are framed on their own). */
+  framed?: boolean;
   className?: string;
 }
 
@@ -104,6 +181,8 @@ function ResponsiveDataTable<T>({
   getRowKey,
   pairLayout = "inline",
   label,
+  stackBelow = "md",
+  framed = false,
   className,
 }: ResponsiveDataTableProps<T>) {
   const projection = projectColumnsToCard(columns);
@@ -111,8 +190,19 @@ function ResponsiveDataTable<T>({
     projection.title.length > 0 || projection.badges.length > 0;
 
   return (
-    <div data-slot="responsive-data-table" className={className}>
-      <div className="hidden page-md:block">
+    <TableFit
+      data-slot="responsive-data-table"
+      className={cn("group/rdt @container/rdt w-full", className)}
+    >
+      <div
+        data-rdt-layout="table"
+        className={cn(
+          "hidden",
+          SHOW_TABLE[stackBelow],
+          "group-data-[stacked=true]/rdt:hidden!",
+          framed && TABLE_FRAME,
+        )}
+      >
         <Table>
           {label ? <caption className="sr-only">{label}</caption> : null}
           <TableHeader>
@@ -121,6 +211,9 @@ function ResponsiveDataTable<T>({
                 <TableHead
                   key={column.id}
                   className={cn(
+                    column.role === "actions"
+                      ? "w-px"
+                      : column.role !== "badge" && "whitespace-normal",
                     column.align && alignText[column.align],
                     column.headClassName,
                   )}
@@ -142,11 +235,12 @@ function ResponsiveDataTable<T>({
                     key={column.id}
                     className={cn(
                       "align-top",
+                      cellWrapClass(column),
                       column.align && alignText[column.align],
                       column.cellClassName,
                     )}
                   >
-                    {column.cell(row)}
+                    <CellContent column={column} row={row} />
                   </TableCell>
                 ))}
               </TableRow>
@@ -156,7 +250,12 @@ function ResponsiveDataTable<T>({
       </div>
 
       <ul
-        className="flex list-none flex-col gap-3 page-md:hidden"
+        data-rdt-layout="cards"
+        className={cn(
+          "flex list-none flex-col gap-3",
+          HIDE_CARDS[stackBelow],
+          "group-data-[stacked=true]/rdt:flex!",
+        )}
         aria-label={label}
       >
         {data.map((row) => (
@@ -220,14 +319,16 @@ function ResponsiveDataTable<T>({
             {projection.actions.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 border-t pt-3">
                 {projection.actions.map((column) => (
-                  <div key={column.id}>{column.cell(row)}</div>
+                  <div key={column.id} className={column.cardClassName}>
+                    {column.cell(row)}
+                  </div>
                 ))}
               </div>
             )}
           </li>
         ))}
       </ul>
-    </div>
+    </TableFit>
   );
 }
 

@@ -83,9 +83,13 @@ import {
   resetDuesStore,
 } from "./test-store-dues";
 import { resetClaimsStore } from "./test-store-claims";
+import { resetKitchenMenuStore } from "./test-store-kitchen-menu";
 import { resetRentalStore } from "./test-store-rental";
 import { resetGuideStore } from "./test-store-guide";
-import { resetLogisticsStore } from "./test-store-logistics";
+import {
+  adoptLogisticsSentinel,
+  resetLogisticsStore,
+} from "./test-store-logistics";
 import type { MyLift } from "@camp404/db/cars";
 import {
   ALREADY_SEATED,
@@ -290,6 +294,7 @@ import {
   type MealPlanSave,
   type MealPlanWriteResult,
 } from "@camp404/db/meal-plan";
+import type { MenuBookRecipe, MenuRecipeFacts } from "@camp404/db/kitchen-menu";
 import {
   calendarEventRefusal,
   type AddCalendarEventResult,
@@ -341,14 +346,18 @@ import {
 import {
   currentCycle,
   DEFAULT_CAMP_CONFIG,
+  foundingCycles,
+  isCycleYear,
   MAX_CYCLE_YEAR,
   resolveCycles,
   UNSET_CYCLE,
+  type CampConfig,
   type TeamsConfig,
 } from "@camp404/db/camp-config";
 import {
   ROLLOVER_UNTOUCHED,
   type RolloverPlan,
+  type SetFoundingYearResult,
 } from "@camp404/db/cycle-rollover";
 // Type-only: the store's three team operations return the SAME shapes the
 // production writers do, so a divergence is a typecheck failure rather than a
@@ -2674,6 +2683,93 @@ export const testStore = {
   },
 
   /**
+   * Twin of setFoundingYear, so the camp's year page can be founded under
+   * E2E and its rollover state reached (it crashed the window before:
+   * "Camp settings stopped responding"). Names the year in the camp config,
+   * refuses a second founding, and adopts the store's own sentinel rows the
+   * way production does: team places, driver profiles and their seats,
+   * coming-this-year answers, tickets, trailers, lift requests and the
+   * logistics phases, answers and deadlines. KNOWN BOUNDARY: the store keeps
+   * no questionnaire sends, budgets, adoption slots, inventory, claims or
+   * rental orders under a year, so those counts are 0 and nothing of theirs
+   * moves; a ticket whose member already has one for the year keeps the
+   * year's row (production merges the two field by field).
+   */
+  setFoundingYear(input: {
+    year: number;
+    actorUserId: string | null;
+    now?: Date;
+  }): SetFoundingYearResult {
+    if (!isCycleYear(input.year)) return { ok: false, reason: "invalid-year" };
+    const config = globalState().teamsConfig;
+    if (resolveCycles(config).length > 0) {
+      return { ok: false, reason: "already-founded" };
+    }
+    // The cycles live beside the team config in the one camp config, as the
+    // participations suite's `foundedAt` writes them.
+    const founded: CampConfig = {
+      ...(config as CampConfig),
+      cycles: foundingCycles(input.year, input.now ?? new Date()),
+    };
+    globalState().teamsConfig = founded satisfies TeamsConfig;
+    const { year } = input;
+    const adopt = <T extends { cycle: number }>(rows: T[]): number => {
+      let moved = 0;
+      for (const row of rows) {
+        if (row.cycle !== UNSET_CYCLE) continue;
+        row.cycle = year;
+        moved += 1;
+      }
+      return moved;
+    };
+    const rekey = <T extends { userId: string; cycle: number }>(
+      rows: Map<string, T>,
+    ): number => {
+      let moved = 0;
+      for (const [key, row] of [...rows]) {
+        if (row.cycle !== UNSET_CYCLE) continue;
+        rows.delete(key);
+        const next = participationKey(row.userId, year);
+        if (rows.has(next)) continue;
+        rows.set(next, { ...row, cycle: year });
+        moved += 1;
+      }
+      return moved;
+    };
+    const carSeatsStamped = adopt(carMembers);
+    const driverProfilesStamped = adopt(driverProfiles);
+    const teamMembershipsStamped = adopt(teamMemberships);
+    const participationsStamped = rekey(participations);
+    const ticketsStamped = rekey(tickets);
+    const trailersStamped = adopt(transportTrailers);
+    const liftRequestsStamped = adopt(liftRequests);
+    for (const [key, row] of [...logisticsPhases]) {
+      if (row.cycle !== UNSET_CYCLE) continue;
+      logisticsPhases.delete(key);
+      logisticsPhases.set(`${year}:${row.phase}`, { ...row, cycle: year });
+    }
+    adoptLogisticsSentinel(UNSET_CYCLE, year);
+    return {
+      ok: true,
+      report: {
+        year,
+        activationsStamped: 0,
+        responsesStamped: 0,
+        teamMembershipsStamped,
+        driverProfilesStamped,
+        carSeatsStamped,
+        teamBudgetsStamped: 0,
+        adopteesStamped: 0,
+        participationsStamped,
+        trailersStamped,
+        liftRequestsStamped,
+        ticketsStamped,
+        auditLogId: `test-audit-founding-${year}`,
+      },
+    };
+  },
+
+  /**
    * This year's memberships for one member, team-ordered (mirrors
    * getTeamMemberships). "Team order" is the database's: `ORDER BY team` on a
    * Postgres enum sorts by the enum's declared order (kitchen, structures, …),
@@ -3370,6 +3466,8 @@ export const testStore = {
         heldAt: n.heldAt,
         decisions: n.decisions.length,
         actionItems: n.actionItems.length,
+        attendees: n.attendeeIds.length,
+        firstDecision: n.decisions[0]?.text ?? null,
       }));
     return input.limit ? rows.slice(0, input.limit) : rows;
   },
@@ -5705,6 +5803,128 @@ export const testStore = {
     });
   },
 
+  /**
+   * Test only: recipes straight into the book, for the Kitchen's specs and
+   * screenshots (/api/test/seed-kitchen-book). Each is written for its first
+   * plate count; each further count gets lines of its own (the amounts in
+   * proportion: seed data, not the kitchen's maths, which never multiplies),
+   * and Claude is "on" each of `open`. Returns the recipes' ids by title.
+   */
+  seedKitchenBook(input: {
+    authorId: string;
+    recipes: {
+      title: string;
+      summary?: string | null;
+      totalMinutes?: number | null;
+      plates: number[];
+      open?: number[];
+      ingredients: {
+        name: string;
+        category: KitchenRecipe["ingredients"][number]["category"];
+        quantity: number | null;
+        unit: KitchenRecipe["ingredients"][number]["unit"];
+      }[];
+    }[];
+  }): Record<string, string> {
+    const ids: Record<string, string> = {};
+    for (const seed of input.recipes) {
+      const [first, ...more] = seed.plates;
+      if (first === undefined) throw new Error(`${seed.title}: no plates`);
+      const now = new Date();
+      const id = crypto.randomUUID();
+      recipes.push({
+        id,
+        submitterId: input.authorId,
+        source: "text",
+        status: "accepted",
+        title: seed.title,
+        sourceUrl: null,
+        rawText: seed.title,
+        suitabilityNote: null,
+        textAuthorId: input.authorId,
+        aiConsentAt: now,
+        changesNote: null,
+        rejectionReason: null,
+        lastError: null,
+        latestRunId: null,
+        acceptedVersionId: null,
+        rerunRequest: null,
+        rerunRequestedBy: null,
+        rerunRequestedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      const body = KitchenRecipe.parse({
+        title: seed.title,
+        summary: seed.summary ?? null,
+        plates: first,
+        totalTimeMinutes: seed.totalMinutes ?? null,
+        ingredients: seed.ingredients,
+        steps: [
+          {
+            instruction: "Cook it.",
+            uses: seed.ingredients.map((l) => l.name),
+          },
+        ],
+      });
+      const { versionId } = addStoreVersion(findRecipe(id)!, {
+        authorId: input.authorId,
+        runId: null,
+        reason: "Seeded",
+        body,
+        report: null,
+      });
+      for (const plates of more) {
+        const k = plates / first;
+        recipePlateCounts.push({
+          versionId,
+          plates,
+          lines: baseLines(body).map((line) => ({
+            ...line,
+            quantity:
+              line.quantity === null
+                ? null
+                : Math.round(line.quantity * k * 10) / 10,
+          })),
+          pots: null,
+          notes: [],
+          report: null,
+          source: "proofread",
+          runId: null,
+          createdAt: now,
+        });
+      }
+      for (const plates of seed.open ?? []) {
+        recipeRuns.push({
+          id: crypto.randomUUID(),
+          recipeId: id,
+          requestedBy: input.authorId,
+          requestedAt: now,
+          note: null,
+          startedAt: now,
+          finishedAt: null,
+          promptVersion: "seeded",
+          model: "seeded",
+          inputTokens: null,
+          outputTokens: null,
+          outcome: "running",
+          error: null,
+          result: null,
+          kind: "plates",
+          plates,
+          versionId,
+          sourceId: null,
+          stage: null,
+          exchange: null,
+          previousStatus: "accepted",
+          previousRunId: null,
+        });
+      }
+      ids[seed.title] = id;
+    }
+    return ids;
+  },
+
   /** The twin of addLesson: on one of the recipe's versions. */
   addLesson(input: {
     recipeId: string;
@@ -6008,6 +6228,83 @@ export const testStore = {
     };
   },
 
+  /**
+   * What the kitchen menu reads about each recipe on it (the twin of the
+   * recipe half of readKitchenMenu): the book version, its lines' shop areas,
+   * its plate counts with their lines, and the counts Claude is working on.
+   */
+  kitchenMenuRecipes(
+    recipeIds: readonly string[],
+  ): Record<string, MenuRecipeFacts> {
+    const out: Record<string, MenuRecipeFacts> = {};
+    for (const id of new Set(recipeIds)) {
+      const recipe = findRecipe(id);
+      if (!recipe) continue;
+      const version = recipe.acceptedVersionId
+        ? recipeVersions.find((v) => v.id === recipe.acceptedVersionId)
+        : undefined;
+      out[id] = {
+        recipeId: id,
+        title: recipe.title?.trim() || UNTITLED_RECIPE,
+        versionId: version?.id ?? null,
+        categories: version?.body.ingredients.map((l) => l.category) ?? [],
+        counts: version
+          ? storePlateCounts(version.id).map((p) => ({
+              plates: p.plates,
+              lines: p.lines,
+            }))
+          : [],
+        openPlates: version
+          ? recipeRuns
+              .filter(
+                (r) =>
+                  r.kind === "plates" &&
+                  r.versionId === version.id &&
+                  (r.outcome === "queued" || r.outcome === "running") &&
+                  r.plates !== null,
+              )
+              .map((r) => r.plates!)
+          : [],
+      };
+    }
+    return out;
+  },
+
+  /** The recipe book as the menu's picker lists it (the twin of listMenuBook). */
+  menuBook(): MenuBookRecipe[] {
+    return recipes
+      .filter((r) => r.acceptedVersionId !== null)
+      .map((r) => {
+        const version = recipeVersions.find(
+          (v) => v.id === r.acceptedVersionId,
+        )!;
+        return {
+          id: r.id,
+          title: r.title?.trim() || UNTITLED_RECIPE,
+          summary: version.body.summary?.trim() || null,
+          totalMinutes: version.body.totalTimeMinutes ?? null,
+          readyPlates: storePlateCounts(version.id).map((p) => p.plates),
+          openPlates: recipeRuns
+            .filter(
+              (run) =>
+                run.kind === "plates" &&
+                run.versionId === version.id &&
+                (run.outcome === "queued" || run.outcome === "running") &&
+                run.plates !== null,
+            )
+            .map((run) => run.plates!),
+        };
+      })
+      .sort((a, b) =>
+        a.title.toLowerCase().localeCompare(b.title.toLowerCase()),
+      );
+  },
+
+  /** Whether a recipe is in the book (it has an accepted version). */
+  recipeInBook(recipeId: string): boolean {
+    return Boolean(findRecipe(recipeId)?.acceptedVersionId);
+  },
+
   getPlateCount(versionId: string, plates: number): PlateCountDetail | null {
     const row = recipePlateCounts.find(
       (p) => p.versionId === versionId && p.plates === plates,
@@ -6116,6 +6413,7 @@ export const testStore = {
     resetLogisticsStore();
     resetGuideStore();
     resetClaimsStore();
+    resetKitchenMenuStore();
   },
 
   // --- INKBLOT's board (the twin of @camp404/db/inkblot) --------------------

@@ -2291,8 +2291,8 @@ describe("recipes", () => {
           actorId: captain.id,
           daysOnSite: 2,
           days: [
-            { breakfast: 45, lunch: 0, dinner: 50 },
-            { breakfast: 45, lunch: 0, dinner: 60 },
+            { breakfast: 45, dinner: 50 },
+            { breakfast: 45, dinner: 60 },
           ],
           expectedVersion: 0,
         }),

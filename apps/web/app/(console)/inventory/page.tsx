@@ -409,14 +409,13 @@ export default async function InventoryPage({
                   {g.items.length} item{g.items.length === 1 ? "" : "s"}
                 </p>
               </div>
-              <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
-                <ResponsiveDataTable
-                  columns={columns}
-                  data={g.items}
-                  getRowKey={(i) => i.id}
-                  label={CATEGORY_LABELS[g.category]}
-                />
-              </div>
+              <ResponsiveDataTable
+                columns={columns}
+                data={g.items}
+                getRowKey={(i) => i.id}
+                label={CATEGORY_LABELS[g.category]}
+                framed
+              />
             </section>
           ))
         )}

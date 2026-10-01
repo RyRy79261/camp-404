@@ -104,10 +104,12 @@ test.describe("applications: tickets and WAP", () => {
     await page.getByRole("radio", { name: "I have my ticket" }).click();
     await page.getByRole("button", { name: "Save ticket" }).click();
     await expect(
-      page.getByRole("status").filter({ hasText: "Saved." }),
+      page.getByRole("status").filter({ hasText: "Saved" }),
     ).toBeVisible();
     // His own DDT and WAP are on his page, read-only, at their defaults.
-    const setByCaptains = page.getByLabel("Set by the captains");
+    const setByCaptains = page.getByRole("region", {
+      name: "From the captains",
+    });
     await expect(setByCaptains).toContainText("WAP (work access pass)");
     await expect(setByCaptains).toContainText("Not needed");
 
@@ -121,30 +123,22 @@ test.describe("applications: tickets and WAP", () => {
     ).toHaveValue("has_ticket");
     // What he said and what the captains decided, each in its own column.
     await expect(says(page, "Ben Placed", "Maybe")).toBeVisible();
-    await expect(
-      row(page, "Ben Placed").getByText("Accepted", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      row(page, "Ada Yes").getByText("Not decided yet", { exact: true }),
-    ).toBeVisible();
+    // The decision is one control, the captains' decision pressed.
+    const accept = (name: string) =>
+      page
+        .getByRole("button", { name: `Accept ${name} for this year` })
+        .filter({ visible: true });
+    await expect(accept("Ben Placed")).toHaveAttribute("aria-pressed", "true");
+    await expect(accept("Ada Yes")).toHaveAttribute("aria-pressed", "false");
     // "Coming, not decided" is Ada alone: Ben's decision takes him out.
     await page
-      .getByRole("group", { name: "Show" })
-      .getByRole("button", { name: /^Coming, not decided/ })
-      .click();
+      .getByRole("combobox", { name: "This year" })
+      .selectOption("applied");
     await expect(row(page, "Ada Yes")).toBeVisible();
     await expect(row(page, "Ben Placed")).toHaveCount(0);
-    await page
-      .getByRole("group", { name: "Show" })
-      .getByRole("button", { name: /^All/ })
-      .click();
-    await page
-      .getByRole("button", { name: "Accept Ada Yes for this year" })
-      .filter({ visible: true })
-      .click();
-    await expect(
-      row(page, "Ada Yes").getByText("Accepted", { exact: true }),
-    ).toBeVisible();
+    await page.getByRole("combobox", { name: "This year" }).selectOption("all");
+    await accept("Ada Yes").click();
+    await expect(accept("Ada Yes")).toHaveAttribute("aria-pressed", "true");
     await page
       .getByRole("combobox", { name: "WAP for Ben Placed" })
       .filter({ visible: true })
@@ -197,7 +191,7 @@ test.describe("applications: tickets and WAP", () => {
     // Ben reads his own WAP, issued; nothing on his page lets him change it.
     await as(page, "ben", "Ben Placed");
     await page.goto("/profile");
-    const mine = page.getByLabel("Set by the captains");
+    const mine = page.getByRole("region", { name: "From the captains" });
     await expect(mine).toContainText("Issued");
     await expect(mine.locator("select, input")).toHaveCount(0);
   });
@@ -219,11 +213,12 @@ test.describe("applications: tickets and WAP", () => {
     await expect(
       row(page, "Ben Placed").getByText("Accepted", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("combobox")).toHaveCount(0);
+    // One filter (This year), and nothing to set on a row.
+    await expect(page.getByRole("combobox")).toHaveCount(1);
     await expect(page.getByRole("columnheader", { name: "WAP" })).toHaveCount(
       0,
     );
-    await expect(page.getByText("Needs DDT")).toHaveCount(0);
+    await expect(page.getByText("Wants a DDT")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /for this year$/ }),
     ).toHaveCount(0);
@@ -233,9 +228,7 @@ test.describe("applications: tickets and WAP", () => {
     await person(page, request, "mo", "Mo Member");
     await openApplications(page);
 
-    await expect(
-      page.getByText(/Applications are for captains and team leads/),
-    ).toBeVisible();
+    await expect(page.getByText("For captains and team leads")).toBeVisible();
     await expect(page.getByText("Ada Yes")).toHaveCount(0);
   });
 });

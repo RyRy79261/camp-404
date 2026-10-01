@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { planRollover } from "@camp404/db/cycle-rollover";
+import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import {
@@ -11,6 +13,7 @@ import {
   isLogisticsCalendarConnected,
   listDeadlines,
 } from "@/lib/logistics";
+import { LOGISTICS_PATH, YEAR_LOCK_MESSAGE } from "@/lib/logistics-copy";
 import { usesTestStore } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
 import { RolloverPanel, type RolloverPlanView } from "./rollover-panel";
@@ -85,12 +88,28 @@ export default async function CycleRolloverPage() {
       {plan ? (
         <div className="flex flex-col gap-6">
           {/* Before the camp names its year, deadlines are filed under the
-              sentinel and the founding year adopts them. */}
-          <DeadlinesManager deadlines={deadlines} />
-          <RolloverPanel plan={plan} />
+              sentinel and the founding year adopts them. Until then the year
+              is the first thing to settle, so its card comes first. */}
+          {/* Keyed, so the rollover panel is the same component when the
+              order flips at the founding, and keeps its receipt on screen. */}
+          {(founded ? ["deadlines", "year"] : ["year", "deadlines"]).map(
+            (part) =>
+              part === "year" ? (
+                <RolloverPanel key="year" plan={plan} />
+              ) : (
+                <DeadlinesManager key="deadlines" deadlines={deadlines} />
+              ),
+          )}
         </div>
       ) : (
-        <CaptainLock message="Starting a new year is captain-only. Your rank doesn't have clearance for this." />
+        <CaptainLock
+          message={YEAR_LOCK_MESSAGE}
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Link href={LOGISTICS_PATH}>Open Logistics</Link>
+            </Button>
+          }
+        />
       )}
     </div>
   );

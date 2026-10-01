@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Pencil } from "lucide-react";
 import {
@@ -14,20 +14,39 @@ import { Button } from "@camp404/ui/components/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@camp404/ui/components/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@camp404/ui/components/dialog";
+import { EditorsNote } from "@camp404/ui/components/field-list";
 import { InputField } from "@camp404/ui/components/input-field";
 import { ProgressBar } from "@camp404/ui/components/progress-bar";
+import {
+  ResponsiveDataTable,
+  type ResponsiveColumn,
+} from "@camp404/ui/components/responsive-data-table";
+import { RowActions } from "@camp404/ui/components/row-actions";
 import { toast } from "@camp404/ui/components/toast";
-import { SPENT_MEANS } from "@/lib/claims-copy";
-import { budgetLeftLine } from "@/lib/claims-view";
+import { BudgetStats } from "@/components/teams/budget-stats";
+import { BUDGET_EDITORS } from "@/lib/claims-copy";
 import { typedRands } from "@/lib/dues-view";
 import { setBudgetAction } from "../claims-actions";
 
-// The Finance team's Budgets tab (#242): one amount per team for the year.
-// Each row edits in place; a problem with what was typed shows beside it.
+// The year's team budgets (#242): one amount per team, as one table (cards in
+// a narrow window) with the amounts in right-aligned columns, so Budget,
+// Spent, Left and Waiting line up down the list, and a team with no budget
+// keeps the same row height (its bar cell stays empty). The year's totals sit
+// above in the same four figures as a team's page. The Finance team (captains
+// and Finance leads) gets an Edit button at the end of each row that opens the
+// budget in a small dialog, where a problem with what was typed shows beside
+// the field; everyone else reads the same table with no Edit buttons, and one
+// quiet line says who sets them.
 
 export interface BudgetRow extends BudgetTotals {
   key: string;
@@ -37,70 +56,182 @@ export interface BudgetRow extends BudgetTotals {
 
 const TYPE_AMOUNT = "Type the budget in rands, like 5000 or 5000,50.";
 
+function amountColumn(
+  id: string,
+  header: string,
+  cell: (r: BudgetRow) => ReactNode,
+): ResponsiveColumn<BudgetRow> {
+  return {
+    id,
+    header,
+    align: "right",
+    cellClassName: "whitespace-nowrap tabular-nums",
+    cell,
+  };
+}
+
+function columns(onEdit: ((row: BudgetRow) => void) | null) {
+  const cols: ResponsiveColumn<BudgetRow>[] = [
+    {
+      id: "team",
+      header: "Team",
+      role: "title",
+      cellClassName: "font-medium",
+      cell: (r) => r.label,
+    },
+    {
+      id: "marks",
+      header: "Marks",
+      role: "badge",
+      hideHeader: true,
+      cell: (r) =>
+        r.over || r.archived ? (
+          <span className="flex gap-1">
+            {r.archived && <Badge variant="outline">Archived</Badge>}
+            {r.over && <Badge variant="destructive">Over budget</Badge>}
+          </span>
+        ) : null,
+    },
+    amountColumn("budget", "Budget", (r) =>
+      r.budgetCents === null ? (
+        <span className="text-muted-foreground">No budget</span>
+      ) : (
+        <span className="font-medium">{formatMoney(r.budgetCents)}</span>
+      ),
+    ),
+    amountColumn("spent", "Spent", (r) => formatMoney(r.spentCents)),
+    amountColumn("left", "Left", (r) =>
+      r.leftCents === null ? (
+        <span className="text-muted-foreground">—</span>
+      ) : r.leftCents < 0 ? (
+        <span className="text-destructive">
+          {formatMoney(-r.leftCents)} over
+        </span>
+      ) : (
+        formatMoney(r.leftCents)
+      ),
+    ),
+    amountColumn("waiting", "Waiting", (r) =>
+      r.waitingCount === 0 ? (
+        <span className="text-muted-foreground">—</span>
+      ) : (
+        <span>
+          {formatMoney(r.waitingCents)}{" "}
+          <span className="text-xs text-muted-foreground">
+            ({r.waitingCount})
+          </span>
+        </span>
+      ),
+    ),
+    {
+      id: "bar",
+      header: "Spent of budget",
+      hideHeader: true,
+      mobileHidden: true,
+      cellClassName: "w-28 align-middle",
+      cell: (r) => {
+        const percent = budgetSpentPercent(r);
+        return percent === null ? null : (
+          <ProgressBar value={percent} label={`${r.label} budget spent`} />
+        );
+      },
+    },
+  ];
+  if (onEdit) {
+    cols.push({
+      id: "actions",
+      header: "Actions",
+      role: "actions",
+      hideHeader: true,
+      align: "right",
+      cell: (r) => (
+        <RowActions
+          label={`Actions for ${r.label}`}
+          primary={
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-label={`Edit ${r.label}'s budget`}
+              onClick={() => onEdit(r)}
+            >
+              <Pencil aria-hidden />
+              Edit
+            </Button>
+          }
+        />
+      ),
+    });
+  }
+  return cols;
+}
+
 export function BudgetsManager({
   yearLabel,
   rows,
   totals,
+  canEdit,
 }: {
   yearLabel: string;
   rows: BudgetRow[];
-  totals: { budgetCents: number; spentCents: number; waitingCents: number };
+  totals: Pick<
+    BudgetTotals,
+    "budgetCents" | "spentCents" | "leftCents" | "waitingCents" | "waitingCount"
+  >;
+  /** A captain or a Finance lead: the Edit buttons and the dialog. */
+  canEdit: boolean;
 }) {
+  const [editing, setEditing] = useState<BudgetRow | null>(null);
   return (
     <div className="flex flex-col gap-6">
       <Card>
-        <CardContent className="flex flex-wrap gap-x-8 gap-y-2 p-5 text-sm text-muted-foreground">
-          <span>
-            Budgets {yearLabel}{" "}
-            <span className="font-medium tabular-nums text-foreground">
-              {formatMoney(totals.budgetCents)}
-            </span>
-          </span>
-          <span>
-            Spent{" "}
-            <span className="font-medium tabular-nums text-foreground">
-              {formatMoney(totals.spentCents)}
-            </span>
-          </span>
-          {totals.waitingCents > 0 && (
-            <span>
-              Waiting for a yes{" "}
-              <span className="font-medium tabular-nums text-foreground">
-                {formatMoney(totals.waitingCents)}
-              </span>
-            </span>
-          )}
-        </CardContent>
-      </Card>
-      <Card>
         <CardHeader className="p-5 pb-3">
-          <CardTitle className="text-base">Team budgets</CardTitle>
-          <CardDescription>{SPENT_MEANS}</CardDescription>
+          <CardTitle className="text-base">All teams, {yearLabel}</CardTitle>
         </CardHeader>
         <CardContent className="p-5 pt-0">
-          <ul aria-label="Team budgets" className="divide-y divide-border">
-            {rows.map((row) => (
-              <BudgetItem key={row.key} row={row} />
-            ))}
-          </ul>
+          <BudgetStats totals={totals} label={`Budgets ${yearLabel}`} />
         </CardContent>
       </Card>
+      <div className="flex flex-col gap-2">
+        <ResponsiveDataTable
+          columns={columns(canEdit ? setEditing : null)}
+          data={rows}
+          getRowKey={(r) => r.key}
+          label="Team budgets"
+          stackBelow="md"
+          framed
+        />
+        {!canEdit && <EditorsNote>{BUDGET_EDITORS}</EditorsNote>}
+      </div>
+      {canEdit && (
+        <BudgetDialog
+          // A fresh dialog per opening: it always starts from the budget as
+          // it is now, never an old draft left by Cancel.
+          key={editing ? `${editing.key}:${editing.budgetCents}` : "closed"}
+          row={editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }
 
-function BudgetItem({ row }: { row: BudgetRow }) {
+function BudgetDialog({
+  row,
+  onClose,
+}: {
+  row: BudgetRow | null;
+  onClose: () => void;
+}) {
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState(
-    row.budgetCents === null ? "" : typedRands(row.budgetCents),
+    row?.budgetCents == null ? "" : typedRands(row.budgetCents),
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const percent = budgetSpentPercent(row);
-  const left = budgetLeftLine(row);
 
   function save() {
+    if (!row) return;
     setError(null);
     let cents: number | null = null;
     if (amount.trim() !== "") {
@@ -125,103 +256,60 @@ function BudgetItem({ row }: { row: BudgetRow }) {
           ? `${row.label}: budget cleared`
           : `${row.label}: budget ${formatMoney(cents)}`,
       );
-      setEditing(false);
+      onClose();
       router.refresh();
     });
   }
 
   return (
-    <li className="flex flex-col gap-2 py-3" aria-label={row.label}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="flex items-center gap-2">
-          <span className="font-medium">{row.label}</span>
-          {row.archived && <Badge variant="outline">Archived</Badge>}
-          {row.over && <Badge variant="destructive">Over budget</Badge>}
-        </span>
-        {!editing && (
-          <span className="flex items-center gap-2">
-            <span className="font-medium tabular-nums">
-              {row.budgetCents === null
-                ? "No budget"
-                : formatMoney(row.budgetCents)}
-            </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              aria-label={`Edit ${row.label}'s budget`}
-              onClick={() => {
-                // Start from the budget as it is now, never an old draft.
-                setAmount(
-                  row.budgetCents === null ? "" : typedRands(row.budgetCents),
-                );
-                setError(null);
-                setEditing(true);
-              }}
-            >
-              <Pencil aria-hidden />
-            </Button>
-          </span>
-        )}
-      </div>
-      {percent !== null && (
-        <ProgressBar value={percent} label={`${row.label} budget spent`} />
-      )}
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-        <span>
-          Spent{" "}
-          <span className="tabular-nums text-foreground">
-            {formatMoney(row.spentCents)}
-          </span>
-        </span>
-        {left && <span className="tabular-nums">{left}</span>}
-        {row.waitingCount > 0 && (
-          <span>
-            Waiting{" "}
-            <span className="tabular-nums text-foreground">
-              {formatMoney(row.waitingCents)}
-            </span>
-          </span>
-        )}
-      </div>
-      {editing && (
-        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-40 flex-1">
-              <InputField
-                label={`${row.label} budget (R)`}
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.currentTarget.value)}
-                disabled={pending}
-              />
-            </div>
-            <Button type="button" disabled={pending} onClick={save}>
-              {pending && <Loader2 className="animate-spin" aria-hidden />}
-              Save
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
+    <Dialog
+      open={row !== null}
+      onOpenChange={(open) => {
+        if (!open && !pending) onClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-sm" showCloseButton={!pending}>
+        {row && (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{row.label}&rsquo;s budget</DialogTitle>
+              <DialogDescription>
+                The amount for {row.label} this year, in rands.
+              </DialogDescription>
+            </DialogHeader>
+            <InputField
+              label={`${row.label} budget (R)`}
+              inputMode="decimal"
+              autoFocus
+              value={amount}
+              onChange={(e) => setAmount(e.currentTarget.value)}
               disabled={pending}
-              onClick={() => {
-                setEditing(false);
-                setError(null);
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Leave it empty to clear the budget.
-          </p>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-        </div>
-      )}
-    </li>
+              helper="Leave it empty to clear the budget."
+              error={error ?? undefined}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={onClose}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={pending}>
+                {pending && <Loader2 className="animate-spin" aria-hidden />}
+                Save
+              </Button>
+            </div>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

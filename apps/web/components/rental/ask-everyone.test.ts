@@ -5,7 +5,7 @@ vi.mock("@/app/(console)/captains/gear-rental/actions", () => ({
   askForGearOrdersAction: vi.fn(),
 }));
 
-import { askedText } from "./ask-everyone";
+import { askedText, askLabel } from "./ask-everyone";
 
 // What a captain is told after "Ask everyone" (#241): how many members were
 // asked, and how many got no second notice because their first is unread.
@@ -32,5 +32,12 @@ describe("askedText", () => {
     expect(askedText(1, 0)).toBe(
       "1 member already has the ask unread. No second notice was sent.",
     );
+  });
+});
+
+describe("askLabel", () => {
+  it("says how many the button reaches", () => {
+    expect(askLabel(1)).toBe("Ask the 1 who hasn\u2019t answered");
+    expect(askLabel(5)).toBe("Ask the 5 who haven\u2019t answered");
   });
 });

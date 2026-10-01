@@ -8,7 +8,9 @@ import { cn } from "../lib/utils";
 // `Table` renders its own `relative w-full overflow-x-auto` container: a data
 // table is the one element that legitimately outgrows a phone viewport, and the
 // container is what lets it scroll sideways instead of being clipped by an
-// ancestor's `overflow-hidden`.
+// ancestor's `overflow-hidden`. A page's data table should not lean on that
+// scroll: use ResponsiveDataTable, which shows its rows as cards whenever the
+// table would not fit its window (AGENTS.md, "A table fits its window").
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (

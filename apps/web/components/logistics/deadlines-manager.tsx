@@ -26,6 +26,7 @@ import {
 } from "@camp404/ui/components/dialog";
 import { Field } from "@camp404/ui/components/field";
 import { Input } from "@camp404/ui/components/input";
+import { RowActions } from "@camp404/ui/components/row-actions";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { toast } from "@camp404/ui/components/toast";
 import {
@@ -43,9 +44,11 @@ import {
 } from "@/app/(console)/captains/camp-settings/cycle/deadline-actions";
 import {
   DEADLINE_NOT_ON_CALENDAR,
+  DEADLINES_ANCHOR,
   NOT_ANNOUNCED_YET,
   deadlineDateText,
 } from "@/lib/logistics-copy";
+import { pickedDayText } from "./phase-editor";
 
 // The year's AfrikaBurn dates, for captains (owner, 2026-10-01, mock-up A:
 // "The year's standard AfrikaBurn dates are already listed; a captain fills
@@ -57,7 +60,9 @@ import {
 // each is a name with its date under it and the button on the right, and the
 // Change dialog carries the done tick. A problem with what was typed shows in
 // the dialog; the one-tap done tick reports a failure as a toast, and only it
-// spins. A date goes on the camp calendar as "AfrikaBurn: <name>".
+// spins. A date goes on the camp calendar as "AfrikaBurn: <name>". The row's
+// button sits in RowActions, the same slot on every row (#323), and the tick
+// is labelled "<name> done" (the owner's mock-up keeps a Done column).
 
 export interface DeadlineItem {
   id: string;
@@ -196,7 +201,7 @@ function StandardDateDialog({
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent>
+      <DialogContent data-window-tint>
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
             <DialogTitle>
@@ -216,10 +221,16 @@ function StandardDateDialog({
               {NO_ROUND_THIS_YEAR}
             </AckRow>
           )}
-          <Field label="Date" htmlFor={id("date")} error={errors.dueDate}>
+          <Field
+            label="Date"
+            htmlFor={id("date")}
+            error={errors.dueDate}
+            help={form.skipped ? undefined : pickedDayText(form.dueDate)}
+          >
             <DateControl
               id={id("date")}
-              className="page-sm:w-56 sm:w-56"
+              aria-describedby={`${id("date")}-${errors.dueDate ? "error" : "help"}`}
+              className="sm:w-56"
               value={form.skipped ? "" : form.dueDate}
               disabled={form.skipped}
               onChange={(e) =>
@@ -342,7 +353,7 @@ function OtherDateDialog({
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent>
+      <DialogContent data-window-tint>
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
             <DialogTitle>
@@ -372,10 +383,14 @@ function OtherDateDialog({
             label="Date (optional)"
             htmlFor={id("date")}
             error={errors.dueDate}
-            help="Leave it empty until AfrikaBurn says."
+            help={
+              pickedDayText(form.dueDate) ??
+              "Leave it empty until AfrikaBurn says."
+            }
           >
             <DateControl
               id={id("date")}
+              aria-describedby={`${id("date")}-${errors.dueDate ? "error" : "help"}`}
               className="sm:w-56"
               value={form.dueDate}
               onChange={(e) =>
@@ -530,22 +545,28 @@ function DateRow({
       <span className="hidden h-5 items-center page-sm:flex">
         <DoneTick row={row} name={name} />
       </span>
-      <Button
-        size="sm"
-        variant={set ? "outline" : "default"}
-        className="shrink-0 page-sm:w-full"
-        onClick={onOpen}
-        aria-label={set ? `Change ${name}` : `Set the date for ${name}`}
-      >
-        {set ? (
-          "Change"
-        ) : (
-          <>
-            <span className="page-sm:hidden">Set date</span>
-            <span className="hidden page-sm:inline">Set the date</span>
-          </>
-        )}
-      </Button>
+      <RowActions
+        className="shrink-0"
+        label={`Actions for ${name}`}
+        primary={
+          <Button
+            size="sm"
+            variant={set ? "outline" : "default"}
+            className="page-sm:w-[8.5rem]"
+            onClick={onOpen}
+            aria-label={set ? `Change ${name}` : `Set the date for ${name}`}
+          >
+            {set ? (
+              "Change"
+            ) : (
+              <>
+                <span className="page-sm:hidden">Set date</span>
+                <span className="hidden page-sm:inline">Set the date</span>
+              </>
+            )}
+          </Button>
+        }
+      />
     </li>
   );
 }
@@ -669,7 +690,10 @@ export function DeadlinesManager({ deadlines }: { deadlines: DeadlineItem[] }) {
   );
   const others = deadlines.filter((d) => d.kind === null);
   return (
-    <Card className="overflow-hidden rounded-none">
+    <Card
+      id={DEADLINES_ANCHOR}
+      className="scroll-mt-4 overflow-hidden rounded-none"
+    >
       <div
         aria-hidden
         className={`hidden px-3 py-2.5 font-pixel text-[10px] uppercase tracking-[0.15em] text-muted-foreground ${COLUMNS}`}

@@ -86,24 +86,27 @@ export default async function MeetingsPage({
         eyebrow="Camp / Meetings"
         title="Meetings"
         description="What each meeting planned, decided and handed out, newest first. A team's members write its notes; captains write the whole camp's."
-        actions={
-          newHref ? (
-            <Button asChild>
+      />
+
+      <div className="flex flex-col gap-6">
+        {/* The filter bar, as AfrikaBurn's list pages draw it: the filter on
+            the left, the one action on the same line at the right. On a phone
+            the action comes first, full width. */}
+        <div className="flex flex-col-reverse gap-3 page-sm:flex-row page-sm:items-end page-sm:justify-between">
+          <MeetingsFilter
+            value={filter ?? ALL_MEETINGS}
+            teams={options}
+            wholeCamp={WHOLE_CAMP_MEETINGS}
+          />
+          {newHref ? (
+            <Button asChild className="w-full page-sm:w-auto">
               <Link href={newHref}>
                 <Plus aria-hidden />
                 New meeting
               </Link>
             </Button>
-          ) : null
-        }
-      />
-
-      <div className="flex flex-col gap-6">
-        <MeetingsFilter
-          value={filter ?? ALL_MEETINGS}
-          teams={options}
-          wholeCamp={WHOLE_CAMP_MEETINGS}
-        />
+          ) : null}
+        </div>
 
         {notes.length === 0 ? (
           <EmptyState

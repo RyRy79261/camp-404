@@ -1,5 +1,5 @@
 {
-  "id": "d05c6234-579f-4c54-834d-b39c9f47f6c0",
+  "id": "5850f7f0-76e2-41af-b0ad-d38ac869a7c9",
   "prevId": "ef325c37-7c1d-4ba9-a0b2-6f24523a91b7",
   "version": "7",
   "dialect": "postgresql",
@@ -340,12 +340,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "title": {
           "name": "title",
           "type": "text",
@@ -366,13 +360,6 @@
         },
         "done": {
           "name": "done",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "skipped": {
-          "name": "skipped",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -445,28 +432,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "afrikaburn_deadlines_cycle_kind_uniq": {
-          "name": "afrikaburn_deadlines_cycle_kind_uniq",
-          "columns": [
-            {
-              "expression": "cycle",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "kind",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"afrikaburn_deadlines\".\"kind\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -500,12 +465,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "afrikaburn_deadlines_skipped_check": {
-          "name": "afrikaburn_deadlines_skipped_check",
-          "value": "not \"afrikaburn_deadlines\".\"skipped\" or \"afrikaburn_deadlines\".\"due_date\" is null"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.audit_log": {
@@ -5107,6 +5067,301 @@
           "value": "\"kitchen_meal_plans\".\"days_on_site\" between 1 and 30"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.kitchen_menu_items": {
+      "name": "kitchen_menu_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "cycle": {
+          "name": "cycle",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "meal": {
+          "name": "meal",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recipe_id": {
+          "name": "recipe_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "added_by_user_id": {
+          "name": "added_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "kitchen_menu_items_meal_recipe_idx": {
+          "name": "kitchen_menu_items_meal_recipe_idx",
+          "columns": [
+            {
+              "expression": "cycle",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "meal",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "recipe_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "kitchen_menu_items_cycle_idx": {
+          "name": "kitchen_menu_items_cycle_idx",
+          "columns": [
+            {
+              "expression": "cycle",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "kitchen_menu_items_recipe_id_recipes_id_fk": {
+          "name": "kitchen_menu_items_recipe_id_recipes_id_fk",
+          "tableFrom": "kitchen_menu_items",
+          "tableTo": "recipes",
+          "columnsFrom": [
+            "recipe_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "kitchen_menu_items_added_by_user_id_users_id_fk": {
+          "name": "kitchen_menu_items_added_by_user_id_users_id_fk",
+          "tableFrom": "kitchen_menu_items",
+          "tableTo": "users",
+          "columnsFrom": [
+            "added_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "kitchen_menu_items_day_check": {
+          "name": "kitchen_menu_items_day_check",
+          "value": "\"kitchen_menu_items\".\"day\" between 1 and 30"
+        },
+        "kitchen_menu_items_meal_check": {
+          "name": "kitchen_menu_items_meal_check",
+          "value": "\"kitchen_menu_items\".\"meal\" in ('breakfast', 'dinner')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.kitchen_shopping_ticks": {
+      "name": "kitchen_shopping_ticks",
+      "schema": "",
+      "columns": {
+        "cycle": {
+          "name": "cycle",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_key": {
+          "name": "item_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ticked_by_user_id": {
+          "name": "ticked_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ticked_at": {
+          "name": "ticked_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "kitchen_shopping_ticks_ticked_by_user_id_users_id_fk": {
+          "name": "kitchen_shopping_ticks_ticked_by_user_id_users_id_fk",
+          "tableFrom": "kitchen_shopping_ticks",
+          "tableTo": "users",
+          "columnsFrom": [
+            "ticked_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "kitchen_shopping_ticks_cycle_item_key_pk": {
+          "name": "kitchen_shopping_ticks_cycle_item_key_pk",
+          "columns": [
+            "cycle",
+            "item_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.kitchen_snacks": {
+      "name": "kitchen_snacks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "cycle": {
+          "name": "cycle",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "added_by_user_id": {
+          "name": "added_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "kitchen_snacks_cycle_idx": {
+          "name": "kitchen_snacks_cycle_idx",
+          "columns": [
+            {
+              "expression": "cycle",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "kitchen_snacks_added_by_user_id_users_id_fk": {
+          "name": "kitchen_snacks_added_by_user_id_users_id_fk",
+          "tableFrom": "kitchen_snacks",
+          "tableTo": "users",
+          "columnsFrom": [
+            "added_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.lift_requests": {

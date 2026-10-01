@@ -13,10 +13,12 @@ import {
 } from "./_helpers";
 
 // The payments ledger, in rands only (test-mode, on the store's ledger twin).
-// A captain records two received payments and a pending one; there is no
-// currency to pick. The ledger shows each amount, and "Dues paid" totals the
-// rands that came in, with the promised rands on a line of their own. A member
-// who opens the page sees the lock and no amounts. Amounts are made up.
+// A captain records two payments in the bank and a promised one, from the
+// "Record a payment" dialog; there is no currency to pick. The ledger shows
+// each amount, and the year's figures total the rands in the bank, with the
+// promised rands under "To check", which Who owes what's "To check" filter
+// agrees with. A member who opens the page sees the lock, a way to their own
+// dues, and no amounts. Amounts are made up.
 //
 // Intl writes no-break spaces ("R 12,34"), so money is matched with \s.
 // The ledger draws a table from md up and a card list below it; both are in
@@ -38,7 +40,7 @@ async function openPayments(page: Page) {
   await page.goto("/captains/payments");
   // Something PRESENT first, so no check below runs on an unpainted page.
   await expect(
-    page.getByRole("heading", { level: 1, name: "Dues & payments" }),
+    page.getByRole("heading", { level: 1, name: /^Payments$/ }),
   ).toBeVisible();
 }
 
@@ -50,19 +52,20 @@ async function recordPayment(
     status: "reconciled" | "pending";
   },
 ) {
-  const member = page.locator("#payment-member");
+  await page.getByRole("button", { name: "Record a payment" }).click();
+  const dialog = page.getByRole("dialog", { name: "Record a payment" });
+  const member = dialog.locator("#payment-member");
   const value = await member
     .locator("option", { hasText: input.member })
     .getAttribute("value");
   await member.selectOption(value!);
-  await page.getByLabel("Amount (R)").fill(input.amount);
-  await page.locator("#payment-status").selectOption(input.status);
-  await page.getByRole("button", { name: "Record payment" }).click();
-  // The form clears once the payment is on file. The toast names its
-  // reference; the one before it may still be up (toasts stay five seconds,
-  // and nothing covers the Record button to make the next click wait), so the
-  // newest is the last.
-  await expect(page.getByLabel("Amount (R)")).toHaveValue("");
+  await dialog.getByLabel("Amount (R)").fill(input.amount);
+  await dialog.locator("#payment-status").selectOption(input.status);
+  await dialog.getByRole("button", { name: "Record payment" }).click();
+  // The dialog closes once the payment is on file. The toast names its
+  // reference; the one before it may still be up (toasts stay five seconds),
+  // so the newest is the last.
+  await expect(dialog).toBeHidden();
   await expect(page.getByText(/^Recorded C404-M\d{3}-/).last()).toBeVisible();
 }
 
@@ -78,14 +81,16 @@ async function expectLedgerAndTotals(page: Page) {
     ledger.getByText(/^R\s7,00$/).filter({ visible: true }),
   ).toBeVisible();
 
-  const received = page.getByRole("status").filter({ hasText: /^Received:/ });
-  const pending = page.getByRole("status").filter({ hasText: /^Pending:/ });
+  const inBank = page.getByRole("group", { name: "In the bank" });
+  const toCheck = page.getByRole("group", { name: "To check" });
   // One rand total, and the promised rands apart until they land.
-  await expect(received).toHaveText(/^Received: R\s17,34$/);
-  await expect(pending).toHaveText(/^Pending: R\s7,00$/);
-  await expect(
-    page.getByRole("status").filter({ hasText: /members have paid/ }),
-  ).toHaveText(/^2 of \d+ members have paid for this year\.$/);
+  await expect(inBank.getByText(/^R\s17,34$/)).toBeVisible();
+  await expect(toCheck.getByText(/^R\s7,00$/)).toBeVisible();
+  await expect(toCheck).toContainText(/R\s7,00 promised/);
+  // Paid up counts members charged a fee; nobody is charged one here.
+  await expect(page.getByRole("group", { name: "Paid up" })).toContainText(
+    "Nobody is charged a fee yet",
+  );
 }
 
 test.describe("payments ledger (test-mode)", () => {
@@ -112,8 +117,8 @@ test.describe("payments ledger (test-mode)", () => {
     await openPayments(page);
     await expect(page.getByText("No payments recorded yet.")).toBeVisible();
     await expect(
-      page.getByRole("status").filter({ hasText: /^Received:/ }),
-    ).toHaveText(/^Received: R\s0,00$/);
+      page.getByRole("group", { name: "In the bank" }).getByText(/^R\s0,00$/),
+    ).toBeVisible();
     // Money is in rands only: there is no currency to pick.
     await expect(page.locator("#payment-currency")).toHaveCount(0);
 
@@ -138,9 +143,26 @@ test.describe("payments ledger (test-mode)", () => {
     // Nothing was only on screen: a reload reads the same ledger back.
     await page.reload();
     await expect(
-      page.getByRole("heading", { level: 1, name: "Dues & payments" }),
+      page.getByRole("heading", { level: 1, name: /^Payments$/ }),
     ).toBeVisible();
     await expectLedgerAndTotals(page);
+
+    // Who owes what agrees: the promised payment is something to check.
+    await page.goto("/captains/payments/members?show=check");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Who owes what" }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("link", { name: "Second Payer" })
+        .filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Promised", { exact: true }).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Rand Payer" }).filter({ visible: true }),
+    ).toHaveCount(0);
 
     // The Overview's "Dues paid" card reads the same ledger.
     await page.goto("/captains/overview");
@@ -154,12 +176,21 @@ test.describe("payments ledger (test-mode)", () => {
     await login(page, { id: "pay-rand", email: "pay-rand@example.com" });
     await openPayments(page);
     await expect(
-      page.getByText(/Payments are for captains and Finance leads/),
+      page.getByText(
+        /Only captains and the Finance team see the camp's payments/,
+      ),
     ).toBeVisible();
     await expect(page.getByText(/R\s(12,34|17,34|5,00|7,00)/)).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "In the bank" })).toHaveCount(
+      0,
+    );
     await expect(
-      page.getByRole("status").filter({ hasText: /^Received:/ }),
+      page.getByRole("button", { name: "Record a payment" }),
     ).toHaveCount(0);
-    await expect(page.locator("#payment-member")).toHaveCount(0);
+    // What they almost always want is their own dues: the lock points there.
+    await page.getByRole("link", { name: "Go to My dues" }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "My dues" }),
+    ).toBeVisible();
   });
 });

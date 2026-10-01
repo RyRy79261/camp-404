@@ -2,6 +2,7 @@ import {
   ViewerRank,
   type ChargeKind,
   type PaymentMethod,
+  type PaymentSource,
   type RefundStatus,
 } from "@camp404/types";
 import { isCurrency, sumMinor, UnknownCurrencyError } from "./money";
@@ -113,6 +114,46 @@ export interface DuesBalance {
 
 function inRands(currency: string): void {
   if (!isCurrency(currency)) throw new UnknownCurrencyError(currency);
+}
+
+/**
+ * The year's payments in the Finance team's words, kept apart so no figure
+ * means two things: money seen in the bank, dues excused (waived: settles what
+ * is owed, brings nothing in), proofs a member sent in waiting to be checked,
+ * and payments recorded by hand as promised but not in the bank yet.
+ */
+export interface PaymentFigures {
+  inBankCents: number;
+  excusedCents: number;
+  toCheckCents: number;
+  toCheckCount: number;
+  promisedCents: number;
+  promisedCount: number;
+}
+
+export function paymentFigures(
+  payments: readonly {
+    amountCents: number;
+    status: PaymentStatus;
+    source: PaymentSource;
+  }[],
+): PaymentFigures {
+  const sum = (rows: readonly { amountCents: number }[]) =>
+    sumMinor(rows.map((p) => p.amountCents));
+  const toCheck = payments.filter(
+    (p) => p.status === "pending" && p.source === "member",
+  );
+  const promised = payments.filter(
+    (p) => p.status === "pending" && p.source !== "member",
+  );
+  return {
+    inBankCents: sum(payments.filter((p) => p.status === "reconciled")),
+    excusedCents: sum(payments.filter((p) => p.status === "waived")),
+    toCheckCents: sum(toCheck),
+    toCheckCount: toCheck.length,
+    promisedCents: sum(promised),
+    promisedCount: promised.length,
+  };
 }
 
 /**
@@ -626,13 +667,21 @@ export interface StatementLedgerPayment {
   userId: string;
   amountCents: number;
   status: PaymentStatus;
+  /** Who recorded it: only a proof the member sent is ever suggested. */
+  source: PaymentSource;
   /** The day the money was paid, YYYY-MM-DD, when known. */
   paidOn: string | null;
 }
 
 export interface StatementProposal extends StatementLine {
-  /** The member the reference names, or null when none does. */
+  /** The member the reference names (or suggested), or null when none. */
   member: { id: string; name: string; refCode: string } | null;
+  /**
+   * How the member was found: by the reference on the line, or only
+   * suggested because one pending payment has the same amount (the Finance
+   * team checks before confirming), or not at all.
+   */
+  matchedBy: "reference" | "amount" | null;
   /** The member's own pending payment for the same amount, to mark received. */
   pendingPaymentId: string | null;
   /** A payment for the same member, amount and day is already on the ledger. */
@@ -654,8 +703,11 @@ export function proposeStatementMatches(
       .filter((m): m is StatementMember & { refCode: string } => !!m.refCode)
       .map((m) => [m.refCode, m]),
   );
+  const byId = new Map(members.map((m) => [m.id, m]));
   const claimed = new Set<string>();
-  return lines.map((line) => {
+  // First the lines whose reference names a member, so a suggestion never
+  // takes a payment a referenced line accounts for.
+  const proposals: StatementProposal[] = lines.map((line) => {
     const found = line.memberRef ? byRef.get(line.memberRef) : undefined;
     const member = found
       ? { id: found.id, name: found.name, refCode: found.refCode }
@@ -664,6 +716,7 @@ export function proposeStatementMatches(
       return {
         ...line,
         member,
+        matchedBy: null,
         pendingPaymentId: null,
         alreadyRecorded: false,
       };
@@ -681,8 +734,34 @@ export function proposeStatementMatches(
     return {
       ...line,
       member,
+      matchedBy: "reference",
       pendingPaymentId: pending?.id ?? null,
       alreadyRecorded,
+    };
+  });
+  // Then a line with no reference: when exactly one proof a member sent, still
+  // waiting, has the same amount, suggest that member (someone who forgot the
+  // reference). Only a suggestion: the import never picks it for the Finance
+  // team, who choose the member before the line can be recorded. A payment a
+  // captain recorded by hand as promised is never suggested.
+  return proposals.map((proposal) => {
+    if (proposal.member) return proposal;
+    const same = payments.filter(
+      (p) =>
+        p.status === "pending" &&
+        p.source === "member" &&
+        p.amountCents === proposal.amountCents &&
+        !claimed.has(p.id),
+    );
+    const only = same.length === 1 ? same[0]! : null;
+    const who = only ? byId.get(only.userId) : undefined;
+    if (!only || !who?.refCode) return proposal;
+    claimed.add(only.id);
+    return {
+      ...proposal,
+      member: { id: who.id, name: who.name, refCode: who.refCode },
+      matchedBy: "amount",
+      pendingPaymentId: only.id,
     };
   });
 }

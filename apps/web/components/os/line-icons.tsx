@@ -41,6 +41,7 @@ export const PROGRAM_ICON_KEYS = [
   "logistics",
   "tent",
   "receipt",
+  "basket",
   "lounge",
   "tickets",
   "guide",
@@ -314,6 +315,14 @@ const PATHS: Record<IconKey, ReactNode> = {
     <>
       <path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z" />
       <path d="M9 8h6M9 12h6M9 16h3" />
+    </>
+  ),
+  // A shopping basket with its handle, for the Kitchen's shopping list (#245).
+  basket: (
+    <>
+      <path d="M3 10h18l-2 10H5L3 10z" />
+      <path d="M8 10l3-6M16 10l-3-6" />
+      <path d="M9 13v4M12 13v4M15 13v4" />
     </>
   ),
   // A Burn ticket, notched at both sides, with its tear-off line.

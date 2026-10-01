@@ -47,6 +47,18 @@ export function meetingWhen(heldAt: Date): string {
   return `${WHEN.format(heldAt).replace(",", "")} · ${meetingTimeKey(heldAt)}`;
 }
 
+/**
+ * A picked camp day (YYYY-MM-DD) in words, "Thu 1 Oct 2026", said under a
+ * date box: the box itself follows the browser's locale, where 10/01 may read
+ * as 10 January. Null for an empty or broken value.
+ */
+export function campDayLabel(day: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const at = new Date(`${day}T12:00:00+02:00`);
+  if (Number.isNaN(at.getTime())) return null;
+  return WHEN.format(at).replace(",", "");
+}
+
 /** An action item's deadline, "Due Fri 9 Oct", from its camp day. */
 export function actionItemDue(dueOn: string): string {
   return `Due ${SHORT_DAY.format(new Date(`${dueOn}T12:00:00+02:00`)).replace(",", "")}`;
@@ -60,12 +72,19 @@ export const TASK_STATUS_LABEL = {
   cancelled: "Taken off the board",
 } as const;
 
-/** "2 decisions · 1 action item", or null when there are neither. */
+/**
+ * "3 people there · 2 decisions · 1 action item", or null when there is none
+ * of it. Who was there leads, when the list knows.
+ */
 export function meetingCounts(input: {
   decisions: number;
   actionItems: number;
+  attendees?: number;
 }): string | null {
   const parts = [
+    input.attendees
+      ? `${input.attendees} ${input.attendees === 1 ? "person" : "people"} there`
+      : null,
     input.decisions > 0
       ? `${input.decisions} decision${input.decisions === 1 ? "" : "s"}`
       : null,

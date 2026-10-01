@@ -14,13 +14,13 @@ import {
 } from "./_helpers";
 
 // The Kitchen's meal plan (the owner's sketch, 2026-09-24, test-mode): this
-// year's days on site and the plates at breakfast, lunch and dinner, reached
-// from the recipe book. A captain or a Kitchen lead edits it (Save in the
-// heading, "Copy Day 1 to every day"), and it persists; a member reads it and
-// changes nothing; a lead of another team the same. The editor sets the date
-// of day 1 beside the days on site, and every day row then shows its date
-// ("Day 1 · Sat 25 Apr"), for the editor and a member alike. The page fits a
-// phone.
+// year's days on site and the plates at breakfast and dinner (the camp does
+// no lunch), reached from the recipe book. A captain or a Kitchen lead edits
+// it (Save in the heading, "Copy Day 1's plates to every day"), and it
+// persists; a member reads the menu as a card per day and changes nothing; a
+// lead of another team the same. The editor sets the date of day 1 beside
+// the days on site, and every day then shows its date ("Day 1 · Sat 25
+// Apr"), for the editor and a member alike. The page fits a phone.
 
 async function member(
   page: Page,
@@ -64,16 +64,18 @@ test.describe("meal plan (test-mode)", () => {
     await expect(page.getByLabel("Day 1 breakfast")).toHaveValue("0");
 
     // A count out of range is refused beside it, and nothing saves.
-    await page.getByLabel("Day 1 lunch").fill("501");
+    await expect(page.getByLabel(/lunch/i)).toHaveCount(0);
+    await page.getByLabel("Day 1 dinner").fill("501");
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Give at most 500 plates.")).toBeVisible();
 
     await page.getByLabel("Days on site").fill("3");
     await expect(page.getByRole("rowheader", { name: "Day 4" })).toHaveCount(0);
     await page.getByLabel("Day 1 breakfast").fill("20");
-    await page.getByLabel("Day 1 lunch").fill("0");
     await page.getByLabel("Day 1 dinner").fill("25");
-    await page.getByRole("button", { name: "Copy Day 1 to every day" }).click();
+    await page
+      .getByRole("button", { name: "Copy Day 1’s plates to every day" })
+      .click();
     await expect(page.getByLabel("Day 3 dinner")).toHaveValue("25");
     await page.getByLabel("Day 2 dinner").fill("50");
     // The date of day 1, beside the days on site, dates every row at once.
@@ -107,22 +109,19 @@ test.describe("meal plan (test-mode)", () => {
       )
       .toBe(true);
 
-    // A member reads the same plan, and changes nothing.
+    // A member reads the menu, a card per day with its date, and changes
+    // nothing.
     await member(page, request, "mp-member");
     await page.goto("/kitchen/meal-plan");
-    const table = page.getByRole("table", { name: "Plates per day" });
-    await expect(
-      table.getByRole("row", { name: /Day 2/ }).getByText("50"),
-    ).toBeVisible();
-    // A member reads each day's date too, and has no date to change.
-    await expect(
-      table.getByRole("rowheader", { name: "Day 2 · Sun 26 Apr" }),
-    ).toBeVisible();
+    const day2 = page.getByRole("region", { name: /Sun 26 Apr/ });
+    await expect(day2).toContainText("Dinner50 plates");
+    await expect(day2).toContainText("Dishes not chosen yet");
+    await expect(page.getByText("Sat 25 – Mon 27 Apr")).toBeVisible();
     await expect(page.getByLabel("Day 1 date")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save" })).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Copy Day 1 to every day" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Copy Day 1/ })).toHaveCount(
+      0,
+    );
     await expect(page.getByRole("spinbutton")).toHaveCount(0);
   });
 
@@ -145,10 +144,7 @@ test.describe("meal plan (test-mode)", () => {
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Save" })).toHaveCount(0);
     await expect(
-      page
-        .getByRole("table", { name: "Plates per day" })
-        .getByRole("row", { name: /Day 1/ })
-        .getByText("40"),
-    ).toBeVisible();
+      page.getByRole("region", { name: "Day 1", exact: true }),
+    ).toContainText("Dinner40 plates");
   });
 });

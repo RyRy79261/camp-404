@@ -1,4 +1,4 @@
-import { Lock, PlugZap } from "lucide-react";
+import { PlugZap } from "lucide-react";
 import {
   MAINS_VOLTS,
   amps,
@@ -18,6 +18,7 @@ import {
   ResponsiveDataTable,
   type ResponsiveColumn,
 } from "@camp404/ui/components/responsive-data-table";
+import { RowActions } from "@camp404/ui/components/row-actions";
 import type {
   EditableLoad,
   InventoryOption,
@@ -48,7 +49,6 @@ import {
 } from "@/lib/power";
 import {
   CATEGORY_LABELS,
-  POWER_REFUSAL,
   START_UP_SPIKE,
   START_UP_SPIKE_HELP,
   daysText,
@@ -67,16 +67,16 @@ export const metadata = { title: "Load list — Camp 404" };
 // The camp's load list and power calculator (#253). Every approved member
 // reads it; a captain or a Power & Lighting lead edits it. Composed from the
 // AfrikaBurn console: the categories screen for the list (the table in a card,
-// Add opening a dialog, Edit and Remove per row, and for everyone else the
-// controls PRESENT BUT DISABLED with one Lock line above the table that each
-// one describes to), and the status board for the results (the KPI row and the
-// officer-coverage rail, here the generator).
+// Add opening a dialog, Edit and Remove per row in the row action slot), and
+// the status board for the results (the KPI row and the officer-coverage rail,
+// here the generator). Everyone else reads the same list with no controls at
+// all: the heading says who edits it (AGENTS.md, "read-only is content").
 //
 // Everything is computed here on the server with the core functions, so the
 // figures on the page are the ones the tests pin. No member id reaches the
 // page: a load has none, and a member's own load reads "Member-owned".
 
-/** The one refusal line every disabled control on this page describes to. */
+/** Kept for the shared controls' props; an editor never sees a refusal. */
 const REFUSAL_ID = "power-edit-refusal";
 
 /** The row as the edit dialog takes it: no year, order or timestamps. */
@@ -192,21 +192,32 @@ function loadColumns(
       cellClassName: "text-muted-foreground",
       cell: (r) => ownerText(r),
     },
-    {
-      id: "actions",
-      header: "Actions",
-      role: "actions",
-      hideHeader: true,
-      align: "right",
-      cell: (r) => (
-        <LoadRowActions
-          load={editable(r)}
-          canEdit={canEdit}
-          refusalId={REFUSAL_ID}
-          inventory={inventory}
-        />
-      ),
-    },
+    // Only an editor has a row action at all; a reader sees the list.
+    ...(canEdit
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            role: "actions",
+            hideHeader: true,
+            align: "right",
+            cell: (r) => (
+              <RowActions
+                label={`Actions for ${r.name}`}
+                secondarySlots={2}
+                secondary={
+                  <LoadRowActions
+                    load={editable(r)}
+                    canEdit
+                    refusalId={REFUSAL_ID}
+                    inventory={inventory}
+                  />
+                }
+              />
+            ),
+          } satisfies ResponsiveColumn<PowerLoadRow>,
+        ]
+      : []),
   ];
 }
 
@@ -295,13 +306,10 @@ export default async function PowerLoadsPage() {
   const canCopy = loads.length === 0 && earlier !== null;
   // Offered once, as the empty state's call to action (the only time it
   // applies), so the page never carries two identical buttons.
-  const copyButton = canCopy ? (
-    <CopyLastYearButton
-      fromCycle={earlier}
-      canEdit={canEdit}
-      refusalId={REFUSAL_ID}
-    />
-  ) : null;
+  const copyButton =
+    canCopy && canEdit ? (
+      <CopyLastYearButton fromCycle={earlier} canEdit refusalId={REFUSAL_ID} />
+    ) : null;
 
   return (
     <div className="flex flex-col">
@@ -310,8 +318,8 @@ export default async function PowerLoadsPage() {
         title="Load list"
         description="Everything the camp plugs in this year and what it adds up to. Everyone can read it; captains and Power & Lighting leads edit it."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {canEdit && (
+          canEdit ? (
+            <div className="flex flex-wrap items-center gap-2">
               <PlanSettingsButton
                 key={plan.version}
                 plan={{
@@ -321,13 +329,13 @@ export default async function PowerLoadsPage() {
                   version: plan.version,
                 }}
               />
-            )}
-            <AddLoadButton
-              canEdit={canEdit}
-              refusalId={REFUSAL_ID}
-              inventory={inventoryOptions}
-            />
-          </div>
+              <AddLoadButton
+                canEdit
+                refusalId={REFUSAL_ID}
+                inventory={inventoryOptions}
+              />
+            </div>
+          ) : undefined
         }
       />
       <PowerTabs tab="loads" />
@@ -349,16 +357,6 @@ export default async function PowerLoadsPage() {
             </p>
           </div>
 
-          {!canEdit && (
-            <p
-              id={REFUSAL_ID}
-              className="flex items-start gap-2 rounded-lg border border-border bg-card/40 px-3 py-2.5 text-xs text-muted-foreground"
-            >
-              <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              {POWER_REFUSAL}
-            </p>
-          )}
-
           {loads.length === 0 ? (
             <EmptyState
               icon={<PlugZap />}
@@ -371,14 +369,13 @@ export default async function PowerLoadsPage() {
               action={copyButton}
             />
           ) : (
-            <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
-              <ResponsiveDataTable
-                columns={loadColumns(canEdit, inventoryOptions)}
-                data={loads}
-                getRowKey={(r) => r.id}
-                label="Load list"
-              />
-            </div>
+            <ResponsiveDataTable
+              columns={loadColumns(canEdit, inventoryOptions)}
+              data={loads}
+              getRowKey={(r) => r.id}
+              label="Load list"
+              framed
+            />
           )}
         </section>
 
