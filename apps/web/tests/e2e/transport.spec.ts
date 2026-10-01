@@ -16,7 +16,7 @@ import {
 // Transport (#270, test-mode). A member asks for a seat in a driver's car;
 // the driver accepts, then writes to their car, and the rider reads it in
 // their inbox. A plain member only reads the car list; a Kitchen lead stands
-// on the same team_lead rung and still finds the trailer controls disabled;
+// on the same team_lead rung and still finds no trailer controls at all;
 // a Transport & Logistics lead adds a trailer and puts it on the car.
 
 async function approvedMember(
@@ -125,18 +125,16 @@ test.describe("transport (test-mode)", () => {
       canTow: true,
     });
 
-    // A plain member reads the car list; the trailer controls are disabled.
+    // A plain member reads the car list; there are no trailer controls at
+    // all, greyed or not.
     await approvedMember(page, request, "tr-member", "Mo Member");
     await openTransport(page);
     await expect(
       page.getByText("Dee Driver").filter(visible).first(),
     ).toBeVisible();
     await expect(
-      page.getByText(/Captains and Transport & Logistics leads match people/),
-    ).toBeVisible();
-    await expect(
       page.getByRole("button", { name: /^Add trailer/ }),
-    ).toBeDisabled();
+    ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: "Still without a seat" }),
     ).toHaveCount(0);
@@ -146,8 +144,11 @@ test.describe("transport (test-mode)", () => {
     await seedTeam(request, "tr-kitchen", "kitchen", true);
     await openTransport(page);
     await expect(
+      page.getByText("Dee Driver").filter(visible).first(),
+    ).toBeVisible();
+    await expect(
       page.getByRole("button", { name: /^Add trailer/ }),
-    ).toBeDisabled();
+    ).toHaveCount(0);
 
     // A Transport & Logistics lead adds a trailer and puts it on the car.
     await approvedMember(page, request, "tr-lead", "Tee Lead");

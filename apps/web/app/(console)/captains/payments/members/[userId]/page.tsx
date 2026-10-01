@@ -1,9 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { campDayKey } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
-import { Button } from "@camp404/ui/components/button";
 import { PaymentsFrame } from "@/components/dues/payments-frame";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getDuesYear, getMemberDues, listFeeTiers } from "@/lib/dues";
@@ -17,9 +14,11 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Member's dues — Camp 404" };
 
-// One member's dues for the year (#240), for the Finance team: their charges,
-// payments and refunds on the left, and their balance, camp fee and payment
-// plan on the right. A concession's reason is read here and nowhere a member
+// One member's dues for the year (#240), for the Finance team: their balance,
+// payments and charges on the left, and their camp fee, a new charge and their
+// payment plan in a rail on the right. The tabs above ("Who owes what" lit)
+// are the way back; on a phone, where the tabs are one menu, a link back sits
+// beside it. A concession's reason is read here and nowhere a member
 // can see it. Captains and Finance leads only; anyone else sees a lock and
 // nothing is read, not even the member's name.
 
@@ -53,25 +52,18 @@ export default async function MemberDuesPage({
 
   return (
     <div className="flex flex-col">
-      <div className="mb-4">
-        <Button asChild variant="ghost" size="sm">
-          <Link href={PAYMENTS_OWING_PATH}>
-            <ArrowLeft aria-hidden />
-            Who owes what
-          </Link>
-        </Button>
-      </div>
       <PaymentsFrame
         active={PAYMENTS_OWING_PATH}
+        below
         title={dues.name}
         description="Their camp fee, other charges, payments and payment plan for this year."
         cleared
       >
         <div className="-mt-2 mb-6 flex flex-wrap gap-2" aria-label="Member">
           {dues.refCode && (
-            <Badge variant="outline" className="font-mono normal-case">
+            <span className="inline-flex items-center rounded-md border border-border px-2 py-0.5 font-mono text-xs tracking-normal">
               {dues.refCode}
-            </Badge>
+            </span>
           )}
           <Badge variant="secondary">
             {dues.participation

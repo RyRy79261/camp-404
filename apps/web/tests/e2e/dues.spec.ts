@@ -66,6 +66,9 @@ async function memberPledges(page: Page) {
   await page.goto("/dues");
   await heading(page, "My dues");
   await expect(page.getByText("Nothing to pay yet.")).toBeVisible();
+  // Nothing charged yet: picking what they can pay is the one thing to do,
+  // and there is no proof form for money they do not owe.
+  await expect(page.getByLabel("Proof of payment")).toHaveCount(0);
   await page.getByRole("radio", { name: /Base: R\s1\s500,00/ }).click();
   await page.getByRole("button", { name: "Save my pledge" }).click();
   await expect(page.getByText("You owe R 1 500,00.")).toBeVisible();
@@ -147,6 +150,14 @@ test.describe("dues (test-mode)", () => {
     await expect(
       page.getByRole("list", { name: "Your payments" }).getByText("Received"),
     ).toBeVisible();
+    // Paid up: the proof form folds to one button, and the pledge to a line.
+    await expect(page.getByLabel("Proof of payment")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Send another proof" }),
+    ).toBeVisible();
+    await expect(page.getByTestId("my-pledge")).toContainText(
+      /You pledged R\s1\s500,00 \(Base\)\./,
+    );
     // A member reads only their own: the Finance tools stay locked.
     await page.goto("/captains/payments/members");
     await expect(
@@ -189,7 +200,9 @@ test.describe("dues (test-mode)", () => {
     });
     await page.getByRole("button", { name: "Read the statement" }).click();
     await expect(
-      page.getByText(/1 payment, 1 matched to a member by reference\./),
+      page.getByText(
+        /^1 payment in, 1 matched by reference\. 1 payment out was skipped\.$/,
+      ),
     ).toBeVisible();
     const lines = page.getByRole("list", { name: "Statement payments" });
     await expect(

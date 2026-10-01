@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_TICKET, type TicketFacts } from "@camp404/core";
 import {
+  NO_FILTERS,
+  applicationCountLine,
   applicationRows,
-  matchesApplicationFilter,
+  filterApplicationRows,
+  type ApplicationFilters,
   type ApplicationMember,
 } from "@/lib/applications";
 
@@ -107,23 +110,75 @@ describe("applicationRows: the answer and the decision", () => {
   });
 });
 
-describe("matchesApplicationFilter", () => {
+describe("filterApplicationRows", () => {
   const rows = applicationRows(members, tickets);
-  const ids = (f: Parameters<typeof matchesApplicationFilter>[1]) =>
-    rows.filter((r) => matchesApplicationFilter(r, f)).map((r) => r.id);
+  const ids = (f: Partial<ApplicationFilters>) =>
+    filterApplicationRows(rows, { ...NO_FILTERS, ...f }).map((r) => r.id);
 
-  it("filters by status, no answer, and no ticket yet", () => {
-    expect(ids("all")).toEqual(["a", "b", "n"]);
-    expect(ids("applied")).toEqual(["a"]);
-    expect(ids("accepted")).toEqual(["b"]);
-    expect(ids("none")).toEqual(["n"]);
-    expect(ids("needs_ticket")).toEqual(["b"]);
+  it("filters by this year's status, or no answer", () => {
+    expect(ids({})).toEqual(["a", "b", "n"]);
+    expect(ids({ year: "applied" })).toEqual(["a"]);
+    expect(ids({ year: "accepted" })).toEqual(["b"]);
+    expect(ids({ year: "none" })).toEqual(["n"]);
   });
 
-  it("finds nobody without a ticket on a lead's rows (they have no tickets)", () => {
+  it("filters by ticket, apart from the year", () => {
+    expect(ids({ ticket: "needs_ticket" })).toEqual(["b"]);
+    expect(ids({ ticket: "wap_requested" })).toEqual([]);
+    const more = applicationRows(
+      members,
+      new Map<string, TicketFacts>([
+        [
+          "a",
+          {
+            ticketStatus: "needs_directed_ticket",
+            ddt: "none",
+            wap: "requested",
+          },
+        ],
+        [
+          "b",
+          {
+            ticketStatus: "needs_directed_ticket",
+            ddt: "allocated",
+            wap: "issued",
+          },
+        ],
+      ]),
+    );
+    const pick = (f: Partial<ApplicationFilters>) =>
+      filterApplicationRows(more, { ...NO_FILTERS, ...f }).map((r) => r.id);
+    // Ben's DDT is given: he no longer waits on one.
+    expect(pick({ ticket: "wants_ddt" })).toEqual(["a"]);
+    expect(pick({ ticket: "wap_requested" })).toEqual(["a"]);
+    // Both filters at once.
+    expect(pick({ ticket: "wants_ddt", year: "accepted" })).toEqual([]);
+  });
+
+  it("finds a name by any part of it, any case", () => {
+    expect(ids({ query: "BE" })).toEqual(["b"]);
+    expect(ids({ query: "  " })).toEqual(["a", "b", "n"]);
+  });
+
+  it("finds nobody by ticket on a lead's rows (they have no tickets)", () => {
     const leadRows = applicationRows(members, null);
     expect(
-      leadRows.filter((r) => matchesApplicationFilter(r, "needs_ticket")),
+      filterApplicationRows(leadRows, {
+        ...NO_FILTERS,
+        ticket: "needs_ticket",
+      }),
     ).toEqual([]);
+  });
+});
+
+describe("applicationCountLine", () => {
+  it("counts the members, and on a captain's rows who still needs a ticket", () => {
+    expect(applicationCountLine(applicationRows(members, tickets))).toBe(
+      "3 members, 1 still needs a ticket",
+    );
+    expect(applicationCountLine(applicationRows(members, null))).toBe(
+      "3 members",
+    );
+    expect(applicationCountLine([])).toBe("0 members");
   });
 });

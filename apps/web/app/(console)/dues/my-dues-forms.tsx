@@ -1,39 +1,59 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Pencil, ReceiptText, Send } from "lucide-react";
 import { formatMoney, parseMoneyToMinor } from "@camp404/core";
 import type { PaymentMethod } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 import { DateControl } from "@camp404/ui/components/date-control";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@camp404/ui/components/dialog";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
 import { OptionCardGroup } from "@camp404/ui/components/option-card-group";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
-import { PROOF_MAX_BYTES } from "@/lib/dues-copy";
+import { ReceiptPicker } from "@/components/claims/receipt-picker";
+import { PROOF_MAX_BYTES, PROOF_TYPES } from "@/lib/dues-copy";
 import { METHOD_CHOICES, typedRands } from "@/lib/dues-view";
 import { requestMyRefundAction, savePledgeAction } from "./actions";
 
 // The member's own dues forms (#240): their pledge, their proof of payment,
 // and asking for a refund. Problems with what they typed show beside the form.
+// Each form's button is normal width at its foot, on the left, like every
+// other form in the console. Once a member has pledged, or has nothing left
+// to send proof for, the form moves into a dialog behind a quiet button, so
+// the page reads like a statement (AfrikaBurn's add-and-edit dialog; on a
+// phone the dialog fills the screen).
 
 const TYPE_AMOUNT = "Type the amount in rands, like 1250 or 1250,50.";
 const BELOW = "below";
 
+/** A dialog that fills a phone's screen and scrolls when it is long. */
+const DIALOG_CLASS =
+  "max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:max-w-full max-sm:rounded-none max-sm:border-0";
+
 const selectClass =
-  "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
+  "h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
 export function PledgeForm({
   tiers,
   pledge,
   locked,
+  onSaved,
 }: {
   tiers: { id: string; label: string; amountCents: number }[];
   pledge: { tierId: string | null; amountCents: number } | null;
   locked: boolean;
+  onSaved?: () => void;
 }) {
   const router = useRouter();
   const [choice, setChoice] = useState(pledge ? (pledge.tierId ?? BELOW) : "");
@@ -90,6 +110,7 @@ export function PledgeForm({
           ? "Saved. Your camp fee is on your dues now."
           : "Saved. Your fee is charged once you have a place.",
       );
+      onSaved?.();
       router.refresh();
     });
   }
@@ -116,6 +137,7 @@ export function PledgeForm({
         <InputField
           label="What you can pay (R)"
           inputMode="decimal"
+          className="max-w-48"
           value={below}
           onChange={(e) => setBelow(e.currentTarget.value)}
           disabled={pending}
@@ -126,7 +148,12 @@ export function PledgeForm({
           {error}
         </p>
       )}
-      <Button type="button" disabled={pending || !choice} onClick={save}>
+      <Button
+        type="button"
+        className="self-start"
+        disabled={pending || !choice}
+        onClick={save}
+      >
         {pending && <Loader2 className="animate-spin" aria-hidden />}
         {pledge ? "Change my pledge" : "Save my pledge"}
       </Button>
@@ -134,9 +161,84 @@ export function PledgeForm({
   );
 }
 
-export function ProofForm({ today }: { today: string }) {
+/** "Change" beside a pledge that is not charged yet: the form in a dialog. */
+export function PledgeDialog({
+  tiers,
+  pledge,
+}: {
+  tiers: { id: string; label: string; amountCents: number }[];
+  pledge: { tierId: string | null; amountCents: number };
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="outline">
+          <Pencil aria-hidden />
+          Change
+        </Button>
+      </DialogTrigger>
+      <DialogContent className={DIALOG_CLASS}>
+        <DialogHeader>
+          <DialogTitle>What you can pay</DialogTitle>
+          <DialogDescription>
+            You can change it until your fee is charged. Less than the lowest
+            tier is fine too.
+          </DialogDescription>
+        </DialogHeader>
+        <PledgeForm
+          tiers={tiers}
+          pledge={pledge}
+          locked={false}
+          onSaved={() => setOpen(false)}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * "Send another proof" once nothing is left to pay (or "Send a proof" before
+ * any payment): the form in a dialog.
+ */
+export function ProofDialog({
+  today,
+  label = "Send another proof",
+}: {
+  today: string;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" size="sm" variant="outline">
+          <ReceiptText aria-hidden />
+          {label}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className={DIALOG_CLASS}>
+        <DialogHeader>
+          <DialogTitle>Tell us you paid</DialogTitle>
+          <DialogDescription>
+            Send the amount, the day and your proof of payment: a photo or a PDF
+            of the bank&rsquo;s confirmation. Never send card numbers.
+          </DialogDescription>
+        </DialogHeader>
+        <ProofForm today={today} onSent={() => setOpen(false)} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function ProofForm({
+  today,
+  onSent,
+}: {
+  today: string;
+  onSent?: () => void;
+}) {
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
   const [amount, setAmount] = useState("");
   const [paidOn, setPaidOn] = useState(today);
   const [method, setMethod] = useState<PaymentMethod>("bank_transfer");
@@ -195,29 +297,31 @@ export function ProofForm({ today }: { today: string }) {
       setAmount("");
       setNote("");
       setFile(null);
-      if (fileRef.current) fileRef.current.value = "";
+      onSent?.();
       router.refresh();
     });
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <InputField
-        label="Amount (R)"
-        inputMode="decimal"
-        value={amount}
-        onChange={(e) => setAmount(e.currentTarget.value)}
-        disabled={pending}
-      />
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="proof-day">Day you paid</Label>
-        <DateControl
-          id="proof-day"
-          value={paidOn}
-          max={today}
-          onChange={(e) => setPaidOn(e.currentTarget.value)}
+      <div className="grid gap-4 page-sm:grid-cols-[12rem_12rem]">
+        <InputField
+          label="Amount (R)"
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.currentTarget.value)}
           disabled={pending}
         />
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="proof-day">Day you paid</Label>
+          <DateControl
+            id="proof-day"
+            value={paidOn}
+            max={today}
+            onChange={(e) => setPaidOn(e.currentTarget.value)}
+            disabled={pending}
+          />
+        </div>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="proof-method">How you paid</Label>
@@ -237,18 +341,20 @@ export function ProofForm({ today }: { today: string }) {
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="proof-file">Proof of payment</Label>
-        <input
-          ref={fileRef}
+        <ReceiptPicker
           id="proof-file"
-          type="file"
-          accept="application/pdf,image/jpeg,image/png,image/webp"
-          className="text-sm file:mr-3 file:rounded-md file:border file:border-border file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-secondary-foreground"
-          onChange={(e) => setFile(e.currentTarget.files?.[0] ?? null)}
+          files={file ? [file] : []}
+          onChange={(files) => setFile(files[0] ?? null)}
+          maxFiles={1}
+          maxBytes={PROOF_MAX_BYTES}
+          accept={Object.keys(PROOF_TYPES).join(",")}
+          inputLabel="Proof of payment"
+          addText="Add your proof"
+          kindText="A PDF or a photo of the bank's confirmation"
           disabled={pending}
         />
         <p className="text-xs text-muted-foreground">
-          A PDF or a photo, up to 4 MB. Only you and the Finance team can open
-          it.
+          Only you and the Finance team can open it.
         </p>
       </div>
       <div className="flex flex-col gap-1.5">
@@ -260,15 +366,22 @@ export function ProofForm({ today }: { today: string }) {
           value={note}
           onChange={(e) => setNote(e.currentTarget.value)}
           disabled={pending}
-          placeholder="Paid for me and my partner, for example"
         />
+        <p className="text-xs text-muted-foreground">
+          For example: paid for me and my partner.
+        </p>
       </div>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
-      <Button type="button" disabled={pending} onClick={send}>
+      <Button
+        type="button"
+        className="self-start"
+        disabled={pending}
+        onClick={send}
+      >
         {pending ? (
           <Loader2 className="animate-spin" aria-hidden />
         ) : (

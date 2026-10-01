@@ -61,6 +61,7 @@ const LINE: Readonly<Record<string, IconKey>> = {
   "my-gear": "tent",
   "gear-rental": "tent",
   "my-claims": "receipt",
+  budgets: "ledger",
   "claim-approvals": "receipt",
   "camp-settings": "settings",
   "join-site": "joinsite",

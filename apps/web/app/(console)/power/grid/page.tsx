@@ -405,14 +405,13 @@ export default async function PowerGridPage() {
               description="List what the camp plugs in on the load list, then say here where each plugs in."
             />
           ) : (
-            <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
-              <ResponsiveDataTable
-                columns={loadColumns(canEdit, where, pointOptions, names)}
-                data={loads}
-                getRowKey={(l) => l.id}
-                label="What plugs in where"
-              />
-            </div>
+            <ResponsiveDataTable
+              columns={loadColumns(canEdit, where, pointOptions, names)}
+              data={loads}
+              getRowKey={(l) => l.id}
+              label="What plugs in where"
+              framed
+            />
           )}
         </section>
 

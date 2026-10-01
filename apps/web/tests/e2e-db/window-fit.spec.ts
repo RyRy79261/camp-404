@@ -1,7 +1,7 @@
 import { test, expect, type Locator } from "@playwright/test";
 import { resetTestState } from "../e2e/_helpers";
 import {
-  borderTop,
+  tableFrameTop,
   expectBeside,
   expectFits,
   expectStacked,
@@ -132,11 +132,11 @@ test("the builder and a questionnaire's results fit their window", async ({
   await resizeWindowTo(captain, win, NARROW);
   await expectFits(win);
   await expect(win.getByRole("table", { name: "Answers" })).toBeHidden();
-  await expect.poll(() => borderTop(answers)).toBe(0);
+  await expect.poll(() => tableFrameTop(answers)).toBe(0);
   await resizeWindowTo(captain, win, WIDE);
   await expectFits(win);
   await expect(win.getByRole("table", { name: "Answers" })).toBeVisible();
-  await expect.poll(() => borderTop(answers)).toBe(1);
+  await expect.poll(() => tableFrameTop(answers)).toBe(1);
 
   await captain.context().close();
 });

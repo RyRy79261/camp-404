@@ -152,6 +152,52 @@ export function borderTop(el: Locator): Promise<number> {
 }
 
 /**
+ * The top border of a ResponsiveDataTable's frame, in px: the frame is drawn
+ * on its table form only, so it is 0 whenever the rows show as cards.
+ */
+export function tableFrameTop(dataTable: Locator): Promise<number> {
+  return dataTable
+    .locator('[data-rdt-layout="table"]')
+    .evaluate((node) =>
+      node.getClientRects().length === 0
+        ? 0
+        : parseFloat(getComputedStyle(node).borderTopWidth),
+    );
+}
+
+/**
+ * No shared data table in the window scrolls sideways: each one either fits
+ * as a table or shows its rows as cards (the audit of 2026-10-01 found row
+ * buttons past the window's edge behind a hidden sideways scroll), and each
+ * visible row action sits inside the window.
+ */
+export async function expectTablesFit(win: Locator): Promise<void> {
+  await expect
+    .poll(() =>
+      win.evaluate((w) =>
+        [
+          ...w.querySelectorAll<HTMLElement>(
+            '[data-slot="responsive-data-table"] [data-slot="table-container"]',
+          ),
+        ]
+          .filter((el) => el.getClientRects().length > 0)
+          .map((el) => el.scrollWidth - el.clientWidth)
+          .filter((over) => over > 1),
+      ),
+    )
+    .toEqual([]);
+  const right = (await win.boundingBox())!;
+  const actions = await win.evaluate((w) =>
+    [...w.querySelectorAll<HTMLElement>('[data-slot="row-actions"]')]
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => el.getBoundingClientRect().right),
+  );
+  for (const edge of actions) {
+    expect(edge).toBeLessThanOrEqual(right.x + right.width);
+  }
+}
+
+/**
  * The sticky rail around `inside` sticks near the top of the WINDOW's scroll
  * box (within 24px) while the column beside it scrolls on: the page is
  * scrolled halfway through the room the rail has to travel, and the rail's

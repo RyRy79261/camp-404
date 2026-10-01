@@ -329,7 +329,10 @@ export default async function InventoryNeedsPage({
                       {g.rows.map((r) => (
                         <tr key={r.id}>
                           <td className={TD}>
-                            <span className="block truncate font-semibold">
+                            <span
+                              className="block truncate font-semibold"
+                              title={r.name}
+                            >
                               {r.name}
                             </span>
                             <SubLine>{needLine(r, viewer)}</SubLine>

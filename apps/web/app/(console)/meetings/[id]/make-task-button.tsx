@@ -38,12 +38,13 @@ export function MakeTaskButton({
       type="button"
       size="sm"
       variant="outline"
+      className="w-full"
       onClick={makeTask}
       disabled={pending}
       aria-label={`Add “${text}” to the task board`}
     >
       {pending ? <Spinner /> : <SquareKanban aria-hidden />}
-      Add to tasks
+      Add to board
     </Button>
   );
 }

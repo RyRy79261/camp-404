@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   CalendarDays,
-  Circle,
   Crown,
+  Megaphone,
   NotebookPen,
   Plus,
   SquareKanban,
@@ -18,6 +18,7 @@ import {
 } from "@camp404/core";
 import { Team } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
+import { Button } from "@camp404/ui/components/button";
 import {
   Card,
   CardContent,
@@ -25,6 +26,7 @@ import {
   CardTitle,
 } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
+import { cn } from "@camp404/ui/lib/utils";
 import { CalendarRow } from "@/components/calendar/calendar-days";
 import { MeetingRow } from "@/components/meetings/meeting-row";
 import { TeamAboutCard } from "@/components/teams/team-about-card";
@@ -46,8 +48,8 @@ import {
 } from "@/lib/meeting-notes-view";
 import { ledgerCycle } from "@/lib/payments";
 import { listTeamPeople, type TeamPerson } from "@/lib/roster";
-import { presentTask } from "@/lib/task-board";
-import { buildTeamPage } from "@/lib/team-page";
+import { presentTask, TASK_COLUMN_LABEL, tasksHref } from "@/lib/task-board";
+import { buildTeamPage, writeAnnouncementHref } from "@/lib/team-page";
 import { listBoardTasks } from "@/lib/tasks";
 import { getTeamProgram, listTeamAnnouncements } from "@/lib/team-programs";
 import { getLeadTeams } from "@/lib/users";
@@ -89,6 +91,13 @@ const DUE_VARIANT = {
   done: "outline",
 } as const;
 
+/** A card's header with its one action at the right. */
+const HEADER_WITH_ACTION =
+  "flex-row flex-wrap items-center justify-between gap-x-3 gap-y-2 space-y-0 pb-3";
+/** A card's "See all" link, at its foot. */
+const FOOT_LINK =
+  "mt-3 self-start text-xs font-medium text-accent hover:underline";
+
 const CALENDAR_NOTE = {
   not_configured: "The camp calendar isn't connected yet.",
   unavailable: "Couldn't reach the camp calendar just now.",
@@ -105,7 +114,7 @@ function PersonRow({ person, you }: { person: TeamPerson; you: boolean }) {
         )}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">
+        <span className="block text-sm font-medium [overflow-wrap:anywhere]">
           {person.displayName}
           {you ? <span className="text-muted-foreground"> (you)</span> : null}
         </span>
@@ -220,7 +229,10 @@ export default async function TeamPage({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 page-lg:grid-cols-3">
+      {/* The main cards by use, the people beside them from a medium window
+          up (the window opens wide enough for both). Each card's own action
+          sits at the right of its header, the "See all" link at its foot. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 page-md:grid-cols-[minmax(0,1fr)_17rem] page-lg:grid-cols-3">
         <div className="flex flex-col gap-6 page-lg:col-span-2">
           <TeamAboutCard
             description={about.description}
@@ -238,18 +250,6 @@ export default async function TeamPage({
           />
 
           {panel}
-
-          <TeamBudgetCard
-            teamLabel={entry.label}
-            totals={budgets[team.data]}
-            canApprove={canApproveClaim(rank, leadTeams, team.data)}
-            keepsMoney={canManageMoney(rank, leadTeams)}
-          />
-
-          <TeamAnnouncementsCard
-            items={announcements.items}
-            more={announcements.more}
-          />
 
           <Card>
             <CardHeader className="pb-3">
@@ -283,10 +283,7 @@ export default async function TeamPage({
                 </ul>
               )}
               {calendar.status === "ok" ? (
-                <Link
-                  href={calendarHref}
-                  className="mt-3 self-start text-xs font-medium text-accent hover:underline"
-                >
+                <Link href={calendarHref} className={FOOT_LINK}>
                   {page.eventsMore > 0
                     ? `See all on the calendar (+${page.eventsMore} more)`
                     : "See this team on the calendar"}
@@ -296,11 +293,19 @@ export default async function TeamPage({
           </Card>
 
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className={HEADER_WITH_ACTION}>
               <CardTitle className="flex items-center gap-2 text-base">
                 <SquareKanban className="h-4 w-4 text-accent" aria-hidden />
                 Open tasks
               </CardTitle>
+              {canEdit && !entry.archived ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={tasksHref(key, { add: true })}>
+                    <Plus aria-hidden />
+                    Add task
+                  </Link>
+                </Button>
+              ) : null}
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {page.tasks.length === 0 ? (
@@ -315,62 +320,68 @@ export default async function TeamPage({
                   {page.tasks.map((task) => (
                     <li
                       key={task.id}
-                      className="grid grid-cols-[1rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 page-sm:grid-cols-[1rem_minmax(0,1fr)_auto]"
+                      className="grid grid-cols-[0.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-3 page-sm:grid-cols-[0.5rem_minmax(0,1fr)_7.5rem]"
                     >
-                      <Circle
-                        className="h-4 w-4 text-muted-foreground"
+                      {/* Where the card stands on the board, as a dot: content
+                          to read, not a box to tick. */}
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full",
+                          task.status === "in_progress"
+                            ? "bg-accent"
+                            : "bg-muted-foreground/60",
+                        )}
                         aria-hidden
                       />
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium">
+                        <span className="block text-sm font-medium [overflow-wrap:anywhere]">
                           {task.title}
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">
-                          {task.assigneeName
-                            ? `${task.assigneeName}${task.mine ? " (you)" : ""}`
-                            : "Nobody yet"}
+                          {[
+                            TASK_COLUMN_LABEL[task.status],
+                            task.assigneeName
+                              ? `${task.assigneeName}${task.mine ? " (you)" : ""}`
+                              : "Nobody yet",
+                          ].join(" · ")}
                         </span>
                       </span>
-                      {/* On a phone the badges drop under the title. */}
-                      {task.status === "in_progress" || task.due ? (
-                        <span className="col-start-2 flex flex-wrap gap-1.5 page-sm:col-start-3 page-sm:row-start-1 page-sm:justify-end">
-                          {task.status === "in_progress" ? (
-                            <Badge variant="outline">Doing</Badge>
-                          ) : null}
-                          {task.due ? (
-                            <Badge variant={DUE_VARIANT[task.due.tone]}>
-                              {task.due.label}
-                            </Badge>
-                          ) : null}
-                        </span>
-                      ) : null}
+                      {/* One column of one width, so the deadlines line up;
+                          on a phone it drops under the title. */}
+                      <span className="col-start-2 flex page-sm:col-start-3 page-sm:row-start-1 page-sm:justify-end">
+                        {task.due ? (
+                          <Badge variant={DUE_VARIANT[task.due.tone]}>
+                            {task.due.label}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            No deadline
+                          </span>
+                        )}
+                      </span>
                     </li>
                   ))}
                 </ul>
               )}
-              <Link
-                href="/tasks"
-                className="mt-3 self-start text-xs font-medium text-accent hover:underline"
-              >
-                Open the task board
+              <Link href={tasksHref(key)} className={FOOT_LINK}>
+                See all of this team&rsquo;s tasks
               </Link>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-3">
+            <CardHeader className={HEADER_WITH_ACTION}>
               <CardTitle className="flex items-center gap-2 text-base">
                 <NotebookPen className="h-4 w-4 text-accent" aria-hidden />
                 Meetings
               </CardTitle>
               {canWriteNotes ? (
-                <Link
-                  href={newMeetingHref(key)}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden />
-                  New meeting
-                </Link>
+                <Button asChild variant="outline" size="sm">
+                  <Link href={newMeetingHref(key)}>
+                    <Plus aria-hidden />
+                    New meeting
+                  </Link>
+                </Button>
               ) : null}
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
@@ -390,14 +401,35 @@ export default async function TeamPage({
                   ))}
                 </ul>
               )}
-              <Link
-                href={meetingsHref(key)}
-                className="mt-3 self-start text-xs font-medium text-accent hover:underline"
-              >
+              <Link href={meetingsHref(key)} className={FOOT_LINK}>
                 See all meetings
               </Link>
             </CardContent>
           </Card>
+
+          <TeamAnnouncementsCard
+            items={announcements.items}
+            more={announcements.more}
+            action={
+              canEdit && !entry.archived ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={writeAnnouncementHref(key)}>
+                    <Megaphone aria-hidden />
+                    Write announcement
+                  </Link>
+                </Button>
+              ) : undefined
+            }
+          />
+
+          <TeamBudgetCard
+            team={team.data}
+            teamLabel={entry.label}
+            totals={budgets[team.data]}
+            onTeam={page.viewer.onTeam && !entry.archived}
+            canApprove={canApproveClaim(rank, leadTeams, team.data)}
+            keepsMoney={canManageMoney(rank, leadTeams)}
+          />
         </div>
 
         <Card className="self-start">
@@ -464,7 +496,7 @@ export default async function TeamPage({
             </section>
             <Link
               href={`/captains/camp-management?team=${encodeURIComponent(key)}`}
-              className="self-start text-xs font-medium text-accent hover:underline"
+              className={FOOT_LINK}
             >
               See them on the roster
             </Link>

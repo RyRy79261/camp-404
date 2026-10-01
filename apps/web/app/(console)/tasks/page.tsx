@@ -19,8 +19,13 @@ export const metadata = { title: "Tasks — Camp 404" };
 // AfrikaBurn's console has no board to copy, so the columns are the owner's
 // pick; everything inside them is the kit's cards, badges and dialogs.
 
-export default async function TasksPage() {
+export default async function TasksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ team?: string; add?: string }>;
+}) {
   const { campUser, rank } = await captainPageGate("camp_member");
+  const { team: askedTeam, add } = await searchParams;
   const isCaptain = rank === "captain";
   const leadTeams =
     rank === "team_lead"
@@ -73,6 +78,18 @@ export default async function TasksPage() {
         }
       />
       <TaskBoard
+        // A team page's "See all tasks" and a team folder's "<Team> tasks"
+        // land filtered to the team; its "Add task" opens the form on it.
+        initialTeam={
+          askedTeam && filterTeams.some((t) => t.value === askedTeam)
+            ? askedTeam
+            : undefined
+        }
+        openAdd={
+          add === "1" && addTeams.some((t) => t.value === askedTeam)
+            ? askedTeam
+            : undefined
+        }
         cards={cards}
         viewerId={campUser.id}
         members={members}

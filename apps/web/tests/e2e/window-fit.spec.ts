@@ -10,6 +10,7 @@ import {
   login,
   redeemInviteAtGate,
   resetTestState,
+  seedParticipation,
   seedTeam,
   setRank,
 } from "./_helpers";
@@ -21,9 +22,11 @@ import {
   expectFits,
   expectStacked,
   expectSticksInWindow,
+  expectTablesFit,
   NARROW,
   openWindow,
   resizeWindowTo,
+  tableFrameTop,
   WIDE,
   WIDEST,
 } from "./lib/window-fit";
@@ -57,8 +60,11 @@ async function approvedMember(
   await completeOnboarding(request, id);
 }
 
-/** The framed box a data table sits in (a card from md up, by the window). */
-function tableFrame(win: Locator, label: string): Locator {
+/**
+ * The Kitchen's review queue still draws its own frame around the shared
+ * table (a card from page-md), so its frame is the table's parent.
+ */
+function kitchenFrame(win: Locator, label: string): Locator {
   return dataTable(win, label).locator("..");
 }
 
@@ -120,11 +126,15 @@ test.describe("windows fit their own width (test-mode)", () => {
     await expectFits(win);
     await expect(win.getByRole("table", { name: "Suggestions" })).toBeHidden();
     await expect(win.getByRole("list", { name: "Suggestions" })).toBeVisible();
-    await expect.poll(() => borderTop(tableFrame(win, "Suggestions"))).toBe(0);
+    await expect
+      .poll(() => borderTop(kitchenFrame(win, "Suggestions")))
+      .toBe(0);
     await resizeWindowTo(page, win, WIDE);
     await expectFits(win);
     await expect(win.getByRole("list", { name: "Suggestions" })).toBeHidden();
-    await expect.poll(() => borderTop(tableFrame(win, "Suggestions"))).toBe(1);
+    await expect
+      .poll(() => borderTop(kitchenFrame(win, "Suggestions")))
+      .toBe(1);
 
     // The meal plan: narrower plate boxes and no frame in a narrow window.
     win = await openWindow(page, "/kitchen/meal-plan", "Meal plan");
@@ -198,6 +208,69 @@ test.describe("windows fit their own width (test-mode)", () => {
     await expectBeside(record, rail);
   });
 
+  test("Applications: the board where it opens, narrow, and the profile on a phone", async ({
+    page,
+    request,
+  }) => {
+    await approvedMember(
+      page,
+      request,
+      "fit-app-a",
+      "Pieter van der Merwe-Smit",
+    );
+    await seedParticipation(request, "fit-app-a", "accepted", "maybe");
+    await approvedMember(page, request, "fit-app-b", "Kai Brennan");
+    await captain(page, request, "fit-app-cap");
+    await seedParticipation(request, "fit-app-cap", "applied");
+
+    // At the size the window opens at on this screen, the six columns are a
+    // table, inside the window, with the decision in sight (the audit found
+    // WAP cut at the window's edge).
+    const win = await openWindow(
+      page,
+      "/captains/applications",
+      "Applications",
+    );
+    await expectFits(win);
+    await expectTablesFit(win);
+    await expect(
+      win.getByRole("table", { name: "Applications" }),
+    ).toBeVisible();
+    const accept = win
+      .getByRole("button", { name: "Accept Cap Tain for this year" })
+      .filter({ visible: true });
+    await expect(accept).toBeVisible();
+    const edge = (await win.boundingBox())!;
+    const box = (await accept.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(edge.x + edge.width);
+    // Narrow, the rows are cards.
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expect(win.getByRole("list", { name: "Applications" })).toBeVisible();
+    await expect(accept).toBeVisible();
+
+    // The member's own profile on a phone: nothing runs past the screen (a
+    // long name in the pixel face set the column's width).
+    await login(page, {
+      id: "fit-app-a",
+      email: "fit-app-a@example.com",
+      displayName: "Pieter van der Merwe-Smit",
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openWindow(page, "/profile", "Your profile");
+    const ddt = page.getByRole("radio", { name: /^I want a DDT/ });
+    await ddt.scrollIntoViewIfNeeded();
+    const right = await ddt.evaluate((el) => el.getBoundingClientRect().right);
+    expect(right).toBeLessThanOrEqual(390);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth - window.innerWidth,
+        ),
+      )
+      .toBeLessThanOrEqual(0);
+  });
+
   test("Power: the load list and the fuel estimate", async ({
     page,
     request,
@@ -206,14 +279,50 @@ test.describe("windows fit their own width (test-mode)", () => {
     await seedTeam(request, "fit-power-cap", "power_and_lighting", true);
 
     let win = await openWindow(page, "/power/loads", "Load list");
+    // One load, so the list (ten columns and Edit and Remove) is drawn.
+    await win.getByRole("button", { name: "Add load", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Add a load" });
+    await dialog
+      .getByRole("textbox", { name: "Name", exact: true })
+      .fill("Deep freeze");
+    await dialog.getByLabel("Area").fill("kitchen");
+    await dialog.getByRole("combobox", { name: "Category" }).click();
+    await page.getByRole("option", { name: "Lighting (decorative)" }).click();
+    await dialog
+      .getByRole("spinbutton", { name: "Watts each", exact: true })
+      .fill("480");
+    await dialog.getByRole("radio", { name: "Hours a day" }).click();
+    await dialog.getByLabel("Hours it runs each day").fill("6");
+    await dialog.getByRole("button", { name: "Add load" }).click();
+    await expect(page.getByText("Load added")).toBeVisible();
+    win = await openWindow(page, "/power/loads", "Load list");
+    const loads = dataTable(win, "Load list");
+    const edit = win
+      .getByRole("button", { name: "Edit Deep freeze" })
+      .filter({ visible: true });
+
     const connected = win.getByRole("article", { name: "Connected load" });
     const peak = win.getByRole("article", { name: "Estimated peak" });
     await resizeWindowTo(page, win, NARROW);
     await expectFits(win);
+    await expectTablesFit(win);
     await expectStacked(connected, peak);
+    await expect(edit).toBeVisible();
+    // At about the size a window opens at, the ten columns are a table only
+    // if they fit; otherwise cards. Never a table scrolled sideways with
+    // Edit out of sight (main put it past the window's edge here).
     await resizeWindowTo(page, win, WIDE);
     await expectFits(win);
+    await expectTablesFit(win);
     await expectBeside(connected, peak);
+    await expect(edit).toBeVisible();
+    // Maximised on the 1440 screen, the table has the room it needs.
+    await win.getByRole("button", { name: /^Full screen / }).click();
+    await expectTablesFit(win);
+    await expect(win.getByRole("table", { name: "Load list" })).toBeVisible();
+    await expect.poll(() => tableFrameTop(loads)).toBe(1);
+    await expect(edit).toBeVisible();
+    await win.getByRole("button", { name: /^Restore / }).click();
 
     win = await openWindow(page, "/power/fuel", "Fuel estimate");
     const generator = win.getByText("Generator", { exact: true });
@@ -226,39 +335,49 @@ test.describe("windows fit their own width (test-mode)", () => {
     await expectBeside(generator, second);
   });
 
-  test("Payments: the ledger's frame and the totals beside it", async ({
+  test("Payments: the ledger's frame and the year's figures above it", async ({
     page,
     request,
   }) => {
     await approvedMember(page, request, "fit-payer", "Pat Payer");
     await captain(page, request, "fit-pay-cap");
 
-    const win = await openWindow(page, "/captains/payments", "Dues & payments");
-    const member = win.locator("#payment-member");
+    const win = await openWindow(page, "/captains/payments", /^Payments$/);
+    await win.getByRole("button", { name: "Record a payment" }).click();
+    const dialog = page.getByRole("dialog", { name: "Record a payment" });
+    const member = dialog.locator("#payment-member");
     const value = await member
       .locator("option", { hasText: "Pat Payer" })
       .getAttribute("value");
     await member.selectOption(value!);
-    await win.getByLabel("Amount (R)").fill("1500");
-    await win.getByRole("button", { name: "Record payment" }).click();
-    await expect(win.getByLabel("Amount (R)")).toHaveValue("");
+    await dialog.getByLabel("Amount (R)").fill("1500");
+    await dialog.getByRole("button", { name: "Record payment" }).click();
+    await expect(dialog).toBeHidden();
 
+    // The year's figures sit above the ledger at every width: two by two in
+    // a narrow window, four in a row in a wide one.
     const ledger = win.getByRole("region", { name: /^Payments for / });
-    const totals = win.getByText("Dues paid", { exact: true });
+    const paidUp = win.getByRole("group", { name: "Paid up" });
+    const toCome = win.getByRole("group", { name: "Still to come in" });
+    const inBank = win.getByRole("group", { name: "In the bank" });
+    await expect(ledger).toBeVisible();
     await resizeWindowTo(page, win, NARROW);
     await expectFits(win);
-    await expectStacked(ledger, totals);
+    await expectStacked(paidUp, ledger);
+    await expectBeside(paidUp, toCome);
+    await expectStacked(paidUp, inBank);
     await expect(
       win.getByRole("table", { name: /^Payments for / }),
     ).toBeHidden();
     // The ledger is a card list here, not a framed table.
     const ledgerTable = dataTable(win, /^Payments for /);
-    await expect.poll(() => borderTop(ledgerTable)).toBe(0);
+    await expect.poll(() => tableFrameTop(ledgerTable)).toBe(0);
     await resizeWindowTo(page, win, WIDE);
     await expectFits(win);
-    await expect.poll(() => borderTop(ledgerTable)).toBe(1);
+    await expect.poll(() => tableFrameTop(ledgerTable)).toBe(1);
     await resizeWindowTo(page, win, WIDEST);
-    await expectBeside(ledger, totals);
+    await expectStacked(paidUp, ledger);
+    await expectBeside(toCome, inBank);
   });
 
   test("Tasks: the board's columns", async ({ page, request }) => {
@@ -266,11 +385,20 @@ test.describe("windows fit their own width (test-mode)", () => {
     const win = await openWindow(page, "/tasks", "Tasks");
     const todo = win.getByRole("region", { name: "To do" });
     const doing = win.getByRole("region", { name: "Doing" });
+    // Narrow: one column at a time, picked from the Column switch with its
+    // count, so the board is not one long list.
     await resizeWindowTo(page, win, NARROW);
     await expectFits(win);
-    await expectStacked(todo, doing);
+    const pickColumn = win.getByRole("radiogroup", { name: "Column" });
+    await expect(pickColumn).toBeVisible();
+    await expect(todo).toBeVisible();
+    await expect(doing).toBeHidden();
+    await pickColumn.getByRole("radio", { name: /^Doing \d+$/ }).click();
+    await expect(doing).toBeVisible();
+    await expect(todo).toBeHidden();
     await resizeWindowTo(page, win, WIDEST);
     await expectFits(win);
+    await expect(pickColumn).toBeHidden();
     await expectBeside(todo, doing);
   });
 

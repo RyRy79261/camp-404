@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { cn } from "@camp404/ui/lib/utils";
-import { RENTAL_REFUSAL, RENTAL_TABS } from "@/lib/rental-copy";
+import { MY_GEAR_PATH, RENTAL_REFUSAL, RENTAL_TABS } from "@/lib/rental-copy";
 
 // Gear rental's frame for captains (#241): the heading, then a row of tabs,
 // one per page (the orders, the summary and the catalogue), all in the one
@@ -43,7 +43,7 @@ export function RentalTabs({ active }: { active: RentalTab }) {
   );
 }
 
-/** The heading and tabs, then the page, or the lock for anyone else. */
+/** The heading and tabs, then the page, or the lock (and a pointer to My gear) for anyone else. */
 export function RentalFrame({
   active,
   title,
@@ -65,7 +65,24 @@ export function RentalFrame({
       <PageHeading
         eyebrow="Captains / Gear rental"
         title={title}
-        description={description}
+        description={
+          cleared ? (
+            description
+          ) : (
+            // The captain's workflow means nothing to someone who cannot do
+            // it: point them at their own gear instead.
+            <>
+              Your own gear is on{" "}
+              <Link
+                href={MY_GEAR_PATH}
+                className="font-medium text-accent hover:underline"
+              >
+                My gear
+              </Link>
+              .
+            </>
+          )
+        }
         actions={cleared ? actions : undefined}
       />
       {cleared ? (

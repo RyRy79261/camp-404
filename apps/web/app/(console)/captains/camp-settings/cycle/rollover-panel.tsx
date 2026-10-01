@@ -255,10 +255,20 @@ function FoundingYearForm({
   const router = useRouter();
   const [year, setYear] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [typo, setTypo] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function save() {
     setError(null);
+    // The button stays pressable and names what it does; a year that is not
+    // one is said beside the box, rather than greying the button out.
+    if (!isYear(year)) {
+      setTypo(
+        `Type the year as four digits, between ${MIN_YEAR} and ${MAX_YEAR}.`,
+      );
+      return;
+    }
+    setTypo(null);
     startTransition(async () => {
       const result = await setFoundingYearAction({ year: Number(year) });
       if (!result.ok) {
@@ -287,12 +297,15 @@ function FoundingYearForm({
           label="This year"
           wrapperClassName="max-w-xs"
           helper="Four digits, the year the camp is in right now. For example 2026."
+          error={typo ?? undefined}
           value={year}
           inputMode="numeric"
           autoComplete="off"
           maxLength={4}
-          autoFocus
-          onChange={(event) => setYear(digits(event.target.value))}
+          onChange={(event) => {
+            setYear(digits(event.target.value));
+            setTypo(null);
+          }}
         />
 
         <p className="text-xs text-muted-foreground">
@@ -311,10 +324,10 @@ function FoundingYearForm({
           type="button"
           className="self-start"
           onClick={save}
-          disabled={pending || !isYear(year)}
+          disabled={pending}
         >
           {pending && <Loader2 aria-hidden className="size-4 animate-spin" />}
-          {isYear(year) ? `The camp is in ${year}` : "Type the year"}
+          {isYear(year) ? `Save ${year} as the year` : "Save the year"}
         </Button>
       </CardContent>
     </Card>

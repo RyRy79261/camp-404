@@ -39,6 +39,20 @@ function column(page: Page, name: string) {
   return page.getByRole("region", { name });
 }
 
+/**
+ * A narrow window shows one column at a time, picked from the Column switch;
+ * pick `name` there when the switch is on screen (a phone). On a wide window
+ * the three stand side by side and this does nothing.
+ */
+async function showColumn(page: Page, name: string) {
+  const tabs = page.getByRole("radiogroup", { name: "Column" });
+  if (await tabs.isVisible()) {
+    await tabs
+      .getByRole("radio", { name: new RegExp(`^${name} \\d+$`) })
+      .click();
+  }
+}
+
 async function captain(page: Page, request: APIRequestContext, id: string) {
   await login(page, { id, email: "god@example.com", displayName: "Cap Tain" });
   await page.goto("/");
@@ -116,12 +130,14 @@ test.describe("task board (test-mode)", () => {
     await mine
       .getByRole("button", { name: "Move “Count the float” to Done" })
       .click();
+    await showColumn(page, "Done");
     await expect(
       column(page, "Done").getByRole("article", { name: "Count the float" }),
     ).toBeVisible();
 
     // It stays there after a reload: the server moved it, not just the screen.
     await page.reload();
+    await showColumn(page, "Done");
     await expect(
       column(page, "Done").getByRole("article", { name: "Count the float" }),
     ).toBeVisible();

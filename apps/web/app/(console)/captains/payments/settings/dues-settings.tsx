@@ -18,6 +18,7 @@ import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { DateControl } from "@camp404/ui/components/date-control";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
+import { RowActions } from "@camp404/ui/components/row-actions";
 import { toast } from "@camp404/ui/components/toast";
 import {
   addFeeTierAction,
@@ -28,7 +29,10 @@ import {
 import { typedRands } from "@/lib/dues-view";
 
 // The year's fee tiers and dates (#240). A typing problem shows beside the
-// form; removing a tier is a one-tap row action with a toast on failure.
+// form; removing a tier is a one-tap row action with a toast on failure. A
+// new tier is typed on the list's last row (name, amount, then an outlined
+// "Add tier" that keeps its border while it waits), not in a box of its own.
+// Dates and amounts are sized to what they hold.
 
 const TYPE_AMOUNT = "Type the amount in rands, like 1250 or 1250,50.";
 
@@ -165,46 +169,51 @@ export function DuesSettings({
                       {formatMoney(tier.amountCents)}
                     </span>
                   </span>
-                  <span className="flex gap-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Change ${tier.label}`}
-                      disabled={busy}
-                      onClick={() => startEdit(tier)}
-                    >
-                      <Pencil aria-hidden />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Remove ${tier.label}`}
-                      disabled={busy}
-                      onClick={() => void removeTier(tier)}
-                    >
-                      {removePending && removing === tier.id ? (
-                        <Loader2 className="animate-spin" aria-hidden />
-                      ) : (
-                        <Trash2 aria-hidden />
-                      )}
-                    </Button>
-                  </span>
+                  <RowActions
+                    secondarySlots={2}
+                    secondary={
+                      <>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Change ${tier.label}`}
+                          disabled={busy}
+                          onClick={() => startEdit(tier)}
+                        >
+                          <Pencil aria-hidden />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Remove ${tier.label}`}
+                          disabled={busy}
+                          onClick={() => void removeTier(tier)}
+                        >
+                          {removePending && removing === tier.id ? (
+                            <Loader2 className="animate-spin" aria-hidden />
+                          ) : (
+                            <Trash2 aria-hidden />
+                          )}
+                        </Button>
+                      </>
+                    }
+                  />
                 </li>
               ))}
             </ul>
           )}
-          <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border p-4">
-            <p className="text-sm font-medium">
-              {editing ? "Change the tier" : "Add a tier"}
-            </p>
-            <div className="grid gap-3 page-sm:grid-cols-[minmax(0,1fr)_8rem]">
+          <div
+            role="group"
+            aria-label={editing ? "Change the tier" : "Add a tier"}
+            className="flex flex-col gap-2 border-t border-border pt-4"
+          >
+            <div className="grid gap-3 page-sm:grid-cols-[minmax(0,1fr)_8rem_auto] page-sm:items-end">
               <InputField
                 label="Name"
                 value={label}
                 maxLength={60}
-                placeholder="Supporter"
                 onChange={(e) => setLabel(e.currentTarget.value)}
                 disabled={tierPending}
               />
@@ -215,42 +224,49 @@ export function DuesSettings({
                 onChange={(e) => setAmount(e.currentTarget.value)}
                 disabled={tierPending}
               />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    busy ||
+                    !label.trim() ||
+                    !amount.trim() ||
+                    (!editing && tiers.length >= MAX_FEE_TIERS)
+                  }
+                  onClick={saveTier}
+                >
+                  {tierPending ? (
+                    <Loader2 className="animate-spin" aria-hidden />
+                  ) : editing ? null : (
+                    <Plus aria-hidden />
+                  )}
+                  {editing ? "Save tier" : "Add tier"}
+                </Button>
+                {editing && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={tierPending}
+                    onClick={() => startEdit(null)}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
             </div>
-            {tierError && (
+            {tierError ? (
               <p role="alert" className="text-sm text-destructive">
                 {tierError}
               </p>
+            ) : (
+              !editing && (
+                <p className="text-xs text-muted-foreground">
+                  Name a tier so a member knows what it is, like &ldquo;Early
+                  bird&rdquo;.
+                </p>
+              )
             )}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={
-                  busy ||
-                  !label.trim() ||
-                  !amount.trim() ||
-                  (!editing && tiers.length >= MAX_FEE_TIERS)
-                }
-                onClick={saveTier}
-              >
-                {tierPending ? (
-                  <Loader2 className="animate-spin" aria-hidden />
-                ) : editing ? null : (
-                  <Plus aria-hidden />
-                )}
-                {editing ? "Save tier" : "Add tier"}
-              </Button>
-              {editing && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={tierPending}
-                  onClick={() => startEdit(null)}
-                >
-                  Cancel
-                </Button>
-              )}
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -264,25 +280,25 @@ export function DuesSettings({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 p-5 pt-0">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="dues-deadline">Pay by</Label>
-            <DateControl
-              id="dues-deadline"
-              value={deadline}
-              onChange={(e) => setDeadline(e.currentTarget.value)}
-              disabled={datesPending}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="dues-full-refund">Full refund until</Label>
-            <DateControl
-              id="dues-full-refund"
-              value={fullUntil}
-              onChange={(e) => setFullUntil(e.currentTarget.value)}
-              disabled={datesPending}
-            />
-          </div>
-          <div className="grid gap-3 page-sm:grid-cols-[minmax(0,1fr)_8rem]">
+          <div className="grid gap-4 page-sm:grid-cols-[12rem_12rem]">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="dues-deadline">Pay by</Label>
+              <DateControl
+                id="dues-deadline"
+                value={deadline}
+                onChange={(e) => setDeadline(e.currentTarget.value)}
+                disabled={datesPending}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="dues-full-refund">Full refund until</Label>
+              <DateControl
+                id="dues-full-refund"
+                value={fullUntil}
+                onChange={(e) => setFullUntil(e.currentTarget.value)}
+                disabled={datesPending}
+              />
+            </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="dues-partial-refund">Part refund until</Label>
               <DateControl

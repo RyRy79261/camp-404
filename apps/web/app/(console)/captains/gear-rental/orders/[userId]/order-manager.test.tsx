@@ -27,7 +27,7 @@ import {
   confirmRentalOrderAction,
   reopenRentalOrderAction,
 } from "../../actions";
-import { OrderManager, tooSmallText } from "./order-manager";
+import { OrderManager, stillToPickText, tooSmallText } from "./order-manager";
 
 // A captain's view of one gear order (#241). The member asked for "a tent",
 // never for a catalogue tent: the captain picks which one and where it comes
@@ -145,10 +145,11 @@ describe("assigning a tent", () => {
         .getAllByRole("radio")
         .map((r) => (r as HTMLInputElement).checked),
     ).toEqual([false, false]);
-    // Nothing is picked yet, so there is no total and no source to choose.
+    // Nothing is picked yet, so there is no total, and it says what is
+    // missing; no source to choose until there is a tent.
     expect(
       screen.getByRole("status", { name: "Order total" }).textContent,
-    ).toBe("Not yet");
+    ).toBe("Pick their tent");
     expect(
       screen.queryByRole("radiogroup", { name: "Where the tent comes from" }),
     ).toBeNull();
@@ -294,5 +295,74 @@ describe("reopening a confirmed order", () => {
       "This order changed since you opened it. Reload the page.",
     );
     expect(toast.success).not.toHaveBeenCalled();
+  });
+});
+
+describe("a source to pick", () => {
+  const TWO = "66666666-6666-4666-8666-666666666666";
+  const twoSources = {
+    id: TWO,
+    name: "Foam mattress",
+    isTent: false,
+    sleeps: 1,
+    archived: false,
+    campPriceCents: 4_000,
+    campStockCount: 6,
+    supplierPriceCents: 8_000,
+  };
+
+  it("shows an item with one source as words, not as a pressed button", () => {
+    show({ status: "submitted", tent: null, lines: [line()] });
+    const mattress = screen.getByRole("listitem", { name: "Mattress" });
+    expect(within(mattress).queryByRole("radiogroup")).toBeNull();
+    expect(within(mattress).getByTestId("only-source").textContent).toMatch(
+      /^Supplier · R\s80,00 each/,
+    );
+    // Nothing to pick, so there is a total straight away.
+    expect(
+      screen.getByRole("status", { name: "Order total" }).textContent,
+    ).toMatch(/^R\s80,00$/);
+  });
+
+  it("marks an item with two sources until one is picked, and says so instead of a total", () => {
+    render(
+      <OrderManager
+        order={{
+          id: ORDER,
+          version: 3,
+          status: "submitted",
+          totalCents: null,
+          charged: false,
+          hostedBy: [],
+          tent: null,
+          lines: [
+            line({ itemId: TWO, itemName: "Foam mattress", quantity: 2 }),
+          ],
+        }}
+        items={[...ITEMS, twoSources]}
+        campLeft={{ [TWO]: 6 }}
+        duesHref="/captains/payments/members/m1"
+      />,
+    );
+    const row = screen.getByRole("listitem", { name: "Foam mattress" });
+    expect(row.textContent).toContain("Pick camp stock or supplier.");
+    expect(
+      screen.getByRole("status", { name: "Order total" }).textContent,
+    ).toBe("Pick a source for 1 item");
+    fireEvent.click(within(row).getByRole("radio", { name: /Camp stock/ }));
+    expect(row.textContent).not.toContain("Pick camp stock or supplier.");
+    expect(
+      screen.getByRole("status", { name: "Order total" }).textContent,
+    ).toMatch(/^R\s80,00$/);
+  });
+
+  it("names what is still to pick", () => {
+    expect(stillToPickText({ tent: true, sources: 0 })).toBe("Pick their tent");
+    expect(stillToPickText({ tent: true, sources: 2 })).toBe(
+      "Pick their tent and a source for 2 items",
+    );
+    expect(stillToPickText({ tent: false, sources: 1 })).toBe(
+      "Pick a source for 1 item",
+    );
   });
 });

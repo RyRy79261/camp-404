@@ -477,18 +477,17 @@ export default async function PowerFuelPage() {
               description="Add one from its datasheet: the rated and maximum kVA, the tank and how long it lasts at half and full load."
             />
           ) : (
-            <div className="page-md:rounded-xl page-md:border page-md:bg-card page-md:text-card-foreground page-md:shadow-sm">
-              <ResponsiveDataTable
-                columns={generatorColumns(
-                  canEdit,
-                  inventoryOptions,
-                  plan.generatorId,
-                )}
-                data={generators}
-                getRowKey={(g) => g.id}
-                label="Generators"
-              />
-            </div>
+            <ResponsiveDataTable
+              columns={generatorColumns(
+                canEdit,
+                inventoryOptions,
+                plan.generatorId,
+              )}
+              data={generators}
+              getRowKey={(g) => g.id}
+              label="Generators"
+              framed
+            />
           )}
         </section>
       </div>

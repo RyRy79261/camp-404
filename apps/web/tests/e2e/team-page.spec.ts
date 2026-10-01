@@ -15,7 +15,8 @@ import { goViaConsoleNav } from "./lib/console-nav";
 
 // A team's own page (test-mode): any approved member opens any team's page
 // and reads its leads and members this year, its upcoming events and its open
-// tasks. Read-only: nothing on it adds or changes anything.
+// tasks. Read-only for them; the team's lead starts a task and an
+// announcement from it, each already on the team.
 
 /** A week from now, as the camp's day (YYYY-MM-DD). */
 const NEXT_WEEK = new Intl.DateTimeFormat("en-CA", {
@@ -55,15 +56,30 @@ test.describe("team page (test-mode)", () => {
     await approvedMember(page, request, "team-lead", "Kitchen Lead");
     await seedTeam(request, "team-lead", "kitchen", true);
 
-    // The lead puts a task and an event on the Kitchen's name.
-    await page.goto("/tasks");
-    await page.getByRole("button", { name: "Add task" }).click();
-    const dialog = page.getByRole("dialog");
+    // The lead puts a task on the Kitchen's name from its page: the board
+    // opens on the Kitchen with the form already on the team.
+    await page.goto("/teams/kitchen");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Kitchen" }),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "Add task" }).click();
+    await expect(page).toHaveURL(/\/tasks\?team=kitchen&add=1$/);
+    const dialog = page.getByRole("dialog", { name: "Add a task" });
+    await expect(dialog.getByRole("combobox", { name: "Team" })).toHaveText(
+      "Kitchen",
+    );
     await dialog.getByLabel("Title").fill("Buy the gas");
-    await pick(page, "#task-team", "Kitchen");
     await pick(page, "#task-assignee", "Kitchen Crew");
     await dialog.getByRole("button", { name: "Add task" }).click();
     await expect(page.getByText("Task added")).toBeVisible();
+
+    // Write announcement opens the composer on the Kitchen.
+    await page.goto("/teams/kitchen");
+    await page.getByRole("link", { name: "Write announcement" }).click();
+    await expect(page).toHaveURL(
+      /\/captains\/announcements\?audience=team%3Akitchen$/,
+    );
+    await expect(page.locator("#announcement-audience")).toHaveText("Kitchen");
 
     await page.goto("/captains/calendar");
     await pick(page, "#event-team", "Kitchen");
@@ -93,16 +109,25 @@ test.describe("team page (test-mode)", () => {
 
     const tasks = page.getByRole("list", { name: "Open tasks" });
     await expect(tasks.getByText("Buy the gas")).toBeVisible();
-    await expect(tasks.getByText("Kitchen Crew")).toBeVisible();
+    await expect(tasks.getByText("To do · Kitchen Crew")).toBeVisible();
+    await expect(tasks.getByText("No deadline")).toBeVisible();
 
-    // Not their team, and a read-only page: no controls to add or change.
+    // Not their team, and a read-only page: no controls to add or change,
+    // and no claim (a claim is for money spent for the team).
     await expect(page.getByText(/on this team|lead this team/)).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Add/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Add task" })).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Write announcement" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Claim money back" }),
+    ).toHaveCount(0);
 
     // A member of the team arrives from their team's folder on the desktop.
     await login(page, { id: "team-cook", email: "team-cook@example.com" });
     await page.goto("/");
-    await goViaConsoleNav(page, "Kitchen", "Kitchen team");
+    await goViaConsoleNav(page, "Kitchen page", "Kitchen team");
     await expect(page).toHaveURL(/\/teams\/kitchen$/);
     await expect(
       page.getByRole("heading", { level: 1, name: "Kitchen" }),
@@ -111,6 +136,9 @@ test.describe("team page (test-mode)", () => {
     await expect(
       page.getByRole("list", { name: "Open tasks" }).getByText("(you)"),
     ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Claim money back" }),
+    ).toHaveAttribute("href", "/claims?team=kitchen");
 
     // Its events are a link from the full calendar, filtered to the team.
     await page

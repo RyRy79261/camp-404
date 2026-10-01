@@ -158,6 +158,7 @@ export default async function InventoryBookingsPage() {
                         <td className={TD}>
                           <Link
                             href={inventoryItemPath(i.itemId)}
+                            title={i.name}
                             className="block truncate font-semibold underline-offset-4 hover:text-primary hover:underline"
                           >
                             {i.name}

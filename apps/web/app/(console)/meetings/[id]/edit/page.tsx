@@ -7,7 +7,7 @@ import { getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
 import { CALENDAR_PAGE_RANGE } from "@/lib/google-calendar";
 import { getMeetingNote } from "@/lib/meeting-notes";
-import { meetingEventOptions } from "@/lib/meeting-notes-view";
+import { meetingEventOptions, meetingWhen } from "@/lib/meeting-notes-view";
 import { listTeamPeople } from "@/lib/roster";
 import { listAssignableMembers } from "@/lib/tasks";
 import { getMyTeams } from "@/lib/users";
@@ -74,12 +74,17 @@ export default async function EditMeetingPage({
         )
       : [];
 
+  // A note keeps its team: it is said once, under the title, not as a field.
+  const teamLabel = note.team
+    ? (teamLabels[note.team] ?? note.team)
+    : "Whole camp";
+
   return (
     <div className="flex flex-col">
       <PageHeading
         eyebrow="Camp / Meetings"
         title={`Edit ${note.title}`}
-        description="Action items already on the task board keep their words here; change them on the board."
+        description={`${teamLabel} · ${meetingWhen(note.heldAt)}`}
       />
       <MeetingEditor
         mode={{

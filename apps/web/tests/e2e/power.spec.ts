@@ -16,8 +16,8 @@ import {
 // (1 × 320 W, all day) and a LED strip through the quick-add helper (12 V,
 // 4.8 W/m, 100 m = 480 W) on 6 h a day: 7.68 + 2.88 = 10.56 kWh a day. Editing
 // the strip to 5 h makes it 10.08; removing it leaves the freezer's 7.68. A
-// lead of Kitchen stands on the same team_lead rung, reads the list, and finds
-// Add load disabled with the reason beside it.
+// lead of Kitchen stands on the same team_lead rung and reads the list as
+// content: no Add, Edit or Remove at all, greyed or not.
 
 async function approvedMember(
   page: Page,
@@ -149,19 +149,12 @@ test.describe("power load list (test-mode)", () => {
     await expect(
       page.getByText("Deep freeze").filter({ visible: true }),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Add load/ })).toHaveCount(
+      0,
+    );
     await expect(
-      page.getByText(
-        "Only captains and Power & Lighting leads can change the power plan.",
-      ),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /^Add load/ }),
-    ).toBeDisabled();
-    await expect(
-      page
-        .getByRole("button", { name: /^Edit Deep freeze/ })
-        .filter({ visible: true }),
-    ).toBeDisabled();
+      page.getByRole("button", { name: /^(Edit|Remove) Deep freeze/ }),
+    ).toHaveCount(0);
     await expectEnergy(page, "7.68 kWh");
   });
 });

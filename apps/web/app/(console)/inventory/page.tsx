@@ -323,6 +323,7 @@ export default async function InventoryPage({
                         <td className={TD}>
                           <Link
                             href={inventoryItemPath(i.id)}
+                            title={i.name}
                             className="block truncate font-semibold underline-offset-4 hover:text-primary hover:underline"
                           >
                             {i.name}
@@ -339,7 +340,10 @@ export default async function InventoryPage({
                         <td className={TD}>
                           <Condition item={i} />
                         </td>
-                        <td className={`${TD} truncate text-muted-foreground`}>
+                        <td
+                          className={`${TD} truncate text-muted-foreground`}
+                          title={whereText(i)}
+                        >
                           {whereText(i)}
                         </td>
                         <td className={TD}>

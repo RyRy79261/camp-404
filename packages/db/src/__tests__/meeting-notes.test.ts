@@ -245,6 +245,29 @@ describe("meeting notes", () => {
       expect(all[0]).toMatchObject({ decisions: 1, actionItems: 0 });
       expect(await listMeetingNotes({ limit: 1 })).toHaveLength(1);
     });
+
+    it("says how many were there and what was decided first", async () => {
+      const { captain, lead, member } = await people();
+      await createMeetingNote({
+        actorId: captain.id,
+        team: "kitchen",
+        ...fields({
+          attendeeIds: [lead.id, member.id],
+          decisions: ["Dinner is at 19:00", "Two vegan options"],
+        }),
+      });
+      await createMeetingNote({
+        actorId: captain.id,
+        team: "kitchen",
+        ...fields({ title: "Quiet", heldAt: new Date("2026-09-01T10:00:00Z") }),
+      });
+      const [full, quiet] = await listMeetingNotes({ team: "kitchen" });
+      expect(full).toMatchObject({
+        attendees: 2,
+        firstDecision: "Dinner is at 19:00",
+      });
+      expect(quiet).toMatchObject({ attendees: 0, firstDecision: null });
+    });
   });
 
   describe("editMeetingNote", () => {

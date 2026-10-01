@@ -77,7 +77,17 @@ vi.mock("@/lib/team-programs", () => ({
   })),
 }));
 vi.mock("@/lib/power", () => ({
-  listPowerLoads: vi.fn(async () => []),
+  // One light on the list, so the glance has figures to show.
+  listPowerLoads: vi.fn(async () => [
+    {
+      area: "camp",
+      category: "other",
+      quantity: 1,
+      wattsEach: 100,
+      dutyPct: 100,
+      schedule: "full_time",
+    },
+  ]),
   getPowerPlan: vi.fn(async () => ({
     generatorId: null,
     powerFactor: 0.8,
@@ -95,6 +105,7 @@ vi.mock("@/lib/power", () => ({
 import type { ViewerRank } from "@camp404/types";
 import { captainPageGate } from "@/lib/captain-gate";
 import { listPowerLoads } from "@/lib/power";
+import { listTeamPeople } from "@/lib/roster";
 import { getLeadTeams } from "@/lib/users";
 import TeamPage from "./page";
 
@@ -131,6 +142,29 @@ describe("a team's program", () => {
     expect(screen.queryByRole("link", { name: /^Edit the/ })).toBeNull();
   });
 
+  it("says in one line that there is no power plan yet, and only an editor may start it", async () => {
+    vi.mocked(listPowerLoads)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    viewAs("camp_member");
+    await show("power_and_lighting");
+    expect(screen.getByText("No power plan yet.")).toBeTruthy();
+    expect(
+      screen.queryByRole("region", { name: "Power plan at a glance" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Start the load list" }),
+    ).toBeNull();
+    cleanup();
+    viewAs("team_lead", ["power_and_lighting"]);
+    await show("power_and_lighting");
+    expect(
+      screen
+        .getByRole("link", { name: "Start the load list" })
+        .getAttribute("href"),
+    ).toBe("/power/loads");
+  });
+
   it("gives the team's lead the Edit control and the power tool's edit links", async () => {
     viewAs("team_lead", ["power_and_lighting"]);
     await show("power_and_lighting");
@@ -138,6 +172,52 @@ describe("a team's program", () => {
     expect(
       screen.getByRole("link", { name: "Edit the load list" }),
     ).toBeTruthy();
+  });
+
+  it("lays the cards out by use: about first, the budget last", async () => {
+    viewAs("camp_member");
+    await show("water");
+    const titles = [...document.querySelectorAll("[data-slot='card-title']")]
+      .map((el) => el.textContent?.trim())
+      .filter((t) => t !== "People this year");
+    expect(titles).toEqual([
+      "About this team",
+      "Coming up",
+      "Open tasks",
+      "Meetings",
+      "Announcements",
+      "Budget",
+    ]);
+  });
+
+  it("gives a lead of this team Add task and Write announcement on this team, and no one else", async () => {
+    viewAs("team_lead", ["water"]);
+    await show("water");
+    expect(
+      screen.getByRole("link", { name: "Add task" }).getAttribute("href"),
+    ).toBe("/tasks?team=water&add=1");
+    expect(
+      screen
+        .getByRole("link", { name: "Write announcement" })
+        .getAttribute("href"),
+    ).toBe("/captains/announcements?audience=team%3Awater");
+    expect(
+      screen
+        .getByRole("link", { name: "See all of this team’s tasks" })
+        .getAttribute("href"),
+    ).toBe("/tasks?team=water");
+    for (const [rank, led] of [
+      ["camp_member", []],
+      ["team_lead", ["kitchen"]],
+    ] as const) {
+      cleanup();
+      viewAs(rank, [...led]);
+      await show("water");
+      expect(screen.queryByRole("link", { name: "Add task" })).toBeNull();
+      expect(
+        screen.queryByRole("link", { name: "Write announcement" }),
+      ).toBeNull();
+    }
   });
 
   it("gives a lead of another team no Edit control", async () => {
@@ -179,30 +259,67 @@ describe("a team's program", () => {
   it("shows every member the team's budget totals, and only the links they may use", async () => {
     viewAs("camp_member");
     await show("water");
-    expect(screen.getByTestId("team-budget").textContent).toMatch(
-      /R\s300,00 of R\s1\s000,00 spent/,
-    );
-    expect(screen.getByText(/R\s700,00 left/)).toBeTruthy();
-    expect(screen.getByText(/1 claim waiting for a yes/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Claim money back" })).toBeTruthy();
+    const figures = budgetFigures();
+    expect(figures).toEqual({
+      Budget: "R\u00a01\u00a0000,00",
+      Spent: "R\u00a0300,00",
+      Left: "R\u00a0700,00",
+      Waiting: "R\u00a050,00",
+    });
+    expect(screen.getByText("1 claim")).toBeTruthy();
+    // Not on the team: a claim is for money spent for it.
+    expect(screen.queryByRole("link", { name: "Claim money back" })).toBeNull();
     expect(
-      screen.queryByRole("link", { name: "Claims to approve" }),
+      screen.queryByRole("link", { name: /Claims to approve/ }),
     ).toBeNull();
     expect(screen.queryByRole("link", { name: "Set budgets" })).toBeNull();
+    // A member reads every team's totals on the Budgets page.
+    expect(
+      screen.getByRole("link", { name: "Every team's budget" }),
+    ).toBeTruthy();
   });
 
-  it("gives the team's own lead the approvals link, and a lead of another team nothing", async () => {
+  it("offers Claim money back to the team's own people, on this team", async () => {
+    vi.mocked(listTeamPeople).mockResolvedValueOnce([
+      {
+        id: "viewer",
+        displayName: "Me",
+        handle: null,
+        isLead: false,
+        rank: "member",
+      },
+    ] as never);
+    viewAs("camp_member");
+    await show("water");
+    expect(
+      screen
+        .getByRole("link", { name: "Claim money back" })
+        .getAttribute("href"),
+    ).toBe("/claims?team=water");
+  });
+
+  it("gives the team's own lead the approvals link with its count, and a lead of another team nothing", async () => {
     viewAs("team_lead", ["water"]);
     await show("water");
     expect(
-      screen.getByRole("link", { name: "Claims to approve" }),
+      screen.getByRole("link", { name: "Claims to approve (1)" }),
     ).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Set budgets" })).toBeNull();
     cleanup();
     viewAs("team_lead", ["kitchen"]);
     await show("water");
     expect(
-      screen.queryByRole("link", { name: "Claims to approve" }),
+      screen.queryByRole("link", { name: /Claims to approve/ }),
+    ).toBeNull();
+  });
+
+  it("says in one line that a team has no budget, with no empty figures or links", async () => {
+    viewAs("team_lead", ["power_and_lighting"]);
+    await show("power_and_lighting");
+    expect(screen.getByText("No budget set yet.")).toBeTruthy();
+    expect(screen.queryByTestId("budget-stats")).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /Claims to approve/ }),
     ).toBeNull();
   });
 
@@ -211,7 +328,18 @@ describe("a team's program", () => {
     await show("water");
     expect(screen.getByRole("link", { name: "Set budgets" })).toBeTruthy();
     expect(
-      screen.queryByRole("link", { name: "Claims to approve" }),
+      screen.queryByRole("link", { name: /Claims to approve/ }),
     ).toBeNull();
   });
 });
+
+/** The Budget box's four figures, by their labels. */
+function budgetFigures(): Record<string, string> {
+  const row = screen.getByTestId("budget-stats");
+  const out: Record<string, string> = {};
+  for (const dt of row.querySelectorAll("dt")) {
+    const dd = dt.nextElementSibling;
+    out[dt.textContent!.trim()] = dd!.textContent!.trim();
+  }
+  return out;
+}
