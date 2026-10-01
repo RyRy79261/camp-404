@@ -43,6 +43,153 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* Colour that stays on (owner, 2026-09-30: "I want the colors on the screens
+   always visible, to lighten the appearance up a bit", then "stronger", then,
+   2026-10-01, blue inside windows: the pink mixed into the grey cards read
+   brown, and the owner picked "V2 · Blue" of seven variants).
+
+   On the desktop's chrome: a window without focus keeps a tint of the main
+   colour on its title bar, and an icon's name keeps one at rest; the focused
+   window and a lit icon stay full colour, with the focused window's glow and
+   edge. Inside a window: cards and panels, and every choice not picked, take
+   the desktop icons' blue (--os-accent); a picked choice is the brightest of
+   its group, with the main colour's edge and dot. Each is the theme's own
+   colour mixed into its surface, never a new colour. Mixed in oklab: a grey
+   with a faint hue of its own pulls an oklch mix round to that hue.
+
+   Declared where a theme sets its colours (<html> and the desktop root), so
+   each mix is worked out from that theme's values. A theme whose text would
+   drop below its level at 404 Night's strength has its own values below.
+   lib/__tests__/os-skin-contrast.test.ts reads every one of these lines and
+   measures the text on each, in every theme. */
+:root,
+[data-os-theme] {
+  --os-bar-idle-fg: var(--os-fg);
+  --os-bar-idle: color-mix(in oklab, var(--os-primary) 50%, var(--os-chrome));
+  --os-label: color-mix(in oklab, var(--os-primary) 50%, var(--os-chrome));
+  --os-win-card-tinted: color-mix(
+    in oklab,
+    var(--os-accent) 16%,
+    var(--os-win-card)
+  );
+  --os-win-choice: color-mix(
+    in oklab,
+    var(--os-accent) 24%,
+    var(--os-win-card)
+  );
+  --os-win-choice-hover: color-mix(
+    in oklab,
+    var(--os-accent) 28%,
+    var(--os-win-card)
+  );
+  --os-win-choice-edge: color-mix(
+    in oklab,
+    var(--os-accent) 40%,
+    var(--os-win-card)
+  );
+  --os-win-pick: color-mix(
+    in oklab,
+    var(--os-win-primary) 26%,
+    var(--os-win-card-tinted)
+  );
+}
+/* Calm: its quieter steel blue, a little less, so the magenta link on a card
+   keeps 4.5:1. */
+[data-os-theme="calm"] {
+  --os-bar-idle: color-mix(in oklab, var(--os-primary) 50%, var(--os-chrome));
+  --os-label: color-mix(in oklab, var(--os-primary) 50%, var(--os-chrome));
+  --os-win-card-tinted: color-mix(
+    in oklab,
+    var(--os-accent) 12%,
+    var(--os-win-card)
+  );
+  --os-win-choice: color-mix(
+    in oklab,
+    var(--os-accent) 20%,
+    var(--os-win-card)
+  );
+  --os-win-choice-hover: color-mix(
+    in oklab,
+    var(--os-accent) 24%,
+    var(--os-win-card)
+  );
+  --os-win-choice-edge: color-mix(
+    in oklab,
+    var(--os-accent) 40%,
+    var(--os-win-card)
+  );
+  --os-win-pick: color-mix(
+    in oklab,
+    var(--os-win-primary) 26%,
+    var(--os-win-card-tinted)
+  );
+}
+/* Colour-blind safe: its orange mixed into anything dark reads brown, so a
+   bar without focus, an icon's name and a picked choice take its sky blue
+   instead; the focused window and a lit name stay orange. */
+[data-os-theme="colour-blind"] {
+  --os-bar-idle: color-mix(in oklab, var(--os-accent) 35%, var(--os-chrome));
+  --os-label: color-mix(in oklab, var(--os-accent) 35%, var(--os-chrome));
+  --os-win-card-tinted: color-mix(
+    in oklab,
+    var(--os-accent) 16%,
+    var(--os-win-card)
+  );
+  --os-win-choice: color-mix(
+    in oklab,
+    var(--os-accent) 24%,
+    var(--os-win-card)
+  );
+  --os-win-choice-hover: color-mix(
+    in oklab,
+    var(--os-accent) 28%,
+    var(--os-win-card)
+  );
+  --os-win-choice-edge: color-mix(
+    in oklab,
+    var(--os-accent) 40%,
+    var(--os-win-card)
+  );
+  --os-win-pick: color-mix(
+    in oklab,
+    var(--os-accent) 28%,
+    var(--os-win-card-tinted)
+  );
+}
+/* High contrast promises 7:1. Its yellow mixed into black reads olive, so a
+   bar without focus, an icon's name and a picked choice take its cyan
+   instead, kept low enough for 7:1 white text; the focused window and a lit
+   name stay yellow. */
+[data-os-theme="high-contrast"] {
+  --os-bar-idle: color-mix(in oklab, var(--os-accent) 30%, var(--os-chrome));
+  --os-label: color-mix(in oklab, var(--os-accent) 30%, var(--os-chrome));
+  --os-win-card-tinted: color-mix(
+    in oklab,
+    var(--os-accent) 16%,
+    var(--os-win-card)
+  );
+  --os-win-choice: color-mix(
+    in oklab,
+    var(--os-accent) 24%,
+    var(--os-win-card)
+  );
+  --os-win-choice-hover: color-mix(
+    in oklab,
+    var(--os-accent) 28%,
+    var(--os-win-card)
+  );
+  --os-win-choice-edge: color-mix(
+    in oklab,
+    var(--os-accent) 40%,
+    var(--os-win-card)
+  );
+  --os-win-pick: color-mix(
+    in oklab,
+    var(--os-accent) 22%,
+    var(--os-win-card-tinted)
+  );
+}
+
 :root.os-skinned,
 :host,
 :host > div {
@@ -106,7 +253,15 @@
 :host > div {
   --color-background: var(--os-win-bg);
   --color-foreground: var(--os-win-fg);
-  --color-card: var(--os-win-card);
+  /* Cards and panels carry a tint of the main colour (owner, 2026-09-30),
+     worked out per theme above. */
+  --color-card: var(--os-win-card-tinted);
+  /* A choice (packages/ui lib/choice.ts): not picked, under the pointer, its
+     edge, and picked. */
+  --color-choice: var(--os-win-choice);
+  --color-choice-hover: var(--os-win-choice-hover);
+  --color-choice-edge: var(--os-win-choice-edge);
+  --color-pick: var(--os-win-pick);
   --color-card-foreground: var(--os-win-fg);
   --color-popover: var(--os-win-card);
   --color-popover-foreground: var(--os-win-fg);

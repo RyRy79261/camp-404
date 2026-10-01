@@ -44,9 +44,10 @@ describe("presentPublicMember", () => {
   });
 
   it("returns null for missing / blank / non-string answers", () => {
-    expect(
-      presentPublicMember({ responses: {} }),
-    ).toEqual({ bio: null, contribution: null });
+    expect(presentPublicMember({ responses: {} })).toEqual({
+      bio: null,
+      contribution: null,
+    });
     expect(
       presentPublicMember({
         responses: { "bio.statement": "   ", "ideas.this_year": 42 },

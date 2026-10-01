@@ -23,6 +23,7 @@ import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { toast } from "@camp404/ui/components/toast";
+import { CHOICE_OFF, CHOICE_ON } from "@camp404/ui/lib/choice";
 import { cn } from "@camp404/ui/lib/utils";
 import { fillRentalOrderAction } from "@/app/(console)/captains/gear-rental/actions";
 import {
@@ -285,16 +286,14 @@ export function GearOrderForm({
                   key={option.value}
                   className={cn(
                     "flex min-h-[44px] cursor-pointer items-start gap-3 rounded-md border p-3 text-sm",
-                    checked
-                      ? "border-accent bg-accent/10"
-                      : "border-input bg-background hover:bg-muted/40",
+                    checked ? CHOICE_ON : CHOICE_OFF,
                     locked && "cursor-not-allowed opacity-60",
                   )}
                 >
                   <input
                     type="radio"
                     name="tent-choice"
-                    className="mt-1 accent-[var(--color-accent)]"
+                    className="mt-1 accent-[var(--color-primary)]"
                     value={option.value}
                     checked={checked}
                     disabled={pending || locked}

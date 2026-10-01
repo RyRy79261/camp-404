@@ -118,7 +118,7 @@ function FolderIcon({ item }: { item: FolderItem }) {
         className={`line-clamp-2 max-w-full px-1.5 py-0.5 text-center font-pixel text-[10px] uppercase leading-tight after:content-[attr(data-label)] ${
           item.open
             ? "bg-os-primary text-os-bg"
-            : "bg-os-chrome/80 text-os-fg group-hover:bg-os-primary group-hover:text-os-bg group-focus-visible:bg-os-primary group-focus-visible:text-os-bg"
+            : "bg-os-label text-os-fg group-hover:bg-os-primary group-hover:text-os-bg group-focus-visible:bg-os-primary group-focus-visible:text-os-bg"
         }`}
       />
     </button>
