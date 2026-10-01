@@ -258,6 +258,17 @@ test.describe("shift roster (test-mode)", () => {
       .getByRole("button", { name: "Take Dee M. off Morning clean" })
       .click();
     await expect(slotRow(page, "Morning clean")).toContainText("Nobody yet");
+    // Put Sam on from the panel's member picker; the place is full again.
+    await panel.getByRole("combobox", { name: "Put someone on" }).click();
+    await page.getByRole("option", { name: /Sam/ }).click();
+    await panel.getByRole("button", { name: "Put them on" }).click();
+    await expect(slotRow(page, "Morning clean")).toContainText("Sam S.");
+    await expect(slotRow(page, "Morning clean")).toContainText("1 of 1");
+    await expect(panel).toContainText("Full. Take someone off first.");
+    await panel
+      .getByRole("button", { name: "Take Sam S. off Morning clean" })
+      .click();
+    await expect(slotRow(page, "Morning clean")).toContainText("Nobody yet");
     await panel
       .getByRole("button", { name: `Not needed on ${FIRST_TAB}` })
       .click();
