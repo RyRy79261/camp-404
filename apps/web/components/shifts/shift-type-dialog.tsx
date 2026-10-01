@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import {
   Dialog,
@@ -32,6 +31,10 @@ import {
   type Team,
 } from "@camp404/types";
 import { saveShiftTypeAction } from "@/app/(console)/shifts/actions";
+import {
+  FillDaysButton,
+  RemoveShiftButton,
+} from "@/components/shifts/shift-controls";
 import { clockFromMinutes, minutesFromClock } from "@/lib/shifts-copy";
 
 // Adding or changing one shift type (#248): its team, name, hours, how many
@@ -58,11 +61,20 @@ type Errors = Partial<
 export function ShiftTypeDialog({
   type,
   teams,
+  triggerClassName,
+  missingDays = 0,
+  hasPeople = false,
 }: {
   /** The shift to change; absent to add one. */
   type?: EditableShiftType;
   /** The teams the viewer may set up shifts for. */
   teams: { key: Team; label: string }[];
+  /** Sizes the trigger to the table's button slot. */
+  triggerClassName?: string;
+  /** Burn days the shift has no slot for yet: offered in the dialog. */
+  missingDays?: number;
+  /** Someone is on one of its days: it cannot be removed. */
+  hasPeople?: boolean;
 }) {
   const router = useRouter();
   const initial = {
@@ -151,15 +163,19 @@ export function ShiftTypeDialog({
           type="button"
           size="sm"
           variant="outline"
+          className={triggerClassName}
           aria-label={`Change ${type.name}`}
           onClick={() => setOpen(true)}
         >
-          <Pencil aria-hidden />
           Change
         </Button>
       ) : (
-        <Button type="button" size="sm" onClick={() => setOpen(true)}>
-          <Plus aria-hidden />
+        <Button
+          type="button"
+          size="sm"
+          className={triggerClassName}
+          onClick={() => setOpen(true)}
+        >
           Add a shift
         </Button>
       )}
@@ -288,7 +304,37 @@ export function ShiftTypeDialog({
                 {error}
               </p>
             )}
-            <DialogFooter>
+            {type && missingDays > 0 && (
+              <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+                <span className="text-sm text-muted-foreground">
+                  {missingDays === 1
+                    ? "1 Burn day has"
+                    : `${missingDays} Burn days have`}{" "}
+                  no slot for this shift yet.
+                </span>
+                <FillDaysButton
+                  typeId={type.id}
+                  missing={missingDays}
+                  name={type.name}
+                />
+              </div>
+            )}
+            <DialogFooter className="gap-2 page-sm:justify-between">
+              {type ? (
+                hasPeople ? (
+                  <span className="text-xs text-muted-foreground">
+                    People are on it, so it can&apos;t be removed.
+                  </span>
+                ) : (
+                  <RemoveShiftButton
+                    id={type.id}
+                    version={type.version}
+                    name={type.name}
+                  />
+                )
+              ) : (
+                <span />
+              )}
               <Button type="submit" disabled={pending}>
                 {pending && <Spinner size="sm" label="Saving…" />}
                 Save

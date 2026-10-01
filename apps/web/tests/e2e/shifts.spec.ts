@@ -51,6 +51,12 @@ function dayLabel(day: string): string {
 const FIRST = campDay(10);
 const LAST = campDay(12);
 const FIRST_LABEL = dayLabel(FIRST);
+/** The day as its tab and the lead tools say it: "Thu 29". */
+const FIRST_TAB = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  timeZone: "UTC",
+}).format(new Date(`${FIRST}T00:00:00Z`));
 
 async function approvedMember(
   page: Page,
@@ -94,10 +100,16 @@ async function pressUntil(control: Locator, shown: () => Promise<void>) {
   }).toPass({ timeout: 20_000 });
 }
 
+// The day is a table from page-md up (the phone's cards are hidden then).
 const slotRow = (page: Page, name: string, label = FIRST_LABEL) =>
   page
-    .getByRole("list", { name: `Shifts on ${label}` })
-    .getByRole("listitem", { name: `${name} on ${label}`, exact: true });
+    .getByRole("table", { name: `Shifts on ${label}` })
+    .getByRole("row", { name: `${name} on ${label}`, exact: true });
+
+const typeRow = (page: Page, name: string) =>
+  page
+    .getByRole("table", { name: "The shifts" })
+    .getByRole("row", { name, exact: true });
 
 async function setBurnDays(page: Page) {
   await page.goto("/logistics");
@@ -156,11 +168,10 @@ test.describe("shift roster (test-mode)", () => {
     await login(page, { id: "sh-san", email: "sh-san@example.com" });
     await openShifts(page);
     await addCleaningShift(page);
-    const types = page.getByRole("list", { name: "The shifts" });
-    await expect(
-      types.getByRole("listitem", { name: "Morning clean" }),
-    ).toContainText("08:00–10:00 · 1 person");
-    await expect(slotRow(page, "Morning clean")).toContainText("0 of 1 place");
+    await expect(typeRow(page, "Morning clean")).toContainText("08:00–10:00");
+    await expect(typeRow(page, "Morning clean")).toContainText("1 person");
+    await expect(slotRow(page, "Morning clean")).toContainText("Nobody yet");
+    await expect(slotRow(page, "Morning clean")).toContainText("0 of 1");
     await expect(
       page.getByRole("navigation", { name: "Burn days" }).getByRole("link"),
     ).toHaveCount(3);
@@ -192,8 +203,9 @@ test.describe("shift roster (test-mode)", () => {
       }),
       () => expect(leave).toBeVisible({ timeout: 3_000 }),
     );
-    await expect(slotRow(page, "Morning clean")).toContainText("Dee M.");
-    await expect(slotRow(page, "Morning clean")).toContainText("1 of 1 place");
+    // Her own place says You; the button stayed in its slot as Leave.
+    await expect(slotRow(page, "Morning clean")).toContainText("You");
+    await expect(slotRow(page, "Morning clean")).toContainText("1 of 1");
     await expect(page.getByTestId("shift-reminder")).toContainText(
       "You're on 1 shift.",
     );
@@ -204,18 +216,16 @@ test.describe("shift roster (test-mode)", () => {
       sam.getByText("That shift is full. Pick another one."),
     ).toBeVisible();
     await openShifts(sam);
+    await expect(slotRow(sam, "Morning clean")).toContainText("Dee M.");
     await expect(
-      slotRow(sam, "Morning clean").getByRole("button", {
+      slotRow(sam, "Morning clean").getByRole("status", {
         name: `Morning clean on ${FIRST_LABEL} is full`,
       }),
-    ).toBeDisabled();
-    // A member only reads the setup: no Add, no Change, and the reason.
+    ).toHaveText("Full");
+    // A member only reads: no lead tools, no Add, no Change.
     await expect(
-      sam.getByText(
-        "Captains and each team's leads set up that team's shifts.",
-        { exact: false },
-      ),
-    ).toBeVisible();
+      sam.getByRole("button", { name: /^Lead tools for/ }),
+    ).toHaveCount(0);
     await expect(sam.getByRole("button", { name: "Add a shift" })).toHaveCount(
       0,
     );
@@ -224,24 +234,52 @@ test.describe("shift roster (test-mode)", () => {
     ).toHaveCount(0);
     await other.close();
 
+    // The Sanitation lead opens the row's lead tools: they are under the
+    // row, never in it, and the row's own button is still Sign up's slot.
+    await login(page, { id: "sh-san", email: "sh-san@example.com" });
+    await openShifts(page);
+    const arrow = slotRow(page, "Morning clean").getByRole("button", {
+      name: "Lead tools for Morning clean",
+    });
+    const panel = page.locator(`[id^="lead-"]`).filter({ visible: true });
+    await pressUntil(arrow, () =>
+      expect(panel).toContainText(
+        `Lead tools · Morning clean, ${FIRST_LABEL}`,
+        { timeout: 2_000 },
+      ),
+    );
+    await expect(arrow).toHaveAttribute("aria-expanded", "true");
+    // Someone is on it: the day cannot be skipped yet.
+    await expect(
+      panel.getByRole("button", { name: `Not needed on ${FIRST_TAB}` }),
+    ).toBeDisabled();
+    await expect(panel).toContainText("Take everyone off it first.");
+    await panel
+      .getByRole("button", { name: "Take Dee M. off Morning clean" })
+      .click();
+    await expect(slotRow(page, "Morning clean")).toContainText("Nobody yet");
+    await panel
+      .getByRole("button", { name: `Not needed on ${FIRST_TAB}` })
+      .click();
+    await expect(slotRow(page, "Morning clean")).toContainText(
+      `Not needed on ${FIRST_TAB}`,
+    );
+    await expect(
+      slotRow(page, "Morning clean").getByRole("status", {
+        name: `Morning clean is not needed on ${FIRST_LABEL}`,
+      }),
+    ).toHaveText("Not needed");
+
     // A Kitchen lead: Kitchen only for a new shift, and hands off cleaning.
     await login(page, { id: "sh-kit", email: "sh-kit@example.com" });
     await openShifts(page);
-    await expect(
-      page.getByRole("list", { name: "The shifts" }).getByRole("listitem", {
-        name: "Morning clean",
-      }),
-    ).toBeVisible();
+    await expect(typeRow(page, "Morning clean")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Change Morning clean" }),
     ).toHaveCount(0);
+    // No arrow on a cleaning row: the panel cannot be opened.
     await expect(
-      page.getByRole("button", { name: "Remove Morning clean" }),
-    ).toHaveCount(0);
-    await expect(
-      slotRow(page, "Morning clean").getByRole("button", {
-        name: /Put someone on|not needed|Take .* off/,
-      }),
+      page.getByRole("button", { name: "Lead tools for Morning clean" }),
     ).toHaveCount(0);
     const dialog = page.getByRole("dialog", { name: "Add a shift" });
     await pressUntil(page.getByRole("button", { name: "Add a shift" }), () =>

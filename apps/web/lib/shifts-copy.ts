@@ -10,9 +10,6 @@ export const SHIFTS_PRINT_PATH = "/print/shifts";
 export const MY_SHIFTS_PRINT_PATH = "/print/shifts/mine";
 export const LOGISTICS_PATH = "/logistics";
 
-/** What anyone who may not set shifts up is told, on the page. */
-export const SHIFTS_REFUSAL =
-  "Captains and each team's leads set up that team's shifts. Sanitation sets up the cleaning. Anyone can sign up.";
 /** What the action says to someone who may set up no team's shifts. */
 export const SHIFTS_ACTION_REFUSAL =
   "Only captains and that team's leads can set up its shifts.";
@@ -22,7 +19,7 @@ export const CHECK_SHIFT = "Check the shift and try again.";
 export const RELOAD = "Reload the page and try again.";
 
 /** How the roster works, said once near the top. */
-export const PAPER_NOTE = `Sign up here before the burn. The roster gets printed for site, and changes on site go on the paper. There is no internet out there. Everyone takes at least ${SHIFT_MINIMUM} shifts.`;
+export const PAPER_NOTE = `Who cooks, cleans and keeps watch in burn week. Sign up before the Burn: the roster is printed for site, and changes there go on paper. Everyone takes at least ${SHIFT_MINIMUM}.`;
 
 /** What the toast says after "Ask everyone" about shifts. */
 export function shiftsAskedText(asked: number, notified: number): string {

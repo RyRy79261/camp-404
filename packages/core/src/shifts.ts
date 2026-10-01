@@ -112,6 +112,30 @@ export function shiftDayLabel(day: string): string {
   return at === null ? day : DAY_LABEL.format(new Date(at * DAY_MS));
 }
 
+const DAY_TAB = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+const DAY_LONG = new Intl.DateTimeFormat("en-GB", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+});
+
+/** A camp day as a day tab says it: "Wed 29". */
+export function shiftDayTab(day: string): string {
+  const at = utcDay(day);
+  return at === null ? day : DAY_TAB.format(new Date(at * DAY_MS));
+}
+
+/** A camp day in full, for a heading: "Wednesday 29 April". */
+export function shiftDayLong(day: string): string {
+  const at = utcDay(day);
+  return at === null ? day : DAY_LONG.format(new Date(at * DAY_MS));
+}
+
 /** A shift's hours as "08:00–10:00". */
 export function shiftTimeText(
   startMinute: number,

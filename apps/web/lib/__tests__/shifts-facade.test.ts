@@ -136,6 +136,7 @@ describe("getShiftsView", () => {
     });
     expect(find(asMember)).toMatchObject({
       names: ["Dee M."],
+      others: [],
       people: null,
       mine: true,
     });
@@ -159,7 +160,7 @@ describe("getShiftsView", () => {
       ledTeams: ["sanitation_and_water"],
     });
     expect(find(asSanitation).people).toEqual([
-      { userId: dee.id, name: "Dee M." },
+      { userId: dee.id, name: "Dee M.", you: false },
     ]);
 
     const asCaptain = await getShiftsView({
@@ -168,7 +169,7 @@ describe("getShiftsView", () => {
       ledTeams: [],
     });
     expect(find(asCaptain).people).toEqual([
-      { userId: dee.id, name: "Dee M." },
+      { userId: dee.id, name: "Dee M.", you: false },
     ]);
     expect(asCaptain.canAsk).toBe(true);
     expect(asCaptain.teams.map((t) => t.key)).toEqual([

@@ -8,6 +8,8 @@ import {
   shiftChangesOpen,
   shiftClashes,
   shiftDayLabel,
+  shiftDayLong,
+  shiftDayTab,
   shiftFairness,
   shiftReminderText,
   shiftTimeText,
@@ -65,8 +67,10 @@ export interface ShiftSlotView {
   taken: number;
   /** Who is on it, as the print shows them, in sign-up order. */
   names: string[];
+  /** The same, without the viewer (the screen says "You" for them). */
+  others: string[];
   /** Who is on it with their ids: only for a viewer who manages the team. */
-  people: { userId: string; name: string }[] | null;
+  people: { userId: string; name: string; you: boolean }[] | null;
   /** The viewer is on it. */
   mine: boolean;
   /** Still takes changes: its day has not started. */
@@ -94,7 +98,12 @@ export interface ShiftTypeView {
 
 export interface ShiftDayView {
   day: string;
+  /** "Wed 29 Apr" */
   label: string;
+  /** "Wed 29", for the day tabs. */
+  tab: string;
+  /** "Wednesday 29 April", for the day's heading. */
+  longLabel: string;
   /** A day with slots that is no longer one of the Burn's days. */
   outsideBurn: boolean;
   slots: (ShiftSlotView & { type: ShiftTypeView })[];
@@ -148,8 +157,15 @@ function slotView(
     version: slot.version,
     taken: on.length,
     names: on.map((s) => printName(s.name)),
+    others: on
+      .filter((s) => s.userId !== viewerId)
+      .map((s) => printName(s.name)),
     people: manage
-      ? on.map((s) => ({ userId: s.userId, name: printName(s.name) }))
+      ? on.map((s) => ({
+          userId: s.userId,
+          name: printName(s.name),
+          you: s.userId === viewerId,
+        }))
       : null,
     mine: on.some((s) => s.userId === viewerId),
     open: shiftChangesOpen(slot.day, today),
@@ -238,6 +254,8 @@ export async function getShiftsView(viewer: {
     return {
       day,
       label: shiftDayLabel(day),
+      tab: shiftDayTab(day),
+      longLabel: shiftDayLong(day),
       outsideBurn: !burn.has(day),
       slots,
       openPlaces: slots

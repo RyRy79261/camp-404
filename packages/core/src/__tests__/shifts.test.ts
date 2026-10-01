@@ -9,6 +9,8 @@ import {
   shiftChangesOpen,
   shiftClashes,
   shiftDayLabel,
+  shiftDayLong,
+  shiftDayTab,
   shiftDays,
   shiftFairness,
   shiftReminderText,
@@ -90,6 +92,8 @@ describe("shiftDays", () => {
 
   it("labels a day and a shift's hours plainly", () => {
     expect(shiftDayLabel("2027-04-29")).toBe("Thu 29 Apr");
+    expect(shiftDayTab("2027-04-29")).toBe("Thu 29");
+    expect(shiftDayLong("2027-04-29")).toBe("Thursday 29 April");
     expect(shiftTimeText(8 * 60, 120)).toBe("08:00–10:00");
     // A night watch runs to midnight.
     expect(shiftTimeText(16 * 60, 480)).toBe("16:00–00:00");

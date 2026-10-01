@@ -2,36 +2,16 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import {
-  CalendarPlus,
-  Loader2,
-  Megaphone,
-  Trash2,
-  UserPlus,
-  X,
-} from "lucide-react";
+import { CalendarPlus, Loader2, Megaphone, Trash2 } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
-import { Combobox } from "@camp404/ui/components/combobox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@camp404/ui/components/dialog";
-import { Field } from "@camp404/ui/components/field";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { toast } from "@camp404/ui/components/toast";
 import {
   askForShiftsAction,
   fillShiftDaysAction,
   leaveShiftAction,
-  placeMemberOnShiftAction,
   removeShiftTypeAction,
-  setSlotNeededAction,
   signUpForShiftAction,
-  takeMemberOffShiftAction,
 } from "@/app/(console)/shifts/actions";
 import { shiftsAskedText } from "@/lib/shifts-copy";
 
@@ -112,56 +92,6 @@ export function SignUpButton({
     >
       {full ? "Full" : "Sign up"}
     </OneTap>
-  );
-}
-
-/** Mark a day's slot not needed, or needed again. */
-export function NeededToggle({
-  slotId,
-  version,
-  needed,
-  label,
-}: {
-  slotId: string;
-  version: number;
-  needed: boolean;
-  label: string;
-}) {
-  return (
-    <OneTap
-      variant="ghost"
-      aria-label={needed ? `Mark ${label} not needed` : `Mark ${label} needed`}
-      act={() =>
-        setSlotNeededAction({
-          slotId,
-          needed: !needed,
-          expectedVersion: version,
-        })
-      }
-    >
-      {needed ? "Not needed" : "Needed after all"}
-    </OneTap>
-  );
-}
-
-/** Take a member off a slot (a lead of its team, or a captain). */
-export function TakeOffButton({
-  slotId,
-  userId,
-  name,
-}: {
-  slotId: string;
-  userId: string;
-  name: string;
-}) {
-  return (
-    <OneTap
-      variant="ghost"
-      className="h-6 px-1.5"
-      aria-label={`Take ${name} off`}
-      icon={<X aria-hidden />}
-      act={() => takeMemberOffShiftAction({ slotId, userId })}
-    />
   );
 }
 
@@ -259,100 +189,5 @@ export function AskShifts() {
       )}
       Ask everyone
     </Button>
-  );
-}
-
-/** Put a member on a slot: a small dialog with a searchable member list. */
-export function PutSomeoneOn({
-  slotId,
-  label,
-  members,
-  exclude,
-}: {
-  slotId: string;
-  label: string;
-  members: { userId: string; name: string }[];
-  /** Already on it. */
-  exclude: string[];
-}) {
-  const router = useRouter();
-  const [open, setOpen] = React.useState(false);
-  const [who, setWho] = React.useState<string | undefined>();
-  const [error, setError] = React.useState<string | null>(null);
-  const [pending, start] = React.useTransition();
-  const options = members
-    .filter((m) => !exclude.includes(m.userId))
-    .map((m) => ({ value: m.userId, label: m.name }));
-  const id = `put-${slotId}`;
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!who) {
-      setError("Pick a member.");
-      return;
-    }
-    setError(null);
-    start(async () => {
-      const result = await placeMemberOnShiftAction({ slotId, userId: who });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setOpen(false);
-      setWho(undefined);
-      router.refresh();
-    });
-  }
-
-  return (
-    <>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        aria-label={`Put someone on ${label}`}
-        onClick={() => setOpen(true)}
-      >
-        <UserPlus aria-hidden />
-        Add
-      </Button>
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          if (pending) return;
-          if (!next) {
-            setWho(undefined);
-            setError(null);
-          }
-          setOpen(next);
-        }}
-      >
-        <DialogContent>
-          <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-            <DialogHeader>
-              <DialogTitle>Put someone on</DialogTitle>
-              <DialogDescription>{label}</DialogDescription>
-            </DialogHeader>
-            <Field label="Member" htmlFor={id} error={error ?? undefined}>
-              <Combobox
-                id={id}
-                options={options}
-                value={who}
-                onChange={setWho}
-                placeholder="Pick a member"
-                searchPlaceholder="Type a name"
-                emptyMessage="Nobody by that name."
-              />
-            </Field>
-            <DialogFooter>
-              <Button type="submit" disabled={pending}>
-                {pending && <Spinner size="sm" label="Saving…" />}
-                Put them on
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
   );
 }
