@@ -60,8 +60,9 @@ export interface SheetTeamSection {
  * One day's tasks grouped by team, in the camp's team order (`teams`, as Camp
  * settings lists them); a team the order does not name (one added later, or
  * archived) comes after, by its key. Only teams with a needed task that day
- * appear. Within a team, by start time; two at the same time keep the
- * roster's order. `nameOf` gives each member's name as the sheet prints it.
+ * appear, and the teams in `include` (the Kitchen on a day with a menu).
+ * Within a team, by start time; two at the same time keep the roster's
+ * order. `nameOf` gives each member's name as the sheet prints it.
  */
 export function groupSlotsByTeam(input: {
   day: string;
@@ -70,6 +71,7 @@ export function groupSlotsByTeam(input: {
   signups: readonly SheetSignup[];
   teams: readonly { key: string; label: string }[];
   nameOf: (userId: string) => string;
+  include?: readonly string[];
 }): SheetTeamSection[] {
   const types = new Map(input.types.map((t) => [t.id, t]));
   const byTeam = new Map<
@@ -97,6 +99,10 @@ export function groupSlotsByTeam(input: {
     });
     byTeam.set(type.team, list);
   });
+
+  for (const team of input.include ?? []) {
+    if (!byTeam.has(team)) byTeam.set(team, []);
+  }
 
   const rank = new Map(input.teams.map((t, i) => [t.key, i]));
   const labels = new Map(input.teams.map((t) => [t.key, t.label]));
@@ -145,7 +151,8 @@ export function sheetNames(
   people: readonly { userId: string; name: string | null }[],
 ): Map<string, string> {
   const unique = new Map<string, string | null>();
-  for (const p of people) if (!unique.has(p.userId)) unique.set(p.userId, p.name);
+  for (const p of people)
+    if (!unique.has(p.userId)) unique.set(p.userId, p.name);
   const firstCount = new Map<string, number>();
   for (const name of unique.values()) {
     const first = firstNameOf(name);

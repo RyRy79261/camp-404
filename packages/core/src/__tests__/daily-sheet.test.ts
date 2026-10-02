@@ -140,6 +140,22 @@ describe("groupSlotsByTeam", () => {
     ]);
   });
 
+  it("includes a team asked for even with no task (the Kitchen on a menu day)", () => {
+    const sections = groupSlotsByTeam({
+      day: DAY,
+      types,
+      slots: [slot("s-bins", "t-bins")],
+      signups: [],
+      teams: TEAMS,
+      nameOf,
+      include: ["kitchen"],
+    });
+    expect(sections.map((s) => [s.team, s.tasks.length])).toEqual([
+      ["kitchen", 0],
+      ["sanitation_and_water", 1],
+    ]);
+  });
+
   it("follows the camp's own team order and labels", () => {
     const sections = groupSlotsByTeam({
       day: DAY,

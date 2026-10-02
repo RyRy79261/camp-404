@@ -91,6 +91,7 @@ import {
   resetLogisticsStore,
 } from "./test-store-logistics";
 import { dropMemberShifts, resetShiftsStore } from "./test-store-shifts";
+import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
 import {
   ALREADY_SEATED,
@@ -6419,6 +6420,7 @@ export const testStore = {
     resetLogisticsStore();
     resetGuideStore();
     resetShiftsStore();
+    resetDailySheetStore();
     resetClaimsStore();
     resetKitchenMenuStore();
   },

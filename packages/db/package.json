@@ -51,6 +51,7 @@
     "./power": "./src/power.ts",
     "./logistics": "./src/logistics.ts",
     "./shifts": "./src/shifts.ts",
+    "./daily-sheet": "./src/daily-sheet.ts",
     "./deadlines": "./src/deadlines.ts",
     "./camp-layout": "./src/camp-layout.ts",
     "./lounge": "./src/lounge.ts",
