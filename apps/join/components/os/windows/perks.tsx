@@ -1,5 +1,6 @@
 import { useJoinData } from "../join-data";
 import { WinBody } from "./ui";
+import { InlineText } from "../inline-text";
 
 export function PerksWindow() {
   const perks = useJoinData().content.perks;
@@ -33,7 +34,9 @@ export function PerksWindow() {
             </summary>
             <div className="space-y-2 px-3 pb-3">
               {f.paragraphs.map((p) => (
-                <p key={p}>{p}</p>
+                <p key={p}>
+                  <InlineText text={p} />
+                </p>
               ))}
             </div>
           </details>

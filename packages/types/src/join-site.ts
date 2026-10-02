@@ -277,7 +277,7 @@ export const DEFAULT_JOIN_CONTENT: JoinSiteContent = {
     ],
     subsidy: {
       name: "Subsidy",
-      note: "South African, a student, or short on cash? Pay what you can: nothing is okay. Ask the Comms & HR team.",
+      note: "South African, a student, or short on cash? Pay what you can: nothing is okay. Ask the Communications & HR team.",
     },
     scaleIntro:
       "A floating scale, not a fixed fee. Slide to see where you land.",
@@ -338,7 +338,7 @@ export const DEFAULT_JOIN_CONTENT: JoinSiteContent = {
     entries: [
       "One big truck carries the camp: infrastructure, furniture, freezers, gas, decor.",
       "A couple of trailers, towed by members' own cars, carry everything else.",
-      "The Transport & Travel team makes sure everyone and everything has a ride.",
+      "The Transport and Logistics team makes sure everyone and everything has a ride.",
     ],
   },
   apply: {

@@ -1,5 +1,6 @@
 import { useJoinData } from "../join-data";
 import type { AppId } from "@/lib/window-manager";
+import { InlineText } from "../inline-text";
 
 export function ReadmeWindow({ openApp }: { openApp: (id: AppId) => void }) {
   const { readme } = useJoinData().content;
@@ -9,7 +10,9 @@ export function ReadmeWindow({ openApp }: { openApp: (id: AppId) => void }) {
         {readme.heading}
       </h3>
       {readme.paragraphs.map((p) => (
-        <p key={p}>{p}</p>
+        <p key={p}>
+          <InlineText text={p} />
+        </p>
       ))}
       <p className="border border-os-primary/60 bg-os-primary/10 px-3 py-2 font-mono text-xs uppercase tracking-wide text-os-primary">
         ⚠ {readme.warning}
