@@ -10,11 +10,14 @@ import {
   canShareLayout,
   emptyLayout,
   keepOnPlot,
+  kindKeys,
+  otherHalfSide,
   movePiece,
   neighbourView,
   newPiece,
   overlappingPieces,
   pieceCounts,
+  pieceKeys,
   pieceName,
   resizePlot,
   turnPiece,
@@ -147,6 +150,21 @@ describe("the grid", () => {
       { kind: "kitchen", count: 1 },
       { kind: "tent", count: 2 },
     ]);
+    // The plan's own order, the tents straight after their sleeping area.
+    expect(
+      pieceCounts([
+        { kind: "parking" },
+        { kind: "sleeping_area" },
+        { kind: "kitchen" },
+        { kind: "parking" },
+        { kind: "tent" },
+      ]),
+    ).toEqual([
+      { kind: "parking", count: 2 },
+      { kind: "sleeping_area", count: 1 },
+      { kind: "tent", count: 1 },
+      { kind: "kitchen", count: 1 },
+    ]);
   });
 
   it("gives every kind a label and a size that fits the default plot", () => {
@@ -174,7 +192,7 @@ describe("what leaves the camp", () => {
     };
     const view = neighbourView(layout);
     expect(view).toEqual({
-      plot: { widthM: 20, depthM: 10, north: "top" },
+      plot: { widthM: 20, depthM: 10, north: "top", part: "right" },
       pieces: [{ kind: "tent", x: 1, y: 2, w: 3, h: 2 }],
     });
     expect(JSON.stringify(view)).not.toContain("Sam");
@@ -213,5 +231,58 @@ describe("CampLayout", () => {
       CampLayout.safeParse({ plot: { ...PLOT, widthM: 1 }, pieces: [] })
         .success,
     ).toBe(false);
+  });
+
+  it("reads a plan saved before the block part existed as the whole block", () => {
+    const { part: _part, ...before } = PLOT;
+    const parsed = CampLayout.safeParse({ plot: before, pieces: [] });
+    expect(parsed.success && parsed.data.plot.part).toBe("whole");
+    expect(
+      CampLayout.safeParse({ plot: { ...PLOT, part: "middle" }, pieces: [] })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe("the block", () => {
+  it("starts a new year on the camp's usual right half, 28 by 60 m", () => {
+    const plot = emptyLayout().plot;
+    expect(plot).toMatchObject({ widthM: 28, depthM: 60, part: "right" });
+    expect(plot.edges).toMatchObject({ top: "B Road", bottom: "A Road" });
+  });
+
+  it("hatches the side that faces the other half", () => {
+    expect(otherHalfSide("left")).toBe("right");
+    expect(otherHalfSide("right")).toBe("left");
+    expect(otherHalfSide("whole")).toBeNull();
+  });
+});
+
+describe("numbering", () => {
+  it("numbers the camp's pieces in order and the tents apart", () => {
+    const keys = pieceKeys([
+      { id: "a", kind: "parking" },
+      { id: "t1", kind: "tent" },
+      { id: "b", kind: "kitchen" },
+      { id: "t2", kind: "tent" },
+    ]);
+    expect([...keys.entries()]).toEqual([
+      ["a", "1"],
+      ["t1", "T1"],
+      ["b", "2"],
+      ["t2", "T2"],
+    ]);
+  });
+
+  it("numbers a neighbour's kinds in the plan's order, tents last without an area", () => {
+    const keys = kindKeys([
+      { kind: "tent" },
+      { kind: "kitchen" },
+      { kind: "tent" },
+    ]);
+    expect([...keys.entries()]).toEqual([
+      ["kitchen", "1"],
+      ["tent", "2"],
+    ]);
   });
 });

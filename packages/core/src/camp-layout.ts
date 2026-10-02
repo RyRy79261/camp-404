@@ -2,6 +2,7 @@ import {
   LAYOUT_STEP_M,
   ViewerRank,
   type CampLayout,
+  type LayoutBlockPart,
   type LayoutNorth,
   type LayoutPiece,
   type LayoutPieceKind,
@@ -90,13 +91,40 @@ export const LAYOUT_KIND_SIZES: Readonly<
   other: { w: 3, h: 3 },
 };
 
-/** A new year's plot before anyone sizes it. */
+/**
+ * A new year's plot before anyone sizes it: the camp's half of the block it
+ * shares (the owner's Figma, 2026-10-01: about 56 m along the roads and 60 m
+ * deep, B Road along the top, A Road along the bottom, the 3ish road on the
+ * left and the 4ish road on the right). Most years the camp has the right
+ * half, so a new year starts there; the plot dialog changes it.
+ */
 export const DEFAULT_PLOT: LayoutPlot = {
-  widthM: 40,
-  depthM: 30,
+  widthM: 28,
+  depthM: 60,
   north: "top",
-  edges: { top: "", right: "", bottom: "", left: "" },
+  part: "right",
+  edges: { top: "B Road", right: "4ish road", bottom: "A Road", left: "" },
 };
+
+export type LayoutSide = "top" | "right" | "bottom" | "left";
+
+/**
+ * The side of the plot that faces the other half of the block, or null for a
+ * whole-block plot. Nothing borders it but the other camp, so the drawing
+ * hatches it instead of naming a road.
+ */
+export function otherHalfSide(part: LayoutBlockPart): LayoutSide | null {
+  if (part === "left") return "right";
+  if (part === "right") return "left";
+  return null;
+}
+
+/** "Left half of the block", or null for a whole-block plot. */
+export function blockPartLabel(part: LayoutBlockPart): string | null {
+  if (part === "left") return "Left half of the block";
+  if (part === "right") return "Right half of the block";
+  return null;
+}
 
 /** An empty plan on the default plot. */
 export function emptyLayout(): CampLayout {
@@ -224,22 +252,63 @@ export function overlappingPieces(pieces: readonly LayoutPiece[]): Set<string> {
   return hit;
 }
 
+/**
+ * Each piece's number on the plan and in its key: the camp's pieces 1, 2, 3…
+ * in the plan's own order, and the tents T1, T2… (a tent is someone's, and
+ * the key lists them apart, "who sleeps where"). Removing a piece renumbers
+ * the ones after it.
+ */
+export function pieceKeys(
+  pieces: readonly Pick<LayoutPiece, "id" | "kind">[],
+): Map<string, string> {
+  const keys = new Map<string, string>();
+  let camp = 0;
+  let tents = 0;
+  for (const piece of pieces) {
+    keys.set(piece.id, piece.kind === "tent" ? `T${++tents}` : String(++camp));
+  }
+  return keys;
+}
+
+/**
+ * Each kind's number on the neighbour page, where the key is by kind (no
+ * piece has a name there): 1, 2, 3… in the order pieceCounts gives.
+ */
+export function kindKeys(
+  pieces: readonly Pick<LayoutPiece, "kind">[],
+): Map<LayoutPieceKind, string> {
+  return new Map(
+    pieceCounts(pieces).map(({ kind }, index) => [kind, String(index + 1)]),
+  );
+}
+
 /** A piece's name on the plan: its label, else its kind. */
 export function pieceName(piece: Pick<LayoutPiece, "kind" | "label">): string {
   return piece.label.trim() || LAYOUT_KIND_LABELS[piece.kind];
 }
 
-/** How many pieces of each kind, in the kinds' order, kinds with none left out. */
+/**
+ * How many pieces of each kind, in the plan's own order (the order the camp's
+ * numbers follow), kinds with none left out. The tents come straight after
+ * the sleeping area they stand in, as the approved key lists them.
+ */
 export function pieceCounts(
   pieces: readonly Pick<LayoutPiece, "kind">[],
 ): { kind: LayoutPieceKind; count: number }[] {
   const counts = new Map<LayoutPieceKind, number>();
   for (const piece of pieces) {
+    if (piece.kind === "tent") continue;
     counts.set(piece.kind, (counts.get(piece.kind) ?? 0) + 1);
+    if (piece.kind === "sleeping_area" && !counts.has("tent")) {
+      const tents = pieces.filter((p) => p.kind === "tent").length;
+      if (tents > 0) counts.set("tent", tents);
+    }
   }
-  return (Object.keys(LAYOUT_KIND_LABELS) as LayoutPieceKind[])
-    .filter((kind) => counts.has(kind))
-    .map((kind) => ({ kind, count: counts.get(kind)! }));
+  if (!counts.has("tent")) {
+    const tents = pieces.filter((p) => p.kind === "tent").length;
+    if (tents > 0) counts.set("tent", tents);
+  }
+  return [...counts].map(([kind, count]) => ({ kind, count }));
 }
 
 // --- What leaves the camp ------------------------------------------------------
@@ -255,7 +324,13 @@ export interface NeighbourPiece {
 
 /** The plan as a neighbour sees it. */
 export interface NeighbourLayout {
-  plot: { widthM: number; depthM: number; north: LayoutNorth };
+  plot: {
+    widthM: number;
+    depthM: number;
+    north: LayoutNorth;
+    /** Which half of the block: a choice from a list, never typed text. */
+    part: LayoutBlockPart;
+  };
   pieces: NeighbourPiece[];
 }
 
@@ -270,6 +345,7 @@ export function neighbourView(layout: CampLayout): NeighbourLayout {
       widthM: layout.plot.widthM,
       depthM: layout.plot.depthM,
       north: layout.plot.north,
+      part: layout.plot.part,
     },
     pieces: layout.pieces.map((piece) => ({
       kind: piece.kind,

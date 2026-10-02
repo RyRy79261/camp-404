@@ -30,6 +30,17 @@ export const LAYOUT_NORTH_SIDES = ["top", "right", "bottom", "left"] as const;
 export const LayoutNorth = z.enum(LAYOUT_NORTH_SIDES);
 export type LayoutNorth = z.infer<typeof LayoutNorth>;
 
+/**
+ * Which part of the block the plot is (the owner's Figma, 2026-10-01): the
+ * camp shares a block between four roads with another camp, and takes one
+ * half of it, the left one some years and the right one others. `whole` is a
+ * plot with no neighbour inside the block, and what a plan saved before this
+ * field existed reads as.
+ */
+export const LAYOUT_BLOCK_PARTS = ["whole", "left", "right"] as const;
+export const LayoutBlockPart = z.enum(LAYOUT_BLOCK_PARTS);
+export type LayoutBlockPart = z.infer<typeof LayoutBlockPart>;
+
 /** The smallest and largest plot side, in metres. */
 export const PLOT_MIN_M = 5;
 export const PLOT_MAX_M = 300;
@@ -57,11 +68,16 @@ const edgeNote = z
   .trim()
   .max(LAYOUT_EDGE_MAX, `Keep it under ${LAYOUT_EDGE_MAX} characters.`);
 
-/** The plot: its size and what borders each side of the drawing. */
+/**
+ * The plot: its size, which part of the block it is, and the road (or
+ * whatever else) along each side of the drawing.
+ */
 export const LayoutPlot = z.object({
   widthM: metres(PLOT_MIN_M, PLOT_MAX_M),
   depthM: metres(PLOT_MIN_M, PLOT_MAX_M),
   north: LayoutNorth,
+  /** Added 2026-10-02; a plan saved before it reads as the whole block. */
+  part: LayoutBlockPart.default("whole"),
   edges: z.object({
     top: edgeNote,
     right: edgeNote,
