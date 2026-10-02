@@ -390,7 +390,11 @@ export function PledgeButton({
 }) {
   const router = useRouter();
   const initial = () => ({
-    quantity: String(mine?.quantity ?? Math.max(1, Math.min(still, 1))),
+    // Prefill with what's still to find, never less than 1: PledgeButton is
+    // only shown with no pledge of the viewer's own when `still` is already
+    // > 0 (the Action component shows "Covered" instead otherwise), so this
+    // only floors a stray 0 rather than silently discarding `still`.
+    quantity: String(mine?.quantity ?? Math.max(1, still)),
     note: mine?.note ?? "",
   });
   const [open, setOpen] = React.useState(false);

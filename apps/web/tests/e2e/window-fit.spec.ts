@@ -443,4 +443,33 @@ test.describe("windows fit their own width (test-mode)", () => {
     await expectFits(win);
     await expectBeside(name, detail);
   });
+
+  test("Inventory: Needs filters sit in a row wide, behind Filters narrow", async ({
+    page,
+    request,
+  }) => {
+    await captain(page, request, "fit-needs-cap");
+    let win = await openWindow(page, "/inventory/needs", "Inventory");
+    await win.getByRole("button", { name: "Add need" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add a need" });
+    await dialog.getByLabel("What").fill("Camping chairs");
+    await dialog.getByLabel("How many needed").fill("4");
+    await dialog.getByRole("button", { name: "Add need" }).click();
+    await expect(page.getByText("Need added")).toBeVisible();
+
+    win = await openWindow(page, "/inventory/needs", "Inventory");
+    const team = win.getByLabel("Team", { exact: true });
+    const filtersButton = win.getByRole("button", { name: /^Filters/ });
+    await resizeWindowTo(page, win, NARROW);
+    await expectFits(win);
+    await expect(filtersButton).toBeVisible();
+    await expect(team).toBeHidden();
+    await filtersButton.click();
+    await expect(team).toBeVisible();
+
+    await resizeWindowTo(page, win, WIDE);
+    await expectFits(win);
+    await expect(filtersButton).toBeHidden();
+    await expect(team).toBeVisible();
+  });
 });

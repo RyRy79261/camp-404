@@ -187,7 +187,12 @@ export function SelectFilters({
   }[];
 }) {
   const form = React.useRef<HTMLFormElement>(null);
-  const any = selects.some((s) => s.value !== "");
+  const narrowed = selects.filter((s) => s.value !== "").length;
+  const any = narrowed > 0;
+  // Shows in a row on desktop; on a phone it folds behind one "Filters"
+  // button (the Gear tab's own GearFilters does the same), open by default
+  // only once a filter already narrows the list.
+  const [open, setOpen] = React.useState(narrowed > 0);
   return (
     <form
       ref={form}
@@ -195,35 +200,49 @@ export function SelectFilters({
       action={action}
       role="search"
       aria-label={label}
-      className={cn(
-        "mb-5 grid grid-cols-2 items-end gap-3 page-md:flex page-md:gap-4",
-        className,
-      )}
+      className={cn("mb-5 flex flex-col gap-3 page-md:flex-row", className)}
     >
-      {selects.map((s) => (
-        <Labelled key={s.name} label={s.label} className="page-md:w-52">
-          <NativeSelect
-            name={s.name}
-            aria-label={s.label}
-            placeholder={s.placeholder}
-            options={s.options}
-            defaultValue={s.value}
-            onChange={() => form.current?.requestSubmit()}
-            selectClassName={FILTER_BOX}
-          />
-        </Labelled>
-      ))}
-      <button type="submit" className="sr-only">
-        Apply filters
-      </button>
-      {any && (
-        <Link
-          href={action}
-          className="flex h-9 items-center text-[13px] text-muted-foreground underline underline-offset-4 hover:text-foreground"
-        >
-          Clear
-        </Link>
-      )}
+      <Button
+        type="button"
+        variant="outline"
+        className="h-9 w-fit page-md:hidden"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <SlidersHorizontal aria-hidden />
+        Filters{narrowed ? ` (${narrowed})` : ""}
+      </Button>
+      <div
+        className={cn(
+          "grid-cols-2 items-end gap-3 page-md:flex page-md:gap-4",
+          open ? "grid" : "hidden",
+        )}
+      >
+        {selects.map((s) => (
+          <Labelled key={s.name} label={s.label} className="page-md:w-52">
+            <NativeSelect
+              name={s.name}
+              aria-label={s.label}
+              placeholder={s.placeholder}
+              options={s.options}
+              defaultValue={s.value}
+              onChange={() => form.current?.requestSubmit()}
+              selectClassName={FILTER_BOX}
+            />
+          </Labelled>
+        ))}
+        <button type="submit" className="sr-only">
+          Apply filters
+        </button>
+        {any && (
+          <Link
+            href={action}
+            className="flex h-9 items-center text-[13px] text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            Clear
+          </Link>
+        )}
+      </div>
     </form>
   );
 }

@@ -234,10 +234,9 @@ export default async function InventoryNeedsPage({
         />
       ) : (
         <>
-          {/* No filters on a phone (the mock-up's phone): the list is
-              short, and grouped by team. */}
+          {/* The filters show in a row on desktop; on a phone they fold
+              behind a "Filters" button, the same as the Gear tab's. */}
           <SelectFilters
-            className="hidden"
             action={INVENTORY_NEEDS_PATH}
             label="Filter the needs"
             selects={[
