@@ -90,9 +90,9 @@ describe("RecipeLine allergens", () => {
   });
 
   it("are the fixed foods only", () => {
-    expect(RecipeLine.parse({ ...line, allergens: ["milk"] }).allergens).toEqual([
-      "milk",
-    ]);
+    expect(
+      RecipeLine.parse({ ...line, allergens: ["milk"] }).allergens,
+    ).toEqual(["milk"]);
     expect(
       RecipeLine.safeParse({ ...line, allergens: ["cheese"] }).success,
     ).toBe(false);

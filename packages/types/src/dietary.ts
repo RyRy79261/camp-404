@@ -52,7 +52,11 @@ export const ALLERGEN_LABELS: Record<KitchenAllergen, string> = {
 };
 
 /** What a food does to a member. Anaphylaxis is the hard stop. */
-export const FOOD_REACTIONS = ["allergy", "intolerance", "anaphylaxis"] as const;
+export const FOOD_REACTIONS = [
+  "allergy",
+  "intolerance",
+  "anaphylaxis",
+] as const;
 export const FoodReaction = z.enum(FOOD_REACTIONS);
 export type FoodReaction = z.infer<typeof FoodReaction>;
 
@@ -126,9 +130,7 @@ export function readFoodReactions(value: unknown): FoodReactionEntry[] {
 export function readDiets(value: unknown): Diet[] {
   if (!Array.isArray(value)) return [];
   return [
-    ...new Set(
-      value.filter((d): d is Diet => Diet.safeParse(d).success),
-    ),
+    ...new Set(value.filter((d): d is Diet => Diet.safeParse(d).success)),
   ];
 }
 
@@ -136,7 +138,9 @@ export function readDiets(value: unknown): Diet[] {
 export function readAllergens(value: unknown): KitchenAllergen[] {
   if (!Array.isArray(value)) return [];
   const set = new Set(
-    value.filter((a): a is KitchenAllergen => KitchenAllergen.safeParse(a).success),
+    value.filter(
+      (a): a is KitchenAllergen => KitchenAllergen.safeParse(a).success,
+    ),
   );
   return KITCHEN_ALLERGENS.filter((a) => set.has(a));
 }

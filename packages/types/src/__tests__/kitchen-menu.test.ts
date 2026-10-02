@@ -123,7 +123,12 @@ describe("#245 inputs: prices, allergen plans and corrections, prep steps", () =
   });
 
   it("needs a date for a prep step before we leave, and only then", () => {
-    const step = { itemId: id, what: "Soak the oats", when: "day_before", date: "" };
+    const step = {
+      itemId: id,
+      what: "Soak the oats",
+      when: "day_before",
+      date: "",
+    };
     expect(AddPrepStepInput.parse(step).date).toBeNull();
     const leaving = { ...step, when: "before_leaving" };
     expect(AddPrepStepInput.safeParse(leaving).success).toBe(false);

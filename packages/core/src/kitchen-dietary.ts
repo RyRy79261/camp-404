@@ -129,7 +129,11 @@ export function dietaryCounts(
       foodOrder,
     ),
     preferences: byCount(
-      [...diet].map(([d, count]) => ({ diet: d, label: DIET_LABELS[d], count })),
+      [...diet].map(([d, count]) => ({
+        diet: d,
+        label: DIET_LABELS[d],
+        count,
+      })),
       (row) => DIETS.indexOf(row.diet),
     ),
   };
@@ -216,10 +220,15 @@ export function allergenFlags(
       counts.intolerances.find((c) => c.food === h.allergen)?.count ?? 0;
     const parts: string[] = [];
     if (allergy) parts.push(`${allergy.count} allergic`);
-    if (allergy?.anaphylactic) parts.push(`${allergy.anaphylactic} anaphylactic`);
+    if (allergy?.anaphylactic)
+      parts.push(`${allergy.anaphylactic} anaphylactic`);
     if (intolerant) parts.push(`${intolerant} intolerant`);
     if (parts.length === 0) continue;
-    const flag = { allergen: h.allergen, label: flagLabel(h), text: parts.join(", ") };
+    const flag = {
+      allergen: h.allergen,
+      label: flagLabel(h),
+      text: parts.join(", "),
+    };
     if (allergy?.anaphylactic) red.push(flag);
     else amber.push(flag);
   }

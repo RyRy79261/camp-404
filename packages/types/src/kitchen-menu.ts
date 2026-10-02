@@ -171,7 +171,11 @@ export type CorrectRecipeAllergensInput = z.infer<
 // due before the camp leaves goes on the task board for the Kitchen; one due
 // on a day on site prints on that day's site sheet (no internet on site).
 
-export const PREP_TIMINGS = ["day_before", "same_day", "before_leaving"] as const;
+export const PREP_TIMINGS = [
+  "day_before",
+  "same_day",
+  "before_leaving",
+] as const;
 export const PrepTiming = z.enum(PREP_TIMINGS);
 export type PrepTiming = z.infer<typeof PrepTiming>;
 

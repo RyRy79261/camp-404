@@ -283,7 +283,12 @@ describe("allergyGroups", () => {
             isAnaphylactic: false,
             foods: [{ food: "sesame", reaction: "allergy" }],
           },
-          { userId: "c", allergies: "Shellfish", isAnaphylactic: false, foods: null },
+          {
+            userId: "c",
+            allergies: "Shellfish",
+            isAnaphylactic: false,
+            foods: null,
+          },
           { userId: "d", allergies: "Nuts", isAnaphylactic: true, foods: [] },
         ],
         (id) => people.get(id) ?? "?",
