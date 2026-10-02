@@ -21,7 +21,7 @@ export const PROMPT_VERSIONS = {
   voiceIntent: "2026-05-19.1",
   recipeImport: "2026-09-25.2",
   recipePlates: "2026-09-25.2",
-  recipeSource: "2026-09-24.2",
-  recipeSourceRevision: "2026-09-24.2",
-  recipeAdjust: "2026-09-24.1",
+  recipeSource: "2026-10-02.1",
+  recipeSourceRevision: "2026-10-02.1",
+  recipeAdjust: "2026-10-02.1",
 } as const;

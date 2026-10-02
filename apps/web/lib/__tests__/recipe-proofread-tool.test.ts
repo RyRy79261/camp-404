@@ -27,6 +27,9 @@ const PINNED: Record<string, string> = {
   // The same tool: 2026-09-24.2 changed only the text (no pot size, no burners).
   "2026-09-24.2":
     "7d0e15ff89f1c14ece609ebe57352fb7fe89b232c4644c653545c5ff940504f8",
+  // #245: each ingredient line gained `allergens` (the camp's fixed list).
+  "2026-10-02.1":
+    "d53f9ca18d1b97f84887429d01a25c1760b3a8449af103252bcd5f45b714d0fe",
 };
 
 const fingerprint = () =>
@@ -53,6 +56,9 @@ describe("SOURCE_TOOL", () => {
       expect(schema).toContain(`"${field}"`);
     }
     expect(schema).toContain("To serve: Rice");
+    // #245 (2026-10-02.1): each line's allergens, from the camp's fixed list.
+    expect(schema).toContain('"allergens"');
+    expect(schema).toContain('"onion_garlic"');
     // Science is not in the contract, and neither are imperial units.
     expect(schema).not.toContain('"science"');
     expect(schema).not.toContain('"oz"');

@@ -18,8 +18,13 @@ import {
 import { PROMPT_VERSIONS } from "../index";
 import {
   INGREDIENT_CATEGORIES,
+  KITCHEN_ALLERGENS,
+  KitchenAllergen,
+  KitchenRecipe,
   RECIPE_LINE_UNITS,
+  RecipeLine,
   RECIPE_NOTE_KINDS,
+  SourceProofread,
 } from "@camp404/types";
 
 describe("voiceIntentPrompt", () => {
@@ -275,7 +280,7 @@ describe("recipeSourcePrompt", () => {
   };
 
   it("is pinned at its own version, beside the prompts it leaves unchanged", () => {
-    expect(PROMPT_VERSIONS.recipeSource).toBe("2026-09-24.2");
+    expect(PROMPT_VERSIONS.recipeSource).toBe("2026-10-02.1");
     expect(PROMPT_VERSIONS.recipeImport).toBe("2026-09-25.2");
     expect(PROMPT_VERSIONS.recipePlates).toBe("2026-09-25.2");
     expect(recipeSourcePrompt.toolName).toBe("record_source_proofread");
@@ -448,7 +453,7 @@ describe("recipeSourceRevisionPrompt", () => {
   };
 
   it("is a new prompt at its own version, built on the source prompt it leaves unchanged", () => {
-    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-09-24.2");
+    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-10-02.1");
     // Built on this source prompt: bump both together.
     expect(PROMPT_VERSIONS.recipeSource).toBe(REVISION_BUILT_ON);
     expect(recipeSourceRevisionPrompt.toolName).toBe(
@@ -520,11 +525,11 @@ describe("recipeAdjustPrompt", () => {
   };
 
   it("is a new prompt at its own version, built on the source prompt it leaves unchanged", () => {
-    expect(PROMPT_VERSIONS.recipeAdjust).toBe("2026-09-24.1");
+    expect(PROMPT_VERSIONS.recipeAdjust).toBe("2026-10-02.1");
     // Built on this source prompt: bump both together.
     expect(PROMPT_VERSIONS.recipeSource).toBe(ADJUST_BUILT_ON);
     // The prompts it sits beside are unchanged.
-    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-09-24.2");
+    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-10-02.1");
     expect(recipeAdjustPrompt.toolName).toBe(recipeSourcePrompt.toolName);
     expect(
       recipeAdjustPrompt.system.startsWith(recipeSourcePrompt.system),
@@ -692,5 +697,60 @@ describe("the recipe prompts after the kitchen settings went", () => {
 
   it.each(texts)("the %s names no variations", (_, text) => {
     expect(text).not.toMatch(/variation/i);
+  });
+});
+
+describe("recipeSource 2026-10-02.1: allergens (#245)", () => {
+  // No live Claude call: the prompt's words, the tool's schema and the shape
+  // of an answer are checked here; the answer is parsed by SourceProofread,
+  // exactly as a real run's is.
+  const ingredient = {
+    name: "Peanut butter",
+    category: "other",
+    quantity: 1,
+    unit: "kg",
+  };
+  const answer = (allergens?: string[]) => ({
+    needsInfo: false,
+    recipe: {
+      title: "Overnight oats",
+      plates: 60,
+      ingredients: [
+        allergens === undefined ? ingredient : { ...ingredient, allergens },
+      ],
+      steps: [{ instruction: "Stir.", uses: ["Peanut butter"] }],
+    },
+    report: { changed: [], unsure: [] },
+    scalingNotes: ["Peanut butter was scaled in step with the plates."],
+  });
+
+  it("tells Claude to mark every line from the fixed list, and the three prompts move together", () => {
+    const system = recipeSourcePrompt.system;
+    expect(system).toContain("Allergens:");
+    for (const food of KITCHEN_ALLERGENS) expect(system, food).toContain(food);
+    expect(system).toMatch(/never leave allergens out/);
+    expect(recipeSourceRevisionPrompt.system).toContain("Allergens:");
+    expect(recipeAdjustPrompt.system).toContain("Allergens:");
+    expect(REVISION_BUILT_ON).toBe(PROMPT_VERSIONS.recipeSource);
+    expect(ADJUST_BUILT_ON).toBe(PROMPT_VERSIONS.recipeSource);
+  });
+
+  it("puts allergens, from the fixed list only, on each line of the tool's recipe", () => {
+    // The tool's input schema is built from SourceProofread (SOURCE_TOOL in
+    // apps/web/lib/recipe-proofread.ts, whose test reads the JSON schema).
+    expect(RecipeLine.shape.allergens).toBeDefined();
+    expect(KitchenAllergen.options).toEqual([...KITCHEN_ALLERGENS]);
+  });
+
+  it("takes an answer with each line's allergens, and refuses a food off the list", () => {
+    const parsed = SourceProofread.parse(answer(["peanuts"]));
+    expect(parsed.recipe?.ingredients[0]?.allergens).toEqual(["peanuts"]);
+    expect(SourceProofread.safeParse(answer(["nuts"])).success).toBe(false);
+  });
+
+  it("still reads a version written before allergens were marked", () => {
+    const parsed = SourceProofread.parse(answer());
+    expect(parsed.recipe?.ingredients[0]?.allergens).toBeUndefined();
+    expect(KitchenRecipe.safeParse(parsed.recipe).success).toBe(true);
   });
 });

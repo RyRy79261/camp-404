@@ -15,7 +15,8 @@ import { recipeSourcePrompt } from "./recipe-source";
 // stored exactly as a source run's is.
 //
 // Pinned at PROMPT_VERSIONS.recipeAdjust and recorded on every adjust run. It
-// is built on recipeSource 2026-09-24.2: a change to that prompt, its tool or
+// is built on recipeSource 2026-10-02.1 (2026-09-24.2 before #245 added
+// allergens to the shared prompt and tool): a change to that prompt, its tool or
 // SourceProofread changes this one too, so both versions are bumped together
 // (a test holds recipeSource to the version this was written against).
 //
@@ -53,7 +54,7 @@ export interface RecipeAdjustInput {
 }
 
 /** The recipeSource version this prompt was written against. */
-export const ADJUST_BUILT_ON = "2026-09-24.2";
+export const ADJUST_BUILT_ON = "2026-10-02.1";
 
 const ADJUSTING = `
 

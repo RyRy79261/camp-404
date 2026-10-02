@@ -219,8 +219,8 @@ describe("runProofreadingAction", () => {
         model: "claude-opus-4-8",
       }),
     );
-    expect(PROMPT_VERSIONS.recipeSource).toBe("2026-09-24.2");
-    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-09-24.2");
+    expect(PROMPT_VERSIONS.recipeSource).toBe("2026-10-02.1");
+    expect(PROMPT_VERSIONS.recipeSourceRevision).toBe("2026-10-02.1");
     // Not before the response: after() holds the work.
     expect(processRuns).not.toHaveBeenCalled();
     expect(after).toHaveBeenCalledTimes(1);
