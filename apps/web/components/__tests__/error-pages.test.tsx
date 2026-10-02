@@ -12,6 +12,13 @@ import {
 
 const pathname = vi.hoisted(() => ({ value: "/tasks" }));
 vi.mock("next/navigation", () => ({ usePathname: () => pathname.value }));
+// The error screens read the session (error-recovery.tsx). The real Better
+// Auth client keeps a store whose unmount timer can fire after jsdom is torn
+// down ("window is not defined"), failing a slow CI run with an unhandled
+// error though every test passed. A signed-out stand-in keeps it in the test.
+vi.mock("@/lib/auth-client", () => ({
+  authClient: { useSession: () => ({ data: null, isPending: false }) },
+}));
 
 // Smoke tests for the recovery surfaces added alongside the onboarding fix.
 // (global-error.tsx renders its own <html>/<body>, which jsdom's container
