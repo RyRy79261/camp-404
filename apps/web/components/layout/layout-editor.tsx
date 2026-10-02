@@ -148,6 +148,7 @@ export function LayoutWorkspace({
     underBanner ? "versions" : null,
   );
   const svgWrap = React.useRef<HTMLDivElement>(null);
+  const tabRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
 
   const tabs: RailTab[] = [
     editing ? "piece" : "about",
@@ -451,15 +452,34 @@ export function LayoutWorkspace({
             aria-label="About the plan"
             className="mx-3 mt-3 flex gap-1 bg-[color-mix(in_oklab,var(--color-background)_70%,var(--color-card))] p-1"
           >
-            {tabs.map((t) => (
+            {tabs.map((t, i) => (
               <button
                 key={t}
+                ref={(el) => {
+                  tabRefs.current[i] = el;
+                }}
                 type="button"
                 role="tab"
                 id={`layout-tab-${t}`}
                 aria-selected={tab === t}
                 aria-controls={`layout-panel-${t}`}
+                tabIndex={tab === t ? 0 : -1}
                 onClick={() => setChosenTab(t)}
+                onKeyDown={(e) => {
+                  // Roving tabIndex: arrows move both the choice and focus
+                  // (Home/End jump to the ends), so a keyboard user never
+                  // lands on a tab that isn't the selected one.
+                  let next: number;
+                  if (e.key === "ArrowRight") next = (i + 1) % tabs.length;
+                  else if (e.key === "ArrowLeft")
+                    next = (i - 1 + tabs.length) % tabs.length;
+                  else if (e.key === "Home") next = 0;
+                  else if (e.key === "End") next = tabs.length - 1;
+                  else return;
+                  e.preventDefault();
+                  setChosenTab(tabs[next]!);
+                  tabRefs.current[next]?.focus();
+                }}
                 className={cn(
                   "h-7 min-w-0 flex-1 whitespace-nowrap px-1 text-xs font-semibold text-muted-foreground",
                   tab === t &&

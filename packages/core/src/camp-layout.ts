@@ -289,8 +289,11 @@ export function pieceName(piece: Pick<LayoutPiece, "kind" | "label">): string {
 
 /**
  * How many pieces of each kind, in the plan's own order (the order the camp's
- * numbers follow), kinds with none left out. The tents come straight after
- * the sleeping area they stand in, as the approved key lists them.
+ * numbers follow), kinds with none left out. Every tent's count comes
+ * straight after the FIRST sleeping area in the plan, as the approved key
+ * lists them — this does not check which sleeping area a tent actually
+ * stands in, so a plan with more than one sleeping area still groups every
+ * tent after the first.
  */
 export function pieceCounts(
   pieces: readonly Pick<LayoutPiece, "kind">[],

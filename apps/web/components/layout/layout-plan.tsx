@@ -225,6 +225,13 @@ export function LayoutPlan({
   className?: string;
   style?: React.CSSProperties;
 }) {
+  // The hatch pattern's id must be unique per drawing on the page: a fixed
+  // id would make a second LayoutPlan's url(#...) resolve to the first
+  // pattern (and its own B's scale). This component holds no hooks (so a
+  // server page can draw it as HTML), so React.useId() is out; derive the
+  // id from the drawing's own accessible name instead, which is already
+  // distinct per instance on every page that renders one.
+  const hatchId = `plan-hatch-${label.replace(/[^a-zA-Z0-9]+/g, "-")}`;
   const W = plot.widthM;
   const H = plot.depthM;
   const big = Math.max(W, H);
@@ -266,7 +273,7 @@ export function LayoutPlan({
     >
       <defs>
         <pattern
-          id="plan-hatch"
+          id={hatchId}
           width={B * 0.34}
           height={B * 0.34}
           patternUnits="userSpaceOnUse"
@@ -304,7 +311,7 @@ export function LayoutPlan({
               y={0}
               width={B}
               height={H}
-              fill="url(#plan-hatch)"
+              fill={`url(#${hatchId})`}
             />
             <text
               transform={
