@@ -116,6 +116,7 @@ export const AUDIT_ACTION_LABELS = {
   "rental.order_reopened": "Reopened a member's gear order",
   "rental.orders_asked": "Asked members for their gear orders",
   "rental.tent_labelled": "Labelled a tent",
+  "safety.allergies.view": "Read the camp's allergies for the daily site sheet",
   "safety.emergency_contacts.view": "Read emergency contacts",
   "shifts.asked": "Asked members to sign up for shifts",
   "shifts.days_added": "Added days to a shift",

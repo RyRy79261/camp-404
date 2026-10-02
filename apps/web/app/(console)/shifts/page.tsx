@@ -23,6 +23,7 @@ import {
   SHIFTS_PRINT_PATH,
 } from "@/lib/shifts-copy";
 import { getLeadTeams } from "@/lib/users";
+import { dailySheetHref } from "@/lib/daily-sheet-copy";
 
 export const dynamic = "force-dynamic";
 
@@ -195,6 +196,14 @@ export default async function ShiftsPage({
                 Print
               </Link>
             </Button>
+            {/* The daily site sheet shows safety data: leads and captains only. */}
+            {rank !== "camp_member" && (
+              <Button asChild variant="outline" className="page-sm:flex-none">
+                <Link href={dailySheetHref(day?.day ?? null)}>
+                  Print daily sheets
+                </Link>
+              </Button>
+            )}
           </>
         }
       />

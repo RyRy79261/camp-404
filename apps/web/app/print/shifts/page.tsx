@@ -5,6 +5,7 @@ import { SHEET_TABLE } from "@/lib/print";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getShiftsView } from "@/lib/shifts";
 import { SHIFTS_PATH, SHIFTS_PRINT_PATH } from "@/lib/shifts-copy";
+import { dailySheetHref } from "@/lib/daily-sheet-copy";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function ShiftsPrintPage({
 }: {
   searchParams: Promise<{ day?: string; sheet?: string }>;
 }) {
-  const { campUser } = await captainPageGate("camp_member");
+  const { campUser, rank } = await captainPageGate("camp_member");
   const params = await searchParams;
   // Printed as a member sees it: names only, never ids.
   const view = await getShiftsView({
@@ -63,6 +64,15 @@ export default async function ShiftsPrintPage({
           <span aria-hidden>·</span>
           <Link href={link(day.day, !blank)} className="underline">
             {blank ? "With names" : "Blank for the whiteboard"}
+          </Link>
+        </>
+      )}
+      {/* The daily site sheet lists allergies: leads and captains. */}
+      {rank !== "camp_member" && (
+        <>
+          <span aria-hidden>·</span>
+          <Link href={dailySheetHref(day?.day ?? null)} className="underline">
+            Daily site sheets
           </Link>
         </>
       )}
