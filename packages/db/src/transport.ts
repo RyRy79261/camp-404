@@ -287,6 +287,8 @@ export interface TransportCar {
   driverUserId: string;
   driverName: string | null;
   vehicle: string | null;
+  /** The make alone ("Land Rover"), for short labels such as "Sipho's Land Rover". */
+  vehicleMake: string | null;
   departureCity: string | null;
   seatsOffered: number | null;
   canTow: boolean;
@@ -392,6 +394,7 @@ export async function getTransportBoard(
       driverUserId: d.userId,
       driverName: d.name,
       vehicle: vehicleLabel(d.vehicleMake, d.vehicleModel),
+      vehicleMake: d.vehicleMake?.trim() || null,
       departureCity: d.departureCity,
       seatsOffered: d.seatsOffered,
       canTow: d.canTow,
@@ -457,6 +460,8 @@ export async function listLiftRequests(
 export interface UnseatedMember {
   userId: string;
   name: string | null;
+  /** Their place this year: accepted, coming (not yet accepted) or maybe. */
+  status: "applied" | "maybe" | "accepted";
 }
 
 /**
@@ -489,8 +494,12 @@ export async function listUnseated(cycle?: number): Promise<UnseatedMember[]> {
         eq(schema.driverProfiles.intendsToDrive, true),
       ),
     );
-  return db
-    .select({ userId: schema.users.id, name: schema.users.displayName })
+  const rows = await db
+    .select({
+      userId: schema.users.id,
+      name: schema.users.displayName,
+      status: schema.campParticipations.status,
+    })
     .from(schema.campParticipations)
     .innerJoin(
       schema.users,
@@ -512,6 +521,12 @@ export async function listUnseated(cycle?: number): Promise<UnseatedMember[]> {
       ),
     )
     .orderBy(asc(schema.users.displayName), asc(schema.users.id));
+  // The WHERE keeps only these three; the narrowing says so to TypeScript.
+  return rows.map((r) => ({
+    userId: r.userId,
+    name: r.name,
+    status: r.status as UnseatedMember["status"],
+  }));
 }
 
 // --- Seats -------------------------------------------------------------------

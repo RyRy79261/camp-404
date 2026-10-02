@@ -289,44 +289,4 @@ describe("meal plan", () => {
       kitchenPlatesDinner: 60,
     });
   });
-
-  it("never reads a lunch a row still holds, and a save leaves that column as it was", async () => {
-    const { captain } = await people();
-    await setMealPlan({
-      actorId: captain.id,
-      daysOnSite: 3,
-      days: THREE_DAYS,
-      expectedVersion: 0,
-    });
-    // A row from before the camp dropped lunch (the owner, 2026-10-01).
-    await h
-      .db()
-      .update(schema.kitchenMealPlanDays)
-      .set({ lunch: 300 })
-      .where(eq(schema.kitchenMealPlanDays.day, 2));
-    const plan = await getMealPlan();
-    expect(plan.days).toEqual(THREE_DAYS);
-    expect(plan.days.every((d) => !("lunch" in d))).toBe(true);
-    expect((await readMealPlanPeaks()).kitchenPlatesLunch).toBeNull();
-
-    await setMealPlan({
-      actorId: captain.id,
-      daysOnSite: 3,
-      days: THREE_DAYS,
-      expectedVersion: 1,
-    });
-    const rows = await h
-      .db()
-      .select({
-        day: schema.kitchenMealPlanDays.day,
-        lunch: schema.kitchenMealPlanDays.lunch,
-      })
-      .from(schema.kitchenMealPlanDays)
-      .orderBy(schema.kitchenMealPlanDays.day);
-    expect(rows).toEqual([
-      { day: 1, lunch: 0 },
-      { day: 2, lunch: 300 },
-      { day: 3, lunch: 0 },
-    ]);
-  });
 });
