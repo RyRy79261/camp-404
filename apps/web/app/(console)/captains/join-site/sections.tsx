@@ -1131,6 +1131,19 @@ export function FeeSection({
 
 type PerkFile = C["perks"]["files"][number];
 
+/** A key for a perk file's own editor, never saved: the stored shape has
+ * no id of its own, so one is made client-side when a file is loaded or
+ * added, and carried along as files move or are removed. Without it,
+ * React keeps the same `FieldCard`/`Words` instance at an array index, the
+ * `MarkdownEditor` inside reads its text once on mount, and a move or a
+ * delete leaves the wrong words in it; the next keystroke then overwrites
+ * whatever file now sits at that index (CodeRabbit, PR #333). */
+function newPerkKey(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `perk-${Math.random().toString(36).slice(2)}`;
+}
+
 export function PerksSection({
   value,
   set,
@@ -1138,6 +1151,15 @@ export function PerksSection({
   value: C["perks"];
   set: SetSection<"perks">;
 }) {
+  const [keys, setKeys] = React.useState<string[]>(() =>
+    value.files.map(() => newPerkKey()),
+  );
+  // Defensive resync if the files ever change from outside a handler below
+  // (e.g. a discard that replaces `value` wholesale): keep one key per
+  // file, making up new ones only for files that don't have one yet.
+  if (keys.length !== value.files.length) {
+    setKeys(value.files.map((_, i) => keys[i] ?? newPerkKey()));
+  }
   const setFile = (i: number, next: PerkFile) =>
     set({ ...value, files: value.files.map((f, j) => (j === i ? next : f)) });
   const moveFile = (i: number, to: number) => {
@@ -1145,6 +1167,23 @@ export function PerksSection({
     const [f] = files.splice(i, 1);
     files.splice(to, 0, f!);
     set({ ...value, files });
+    setKeys((prev) => {
+      const next = [...prev];
+      const [k] = next.splice(i, 1);
+      next.splice(to, 0, k!);
+      return next;
+    });
+  };
+  const deleteFile = (i: number) => {
+    set({ ...value, files: value.files.filter((_, j) => j !== i) });
+    setKeys((prev) => prev.filter((_, j) => j !== i));
+  };
+  const addFile = () => {
+    set({
+      ...value,
+      files: [...value.files, { file: "", name: "", paragraphs: [] }],
+    });
+    setKeys((prev) => [...prev, newPerkKey()]);
   };
   return (
     <>
@@ -1162,7 +1201,7 @@ export function PerksSection({
       </TableCard>
       {value.files.map((f, i) => (
         <FieldCard
-          key={i}
+          key={keys[i] ?? i}
           title={f.name.trim() || `File ${i + 1}`}
           description="A file in the PERKS/ folder on the join site; About shows its title and words."
           action={
@@ -1171,9 +1210,7 @@ export function PerksSection({
               index={i}
               count={value.files.length}
               onMove={(to) => moveFile(i, to)}
-              onDelete={() =>
-                set({ ...value, files: value.files.filter((_, j) => j !== i) })
-              }
+              onDelete={() => deleteFile(i)}
             />
           }
         >
@@ -1204,16 +1241,7 @@ export function PerksSection({
       ))}
       {value.files.length < 8 ? (
         <div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              set({
-                ...value,
-                files: [...value.files, { file: "", name: "", paragraphs: [] }],
-              })
-            }
-          >
+          <Button type="button" variant="outline" onClick={addFile}>
             Add a file
           </Button>
         </div>
