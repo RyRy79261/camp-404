@@ -4,12 +4,7 @@
 
 export const TRANSPORT_PATH = "/transport";
 
-export const CHECK_FORM = "Check the form and try again.";
+/** My lift: the same panel as the top of Transport. */
+export const LIFT_PATH = "/lift";
 
-/** Seats as people say them: "2 of 3 seats taken", or who rides. */
-export function seatsText(seatsOffered: number | null, riders: number): string {
-  if (seatsOffered === null) {
-    return riders === 1 ? "1 rider" : `${riders} riders`;
-  }
-  return `${riders} of ${seatsOffered} seat${seatsOffered === 1 ? "" : "s"} taken`;
-}
+export const CHECK_FORM = "Check the form and try again.";

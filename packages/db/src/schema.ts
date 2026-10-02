@@ -2227,7 +2227,8 @@ export const recipeLessons = pgTable(
 
 // The kitchen's meal plan for one year (the owner's sketch, 2026-09-24): how
 // many days the camp is on site, the date of day 1, and the plates at
-// breakfast, lunch and dinner on each day. A recipe in the book is shown at
+// breakfast and dinner on each day (the camp does no lunch, owner,
+// 2026-10-01). A recipe in the book is shown at
 // each distinct count in it, and the largest is what Claude writes a new
 // recipe for. Anyone approved reads it; a captain or a Kitchen lead saves it,
 // audited and compare-and-set on `version`. No row means the defaults (11
@@ -2265,10 +2266,6 @@ export const kitchenMealPlanDays = pgTable(
       .references(() => kitchenMealPlans.cycle, { onDelete: "cascade" }),
     day: integer("day").notNull(),
     breakfast: integer("breakfast").notNull().default(0),
-    // Unused: the camp does no lunch (the owner, 2026-10-01). Kept, not
-    // dropped, because production may hold values here; a later migration
-    // drops it.
-    lunch: integer("lunch").notNull().default(0),
     dinner: integer("dinner").notNull().default(0),
   },
   (d) => ({
@@ -2279,7 +2276,7 @@ export const kitchenMealPlanDays = pgTable(
     ),
     platesCheck: check(
       "kitchen_meal_plan_days_plates_check",
-      sql`${d.breakfast} between 0 and 500 and ${d.lunch} between 0 and 500 and ${d.dinner} between 0 and 500`,
+      sql`${d.breakfast} between 0 and 500 and ${d.dinner} between 0 and 500`,
     ),
   }),
 );

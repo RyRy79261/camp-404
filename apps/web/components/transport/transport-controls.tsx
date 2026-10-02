@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Check, MessageSquare, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   CAR_MESSAGE_BODY_MAX,
   CAR_MESSAGE_TITLE_MAX,
@@ -13,7 +12,6 @@ import {
   TrailerInput,
 } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
-import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -33,56 +31,47 @@ import {
 } from "@camp404/ui/components/select";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { Textarea } from "@camp404/ui/components/textarea";
+import { TextareaWithCount } from "@camp404/ui/components/textarea-with-count";
 import { toast } from "@camp404/ui/components/toast";
+import { CHOICE_OFF, CHOICE_ON } from "@camp404/ui/lib/choice";
+import { cn } from "@camp404/ui/lib/utils";
 import {
-  addRiderAction,
   addTrailerAction,
   answerLiftRequestAction,
   removeRiderAction,
-  removeTrailerAction,
   requestLiftAction,
   sendCarMessageAction,
   setSeatsAction,
-  setTowAction,
   updateTrailerAction,
   withdrawLiftRequestAction,
 } from "@/app/(console)/transport/actions";
+import { listWords } from "@/lib/transport-view";
 
-// The Transport page's controls (#270). Composed as the power load list's: a
-// dialog for anything typed (its problems shown inline beside the field), a
-// toast for a one-tap change on a row (only the control that was used spins),
-// and for someone who may not use a control, the control present but disabled
-// and described by the page's one refusal line. The server re-checks every
-// write; nothing here is the boundary.
+// The Transport page's and My lift's small controls (#270), restyled to the
+// owner's approved Option A (2026-10-01). A dialog for anything typed (its
+// problems inline beside the field), a toast for a one-tap change on a row
+// (only the pressed control spins). Someone who may not use a control never
+// gets it: the page leaves it out. The server re-checks every write.
 
-/** A car a select can offer. */
-export interface CarOption {
-  driverUserId: string;
-  label: string;
-}
+type Result = { ok: true } | { ok: false; error: string };
 
-const ANY_CAR = "any";
-const NO_CAR = "none";
-
-function refusalProps(allowed: boolean, name: string, refusalId?: string) {
-  return allowed || !refusalId
-    ? {}
-    : {
-        "aria-label": `${name} — not available to you`,
-        "aria-describedby": refusalId,
-      };
-}
+/** One row action's width (the mock-up's 128px slot), and its phone form. */
+export const ROW_ACTION = "h-8 w-32";
+export const ROW_ACTION_PHONE = "h-10 w-full";
+/** A quiet text button: no border, muted until hovered. */
+export const QUIET =
+  "h-8 px-2 font-sans text-[13px] font-semibold tracking-normal normal-case text-muted-foreground hover:bg-transparent hover:text-foreground";
 
 /** Run a one-tap action: a toast on failure, a refresh on success. */
-function useRowAction() {
+export function useRowAction() {
   const router = useRouter();
   const [pending, start] = React.useTransition();
   const run = React.useCallback(
-    (action: () => Promise<{ ok: boolean; error?: string }>, success: string) =>
+    (action: () => Promise<Result>, success: string) =>
       start(async () => {
         const result = await action();
         if (!result.ok) {
-          toast.error(result.error ?? "That didn't work. Try again.");
+          toast.error(result.error);
           return;
         }
         toast.success(success);
@@ -93,17 +82,332 @@ function useRowAction() {
   return [pending, run] as const;
 }
 
-// --- Seats and riders ----------------------------------------------------------
+// --- A list of choices (the panel under a row) ---------------------------------
 
-/** How many seats a car offers, for its driver or a transport editor. */
-export function SeatsControl({
+export interface PanelChoice {
+  value: string;
+  label: string;
+  description?: string | null;
+  /** The short fact on the right ("2 seats free"). */
+  right?: string | null;
+}
+
+/** A radio list in the choice look: one picked, arrows move between them. */
+export function ChoiceList({
+  label,
+  choices,
+  value,
+  onChange,
+}: {
+  label: string;
+  choices: PanelChoice[];
+  value: string | null;
+  onChange: (value: string) => void;
+}) {
+  const refs = React.useRef<(HTMLButtonElement | null)[]>([]);
+  const picked = choices.findIndex((c) => c.value === value);
+  function move(index: number) {
+    const target = (index + choices.length) % choices.length;
+    const next = choices[target];
+    if (!next) return;
+    onChange(next.value);
+    refs.current[target]?.focus();
+  }
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-col gap-2">
+      {choices.map((c, i) => {
+        const on = c.value === value;
+        return (
+          <button
+            key={c.value}
+            ref={(el) => {
+              refs.current[i] = el;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabIndex={on || (picked === -1 && i === 0) ? 0 : -1}
+            onClick={() => move(i)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+                e.preventDefault();
+                move(i + 1);
+              } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+                e.preventDefault();
+                move(i - 1);
+              }
+            }}
+            className={cn(
+              "flex items-center gap-3 border p-3 text-left font-sans tracking-normal normal-case focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              on ? CHOICE_ON : CHOICE_OFF,
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn(
+                "h-4 w-4 shrink-0 rounded-full border-2",
+                on ? "border-primary bg-primary" : "border-muted-foreground",
+              )}
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm leading-5 font-semibold">
+                {c.label}
+              </span>
+              {c.description && (
+                <span className="block text-xs leading-4 text-muted-foreground">
+                  {c.description}
+                </span>
+              )}
+            </span>
+            {c.right && (
+              <span className="shrink-0 text-[13px] whitespace-nowrap text-muted-foreground">
+                {c.right}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// --- Your lift: rider and member -------------------------------------------------
+
+/** A rider takes themself out of the car they ride in. */
+export function LeaveCarButton({
+  driverUserId,
+  memberUserId,
+  className,
+}: {
+  driverUserId: string;
+  memberUserId: string;
+  className?: string;
+}) {
+  const [pending, run] = useRowAction();
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className={cn("h-8", className)}
+      disabled={pending}
+      onClick={() =>
+        run(
+          () => removeRiderAction({ driverUserId, memberUserId }),
+          "You left the car",
+        )
+      }
+    >
+      {pending ? <Spinner size="sm" label="Leaving…" /> : null}
+      Leave this car
+    </Button>
+  );
+}
+
+export function WithdrawRequestButton() {
+  const [pending, run] = useRowAction();
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={QUIET}
+      disabled={pending}
+      onClick={() =>
+        run(() => withdrawLiftRequestAction(), "Request taken back")
+      }
+    >
+      {pending ? <Spinner size="sm" label="Taking back…" /> : null}
+      Take back my request
+    </Button>
+  );
+}
+
+const ANY_CAR = "any";
+
+/**
+ * A member asks for a lift: a car with free seats, or any car. Nothing is
+ * picked to start with, so one tap never sends a vague request.
+ */
+export function AskForLift({
+  cars,
+}: {
+  cars: { driverUserId: string; label: string }[];
+}) {
+  const router = useRouter();
+  const [car, setCar] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+  const [pending, start] = React.useTransition();
+  const errorId = React.useId();
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!car) {
+      setError("Choose a car, or Any car.");
+      return;
+    }
+    setError(null);
+    start(async () => {
+      const result = await requestLiftAction({
+        driverUserId: car === ANY_CAR ? null : car,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      toast.success("Lift asked for");
+      router.refresh();
+    });
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      noValidate
+      className="flex w-full max-w-[420px] flex-col gap-2"
+    >
+      <div className="flex flex-col gap-2 page-sm:flex-row">
+        <Select value={car} onValueChange={setCar}>
+          <SelectTrigger
+            aria-label="Which car"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
+            className="h-10 min-w-0 flex-1 font-sans tracking-normal normal-case page-sm:h-8"
+          >
+            <SelectValue placeholder="Choose a car" />
+          </SelectTrigger>
+          <SelectContent>
+            {cars.map((c) => (
+              <SelectItem key={c.driverUserId} value={c.driverUserId}>
+                {c.label}
+              </SelectItem>
+            ))}
+            <SelectItem value={ANY_CAR}>Any car</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          type="submit"
+          size="sm"
+          className="h-10 page-sm:h-8"
+          disabled={pending}
+        >
+          {pending ? <Spinner size="sm" label="Asking…" /> : null}
+          Ask for a lift
+        </Button>
+      </div>
+      {error && (
+        <p
+          id={errorId}
+          role="alert"
+          className="text-left text-sm text-destructive"
+        >
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
+// --- Your car: the driver ---------------------------------------------------------
+
+/** Accept (seat them in this car) or decline someone asking to ride. */
+export function AnswerRequest({
+  memberUserId,
+  name,
+  phone,
+}: {
+  memberUserId: string;
+  name: string;
+  phone?: boolean;
+}) {
+  const [accepting, runAccept] = useRowAction();
+  const [declining, runDecline] = useRowAction();
+  const busy = accepting || declining;
+  return (
+    <span className="flex shrink-0 items-center gap-2">
+      <Button
+        size="sm"
+        variant="ghost"
+        className={QUIET}
+        disabled={busy}
+        aria-label={`Decline ${name}`}
+        onClick={() =>
+          runDecline(
+            () => answerLiftRequestAction({ memberUserId, accept: false }),
+            "Request declined",
+          )
+        }
+      >
+        {declining ? <Spinner size="sm" label="Declining…" /> : null}
+        Decline
+      </Button>
+      <Button
+        size="sm"
+        className={phone ? "h-10 w-24" : ROW_ACTION}
+        disabled={busy}
+        aria-label={`Accept ${name}`}
+        onClick={() =>
+          runAccept(
+            () => answerLiftRequestAction({ memberUserId, accept: true }),
+            `${name} is in the car`,
+          )
+        }
+      >
+        {accepting ? <Spinner size="sm" label="Accepting…" /> : null}
+        Accept
+      </Button>
+    </span>
+  );
+}
+
+/** Take a rider out of a car: its driver, or a Transport editor. */
+export function TakeOutButton({
+  driverUserId,
+  memberUserId,
+  name,
+  short,
+  className,
+}: {
+  driverUserId: string;
+  memberUserId: string;
+  name: string;
+  /** "Take out" on a phone, where the row is narrow. */
+  short?: boolean;
+  className?: string;
+}) {
+  const [pending, run] = useRowAction();
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className={cn(short ? "h-10 w-28" : "h-8 w-40", className)}
+      disabled={pending}
+      onClick={() =>
+        run(
+          () => removeRiderAction({ driverUserId, memberUserId }),
+          `${name} is out of the car`,
+        )
+      }
+    >
+      {pending ? <Spinner size="sm" label="Taking out…" /> : null}
+      {short ? "Take out" : "Take out of car"}
+      <span className="sr-only"> ({name})</span>
+    </Button>
+  );
+}
+
+/** How many seats a car offers: a read value with a Change seats dialog. */
+export function ChangeSeatsButton({
   driverUserId,
   seatsOffered,
+  riders,
+  className,
 }: {
   driverUserId: string;
   seatsOffered: number | null;
+  riders: number;
+  className?: string;
 }) {
   const router = useRouter();
+  const [open, setOpen] = React.useState(false);
   const [value, setValue] = React.useState(
     seatsOffered === null ? "" : String(seatsOffered),
   );
@@ -129,273 +433,186 @@ export function SeatsControl({
         return;
       }
       toast.success("Seats saved");
+      setOpen(false);
       router.refresh();
     });
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-1" noValidate>
-      <Field label="Seats you offer" htmlFor={id} error={error ?? undefined}>
-        <div className="flex items-center gap-2">
-          <Input
-            id={id}
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={MAX_SEATS_OFFERED}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            aria-invalid={error ? true : undefined}
-            className="w-24"
-          />
-          <Button type="submit" variant="outline" disabled={pending}>
-            {pending ? <Spinner size="sm" label="Saving…" /> : null}
-            Save seats
-          </Button>
-        </div>
-      </Field>
-    </form>
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn(QUIET, "text-primary hover:text-primary", className)}
+        onClick={() => {
+          setValue(seatsOffered === null ? "" : String(seatsOffered));
+          setError(null);
+          setOpen(true);
+        }}
+      >
+        Change seats
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!pending) setOpen(next);
+        }}
+      >
+        <DialogContent>
+          <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+            <DialogHeader>
+              <DialogTitle>Change seats</DialogTitle>
+              <DialogDescription>
+                How many people can ride with you, not counting you.
+                {riders > 0
+                  ? ` ${riders} ${riders === 1 ? "rides" : "ride"} with you now.`
+                  : ""}
+              </DialogDescription>
+            </DialogHeader>
+            <Field
+              label="Seats you offer"
+              htmlFor={id}
+              error={error ?? undefined}
+            >
+              <Input
+                id={id}
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={MAX_SEATS_OFFERED}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                aria-invalid={error ? true : undefined}
+                className="w-24"
+              />
+            </Field>
+            <DialogFooter>
+              <Button type="submit" disabled={pending}>
+                {pending ? <Spinner size="sm" label="Saving…" /> : null}
+                Save seats
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
-/** A rider's name, with a remove button for whoever may take them out. */
-export function RiderChip({
-  driverUserId,
-  rider,
-  canRemove,
+/**
+ * A driver writes to the people in their car. The form sends a title and a
+ * message only; the server finds the car and its riders itself.
+ */
+export function CarMessageButton({
+  riders,
+  className,
 }: {
-  driverUserId: string;
-  rider: { userId: string; name: string };
-  canRemove: boolean;
+  riders: string[];
+  className?: string;
 }) {
-  const [pending, run] = useRowAction();
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 py-0.5 pl-2.5 pr-1 text-xs">
-      {rider.name}
-      {canRemove && (
-        <button
-          type="button"
-          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-          aria-label={`Take ${rider.name} out of this car`}
-          disabled={pending}
-          onClick={() =>
-            run(
-              () =>
-                removeRiderAction({ driverUserId, memberUserId: rider.userId }),
-              `${rider.name} is out of the car`,
-            )
-          }
-        >
-          {pending ? (
-            <Spinner size="sm" label="Removing…" />
-          ) : (
-            <X className="h-3 w-3" aria-hidden />
-          )}
-        </button>
-      )}
-    </span>
-  );
-}
-
-/** A rider takes themself out of the car they ride in. */
-export function LeaveCarButton({
-  driverUserId,
-  memberUserId,
-}: {
-  driverUserId: string;
-  memberUserId: string;
-}) {
-  const [pending, run] = useRowAction();
-  return (
-    <Button
-      variant="outline"
-      disabled={pending}
-      onClick={() =>
-        run(
-          () => removeRiderAction({ driverUserId, memberUserId }),
-          "You left the car",
-        )
-      }
-    >
-      {pending ? <Spinner size="sm" label="Leaving…" /> : null}
-      Leave this car
-    </Button>
-  );
-}
-
-// --- Lift requests -------------------------------------------------------------
-
-/** A member asks for a lift, in one car or any car. */
-export function AskForLift({ cars }: { cars: CarOption[] }) {
-  const router = useRouter();
-  const [car, setCar] = React.useState(ANY_CAR);
+  const [open, setOpen] = React.useState(false);
+  const [title, setTitle] = React.useState("");
+  const [body, setBody] = React.useState("");
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
+
+  function reset() {
+    setTitle("");
+    setBody("");
+    setErrors({});
+    setError(null);
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const check = CarMessageInput.safeParse({ title, body });
+    if (!check.success) {
+      const next: Record<string, string> = {};
+      for (const issue of check.error.issues) {
+        next[String(issue.path[0])] ??= issue.message;
+      }
+      setErrors(next);
+      return;
+    }
+    setErrors({});
     start(async () => {
-      const result = await requestLiftAction({
-        driverUserId: car === ANY_CAR ? null : car,
-      });
+      const result = await sendCarMessageAction(check.data);
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      toast.success("Lift asked for");
-      router.refresh();
+      const n = result.data.recipientCount;
+      toast.success(`Sent to ${n} ${n === 1 ? "person" : "people"}`);
+      reset();
+      setOpen(false);
     });
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-2 page-sm:flex-row page-sm:items-end"
-    >
-      <Field
-        label="Which car?"
-        htmlFor="ask-car"
-        error={error ?? undefined}
-        className="page-sm:w-72"
-      >
-        <Select value={car} onValueChange={setCar}>
-          <SelectTrigger id="ask-car">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ANY_CAR}>Any car</SelectItem>
-            {cars.map((c) => (
-              <SelectItem key={c.driverUserId} value={c.driverUserId}>
-                {c.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Button type="submit" disabled={pending}>
-        {pending ? <Spinner size="sm" label="Asking…" /> : null}
-        Ask for a lift
-      </Button>
-    </form>
-  );
-}
-
-export function WithdrawRequestButton() {
-  const [pending, run] = useRowAction();
-  return (
-    <Button
-      variant="outline"
-      disabled={pending}
-      onClick={() =>
-        run(() => withdrawLiftRequestAction(), "Request taken back")
-      }
-    >
-      {pending ? <Spinner size="sm" label="Taking back…" /> : null}
-      Take back my request
-    </Button>
-  );
-}
-
-/** Accept (seat them in the car they asked for) or decline a request. */
-export function RequestActions({
-  memberUserId,
-  name,
-  canAccept,
-}: {
-  memberUserId: string;
-  name: string;
-  canAccept: boolean;
-}) {
-  const [accepting, runAccept] = useRowAction();
-  const [declining, runDecline] = useRowAction();
-  const busy = accepting || declining;
-  return (
-    <span className="flex items-center justify-end gap-1">
-      {canAccept && (
-        <Button
-          size="sm"
-          disabled={busy}
-          onClick={() =>
-            runAccept(
-              () => answerLiftRequestAction({ memberUserId, accept: true }),
-              `${name} is in the car`,
-            )
-          }
-          aria-label={`Accept ${name}`}
-        >
-          {accepting ? (
-            <Spinner size="sm" label="Accepting…" />
-          ) : (
-            <Check aria-hidden />
-          )}
-          Accept
-        </Button>
-      )}
+    <>
       <Button
-        size="sm"
-        variant="ghost"
-        disabled={busy}
-        onClick={() =>
-          runDecline(
-            () => answerLiftRequestAction({ memberUserId, accept: false }),
-            "Request declined",
-          )
-        }
-        aria-label={`Decline ${name}`}
-      >
-        {declining ? <Spinner size="sm" label="Declining…" /> : null}
-        Decline
-      </Button>
-    </span>
-  );
-}
-
-/** A transport editor puts a member in a car of their choosing. */
-export function PlaceInCar({
-  memberUserId,
-  name,
-  cars,
-}: {
-  memberUserId: string;
-  name: string;
-  cars: CarOption[];
-}) {
-  const [car, setCar] = React.useState<string>("");
-  const [pending, run] = useRowAction();
-  return (
-    <span className="flex items-center justify-end gap-1">
-      <Select value={car} onValueChange={setCar}>
-        <SelectTrigger
-          className="h-8 w-44 text-xs"
-          aria-label={`Car for ${name}`}
-        >
-          <SelectValue placeholder="Pick a car" />
-        </SelectTrigger>
-        <SelectContent>
-          {cars.map((c) => (
-            <SelectItem key={c.driverUserId} value={c.driverUserId}>
-              {c.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Button
-        size="sm"
         variant="outline"
-        disabled={!car || pending}
-        onClick={() =>
-          run(
-            () => addRiderAction({ driverUserId: car, memberUserId }),
-            `${name} is in the car`,
-          )
-        }
-        aria-label={`Put ${name} in the car`}
+        size="sm"
+        className={cn("h-8", className)}
+        disabled={riders.length === 0}
+        title={riders.length === 0 ? "Nobody rides with you yet" : undefined}
+        onClick={() => setOpen(true)}
       >
-        {pending ? <Spinner size="sm" label="Adding…" /> : null}
-        Put in car
+        Message my car
       </Button>
-    </span>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (pending) return;
+          if (!next) reset();
+          setOpen(next);
+        }}
+      >
+        <DialogContent>
+          <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+            <DialogHeader>
+              <DialogTitle>Message my car</DialogTitle>
+              <DialogDescription>
+                Goes to {listWords(riders)}, in their inbox and as a push. There
+                is no signal at the burn, so send it before you leave.
+              </DialogDescription>
+            </DialogHeader>
+            <Field label="Title" htmlFor="car-title" error={errors.title}>
+              <Input
+                id="car-title"
+                value={title}
+                maxLength={CAR_MESSAGE_TITLE_MAX}
+                onChange={(e) => setTitle(e.target.value)}
+                aria-invalid={errors.title ? true : undefined}
+              />
+            </Field>
+            <Field label="Message" htmlFor="car-body" error={errors.body}>
+              <TextareaWithCount
+                id="car-body"
+                rows={5}
+                value={body}
+                maxLength={CAR_MESSAGE_BODY_MAX}
+                onChange={(e) => setBody(e.target.value)}
+                aria-invalid={errors.body ? true : undefined}
+              />
+            </Field>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+            <DialogFooter>
+              <Button type="submit" disabled={pending}>
+                {pending ? <Spinner size="sm" label="Sending…" /> : null}
+                Send to my car
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -409,7 +626,7 @@ export interface EditableTrailer {
   towedByUserId: string | null;
 }
 
-function TrailerDialog({
+export function TrailerDialog({
   open,
   onOpenChange,
   editing,
@@ -475,8 +692,8 @@ function TrailerDialog({
               {editing ? "Edit trailer" : "Add a trailer"}
             </DialogTitle>
             <DialogDescription>
-              A trailer the camp has this year. Pick the car that tows it on the
-              list.
+              A trailer the camp has this year. Choose the car that tows it on
+              the list.
             </DialogDescription>
           </DialogHeader>
           <Field label="Name" htmlFor="trailer-name" error={errors.name}>
@@ -489,10 +706,10 @@ function TrailerDialog({
             />
           </Field>
           <Field
-            label="Notes (optional)"
+            label="What it carries (optional)"
             htmlFor="trailer-notes"
             error={errors.notes}
-            help="What it carries, or where to collect it."
+            help="Or where to collect it."
           >
             <Textarea
               id="trailer-notes"
@@ -519,272 +736,19 @@ function TrailerDialog({
   );
 }
 
-export function AddTrailerButton({
-  canEdit,
-  refusalId,
-}: {
-  canEdit: boolean;
-  refusalId: string;
-}) {
+export function AddTrailerButton({ className }: { className?: string }) {
   const [open, setOpen] = React.useState(false);
-  return (
-    <>
-      <Button
-        disabled={!canEdit}
-        onClick={() => setOpen(true)}
-        {...refusalProps(canEdit, "Add trailer", refusalId)}
-      >
-        <Plus aria-hidden />
-        Add trailer
-      </Button>
-      {canEdit && <TrailerDialog open={open} onOpenChange={setOpen} />}
-    </>
-  );
-}
-
-/** Which car tows a trailer: the cars that can tow, or none. */
-export function TowSelect({
-  trailer,
-  cars,
-  canEdit,
-  refusalId,
-}: {
-  trailer: EditableTrailer;
-  cars: CarOption[];
-  canEdit: boolean;
-  refusalId: string;
-}) {
-  const [pending, run] = useRowAction();
-  const value = trailer.towedByUserId ?? NO_CAR;
-  return (
-    <span className="inline-flex items-center gap-1">
-      <Select
-        value={value}
-        disabled={!canEdit || pending}
-        onValueChange={(next) =>
-          run(
-            () =>
-              setTowAction({
-                trailerId: trailer.id,
-                expectedVersion: trailer.version,
-                driverUserId: next === NO_CAR ? null : next,
-              }),
-            next === NO_CAR ? "Trailer has no car" : "Tow saved",
-          )
-        }
-      >
-        <SelectTrigger
-          className="h-8 w-48 text-xs"
-          aria-label={
-            canEdit
-              ? `Car towing ${trailer.name}`
-              : `Car towing ${trailer.name} — not available to you`
-          }
-          aria-describedby={canEdit ? undefined : refusalId}
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NO_CAR}>No car yet</SelectItem>
-          {cars.map((c) => (
-            <SelectItem key={c.driverUserId} value={c.driverUserId}>
-              {c.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {pending && <Spinner size="sm" label="Saving…" />}
-    </span>
-  );
-}
-
-export function TrailerRowActions({
-  trailer,
-  canEdit,
-  refusalId,
-}: {
-  trailer: EditableTrailer;
-  canEdit: boolean;
-  refusalId: string;
-}) {
-  const router = useRouter();
-  const [editOpen, setEditOpen] = React.useState(false);
-  const [confirming, setConfirming] = React.useState(false);
-  const [removing, startRemove] = React.useTransition();
-
-  function confirmRemove() {
-    startRemove(async () => {
-      const result = await removeTrailerAction({
-        trailerId: trailer.id,
-        expectedVersion: trailer.version,
-      });
-      setConfirming(false);
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success("Trailer removed");
-      router.refresh();
-    });
-  }
-
-  return (
-    <span className="flex items-center justify-end gap-1">
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={!canEdit || removing}
-        onClick={() => setEditOpen(true)}
-        aria-label={`Edit ${trailer.name}`}
-        {...refusalProps(canEdit, `Edit ${trailer.name}`, refusalId)}
-      >
-        <Pencil aria-hidden />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={!canEdit || removing}
-        onClick={() => setConfirming(true)}
-        aria-label={`Remove ${trailer.name}`}
-        {...refusalProps(canEdit, `Remove ${trailer.name}`, refusalId)}
-      >
-        {removing ? (
-          <Spinner size="sm" label="Removing…" />
-        ) : (
-          <Trash2 aria-hidden />
-        )}
-      </Button>
-      {canEdit && (
-        <>
-          <TrailerDialog
-            key={`${trailer.id}:${trailer.version}`}
-            open={editOpen}
-            onOpenChange={setEditOpen}
-            editing={trailer}
-          />
-          <ConfirmDialog
-            open={confirming}
-            onOpenChange={setConfirming}
-            title={`Remove ${trailer.name}?`}
-            description="It comes off this year's list, and off the car that tows it."
-            confirmLabel="Remove trailer"
-            destructive
-            pending={removing}
-            onConfirm={confirmRemove}
-          />
-        </>
-      )}
-    </span>
-  );
-}
-
-// --- The car message -------------------------------------------------------------
-
-/**
- * A driver writes to the people in their car. The form sends a title and a
- * message only; the server finds the car and its riders itself.
- */
-export function CarMessageButton({ riders }: { riders: number }) {
-  const [open, setOpen] = React.useState(false);
-  const [title, setTitle] = React.useState("");
-  const [body, setBody] = React.useState("");
-  const [errors, setErrors] = React.useState<Record<string, string>>({});
-  const [error, setError] = React.useState<string | null>(null);
-  const [pending, start] = React.useTransition();
-
-  function reset() {
-    setTitle("");
-    setBody("");
-    setErrors({});
-    setError(null);
-  }
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    const check = CarMessageInput.safeParse({ title, body });
-    if (!check.success) {
-      const next: Record<string, string> = {};
-      for (const issue of check.error.issues) {
-        next[String(issue.path[0])] ??= issue.message;
-      }
-      setErrors(next);
-      return;
-    }
-    setErrors({});
-    start(async () => {
-      const result = await sendCarMessageAction(check.data);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      const n = result.data.recipientCount;
-      toast.success(`Sent to ${n} ${n === 1 ? "person" : "people"}`);
-      reset();
-      setOpen(false);
-    });
-  }
-
   return (
     <>
       <Button
         variant="outline"
-        disabled={riders === 0}
+        size="sm"
+        className={cn("h-8", className)}
         onClick={() => setOpen(true)}
       >
-        <MessageSquare aria-hidden />
-        Message my car
+        Add trailer
       </Button>
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          if (pending) return;
-          if (!next) reset();
-          setOpen(next);
-        }}
-      >
-        <DialogContent>
-          <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-            <DialogHeader>
-              <DialogTitle>Message my car</DialogTitle>
-              <DialogDescription>
-                Goes to the {riders === 1 ? "person" : `${riders} people`}{" "}
-                riding with you this year, in their inbox and as a push.
-              </DialogDescription>
-            </DialogHeader>
-            <Field label="Title" htmlFor="car-title" error={errors.title}>
-              <Input
-                id="car-title"
-                value={title}
-                maxLength={CAR_MESSAGE_TITLE_MAX}
-                onChange={(e) => setTitle(e.target.value)}
-                aria-invalid={errors.title ? true : undefined}
-              />
-            </Field>
-            <Field label="Message" htmlFor="car-body" error={errors.body}>
-              <Textarea
-                id="car-body"
-                rows={5}
-                value={body}
-                maxLength={CAR_MESSAGE_BODY_MAX}
-                onChange={(e) => setBody(e.target.value)}
-                aria-invalid={errors.body ? true : undefined}
-              />
-            </Field>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <DialogFooter>
-              <Button type="submit" disabled={pending}>
-                {pending ? <Spinner size="sm" label="Sending…" /> : null}
-                Send to my car
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <TrailerDialog open={open} onOpenChange={setOpen} />
     </>
   );
 }

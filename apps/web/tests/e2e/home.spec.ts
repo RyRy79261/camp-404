@@ -132,14 +132,17 @@ test.describe("a member's own home", () => {
     await expect(driverToday.getByText("Toyota Hilux")).toBeVisible();
     await expect(driverToday.getByText("With Ren Rider")).toBeVisible();
 
-    // The My lift program's page shows the same card.
+    // The My lift program's page shows the driver's car as a labelled list.
     await page.goto("/lift");
     await expect(
       page.getByRole("heading", { level: 1, name: "My lift" }),
     ).toBeVisible();
-    // In the program's window: Today, left open, shows the same line.
+    const win = page.locator("#os-window-content");
+    await expect(win.getByText("1 of 3 taken")).toBeVisible();
     await expect(
-      page.locator("#os-window-content").getByText("1 of 3 seats taken"),
+      win
+        .getByRole("list", { name: "Riding with you" })
+        .getByText("Ren Rider", { exact: true }),
     ).toBeVisible();
 
     await login(page, {

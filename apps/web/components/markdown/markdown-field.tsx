@@ -6,7 +6,7 @@ import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { cn } from "@camp404/ui/lib/utils";
 import { MarkdownBody } from "@/components/announcements/markdown-body";
 import { InlineParagraphsValue } from "./inline-text";
-import { MarkdownEditor } from "./markdown-editor";
+import { MarkdownEditor } from "@/components/guide/markdown-editor";
 
 // One long-text field written in the WYSIWYG Markdown editor with its live
 // preview (owner, 2026-10-01: long text is a WYSIWYG Markdown editor with a
