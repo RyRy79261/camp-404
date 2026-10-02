@@ -789,3 +789,66 @@ body:has(#os-desktop) {
 [data-os-text="bigger"] :is([data-slot="button"], [data-slot="card-title"]) {
   font-size: 13px;
 }
+
+/* ===========================================================================
+   The site plan's colours (Camp layout, the approved redesign 2026-10-01):
+   one distinct hue per kind of piece, the same on the console, the neighbour
+   page and paper, and the surfaces of a drawing to scale (the roads, the
+   plot, its grid). A map's legend is content, not chrome, so these do not
+   follow the window theme; `data-plan-tone="paper"` (the A4 print) swaps in
+   darker lines that read on white.
+   =========================================================================== */
+:root {
+  --plan-stretch-tent: #f2c94c;
+  --plan-shade: #a3a8ff;
+  --plan-kitchen: #4ea8ff;
+  --plan-lounge: #f78fb3;
+  --plan-sleeping-area: #9fb3c8;
+  --plan-tent: #e6e9ec;
+  --plan-generator: #ff6b5a;
+  --plan-water: #3fd0c9;
+  --plan-bins: #c49a6c;
+  --plan-fire: #ffa94d;
+  --plan-parking: #8b96a3;
+  --plan-path: #8fd16a;
+  --plan-other: #d58cff;
+
+  --plan-card: #14181b;
+  --plan-road: #3b3128;
+  --plan-road-text: #e2c49c;
+  --plan-ground: #1c2125;
+  --plan-grid: #262d33;
+  --plan-edge: #5b666e;
+  --plan-hatch: #3a4249;
+  --plan-hatch-text: #7d878f;
+  --plan-badge: #111417;
+  --plan-text: #f4f0e8;
+  --plan-north: oklch(0.72 0.2 345);
+}
+[data-plan-tone="paper"] {
+  --plan-stretch-tent: #a87f00;
+  --plan-shade: #4f55c4;
+  --plan-kitchen: #1b67b8;
+  --plan-lounge: #b83a6c;
+  --plan-sleeping-area: #50657d;
+  --plan-tent: #30363b;
+  --plan-generator: #c2301f;
+  --plan-water: #0f7f7a;
+  --plan-bins: #85592c;
+  --plan-fire: #b85f00;
+  --plan-parking: #555e69;
+  --plan-path: #3f7f22;
+  --plan-other: #8a3cbd;
+
+  --plan-card: #ffffff;
+  --plan-road: #ece2d0;
+  --plan-road-text: #4d3b22;
+  --plan-ground: #ffffff;
+  --plan-grid: #e4e4e4;
+  --plan-edge: #6b6b6b;
+  --plan-hatch: #b5b5b5;
+  --plan-hatch-text: #555555;
+  --plan-badge: #ffffff;
+  --plan-text: #111111;
+  --plan-north: #111111;
+}

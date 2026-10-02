@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, History, Link2, Link2Off, RefreshCw } from "lucide-react";
+import { Check, Copy, Link2 } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 import { Input } from "@camp404/ui/components/input";
@@ -14,7 +14,7 @@ import {
   shareLayoutAction,
   unshareLayoutAction,
 } from "@/app/(console)/camp-layout/actions";
-import { neighbourPath } from "@/lib/camp-layout-copy";
+import { LAYOUT_PATH, neighbourPath } from "@/lib/camp-layout-copy";
 
 // The layout page's one-tap controls (#271): copy last year's plan, bring an
 // older version back, and a captain's neighbour link. A one-tap change reports
@@ -46,7 +46,10 @@ export function CopyLastYearLayoutButton({ fromCycle }: { fromCycle: number }) {
   );
 }
 
-/** Saves an older version again as the newest. */
+/**
+ * Saves an older version again as the newest: the primary action on the
+ * banner while an editor looks at an older plan.
+ */
 export function RestoreVersionButton({
   number,
   latest,
@@ -60,18 +63,13 @@ export function RestoreVersionButton({
   return (
     <>
       <Button
-        variant="ghost"
         size="sm"
+        className="h-8 px-3 text-[13px] font-semibold"
         disabled={pending}
         onClick={() => setConfirming(true)}
-        aria-label={`Bring back version ${number}`}
       >
-        {pending ? (
-          <Spinner size="sm" label="Bringing back…" />
-        ) : (
-          <History aria-hidden />
-        )}
-        Bring back
+        {pending ? <Spinner size="sm" label="Bringing back…" /> : null}
+        Bring back version {number}
       </Button>
       <ConfirmDialog
         open={confirming}
@@ -92,6 +90,7 @@ export function RestoreVersionButton({
               return;
             }
             toast.success(`Version ${number} is back`);
+            router.push(LAYOUT_PATH);
             router.refresh();
           })
         }
@@ -101,8 +100,9 @@ export function RestoreVersionButton({
 }
 
 /**
- * A captain's neighbour link: off until turned on, then a link to copy, a
- * new link (the old one stops working) or off again.
+ * A captain's neighbour link (the rail's Share tab): off until turned on,
+ * then the link to copy, Replace link (the old one stops working) and Stop
+ * sharing. The words about what neighbours see sit above, on the page.
  */
 export function NeighbourShareControls({
   token,
@@ -160,9 +160,10 @@ export function NeighbourShareControls({
   if (!token) {
     return (
       <Button
+        size="sm"
         onClick={() => run("on")}
         disabled={pending || !canShareNow}
-        className="self-start"
+        className="h-8 self-start px-3 text-[13px] font-semibold"
       >
         {busy === "on" ? (
           <Spinner size="sm" label="Turning on…" />
@@ -175,59 +176,55 @@ export function NeighbourShareControls({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <Input
           readOnly
           value={url}
           aria-label="Neighbour link"
           onFocus={(e) => e.currentTarget.select()}
-          className="min-w-0 flex-1 font-mono text-xs"
+          className="h-8 min-w-0 flex-1 px-1.5 text-xs"
         />
         <Button
           variant="outline"
-          size="icon"
+          size="sm"
           onClick={copy}
           aria-label="Copy the neighbour link"
           disabled={!origin}
+          className="h-8 px-3 text-[13px] font-semibold"
         >
-          {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+          {copied ? <Check aria-hidden /> : null}
+          Copy
         </Button>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex items-center justify-between gap-2">
         <Button
           variant="outline"
           size="sm"
           disabled={pending}
           onClick={() => setConfirm("new")}
+          className="h-8 px-3 text-[13px] font-semibold"
         >
-          {busy === "new" ? (
-            <Spinner size="sm" label="Making…" />
-          ) : (
-            <RefreshCw aria-hidden />
-          )}
-          Make a new link
+          {busy === "new" ? <Spinner size="sm" label="Making…" /> : null}
+          Replace link
         </Button>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           disabled={pending}
           onClick={() => setConfirm("off")}
+          className="h-8 px-3 text-[13px] font-semibold text-destructive hover:text-destructive"
         >
-          {busy === "off" ? (
-            <Spinner size="sm" label="Turning off…" />
-          ) : (
-            <Link2Off aria-hidden />
-          )}
+          {busy === "off" ? <Spinner size="sm" label="Turning off…" /> : null}
           Stop sharing
         </Button>
       </div>
       <ConfirmDialog
         open={confirm === "new"}
         onOpenChange={(open) => setConfirm(open ? "new" : null)}
-        title="Make a new link?"
+        title="Replace the link?"
         description="The link you shared stops working. Send the new one to the neighbours who should still see the layout."
-        confirmLabel="Make a new link"
+        confirmLabel="Replace link"
         pending={pending}
         onConfirm={() => run("new")}
       />
