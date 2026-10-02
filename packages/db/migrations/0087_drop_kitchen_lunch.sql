@@ -1,0 +1,3 @@
+ALTER TABLE "kitchen_meal_plan_days" DROP CONSTRAINT "kitchen_meal_plan_days_plates_check";--> statement-breakpoint
+ALTER TABLE "kitchen_meal_plan_days" DROP COLUMN "lunch";--> statement-breakpoint
+ALTER TABLE "kitchen_meal_plan_days" ADD CONSTRAINT "kitchen_meal_plan_days_plates_check" CHECK ("kitchen_meal_plan_days"."breakfast" between 0 and 500 and "kitchen_meal_plan_days"."dinner" between 0 and 500);

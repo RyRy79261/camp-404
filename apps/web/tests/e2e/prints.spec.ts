@@ -125,6 +125,8 @@ test.describe("prints (test-mode)", () => {
       ["/print/power/sharing", "Sharing a generator"],
       ["/print/lounge?day=1", "Lounge programme"],
       ["/print/lounge?sheet=blank", "Lounge whiteboard"],
+      ["/print/shifts/mine", "Mem P.'s shifts"],
+      ["/print/shifts", "Camp 404 shifts"],
     ] as const) {
       await page.goto(path);
       await sheetWithoutDesktop(page, heading);
