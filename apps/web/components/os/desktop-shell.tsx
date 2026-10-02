@@ -232,7 +232,11 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   overview: L_SIZE,
   questionnaires: L_SIZE,
   announcements: L_SIZE,
-  "join-site": L_SIZE,
+  // About reads in three columns, and the Join site editor shows its section
+  // list beside the open section, Write beside Preview (approved redesign,
+  // 2026-10-01; audit: at 720 wide About was one column 13 screens long).
+  about: { w: 1040, h: 800 },
+  "join-site": WRITE_SIZE,
   audit: L_SIZE,
   "new-event": S_SIZE,
   terminal: { w: 640, h: 420 },

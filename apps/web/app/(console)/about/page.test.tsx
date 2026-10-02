@@ -49,24 +49,72 @@ describe("About Camp 404", () => {
       screen.getByRole("heading", { level: 1, name: "About Camp 404" }),
     ).toBeTruthy();
     expect(screen.getByText(DEFAULT_JOIN_CONTENT.readme.warning)).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /Edit these words/ })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /Edit in Join site/ }),
+    ).toBeNull();
     expect(captainPageGate).toHaveBeenCalledWith("camp_member");
   });
 
   it("offers a team lead no way to edit it either", async () => {
     asRank("team_lead");
     render(await AboutPage());
-    expect(screen.queryByRole("link", { name: /Edit these words/ })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /Edit in Join site/ }),
+    ).toBeNull();
   });
 
-  it("sends a captain to the Join site program to edit it", async () => {
+  it("sends a captain to the Join site program to edit it, saying the join site changes too", async () => {
     asRank("captain");
     render(await AboutPage());
     expect(
       screen
-        .getByRole("link", { name: /Edit these words/ })
+        .getByRole("link", { name: /Edit in Join site/ })
         .getAttribute("href"),
     ).toBe("/captains/join-site");
+    expect(screen.getByText("Also changes join.camp-404.com")).toBeTruthy();
+  });
+
+  it("lists the page's cards in On this page", async () => {
+    asRank("camp_member");
+    render(await AboutPage());
+    const [column] = screen.getAllByRole("navigation", {
+      name: "On this page",
+    });
+    for (const name of ["Who we are", "The camp fee", "Getting there"]) {
+      expect(within(column!).getByRole("button", { name })).toBeTruthy();
+    }
+    expect(screen.getByRole("region", { name: "The camp fee" }).id).toBe(
+      "about-fee",
+    );
+  });
+
+  it("shows bold and italic a captain set in the words", async () => {
+    vi.mocked(getAboutCamp).mockResolvedValue({
+      ...ABOUT,
+      content: {
+        ...DEFAULT_JOIN_CONTENT,
+        readme: {
+          ...DEFAULT_JOIN_CONTENT.readme,
+          paragraphs: ["In the desert **everyone** builds, *really*."],
+        },
+      },
+    });
+    asRank("camp_member");
+    render(await AboutPage());
+    expect(screen.getByText("everyone").tagName).toBe("STRONG");
+    expect(screen.getByText("really").tagName).toBe("EM");
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+  });
+
+  it("asks members to invite a friend, not to sign up themselves", async () => {
+    asRank("camp_member");
+    render(await AboutPage());
+    expect(
+      screen.getByRole("link", { name: "Open Invites" }).getAttribute("href"),
+    ).toBe("/tools/invite");
+    expect(
+      screen.queryByText(DEFAULT_JOIN_CONTENT.readme.steps[1]!),
+    ).toBeNull();
   });
 
   it("links each team to its page and names the Burn's dates", async () => {
@@ -102,13 +150,40 @@ describe("About Camp 404", () => {
     ).toBeTruthy();
   });
 
-  it("shows the fee scale in rands but not last year's spend amounts", async () => {
+  it("shows the fee scale in whole rands but not last year's spend amounts", async () => {
     asRank("camp_member");
     render(await AboutPage());
     const scale = screen.getByRole("list", { name: "Fee scale" });
-    expect(within(scale).getByText(/R\s8\s000,00/)).toBeTruthy();
+    expect(within(scale).getByText(/^R\s8\s000$/)).toBeTruthy();
+    // Subsidy reads first.
+    expect(within(scale).getAllByRole("listitem")[0]!.textContent).toContain(
+      DEFAULT_JOIN_CONTENT.fee.subsidy.name,
+    );
     const shade = DEFAULT_JOIN_CONTENT.fee.spend[0]!;
     expect(screen.getByText(shade.what)).toBeTruthy();
     expect(screen.queryByText(/100\s000/)).toBeNull();
+  });
+
+  it("leaves the tent fee out while it says TBC, and shows it once it has an amount", async () => {
+    asRank("camp_member");
+    render(await AboutPage());
+    expect(
+      within(screen.getByRole("list", { name: "Fee scale" })).queryByText(
+        "Tent fee",
+      ),
+    ).toBeNull();
+    cleanup();
+
+    vi.mocked(getAboutCamp).mockResolvedValue({
+      ...ABOUT,
+      content: {
+        ...DEFAULT_JOIN_CONTENT,
+        fee: { ...DEFAULT_JOIN_CONTENT.fee, tentFee: "R 900" },
+      },
+    });
+    render(await AboutPage());
+    const scale = screen.getByRole("list", { name: "Fee scale" });
+    expect(within(scale).getByText("Tent fee")).toBeTruthy();
+    expect(within(scale).getByText("R 900")).toBeTruthy();
   });
 });

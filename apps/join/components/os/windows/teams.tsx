@@ -5,6 +5,7 @@ import { teamFile, teamIcon } from "@/lib/teams";
 import { useJoinData } from "../join-data";
 import { PixelIcon } from "../pixel-icons";
 import { WinBody } from "./ui";
+import { InlineText } from "../inline-text";
 
 /** "MUTANT.VEH" → "MUTANT", "COMMS_HR.TXT" → "COMMS HR". */
 const label = (file: string) => file.replace(/\.[^.]+$/, "").replace(/_/g, " ");
@@ -75,7 +76,7 @@ export function TeamsWindow() {
       </section>
       {content.teams.outro.map((p) => (
         <p key={p} className="text-os-muted">
-          {p}
+          <InlineText text={p} />
         </p>
       ))}
     </WinBody>

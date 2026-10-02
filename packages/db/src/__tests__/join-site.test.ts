@@ -11,6 +11,7 @@ import {
   getJoinSitePublic,
   JoinSectionInvalidError,
   saveJoinSiteSection,
+  saveJoinSiteSections,
 } from "../join-site";
 import * as schema from "../schema";
 
@@ -108,6 +109,56 @@ describe("join site words", () => {
         actorUserId: captain.id,
       }),
     ).rejects.toBeInstanceOf(JoinSectionInvalidError);
+    expect(await db.select().from(schema.joinSiteContent)).toHaveLength(0);
+    expect(
+      await db
+        .select()
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.action, SAVED)),
+    ).toHaveLength(0);
+  });
+});
+
+describe("join site words, several sections in one save", () => {
+  const h = useTestDb();
+
+  it("saves every changed section at once, with one audit row each", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const truck = { entries: ["One truck.", "Two trailers."] };
+    await saveJoinSiteSections({
+      year: 2027,
+      sections: { map: newMap, truck },
+      actorUserId: captain.id,
+    });
+
+    const { content } = await getJoinSiteContent(2027);
+    expect(content.map).toEqual(newMap);
+    expect(content.truck).toEqual(truck);
+    expect(content.readme).toEqual(DEFAULT_JOIN_CONTENT.readme);
+
+    const audits = await db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, SAVED));
+    expect(
+      audits.map((a) => (a.metadata as { section: string }).section).sort(),
+    ).toEqual(["map", "truck"]);
+  });
+
+  it("saves none of them when one fails its schema, and names that one", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const error = await saveJoinSiteSections({
+      year: 2027,
+      sections: {
+        map: newMap,
+        crew: { capacity: { min: 80, max: 50 }, counting: "Soon." },
+      },
+      actorUserId: captain.id,
+    }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(JoinSectionInvalidError);
+    expect((error as JoinSectionInvalidError).section).toBe("crew");
     expect(await db.select().from(schema.joinSiteContent)).toHaveLength(0);
     expect(
       await db

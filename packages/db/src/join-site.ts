@@ -2,6 +2,7 @@ import { and, desc, eq, lte, sql } from "drizzle-orm";
 import {
   DEFAULT_JOIN_CONTENT,
   DEFAULT_TEAM_DESCRIPTIONS,
+  JOIN_SECTION_KEYS,
   JoinSections,
   resolveJoinContent,
   type JoinSectionKey,
@@ -21,7 +22,7 @@ import * as schema from "./schema";
 // what the camp already records (the year and the Burn's dates, the team list,
 // captains who chose to be shown, and this year's headcount). The join app
 // reads getJoinSitePublic() on its own server; the app's editor reads
-// getJoinSiteContent() and writes saveJoinSiteSection().
+// getJoinSiteContent() and writes saveJoinSiteSections().
 
 /** A captain's card, as they wrote it on their profile. */
 export type JoinCaptain = { name: string; title: string; blurb: string };
@@ -70,7 +71,11 @@ export async function getJoinSiteContent(
 }
 
 export class JoinSectionInvalidError extends Error {
-  constructor(readonly issues: string[]) {
+  constructor(
+    readonly issues: string[],
+    /** The section that failed, when several were saved at once. */
+    readonly section?: JoinSectionKey,
+  ) {
     super(issues.join(" "));
   }
 }
@@ -88,15 +93,42 @@ export async function saveJoinSiteSection<K extends JoinSectionKey>(input: {
   value: unknown;
   actorUserId: string;
 }): Promise<JoinSiteContent> {
-  const parsed = JoinSections[input.section].safeParse(input.value);
-  if (!parsed.success) {
-    throw new JoinSectionInvalidError(
-      parsed.error.issues.map((i) => i.message),
-    );
+  return saveJoinSiteSections({
+    year: input.year,
+    sections: { [input.section]: input.value },
+    actorUserId: input.actorUserId,
+  });
+}
+
+/**
+ * Save several sections of one year's words at once: the Join site editor's
+ * one Save. Every section is checked by its schema before anything is
+ * written, so one bad section saves none of them (the error names it); then
+ * all of them land in one transaction, each with its own audit row, as a
+ * section saved alone would have.
+ */
+export async function saveJoinSiteSections(input: {
+  year: number;
+  sections: Partial<Record<JoinSectionKey, unknown>>;
+  actorUserId: string;
+}): Promise<JoinSiteContent> {
+  const parsed: Partial<Record<JoinSectionKey, unknown>> = {};
+  for (const key of JOIN_SECTION_KEYS) {
+    if (!(key in input.sections)) continue;
+    const result = JoinSections[key].safeParse(input.sections[key]);
+    if (!result.success) {
+      throw new JoinSectionInvalidError(
+        result.error.issues.map((i) => i.message),
+        key,
+      );
+    }
+    parsed[key] = result.data;
   }
+  const keys = Object.keys(parsed) as JoinSectionKey[];
 
   return await withTransaction(async (tx) => {
     const { content: base } = await getJoinSiteContent(input.year, tx);
+    if (keys.length === 0) return base;
     await tx
       .insert(schema.joinSiteContent)
       .values({ cycle: input.year, content: base })
@@ -107,10 +139,10 @@ export async function saveJoinSiteSection<K extends JoinSectionKey>(input: {
       .where(eq(schema.joinSiteContent.cycle, input.year))
       .for("update");
 
-    const next: JoinSiteContent = {
+    const next = {
       ...resolveJoinContent(locked?.content),
-      [input.section]: parsed.data,
-    };
+      ...parsed,
+    } as JoinSiteContent;
     await tx
       .update(schema.joinSiteContent)
       .set({
@@ -119,12 +151,14 @@ export async function saveJoinSiteSection<K extends JoinSectionKey>(input: {
         updatedAt: new Date(),
       })
       .where(eq(schema.joinSiteContent.cycle, input.year));
-    await writeAuditEvent(tx, {
-      actorId: input.actorUserId,
-      action: "join_site.section_saved",
-      target: `join_site:${input.year}`,
-      metadata: { section: input.section, year: input.year },
-    });
+    for (const section of keys) {
+      await writeAuditEvent(tx, {
+        actorId: input.actorUserId,
+        action: "join_site.section_saved",
+        target: `join_site:${input.year}`,
+        metadata: { section, year: input.year },
+      });
+    }
     return next;
   });
 }

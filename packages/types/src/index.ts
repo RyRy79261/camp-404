@@ -31,6 +31,7 @@ export * from "./power-site";
 export * from "./meeting-note";
 export * from "./transport";
 export * from "./join-site";
+export * from "./join-inline";
 export * from "./desktop-layout";
 export * from "./desktop-preferences";
 export * from "./team-program";
