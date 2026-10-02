@@ -11,7 +11,11 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { canEditInventory, nextMaintenanceDue } from "@camp404/core";
+import {
+  bookableNow,
+  canEditInventory,
+  nextMaintenanceDue,
+} from "@camp404/core";
 import type {
   EditInventoryItemInput,
   EditInventoryNeedInput,
@@ -72,6 +76,10 @@ export const NOT_BOOKABLE = "This item can't be booked.";
 export const FULLY_BOOKED =
   "It's fully booked. Nobody else can book it this year.";
 export const ALREADY_BOOKED = "You've already booked this.";
+export const ITEM_BROKEN =
+  "It's marked broken, so it can't be booked until it's fixed.";
+export const NONE_FREE =
+  "None is free to book: the rest are lent to another camp.";
 export const BOOKING_GONE =
   "That booking isn't there any more. Reload the page.";
 export const NOT_YOUR_BOOKING =
@@ -166,6 +174,11 @@ export interface BookableItemRow {
   name: string;
   team: Team;
   bookableCount: number;
+  /** How many the camp owns. */
+  quantity: number;
+  condition: InventoryCondition;
+  /** How many are lent to other camps and not back yet. */
+  lentOut: number;
   booked: number;
   /** The viewer's own booking of it, if any. */
   myBookingId: string | null;
@@ -532,6 +545,14 @@ export async function listBookableItems(
       name: schema.inventoryItems.name,
       team: schema.inventoryItems.team,
       bookableCount: schema.inventoryItems.bookableCount,
+      quantity: schema.inventoryItems.quantity,
+      condition: schema.inventoryItems.condition,
+      lentOut: sql<number>`(
+        select coalesce(sum(${schema.inventoryLoans.quantity}), 0)::int
+        from ${schema.inventoryLoans}
+        where ${schema.inventoryLoans.itemId} = ${schema.inventoryItems.id}
+          and ${schema.inventoryLoans.returnedAt} is null
+      )`,
       booked: sql<number>`(
         select count(*)::int from ${schema.inventoryBookings}
         where ${schema.inventoryBookings.itemId} = ${schema.inventoryItems.id}
@@ -558,6 +579,7 @@ export async function listBookableItems(
   return rows.map((r) => ({
     ...r,
     bookableCount: r.bookableCount ?? 0,
+    lentOut: Number(r.lentOut),
     booked: Number(r.booked),
   }));
 }
@@ -1053,7 +1075,11 @@ export async function withdrawPledge(input: {
 /**
  * A member books an item for this year. The item row is locked, then the
  * year's bookings are counted, so two members pressing at once cannot both
- * take the last one: the second waits, counts again and is told.
+ * take the last one: the second waits, counts again and is told. A booking
+ * is one unit for the whole burn, so an item marked broken takes none, and
+ * units lent to another camp come off what can be booked (bookableNow).
+ * Bookings already made stay when an item breaks or is lent: a lead cancels
+ * them by hand.
  */
 export async function bookInventoryItem(
   input: InventoryBookingInput & { actorId: string },
@@ -1082,7 +1108,27 @@ export async function bookInventoryItem(
           eq(schema.inventoryBookings.cycle, cycle),
         ),
       );
-    if ((booked?.n ?? 0) >= item.bookableCount) refuse(FULLY_BOOKED);
+    if (item.condition === "broken") refuse(ITEM_BROKEN);
+    const [out] = await tx
+      .select({
+        n: sql<number>`coalesce(sum(${schema.inventoryLoans.quantity}), 0)::int`,
+      })
+      .from(schema.inventoryLoans)
+      .where(
+        and(
+          eq(schema.inventoryLoans.itemId, item.id),
+          isNull(schema.inventoryLoans.returnedAt),
+        ),
+      );
+    const free = bookableNow({
+      bookableCount: item.bookableCount,
+      quantity: item.quantity,
+      broken: false,
+      lentOut: Number(out?.n ?? 0),
+    });
+    const taken = booked?.n ?? 0;
+    if (taken >= item.bookableCount) refuse(FULLY_BOOKED);
+    if (taken >= free) refuse(NONE_FREE);
     const [row] = await tx
       .insert(schema.inventoryBookings)
       .values({

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { HandHeart, Pencil, Plus, Trash2, Undo2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   EditInventoryNeedInput,
   InventoryNeedInput,
@@ -10,6 +10,12 @@ import {
 } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@camp404/ui/components/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -252,45 +258,36 @@ function NeedDialog({
   );
 }
 
+/** "Add need": shown only to a captain or a team lead (the page decides). */
 export function AddNeedButton({
   teams,
   items,
-  refusalId,
 }: {
   teams: SelectOption[];
   items: SelectOption[];
-  refusalId: string;
 }) {
   const [open, setOpen] = React.useState(false);
-  const can = teams.length > 0;
+  if (teams.length === 0) return null;
   return (
     <>
-      <Button
-        disabled={!can}
-        onClick={() => setOpen(true)}
-        {...(can
-          ? {}
-          : {
-              "aria-label": "Add need — not available to you",
-              "aria-describedby": refusalId,
-            })}
-      >
+      <Button onClick={() => setOpen(true)}>
         <Plus aria-hidden />
         Add need
       </Button>
-      {can && (
-        <NeedDialog
-          open={open}
-          onOpenChange={setOpen}
-          teams={teams}
-          items={items}
-        />
-      )}
+      <NeedDialog
+        open={open}
+        onOpenChange={setOpen}
+        teams={teams}
+        items={items}
+      />
     </>
   );
 }
 
-/** Edit and Remove on a need, for a captain or a lead of its team. */
+/**
+ * Edit and Remove on a need, for a captain or a lead of its team, behind one
+ * "···" in the row's own narrow column, so the pledge button keeps its place.
+ */
 export function NeedRowActions({
   need,
   teams,
@@ -306,28 +303,33 @@ export function NeedRowActions({
   const [removing, start] = React.useTransition();
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={`Edit ${need.name}`}
-        disabled={removing}
-        onClick={() => setEditing(true)}
-      >
-        <Pencil aria-hidden />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={`Remove ${need.name}`}
-        disabled={removing}
-        onClick={() => setConfirming(true)}
-      >
-        {removing ? (
-          <Spinner size="sm" label="Removing…" />
-        ) : (
-          <Trash2 aria-hidden />
-        )}
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            aria-label={`Edit or remove ${need.name}`}
+            disabled={removing}
+          >
+            {removing ? (
+              <Spinner size="sm" label="Removing…" />
+            ) : (
+              <MoreHorizontal aria-hidden />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setEditing(true)}>
+            <Pencil aria-hidden className="size-4" />
+            Edit need
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setConfirming(true)}>
+            <Trash2 aria-hidden className="size-4" />
+            Remove need
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <NeedDialog
         key={`${need.id}:${need.version}`}
         open={editing}
@@ -366,20 +368,33 @@ export function NeedRowActions({
   );
 }
 
-/** "I'll bring some": any member, once per need; again changes the count. */
+/**
+ * The row's one button, in the same slot on every row: "Pledge" when the
+ * viewer hasn't, "Edit my pledge" when they have. Taking a pledge back is
+ * inside the dialog, so the row never grows a second button.
+ */
 export function PledgeButton({
   needId,
   name,
+  still,
   mine,
+  className,
 }: {
   needId: string;
   name: string;
+  /** How many are still to find, for the dialog's line. */
+  still: number;
   /** The viewer's own pledge, if they made one. */
   mine: { quantity: number; note: string | null } | null;
+  className?: string;
 }) {
   const router = useRouter();
   const initial = () => ({
-    quantity: String(mine?.quantity ?? 1),
+    // Prefill with what's still to find, never less than 1: PledgeButton is
+    // only shown with no pledge of the viewer's own when `still` is already
+    // > 0 (the Action component shows "Covered" instead otherwise), so this
+    // only floors a stray 0 rather than silently discarding `still`.
+    quantity: String(mine?.quantity ?? Math.max(1, still)),
     note: mine?.note ?? "",
   });
   const [open, setOpen] = React.useState(false);
@@ -387,9 +402,10 @@ export function PledgeButton({
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | null>(null);
   const [pending, start] = React.useTransition();
+  const busy = pending;
 
   function close(next: boolean) {
-    if (pending) return;
+    if (busy) return;
     if (!next) {
       setForm(initial());
       setErrors({});
@@ -413,32 +429,46 @@ export function PledgeButton({
         setError(result.error);
         return;
       }
-      toast.success("Thanks, your pledge is in");
+      toast.success(mine ? "Pledge changed" : "Thanks, your pledge is in");
       setOpen(false);
       router.refresh();
     });
   }
 
-  // The row's one main action, the same filled button whether or not the
-  // viewer has pledged (only its words change), so it never moves or fades
-  // between rows. Taking a pledge back is a quiet action of its own
-  // (WithdrawPledgeButton, in the row's secondary slot).
+  function takeBack() {
+    start(async () => {
+      const result = await reached(withdrawPledgeAction({ needId }));
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      toast.success("Pledge taken back");
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
   return (
     <>
       <Button
         size="sm"
+        variant={mine ? "outline" : "default"}
+        className={className}
         onClick={() => setOpen(true)}
-        aria-label={mine ? `Change my pledge for ${name}` : `Pledge ${name}`}
+        aria-label={mine ? `Edit my pledge for ${name}` : `Pledge ${name}`}
       >
-        <HandHeart aria-hidden />
-        {mine ? "Change pledge" : "I'll bring some"}
+        {mine ? "Edit my pledge" : "Pledge"}
       </Button>
       <Dialog open={open} onOpenChange={close}>
         <DialogContent>
           <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
             <DialogHeader>
-              <DialogTitle>Bring {name}</DialogTitle>
+              <DialogTitle>{mine ? "Edit my pledge" : "Pledge"}</DialogTitle>
               <DialogDescription>
+                {name}.{" "}
+                {still > 0
+                  ? `${still} still to find.`
+                  : "It's covered, so this is extra."}{" "}
                 Say how many you&apos;ll bring. Everyone sees your pledge under
                 the need.
               </DialogDescription>
@@ -467,6 +497,7 @@ export function PledgeButton({
             >
               <Input
                 id={`pledge-${needId}-note`}
+                placeholder="Full ones from home"
                 value={form.note}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, note: e.target.value }))
@@ -478,60 +509,36 @@ export function PledgeButton({
                 {error}
               </p>
             ) : null}
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => close(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? "Saving…" : "Pledge"}
-              </Button>
+            <DialogFooter className="gap-2 sm:justify-between">
+              {mine ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={takeBack}
+                >
+                  Take back my pledge
+                </Button>
+              ) : (
+                <span />
+              )}
+              <span className="flex flex-col-reverse gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => close(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={busy}>
+                  {pending ? "Saving…" : mine ? "Save pledge" : "Pledge"}
+                </Button>
+              </span>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-/** Takes the viewer's own pledge back: a quiet icon beside the main button. */
-export function WithdrawPledgeButton({
-  needId,
-  name,
-}: {
-  needId: string;
-  name: string;
-}) {
-  const router = useRouter();
-  const [withdrawing, start] = React.useTransition();
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      disabled={withdrawing}
-      aria-label={`Take back my pledge for ${name}`}
-      title="Take back my pledge"
-      onClick={() =>
-        start(async () => {
-          const result = await reached(withdrawPledgeAction({ needId }));
-          if (!result.ok) {
-            toast.error(result.error);
-            return;
-          }
-          toast.success("Pledge taken back");
-          router.refresh();
-        })
-      }
-    >
-      {withdrawing ? (
-        <Spinner size="sm" label="Taking back…" />
-      ) : (
-        <Undo2 aria-hidden />
-      )}
-    </Button>
   );
 }

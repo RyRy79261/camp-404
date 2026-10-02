@@ -214,7 +214,6 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   "new-guide-chapter": WRITE_SIZE,
   "edit-guide-chapter": WRITE_SIZE,
   "camp-layout": XL_SIZE,
-  "inventory-item": L_SIZE,
   transport: L_SIZE,
   "my-dues": L_SIZE,
   "my-gear": L_SIZE,

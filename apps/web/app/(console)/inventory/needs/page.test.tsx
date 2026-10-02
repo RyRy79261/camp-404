@@ -1,11 +1,12 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Needs this year (#246), after the audit of 2026-10-01. Every member pledges,
-// so every row has the one main button, "I'll bring some" (or "Change
-// pledge"), in the same slot. Taking a pledge back, Edit and Remove are quiet
-// icons in a slot of their own. A member who cannot add needs sees no Add
-// button at all, greyed or not, and no lock line.
+// Needs this year (#246), as the approved mock-up draws it (option A, owner
+// 2026-10-01): one table, the teams as header rows naming their leads, and
+// every row's ONE button in the same slot: "Pledge", "Edit my pledge" once
+// you have, or a quiet "Covered". Edit and remove sit behind "···" in a
+// narrow column of their own, there only for someone who may use it. A
+// member who cannot add needs sees no Add button at all.
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -24,18 +25,25 @@ vi.mock("@/lib/inventory", () => ({
   listInventoryNeeds: vi.fn(),
   listInventoryItems: vi.fn(async () => []),
 }));
+vi.mock("@/lib/roster", () => ({ listTeamPeople: vi.fn() }));
 
 import { inventoryViewer } from "@/lib/inventory-viewer";
 import { listInventoryNeeds } from "@/lib/inventory";
 import { captainPageGate } from "@/lib/captain-gate";
+import { listTeamPeople } from "@/lib/roster";
 import InventoryNeedsPage from "./page";
 
-function need(id: string, name: string, pledges: { userId: string }[] = []) {
+function need(
+  id: string,
+  name: string,
+  pledges: { userId: string; quantity: number }[] = [],
+  quantity = 4,
+) {
   return {
     id,
     team: "kitchen" as const,
     name,
-    quantity: 4,
+    quantity,
     itemId: null,
     itemName: null,
     have: 0,
@@ -44,7 +52,7 @@ function need(id: string, name: string, pledges: { userId: string }[] = []) {
     pledges: pledges.map((p) => ({
       userId: p.userId,
       displayName: "Sam Sound",
-      quantity: 1,
+      quantity: p.quantity,
       note: null,
     })),
     version: 1,
@@ -63,69 +71,94 @@ async function renderAs(editsKitchen: boolean) {
     canEdit: (team: string) => editsKitchen && team === "kitchen",
     teamLabel: () => "Kitchen",
     editableTeams: editsKitchen ? [{ value: "kitchen", label: "Kitchen" }] : [],
+    teamOrder: () => 0,
   });
   vi.mocked(listInventoryNeeds).mockResolvedValue([
-    need("n1", "Cooler boxes", [{ userId: "viewer" }]),
+    need("n1", "Cooler boxes", [{ userId: "viewer", quantity: 1 }]),
     need("n2", "Gas bottles"),
+    need("n3", "Tent pegs", [{ userId: "sam", quantity: 2 }], 2),
   ] as never);
-  render(await InventoryNeedsPage());
+  vi.mocked(listTeamPeople).mockResolvedValue([
+    {
+      id: "kim",
+      displayName: "Kim Kitchen",
+      handle: null,
+      rank: "member",
+      isLead: true,
+    },
+    {
+      id: "sam",
+      displayName: "Sam Sound",
+      handle: null,
+      rank: "member",
+      isLead: false,
+    },
+  ]);
+  render(await InventoryNeedsPage({ searchParams: Promise.resolve({}) }));
 }
 
-/** The row's action group in the table (the cards repeat it). */
-function actions(name: string) {
-  const table = screen.getByRole("table", { name: "Kitchen needs" });
-  return within(table).getByRole("group", { name: `Actions for ${name}` });
+/** The desktop table (the phone list repeats the rows). */
+function table() {
+  return screen.getByRole("table", { name: "What the teams need this year" });
+}
+
+/** A row's cells in the table. */
+function cells(name: string) {
+  return within(table())
+    .getByRole("row", { name: new RegExp(`^${name}`) })
+    .querySelectorAll("td");
 }
 
 afterEach(cleanup);
 
 describe("Needs this year", () => {
-  it("shows a member no Add button and no lock line, only the list", async () => {
+  it("shows a member no Add button and no tools column, only the list", async () => {
     await renderAs(false);
-    expect(screen.getByRole("table", { name: "Kitchen needs" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Add need/ })).toBeNull();
-    expect(screen.queryByText(/Only captains and team leads/)).toBeNull();
     expect(
-      within(actions("Gas bottles")).queryByRole("button", { name: /Edit/ }),
+      within(table().querySelector("thead")!).getAllByRole("columnheader"),
+    ).toHaveLength(4);
+    expect(
+      within(table()).queryByRole("button", { name: /Edit or remove/ }),
     ).toBeNull();
   });
 
-  it("puts the one main button first on every row, whether pledged or not", async () => {
+  it("puts one action in the same slot on every row: Pledge, Edit my pledge or Covered", async () => {
     await renderAs(false);
-    for (const [name, label] of [
-      ["Cooler boxes", "Change my pledge for Cooler boxes"],
-      ["Gas bottles", "Pledge Gas bottles"],
-    ] as const) {
-      const group = actions(name);
-      const primary = group.querySelector('[data-slot="row-actions-primary"]')!;
-      expect(
-        within(primary as HTMLElement)
-          .getByRole("button")
-          .getAttribute("aria-label"),
-      ).toBe(label);
-    }
-    // Taking it back is a quiet icon in the secondary slot, not a second
-    // button that pushes the main one aside.
-    const secondary = actions("Cooler boxes").querySelector(
-      '[data-slot="row-actions-secondary"]',
-    )!;
+    const slot = (name: string) => cells(name)[3] as HTMLElement;
     expect(
-      within(secondary as HTMLElement).getByRole("button", {
-        name: "Take back my pledge for Cooler boxes",
-      }),
-    ).toBeTruthy();
-  });
-
-  it("gives a Kitchen lead Add, and Edit and Remove beside the main button", async () => {
-    await renderAs(true);
-    expect(screen.getByRole("button", { name: "Add need" })).toBeTruthy();
-    const secondary = actions("Gas bottles").querySelector(
-      '[data-slot="row-actions-secondary"]',
-    )!;
-    expect(
-      within(secondary as HTMLElement)
+      within(slot("Cooler boxes"))
         .getAllByRole("button")
         .map((b) => b.getAttribute("aria-label")),
-    ).toEqual(["Edit Gas bottles", "Remove Gas bottles"]);
+    ).toEqual(["Edit my pledge for Cooler boxes"]);
+    expect(
+      within(slot("Gas bottles"))
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Pledge Gas bottles"]);
+    // Nothing left to find and no pledge of yours: a quiet word, no button.
+    expect(within(slot("Tent pegs")).queryAllByRole("button")).toHaveLength(0);
+    expect(slot("Tent pegs").textContent).toContain("Covered");
+  });
+
+  it("names the team's leads in its header row", async () => {
+    await renderAs(false);
+    expect(
+      within(table()).getByRole("columnheader", { name: /Kitchen/ })
+        .textContent,
+    ).toContain("Lead: Kim Kitchen");
+  });
+
+  it("gives a Kitchen lead Add need, and Edit or remove behind ··· in its own column", async () => {
+    await renderAs(true);
+    expect(screen.getByRole("button", { name: "Add need" })).toBeTruthy();
+    expect(
+      within(table().querySelector("thead")!).getAllByRole("columnheader"),
+    ).toHaveLength(5);
+    expect(
+      within(cells("Gas bottles")[4] as HTMLElement)
+        .getAllByRole("button")
+        .map((b) => b.getAttribute("aria-label")),
+    ).toEqual(["Edit or remove Gas bottles"]);
   });
 });

@@ -18,15 +18,18 @@ export function NativeSelect({
   options,
   className,
   placeholder,
+  selectClassName,
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement> & {
   options: readonly SelectOption[];
   /** A first, empty choice ("All teams", "None"). */
   placeholder?: string;
+  /** Classes for the <select> itself (a filter strip's shorter box). */
+  selectClassName?: string;
 }) {
   return (
     <div className={cn("relative", className)}>
-      <select className={SELECT} {...props}>
+      <select className={cn(SELECT, selectClassName)} {...props}>
         {placeholder !== undefined && <option value="">{placeholder}</option>}
         {options.map((o) => (
           <option key={o.value} value={o.value}>
