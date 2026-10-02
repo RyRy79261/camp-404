@@ -167,6 +167,7 @@ export function DailySheetPage({
               {kitchen && sheet.allergies.length > 0 && (
                 <p
                   data-testid="sheet-allergies"
+                  data-os-private
                   className="border-t border-[#ddd] px-[7px] pt-[3px] pb-1 text-[9.5px] text-neutral-700"
                 >
                   Allergies:{" "}

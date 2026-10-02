@@ -196,7 +196,7 @@ export default async function ShiftsPage({
                 Print
               </Link>
             </Button>
-            {/* The daily site sheet lists allergies: leads and captains. */}
+            {/* The daily site sheet shows safety data: leads and captains only. */}
             {rank !== "camp_member" && (
               <Button asChild variant="outline" className="page-sm:flex-none">
                 <Link href={dailySheetHref(day?.day ?? null)}>
