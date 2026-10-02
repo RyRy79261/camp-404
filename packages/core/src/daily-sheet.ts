@@ -1,3 +1,4 @@
+import { ALLERGEN_LABELS, type FoodReactionEntry } from "@camp404/types";
 import { PROGRAMME_DAY_START } from "./lounge";
 import { shiftTimeText } from "./shifts";
 
@@ -187,6 +188,12 @@ export interface SheetAllergyFact {
   userId: string;
   allergies: string | null;
   isAnaphylactic: boolean;
+  /**
+   * The foods picked on the dietary pick-list (#245), when the member has
+   * saved it: then they replace the old form's words. Null or absent: only
+   * the old form's words are known.
+   */
+  foods?: readonly FoodReactionEntry[] | null;
 }
 
 /** One allergy and who has it, by first name. */
@@ -208,19 +215,26 @@ export function allergyGroups(
   nameOf: (userId: string) => string,
 ): SheetAllergy[] {
   const groups = new Map<string, SheetAllergy>();
-  for (const f of facts) {
-    const words = (f.allergies ?? "").trim().replace(/\s+/g, " ");
-    if (!words && !f.isAnaphylactic) continue;
-    const text = words || "Severe allergy";
-    const key = `${f.isAnaphylactic ? 1 : 0}:${text.toLowerCase()}`;
-    const group = groups.get(key) ?? {
-      text,
-      severe: f.isAnaphylactic,
-      names: [],
-    };
-    const name = nameOf(f.userId);
+  const add = (userId: string, text: string, severe: boolean) => {
+    const key = `${severe ? 1 : 0}:${text.toLowerCase()}`;
+    const group = groups.get(key) ?? { text, severe, names: [] };
+    const name = nameOf(userId);
     if (!group.names.includes(name)) group.names.push(name);
     groups.set(key, group);
+  };
+  for (const f of facts) {
+    if (f.foods) {
+      // The pick-list: one entry per food someone is allergic to; an
+      // intolerance is not an allergy and stays off this line.
+      for (const { food, reaction } of f.foods) {
+        if (reaction === "intolerance") continue;
+        add(f.userId, ALLERGEN_LABELS[food], reaction === "anaphylaxis");
+      }
+      continue;
+    }
+    const words = (f.allergies ?? "").trim().replace(/\s+/g, " ");
+    if (!words && !f.isAnaphylactic) continue;
+    add(f.userId, words || "Severe allergy", f.isAnaphylactic);
   }
   return [...groups.values()].sort(
     (a, b) =>

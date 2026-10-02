@@ -132,6 +132,13 @@
 //     buildShoppingList (the verified plate counts added up by shop area),
 //     shoppingKey, snackKey, sortMenu and mealPlates
 //     (./kitchen-menu)
+//   - kitchen prices and food cost: canPriceShoppingList, foodCost,
+//     personDays, costPerPersonDay, costBar (./kitchen-costing)
+//   - the dietary cross-check: canCheckMenuAllergens, dietaryCounts (counts
+//     only, never names), recipeAllergens, allergenFlags, planCovers
+//     (./kitchen-dietary)
+//   - prep steps: canAddPrepSteps, prepDueDate, prepGoesOnBoard,
+//     prepTaskTitle, prepSheetLines (./kitchen-prep)
 //   - recipe sources: sourceText (the Markdown-like text Claude reads),
 //     sourceFromText (pasted text into sections), emptySourceSections,
 //     sameSections and sameSource (./recipe-source)
@@ -213,6 +220,9 @@ export * from "./power-grid";
 export * from "./power-sharing";
 export * from "./recipes";
 export * from "./kitchen-menu";
+export * from "./kitchen-costing";
+export * from "./kitchen-dietary";
+export * from "./kitchen-prep";
 export * from "./recipe-source";
 export * from "./calendar-titles";
 export * from "./meeting-notes";
