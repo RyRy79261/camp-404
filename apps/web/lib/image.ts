@@ -1,7 +1,10 @@
-// Client-side image preprocessing for avatar uploads. Centre-crops to a
-// square and downscales to a fixed edge length, exporting WebP to keep
+// Client-side image preprocessing for avatar uploads. Cuts the square the
+// member chose in "Fit your photo" (lib/photo-crop.ts; the middle square when
+// there is no choice) and downscales to a fixed edge length, exporting WebP to keep
 // uploads small. Runs entirely in the browser (canvas) so the server only
 // ever receives an already-normalised image. No external dependency.
+
+import { toSourceRect, type SquareCrop } from "./photo-crop";
 
 export interface CropResizeOptions {
   /** Output edge length in CSS pixels. Defaults to 512. */
@@ -11,18 +14,25 @@ export interface CropResizeOptions {
 }
 
 /**
- * Centre-crop `file` to a square and resize to `size`×`size`, returning a
- * WebP Blob. Rejects if the file can't be decoded as an image.
+ * Cut `crop` (source pixels; the middle square when absent) from `file` and
+ * resize it to `size`×`size`, returning a WebP Blob. A crop that strays off
+ * the image is pulled back inside it. Rejects if the file can't be decoded as
+ * an image.
  */
 export async function cropResizeToSquare(
   file: File,
+  crop?: SquareCrop,
   { size = 512, quality = 0.85 }: CropResizeOptions = {},
 ): Promise<Blob> {
   const bitmap = await loadBitmap(file);
   try {
-    const edge = Math.min(bitmap.width, bitmap.height);
-    const sx = (bitmap.width - edge) / 2;
-    const sy = (bitmap.height - edge) / 2;
+    const rect = toSourceRect(crop, {
+      width: bitmap.width,
+      height: bitmap.height,
+    });
+    const edge = rect.size;
+    const sx = rect.x;
+    const sy = rect.y;
 
     const canvas = document.createElement("canvas");
     canvas.width = size;
