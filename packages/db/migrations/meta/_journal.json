@@ -607,8 +607,15 @@
     {
       "idx": 86,
       "version": "7",
-      "when": 1790912514945,
-      "tag": "0086_drop_kitchen_lunch",
+      "when": 1790889618935,
+      "tag": "0086_power_cable_not_checked",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1790930995714,
+      "tag": "0087_drop_kitchen_lunch",
       "breakpoints": true
     }
   ]

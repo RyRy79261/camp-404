@@ -188,6 +188,50 @@ describe("grid plan", () => {
     expect(row?.version).toBe(1);
   });
 
+  it("counts no cable or adapter as the camp's until someone says so", async () => {
+    const { powerLead } = await setup();
+    const g = await grid(powerLead.id);
+    const byId = new Map((await listGridNodes()).map((n) => [n.id, n]));
+    // Added with no answer: not checked yet, stored as NULL, never "have it".
+    expect(byId.get(g.main)).toMatchObject({
+      haveCable: null,
+      haveAdapter: null,
+    });
+    // An answer given is kept: the kitchen's multiplug is still to get.
+    expect(byId.get(g.kitchen)).toMatchObject({
+      haveCable: null,
+      haveAdapter: false,
+    });
+    const main = byId.get(g.main)!;
+    const saved = await updateGridNode({
+      ...EditGridNodeInput.parse({
+        nodeId: main.id,
+        expectedVersion: main.version,
+        name: main.name,
+        kind: main.kind,
+        parentId: main.parentId,
+        cable: main.cable,
+        cableLengthM: main.cableLengthM,
+        cableGaugeMm2: main.cableGaugeMm2,
+        cableRatedAmps: main.cableRatedAmps,
+        adapter: main.adapter,
+        haveCable: true,
+        haveAdapter: null,
+      }),
+      actorId: powerLead.id,
+    });
+    expect(saved.ok).toBe(true);
+    const [row] = await h
+      .db()
+      .select({
+        haveCable: schema.powerGridNodes.haveCable,
+        haveAdapter: schema.powerGridNodes.haveAdapter,
+      })
+      .from(schema.powerGridNodes)
+      .where(eq(schema.powerGridNodes.id, g.main));
+    expect(row).toEqual({ haveCable: true, haveAdapter: null });
+  });
+
   it("refuses a lead of another team and a member", async () => {
     const { powerLead, kitchenLead } = await setup();
     const g = await grid(powerLead.id);

@@ -50,7 +50,7 @@ async function openProgram(page: Page, path: string, title: string) {
 async function planThePower(page: Page) {
   await page.goto("/power/fuel");
   await page
-    .getByRole("button", { name: "Add generator", exact: true })
+    .getByRole("button", { name: "Add a generator", exact: true })
     .click();
   const gen = page.getByRole("dialog", { name: "Add a generator" });
   await gen.getByRole("textbox", { name: "Model" }).fill("Test 5.5");
@@ -63,11 +63,13 @@ async function planThePower(page: Page) {
   await gen
     .getByRole("spinbutton", { name: "Runtime at 100% load (h)" })
     .fill("5.5");
+  await gen.getByRole("combobox", { name: "Whose it is" }).click();
+  await page.getByRole("option", { name: "Camp", exact: true }).click();
   await gen.getByRole("button", { name: "Add generator" }).click();
   await expect(page.getByText("Generator added")).toBeVisible();
 
   await page.goto("/power/loads");
-  await page.getByRole("button", { name: "Add load", exact: true }).click();
+  await page.getByRole("button", { name: "Add a load", exact: true }).click();
   const load = page.getByRole("dialog", { name: "Add a load" });
   await load
     .getByRole("textbox", { name: "Name", exact: true })
@@ -80,14 +82,16 @@ async function planThePower(page: Page) {
   await expect(page.getByText("Load added")).toBeVisible();
 
   await page.goto("/power/fuel");
-  await page.getByRole("combobox", { name: "Generator" }).click();
+  await page.getByRole("button", { name: "Change the plan" }).click();
+  const plan = page.getByRole("dialog", { name: "The plan" });
+  await plan.getByRole("combobox", { name: "Generator" }).click();
   await page.getByRole("option", { name: "Test 5.5 (5.5 kVA)" }).click();
-  await page.getByRole("spinbutton", { name: /^Days on site/ }).fill("10");
-  await page
+  await plan.getByRole("spinbutton", { name: "Days on site" }).fill("10");
+  await plan
     .getByRole("radiogroup", { name: "Hours running" })
     .getByRole("radio", { name: "24 h" })
     .click();
-  await page.getByRole("button", { name: "Save plan" }).click();
+  await plan.getByRole("button", { name: "Save plan" }).click();
   await expect(page.getByText("Fuel plan saved")).toBeVisible();
 }
 

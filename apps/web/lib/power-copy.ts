@@ -12,11 +12,14 @@ import type {
 // actions and the screens that show these words share them from here. Pure,
 // so the client dialogs import it too.
 
+/** The Power program's home: the answer rail (a phone's list of sections). */
+export const POWER_HOME_PATH = "/power";
 export const POWER_LOADS_PATH = "/power/loads";
 export const POWER_FUEL_PATH = "/power/fuel";
 export const POWER_FUEL_LOG_PATH = "/power/fuel-log";
 export const POWER_GRID_PATH = "/power/grid";
 export const POWER_READINESS_PATH = "/power/readiness";
+export const POWER_SHARING_PATH = "/power/sharing";
 /** The paper sheets, printed outside the desktop (#249). */
 export const PRINT_REFUEL_SHEET_PATH = "/print/power/refuel-sheet";
 export const PRINT_GRID_SHEET_PATH = "/print/power/grid";
@@ -24,16 +27,21 @@ export const PRINT_SHARING_PATH = "/print/power/sharing";
 
 /** Every page that shows power figures, refreshed after any power write. */
 export const POWER_PATHS = [
+  POWER_HOME_PATH,
   POWER_LOADS_PATH,
   POWER_FUEL_PATH,
   POWER_FUEL_LOG_PATH,
   POWER_GRID_PATH,
   POWER_READINESS_PATH,
+  POWER_SHARING_PATH,
 ] as const;
 
 /** What anyone who is not an editor is told, on the page and by the action. */
 export const POWER_REFUSAL =
   "Only captains and Power & Lighting leads can change the power plan.";
+/** The one quiet line a reader sees under the heading, in place of controls. */
+export const POWER_READ_ONLY =
+  "Only captains and Power & Lighting leads change this.";
 export const CHECK_LOAD = "Check the load and try again.";
 export const CHECK_PLAN = "Check the plan settings and try again.";
 export const CHECK_GENERATOR = "Check the generator and try again.";
@@ -101,6 +109,12 @@ export function ownerText(load: {
     return `Neighbour: ${load.neighbourCamp}`;
   }
   return OWNER_LABELS[load.owner];
+}
+
+/** An area as people read it: "kitchen" shows as "Kitchen". */
+export function areaName(area: string): string {
+  const text = area.trim();
+  return text === "" ? "Other" : text[0]!.toUpperCase() + text.slice(1);
 }
 
 /** "18:00", from a whole hour. */

@@ -1,5 +1,5 @@
 {
-  "id": "4c23131b-8a11-4e8d-a09c-4b00e183b460",
+  "id": "b0d4af35-4eb8-4404-964a-65bed3278d2e",
   "prevId": "e0bbd955-323f-41f4-9e83-ac66df8cb31b",
   "version": "7",
   "dialect": "postgresql",
@@ -4984,6 +4984,13 @@
           "notNull": true,
           "default": 0
         },
+        "lunch": {
+          "name": "lunch",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "dinner": {
           "name": "dinner",
           "type": "integer",
@@ -5026,7 +5033,7 @@
         },
         "kitchen_meal_plan_days_plates_check": {
           "name": "kitchen_meal_plan_days_plates_check",
-          "value": "\"kitchen_meal_plan_days\".\"breakfast\" between 0 and 500 and \"kitchen_meal_plan_days\".\"dinner\" between 0 and 500"
+          "value": "\"kitchen_meal_plan_days\".\"breakfast\" between 0 and 500 and \"kitchen_meal_plan_days\".\"lunch\" between 0 and 500 and \"kitchen_meal_plan_days\".\"dinner\" between 0 and 500"
         }
       },
       "isRLSEnabled": false
@@ -7964,15 +7971,13 @@
           "name": "have_cable",
           "type": "boolean",
           "primaryKey": false,
-          "notNull": true,
-          "default": true
+          "notNull": false
         },
         "have_adapter": {
           "name": "have_adapter",
           "type": "boolean",
           "primaryKey": false,
-          "notNull": true,
-          "default": true
+          "notNull": false
         },
         "sort": {
           "name": "sort",
