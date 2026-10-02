@@ -15,8 +15,8 @@ import * as schema from "./schema";
 // The kitchen's meal plan (the owner's sketch, 2026-09-24): for the camp's
 // current year, the days on site, the date of day 1 and the plates at
 // breakfast and dinner on each. The camp does no lunch (the owner,
-// 2026-10-01): the table's lunch column is never read, and a save keeps
-// whatever it already held, untouched, until a migration drops it.
+// 2026-10-01): the table never had a lunch column read anywhere, so the
+// one it had was dropped (migration drop_kitchen_lunch).
 //
 //  - Anyone approved reads it (the page gates that). A recipe in the book is
 //    shown at each distinct count in it (mealPlanPlateCounts), and the
@@ -231,19 +231,6 @@ export async function setMealPlan(
         if (!row) refuse(MEAL_PLAN_CHANGED);
         version = row.version;
       }
-      // The unused lunch column keeps what it held (it is dropped later,
-      // never wiped by a save).
-      const lunches = new Map(
-        (
-          await tx
-            .select({
-              day: schema.kitchenMealPlanDays.day,
-              lunch: schema.kitchenMealPlanDays.lunch,
-            })
-            .from(schema.kitchenMealPlanDays)
-            .where(eq(schema.kitchenMealPlanDays.cycle, cycle))
-        ).map((r) => [r.day, r.lunch]),
-      );
       await tx
         .delete(schema.kitchenMealPlanDays)
         .where(eq(schema.kitchenMealPlanDays.cycle, cycle));
@@ -252,7 +239,6 @@ export async function setMealPlan(
           cycle,
           day: i + 1,
           breakfast: d.breakfast,
-          lunch: lunches.get(i + 1) ?? 0,
           dinner: d.dinner,
         })),
       );
