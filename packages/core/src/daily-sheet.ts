@@ -130,7 +130,9 @@ export function groupSlotsByTeam(input: {
 /** A team key as words, for a team the camp's settings do not name. */
 function teamWords(key: string): string {
   const words = key.replace(/_/g, " ").trim();
-  return words ? words[0]!.toUpperCase() + words.slice(1) : "Team";
+  if (!words) return "Team";
+  const [head, ...rest] = [...words];
+  return head!.toUpperCase() + rest.join("");
 }
 
 // --- Names --------------------------------------------------------------------
@@ -173,7 +175,7 @@ export function sheetNames(
     }
     const words = (name ?? "").trim().split(/\s+/);
     const last = words.length > 1 ? words.at(-1)! : "";
-    out.set(userId, last ? `${first} ${last[0]!.toUpperCase()}.` : first);
+    out.set(userId, last ? `${first} ${[...last][0]!.toUpperCase()}.` : first);
   }
   return out;
 }

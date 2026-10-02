@@ -100,7 +100,7 @@ export async function getDailySheets(
       usesTestStore()
         ? shiftsTestStore.readBurnDays(cycle)
         : shiftsDb.readBurnDays(cycle),
-      getMealPlan(),
+      getMealPlan(cycle),
       getKitchenMenu(),
       readAllergies(cycle),
       getLoungeProgramme(cycle),

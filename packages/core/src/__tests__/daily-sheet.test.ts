@@ -218,6 +218,14 @@ describe("names on the sheet", () => {
       expect(name).not.toMatch(/Mokoena|Pillay|Jacobs/);
     }
   });
+
+  it("takes a whole character for the initial, not half of one", () => {
+    const map = sheetNames([
+      { userId: "a", name: "Sam 𝒵ulu" },
+      { userId: "b", name: "Sam Pillay" },
+    ]);
+    expect(map.get("a")).toBe("Sam 𝒵.");
+  });
 });
 
 describe("allergyGroups", () => {
