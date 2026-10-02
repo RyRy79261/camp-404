@@ -18,7 +18,7 @@ const OS_THEME_CSS = osThemeCss();
 // Brand faces, exposed as CSS vars consumed by --font-sans / --font-mono in
 // @camp404/ui globals.css. Montserrat is the AfrikaBurn app's face (body 500,
 // headings up to 800); JetBrains Mono sets eyebrows and data. Self-hosted
-// (@camp404/ui/fonts/*) rather than `next/font/google`, so `next build`
+// (apps/web/fonts/*, loaded in lib/fonts/*) rather than `next/font/google`, so `next build`
 // makes no Google Fonts request.
 const montserrat = montserratFont;
 const jetbrainsMono = jetbrainsMonoFont;
