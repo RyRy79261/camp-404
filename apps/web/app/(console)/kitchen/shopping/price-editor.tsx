@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoney, parseMoneyToMinor } from "@camp404/core";
 import type { PriceKind } from "@camp404/types";
@@ -81,13 +81,14 @@ export function PriceEditor({
   const [shop, setShop] = useState(price.shop ?? "");
   const [amount, setAmount] = useState(priceText(price.amountCents));
   const [kind, setKind] = useState<PriceKind>(price.kind);
-  const [version, setVersion] = useState(price.version);
-  const [saved, setSaved] = useState(price);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Saves go one after another, each with the version the last one returned,
+  // and the boxes stay open to typing while one is on its way.
+  const saved = useRef(price);
+  const chain = useRef<Promise<void>>(Promise.resolve());
   const id = `price-${lineKey.replace(/[^a-z0-9]+/gi, "-")}`;
 
-  async function save(next: { shop: string; amount: string; kind: PriceKind }) {
+  async function send(next: { shop: string; amount: string; kind: PriceKind }) {
     const amountCents =
       next.amount.trim() === "" ? null : parseMoneyToMinor(next.amount);
     if (amountCents === null && next.amount.trim() !== "") {
@@ -95,15 +96,15 @@ export function PriceEditor({
       return;
     }
     const shopName = next.shop.trim() || null;
+    const last = saved.current;
     if (
-      shopName === saved.shop &&
-      amountCents === saved.amountCents &&
-      next.kind === saved.kind
+      shopName === last.shop &&
+      amountCents === last.amountCents &&
+      next.kind === last.kind
     ) {
       setError(null);
       return;
     }
-    setBusy(true);
     setError(null);
     try {
       const result = await setShoppingPriceAction({
@@ -112,7 +113,7 @@ export function PriceEditor({
         amountCents,
         kind: next.kind,
         currency: "ZAR",
-        expectedVersion: version,
+        expectedVersion: last.version,
       });
       if (!result.ok) {
         setError(result.error);
@@ -124,16 +125,17 @@ export function PriceEditor({
         kind: next.kind,
         version: result.data!.version,
       };
-      setVersion(now.version);
-      setSaved(now);
-      if (amountCents !== null) setAmount(priceText(amountCents));
+      saved.current = now;
       onSaved(now);
       router.refresh();
     } catch {
       setError(UNREACHABLE);
-    } finally {
-      setBusy(false);
     }
+  }
+
+  function save(next: { shop: string; amount: string; kind: PriceKind }) {
+    chain.current = chain.current.then(() => send(next));
+    return chain.current;
   }
 
   return (
@@ -148,9 +150,8 @@ export function PriceEditor({
             maxLength={80}
             placeholder="Where to buy it"
             aria-label={`Shop: ${name}`}
-            disabled={busy}
             onChange={(e) => setShop(e.target.value)}
-            onBlur={() => save({ shop, amount, kind })}
+            onBlur={() => void save({ shop, amount, kind })}
           />
         </label>
         <label className="flex flex-col gap-1.5 page-md:w-28">
@@ -173,9 +174,12 @@ export function PriceEditor({
               aria-label={`Price in rands: ${name}`}
               aria-invalid={error ? true : undefined}
               aria-describedby={error ? `${id}-error` : undefined}
-              disabled={busy}
               onChange={(e) => setAmount(e.target.value)}
-              onBlur={() => save({ shop, amount, kind })}
+              onBlur={() => {
+                const cents = parseMoneyToMinor(amount);
+                if (cents !== null) setAmount(priceText(cents));
+                void save({ shop, amount, kind });
+              }}
             />
           </span>
         </label>
