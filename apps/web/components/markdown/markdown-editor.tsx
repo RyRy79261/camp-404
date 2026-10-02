@@ -20,6 +20,11 @@ import {
   editorMarkdown,
   MARKDOWN_EDITOR_EXTENSIONS,
 } from "./markdown-extensions";
+import {
+  docFromValue,
+  PARAGRAPH_EDITOR_EXTENSIONS,
+  valueFromDoc,
+} from "./paragraph-text";
 
 // The WYSIWYG Markdown editor (owner, 2026-10-01: "Just make a WYSIWYG
 // Markdown editor"; long text is never a raw Markdown textarea). The Survival
@@ -151,6 +156,33 @@ function LinkRow({ editor, onDone }: { editor: Editor; onDone: () => void }) {
   );
 }
 
+/** The paragraphs mode's toolbar: the only marks its words can hold. */
+function MarksToolbar({ editor }: { editor: Editor }) {
+  const chain = () => editor.chain().focus();
+  return (
+    <div
+      role="toolbar"
+      aria-label="Text style"
+      className="flex shrink-0 flex-nowrap items-center gap-1 overflow-x-auto border-b border-input px-2 py-1"
+    >
+      <ToolbarButton
+        label="Bold"
+        active={editor.isActive("bold")}
+        onClick={() => chain().toggleBold().run()}
+      >
+        <Bold className="h-4 w-4" aria-hidden />
+      </ToolbarButton>
+      <ToolbarButton
+        label="Italic"
+        active={editor.isActive("italic")}
+        onClick={() => chain().toggleItalic().run()}
+      >
+        <Italic className="h-4 w-4" aria-hidden />
+      </ToolbarButton>
+    </div>
+  );
+}
+
 function Toolbar({ editor }: { editor: Editor }) {
   const [linking, setLinking] = React.useState(false);
   const chain = () => editor.chain().focus();
@@ -252,6 +284,12 @@ export interface MarkdownEditorProps {
    * least eight lines tall that grows with its text.
    */
   fill?: boolean;
+  /**
+   * "markdown" (the default): the value is Markdown, with headings, lists,
+   * quotes and links. "paragraphs": the value is paragraphs with only bold
+   * and italic, kept in the join site's own small dialect (./paragraph-text).
+   */
+  mode?: "markdown" | "paragraphs";
   className?: string;
 }
 
@@ -262,12 +300,17 @@ export function MarkdownEditor({
   describedBy,
   disabled,
   fill,
+  mode = "markdown",
   className,
 }: MarkdownEditorProps) {
+  const paragraphs = mode === "paragraphs";
   const editor = useEditor({
-    extensions: MARKDOWN_EDITOR_EXTENSIONS,
-    content: value,
-    contentType: "markdown",
+    extensions: paragraphs
+      ? PARAGRAPH_EDITOR_EXTENSIONS
+      : MARKDOWN_EDITOR_EXTENSIONS,
+    ...(paragraphs
+      ? { content: docFromValue(value) }
+      : { content: value, contentType: "markdown" as const }),
     immediatelyRender: false,
     // Re-render on each change so the toolbar's aria-pressed follows the caret.
     shouldRerenderOnTransaction: true,
@@ -280,7 +323,8 @@ export function MarkdownEditor({
         ...(describedBy ? { "aria-describedby": describedBy } : {}),
       },
     },
-    onUpdate: ({ editor: e }) => onChange(editorMarkdown(e)),
+    onUpdate: ({ editor: e }) =>
+      onChange(paragraphs ? valueFromDoc(e.getJSON()) : editorMarkdown(e)),
   });
 
   React.useEffect(() => {
@@ -297,7 +341,13 @@ export function MarkdownEditor({
         className,
       )}
     >
-      {editor ? <Toolbar editor={editor} /> : null}
+      {editor ? (
+        paragraphs ? (
+          <MarksToolbar editor={editor} />
+        ) : (
+          <Toolbar editor={editor} />
+        )
+      ) : null}
       <EditorContent
         editor={editor}
         className={cn(

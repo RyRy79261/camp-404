@@ -5,6 +5,7 @@ import { Eye, PenLine } from "lucide-react";
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { cn } from "@camp404/ui/lib/utils";
 import { MarkdownBody } from "@/components/announcements/markdown-body";
+import { InlineParagraphsValue } from "./inline-text";
 import { MarkdownEditor } from "./markdown-editor";
 
 // One long-text field written in the WYSIWYG Markdown editor with its live
@@ -44,6 +45,10 @@ export interface MarkdownFieldProps {
   disabled?: boolean;
   /** The text box is at least this tall (Tailwind min-h class). */
   minHeight?: string;
+  /** The editor's mode (MarkdownEditor): paragraphs keeps only bold and italic. */
+  mode?: "markdown" | "paragraphs";
+  /** Head the Write pane with its name, as the Preview pane is. */
+  labelWrite?: boolean;
   className?: string;
 }
 
@@ -54,6 +59,8 @@ export function MarkdownField({
   emptyPreview = "Nothing written yet. Start writing and it appears here.",
   disabled,
   minHeight = "min-h-32",
+  mode = "markdown",
+  labelWrite = false,
   className,
 }: MarkdownFieldProps) {
   const [view, setView] = React.useState<"write" | "preview">("write");
@@ -83,8 +90,17 @@ export function MarkdownField({
             view === "write" ? "flex" : "hidden page-md:flex",
           )}
         >
+          {labelWrite ? (
+            // On a phone the Write | Preview switch already names the pane.
+            <div className="hidden page-md:block">
+              <PaneLabel icon={<PenLine className="h-3 w-3" aria-hidden />}>
+                Write
+              </PaneLabel>
+            </div>
+          ) : null}
           <MarkdownEditor
             fill
+            mode={mode}
             value={value}
             onChange={onChange}
             ariaLabel={label}
@@ -108,6 +124,8 @@ export function MarkdownField({
                 <PenLine className="h-3.5 w-3.5" aria-hidden />
                 {emptyPreview}
               </p>
+            ) : mode === "paragraphs" ? (
+              <InlineParagraphsValue value={settled} />
             ) : (
               <MarkdownBody className="text-sm">{settled}</MarkdownBody>
             )}
