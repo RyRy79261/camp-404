@@ -15,10 +15,12 @@ import {
   ALREADY_BOOKED,
   CUSTODIAN_UNKNOWN,
   FULLY_BOOKED,
+  ITEM_BROKEN,
   ITEM_CHANGED,
   LOAN_RETURNED,
   LOAN_TOO_MANY,
   NOT_AN_INVENTORY_EDITOR,
+  NONE_FREE,
   NOT_BOOKABLE,
   NOT_YOUR_BOOKING,
   PROPOSAL_DECIDED,
@@ -399,6 +401,67 @@ describe("inventory", () => {
         .from(schema.inventoryBookings)
         .where(eq(schema.inventoryBookings.itemId, id));
       expect(rows).toHaveLength(2);
+    });
+
+    it("refuses an item marked broken, and keeps the bookings it already has", async () => {
+      const p = await people();
+      const id = await cooler(p.captain.id);
+      expect(
+        (await bookInventoryItem({ itemId: id, actorId: p.member.id })).ok,
+      ).toBe(true);
+      await h
+        .db()
+        .update(schema.inventoryItems)
+        .set({ condition: "broken" })
+        .where(eq(schema.inventoryItems.id, id));
+      expect(
+        await bookInventoryItem({ itemId: id, actorId: p.other.id }),
+      ).toEqual({ ok: false, error: ITEM_BROKEN });
+      const [row] = await listBookableItems(p.member.id);
+      expect(row).toMatchObject({ condition: "broken", booked: 1 });
+      expect(row?.myBookingId).not.toBeNull();
+    });
+
+    it("takes units lent to another camp off what can be booked, and gives them back on return", async () => {
+      const p = await people();
+      // 4 owned, 3 may be booked; 2 lent out leaves 2 here to book.
+      const id = await cooler(
+        p.captain.id,
+        InventoryItemInput.parse({ ...COOLER, bookableCount: 3 }),
+      );
+      const lent = await lendInventoryItem({
+        ...InventoryLoanInput.parse({
+          itemId: id,
+          quantity: 2,
+          borrowerCamp: "Camp Next Door",
+          borrowerAddress: "7:30 and C",
+        }),
+        actorId: p.captain.id,
+      });
+      if (!lent.ok) throw new Error(lent.error);
+      expect(
+        (await bookInventoryItem({ itemId: id, actorId: p.member.id })).ok,
+      ).toBe(true);
+      expect(
+        (await bookInventoryItem({ itemId: id, actorId: p.other.id })).ok,
+      ).toBe(true);
+      expect(
+        await bookInventoryItem({ itemId: id, actorId: p.soundLead.id }),
+      ).toEqual({ ok: false, error: NONE_FREE });
+      const [row] = await listBookableItems(p.member.id);
+      expect(row).toMatchObject({
+        quantity: 4,
+        bookableCount: 3,
+        lentOut: 2,
+        booked: 2,
+      });
+
+      await returnInventoryLoan({ loanId: lent.id, actorId: p.captain.id });
+      expect(
+        (await bookInventoryItem({ itemId: id, actorId: p.soundLead.id })).ok,
+      ).toBe(true);
+      const [after] = await listBookableItems(p.member.id);
+      expect(after).toMatchObject({ lentOut: 0, booked: 3 });
     });
 
     it("refuses an item that is not booked at all", async () => {

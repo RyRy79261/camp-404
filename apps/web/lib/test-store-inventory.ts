@@ -1,10 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { canEditInventory, nextMaintenanceDue } from "@camp404/core";
+import {
+  bookableNow,
+  canEditInventory,
+  nextMaintenanceDue,
+} from "@camp404/core";
 import {
   ALREADY_BOOKED,
   BOOKING_GONE,
   CUSTODIAN_UNKNOWN,
   FULLY_BOOKED,
+  ITEM_BROKEN,
   ITEM_CHANGED,
   ITEM_GONE,
   LOAN_GONE,
@@ -12,6 +17,7 @@ import {
   LOAN_TOO_MANY,
   NEED_CHANGED,
   NEED_GONE,
+  NONE_FREE,
   NOT_AN_INVENTORY_EDITOR,
   NOT_BOOKABLE,
   NOT_YOUR_BOOKING,
@@ -228,6 +234,13 @@ function logDirect(item: StoreItem, actorId: string, note: string) {
   });
 }
 
+/** How many of an item are lent out and not back yet, across years. */
+function lentOutOf(itemId: string): number {
+  return state()
+    .loans.filter((l) => l.itemId === itemId && l.returnedAt === null)
+    .reduce((sum, l) => sum + l.quantity, 0);
+}
+
 function cycle(): number {
   return testStore.currentCycleNumber();
 }
@@ -319,6 +332,9 @@ export const inventoryStore = {
           name: i.name,
           team: i.team,
           bookableCount: i.bookableCount ?? 0,
+          quantity: i.quantity,
+          condition: i.condition,
+          lentOut: lentOutOf(i.id),
           booked: bookings.length,
           myBookingId: bookings.find((b) => b.userId === viewerId)?.id ?? null,
         };
@@ -626,7 +642,15 @@ export const inventoryStore = {
     if (bookings.some((b) => b.userId === input.actorId)) {
       return refuseOr(ALREADY_BOOKED);
     }
+    if (item.condition === "broken") return refuseOr(ITEM_BROKEN);
     if (bookings.length >= item.bookableCount) return refuseOr(FULLY_BOOKED);
+    const free = bookableNow({
+      bookableCount: item.bookableCount,
+      quantity: item.quantity,
+      broken: false,
+      lentOut: lentOutOf(item.id),
+    });
+    if (bookings.length >= free) return refuseOr(NONE_FREE);
     const id = randomUUID();
     state().bookings.push({
       id,
@@ -664,9 +688,7 @@ export const inventoryStore = {
     if (!item) return refuseOr(ITEM_GONE);
     if (!isEditor(input.actorId, item.team))
       return refuseOr(NOT_AN_INVENTORY_EDITOR);
-    const out = state()
-      .loans.filter((l) => l.itemId === item.id && l.returnedAt === null)
-      .reduce((sum, l) => sum + l.quantity, 0);
+    const out = lentOutOf(item.id);
     if (out + input.quantity > item.quantity) return refuseOr(LOAN_TOO_MANY);
     const id = randomUUID();
     state().loans.push({

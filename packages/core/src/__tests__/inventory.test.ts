@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Team } from "@camp404/types";
 import {
+  bookableNow,
   bookingsLeft,
   canEditAnyInventory,
   canEditInventory,
@@ -70,6 +71,29 @@ describe("bookingsLeft", () => {
   it("is 0 for an item with no limit, so it is never booked by mistake", () => {
     expect(bookingsLeft(null, 0)).toBe(0);
     expect(bookingsLeft(0, 0)).toBe(0);
+  });
+});
+
+describe("bookableNow", () => {
+  const item = { bookableCount: 3, quantity: 5, broken: false, lentOut: 0 };
+
+  it("is the item's limit when every unit is here and whole", () => {
+    expect(bookableNow(item)).toBe(3);
+  });
+
+  it("takes off units lent to another camp", () => {
+    expect(bookableNow({ ...item, lentOut: 3 })).toBe(2);
+    expect(bookableNow({ ...item, lentOut: 5 })).toBe(0);
+    expect(bookableNow({ ...item, lentOut: 9 })).toBe(0);
+  });
+
+  it("is 0 while the item is marked broken", () => {
+    expect(bookableNow({ ...item, broken: true })).toBe(0);
+  });
+
+  it("is 0 for an item with no limit", () => {
+    expect(bookableNow({ ...item, bookableCount: null })).toBe(0);
+    expect(bookableNow({ ...item, bookableCount: 0 })).toBe(0);
   });
 });
 

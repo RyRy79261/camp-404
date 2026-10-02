@@ -352,7 +352,7 @@ export function ItemDialog({
               >
                 <Input
                   id={id("storageLocation")}
-                  placeholder="Shelf 3"
+                  placeholder="Bay 2, top shelf"
                   value={form.storageLocation}
                   onChange={(e) => set("storageLocation", e.target.value)}
                 />
@@ -360,23 +360,25 @@ export function ItemDialog({
             )}
           </div>
 
-          <div className="grid gap-4 page-sm:grid-cols-3">
-            {numberInput("weightKg", "Weight in kg", {
-              min: 0,
-              step: 0.1,
-            })}
-            {numberInput(
-              "wattsEach",
-              "Watts each",
-              { min: 0 },
-              "Only for gear that plugs in. The power plan reads it.",
-            )}
-            {numberInput(
-              "bookableCount",
-              "Bookings a year",
-              { min: 1, inputMode: "numeric" },
-              "How many members can book it. Leave blank if it isn't booked.",
-            )}
+          <div className="flex flex-col gap-1.5">
+            {/* items-end: the long third label wraps, and the boxes still
+                line up. */}
+            <div className="grid gap-4 page-sm:grid-cols-3 page-sm:items-end">
+              {numberInput("weightKg", "Weight in kg", {
+                min: 0,
+                step: 0.1,
+              })}
+              {numberInput("wattsEach", "Watts each", { min: 0 })}
+              {numberInput("bookableCount", "Members who can book one", {
+                min: 1,
+                inputMode: "numeric",
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Watts only for gear that plugs in (the power plan reads it). Leave
+              &ldquo;Members who can book one&rdquo; blank if nobody books it; a
+              booking is one unit for the whole burn.
+            </p>
           </div>
 
           <AckRow
@@ -431,41 +433,28 @@ export function ItemDialog({
   );
 }
 
-/** The heading's Add button; disabled, with the reason, for anyone else. */
+/** The heading's Add button, shown only to a captain or a team lead. */
 export function AddItemButton({
   teams,
   members,
-  refusalId,
 }: {
   teams: SelectOption[];
   members: SelectOption[];
-  refusalId: string;
 }) {
   const [open, setOpen] = React.useState(false);
-  const canAdd = teams.length > 0;
+  if (teams.length === 0) return null;
   return (
     <>
-      <Button
-        disabled={!canAdd}
-        onClick={() => setOpen(true)}
-        {...(canAdd
-          ? {}
-          : {
-              "aria-label": "Add item — not available to you",
-              "aria-describedby": refusalId,
-            })}
-      >
+      <Button onClick={() => setOpen(true)}>
         <Plus aria-hidden />
         Add item
       </Button>
-      {canAdd && (
-        <ItemDialog
-          open={open}
-          onOpenChange={setOpen}
-          teams={teams}
-          members={members}
-        />
-      )}
+      <ItemDialog
+        open={open}
+        onOpenChange={setOpen}
+        teams={teams}
+        members={members}
+      />
     </>
   );
 }
@@ -475,15 +464,17 @@ export function EditItemButton({
   item,
   teams,
   members,
+  className,
 }: {
   item: EditableItem;
   teams: SelectOption[];
   members: SelectOption[];
+  className?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button className={className} onClick={() => setOpen(true)}>
         <Pencil aria-hidden />
         Edit
       </Button>
