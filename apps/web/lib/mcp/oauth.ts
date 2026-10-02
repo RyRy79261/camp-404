@@ -53,3 +53,4 @@ export function isAllowedRedirectUri(uri: string): boolean {
     return false;
   }
 }
+

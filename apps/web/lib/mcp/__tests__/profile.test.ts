@@ -270,10 +270,7 @@ describe("update_my_id_documents holds the one-document invariant", () => {
     // The both-documents guard reads as arity but branches on the classifier,
     // so `{ passport: "", saId: "X" }` is one set and one clear — a legal call,
     // not a refusal.
-    await call("update_my_id_documents", {
-      passport: "",
-      saId: "8001015009087",
-    });
+    await call("update_my_id_documents", { passport: "", saId: "8001015009087" });
 
     const patch = onlyPatch();
     expect(patch.saIdEncrypted).not.toBeNull();

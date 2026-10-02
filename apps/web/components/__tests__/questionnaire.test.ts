@@ -53,8 +53,7 @@ describe("burner-profile questionnaire", () => {
       "team_interest.kitchen": 99,
     });
     expect(result.ok).toBe(false);
-    if (!result.ok)
-      expect(result.errors["team_interest.kitchen"]).toBeDefined();
+    if (!result.ok) expect(result.errors["team_interest.kitchen"]).toBeDefined();
   });
 
   it("rejects unknown single-select values", () => {
@@ -81,7 +80,8 @@ describe("burner-profile questionnaire", () => {
       "competency.cooking": "transcendent",
     });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.errors["competency.cooking"]).toBeDefined();
+    if (!result.ok)
+      expect(result.errors["competency.cooking"]).toBeDefined();
   });
 
   it("treats dietary lists as optional (none = empty checklists)", () => {

@@ -51,9 +51,7 @@ export async function cropResizeToSquare(
   }
 }
 
-async function loadBitmap(
-  file: File,
-): Promise<ImageBitmap & { close?: () => void }> {
+async function loadBitmap(file: File): Promise<ImageBitmap & { close?: () => void }> {
   // createImageBitmap is the fast path and is widely supported; fall back
   // to an <img> + object URL where it isn't.
   if (typeof createImageBitmap === "function") {

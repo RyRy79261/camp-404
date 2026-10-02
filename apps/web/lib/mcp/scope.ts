@@ -55,9 +55,7 @@ export function resolveMcpScope(rows: McpScopeRows): McpScope {
  * Reads the scope rows for `campUserId` and resolves the capability
  * snapshot. Returns `null` if the user row doesn't exist.
  */
-export async function getMcpScope(
-  campUserId: string,
-): Promise<McpScope | null> {
+export async function getMcpScope(campUserId: string): Promise<McpScope | null> {
   const rows = await getMcpScopeRows(campUserId);
   if (!rows) return null;
   return resolveMcpScope(rows);

@@ -117,9 +117,7 @@ describe("canApproveCrossTeam", () => {
 
 describe("canAdmin", () => {
   it("only captains pass", () => {
-    expect(canAdmin(resolveMcpScope(buildRows({ rank: "captain" })))).toBe(
-      true,
-    );
+    expect(canAdmin(resolveMcpScope(buildRows({ rank: "captain" })))).toBe(true);
     expect(canAdmin(resolveMcpScope(buildRows()))).toBe(false);
   });
 });

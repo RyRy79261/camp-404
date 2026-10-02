@@ -23,17 +23,13 @@ describe("DictatePill", () => {
 
   it("renders a custom label", () => {
     render(<DictatePill onActivate={vi.fn()} label="Start dictating" />);
-    expect(
-      screen.getByRole("button", { name: "Start dictating" }),
-    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Start dictating" })).toBeDefined();
   });
 
   it("falls back to the default name when given an empty/whitespace label", () => {
     render(<DictatePill onActivate={vi.fn()} label="   " />);
     // Never renders a nameless button — the label is its accessible name.
-    expect(
-      screen.getByRole("button", { name: "Dictate instead" }),
-    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Dictate instead" })).toBeDefined();
   });
 
   it("merges a custom className onto the button (host layout relies on this)", () => {

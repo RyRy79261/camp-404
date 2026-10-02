@@ -45,15 +45,10 @@ export function registerPeopleTools(server: McpServer): void {
           const memberships = await db
             .select()
             .from(schema.teamMemberships)
-            .where(
-              eq(schema.teamMemberships.cycle, await currentCycleNumber()),
-            );
+            .where(eq(schema.teamMemberships.cycle, await currentCycleNumber()));
           const byUser = new Map<
             string,
-            {
-              team: typeof schema.teamMemberships.$inferSelect.team;
-              isLead: boolean;
-            }[]
+            { team: typeof schema.teamMemberships.$inferSelect.team; isLead: boolean }[]
           >();
           for (const m of memberships) {
             if (!byUser.has(m.userId)) byUser.set(m.userId, []);
@@ -64,12 +59,8 @@ export function registerPeopleTools(server: McpServer): void {
             .filter((r) => {
               if (!args.team && args.isLead === undefined) return true;
               const ms = byUser.get(r.id) ?? [];
-              if (args.team && !ms.some((m) => m.team === args.team))
-                return false;
-              if (
-                args.isLead !== undefined &&
-                !ms.some((m) => m.isLead === args.isLead)
-              ) {
+              if (args.team && !ms.some((m) => m.team === args.team)) return false;
+              if (args.isLead !== undefined && !ms.some((m) => m.isLead === args.isLead)) {
                 return false;
               }
               return true;

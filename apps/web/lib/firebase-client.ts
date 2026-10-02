@@ -1,4 +1,9 @@
-import { type FirebaseApp, getApp, getApps, initializeApp } from "firebase/app";
+import {
+  type FirebaseApp,
+  getApp,
+  getApps,
+  initializeApp,
+} from "firebase/app";
 import { getMessaging, isSupported, type Messaging } from "firebase/messaging";
 import { isWebPushConfigured } from "./integration-config";
 

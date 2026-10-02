@@ -98,9 +98,7 @@ export function registerIdentityTools(server: McpServer): void {
             )
             .limit(1);
           if (!row) {
-            throw new ToolError(
-              `No required action with key '${args.actionKey}'.`,
-            );
+            throw new ToolError(`No required action with key '${args.actionKey}'.`);
           }
           if (row.type !== "acknowledgement") {
             throw new ToolError(
@@ -108,7 +106,9 @@ export function registerIdentityTools(server: McpServer): void {
             );
           }
           if (row.status !== "pending") {
-            throw new ToolError(`Required action is already ${row.status}.`);
+            throw new ToolError(
+              `Required action is already ${row.status}.`,
+            );
           }
           const [updated] = await db
             .update(schema.requiredActions)
