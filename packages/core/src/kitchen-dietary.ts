@@ -196,11 +196,12 @@ export interface RecipeFlags {
   amber: AllergenFlag[];
 }
 
-/** "Milk (feta)"; "Eggs" when the only ingredient is called that. */
+/** "Milk (feta)"; "Eggs" when the ingredient's name already says it. */
 function flagLabel(held: RecipeAllergen): string {
   const label = ALLERGEN_LABELS[held.allergen];
+  // "Sesame seeds" says nothing "Sesame" does not: only other names show.
   const names = held.from.filter(
-    (n) => n.trim().toLowerCase() !== label.toLowerCase(),
+    (n) => !n.trim().toLowerCase().includes(label.toLowerCase()),
   );
   return names.length > 0
     ? `${label} (${names.map((n) => n.trim().toLowerCase()).join(", ")})`

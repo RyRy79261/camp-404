@@ -139,6 +139,7 @@ describe("allergenFlags", () => {
         { allergen: "milk", from: ["Feta"] },
         { allergen: "eggs", from: ["Eggs"] },
         { allergen: "gluten", from: ["Bread"] },
+        { allergen: "sesame", from: ["Sesame seeds"] },
       ],
       counts,
     );
@@ -152,6 +153,7 @@ describe("allergenFlags", () => {
     expect(flags.amber).toEqual([
       { allergen: "milk", label: "Milk (feta)", text: "2 intolerant" },
       { allergen: "eggs", label: "Eggs", text: "1 allergic" },
+      { allergen: "sesame", label: "Sesame", text: "1 allergic" },
     ]);
   });
 
