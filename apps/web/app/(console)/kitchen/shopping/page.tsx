@@ -54,8 +54,8 @@ export const metadata = { title: "Shopping list — Camp 404" };
 // null to anyone else (getShoppingPricesFor, checked in @camp404/db): a
 // member's page is built with no price in it at all.
 
-/** The team page that holds the Kitchen's budget (#242, #317). */
-const KITCHEN_BUDGET_HREF = "/teams/kitchen";
+/** Every team's budget, the Kitchen's among them (#242, #317). */
+const KITCHEN_BUDGET_HREF = "/teams/budgets";
 
 const NO_PRICE: LinePrice = {
   shop: null,

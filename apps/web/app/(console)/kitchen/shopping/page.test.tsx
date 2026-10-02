@@ -406,7 +406,7 @@ describe("shopping list page", () => {
       expect(text).toContain("No price yet: Salt.");
       expect(
         within(cost).getByRole("link", { name: "Budgets" }),
-      ).toHaveProperty("href", expect.stringContaining("/teams/kitchen"));
+      ).toHaveProperty("href", expect.stringContaining("/teams/budgets"));
     });
 
     it("opens Shop, Price and This price is above Comes from, and saves a price as rand cents", async () => {
