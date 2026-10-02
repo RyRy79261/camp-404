@@ -330,6 +330,7 @@ function FuelAnswer({
     days > 0 ? fuel.perDay.reduce((sum, d) => sum + d.kWh, 0) / days : 0;
   const offKwh = Math.max(0, ...fuel.perDay.map((d) => d.unservedWh)) / 1000;
   const refills = refillText(fuel.refillsPerDay);
+  const cans = (n: number) => `${n} can${n === 1 ? "" : "s"}`;
 
   return (
     <>
@@ -344,10 +345,10 @@ function FuelAnswer({
                 tone: toBuy > 0 ? "warn" : "ok",
                 text:
                   toBuy > 0
-                    ? `We own ${plan.cansOwned} cans: buy ${toBuy}`
-                    : `We own ${plan.cansOwned} cans: enough`,
+                    ? `We own ${cans(plan.cansOwned)}: buy ${cans(toBuy)}`
+                    : `We own ${cans(plan.cansOwned)}: enough`,
               }
-            : { tone: "warn", text: `Buy ${toBuy} cans` },
+            : { tone: "warn", text: `Buy ${cans(toBuy)}` },
           ...(refills ? [{ tone: "neutral" as const, text: refills }] : []),
           ...(lastYear
             ? [

@@ -161,7 +161,10 @@ export function fuelSummary(o: PowerOverview): FuelSummary | null {
 /** "Tank filled about once a day", from the refills on the thirstiest day. */
 export function refillText(refillsPerDay: number): string | null {
   if (!(refillsPerDay > 0)) return null;
-  if (refillsPerDay < 0.75) {
+  // A rate up to 2/3 always rounds 1/rate to 2 days or more; above that,
+  // 1/rate can round down to 1 ("every 1 days") before the once-a-day
+  // wording below would otherwise take over at 0.75.
+  if (refillsPerDay <= 2 / 3) {
     return `Tank filled about every ${formatNumber(1 / refillsPerDay, 0)} days`;
   }
   if (refillsPerDay < 1.5) return "Tank filled about once a day";

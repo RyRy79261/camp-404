@@ -22,6 +22,7 @@ vi.mock("@/app/(console)/power/actions");
 
 import { captainPageGate } from "@/lib/captain-gate";
 import { POWER_READ_ONLY } from "@/lib/power-copy";
+import { testStore } from "@/lib/test-store";
 import { getLeadTeams } from "@/lib/users";
 import { setUpPowerCamp, type PowerCamp } from "@/tests/power-camp";
 import { renderServer } from "@/tests/render-server";
@@ -64,7 +65,7 @@ describe("the fuel estimate", () => {
     expect(answer.textContent).toContain(
       "Fill 23 jerry cans: 446 L of petrol for 11 days.",
     );
-    expect(within(answer).getByText("We own 8 cans: buy 15")).toBeTruthy();
+    expect(within(answer).getByText("We own 8 cans: buy 15 cans")).toBeTruthy();
     // The answer comes before the working and the plan, never under a form.
     const regions = screen
       .getAllByRole("region")
@@ -75,6 +76,32 @@ describe("the fuel estimate", () => {
     expect(regions.indexOf("How we get there")).toBeLessThan(
       regions.indexOf("The plan"),
     );
+  });
+
+  it("says 'can', singular, for one owned and one to buy (CodeRabbit, #329)", async () => {
+    const version = testStore.getPowerPlan().version;
+    testStore.setPowerPlan({
+      actorId: camp.pat.id,
+      expectedVersion: version,
+      patch: { cansOwned: 1 },
+    });
+    await renderAs("mem", "camp_member");
+    const answer = screen.getByRole("region", { name: "The answer" });
+    expect(within(answer).getByText(/^We own 1 can:/)).toBeTruthy();
+    expect(within(answer).queryByText(/^We own 1 cans:/)).toBeNull();
+
+    // cansOwned 0 and a can big enough that only one is needed: "Buy 1
+    // can", not "Buy 1 cans".
+    testStore.setPowerPlan({
+      actorId: camp.pat.id,
+      expectedVersion: version + 1,
+      patch: { cansOwned: 0, canLitres: 1000 },
+    });
+    cleanup();
+    await renderAs("mem", "camp_member");
+    const answer2 = screen.getByRole("region", { name: "The answer" });
+    expect(within(answer2).getByText("Buy 1 can")).toBeTruthy();
+    expect(within(answer2).queryByText("Buy 1 cans")).toBeNull();
   });
 
   it("shows how the figure is reached, line by line", async () => {

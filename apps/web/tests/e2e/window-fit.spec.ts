@@ -282,9 +282,10 @@ test.describe("windows fit their own width (test-mode)", () => {
   }) => {
     await captain(page, request, "fit-power-cap");
     await seedTeam(request, "fit-power-cap", "power_and_lighting", true);
-    await page.request.post("/api/test/seed-power", {
+    const seeded = await page.request.post("/api/test/seed-power", {
       data: { authUserId: "fit-power-cap" },
     });
+    expect(seeded.ok(), await seeded.text()).toBe(true);
 
     const win = await openWindow(page, "/power/loads", "Power");
     const rail = win.getByRole("navigation", { name: "Power" });

@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Sharing a generator with a neighbouring camp, its own section in the
@@ -22,12 +22,18 @@ vi.mock("@/app/(console)/power/readiness/actions");
 
 import { SharingAgreementInput } from "@camp404/types";
 import { captainPageGate } from "@/lib/captain-gate";
+import {
+  installSelectPolyfills,
+  optionNames,
+} from "@/components/questionnaires/__tests__/select-helpers";
 import { POWER_READ_ONLY, PRINT_SHARING_PATH } from "@/lib/power-copy";
 import { testStore } from "@/lib/test-store";
 import { getLeadTeams } from "@/lib/users";
 import { setUpPowerCamp, type PowerCamp } from "@/tests/power-camp";
 import { renderServer } from "@/tests/render-server";
 import PowerSharingPage from "./page";
+
+installSelectPolyfills();
 
 let camp: PowerCamp;
 
@@ -106,6 +112,21 @@ describe("sharing", () => {
     expect(
       screen.getByText(/To split the fuel, add Camp Moonbeam's loads/),
     ).toBeTruthy();
+  });
+
+  it("keeps the agreement's own generator in the editor even once it's archived (CodeRabbit, #329)", async () => {
+    const agreement = testStore.getSharingAgreement()!;
+    const archived = testStore.archiveGenerator({
+      actorId: camp.pat.id,
+      generatorId: agreement.generatorId!,
+    });
+    expect(archived.ok).toBe(true);
+    await renderAs("pat", "team_lead", ["power_and_lighting"]);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Change the agreement" }),
+    );
+    const trigger = screen.getByRole("combobox", { name: "Which of ours" });
+    expect(await optionNames(trigger)).toContain("Honda EU70is");
   });
 
   it("reads the agreed split and offers the paper summary once there is one", async () => {

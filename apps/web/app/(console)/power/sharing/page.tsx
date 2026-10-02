@@ -114,7 +114,16 @@ async function SharingSection() {
             }
           : null
       }
-      generators={o.generators.map((g) => ({ id: g.id, label: g.model }))}
+      generators={[
+        ...o.generators,
+        // The agreement's own generator can be archived since (power-
+        // overview.ts falls back to reading it directly); keep it in the
+        // select's options so an editor's save doesn't silently lose it.
+        ...(o.shareGenerator &&
+        !o.generators.some((g) => g.id === o.shareGenerator!.id)
+          ? [o.shareGenerator]
+          : []),
+      ].map((g) => ({ id: g.id, label: g.model }))}
       proposedTheirPct={Number(formatNumber(proposed.theirPct, 1))}
       defaultGeneratorId={o.generator?.id ?? null}
     />

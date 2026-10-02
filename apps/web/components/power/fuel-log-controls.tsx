@@ -532,7 +532,13 @@ export function CountCansButton({ cans }: { cans: EditableCan[] }) {
       for (const payload of payloads) {
         const result = await updateFuelCanAction(payload);
         if (!result.ok) {
-          setError(`${payload.label}: ${result.error}`);
+          const message = `${payload.label}: ${result.error}`;
+          setError(message);
+          // A can before this one in the loop already saved, so its
+          // version moved on; the key above remounts this dialog on the
+          // refresh below and drops the inline error with it. The toast
+          // is what the user is left to see.
+          toast.error(message);
           router.refresh();
           return;
         }
