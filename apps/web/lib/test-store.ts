@@ -6685,6 +6685,7 @@ export const testStore = {
         driverUserId: d.userId,
         driverName: name,
         vehicle: vehicleLabel(d.vehicleMake, d.vehicleModel),
+        vehicleMake: d.vehicleMake?.trim() || null,
         departureCity: d.departureCity,
         seatsOffered: d.seatsOffered,
         canTow: d.canTow,
@@ -6727,15 +6728,19 @@ export const testStore = {
             p.status === "maybe" ||
             p.status === "accepted"),
       )
-      .map((p) => findUserById(p.userId))
+      .map((p) => ({ p, u: findUserById(p.userId) }))
       .filter(
-        (u): u is TestUser =>
-          !!u &&
-          u.approvalStatus === "approved" &&
-          !transportDriving(u.id, cycle) &&
-          !transportSeat(u.id, cycle),
+        (x): x is { p: (typeof x)["p"]; u: TestUser } =>
+          !!x.u &&
+          x.u.approvalStatus === "approved" &&
+          !transportDriving(x.u.id, cycle) &&
+          !transportSeat(x.u.id, cycle),
       )
-      .map((u) => ({ userId: u.id, name: u.displayName }))
+      .map(({ p, u }) => ({
+        userId: u.id,
+        name: u.displayName,
+        status: p.status as UnseatedMember["status"],
+      }))
       .sort(
         (a, b) =>
           (a.name ?? "").localeCompare(b.name ?? "") ||
