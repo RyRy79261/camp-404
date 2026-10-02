@@ -334,7 +334,9 @@ describe("Change allergens under every recipe", () => {
       ).toBeTruthy();
     }
     // Once per recipe: the flags no longer carry it too.
-    expect(screen.getAllByRole("button", { name: /^Change allergens/ })).toHaveLength(2);
+    expect(
+      screen.getAllByRole("button", { name: /^Change allergens/ }),
+    ).toHaveLength(2);
   });
 
   it("is there under a recipe nobody coming reacts to, which has no flag", async () => {
@@ -356,7 +358,9 @@ describe("Change allergens under every recipe", () => {
 
   it("is not on a member's page", async () => {
     await renderAs("camp_member");
-    expect(screen.queryByRole("button", { name: /Change allergens/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Change allergens/ }),
+    ).toBeNull();
     expect(screen.queryByText("Change allergens")).toBeNull();
   });
 });

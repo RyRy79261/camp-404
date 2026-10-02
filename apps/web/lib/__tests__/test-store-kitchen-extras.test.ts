@@ -288,7 +288,13 @@ describe("meal twins", () => {
       when: "before_leaving",
       date: "2027-04-20",
     });
-    x.addPrepStep({ actorId: cook.id, itemId, what: "Soak", when: "same_day", date: null });
+    x.addPrepStep({
+      actorId: cook.id,
+      itemId,
+      what: "Soak",
+      when: "same_day",
+      date: null,
+    });
     testStore.setMealPlan({
       actorId: cook.id,
       daysOnSite: 2,

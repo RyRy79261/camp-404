@@ -787,13 +787,13 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
           dueDate: schema.kitchenPrepSteps.dueDate,
         })
         .from(schema.kitchenPrepSteps);
-      expect(
-        Object.fromEntries(steps.map((s) => [s.what, s.dueDate])),
-      ).toEqual({
-        "Toast the oats": "2027-04-21",
-        "Buy fresh milk": "2027-04-22",
-        "Soak the oats": "2027-04-24",
-      });
+      expect(Object.fromEntries(steps.map((s) => [s.what, s.dueDate]))).toEqual(
+        {
+          "Toast the oats": "2027-04-21",
+          "Buy fresh milk": "2027-04-22",
+          "Soak the oats": "2027-04-24",
+        },
+      );
       const tasks = await h
         .db()
         .select()

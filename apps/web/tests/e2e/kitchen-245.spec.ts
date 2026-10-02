@@ -106,7 +106,9 @@ test.describe("kitchen #245 (test-mode)", () => {
       page.getByRole("heading", { level: 1, name: "Shopping list" }),
     ).toBeVisible();
     const cost = page.getByRole("region", { name: "Food cost" });
-    await expect(cost).toContainText("No price yet: Rolled oats, Peanut butter.");
+    await expect(cost).toContainText(
+      "No price yet: Rolled oats, Peanut butter.",
+    );
 
     await page
       .getByRole("button", {
@@ -116,7 +118,9 @@ test.describe("kitchen #245 (test-mode)", () => {
     await page.getByLabel("Shop: Peanut butter").fill("Vlei Farm Stall");
     await page.getByLabel("Price in rands: Peanut butter").fill("96,00");
     await page.getByLabel("Price in rands: Peanut butter").blur();
-    await expect(page.getByText(/Vlei Farm Stall · R\s96,00 estimate/)).toBeVisible();
+    await expect(
+      page.getByText(/Vlei Farm Stall · R\s96,00 estimate/),
+    ).toBeVisible();
     // 96,00 over 60 person-days.
     await expect(cost).toContainText(/Food cost\s*R\s96,00/);
     await expect(cost).toContainText(/R\s1,60/);
@@ -128,7 +132,9 @@ test.describe("kitchen #245 (test-mode)", () => {
     await expect(
       page.getByRole("checkbox", { name: /^Peanut butter/ }),
     ).toBeVisible();
-    await expect(page.getByRole("region", { name: "Food cost" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Food cost" })).toHaveCount(
+      0,
+    );
     await expect(page.getByText("Vlei Farm Stall")).toHaveCount(0);
     await expect(page.getByText(/R\s96,00/)).toHaveCount(0);
     await expect(page.getByText("No shop or price yet")).toHaveCount(0);
@@ -159,7 +165,9 @@ test.describe("kitchen #245 (test-mode)", () => {
     await expect(box).toContainText("Vegetarian");
     await expect(box).not.toContainText("k5-thandi");
 
-    const oats = page.getByRole("list", { name: "Recipes for Day 2, breakfast" });
+    const oats = page.getByRole("list", {
+      name: "Recipes for Day 2, breakfast",
+    });
     await expect(oats.getByTestId("flag-red")).toContainText(
       "Peanuts (peanut butter): 1 allergic, 1 anaphylactic.",
     );
@@ -167,9 +175,9 @@ test.describe("kitchen #245 (test-mode)", () => {
       .getByRole("button", { name: "Record a plan: Overnight oats" })
       .click();
     const dialog = page.getByRole("dialog", { name: "Plan for peanuts" });
-    await dialog.getByRole("textbox").fill(
-      "One bowl first, in a clean pot, with sunflower seed butter.",
-    );
+    await dialog
+      .getByRole("textbox")
+      .fill("One bowl first, in a clean pot, with sunflower seed butter.");
     await dialog.getByRole("button", { name: "Save plan" }).click();
     await expect(dialog).toHaveCount(0);
     await expect(oats.getByTestId("flag-planned")).toContainText(
