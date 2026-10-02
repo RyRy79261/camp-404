@@ -345,7 +345,7 @@ function FuelAnswer({
                 tone: toBuy > 0 ? "warn" : "ok",
                 text:
                   toBuy > 0
-                    ? `We own ${cans(plan.cansOwned)}: buy ${toBuy}`
+                    ? `We own ${cans(plan.cansOwned)}: buy ${cans(toBuy)}`
                     : `We own ${cans(plan.cansOwned)}: enough`,
               }
             : { tone: "warn", text: `Buy ${cans(toBuy)}` },

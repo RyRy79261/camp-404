@@ -65,7 +65,7 @@ describe("the fuel estimate", () => {
     expect(answer.textContent).toContain(
       "Fill 23 jerry cans: 446 L of petrol for 11 days.",
     );
-    expect(within(answer).getByText("We own 8 cans: buy 15")).toBeTruthy();
+    expect(within(answer).getByText("We own 8 cans: buy 15 cans")).toBeTruthy();
     // The answer comes before the working and the plan, never under a form.
     const regions = screen
       .getAllByRole("region")
