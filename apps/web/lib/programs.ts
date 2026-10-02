@@ -779,15 +779,6 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: null,
     rank: "captain",
   },
-  {
-    id: "inventory-item",
-    label: "Item",
-    fileName: "ITEM.DAT",
-    href: null,
-    icon: "inventory",
-    place: null,
-    rank: "camp_member",
-  },
   // INKBLOT, opened from the Terminal (`play inkblot`), never from an icon.
   {
     id: "inkblot",

@@ -4,12 +4,9 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   Archive,
-  Check,
   ClipboardEdit,
   HandHelping,
-  PackageCheck,
-  Undo2,
-  X,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   INVENTORY_CONDITIONS,
@@ -23,6 +20,13 @@ import { Button } from "@camp404/ui/components/button";
 import { AckRow } from "@camp404/ui/components/checkbox";
 import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@camp404/ui/components/dropdown-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -35,6 +39,7 @@ import { Input } from "@camp404/ui/components/input";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
+import { cn } from "@camp404/ui/lib/utils";
 import {
   archiveItemAction,
   bookItemAction,
@@ -186,10 +191,10 @@ export function SuggestChangeButton({
         <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
             <DialogHeader>
-              <DialogTitle>Suggest a change to {item.name}</DialogTitle>
+              <DialogTitle>Suggest a change</DialogTitle>
               <DialogDescription>
-                Say what you found. A captain or the team&apos;s lead checks it
-                before the item changes.
+                {item.name}. Say what you found. A captain or the team&apos;s
+                lead checks it before the item changes.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 page-sm:grid-cols-2">
@@ -282,7 +287,7 @@ export function SuggestChangeButton({
               <Textarea
                 id="suggest-note"
                 rows={2}
-                placeholder="Counted 3, one lid is cracked"
+                placeholder="What did you find?"
                 value={form.note}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, note: e.target.value }))
@@ -316,14 +321,19 @@ export function SuggestChangeButton({
 
 // --- Review ---------------------------------------------------------------------
 
-/** Approve and Reject on a proposal, for a captain or the item's team lead. */
+/**
+ * Approve and Reject on a proposal, for a captain or the item's team lead:
+ * two equal buttons that fill the row's action slot.
+ */
 export function ReviewButtons({
   updateId,
   what,
+  className,
 }: {
   updateId: string;
-  /** Names the change for a screen reader: "Cooler box: 3". */
+  /** Names the change for a screen reader: "the change to Cooler box". */
   what: string;
+  className?: string;
 }) {
   const { pending, run } = useOneTap();
   const [which, setWhich] = React.useState<"approved" | "rejected" | null>(
@@ -337,7 +347,7 @@ export function ReviewButtons({
     );
   };
   return (
-    <span className="flex flex-wrap items-center gap-1">
+    <span className={cn("grid grid-cols-2 gap-2", className)}>
       <Button
         size="sm"
         disabled={pending}
@@ -346,32 +356,32 @@ export function ReviewButtons({
       >
         {pending && which === "approved" ? (
           <Spinner size="sm" label="Approving…" />
-        ) : (
-          <Check aria-hidden />
-        )}
+        ) : null}
         Approve
       </Button>
       <Button
         size="sm"
-        variant="ghost"
+        variant="outline"
         disabled={pending}
         onClick={() => review("rejected")}
         aria-label={`Reject ${what}`}
       >
         {pending && which === "rejected" ? (
           <Spinner size="sm" label="Rejecting…" />
-        ) : (
-          <X aria-hidden />
-        )}
+        ) : null}
         Reject
       </Button>
     </span>
   );
 }
 
-// --- Archive --------------------------------------------------------------------
+// --- The editor's "···" menu: Lend out and Archive -----------------------------
 
-export function ArchiveItemButton({
+/**
+ * The item page's quieter tools for a captain or a lead of its team, behind
+ * one "···" beside Edit: Lend out and Archive (the destructive one last).
+ */
+export function ItemMenu({
   itemId,
   name,
   version,
@@ -381,18 +391,40 @@ export function ArchiveItemButton({
   version: number;
 }) {
   const router = useRouter();
+  const [lending, setLending] = React.useState(false);
   const [confirming, setConfirming] = React.useState(false);
   const [pending, start] = React.useTransition();
   return (
     <>
-      <Button
-        variant="ghost"
-        onClick={() => setConfirming(true)}
-        disabled={pending}
-      >
-        <Archive aria-hidden />
-        Archive
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={`More for ${name}: Lend out, Archive`}
+            disabled={pending}
+          >
+            <MoreHorizontal aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setLending(true)}>
+            <HandHelping aria-hidden className="size-4" />
+            Lend out
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => setConfirming(true)}>
+            <Archive aria-hidden className="size-4" />
+            Archive
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <LendDialog
+        itemId={itemId}
+        name={name}
+        open={lending}
+        onOpenChange={setLending}
+      />
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -422,65 +454,105 @@ export function ArchiveItemButton({
 
 // --- Bookings -------------------------------------------------------------------
 
+/** "Book one": a member books one unit for the whole burn. */
 export function BookButton({
   itemId,
   name,
-  disabled,
+  className,
 }: {
   itemId: string;
   name: string;
-  disabled?: boolean;
+  className?: string;
 }) {
   const { pending, run } = useOneTap();
   return (
     <Button
       size="sm"
-      disabled={disabled || pending}
+      className={className}
+      disabled={pending}
       onClick={() => run(() => bookItemAction({ itemId }), `Booked ${name}`)}
       aria-label={`Book ${name}`}
     >
-      {pending ? (
-        <Spinner size="sm" label="Booking…" />
-      ) : (
-        <PackageCheck aria-hidden />
-      )}
-      Book
+      {pending ? <Spinner size="sm" label="Booking…" /> : null}
+      Book one
     </Button>
   );
 }
 
+/**
+ * Cancels a booking. The member's own goes in one tap; someone else's (a
+ * captain or the item's lead doing it) asks first, naming whose it is.
+ */
 export function CancelBookingButton({
   bookingId,
+  text,
   label,
+  confirmFor,
+  className,
 }: {
   bookingId: string;
+  /** What the button says: "Cancel my booking", "Cancel booking". */
+  text: React.ReactNode;
   /** "Cancel my booking of Cooler box", "Cancel Sam's booking". */
   label: string;
+  /** Whose booking it is, when it is not the viewer's own: asks first. */
+  confirmFor?: string;
+  className?: string;
 }) {
   const { pending, run } = useOneTap();
+  const [confirming, setConfirming] = React.useState(false);
+  const cancel = () =>
+    run(
+      () => cancelBookingAction({ bookingId }),
+      "Booking cancelled",
+      () => setConfirming(false),
+    );
   return (
-    <Button
-      size="sm"
-      variant="ghost"
-      disabled={pending}
-      onClick={() =>
-        run(() => cancelBookingAction({ bookingId }), "Booking cancelled")
-      }
-      aria-label={label}
-    >
-      {pending ? <Spinner size="sm" label="Cancelling…" /> : <X aria-hidden />}
-      Cancel
-    </Button>
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        className={className}
+        disabled={pending}
+        onClick={() => (confirmFor ? setConfirming(true) : cancel())}
+        aria-label={label}
+      >
+        {pending ? <Spinner size="sm" label="Cancelling…" /> : null}
+        {text}
+      </Button>
+      {confirmFor && (
+        <ConfirmDialog
+          open={confirming}
+          onOpenChange={setConfirming}
+          title={`Cancel ${confirmFor}'s booking?`}
+          description="Their unit goes back to the camp for someone else to book. Tell them you did."
+          confirmLabel="Cancel booking"
+          cancelLabel="Keep it"
+          destructive
+          pending={pending}
+          onConfirm={cancel}
+        />
+      )}
+    </>
   );
 }
 
 // --- Loans ------------------------------------------------------------------------
 
 /** Lend some to another camp: their camp's name and site address only. */
-export function LendButton({ itemId, name }: { itemId: string; name: string }) {
+function LendDialog({
+  itemId,
+  name,
+  open,
+  onOpenChange: setOpen,
+}: {
+  itemId: string;
+  name: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const router = useRouter();
   const blank = { quantity: "1", borrowerCamp: "", borrowerAddress: "" };
-  const [open, setOpen] = React.useState(false);
   const [form, setForm] = React.useState(blank);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | null>(null);
@@ -517,7 +589,7 @@ export function LendButton({ itemId, name }: { itemId: string; name: string }) {
         setError(result.error);
         return;
       }
-      toast.success("Loan logged");
+      toast.success("Lent out");
       setOpen(false);
       setForm(blank);
       router.refresh();
@@ -526,19 +598,15 @@ export function LendButton({ itemId, name }: { itemId: string; name: string }) {
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
-        <HandHelping aria-hidden />
-        Lend out
-      </Button>
       <Dialog open={open} onOpenChange={close}>
         <DialogContent>
           <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
             <DialogHeader>
-              <DialogTitle>Lend {name}</DialogTitle>
+              <DialogTitle>Lend out</DialogTitle>
               <DialogDescription>
-                Write down the camp that borrowed it and where they are. No
-                names or phone numbers: the address is enough to go and ask for
-                it back.
+                {name}. Write down the camp that borrowed it and where they are.
+                No names or phone numbers: the address is enough to go and ask
+                for it back.
               </DialogDescription>
             </DialogHeader>
             <Field
@@ -602,7 +670,7 @@ export function LendButton({ itemId, name }: { itemId: string; name: string }) {
                 Cancel
               </Button>
               <Button type="submit" disabled={pending}>
-                {pending ? "Saving…" : "Log loan"}
+                {pending ? "Saving…" : "Lend out"}
               </Button>
             </DialogFooter>
           </form>
@@ -612,26 +680,47 @@ export function LendButton({ itemId, name }: { itemId: string; name: string }) {
   );
 }
 
+/** "Lend out" in the item page's Lent out box, for an editor. */
+export function LendButton({ itemId, name }: { itemId: string; name: string }) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        Lend out
+      </Button>
+      <LendDialog
+        itemId={itemId}
+        name={name}
+        open={open}
+        onOpenChange={setOpen}
+      />
+    </>
+  );
+}
+
 export function ReturnLoanButton({
   loanId,
   what,
+  className,
 }: {
   loanId: string;
   what: string;
+  className?: string;
 }) {
   const { pending, run } = useOneTap();
   return (
     <Button
       size="sm"
       variant="outline"
+      className={className}
       disabled={pending}
       onClick={() =>
         run(() => returnLoanAction({ loanId }), "Marked as returned")
       }
       aria-label={`Mark ${what} returned`}
     >
-      {pending ? <Spinner size="sm" label="Saving…" /> : <Undo2 aria-hidden />}
-      Returned
+      {pending ? <Spinner size="sm" label="Saving…" /> : null}
+      Mark returned
     </Button>
   );
 }
