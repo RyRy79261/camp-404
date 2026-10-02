@@ -276,68 +276,37 @@ test.describe("windows fit their own width (test-mode)", () => {
       .toBeLessThanOrEqual(0);
   });
 
-  test("Power: the load list and the fuel estimate", async ({
+  test("Power: the answer rail beside the open section, and the rail alone when narrow", async ({
     page,
     request,
   }) => {
     await captain(page, request, "fit-power-cap");
     await seedTeam(request, "fit-power-cap", "power_and_lighting", true);
+    await page.request.post("/api/test/seed-power", {
+      data: { authUserId: "fit-power-cap" },
+    });
 
-    let win = await openWindow(page, "/power/loads", "Load list");
-    // One load, so the list (ten columns and Edit and Remove) is drawn.
-    await win.getByRole("button", { name: "Add load", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Add a load" });
-    await dialog
-      .getByRole("textbox", { name: "Name", exact: true })
-      .fill("Deep freeze");
-    await dialog.getByLabel("Area").fill("kitchen");
-    await dialog.getByRole("combobox", { name: "Category" }).click();
-    await page.getByRole("option", { name: "Lighting (decorative)" }).click();
-    await dialog
-      .getByRole("spinbutton", { name: "Watts each", exact: true })
-      .fill("480");
-    await dialog.getByRole("radio", { name: "Hours a day" }).click();
-    await dialog.getByLabel("Hours it runs each day").fill("6");
-    await dialog.getByRole("button", { name: "Add load" }).click();
-    await expect(page.getByText("Load added")).toBeVisible();
-    win = await openWindow(page, "/power/loads", "Load list");
-    const loads = dataTable(win, "Load list");
-    const edit = win
-      .getByRole("button", { name: "Edit Deep freeze" })
-      .filter({ visible: true });
-
-    const connected = win.getByRole("article", { name: "Connected load" });
-    const peak = win.getByRole("article", { name: "Estimated peak" });
-    await resizeWindowTo(page, win, NARROW);
-    await expectFits(win);
-    await expectTablesFit(win);
-    await expectStacked(connected, peak);
-    await expect(edit).toBeVisible();
-    // At about the size a window opens at, the ten columns are a table only
-    // if they fit; otherwise cards. Never a table scrolled sideways with
-    // Edit out of sight (main put it past the window's edge here).
+    const win = await openWindow(page, "/power/loads", "Power");
+    const rail = win.getByRole("navigation", { name: "Power" });
+    const section = win.getByRole("heading", { level: 2, name: "Load list" });
+    const edit = win.getByRole("button", { name: "Edit Coffee urn" });
+    // At the size a window opens at, the rail sits beside the section and
+    // every row's Edit is in sight: the list's columns fit the window.
     await resizeWindowTo(page, win, WIDE);
     await expectFits(win);
-    await expectTablesFit(win);
-    await expectBeside(connected, peak);
+    await expectBeside(rail, section);
     await expect(edit).toBeVisible();
-    // Maximised on the 1440 screen, the table has the room it needs.
-    await win.getByRole("button", { name: /^Full screen / }).click();
-    await expectTablesFit(win);
-    await expect(win.getByRole("table", { name: "Load list" })).toBeVisible();
-    await expect.poll(() => tableFrameTop(loads)).toBe(1);
-    await expect(edit).toBeVisible();
-    await win.getByRole("button", { name: /^Restore / }).click();
-
-    win = await openWindow(page, "/power/fuel", "Fuel estimate");
-    const generator = win.getByText("Generator", { exact: true });
-    const second = win.getByText("Second generator (a note)", { exact: true });
+    // Narrow, the section stands alone, with a way back to the rail.
     await resizeWindowTo(page, win, NARROW);
     await expectFits(win);
-    await expectStacked(generator, second);
+    await expect(rail).toBeHidden();
+    await expect(
+      win.getByRole("link", { name: "‹ All of Power" }),
+    ).toBeVisible();
+    await expect(edit).toBeVisible();
+    // The rail stays in reach while a long section scrolls beside it.
     await resizeWindowTo(page, win, WIDE);
-    await expectFits(win);
-    await expectBeside(generator, second);
+    await expectSticksInWindow(rail.getByRole("link", { name: /Grid/ }));
   });
 
   test("Payments: the ledger's frame and the year's figures above it", async ({

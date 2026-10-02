@@ -1,12 +1,5 @@
 import type { FuelLine } from "@camp404/core";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@camp404/ui/components/card";
-import {
   Table,
   TableBody,
   TableCell,
@@ -16,58 +9,49 @@ import {
 } from "@camp404/ui/components/table";
 import { formatNumber, litres } from "@/lib/power-copy";
 
-// The fuel page's result panels (#254), composed as the load list's: plain
-// tables in cards, as AfrikaBurn's status board lays its tables out.
+// The fuel page's working (#254), folded away under the answer: the days, and
+// how the litres are worked out, each opened only by whoever wants them.
 // Presentational only: every figure arrives computed on the server from the
 // core fuel functions. No money here: only litres and cans. There is no
 // schedule comparison: the camp runs the generator 24/7 (owner, 2026-09-24).
 
-/** Each day on site against its litres and the kWh the generator delivers. */
-export function FuelDayByDayCard({
+/**
+ * Each day on site against its litres, shown only when the days differ (a
+ * load runs on some days only); otherwise one sentence says they are equal.
+ */
+export function FuelDayByDay({
   days,
 }: {
   days: { label: string; litres: number; kWh: number }[];
 }) {
   return (
-    <Card
-      role="article"
-      aria-labelledby="fuel-day-by-day"
-      className="h-full min-w-0"
-    >
-      <CardHeader>
-        <CardTitle id="fuel-day-by-day" className="text-base">
-          Day by day
-        </CardTitle>
-        <CardDescription>
-          On the plan&apos;s schedule. A load with a day range counts only on
-          its days.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="p-0 pb-2">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="pl-6">Day</TableHead>
-              <TableHead className="text-right">Litres</TableHead>
-              <TableHead className="pr-6 text-right">kWh</TableHead>
+    <details className="mb-4 border border-border bg-card">
+      <summary className="cursor-pointer p-4 text-sm font-semibold">
+        Each day on site
+      </summary>
+      <Table aria-label="Day by day">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="pl-4">Day</TableHead>
+            <TableHead className="text-right">Litres</TableHead>
+            <TableHead className="pr-4 text-right">kWh</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {days.map((day) => (
+            <TableRow key={day.label}>
+              <TableCell className="pl-4 tabular-nums">{day.label}</TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatNumber(day.litres, 1, true)}
+              </TableCell>
+              <TableCell className="pr-4 text-right tabular-nums">
+                {formatNumber(day.kWh, 1, true)}
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
-            {days.map((day) => (
-              <TableRow key={day.label}>
-                <TableCell className="pl-6 tabular-nums">{day.label}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {formatNumber(day.litres, 2, true)}
-                </TableCell>
-                <TableCell className="pr-6 text-right tabular-nums">
-                  {formatNumber(day.kWh, 2, true)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+          ))}
+        </TableBody>
+      </Table>
+    </details>
   );
 }
 
@@ -75,7 +59,7 @@ export function FuelDayByDayCard({
  * How the litres are worked out: the straight line through the datasheet's
  * two points, and where it meets no load (the idle burn).
  */
-export function FuelMethodCard({
+export function FuelMethod({
   generator,
 }: {
   generator: {
@@ -87,13 +71,11 @@ export function FuelMethodCard({
   } | null;
 }) {
   return (
-    <Card role="article" aria-labelledby="fuel-method">
-      <CardHeader>
-        <CardTitle id="fuel-method" className="text-base">
-          How this is worked out
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
+    <details className="mb-4 border border-border bg-card">
+      <summary className="cursor-pointer p-4 text-sm font-semibold">
+        How the litres a day are worked out
+      </summary>
+      <div className="flex flex-col gap-3 px-4 pb-4 text-[13px] leading-5 text-muted-foreground">
         <p>
           A generator&apos;s datasheet gives two points: how long a full tank
           lasts at half load and at full load. A straight line through them
@@ -136,10 +118,10 @@ export function FuelMethodCard({
         <p>
           Each hour the generator runs burns the idle litres plus the
           line&apos;s rise for that hour&apos;s load (kW ÷ power factor ÷ rated
-          kVA). An hour under half load is multiplied by the extra margin at low
-          load. Energy used in hours the generator is off is left out, with a
-          warning. The safety margin is added to the litres for the burn, and
-          the cans are those litres in cans, less the cans already owned.
+          kVA). An hour under half load is multiplied by the extra fuel when
+          lightly loaded. Energy used in hours the generator is off is left out,
+          with a warning. The safety margin is added to the litres for the burn,
+          and the cans are those litres in cans, less the cans already owned.
         </p>
         {generator && (
           <p className="text-xs">
@@ -148,7 +130,7 @@ export function FuelMethodCard({
             10% of rated load.
           </p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </details>
   );
 }

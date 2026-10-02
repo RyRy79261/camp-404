@@ -145,6 +145,7 @@ describe("the car list", () => {
         driverUserId: ada.id,
         driverName: "Ada",
         vehicle: "Toyota Hilux",
+        vehicleMake: "Toyota",
         departureCity: "Cape Town",
         seatsOffered: 3,
         canTow: true,
@@ -189,7 +190,12 @@ describe("the car list", () => {
     await coming(db, waiting.id, "waitlisted");
     await approved(db, "Silent");
 
-    expect((await listUnseated()).map((m) => m.name)).toEqual(["Maybe", "Yes"]);
+    expect(
+      (await listUnseated()).map((m) => ({ name: m.name, status: m.status })),
+    ).toEqual([
+      { name: "Maybe", status: "maybe" },
+      { name: "Yes", status: "applied" },
+    ]);
   });
 });
 

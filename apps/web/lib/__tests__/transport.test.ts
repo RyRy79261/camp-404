@@ -268,7 +268,10 @@ describe("Transport: the database and the test store agree", () => {
         { driverName: "Cai", riders: [{ name: "Fay" }] },
       ],
       requests: [{ name: "Dee", driverUserId: null }],
-      unseated: [{ name: "Dee" }, { name: "Gus" }],
+      unseated: [
+        { name: "Dee", status: "applied" },
+        { name: "Gus", status: "maybe" },
+      ],
       drives: true,
     });
     expect(fromStore).toEqual(fromDb);

@@ -12,22 +12,25 @@ import {
   seedTeam,
 } from "./_helpers";
 
-// Power on site and before it (#255, #256, #257; test-mode). A Power &
-// Lighting lead keeps each page; a lead of another team (Kitchen) and a plain
-// member read it and find every control disabled with the reason beside it.
+// Power on site and before it (#255, #256, #257; test-mode), in the owner's
+// approved redesign (option B, the answer rail). A Power & Lighting lead keeps
+// each section; a lead of another team (Kitchen) and a plain member read the
+// same section as content, with no button to press.
 //
-//  - Refuelling: five full 20 L cans (100 L). Two refuellings of 10 L, six
-//    hours apart, from Can 1: 40 L a day, 80 L left, 2 days. A third at
-//    18:00 from Can 2: 70 L left, 1.8 days, below the 2-day warning.
+//  - Refuelling: there is no signal at the burn, so the paper sheet is the
+//    record and the lead types its lines in after. Five full 20 L cans
+//    (100 L), three lines of 10 L: 70 L in stock. A correction is a new
+//    line; the old one stays, marked Replaced.
 //  - Grid: a 3000 W load plugged in at the kitchen, fed by a 10 A cable, is
-//    13 A: over its rating, and the page says so.
-//  - Readiness: the checklist starts from the template and ticks; the work
-//    plan lands on the task board once; the sharing agreement refuses a phone
-//    number for the contact and saves a role.
+//    13 A: over its rating, and the answer names the run. No cable counts as
+//    the camp's until someone says so.
+//  - Readiness: the plan's generator's checklist starts from the template
+//    and ticks; the work plan lands on the task board once.
+//  - Sharing, its own section: the agreement refuses a phone number for the
+//    contact and saves a role; until a split is agreed it says so.
 //  - The paper sheets print on their own, with no desktop around them.
 
-const REFUSAL =
-  "Only captains and Power & Lighting leads can change the power plan.";
+const READ_ONLY = "Only captains and Power & Lighting leads change this.";
 
 async function approvedMember(
   page: Page,
@@ -41,18 +44,24 @@ async function approvedMember(
   await completeOnboarding(request, id);
 }
 
-async function open(page: Page, path: string, heading: string) {
+/** Open a Power section and wait for its own heading. */
+async function open(page: Page, path: string, title: string) {
   await page.goto(path);
   await expect(
-    page.getByRole("heading", { level: 1, name: heading }),
+    page.getByRole("heading", { level: 1, name: "Power" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 2, name: title }),
   ).toBeVisible();
 }
+
+const answer = (page: Page) => page.getByRole("region", { name: "The answer" });
 
 /** The issue's generator, added on the fuel estimate. */
 async function addGenerator(page: Page) {
   await open(page, "/power/fuel", "Fuel estimate");
   await page
-    .getByRole("button", { name: "Add generator", exact: true })
+    .getByRole("button", { name: "Add a generator", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "Add a generator" });
   await dialog.getByRole("textbox", { name: "Model" }).fill("Test 5.5");
@@ -65,8 +74,21 @@ async function addGenerator(page: Page) {
   await dialog
     .getByRole("spinbutton", { name: "Runtime at 100% load (h)" })
     .fill("5.5");
+  await dialog.getByRole("combobox", { name: "Whose it is" }).click();
+  await page.getByRole("option", { name: "Camp", exact: true }).click();
   await dialog.getByRole("button", { name: "Add generator" }).click();
   await expect(page.getByText("Generator added")).toBeVisible();
+}
+
+/** Put the generator in the year's plan. */
+async function planGenerator(page: Page) {
+  await open(page, "/power/fuel", "Fuel estimate");
+  await page.getByRole("button", { name: "Change the plan" }).click();
+  const plan = page.getByRole("dialog", { name: "The plan" });
+  await plan.getByRole("combobox", { name: "Generator" }).click();
+  await page.getByRole("option", { name: "Test 5.5 (5.5 kVA)" }).click();
+  await plan.getByRole("button", { name: "Save plan" }).click();
+  await expect(page.getByText("Fuel plan saved")).toBeVisible();
 }
 
 async function pick(page: Page, combobox: string, option: string) {
@@ -74,16 +96,16 @@ async function pick(page: Page, combobox: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
-async function logRefuel(
-  page: Page,
-  when: string,
-  litres: string,
-  can: string,
-) {
+/** Type in one line of the paper sheet. */
+async function typeIn(page: Page, when: string, litres: string, can: string) {
   await page
-    .getByRole("button", { name: "Log refuelling", exact: true })
+    .getByRole("button", { name: "Type in from the sheet", exact: true })
     .click();
-  const dialog = page.getByRole("dialog", { name: "Log a refuelling" });
+  const dialog = page.getByRole("dialog", {
+    name: "Type in a line from the sheet",
+  });
+  // Nothing is guessed: the time is the sheet's, typed in.
+  await expect(dialog.getByLabel("When")).toHaveValue("");
   await dialog.getByLabel("When").fill(when);
   await dialog.getByRole("spinbutton", { name: "Litres put in" }).fill(litres);
   await pick(page, "From can", can);
@@ -91,16 +113,15 @@ async function logRefuel(
   await expect(dialog).toHaveCount(0);
 }
 
-function daysLeft(page: Page) {
-  return page.getByRole("article", { name: "Days of fuel left" });
-}
+const logRows = (page: Page) =>
+  page.getByRole("list", { name: "Refuelling log" }).getByRole("listitem");
 
 test.describe("power on site (test-mode)", () => {
   test.beforeEach(async ({ request }) => {
     await resetTestState(request);
   });
 
-  test("a P&L lead logs refuellings and the days of fuel left drop; a Kitchen lead only reads", async ({
+  test("a P&L lead types in the paper sheet and the stock drops; a Kitchen lead only reads", async ({
     page,
     request,
   }) => {
@@ -109,40 +130,25 @@ test.describe("power on site (test-mode)", () => {
     await addGenerator(page);
 
     await open(page, "/power/fuel-log", "Refuelling");
-    await expect(page.getByText("No cans yet")).toBeVisible();
+    await expect(page.getByText("No cans yet.")).toBeVisible();
+    await expect(page.getByText("Nothing typed in yet.")).toBeVisible();
 
     await page.getByRole("button", { name: "Add cans", exact: true }).click();
     const cans = page.getByRole("dialog", { name: "Add cans" });
     await cans.getByRole("spinbutton", { name: "How many" }).fill("5");
     await cans.getByRole("button", { name: "Add cans" }).click();
     await expect(page.getByText("5 cans added")).toBeVisible();
-    await expect(
-      page.getByRole("article", { name: "Fuel on hand" }),
-    ).toContainText("100.0 L");
+    await expect(answer(page)).toContainText("100 L in stock");
 
-    await logRefuel(page, "2026-04-25T06:00", "10", "Can 1 (20 L)");
-    // One refuelling is no rate yet.
-    await expect(page.getByRole("article", { name: "Using" })).toContainText(
-      "Log two refuellings",
-    );
-    await logRefuel(page, "2026-04-25T12:00", "10", "Can 1 (10 L)");
-    await expect(page.getByRole("article", { name: "Using" })).toContainText(
-      "40 L",
-    );
-    await expect(daysLeft(page)).toContainText(/left\s*2\s*warns/);
-    await expect(page.getByText(/^Fuel is running low/)).toHaveCount(0);
-
-    await logRefuel(page, "2026-04-25T18:00", "10", "Can 2 (20 L)");
-    await expect(daysLeft(page)).toContainText(/left\s*1\.8\s*warns/);
-    await expect(page.getByText(/^Fuel is running low/)).toBeVisible();
-    await expect(
-      page.getByRole("article", { name: "Fuel on hand" }),
-    ).toContainText("70.0 L");
+    await typeIn(page, "2026-04-25T06:00", "10", "Can 1 (20 L)");
+    await typeIn(page, "2026-04-25T12:00", "10", "Can 1 (10 L)");
+    await typeIn(page, "2026-04-25T18:00", "10", "Can 2 (20 L)");
+    await expect(answer(page)).toContainText("70 L in stock");
+    await expect(logRows(page)).toHaveCount(3);
 
     // A correction is a new entry; the old one stays, marked Replaced.
     await page
       .getByRole("button", { name: /^Correct the entry of Sat 25 Apr, 18:00/ })
-      .filter({ visible: true })
       .click();
     const fix = page.getByRole("dialog", {
       name: /^Correct the entry of Sat 25 Apr, 18:00/,
@@ -150,33 +156,34 @@ test.describe("power on site (test-mode)", () => {
     await fix.getByRole("spinbutton", { name: "Litres put in" }).fill("12");
     await fix.getByRole("button", { name: "Log correction" }).click();
     await expect(page.getByText("Correction logged")).toBeVisible();
+    await expect(answer(page)).toContainText("68 L in stock");
+    await expect(logRows(page)).toHaveCount(4);
     await expect(
-      page.getByRole("article", { name: "Fuel on hand" }),
-    ).toContainText("68.0 L");
-    await expect(
-      page.getByText("Replaced", { exact: true }).filter({ visible: true }),
+      page.getByRole("list", { name: "Refuelling log" }).getByText("Replaced", {
+        exact: true,
+      }),
     ).toHaveCount(1);
 
-    // A lead of Kitchen reads it all and changes nothing.
+    // A lead of Kitchen reads it all and has nothing to press but the sheet.
     await approvedMember(page, request, "site-kitchen", "Kit Chen");
     await seedTeam(request, "site-kitchen", "kitchen", true);
     await open(page, "/power/fuel-log", "Refuelling");
+    await expect(answer(page)).toContainText("68 L in stock");
+    await expect(logRows(page)).toHaveCount(4);
+    await expect(page.getByText(READ_ONLY)).toBeVisible();
     await expect(
-      page.getByRole("article", { name: "Fuel on hand" }),
-    ).toContainText("68.0 L");
-    await expect(page.getByText(REFUSAL)).toBeVisible();
+      page.getByRole("link", { name: "Print the log sheet" }),
+    ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /^Log refuelling/ }),
-    ).toBeDisabled();
-    await expect(
-      page.getByRole("button", { name: /^Add cans/ }),
-    ).toBeDisabled();
-    await expect(
-      page.getByRole("button", { name: /^Save warning/ }),
-    ).toBeDisabled();
+      page.getByRole("button", { name: "Type in from the sheet" }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Add cans" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Correct / })).toHaveCount(
+      0,
+    );
   });
 
-  test("the grid shows a run over its cable's rating; a member only reads", async ({
+  test("the grid names the run over its cable's rating; a member only reads", async ({
     page,
     request,
   }) => {
@@ -185,7 +192,7 @@ test.describe("power on site (test-mode)", () => {
 
     // One load of 3000 W, all day.
     await open(page, "/power/loads", "Load list");
-    await page.getByRole("button", { name: "Add load", exact: true }).click();
+    await page.getByRole("button", { name: "Add a load", exact: true }).click();
     const load = page.getByRole("dialog", { name: "Add a load" });
     await load
       .getByRole("textbox", { name: "Name", exact: true })
@@ -197,8 +204,8 @@ test.describe("power on site (test-mode)", () => {
     await load.getByRole("button", { name: "Add load" }).click();
     await expect(page.getByText("Load added")).toBeVisible();
 
-    await open(page, "/power/grid", "Grid plan");
-    await expect(page.getByText("No grid yet")).toBeVisible();
+    await open(page, "/power/grid", "Grid");
+    await expect(page.getByText("No grid yet.")).toBeVisible();
 
     const addPoint = async (
       name: string,
@@ -207,7 +214,7 @@ test.describe("power on site (test-mode)", () => {
       amps: string | null,
     ) => {
       await page
-        .getByRole("button", { name: "Add point", exact: true })
+        .getByRole("button", { name: "Add a point", exact: true })
         .click();
       const dialog = page.getByRole("dialog", { name: "Add a point" });
       await dialog.getByRole("textbox", { name: "Name" }).fill(name);
@@ -224,50 +231,75 @@ test.describe("power on site (test-mode)", () => {
     await addPoint("Main junction", "Junction", "Genny", "16");
     await addPoint("Kitchen", "End point", "Main junction", "10");
 
-    await pick(page, "Where Urn and fridges plugs in", "Kitchen (End point)");
-    const kitchen = page.getByRole("listitem", { name: "Kitchen" });
-    await expect(kitchen).toContainText("Over its rating");
-    await expect(kitchen).toContainText("Carries 13 A of 10 A (130%)");
-    await expect(
-      page.getByRole("listitem", { name: "Main junction" }),
-    ).toContainText("Near its limit");
-    await expect(page.getByText(/^One cable carries more/)).toBeVisible();
-
-    // A plain member reads the grid and cannot change it.
-    await approvedMember(page, request, "grid-member", "Mem Ber");
-    await open(page, "/power/grid", "Grid plan");
-    await expect(page.getByRole("listitem", { name: "Kitchen" })).toContainText(
-      "Over its rating",
+    await pick(page, "Where Urn and fridges plugs in", "Kitchen");
+    await expect(answer(page)).toContainText(
+      "Kitchen is over its rating: 13.0 A on a 10 A run.",
     );
-    await expect(page.getByText(REFUSAL)).toBeVisible();
+    const points = page.getByRole("list", { name: "Grid points" });
+    const kitchen = points.getByRole("listitem", { name: "Kitchen" });
+    await expect(kitchen).toContainText("13.0 of 10 A");
+    await expect(kitchen).toContainText("Urn and fridges");
     await expect(
-      page.getByRole("button", { name: /^Add point/ }),
-    ).toBeDisabled();
+      points.getByRole("listitem", { name: "Main junction" }),
+    ).toContainText("Near limit");
+
+    // The cables: none is the camp's until someone says so.
+    const cables = page.getByRole("region", { name: "Cables and adapters" });
+    await expect(cables).toContainText("2 not checked yet.");
+    await cables
+      .getByRole("listitem", { name: "Cable" })
+      .first()
+      .getByRole("button", { name: "Have it" })
+      .click();
+    await expect(cables).toContainText("1 not checked yet.");
+
+    // A plain member reads the grid and has nothing to press.
+    await approvedMember(page, request, "grid-member", "Mem Ber");
+    await open(page, "/power/grid", "Grid");
+    await expect(answer(page)).toContainText("Kitchen is over its rating");
+    await expect(page.getByText(READ_ONLY)).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /^Edit Kitchen/ }),
-    ).toBeDisabled();
+      page.getByRole("region", { name: "Cables and adapters" }),
+    ).toContainText("Not checked yet");
+    await expect(page.getByRole("button", { name: "Add a point" })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole("button", { name: "Edit Kitchen" }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("combobox", { name: "Where Urn and fridges plugs in" }),
     ).toHaveCount(0);
   });
 
-  test("readiness: the checklist ticks, the work plan goes on the board once, and sharing names a role", async ({
+  test("readiness ticks and puts the work plan on the board once; sharing names a role", async ({
     page,
     request,
   }) => {
     await approvedMember(page, request, "ready-lead", "Pat Ready");
     await seedTeam(request, "ready-lead", "power_and_lighting", true);
     await addGenerator(page);
+    await planGenerator(page);
 
-    await open(page, "/power/readiness", "Generator readiness");
-    const card = page.getByRole("article", { name: "Test 5.5" });
-    await expect(card).toContainText("Not started this year.");
-    await card.getByRole("button", { name: "Start the checklist" }).click();
-    await expect(card).toContainText("0 of 9 done");
-    await card
+    await open(page, "/power/readiness", "Readiness");
+    await expect(
+      page.getByText("The Test 5.5's checklist is not started."),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Start the checklist for Test 5.5" })
+      .click();
+    await expect(answer(page)).toContainText(
+      "0 of 9 checks done on the Test 5.5.",
+    );
+    await page
       .getByRole("checkbox", { name: "Starts and runs under load: not done" })
       .click();
-    await expect(card).toContainText("1 of 9 done");
+    await expect(answer(page)).toContainText(
+      "1 of 9 checks done on the Test 5.5.",
+    );
+    await expect(
+      page.getByRole("list", { name: "Done" }).getByRole("listitem"),
+    ).toHaveCount(1);
 
     await page
       .getByRole("button", { name: "Put the work plan on the task board" })
@@ -282,7 +314,11 @@ test.describe("power on site (test-mode)", () => {
       page.getByRole("button", { name: "Put the work plan on the task board" }),
     ).toHaveCount(0);
 
-    const sharing = page.getByRole("article", {
+    // Sharing, its own section.
+    await open(page, "/power/sharing", "Sharing");
+    await expect(page.getByText("No sharing this year.")).toBeVisible();
+    await page.getByRole("button", { name: "Set up sharing" }).click();
+    const sharing = page.getByRole("dialog", {
       name: "Sharing with a neighbouring camp",
     });
     await sharing.getByLabel("Neighbouring camp").fill("Camp Moonbeam");
@@ -297,24 +333,31 @@ test.describe("power on site (test-mode)", () => {
       .fill("They cover 00:00–08:00");
     await sharing.getByRole("button", { name: "Save agreement" }).click();
     await expect(page.getByText("Sharing agreement saved")).toBeVisible();
+    // The plan's generator, and no 100% / 0% split that looks agreed.
+    await expect(answer(page)).toContainText(
+      "Camp Moonbeam shares our Test 5.5",
+    );
+    await expect(answer(page)).toContainText("The split isn't agreed yet.");
     await expect(
-      sharing.getByRole("definition").filter({ hasText: "100%" }),
-    ).toHaveCount(1);
+      page.getByRole("table", { name: "The agreement" }),
+    ).toContainText("their power lead");
+    await expect(
+      page.getByRole("link", { name: "Print the summary" }),
+    ).toHaveCount(0);
 
-    // A lead of Kitchen reads it and changes nothing.
+    // A lead of Kitchen reads both and has nothing to press.
     await approvedMember(page, request, "ready-kitchen", "Kit Ready");
     await seedTeam(request, "ready-kitchen", "kitchen", true);
-    await open(page, "/power/readiness", "Generator readiness");
-    await expect(page.getByRole("article", { name: "Test 5.5" })).toContainText(
-      "1 of 9 done",
-    );
-    await expect(page.getByText(REFUSAL)).toBeVisible();
+    await open(page, "/power/readiness", "Readiness");
+    await expect(answer(page)).toContainText("1 of 9 checks done");
+    await expect(page.getByText(READ_ONLY)).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Edit / })).toHaveCount(0);
+    await open(page, "/power/sharing", "Sharing");
+    await expect(answer(page)).toContainText("Camp Moonbeam shares");
     await expect(
-      page.getByRole("checkbox", { name: /^Starts and runs under load/ }),
-    ).toBeDisabled();
-    await expect(
-      page.getByRole("button", { name: /^Save agreement/ }),
-    ).toBeDisabled();
+      page.getByRole("button", { name: "Change the agreement" }),
+    ).toHaveCount(0);
   });
 
   test("the paper sheets print on their own, with no desktop", async ({

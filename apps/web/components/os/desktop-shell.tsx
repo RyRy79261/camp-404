@@ -193,6 +193,9 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   roster: XL_SIZE,
   payments: XL_SIZE,
   inventory: XL_SIZE,
+  // The lounge's offers table and its one-day programme (redesign A,
+  // 2026-10-01) are drawn for a wide window.
+  lounge: XL_SIZE,
   applications: XL_SIZE,
   "edit-questionnaire": XL_SIZE,
   "edit-recipe": XL_SIZE,

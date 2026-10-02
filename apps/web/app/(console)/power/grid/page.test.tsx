@@ -1,166 +1,162 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The grid plan (#256). Every approved member reads it; a run's amps are
-// worked out on the server from what plugs in beyond it: a 2300 W kitchen on
-// a 10 A cable is 10 A (100%, near its limit), and the 16 A main junction
-// feeding it and a 460 W lounge carries 12 A (75%, fine). A lounge cable with
-// no rating says "Rating unknown", never a guess.
+// The grid in the approved redesign (option B): the answer first (which run
+// is over its rating, by how much), then a card per point with what feeds it,
+// how hard its cable works and what plugs in, then the loads not plugged in
+// yet, then the cables and adapters, none counted as the camp's until someone
+// says so (the audit found "we have the cable" ticked by default). The camp is
+// the mock-up's own (tests/power-camp.ts): Kitchen carries 12.0 A on a 10 A
+// reel, the main junction 14.1 A of 16, and three loads have no point yet.
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
 }));
-vi.mock("@/app/(console)/power/grid/actions", () => ({
-  addGridNodeAction: vi.fn(),
-  updateGridNodeAction: vi.fn(),
-  removeGridNodeAction: vi.fn(),
-  assignLoadAction: vi.fn(),
-  copyLastYearGridAction: vi.fn(),
+vi.mock("@/lib/test-mode", () => ({
+  usesTestStore: () => true,
+  isE2ETestMode: () => true,
 }));
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn(async () => []) }));
-vi.mock("@/lib/power", () => ({
-  listPowerLoads: vi.fn(),
-  getPowerPlan: vi.fn(),
-}));
-vi.mock("@/lib/power-site", () => ({
-  listGridNodes: vi.fn(),
-  listLoadGridPoints: vi.fn(),
-  previousGridCycle: vi.fn(async () => null),
-}));
+vi.mock("@/app/(console)/power/grid/actions");
 
+import { updateGridNodeAction } from "@/app/(console)/power/grid/actions";
 import { captainPageGate } from "@/lib/captain-gate";
-import { getPowerPlan, listPowerLoads } from "@/lib/power";
-import { POWER_REFUSAL } from "@/lib/power-copy";
-import { listGridNodes, listLoadGridPoints } from "@/lib/power-site";
+import { POWER_READ_ONLY, PRINT_GRID_SHEET_PATH } from "@/lib/power-copy";
 import { getLeadTeams } from "@/lib/users";
+import { setUpPowerCamp, type PowerCamp } from "@/tests/power-camp";
+import { renderServer } from "@/tests/render-server";
 import PowerGridPage from "./page";
 
-function node(
-  id: string,
-  name: string,
-  kind: string,
-  parentId: string | null,
-  cableRatedAmps: number | null,
-) {
-  return {
-    id,
-    cycle: 2026,
-    name,
-    kind,
-    parentId,
-    cable: null,
-    cableLengthM: null,
-    cableGaugeMm2: null,
-    cableRatedAmps,
-    adapter: null,
-    haveCable: true,
-    haveAdapter: true,
-    sort: 0,
-    version: 1,
-  };
-}
-
-function load(id: string, name: string, wattsEach: number) {
-  return {
-    id,
-    cycle: 2026,
-    name,
-    area: "camp",
-    category: "other",
-    quantity: 1,
-    wattsEach,
-    surgeWattsEach: null,
-    dutyPct: 100,
-    schedule: "full_time",
-    hoursPerDay: null,
-    windows: null,
-    fromDay: null,
-    toDay: null,
-    volts: 230,
-    current: "ac",
-    owner: "camp",
-    neighbourCamp: null,
-    inventoryItemId: null,
-    circuit: null,
-    sort: 0,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-}
+let camp: PowerCamp;
 
 async function renderAs(
+  who: keyof PowerCamp,
   rank: "camp_member" | "team_lead" | "captain",
   leads: string[] = [],
 ) {
   vi.mocked(captainPageGate).mockResolvedValue({
-    campUser: { id: "viewer" },
+    campUser: { id: camp[who].id },
     rank,
     cleared: true,
   } as never);
-  vi.mocked(getLeadTeams).mockResolvedValue(leads);
-  render(await PowerGridPage());
+  vi.mocked(getLeadTeams).mockResolvedValue(leads as never);
+  await renderServer(PowerGridPage());
 }
+
+const point = (name: string) =>
+  within(screen.getByRole("list", { name: "Grid points" })).getByRole(
+    "listitem",
+    { name },
+  );
 
 afterEach(cleanup);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getPowerPlan).mockResolvedValue({ daysOnSite: 11 } as never);
-  vi.mocked(listGridNodes).mockResolvedValue([
-    node("gen", "Genny", "generator", null, null),
-    node("main", "Main junction", "junction", "gen", 16),
-    node("kitchen", "Kitchen", "end_point", "main", 10),
-    node("lounge", "Lounge", "end_point", "main", null),
-  ] as never);
-  vi.mocked(listPowerLoads).mockResolvedValue([
-    load("l1", "Urn", 2300),
-    load("l2", "Lights", 460),
-    load("l3", "Spare fridge", 900),
-  ] as never);
-  vi.mocked(listLoadGridPoints).mockResolvedValue({
-    l1: "kitchen",
-    l2: "lounge",
-  });
+  camp = setUpPowerCamp();
 });
 
-describe("the grid plan", () => {
-  it("works out each run's amps and says how hard its cable works", async () => {
-    await renderAs("camp_member");
-    const point = (name: string) => screen.getByRole("listitem", { name });
-    expect(within(point("Kitchen")).getByText("Near its limit")).toBeTruthy();
-    expect(
-      within(point("Kitchen")).getByText("Carries 10 A of 10 A (100%)"),
-    ).toBeTruthy();
-    expect(within(point("Main junction")).getByText("Fine")).toBeTruthy();
-    expect(
-      within(point("Main junction")).getByText("Carries 12 A of 16 A (75%)"),
-    ).toBeTruthy();
-    expect(within(point("Lounge")).getByText("Rating unknown")).toBeTruthy();
-    expect(screen.getByText(/1 load is not on the grid yet/)).toBeTruthy();
-  });
-
-  it("shows a member where loads plug in as text, and every control disabled", async () => {
-    await renderAs("camp_member");
-    const refusal = screen.getByText(POWER_REFUSAL);
-    const add = screen.getByRole("button", { name: /^Add point/ });
-    expect(add).toHaveProperty("disabled", true);
-    expect(add.getAttribute("aria-describedby")).toBe(refusal.id);
-    expect(
-      screen.getByRole("button", { name: /^Edit Kitchen/ }),
-    ).toHaveProperty("disabled", true);
-    expect(screen.queryAllByRole("combobox")).toHaveLength(0);
-    expect(screen.getAllByText("Not on the grid yet").length).toBeGreaterThan(
-      0,
+describe("the grid", () => {
+  it("names the run that is over its rating, with the amps on it", async () => {
+    await renderAs("mem", "camp_member");
+    const answer = screen.getByRole("region", { name: "The answer" });
+    expect(answer.textContent).toContain(
+      "Kitchen is over its rating: 12.0 A on a 10 A run.",
     );
+    // The advice names the biggest load there and the next cable up.
+    expect(answer.textContent).toContain(
+      "Give the coffee urn its own run, or lay a 16 A cable to the Kitchen.",
+    );
+    for (const line of [
+      "Over 1",
+      "Near limit 1",
+      "Fine 2",
+      "Not plugged in 3",
+    ]) {
+      expect(within(answer).getByText(line)).toBeTruthy();
+    }
   });
 
-  it("gives a Power & Lighting lead a picker for each load", async () => {
-    await renderAs("team_lead", ["power_and_lighting"]);
-    expect(screen.queryByText(POWER_REFUSAL)).toBeNull();
+  it("draws each point with what feeds it, its load and what plugs in", async () => {
+    await renderAs("mem", "camp_member");
+    const kitchen = point("Kitchen");
+    expect(kitchen.textContent).toContain("From Main junction · 15 m reel");
+    expect(kitchen.textContent).toContain("12.0 of 10 A");
+    expect(within(kitchen).getByText("Over")).toBeTruthy();
+    expect(kitchen.textContent).toContain("Coffee urn");
+    const main = point("Main junction");
+    expect(main.textContent).toContain("14.1 of 16 A");
+    expect(within(main).getByText("Near limit")).toBeTruthy();
+    expect(main.textContent).toContain("Kitchen run");
+    expect(main.textContent).toContain("Lounge run");
+  });
+
+  it("lists the loads not plugged in yet, as text for a reader", async () => {
+    await renderAs("mem", "camp_member");
+    const off = screen.getByRole("list", { name: "Not plugged in yet" });
     expect(
-      screen.getAllByRole("combobox", { name: "Where Urn plugs in" }).length,
-    ).toBeGreaterThan(0);
+      within(off)
+        .getAllByRole("listitem")
+        .map((r) => r.getAttribute("aria-label"))
+        .sort(),
+    ).toEqual(["Angle grinder", "Drinks fridge", "Phone charging station"]);
+    expect(within(off).queryAllByRole("combobox")).toHaveLength(0);
+  });
+
+  it("counts no cable or adapter as the camp's until someone says so", async () => {
+    await renderAs("mem", "camp_member");
+    const card = screen.getByRole("region", { name: "Cables and adapters" });
+    expect(card.textContent).toContain(
+      "5 not checked yet. None counts as ours until someone says so.",
+    );
+    const rows = within(
+      screen.getByRole("list", { name: "Cables and adapters" }),
+    ).getAllByRole("listitem");
+    expect(rows).toHaveLength(5);
+    for (const row of rows) {
+      expect(within(row).getByText("Not checked yet")).toBeTruthy();
+    }
+  });
+
+  it("gives a member and a Kitchen lead the grid sheet and no button", async () => {
+    await renderAs("mem", "camp_member");
+    expect(screen.getByText(POWER_READ_ONLY)).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Print the grid sheet" })
+        .getAttribute("href"),
+    ).toBe(PRINT_GRID_SHEET_PATH);
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    cleanup();
+    await renderAs("kim", "team_lead", ["kitchen"]);
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("gives a Power & Lighting lead the points, the pickers and the checks", async () => {
+    await renderAs("pat", "team_lead", ["power_and_lighting"]);
+    expect(screen.getByRole("button", { name: "Add a point" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit Kitchen" })).toBeTruthy();
+    expect(
+      screen.getByRole("combobox", { name: "Where Drinks fridge plugs in" }),
+    ).toBeTruthy();
+    // Have it / Need to get, neither picked: nobody has checked yet.
+    const reel = screen.getByRole("group", { name: "15 m reel" });
+    for (const b of within(reel).getAllByRole("button")) {
+      expect(b.getAttribute("aria-pressed")).toBe("false");
+    }
+  });
+
+  it("saves one cable's answer without answering its adapter", async () => {
+    vi.mocked(updateGridNodeAction).mockResolvedValue({ ok: true } as never);
+    await renderAs("pat", "team_lead", ["power_and_lighting"]);
+    const cable = screen.getByRole("group", { name: "10 m cable" });
+    fireEvent.click(within(cable).getByRole("button", { name: "Have it" }));
+    await vi.waitFor(() => expect(updateGridNodeAction).toHaveBeenCalled());
+    expect(vi.mocked(updateGridNodeAction).mock.calls[0]![0]).toMatchObject({
+      name: "Lounge",
+      haveCable: true,
+      haveAdapter: null,
+    });
   });
 });
