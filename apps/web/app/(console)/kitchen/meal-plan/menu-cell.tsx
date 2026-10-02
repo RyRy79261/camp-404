@@ -195,9 +195,10 @@ export function MenuCell({
               {plates > 0 ? <LineStatus line={line} plates={plates} /> : null}
             </span>
             <RemoveButton line={line} />
-            {line.check && plates > 0 && (
+            {line.check && (plates > 0 || line.check.prep.length > 0) && (
               <div className="col-span-2 row-start-3 page-md:col-span-3 page-md:row-start-2">
                 <MealChecks
+                  prepOnly={plates <= 0}
                   view={line.check}
                   ctx={{
                     itemId: line.id,

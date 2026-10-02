@@ -120,14 +120,31 @@ function mealWords(ctx: MealContext): string {
 export function MealChecks({
   ctx,
   view,
+  prepOnly = false,
 }: {
   ctx: MealContext;
   view: MealCheckView;
+  /**
+   * A meal saved at 0 plates: only its existing prep steps, each with its ×,
+   * so a step still on the board or the sheet can be taken off. No flags and
+   * no new step.
+   */
+  prepOnly?: boolean;
 }) {
   const [planning, setPlanning] = useState(false);
   const [fixing, setFixing] = useState(false);
   const [prepping, setPrepping] = useState(false);
   const redFoods = view.red.map((r) => r.allergen);
+  if (prepOnly) {
+    return (
+      <div className="flex flex-col" data-os-private>
+        {view.prep.map((step) => (
+          <PrepLine key={step.id} step={step} ctx={ctx} />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col" data-os-private>
       {view.red.length > 0 &&

@@ -122,6 +122,11 @@ export function storeDropMenuItemExtras(itemId: string, actorId: string): void {
   s.steps = s.steps.filter((x) => x.menuItemId !== itemId);
 }
 
+/** Whether a year has prep steps (the meal plan refuses to clear Day 1). */
+export function storeHasPrepSteps(cycle: number): boolean {
+  return state().steps.some((s) => s.cycle === cycle);
+}
+
 /** The twin of the meal plan's re-dating when Day 1 moves. */
 export function storeRedatePrepSteps(
   cycle: number,

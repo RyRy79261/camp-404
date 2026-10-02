@@ -1,7 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { POWER_TEAM } from "@camp404/core";
-import { KitchenRecipe, type Team } from "@camp404/types";
+import {
+  DAY_ONE_NEEDED_FOR_PREP,
+  KitchenRecipe,
+  type Team,
+} from "@camp404/types";
 import type { CampConfig } from "../camp-config";
 import { listSheetAllergies } from "../daily-sheet";
 import {
@@ -38,7 +42,7 @@ import {
   getShoppingPricesFor,
   setShoppingPrice,
 } from "../kitchen-prices";
-import { setMealPlan } from "../meal-plan";
+import { getMealPlan, setMealPlan } from "../meal-plan";
 import * as schema from "../schema";
 import { assignTeam, setLead } from "../team-memberships";
 import { useTestDb } from "./_harness";
@@ -823,6 +827,51 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
           tasks: 2,
         },
       });
+    });
+  });
+
+  describe("Day 1 cleared", () => {
+    const plan = (
+      actorId: string,
+      firstDay: string | null,
+      expectedVersion: number,
+    ) =>
+      setMealPlan({
+        actorId,
+        daysOnSite: 2,
+        firstDay,
+        days: [
+          { breakfast: 0, dinner: 50 },
+          { breakfast: 60, dinner: 50 },
+        ],
+        expectedVersion,
+      });
+
+    it("is refused while there are prep steps, and nothing changes", async () => {
+      const { captain, itemId } = await setUp();
+      const step = await addPrepStep({
+        actorId: captain.id,
+        itemId,
+        what: "Toast the oats",
+        when: "before_leaving",
+        date: "2027-04-19",
+      });
+      expect(step.ok).toBe(true);
+      expect(await plan(captain.id, null, 1)).toEqual({
+        ok: false,
+        error: DAY_ONE_NEEDED_FOR_PREP,
+      });
+      const kept = await getMealPlan();
+      expect(kept).toMatchObject({ firstDay: "2027-04-22", version: 1 });
+      const [stored] = await h.db().select().from(schema.kitchenPrepSteps);
+      expect(stored!.dueDate).toBe("2027-04-19");
+      expect(await audit("camp.kitchen_meal_plan.changed")).toHaveLength(1);
+    });
+
+    it("still works with no prep steps", async () => {
+      const { captain } = await setUp();
+      expect(await plan(captain.id, null, 1)).toEqual({ ok: true, version: 2 });
+      expect((await getMealPlan()).firstDay).toBeNull();
     });
   });
 });

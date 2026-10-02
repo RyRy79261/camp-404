@@ -12,6 +12,7 @@ import {
   PRICE_CHANGED,
   PRICE_RANDS_ONLY,
 } from "@camp404/db/kitchen-prices";
+import { DAY_ONE_NEEDED_FOR_PREP } from "@camp404/types";
 import { testStore } from "../test-store";
 import { dailySheetTestStore } from "../test-store-daily-sheet";
 import { dietaryTestStore } from "../test-store-dietary";
@@ -314,5 +315,31 @@ describe("meal twins", () => {
       .filter((t) => t.team === "kitchen");
     expect(task!.dueAt).toEqual(new Date("2027-04-22T00:00:00+02:00"));
     expect(task!.description).toBe("For Day 2 breakfast, Sun 25 Apr");
+  });
+
+  it("refuse to clear Day 1 while there are prep steps, as the database does", () => {
+    const { cook, itemId } = setUp();
+    x.addPrepStep({
+      actorId: cook.id,
+      itemId,
+      what: "Soak",
+      when: "same_day",
+      date: null,
+    });
+    expect(
+      testStore.setMealPlan({
+        actorId: cook.id,
+        daysOnSite: 2,
+        firstDay: null,
+        days: [
+          { breakfast: 0, dinner: 40 },
+          { breakfast: 60, dinner: 40 },
+        ],
+        expectedVersion: 1,
+      }),
+    ).toEqual({ ok: false, error: DAY_ONE_NEEDED_FOR_PREP });
+    expect(testStore.getMealPlan(testStore.currentCycleNumber()).firstDay).toBe(
+      "2027-04-22",
+    );
   });
 });

@@ -11,6 +11,7 @@ import {
   MEAL_PLAN_DEFAULT_DAYS,
   MealPlanInput,
   type MealPlanDay,
+  DAY_ONE_NEEDED_FOR_PREP,
 } from "@camp404/types";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
@@ -201,6 +202,17 @@ export async function setMealPlan(
       }
       const cycle = await currentCycleNumber(tx);
       const before = await readMealPlan(tx, cycle);
+      // Prep steps are dated from Day 1: clearing it would leave their dates
+      // and their tasks' deadlines with nothing to follow (#245).
+      if (firstDay === null && before.firstDay !== null) {
+        const [step] = await tx
+          .select({ id: schema.kitchenPrepSteps.id })
+          .from(schema.kitchenPrepSteps)
+          .where(eq(schema.kitchenPrepSteps.cycle, cycle))
+          .limit(1)
+          .for("update");
+        if (step) refuse(DAY_ONE_NEEDED_FOR_PREP);
+      }
       const now = new Date();
       let version: number;
       if (expectedVersion === 0) {

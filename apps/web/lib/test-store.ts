@@ -90,6 +90,7 @@ import { resetKitchenMenuStore } from "./test-store-kitchen-menu";
 import {
   resetKitchenExtrasStore,
   storeAllergenCorrection,
+  storeHasPrepSteps,
   storeRedatePrepSteps,
 } from "./test-store-kitchen-extras";
 import { resetRentalStore } from "./test-store-rental";
@@ -330,6 +331,7 @@ import {
   InkblotRun,
   KitchenRecipe,
   MealPlanInput,
+  DAY_ONE_NEEDED_FOR_PREP,
   PROOFREAD_ANSWER_MAX,
   PlateProofread,
   RECIPE_TEXT_MAX,
@@ -4859,6 +4861,13 @@ export const testStore = {
     const before = storeMealPlan(cycle);
     if (before.version !== expectedVersion) {
       return { ok: false, error: MEAL_PLAN_CHANGED };
+    }
+    if (
+      firstDay === null &&
+      before.firstDay !== null &&
+      storeHasPrepSteps(cycle)
+    ) {
+      return { ok: false, error: DAY_ONE_NEEDED_FOR_PREP };
     }
     const version = expectedVersion + 1;
     S.mealPlans.set(cycle, {

@@ -214,3 +214,11 @@ export type AddPrepStepInput = z.infer<typeof AddPrepStepInput>;
 
 export const RemovePrepStepInput = z.object({ stepId: RowId });
 export type RemovePrepStepInput = z.infer<typeof RemovePrepStepInput>;
+
+/**
+ * Why a meal plan cannot be saved with Day 1 cleared: its prep steps are dated
+ * from Day 1, and a step with no Day 1 has no date to keep. The editor shows
+ * it beside the date box.
+ */
+export const DAY_ONE_NEEDED_FOR_PREP =
+  "Day 1 needs a date while there are prep steps: remove them first, or set a date.";

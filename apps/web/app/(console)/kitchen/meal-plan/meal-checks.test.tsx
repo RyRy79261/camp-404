@@ -365,6 +365,52 @@ describe("Change allergens under every recipe", () => {
   });
 });
 
+describe("a meal saved at 0 plates", () => {
+  it("still shows its prep steps with their ×, and offers no new one", async () => {
+    await renderAs("team_lead", {
+      plans: [],
+      prepSteps: [
+        {
+          id: "p0",
+          menuItemId: "i-oats",
+          what: "Toast the oats",
+          timing: "before_leaving",
+          dueDate: "2027-04-20",
+          onBoard: true,
+        },
+      ],
+    });
+    cleanup();
+    vi.mocked(getMealPlan).mockResolvedValue({
+      cycle: 2027,
+      daysOnSite: 3,
+      firstDay: "2027-04-22",
+      days: [
+        { breakfast: 0, dinner: 48 },
+        { breakfast: 60, dinner: 55 },
+        { breakfast: 0, dinner: 50 },
+      ],
+      version: 3,
+      updatedAt: null,
+    });
+    render(await MealPlanPage());
+    const oats = meal("Day 3, breakfast");
+    expect(oats.textContent).toContain("Toast the oats");
+    expect(within(oats).queryByTestId("flag-red")).toBeNull();
+    expect(
+      within(oats).queryByRole("button", { name: /Add a prep step/ }),
+    ).toBeNull();
+    await act(async () => {
+      fireEvent.click(
+        within(oats).getByRole("button", {
+          name: /Take this prep step off: Toast the oats/,
+        }),
+      );
+    });
+    expect(removePrepStepAction).toHaveBeenCalledWith({ stepId: "p0" });
+  });
+});
+
 describe("prep steps", () => {
   it("asks what and when, says where each choice lands, and has no person responsible", async () => {
     await renderAs("team_lead");

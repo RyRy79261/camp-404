@@ -6,6 +6,7 @@ import { CalendarDays, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { mealPlanDayLabel } from "@camp404/core";
 import {
+  DAY_ONE_NEEDED_FOR_PREP,
   MEALS_OF_THE_DAY,
   MEAL_PLAN_MAX_DAYS,
   MealPlanInput,
@@ -217,7 +218,12 @@ function MealPlanEditorForm({
         return;
       }
       if (!result.ok) {
-        setRefusal(result.error);
+        // A problem with the date shows beside the date box (#245).
+        if (result.error === DAY_ONE_NEEDED_FOR_PREP) {
+          setErrors({ firstDay: result.error });
+        } else {
+          setRefusal(result.error);
+        }
         return;
       }
       saved();

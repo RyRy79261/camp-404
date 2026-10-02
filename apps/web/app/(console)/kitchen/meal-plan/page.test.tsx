@@ -47,6 +47,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh, push: vi.fn() }),
 }));
 
+import { DAY_ONE_NEEDED_FOR_PREP } from "@camp404/types";
 import { toast } from "@camp404/ui/components/toast";
 import type { KitchenMenu, MenuBookRecipe } from "@camp404/db/kitchen-menu";
 import { captainPageGate } from "@/lib/captain-gate";
@@ -398,6 +399,29 @@ describe("the meal plan as a Kitchen lead edits it", () => {
     await save();
     expect(screen.getByText("Count at most 30 days.")).toBeTruthy();
     expect(saveMealPlanAction).not.toHaveBeenCalled();
+  });
+
+  it("says beside the date when Day 1 cannot be cleared while there are prep steps", async () => {
+    await renderAs("captain", [], {
+      daysOnSite: 3,
+      days: DAYS,
+      version: 4,
+      firstDay: "2026-04-25",
+    });
+    vi.mocked(saveMealPlanAction).mockResolvedValueOnce({
+      ok: false,
+      error: DAY_ONE_NEEDED_FOR_PREP,
+    });
+    fireEvent.change(screen.getByLabelText("Day 1 date"), {
+      target: { value: "" },
+    });
+    await save();
+    expect(document.getElementById("first-day-error")?.textContent).toBe(
+      DAY_ONE_NEEDED_FOR_PREP,
+    );
+    expect(
+      screen.getByLabelText("Day 1 date").getAttribute("aria-invalid"),
+    ).toBe("true");
   });
 
   it("says why a save was refused, beside Save", async () => {
