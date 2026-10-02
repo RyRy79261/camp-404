@@ -36,11 +36,12 @@ describe("ALWAYS_PRIVATE", () => {
 });
 
 describe("SAFETY_VISIBLE", () => {
-  it("names all three emergency fields", () => {
+  it("names the emergency fields and the dietary pick-list", () => {
     expect(isSafetyVisible("emergencyContacts")).toBe(true);
     expect(isSafetyVisible("allergies")).toBe(true);
     expect(isSafetyVisible("isAnaphylactic")).toBe(true);
-    expect(SAFETY_VISIBLE.size).toBe(3);
+    expect(isSafetyVisible("foodReactions")).toBe(true);
+    expect(SAFETY_VISIBLE.size).toBe(4);
   });
 
   it("does not classify a private field as safety-visible", () => {

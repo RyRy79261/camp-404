@@ -2,15 +2,27 @@ import Link from "next/link";
 import {
   buildShoppingList,
   canTickShoppingList,
+  costBar,
+  costPerPersonDay,
+  foodCost,
   mealPlanDayLabel,
+  personDays,
   snackKey,
   type ShoppingAmount,
 } from "@camp404/core";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { captainPageGate } from "@/lib/captain-gate";
-import { getShoppingFacts } from "@/lib/kitchen-menu";
+import { listBudgetTotals } from "@/lib/claims";
+import {
+  getShoppingFacts,
+  getShoppingPricesFor,
+  type ShoppingPrice,
+} from "@/lib/kitchen-menu";
+import { ledgerCycle } from "@/lib/payments";
 import { MEAL_PLAN_PATH, recipePath } from "@/lib/recipe-copy";
 import { CATEGORY_LABEL, formatAmount, platesLabel } from "@/lib/recipe-labels";
+import { FoodCostBox } from "./food-cost";
+import type { LinePrice } from "./price-editor";
 import {
   NotCountedBox,
   ShoppingListView,
@@ -32,8 +44,43 @@ export const metadata = { title: "Shopping list — Camp 404" };
 // Snacks come last, as typed.
 //
 // Every approved member reads it and may tick (the owner: ticks are shared
-// by the whole camp, and any member may tick). No prices, suppliers, stock or
-// allergen check: each is its own step, not asked for yet.
+// by the whole camp, and any member may tick).
+//
+// Prices and food cost (#245; the owner's Option A of kitchen-prices.html and
+// kitchen-costing.html, 2026-10-02): a captain or a Kitchen lead also gets
+// each line's shop and price, and the food cost box on top (paid and
+// estimated, the Kitchen team's one budget amount, what is left, and per
+// person per day). The prices are read with the viewer, and the read answers
+// null to anyone else (getShoppingPricesFor, checked in @camp404/db): a
+// member's page is built with no price in it at all.
+
+/** Every team's budget, the Kitchen's among them (#242, #317). */
+const KITCHEN_BUDGET_HREF = "/teams/budgets";
+
+const NO_PRICE: LinePrice = {
+  shop: null,
+  amountCents: null,
+  kind: "estimate",
+  version: 0,
+};
+
+function linePrice(
+  prices: ReadonlyMap<string, ShoppingPrice> | null,
+  key: string,
+): { price?: LinePrice } {
+  if (!prices) return {};
+  const p = prices.get(key);
+  return {
+    price: p
+      ? {
+          shop: p.shop,
+          amountCents: p.amountCents,
+          kind: p.kind,
+          version: p.version,
+        }
+      : NO_PRICE,
+  };
+}
 
 /** "2.5 kg", "1–1.5 kg", "10 g + to taste", "To taste". */
 function amountLabel(amount: ShoppingAmount): string {
@@ -43,8 +90,12 @@ function amountLabel(amount: ShoppingAmount): string {
 }
 
 export default async function ShoppingListPage() {
-  const { rank } = await captainPageGate("camp_member");
-  const { plan, menu, snacks, ticks } = await getShoppingFacts();
+  const { rank, campUser } = await captainPageGate("camp_member");
+  const [{ plan, menu, snacks, ticks }, priceRows] = await Promise.all([
+    getShoppingFacts(),
+    getShoppingPricesFor(campUser.id),
+  ]);
+  const prices = priceRows ? new Map(priceRows.map((p) => [p.key, p])) : null;
   const list = buildShoppingList({
     days: plan.days,
     menu: menu.items,
@@ -78,6 +129,7 @@ export default async function ShoppingListPage() {
           href: `${recipePath(s.recipeId)}?plates=${s.plates}`,
         })),
         ...tickState(line.key, amount),
+        ...linePrice(prices, line.key),
       };
     }),
   }));
@@ -94,12 +146,40 @@ export default async function ShoppingListPage() {
           amount,
           sources: [],
           ...tickState(key, amount),
+          ...linePrice(prices, key),
         };
       }),
     });
   }
 
   const empty = groups.length === 0 && list.notCounted.length === 0;
+
+  // The food cost, for the same people as the prices.
+  let costBox = null;
+  if (prices) {
+    const budgets = await listBudgetTotals(await ledgerCycle());
+    const budgetCents = budgets.kitchen?.budgetCents ?? null;
+    const cost = foodCost(
+      groups.flatMap((g) =>
+        g.lines.map((l) => ({
+          name: l.name,
+          amountCents: l.price?.amountCents ?? null,
+          kind: l.price?.kind ?? "estimate",
+        })),
+      ),
+    );
+    const days = personDays(plan.days);
+    costBox = (
+      <FoodCostBox
+        cost={cost}
+        budgetCents={budgetCents}
+        budgetHref={KITCHEN_BUDGET_HREF}
+        perPersonDayCents={costPerPersonDay(cost.totalCents, days)}
+        personDays={days}
+        bar={costBar(cost, budgetCents)}
+      />
+    );
+  }
 
   return (
     <div className="flex min-w-0 flex-col">
@@ -133,7 +213,11 @@ export default async function ShoppingListPage() {
           to fill the list.
         </p>
       ) : (
-        <ShoppingListView groups={groups} canTick={canTickShoppingList(rank)} />
+        <ShoppingListView
+          groups={groups}
+          canTick={canTickShoppingList(rank)}
+          above={costBox}
+        />
       )}
     </div>
   );

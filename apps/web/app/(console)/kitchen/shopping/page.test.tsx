@@ -17,16 +17,32 @@ import type { ShoppingFacts } from "@camp404/db/kitchen-menu";
 // name and All / To buy / Bought; "Tick all" per area; any member ticks.
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
-vi.mock("@/lib/kitchen-menu", () => ({ getShoppingFacts: vi.fn() }));
-vi.mock("./actions", () => ({ setShoppingTicksAction: vi.fn() }));
+vi.mock("@/lib/kitchen-menu", () => ({
+  getShoppingFacts: vi.fn(),
+  getShoppingPricesFor: vi.fn(),
+}));
+vi.mock("@/lib/claims", () => ({ listBudgetTotals: vi.fn() }));
+vi.mock("@/lib/payments", () => ({ ledgerCycle: vi.fn(async () => 2026) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+vi.mock("./actions", () => ({
+  setShoppingTicksAction: vi.fn(),
+  setShoppingPriceAction: vi.fn(),
+}));
 vi.mock("@camp404/ui/components/toast", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 import { toast } from "@camp404/ui/components/toast";
 import { captainPageGate } from "@/lib/captain-gate";
-import { getShoppingFacts } from "@/lib/kitchen-menu";
-import { setShoppingTicksAction } from "./actions";
+import { listBudgetTotals } from "@/lib/claims";
+import {
+  getShoppingFacts,
+  getShoppingPricesFor,
+  type ShoppingPrice,
+} from "@/lib/kitchen-menu";
+import { setShoppingPriceAction, setShoppingTicksAction } from "./actions";
 import ShoppingListPage from "./page";
 
 const DAL = "00000000-0000-4000-8000-000000000001";
@@ -73,6 +89,9 @@ function facts(ticks: ShoppingFacts["ticks"] = []): ShoppingFacts {
             },
           ],
           openPlates: [],
+          allergens: [],
+          allergensMarked: false,
+          allergenRevision: 0,
         },
       },
     },
@@ -82,8 +101,9 @@ function facts(ticks: ShoppingFacts["ticks"] = []): ShoppingFacts {
 }
 
 async function renderAs(
-  rank: "camp_member" | "captain",
+  rank: "camp_member" | "captain" | "team_lead",
   data: ShoppingFacts = facts(),
+  prices: ShoppingPrice[] | null = null,
 ) {
   vi.mocked(captainPageGate).mockResolvedValue({
     campUser: { id: "viewer" },
@@ -91,8 +111,39 @@ async function renderAs(
     cleared: true,
   } as never);
   vi.mocked(getShoppingFacts).mockResolvedValue(data);
+  // The server decides who gets prices (getShoppingPricesFor answers null to
+  // anyone but a captain or a Kitchen lead); the page draws what it gets.
+  vi.mocked(getShoppingPricesFor).mockResolvedValue(prices);
   render(await ShoppingListPage());
 }
+
+/** Text as a person reads it: formatMoney's no-break spaces as spaces. */
+const read = (el: Element | null) =>
+  (el?.textContent ?? "").replace(/\s/g, " ");
+
+const PRICES: ShoppingPrice[] = [
+  {
+    key: "red lentils|g",
+    shop: "Vlei Farm Stall",
+    amountCents: 9600,
+    kind: "estimate",
+    version: 1,
+  },
+  {
+    key: "onions|g",
+    shop: "Tafelberg Wholesale",
+    amountCents: 4950,
+    kind: "paid",
+    version: 2,
+  },
+  {
+    key: "snack:s1",
+    shop: null,
+    amountCents: 19600,
+    kind: "estimate",
+    version: 1,
+  },
+];
 
 const group = (name: string) => screen.getByRole("region", { name });
 /** A line's tick: the line itself, named by its name and amount. */
@@ -104,6 +155,19 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(setShoppingTicksAction).mockResolvedValue({ ok: true });
+  vi.mocked(setShoppingPriceAction).mockResolvedValue({
+    ok: true,
+    data: { version: 2 },
+  });
+  vi.mocked(listBudgetTotals).mockResolvedValue({
+    kitchen: {
+      budgetCents: 350000,
+      spentCents: 0,
+      waitingCents: 0,
+      waitingCount: 0,
+      leftCents: 350000,
+    },
+  } as never);
 });
 
 describe("shopping list page", () => {
@@ -304,5 +368,131 @@ describe("shopping list page", () => {
     await renderAs("camp_member", empty);
     expect(screen.getByText(/Nothing to buy yet/)).toBeTruthy();
     expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  describe("prices and the food cost (#245)", () => {
+    it("builds a member's list with no shop, no price and no food cost", async () => {
+      await renderAs("camp_member");
+      const page = read(document.body);
+      expect(page).not.toMatch(/No shop or price yet|Food cost|estimate|R \d/);
+      expect(screen.queryByRole("region", { name: "Food cost" })).toBeNull();
+      // A snack still has no arrow for a member: nothing to open.
+      expect(screen.queryByRole("button", { name: /Rusks/ })).toBeNull();
+      expect(listBudgetTotals).not.toHaveBeenCalled();
+    });
+
+    it("gives a Kitchen lead each line's shop and price in a grey line, and the food cost on top", async () => {
+      await renderAs("team_lead", facts(), PRICES);
+      const lentils = box("Red lentils").closest("li")!;
+      expect(read(lentils)).toContain("Vlei Farm Stall · R 96,00 estimate");
+      expect(read(box("Onions").closest("li"))).toContain(
+        "Tafelberg Wholesale · R 49,50 paid",
+      );
+      expect(read(box("Salt").closest("li"))).toContain("No shop or price yet");
+
+      const cost = screen.getByRole("region", { name: "Food cost" });
+      const text = read(cost);
+      // 96,00 + 49,50 + 196,00 = 341,50; 49,50 paid, 292,00 estimated.
+      expect(text).toContain("R 341,50");
+      expect(text).toContain("R 49,50 paid");
+      expect(text).toContain("R 292,00 estimated");
+      expect(text).toContain("R 3 500");
+      // Left: 3 500 less 341,50.
+      expect(text).toContain("R 3 158,50");
+      // Two days, each counting its larger meal: 50 + 50 = 100 person-days.
+      expect(text).toContain("R 3,42");
+      expect(text).toContain("Over 100 person-days");
+      expect(text).toContain("10% of the budget");
+      expect(text).toContain("No price yet: Salt.");
+      expect(
+        within(cost).getByRole("link", { name: "Budgets" }),
+      ).toHaveProperty("href", expect.stringContaining("/teams/budgets"));
+    });
+
+    it("opens Shop, Price and This price is above Comes from, and saves a price as rand cents", async () => {
+      await renderAs("captain", facts(), PRICES);
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Shop, price and where it comes from: Red lentils",
+        }),
+      );
+      const price = screen.getByLabelText("Price in rands: Red lentils");
+      expect((price as HTMLInputElement).value).toBe("96,00");
+      expect(screen.getByLabelText("Shop: Red lentils")).toBeTruthy();
+      expect(screen.getByText("Comes from")).toBeTruthy();
+
+      fireEvent.change(price, { target: { value: "99,50" } });
+      await act(async () => {
+        fireEvent.blur(price);
+      });
+      expect(setShoppingPriceAction).toHaveBeenCalledWith({
+        key: "red lentils|g",
+        shop: "Vlei Farm Stall",
+        amountCents: 9950,
+        kind: "estimate",
+        currency: "ZAR",
+        expectedVersion: 1,
+      });
+
+      await act(async () => {
+        fireEvent.click(
+          within(
+            screen.getByRole("group", { name: "This price is: Red lentils" }),
+          ).getByRole("button", { name: "What we paid" }),
+        );
+      });
+      expect(setShoppingPriceAction).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kind: "paid", expectedVersion: 2 }),
+      );
+    });
+
+    it("says beside the boxes when a price can't be read or is refused, and sends nothing for a bad one", async () => {
+      await renderAs("captain", facts(), PRICES);
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Shop, price and where it comes from: Red lentils",
+        }),
+      );
+      const price = screen.getByLabelText("Price in rands: Red lentils");
+      fireEvent.change(price, { target: { value: "$12" } });
+      await act(async () => {
+        fireEvent.blur(price);
+      });
+      expect(screen.getByRole("alert").textContent).toBe(
+        "Type the price in rands, like 96,00.",
+      );
+      expect(setShoppingPriceAction).not.toHaveBeenCalled();
+
+      vi.mocked(setShoppingPriceAction).mockResolvedValue({
+        ok: false,
+        error:
+          "Someone changed this line first. Reload the page to see their shop and price.",
+      });
+      fireEvent.change(price, { target: { value: "12" } });
+      await act(async () => {
+        fireEvent.blur(price);
+      });
+      expect(screen.getByRole("alert").textContent).toContain(
+        "Someone changed this line first",
+      );
+    });
+
+    it("lets a lead price a snack, which comes from no recipe", async () => {
+      await renderAs("captain", facts(), PRICES);
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "Shop, price and where it comes from: Rusks",
+        }),
+      );
+      expect(
+        screen.getByText(
+          "A snack: it is on the list as it is, not from a recipe.",
+        ),
+      ).toBeTruthy();
+      expect(
+        (screen.getByLabelText("Price in rands: Rusks") as HTMLInputElement)
+          .value,
+      ).toBe("196,00");
+    });
   });
 });

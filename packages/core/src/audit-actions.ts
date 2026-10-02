@@ -24,6 +24,14 @@ export const AUDIT_ACTION_LABELS = {
   "camp.kitchen_menu.removed": "Took a recipe off the kitchen's menu",
   "camp.kitchen_snack.added": "Added a snack to the kitchen's list",
   "camp.kitchen_snack.removed": "Took a snack off the kitchen's list",
+  "camp.kitchen_price.set": "Set a shop or a price on the shopping list",
+  "camp.kitchen_allergens.corrected": "Corrected the allergens a recipe holds",
+  "camp.kitchen_allergen_plan.recorded":
+    "Recorded the kitchen's plan for an anaphylaxis on a meal",
+  "camp.kitchen_prep.added": "Added a prep step to a meal",
+  "camp.kitchen_prep.removed": "Took a prep step off a meal",
+  "camp.kitchen_prep.redated":
+    "Moved the prep steps and their tasks with the meal plan's Day 1",
   // No longer written (the settings were removed, 2026-09-24); kept so a row
   // written before still reads.
   "camp.kitchen_settings.changed": "Changed the kitchen settings",

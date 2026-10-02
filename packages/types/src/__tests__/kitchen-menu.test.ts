@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   AddMenuItemInput,
+  AddPrepStepInput,
   AddSnackInput,
+  CorrectRecipeAllergensInput,
+  RecordAllergenPlanInput,
+  RemovePrepStepInput,
   SNACK_AMOUNT_MAX,
+  SetShoppingPriceInput,
 } from "../kitchen-menu";
 
 // The Kitchen menu's and snack list's input shapes (#244, #245): a recipe
@@ -57,5 +62,82 @@ describe("AddSnackInput", () => {
         amount: "x".repeat(SNACK_AMOUNT_MAX + 1),
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("#245 inputs: prices, allergen plans and corrections, prep steps", () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+
+  it("takes a price in rand cents, a blank shop as none, and refuses other money", () => {
+    const ok = SetShoppingPriceInput.parse({
+      key: "onions|g",
+      shop: "  ",
+      amountCents: 4950,
+      kind: "paid",
+      currency: "ZAR",
+      expectedVersion: 0,
+    });
+    expect(ok.shop).toBeNull();
+    expect(
+      SetShoppingPriceInput.safeParse({ ...ok, currency: "USD" }).success,
+    ).toBe(false);
+    expect(
+      SetShoppingPriceInput.safeParse({ ...ok, amountCents: 10.5 }).success,
+    ).toBe(false);
+    expect(
+      SetShoppingPriceInput.safeParse({ ...ok, amountCents: -1 }).success,
+    ).toBe(false);
+  });
+
+  it("needs a plan's words and the foods it covers", () => {
+    const plan = {
+      itemId: id,
+      kind: "portion",
+      details: "One bowl first.",
+      allergens: ["peanuts"],
+      expectedVersion: 0,
+    };
+    expect(RecordAllergenPlanInput.safeParse(plan).success).toBe(true);
+    expect(
+      RecordAllergenPlanInput.safeParse({ ...plan, details: " " }).success,
+    ).toBe(false);
+    expect(
+      RecordAllergenPlanInput.safeParse({ ...plan, allergens: [] }).success,
+    ).toBe(false);
+  });
+
+  it("corrects allergens with each food once", () => {
+    const fix = {
+      recipeId: id,
+      versionId: id,
+      allergens: ["milk"],
+      expectedRevision: 0,
+    };
+    expect(CorrectRecipeAllergensInput.safeParse(fix).success).toBe(true);
+    expect(
+      CorrectRecipeAllergensInput.safeParse({
+        ...fix,
+        allergens: ["milk", "milk"],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("needs a date for a prep step before we leave, and only then", () => {
+    const step = {
+      itemId: id,
+      what: "Soak the oats",
+      when: "day_before",
+      date: "",
+    };
+    expect(AddPrepStepInput.parse(step).date).toBeNull();
+    const leaving = { ...step, when: "before_leaving" };
+    expect(AddPrepStepInput.safeParse(leaving).success).toBe(false);
+    expect(
+      AddPrepStepInput.safeParse({ ...leaving, date: "2027-02-30x" }).success,
+    ).toBe(false);
+    expect(
+      AddPrepStepInput.safeParse({ ...leaving, date: "2027-04-20" }).success,
+    ).toBe(true);
+    expect(RemovePrepStepInput.safeParse({ stepId: id }).success).toBe(true);
   });
 });

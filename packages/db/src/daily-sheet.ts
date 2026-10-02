@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { isComingThisYear } from "@camp404/core";
+import { readFoodReactions, type FoodReactionEntry } from "@camp404/types";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
 
@@ -17,12 +18,15 @@ export interface SheetAllergyRow {
   name: string | null;
   allergies: string | null;
   isAnaphylactic: boolean;
+  /** The dietary pick-list (#245) once saved; null: only the old words. */
+  foods: FoodReactionEntry[] | null;
 }
 
 /**
  * The allergies of every member who is coming this year (said Yes, or a
- * captain accepted them): approved, real, not erased, with allergy words or
- * the severe flag.
+ * captain accepted them): approved, real, not erased, with an allergy on the
+ * dietary pick-list once they have saved it, otherwise with the old form's
+ * allergy words or the severe flag.
  */
 export async function listSheetAllergies(
   cycle: number,
@@ -34,6 +38,8 @@ export async function listSheetAllergies(
       status: schema.campParticipations.status,
       allergies: schema.dietaryRequirements.allergies,
       isAnaphylactic: schema.dietaryRequirements.isAnaphylactic,
+      foodReactions: schema.dietaryRequirements.foodReactions,
+      foodsSavedAt: schema.dietaryRequirements.foodsSavedAt,
     })
     .from(schema.dietaryRequirements)
     .innerJoin(
@@ -54,16 +60,21 @@ export async function listSheetAllergies(
         eq(schema.users.approvalStatus, "approved"),
       ),
     );
-  return rows
-    .filter(
-      (r) =>
-        isComingThisYear(r.status) &&
-        (r.isAnaphylactic || (r.allergies ?? "").trim().length > 0),
-    )
-    .map((r) => ({
-      userId: r.userId,
-      name: r.name,
-      allergies: r.allergies,
-      isAnaphylactic: r.isAnaphylactic,
-    }));
+  return rows.flatMap((r) => {
+    if (!isComingThisYear(r.status)) return [];
+    const foods = r.foodsSavedAt ? readFoodReactions(r.foodReactions) : null;
+    const allergic = foods
+      ? foods.some((f) => f.reaction !== "intolerance")
+      : r.isAnaphylactic || (r.allergies ?? "").trim().length > 0;
+    if (!allergic) return [];
+    return [
+      {
+        userId: r.userId,
+        name: r.name,
+        allergies: r.allergies,
+        isAnaphylactic: r.isAnaphylactic,
+        foods,
+      },
+    ];
+  });
 }

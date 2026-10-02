@@ -119,8 +119,11 @@ test.describe("kitchen menu and shopping list (test-mode)", () => {
     const legumes = page.getByRole("region", { name: "Legumes" });
     await expect(legumes).toContainText("Red lentils");
     await expect(legumes).toContainText("5 kg");
+    // A Kitchen lead's arrow opens the line's shop and price too (#245).
     await legumes
-      .getByRole("button", { name: "Where the Red lentils comes from" })
+      .getByRole("button", {
+        name: "Shop, price and where it comes from: Red lentils",
+      })
       .click();
     const from = legumes.getByRole("list", {
       name: "Where the Red lentils comes from",

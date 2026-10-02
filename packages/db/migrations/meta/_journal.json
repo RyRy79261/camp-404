@@ -645,6 +645,13 @@
       "when": 1790955036445,
       "tag": "0091_report_screenshots",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1790962355349,
+      "tag": "0092_kitchen_prices_allergies_prep",
+      "breakpoints": true
     }
   ]
 }

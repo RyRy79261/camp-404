@@ -28,6 +28,7 @@ import {
   type MealOfTheDay,
 } from "@camp404/types";
 import { testStore } from "./test-store";
+import { storeDropMenuItemExtras } from "./test-store-kitchen-extras";
 
 // The in-memory twins of the Kitchen's menu, snacks and shopping list ticks
 // (@camp404/db/kitchen-menu), for E2E_TEST_MODE. The same rules, sentences
@@ -173,6 +174,8 @@ export function storeRemoveMenuItem(input: {
   const at = items.findIndex((i) => i.id === input.itemId && i.cycle === cycle);
   if (at < 0) return { ok: false, error: MENU_ITEM_GONE };
   items.splice(at, 1);
+  // Its plan and prep steps go with it; their tasks come off the board.
+  storeDropMenuItemExtras(input.itemId, input.actorId);
   return { ok: true };
 }
 

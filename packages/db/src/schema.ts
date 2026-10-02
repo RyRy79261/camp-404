@@ -784,6 +784,19 @@ export const dietaryRequirements = pgTable("dietary_requirements", {
   completedAt: timestamp("completed_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  // The dietary pick-list (#245, owner 2026-10-02): each food the member
+  // reacts to and how ({ food, reaction }: allergy, intolerance or
+  // anaphylaxis, the words in KITCHEN_ALLERGENS), and their diet choices.
+  // Written only by the member's own Dietary needs form. The old form's free
+  // words above stay as they were, shown back to the member to pick again;
+  // nothing converts them. `foods_saved_at` is when the member last saved the
+  // pick-list (null: never, so only the old words are known).
+  foodReactions: jsonb("food_reactions")
+    .$type<{ food: string; reaction: string }[]>()
+    .notNull()
+    .default([]),
+  diets: jsonb("diets").$type<string[]>().notNull().default([]),
+  foodsSavedAt: timestamp("foods_saved_at", { mode: "date" }),
 });
 
 // --- Year-scoped facts ----------------------------------------------------
@@ -2365,6 +2378,129 @@ export const kitchenShoppingTicks = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.cycle, t.itemKey] }),
+  }),
+);
+
+// A shopping line's shop and price for a year (#245; the owner approved
+// Option A, 2026-10-02): the line is named by its key, as the ticks are. The
+// price is for the whole amount on the line, in rand cents (rands only, held
+// by the CHECK), and says whether it is an estimate or what was paid. Set by
+// a captain or a Kitchen lead, audited, compare-and-set on `version`; members
+// are never sent a price.
+export const kitchenShoppingPrices = pgTable(
+  "kitchen_shopping_prices",
+  {
+    cycle: integer("cycle").notNull(),
+    itemKey: text("item_key").notNull(),
+    shop: text("shop"),
+    amountCents: integer("amount_cents"),
+    currency: text("currency").notNull().default("ZAR"),
+    // estimate | paid (PRICE_KINDS)
+    priceKind: text("price_kind").notNull().default("estimate"),
+    version: integer("version").notNull().default(1),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.cycle, t.itemKey] }),
+    currencyCheck: check(
+      "kitchen_shopping_prices_currency_check",
+      sql`${t.currency} = 'ZAR'`,
+    ),
+    amountCheck: check(
+      "kitchen_shopping_prices_amount_check",
+      sql`${t.amountCents} is null or ${t.amountCents} >= 0`,
+    ),
+    kindCheck: check(
+      "kitchen_shopping_prices_kind_check",
+      sql`${t.priceKind} in ('estimate', 'paid')`,
+    ),
+  }),
+);
+
+// A captain's or a Kitchen lead's correction of what a recipe's version holds
+// (#245): the allergens, from KITCHEN_ALLERGENS, replacing the ones Claude
+// marked on its lines. The version itself is never edited by hand. Audited,
+// compare-and-set on `revision`.
+export const recipeAllergenCorrections = pgTable(
+  "recipe_allergen_corrections",
+  {
+    versionId: uuid("version_id")
+      .primaryKey()
+      .references(() => recipeVersions.id, { onDelete: "cascade" }),
+    allergens: jsonb("allergens").$type<string[]>().notNull().default([]),
+    revision: integer("revision").notNull().default(1),
+    setByUserId: uuid("set_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    setAt: timestamp("set_at", { mode: "date" }).notNull().defaultNow(),
+  },
+);
+
+// The kitchen's plan for a recipe on a meal that someone coming is
+// anaphylactic to (#245): a separate portion or a substitution, in words, and
+// the foods it covers (a food added later turns the flag red again). Set by a
+// captain or a Kitchen lead, audited, compare-and-set on `version`; it goes
+// with the recipe off the meal.
+export const kitchenAllergenPlans = pgTable(
+  "kitchen_allergen_plans",
+  {
+    menuItemId: uuid("menu_item_id")
+      .primaryKey()
+      .references(() => kitchenMenuItems.id, { onDelete: "cascade" }),
+    // portion | substitution (ALLERGEN_PLAN_KINDS)
+    kind: text("kind").notNull(),
+    details: text("details").notNull(),
+    allergens: jsonb("allergens").$type<string[]>().notNull().default([]),
+    version: integer("version").notNull().default(1),
+    setByUserId: uuid("set_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    kindCheck: check(
+      "kitchen_allergen_plans_kind_check",
+      sql`${t.kind} in ('portion', 'substitution')`,
+    ),
+  }),
+);
+
+// A prep step under a recipe on a meal (#245; the owner approved Option A,
+// 2026-10-02): what to do and when it is due. One due before Day 1 has a task
+// on the task board for the Kitchen (`task_id`); one due on a day on site
+// prints on that day's site sheet and has no task. Removing the step cancels
+// its task in the same transaction; the step goes with the recipe off the
+// meal. No person responsible (the owner).
+export const kitchenPrepSteps = pgTable(
+  "kitchen_prep_steps",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    menuItemId: uuid("menu_item_id")
+      .notNull()
+      .references(() => kitchenMenuItems.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    what: text("what").notNull(),
+    // day_before | same_day | before_leaving (PREP_TIMINGS)
+    timing: text("timing").notNull(),
+    dueDate: date("due_date", { mode: "string" }).notNull(),
+    taskId: uuid("task_id").references(() => tasks.id, {
+      onDelete: "set null",
+    }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    itemIdx: index("kitchen_prep_steps_item_idx").on(t.menuItemId),
+    cycleIdx: index("kitchen_prep_steps_cycle_idx").on(t.cycle, t.dueDate),
+    timingCheck: check(
+      "kitchen_prep_steps_timing_check",
+      sql`${t.timing} in ('day_before', 'same_day', 'before_leaving')`,
+    ),
   }),
 );
 

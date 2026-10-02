@@ -262,6 +262,43 @@ describe("allergyGroups", () => {
       ),
     ).toEqual([{ text: "Severe allergy", severe: true, names: ["Thandi"] }]);
   });
+
+  it("reads the dietary pick-list over the old words, one entry per food, intolerances left off", () => {
+    expect(
+      allergyGroups(
+        [
+          {
+            userId: "a",
+            allergies: "peanuts maybe",
+            isAnaphylactic: false,
+            foods: [
+              { food: "peanuts", reaction: "anaphylaxis" },
+              { food: "milk", reaction: "intolerance" },
+              { food: "sesame", reaction: "allergy" },
+            ],
+          },
+          {
+            userId: "b",
+            allergies: null,
+            isAnaphylactic: false,
+            foods: [{ food: "sesame", reaction: "allergy" }],
+          },
+          {
+            userId: "c",
+            allergies: "Shellfish",
+            isAnaphylactic: false,
+            foods: null,
+          },
+          { userId: "d", allergies: "Nuts", isAnaphylactic: true, foods: [] },
+        ],
+        (id) => people.get(id) ?? "?",
+      ),
+    ).toEqual([
+      { text: "Peanuts", severe: true, names: ["Thandi"] },
+      { text: "Sesame", severe: false, names: ["Thandi", "Kyle"] },
+      { text: "Shellfish", severe: false, names: ["Aisha"] },
+    ]);
+  });
 });
 
 describe("the day's dishes", () => {

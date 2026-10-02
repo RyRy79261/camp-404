@@ -161,6 +161,7 @@ export function testModeSource(
           quantity: 4,
           unit: "piece",
           preparation: "finely chopped",
+          allergens: ["onion_garlic"],
         },
         {
           name: "Red lentils",
@@ -168,6 +169,7 @@ export function testModeSource(
           quantity: 2.5,
           unit: "kg",
           preparation: "rinsed",
+          allergens: [],
         },
         {
           name: "Coconut milk",
@@ -175,8 +177,15 @@ export function testModeSource(
           quantity: 2,
           unit: "l",
           note: "Five 400 ml tins.",
+          allergens: [],
         },
-        { name: "Ground cumin", category: "spice", quantity: 2, unit: "tbsp" },
+        {
+          name: "Ground cumin",
+          category: "spice",
+          quantity: 2,
+          unit: "tbsp",
+          allergens: [],
+        },
       ],
       steps: [
         {

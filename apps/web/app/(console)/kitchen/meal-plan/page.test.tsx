@@ -24,6 +24,8 @@ vi.mock("@/lib/kitchen-menu", () => ({
   getKitchenMenu: vi.fn(),
   getSnacks: vi.fn(),
   listMenuBook: vi.fn(),
+  getMenuDietaryFor: vi.fn(async () => null),
+  getMealChecks: vi.fn(async () => ({ plans: [], prepSteps: [] })),
 }));
 vi.mock("./actions", () => ({
   saveMealPlanAction: vi.fn(),
@@ -31,6 +33,10 @@ vi.mock("./actions", () => ({
   removeMenuItemAction: vi.fn(),
   addSnackAction: vi.fn(),
   removeSnackAction: vi.fn(),
+  recordAllergenPlanAction: vi.fn(),
+  correctAllergensAction: vi.fn(),
+  addPrepStepAction: vi.fn(),
+  removePrepStepAction: vi.fn(),
 }));
 vi.mock("../recipes/actions", () => ({ proofreadPlatesAction: vi.fn() }));
 vi.mock("@camp404/ui/components/toast", () => ({
@@ -41,6 +47,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh, push: vi.fn() }),
 }));
 
+import { DAY_ONE_NEEDED_FOR_PREP } from "@camp404/types";
 import { toast } from "@camp404/ui/components/toast";
 import type { KitchenMenu, MenuBookRecipe } from "@camp404/db/kitchen-menu";
 import { captainPageGate } from "@/lib/captain-gate";
@@ -158,6 +165,9 @@ const MENU: KitchenMenu = {
         { plates: 50, lines: [] },
       ],
       openPlates: [],
+      allergens: [],
+      allergensMarked: false,
+      allergenRevision: 0,
     },
     [RICE]: {
       recipeId: RICE,
@@ -166,6 +176,9 @@ const MENU: KitchenMenu = {
       categories: [],
       counts: [{ plates: 50, lines: [] }],
       openPlates: [25],
+      allergens: [],
+      allergensMarked: false,
+      allergenRevision: 0,
     },
   },
 };
@@ -388,6 +401,29 @@ describe("the meal plan as a Kitchen lead edits it", () => {
     expect(saveMealPlanAction).not.toHaveBeenCalled();
   });
 
+  it("says beside the date when Day 1 cannot be cleared while there are prep steps", async () => {
+    await renderAs("captain", [], {
+      daysOnSite: 3,
+      days: DAYS,
+      version: 4,
+      firstDay: "2026-04-25",
+    });
+    vi.mocked(saveMealPlanAction).mockResolvedValueOnce({
+      ok: false,
+      error: DAY_ONE_NEEDED_FOR_PREP,
+    });
+    fireEvent.change(screen.getByLabelText("Day 1 date"), {
+      target: { value: "" },
+    });
+    await save();
+    expect(document.getElementById("first-day-error")?.textContent).toBe(
+      DAY_ONE_NEEDED_FOR_PREP,
+    );
+    expect(
+      screen.getByLabelText("Day 1 date").getAttribute("aria-invalid"),
+    ).toBe("true");
+  });
+
   it("says why a save was refused, beside Save", async () => {
     vi.mocked(saveMealPlanAction).mockResolvedValue({
       ok: false,
@@ -408,7 +444,13 @@ describe("the meal plan as a Kitchen lead edits it", () => {
       within(dinner)
         .getAllByRole("listitem")
         .map((li) => li.textContent),
-    ).toEqual(["Camp dalVerified×", "RiceWith Claude…×", "+ Add a recipe"]);
+    ).toEqual([
+      // #245: under each recipe, its allergy line (these versions were
+      // written before Claude marked allergens) and "+ Prep step".
+      "Camp dalVerified×Allergens not marked yet.+ Prep stepChange allergens",
+      "RiceWith Claude…×Allergens not marked yet.+ Prep stepChange allergens",
+      "+ Add a recipe",
+    ]);
     expect(
       within(dinner).getByRole("button", {
         name: "Take Rice off Day 1, dinner",

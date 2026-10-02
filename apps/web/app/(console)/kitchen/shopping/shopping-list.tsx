@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ChevronDown, TriangleAlert } from "lucide-react";
 import { cn } from "@camp404/ui/lib/utils";
@@ -9,6 +9,7 @@ import { FilterToggle, SearchField, TickGlyph } from "@/components/kitchen/kit";
 import { FIELD_LABEL, QUIET_BUTTON } from "@/components/kitchen/labels";
 import { UNREACHABLE } from "@/lib/recipe-copy";
 import { setShoppingTicksAction } from "./actions";
+import { PriceEditor, PriceLine, type LinePrice } from "./price-editor";
 
 // The shopping list's body (the owner's approved mock-up,
 // design/approved-ks.html, Option A, 2026-10-01): one checklist with every
@@ -22,6 +23,11 @@ import { setShoppingTicksAction } from "./actions";
 // at once and is saved behind it; a refused one comes back unticked with a
 // toast. A line ticked at another amount than the list needs now reads as not
 // bought, and says what it was ticked at.
+//
+// A captain or a Kitchen lead also sees each line's shop and price, in a grey
+// line under its name, and edits them in the line's open panel (#245, the
+// owner's Option A, 2026-10-02; price-editor.tsx). Every other member gets
+// the list as it was: their lines carry no price at all.
 
 export interface ShoppingSourceView {
   /** "Day 1 · Mon 26 Apr, dinner". */
@@ -42,6 +48,8 @@ export interface ShoppingLineView {
   ticked: boolean;
   /** The amount it was ticked at, when that is not what the list needs now. */
   tickedWhen: string | null;
+  /** Its shop and price: only ever sent to a captain or a Kitchen lead. */
+  price?: LinePrice;
 }
 
 export interface ShoppingGroupView {
@@ -136,9 +144,12 @@ export function NotCountedBox({ items }: { items: readonly NotCountedView[] }) {
 export function ShoppingListView({
   groups,
   canTick,
+  above,
 }: {
   groups: readonly ShoppingGroupView[];
   canTick: boolean;
+  /** Drawn between the notes on top and the filter (the food cost box). */
+  above?: ReactNode;
 }) {
   const [query, setQuery] = useState("");
   const [show, setShow] = useState<Show>("all");
@@ -217,6 +228,7 @@ export function ShoppingListView({
 
   return (
     <div className="flex flex-col">
+      {above}
       <div className="mb-4 flex flex-col gap-3 page-md:flex-row page-md:items-end page-md:gap-4">
         <label className="flex min-w-0 flex-col gap-1.5 page-md:w-80">
           <span className={FIELD_LABEL}>Filter</span>
@@ -341,6 +353,14 @@ function Line({
   onTick: (value: boolean) => void;
 }) {
   const sourcesId = `sources-${line.key.replace(/[^a-z0-9]+/gi, "-")}`;
+  const [price, setPrice] = useState(line.price);
+  const [seenPrice, setSeenPrice] = useState(line.price);
+  if (seenPrice !== line.price) {
+    // A refreshed list is the truth for the grey line.
+    setSeenPrice(line.price);
+    setPrice(line.price);
+  }
+  const opens = line.sources.length > 0 || price !== undefined;
   const name = (
     <span className="min-w-0 text-[15px] leading-snug font-medium page-md:text-sm">
       <span className={cn(done && "text-muted-foreground line-through")}>
@@ -352,6 +372,7 @@ function Line({
           {line.amount ? ` The list now needs ${line.amount}.` : ""}
         </span>
       )}
+      {price && <PriceLine price={price} />}
     </span>
   );
   const amount = (
@@ -397,12 +418,16 @@ function Line({
           {amount}
         </div>
       )}
-      {line.sources.length > 0 ? (
+      {opens ? (
         <button
           type="button"
           aria-expanded={open}
           aria-controls={sourcesId}
-          aria-label={`Where the ${line.name} comes from`}
+          aria-label={
+            price
+              ? `Shop, price and where it comes from: ${line.name}`
+              : `Where the ${line.name} comes from`
+          }
           onClick={() => onOpen(!open)}
           className={cn(
             "grid place-items-center text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
@@ -417,38 +442,56 @@ function Line({
       ) : (
         <span aria-hidden />
       )}
-      {line.sources.length > 0 && open && (
+      {opens && open && (
         <div
           id={sourcesId}
           className="col-span-2 mr-12 mb-3 ml-4 border-l-2 border-input pl-3 page-md:mr-10 page-md:ml-12"
         >
-          <span className={cn(FIELD_LABEL, "block pb-1")}>Comes from</span>
-          <ul
-            aria-label={`Where the ${line.name} comes from`}
-            className="m-0 list-none p-0"
-          >
-            {line.sources.map((s, i) => (
-              <li
-                key={i}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 border-t border-border py-2 text-[13px]"
+          {price && (
+            <PriceEditor
+              lineKey={line.key}
+              name={line.name}
+              price={price}
+              onSaved={setPrice}
+            />
+          )}
+          {line.sources.length === 0 ? (
+            <p className="py-1 text-[13px] text-muted-foreground">
+              A snack: it is on the list as it is, not from a recipe.
+            </p>
+          ) : (
+            <>
+              <span className={cn(FIELD_LABEL, "block pb-1")}>Comes from</span>
+              <ul
+                aria-label={`Where the ${line.name} comes from`}
+                className="m-0 list-none p-0"
               >
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <Link
-                    href={s.href}
-                    className="font-semibold hover:text-primary hover:underline"
+                {line.sources.map((s, i) => (
+                  <li
+                    key={i}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 border-t border-border py-2 text-[13px]"
                   >
-                    {s.title}
-                  </Link>
-                  <span className="text-xs text-muted-foreground">
-                    {s.meal}
-                    <span className="hidden page-md:inline"> · </span>
-                    <span className="block page-md:inline">{s.plates}</span>
-                  </span>
-                </span>
-                <span className={cn(AMOUNT, "font-medium")}>{s.amount}</span>
-              </li>
-            ))}
-          </ul>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <Link
+                        href={s.href}
+                        className="font-semibold hover:text-primary hover:underline"
+                      >
+                        {s.title}
+                      </Link>
+                      <span className="text-xs text-muted-foreground">
+                        {s.meal}
+                        <span className="hidden page-md:inline"> · </span>
+                        <span className="block page-md:inline">{s.plates}</span>
+                      </span>
+                    </span>
+                    <span className={cn(AMOUNT, "font-medium")}>
+                      {s.amount}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
     </li>

@@ -9,6 +9,7 @@ import {
   groupSlotsByTeam,
   loungeDays,
   mealPlanDayOf,
+  prepSheetLines,
   sheetNames,
   shiftDayLong,
   type SheetAllergy,
@@ -21,7 +22,7 @@ import * as shiftsDb from "@camp404/db/shifts";
 import { getCampSettings } from "./camp-config";
 import { getUpcomingEvents } from "./camp-calendar";
 import { CALENDAR_PAGE_RANGE } from "./google-calendar";
-import { getKitchenMenu } from "./kitchen-menu";
+import { getKitchenMenu, listSheetPrepSteps } from "./kitchen-menu";
 import { getLoungeProgramme } from "./lounge";
 import { buildProgramme, dayItems } from "./lounge-view";
 import { getMealPlan } from "./meal-plan";
@@ -55,6 +56,8 @@ export interface DailySheet {
   sections: SheetTeamSection[];
   /** The Kitchen's dishes per meal: breakfast and dinner, never lunch. */
   meals: { meal: SheetMeal; dishes: string[] }[];
+  /** The Kitchen's prep steps due this day (#245), each a short line. */
+  prep: string[];
   allergies: SheetAllergy[];
   events: DailySheetEvent[];
 }
@@ -92,20 +95,29 @@ export async function getDailySheets(
 ): Promise<DailySheets> {
   const camp = await getCampSettings();
   const cycle = camp.cycleNumber;
-  const [roster, burnDays, plan, menu, allergyRows, programme, calendar] =
-    await Promise.all([
-      usesTestStore()
-        ? shiftsTestStore.readShiftRoster(cycle)
-        : shiftsDb.readShiftRoster(cycle),
-      usesTestStore()
-        ? shiftsTestStore.readBurnDays(cycle)
-        : shiftsDb.readBurnDays(cycle),
-      getMealPlan(cycle),
-      getKitchenMenu(),
-      readAllergies(cycle),
-      getLoungeProgramme(cycle),
-      getUpcomingEvents(CALENDAR_PAGE_RANGE),
-    ]);
+  const [
+    roster,
+    burnDays,
+    plan,
+    menu,
+    allergyRows,
+    programme,
+    calendar,
+    prepSteps,
+  ] = await Promise.all([
+    usesTestStore()
+      ? shiftsTestStore.readShiftRoster(cycle)
+      : shiftsDb.readShiftRoster(cycle),
+    usesTestStore()
+      ? shiftsTestStore.readBurnDays(cycle)
+      : shiftsDb.readBurnDays(cycle),
+    getMealPlan(cycle),
+    getKitchenMenu(),
+    readAllergies(cycle),
+    getLoungeProgramme(cycle),
+    getUpcomingEvents(CALENDAR_PAGE_RANGE),
+    listSheetPrepSteps(cycle),
+  ]);
 
   const days = burnDays.map((day, i) => ({
     day,
@@ -136,6 +148,7 @@ export async function getDailySheets(
   const calendarEvents = calendar.status === "ok" ? calendar.events : [];
 
   const sheets = chosen.map(({ day, number, longLabel }): DailySheet => {
+    const prep = prepSheetLines(day, prepSteps);
     const meals = dishesFor(
       mealPlanDayOf(day, plan.firstDay, plan.daysOnSite),
       menu.items,
@@ -148,9 +161,9 @@ export async function getDailySheets(
       signups: roster.signups,
       teams,
       nameOf,
-      // The Kitchen shows on a day it has tasks, or a menu: the cooks need
-      // the dishes and the allergies either way.
-      include: meals.length > 0 ? [KITCHEN] : [],
+      // The Kitchen shows on a day it has tasks, a menu or prep: the cooks
+      // need the dishes, the prep and the allergies either way.
+      include: meals.length > 0 || prep.length > 0 ? [KITCHEN] : [],
     });
 
     // The programme's day with this date; with no Burn dates on the year,
@@ -192,6 +205,7 @@ export async function getDailySheets(
       longLabel,
       sections,
       meals,
+      prep,
       allergies: sections.some((s) => s.team === KITCHEN) ? allergies : [],
       events: events.map(({ time, title, place }) => ({ time, title, place })),
     };

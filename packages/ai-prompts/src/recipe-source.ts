@@ -1,5 +1,6 @@
 import {
   INGREDIENT_CATEGORIES,
+  KITCHEN_ALLERGENS,
   RECIPE_LINE_UNITS,
   RECIPE_NOTE_KINDS,
 } from "@camp404/types";
@@ -19,6 +20,14 @@ import {
 // write for, the kitchen's meal counts, the captain's note, and every
 // earlier round of Claude's questions with the reviewer's answer. Never the
 // member's note on why it suits the camp, anyone's name, or audio.
+//
+// Version 2026-10-02.1 (#245, the owner, 2026-10-02: "Claude marks recipe
+// allergens when proofreading"): the recipe's ingredient lines carry
+// `allergens` (KitchenRecipe in @camp404/types gained it, optional so older
+// versions stay valid), and the system prompt has an "Allergens" section
+// telling Claude to mark every line from the camp's fixed list. Nothing else
+// in the text changed. The 2026-09-24.2 text is this one without that section
+// and without the line on allergens in the tool's schema.
 
 export interface RecipeSourceInput {
   /** The recipe's name. */
@@ -79,6 +88,11 @@ The recipe:
 - Notes are only practical notes for the cook, of these kinds: ${list(RECIPE_NOTE_KINDS)}. Write warnings, substitutions and make-ahead tips. Write no food science, no history and nothing about why a method works.
 - The camp cooks vegan. Keep the dish as it is written, animal products included, and add one substitution note for each animal product, naming a vegan swap.
 - The summary is one or two sentences about the dish.
+
+Allergens:
+- On every ingredient line, set allergens to the foods from this list that the ingredient holds or may hold: ${list(KITCHEN_ALLERGENS)}. Use an empty list when it holds none of them; never leave allergens out.
+- Count what a bought product usually holds too, such as gluten in soy sauce or stock, milk in butter or cheese, and sulphites in wine or dried fruit. "onion_garlic" covers onions, garlic, leeks and spring onions; "nightshades" covers tomatoes, peppers, chillies, potatoes and brinjal.
+- Mark only what the ingredient itself holds. A camp member's allergy is never named in a recipe.
 
 How it was scaled:
 - In scalingNotes, write short lines on how you scaled the amounts from what the source serves to the camp's plates, and why. For example: salt and spices grow more slowly than the bulk ingredients; water and other liquids depend on evaporation, not only on the plates; and cooking times do not grow with the quantity.

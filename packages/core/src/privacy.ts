@@ -47,6 +47,9 @@ export const SAFETY_VISIBLE: ReadonlySet<string> = new Set([
   "emergencyContacts",
   "allergies",
   "isAnaphylactic",
+  // The dietary pick-list (#245): each food and whether it is an allergy, an
+  // intolerance or anaphylaxis. The same readers as `allergies`.
+  "foodReactions",
 ]);
 
 /**
@@ -171,6 +174,9 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "dietaryRequirements.intolerances": "team_lead",
   "dietaryRequirements.isAnaphylactic": "team_lead",
   "dietaryRequirements.notes": "team_lead",
+  "dietaryRequirements.foodReactions": "team_lead",
+  "dietaryRequirements.diets": "team_lead",
+  "dietaryRequirements.foodsSavedAt": "captain",
   "dietaryRequirements.version": "captain",
   "dietaryRequirements.completedAt": "captain",
   "dietaryRequirements.createdAt": "captain",

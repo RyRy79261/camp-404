@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { KitchenAllergen } from "./dietary";
 import { DietaryTag } from "./member";
 
 // Recipes (#243, Kitchen 1). Anyone suggests a recipe; a Kitchen lead or a
@@ -192,6 +193,16 @@ export const RecipeLine = z
       .boolean()
       .default(false)
       .describe("True when the dish works without it."),
+    // #245 (owner, 2026-10-02): Claude marks each line's allergens when it
+    // proofreads, from the camp's fixed list. Optional, so a version written
+    // before has none and stays valid; absent is "not marked", never "none".
+    allergens: z
+      .array(KitchenAllergen)
+      .max(8)
+      .optional()
+      .describe(
+        "The allergens this ingredient holds or may hold, from the fixed list. An empty list when it holds none of them.",
+      ),
   })
   .superRefine((line, ctx) => {
     if (line.quantityMax === null) return;

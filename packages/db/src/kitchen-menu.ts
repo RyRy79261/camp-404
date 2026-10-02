@@ -1,7 +1,13 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import {
+  allergensMarked,
+  recipeAllergens,
+  type RecipeAllergen,
+} from "@camp404/core";
 import {
   MAX_RECIPES_PER_MEAL,
   MAX_SNACKS,
+  readAllergens,
   type IngredientCategory,
   type MealOfTheDay,
   type PlateLine,
@@ -80,6 +86,15 @@ export interface MenuRecipeFacts {
   counts: { plates: number; lines: PlateLine[] }[];
   /** Counts Claude is still working on. */
   openPlates: number[];
+  /**
+   * What the book version holds (#245): a lead's correction, else what Claude
+   * marked on its lines.
+   */
+  allergens: RecipeAllergen[];
+  /** Whether Claude marked the version's allergens at all. */
+  allergensMarked: boolean;
+  /** The correction's revision; 0 when the allergens are Claude's marks. */
+  allergenRevision: number;
 }
 
 /** A year's menu: the items, and each recipe on it by id. */
@@ -212,9 +227,9 @@ export async function readKitchenMenu(
     .where(inArray(schema.recipes.id, recipeIds));
   const versionIds = books.flatMap((b) => (b.versionId ? [b.versionId] : []));
 
-  const [counts, open] =
+  const [counts, open, corrections] =
     versionIds.length === 0
-      ? [[], []]
+      ? [[], [], []]
       : await Promise.all([
           db
             .select({
@@ -241,6 +256,16 @@ export async function readKitchenMenu(
                 ]),
               ),
             ),
+          db
+            .select({
+              versionId: schema.recipeAllergenCorrections.versionId,
+              allergens: schema.recipeAllergenCorrections.allergens,
+              revision: schema.recipeAllergenCorrections.revision,
+            })
+            .from(schema.recipeAllergenCorrections)
+            .where(
+              inArray(schema.recipeAllergenCorrections.versionId, versionIds),
+            ),
         ]);
 
   const recipes: Record<string, MenuRecipeFacts> = {};
@@ -256,9 +281,28 @@ export async function readKitchenMenu(
       openPlates: open
         .filter((o) => o.versionId === book.versionId && o.plates !== null)
         .map((o) => o.plates!),
+      ...allergenFacts(
+        book.body?.ingredients ?? [],
+        corrections.find((c) => c.versionId === book.versionId) ?? null,
+      ),
     };
   }
   return { cycle, items, recipes };
+}
+
+/** A version's allergens: a correction over Claude's marks (#245). */
+export function allergenFacts(
+  lines: readonly { name: string; allergens?: readonly string[] }[],
+  correction: { allergens: unknown; revision: number } | null,
+): Pick<MenuRecipeFacts, "allergens" | "allergensMarked" | "allergenRevision"> {
+  return {
+    allergens: recipeAllergens(
+      lines,
+      correction ? readAllergens(correction.allergens) : null,
+    ),
+    allergensMarked: allergensMarked(lines),
+    allergenRevision: correction?.revision ?? 0,
+  };
 }
 
 /** This year's menu (or a given year's). */
@@ -496,6 +540,12 @@ export async function removeMenuItem(input: {
     }
     if (!UUID.test(input.itemId)) refuse(MENU_ITEM_GONE);
     const cycle = await currentCycleNumber(tx);
+    // Its prep steps go with it (the foreign key cascades); their tasks come
+    // off the board in this same transaction (#245).
+    const prepTasks = await tx
+      .select({ taskId: schema.kitchenPrepSteps.taskId })
+      .from(schema.kitchenPrepSteps)
+      .where(eq(schema.kitchenPrepSteps.menuItemId, input.itemId));
     const [row] = await tx
       .delete(schema.kitchenMenuItems)
       .where(
@@ -510,6 +560,18 @@ export async function removeMenuItem(input: {
         recipeId: schema.kitchenMenuItems.recipeId,
       });
     if (!row) refuse(MENU_ITEM_GONE);
+    const taskIds = prepTasks.flatMap((p) => (p.taskId ? [p.taskId] : []));
+    if (taskIds.length > 0) {
+      await tx
+        .update(schema.tasks)
+        .set({ status: "cancelled" })
+        .where(
+          and(
+            inArray(schema.tasks.id, taskIds),
+            ne(schema.tasks.status, "cancelled"),
+          ),
+        );
+    }
     const [recipe] = await tx
       .select({ title: schema.recipes.title })
       .from(schema.recipes)

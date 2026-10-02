@@ -1,9 +1,17 @@
-import { and, asc, eq, sql } from "drizzle-orm";
-import { canEditMealPlan, mealPlanPeaks } from "@camp404/core";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
+import {
+  addDays,
+  campDayStart,
+  canEditMealPlan,
+  dayOneShift,
+  mealPlanPeaks,
+  prepTaskDetails,
+} from "@camp404/core";
 import {
   MEAL_PLAN_DEFAULT_DAYS,
   MealPlanInput,
   type MealPlanDay,
+  DAY_ONE_NEEDED_FOR_PREP,
 } from "@camp404/types";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
@@ -194,6 +202,17 @@ export async function setMealPlan(
       }
       const cycle = await currentCycleNumber(tx);
       const before = await readMealPlan(tx, cycle);
+      // Prep steps are dated from Day 1: clearing it would leave their dates
+      // and their tasks' deadlines with nothing to follow (#245).
+      if (firstDay === null && before.firstDay !== null) {
+        const [step] = await tx
+          .select({ id: schema.kitchenPrepSteps.id })
+          .from(schema.kitchenPrepSteps)
+          .where(eq(schema.kitchenPrepSteps.cycle, cycle))
+          .limit(1)
+          .for("update");
+        if (step) refuse(DAY_ONE_NEEDED_FOR_PREP);
+      }
       const now = new Date();
       let version: number;
       if (expectedVersion === 0) {
@@ -242,6 +261,19 @@ export async function setMealPlan(
           dinner: d.dinner,
         })),
       );
+      // Day 1 moved: every prep step moves by the same days, and its task
+      // with it (the owner, 2026-10-02: "If Day 1 changes everything needs
+      // to redate").
+      const shift = dayOneShift(before.firstDay, firstDay);
+      if (shift !== null) {
+        await redatePrepSteps(tx, {
+          actorId: input.actorId,
+          cycle,
+          shift,
+          from: before.firstDay!,
+          to: firstDay!,
+        });
+      }
       await writeAuditEvent(tx, {
         actorId: input.actorId,
         action: "camp.kitchen_meal_plan.changed",
@@ -263,4 +295,83 @@ export async function setMealPlan(
     if (error instanceof Refused) return { ok: false, error: error.sentence };
     throw error;
   }
+}
+
+/**
+ * Moves a year's prep steps by `shift` days because Day 1 moved from `from`
+ * to `to`, inside the meal plan's save: "the day before" and "the same day"
+ * stay with their meal, and a "before we leave" date moves by the same days.
+ * Each step's Kitchen task (one not taken off the board) gets the new due
+ * date, and its line of detail ("For Day 3 breakfast, Sat 24 Apr") the new
+ * date when nobody has edited it. A task's version is bumped as an edit's is,
+ * so an edit dialog opened before cannot put the old date back. One audit row
+ * says what moved. Nothing to move writes nothing.
+ */
+async function redatePrepSteps(
+  tx: Tx,
+  input: {
+    actorId: string;
+    cycle: number;
+    shift: number;
+    from: string;
+    to: string;
+  },
+): Promise<void> {
+  const steps = await tx
+    .select({
+      id: schema.kitchenPrepSteps.id,
+      dueDate: schema.kitchenPrepSteps.dueDate,
+      taskId: schema.kitchenPrepSteps.taskId,
+      day: schema.kitchenMenuItems.day,
+      meal: schema.kitchenMenuItems.meal,
+    })
+    .from(schema.kitchenPrepSteps)
+    .innerJoin(
+      schema.kitchenMenuItems,
+      eq(schema.kitchenMenuItems.id, schema.kitchenPrepSteps.menuItemId),
+    )
+    .where(eq(schema.kitchenPrepSteps.cycle, input.cycle))
+    .for("update");
+  if (steps.length === 0) return;
+  let tasks = 0;
+  for (const step of steps) {
+    const due = addDays(step.dueDate, input.shift);
+    if (!due) continue;
+    await tx
+      .update(schema.kitchenPrepSteps)
+      .set({ dueDate: due })
+      .where(eq(schema.kitchenPrepSteps.id, step.id));
+    if (!step.taskId) continue;
+    const meal = step.meal === "breakfast" ? "breakfast" : "dinner";
+    const oldDetails = prepTaskDetails(step.day, meal, input.from);
+    const newDetails = prepTaskDetails(step.day, meal, input.to);
+    const moved = await tx
+      .update(schema.tasks)
+      .set({
+        dueAt: campDayStart(due),
+        description: sql`case when ${schema.tasks.description} = ${oldDetails} then ${newDetails} else ${schema.tasks.description} end`,
+        version: sql`${schema.tasks.version} + 1`,
+      })
+      .where(
+        and(
+          eq(schema.tasks.id, step.taskId),
+          ne(schema.tasks.status, "cancelled"),
+        ),
+      )
+      .returning({ id: schema.tasks.id });
+    tasks += moved.length;
+  }
+  await writeAuditEvent(tx, {
+    actorId: input.actorId,
+    action: "camp.kitchen_prep.redated",
+    target: "kitchen",
+    metadata: {
+      cycle: input.cycle,
+      from: input.from,
+      to: input.to,
+      shift: input.shift,
+      steps: steps.length,
+      tasks,
+    },
+  });
 }
