@@ -5,6 +5,7 @@ import {
   PREP_NEEDS_DAY_ONE,
   addDays,
   canAddPrepSteps,
+  dayOneShift,
   prepDueDate,
   prepGoesOnBoard,
   prepSheetLines,
@@ -153,5 +154,20 @@ describe("prepSheetLines", () => {
       "Make the dressing (Green salad, Day 3 dinner)",
     ]);
     expect(prepSheetLines("2027-04-25", steps)).toEqual([]);
+  });
+});
+
+describe("dayOneShift", () => {
+  it("is how many days Day 1 moved, across a month end", () => {
+    expect(dayOneShift("2027-04-22", "2027-04-24")).toBe(2);
+    expect(dayOneShift("2027-04-30", "2027-05-02")).toBe(2);
+    expect(dayOneShift("2027-04-22", "2027-04-19")).toBe(-3);
+  });
+
+  it("is nothing when Day 1 did not move, or one side has no date", () => {
+    expect(dayOneShift("2027-04-22", "2027-04-22")).toBeNull();
+    expect(dayOneShift(null, "2027-04-22")).toBeNull();
+    expect(dayOneShift("2027-04-22", null)).toBeNull();
+    expect(dayOneShift("2027-04-22", "soon")).toBeNull();
   });
 });

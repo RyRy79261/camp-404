@@ -145,3 +145,22 @@ export function prepSheetLines(
     )
     .map((s) => `${s.what.trim()} (${s.recipeTitle}, Day ${s.day} ${s.meal})`);
 }
+
+/**
+ * How many days Day 1 moved (`to` less `from`), or null when either is not a
+ * date or it did not move. When it moves, every prep step moves with it
+ * (the owner, 2026-10-02: "If Day 1 changes everything needs to redate").
+ */
+export function dayOneShift(
+  from: string | null,
+  to: string | null,
+): number | null {
+  if (!from || !to || addDays(from, 0) === null || addDays(to, 0) === null) {
+    return null;
+  }
+  const days = Math.round(
+    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) /
+      86_400_000,
+  );
+  return days === 0 ? null : days;
+}

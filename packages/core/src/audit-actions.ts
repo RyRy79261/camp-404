@@ -30,6 +30,8 @@ export const AUDIT_ACTION_LABELS = {
     "Recorded the kitchen's plan for an anaphylaxis on a meal",
   "camp.kitchen_prep.added": "Added a prep step to a meal",
   "camp.kitchen_prep.removed": "Took a prep step off a meal",
+  "camp.kitchen_prep.redated":
+    "Moved the prep steps and their tasks with the meal plan's Day 1",
   // No longer written (the settings were removed, 2026-09-24); kept so a row
   // written before still reads.
   "camp.kitchen_settings.changed": "Changed the kitchen settings",

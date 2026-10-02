@@ -713,4 +713,116 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
       expect(await kitchenTasks(h.db())).toEqual([]);
     });
   });
+
+  describe("Day 1 moves", () => {
+    it("moves every prep step and its Kitchen task by the same days, audited, and keeps an edited line of detail", async () => {
+      const { captain, kitchenLead, itemId } = await setUp();
+      const before = await addPrepStep({
+        actorId: kitchenLead.id,
+        itemId,
+        what: "Toast the oats",
+        when: "before_leaving",
+        date: "2027-04-19",
+      });
+      const buy = await addPrepStep({
+        actorId: kitchenLead.id,
+        itemId,
+        what: "Buy fresh milk",
+        when: "before_leaving",
+        date: "2027-04-20",
+      });
+      const onSite = await addPrepStep({
+        actorId: kitchenLead.id,
+        itemId,
+        what: "Soak the oats",
+        when: "day_before",
+        date: null,
+      });
+      if (!before.ok || !buy.ok || !onSite.ok) throw new Error("setup");
+      // Someone edits one task's details by hand: that text is theirs.
+      const [buyStep] = await h
+        .db()
+        .select({ taskId: schema.kitchenPrepSteps.taskId })
+        .from(schema.kitchenPrepSteps)
+        .where(eq(schema.kitchenPrepSteps.id, buy.stepId));
+      await h
+        .db()
+        .update(schema.tasks)
+        .set({ description: "Ask Thandi which milk" })
+        .where(eq(schema.tasks.id, buyStep!.taskId!));
+
+      // Saved with no new date: nothing moves.
+      expect(
+        await setMealPlan({
+          actorId: captain.id,
+          daysOnSite: 2,
+          firstDay: "2027-04-22",
+          days: [
+            { breakfast: 0, dinner: 50 },
+            { breakfast: 60, dinner: 50 },
+          ],
+          expectedVersion: 1,
+        }),
+      ).toEqual({ ok: true, version: 2 });
+      expect(await audit("camp.kitchen_prep.redated")).toEqual([]);
+
+      // Day 1 moves two days later.
+      expect(
+        await setMealPlan({
+          actorId: kitchenLead.id,
+          daysOnSite: 2,
+          firstDay: "2027-04-24",
+          days: [
+            { breakfast: 0, dinner: 50 },
+            { breakfast: 60, dinner: 50 },
+          ],
+          expectedVersion: 2,
+        }),
+      ).toEqual({ ok: true, version: 3 });
+
+      const steps = await h
+        .db()
+        .select({
+          what: schema.kitchenPrepSteps.what,
+          dueDate: schema.kitchenPrepSteps.dueDate,
+        })
+        .from(schema.kitchenPrepSteps);
+      expect(
+        Object.fromEntries(steps.map((s) => [s.what, s.dueDate])),
+      ).toEqual({
+        "Toast the oats": "2027-04-21",
+        "Buy fresh milk": "2027-04-22",
+        "Soak the oats": "2027-04-24",
+      });
+      const tasks = await h
+        .db()
+        .select()
+        .from(schema.tasks)
+        .where(eq(schema.tasks.team, "kitchen"));
+      const byTitle = Object.fromEntries(tasks.map((t) => [t.title, t]));
+      expect(byTitle["Overnight oats ×60: toast the oats"]).toMatchObject({
+        dueAt: new Date("2027-04-21T00:00:00+02:00"),
+        description: "For Day 2 breakfast, Sun 25 Apr",
+        version: 2,
+      });
+      expect(byTitle["Overnight oats ×60: buy fresh milk"]).toMatchObject({
+        dueAt: new Date("2027-04-22T00:00:00+02:00"),
+        description: "Ask Thandi which milk",
+      });
+      // The step on site has no task, before or after.
+      expect(tasks).toHaveLength(2);
+      const rows = await audit("camp.kitchen_prep.redated");
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        actorId: kitchenLead.id,
+        metadata: {
+          from: "2027-04-22",
+          to: "2027-04-24",
+          shift: 2,
+          steps: 3,
+          tasks: 2,
+        },
+      });
+    });
+  });
 });
