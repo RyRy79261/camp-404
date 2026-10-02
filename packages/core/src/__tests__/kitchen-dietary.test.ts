@@ -124,8 +124,8 @@ describe("recipeAllergens", () => {
   });
 
   it("knows a version Claude never marked from one with no allergens", () => {
-    expect(allergensMarked([{ name: "Salt" }])).toBe(false);
-    expect(allergensMarked([{ name: "Salt", allergens: [] }])).toBe(true);
+    expect(allergensMarked([{}])).toBe(false);
+    expect(allergensMarked([{ allergens: [] }])).toBe(true);
   });
 });
 

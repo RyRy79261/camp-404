@@ -37,7 +37,7 @@ function user(name: string, approved = true) {
   });
 }
 
-function lead(name: string, team: "kitchen" | "power") {
+function lead(name: string, team: "kitchen" | "power_and_lighting") {
   const u = user(name);
   testStore.assignTeam({ userId: u.id, team });
   testStore.setLead({ userId: u.id, team, isLead: true });
@@ -177,7 +177,7 @@ describe("meal twins", () => {
     expect(recipe.allergens).toEqual([
       { allergen: "peanuts", from: ["Peanut butter"] },
     ]);
-    const powerLead = lead("Sparky", "power");
+    const powerLead = lead("Sparky", "power_and_lighting");
     expect(
       x.recordAllergenPlan({
         actorId: powerLead.id,
