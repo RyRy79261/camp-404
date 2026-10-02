@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PRINT_SHEET_ATTR } from "@/lib/print";
-import { PrintRefusal, PrintSheet } from "./print-sheet";
+import { PrintPage, PrintRefusal, PrintSheet } from "./print-sheet";
 
 // The shared print shell (#249): a header line, the title, the page's own
 // options, and two buttons, Download PDF (a real file from the server) and
@@ -120,5 +120,51 @@ describe("PrintSheet", () => {
     const { container } = render(<PrintRefusal>Captains only.</PrintRefusal>);
     expect(container.querySelector(`[${PRINT_SHEET_ATTR}]`)).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("draws pages of their own, each with its header and footer, when paged", () => {
+    const { container } = render(
+      <PrintSheet
+        area="Daily site sheet"
+        title="Daily site sheets"
+        orientation="landscape"
+        marginMm={9}
+        paged
+      >
+        <PrintPage
+          area="Daily site sheet"
+          title="Day 1"
+          footerEnd="page 1 of 2"
+        >
+          <p>Kitchen</p>
+        </PrintPage>
+        <PrintPage
+          area="Daily site sheet · General"
+          title="Day 1"
+          label="Day 1 General page"
+          footerEnd="page 2 of 2"
+        >
+          <p>Task</p>
+        </PrintPage>
+      </PrintSheet>,
+    );
+    // One sheet mark for the PDF route; the title is for the file and
+    // screen readers; each page has its own heading and footer.
+    expect(container.querySelectorAll(`[${PRINT_SHEET_ATTR}]`)).toHaveLength(1);
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Daily site sheets" })
+        .className,
+    ).toContain("sr-only");
+    expect(
+      screen.getAllByRole("heading", { level: 2, name: "Day 1" }),
+    ).toHaveLength(2);
+    expect(
+      screen.getByText("Camp 404 · Daily site sheet · General"),
+    ).toBeTruthy();
+    expect(screen.getByText("page 2 of 2")).toBeTruthy();
+    expect(container.innerHTML).toContain("A4 landscape; margin: 9mm");
+    expect(
+      screen.getByRole("region", { name: "Day 1 General page" }).className,
+    ).toContain("break-after-page");
   });
 });

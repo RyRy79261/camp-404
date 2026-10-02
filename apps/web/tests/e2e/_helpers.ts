@@ -165,6 +165,22 @@ export async function seedParticipation(
   if (!res.ok()) throw new Error(`seedParticipation failed: ${res.status()}`);
 }
 
+/**
+ * Give a test user allergy facts through the test seam (the store does not
+ * model the dietary questionnaire). The daily site sheet's twin reads them.
+ */
+export async function seedAllergy(
+  request: APIRequestContext,
+  authUserId: string,
+  allergies: string | null,
+  isAnaphylactic = false,
+): Promise<void> {
+  const res = await request.post("/api/test/seed-allergy", {
+    data: { authUserId, allergies, isAnaphylactic },
+  });
+  if (!res.ok()) throw new Error(`seedAllergy failed: ${res.status()}`);
+}
+
 /** Clear cookies for an existing Browser context. */
 export async function logoutAll(context: BrowserContext): Promise<void> {
   await context.clearCookies();
