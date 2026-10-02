@@ -6,7 +6,11 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { AvatarUpload } from "@camp404/ui/components/avatar-upload";
+import {
+  AvatarUpload,
+  type AvatarCrop,
+  type AvatarFitProps,
+} from "@camp404/ui/components/avatar-upload";
 
 // jsdom has no object-URL impl; stub create/revoke so the preview path runs.
 const createObjectURL = vi.fn(() => "blob:preview");
@@ -196,5 +200,70 @@ describe("AvatarUpload — board S11", () => {
     await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
     unmount();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:preview");
+  });
+  describe("with a fit step (Fit your photo)", () => {
+    const fitStep = ({ onSave, onCancel, onPickAnother }: AvatarFitProps) => (
+      <div role="dialog" aria-label="fit">
+        <button onClick={() => onSave({ x: 7, y: 8, size: 90 })}>save fit</button>
+        <button onClick={onCancel}>cancel fit</button>
+        <button onClick={onPickAnother}>another</button>
+      </div>
+    );
+
+    it("waits for the member's fit, then preprocesses with that crop", async () => {
+      const onChange = vi.fn();
+      const preprocessImage = vi.fn(
+        async (_file: File, _crop?: AvatarCrop) => webp(),
+      );
+      fetchMock.mockResolvedValue({ ok: true, json: async () => ({ url: "/u" }) });
+      const { container } = render(
+        <AvatarUpload
+          value={null}
+          onChange={onChange}
+          preprocessImage={preprocessImage}
+          fitPhoto={fitStep}
+        />,
+      );
+      pick(fileInput(container));
+      expect(screen.getByRole("dialog", { name: "fit" })).toBeDefined();
+      expect(preprocessImage).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "save fit" }));
+      await waitFor(() => expect(onChange).toHaveBeenCalledWith("/u"));
+      expect(preprocessImage).toHaveBeenCalledWith(expect.any(File), {
+        x: 7,
+        y: 8,
+        size: 90,
+      });
+      expect(screen.queryByRole("dialog", { name: "fit" })).toBeNull();
+    });
+
+    it("cancelling the fit uploads nothing", () => {
+      const preprocessImage = vi.fn(webp);
+      const { container } = render(
+        <AvatarUpload
+          value={null}
+          onChange={vi.fn()}
+          preprocessImage={preprocessImage}
+          fitPhoto={fitStep}
+        />,
+      );
+      pick(fileInput(container));
+      fireEvent.click(screen.getByRole("button", { name: "cancel fit" }));
+      expect(screen.queryByRole("dialog", { name: "fit" })).toBeNull();
+      expect(preprocessImage).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("Use another photo opens the picker again", () => {
+      const { container } = render(
+        <AvatarUpload value={null} onChange={vi.fn()} fitPhoto={fitStep} />,
+      );
+      pick(fileInput(container));
+      const clickSpy = vi.spyOn(fileInput(container), "click");
+      fireEvent.click(screen.getByRole("button", { name: "another" }));
+      expect(clickSpy).toHaveBeenCalledOnce();
+    });
   });
 });

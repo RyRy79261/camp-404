@@ -9,6 +9,7 @@ import { Button } from "@camp404/ui/components/button";
 import { Input } from "@camp404/ui/components/input";
 import { Label } from "@camp404/ui/components/label";
 import { AvatarUpload } from "@camp404/ui/components/avatar-upload";
+import { PhotoCropDialog } from "@/components/profile/photo-crop-dialog";
 import { cropResizeToSquare } from "@/lib/image";
 import { updateProfile, type UpdateProfileResult } from "../actions";
 
@@ -40,6 +41,7 @@ export function ProfileEditForm({
         value={imageUrl}
         onChange={setImageUrl}
         preprocessImage={cropResizeToSquare}
+        fitPhoto={(fit) => <PhotoCropDialog {...fit} />}
       />
       <input type="hidden" name="profileImageUrl" value={imageUrl ?? ""} />
 

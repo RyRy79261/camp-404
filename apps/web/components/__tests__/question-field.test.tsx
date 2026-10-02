@@ -12,8 +12,18 @@ const route = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ useParams: () => route.params }));
 vi.mock("@camp404/ui/components/avatar-upload", () => ({
-  AvatarUpload: ({ uploadUrl }: { uploadUrl?: string }) => (
-    <div data-testid="upload" data-url={uploadUrl ?? "(component default)"} />
+  AvatarUpload: ({
+    uploadUrl,
+    fitPhoto,
+  }: {
+    uploadUrl?: string;
+    fitPhoto?: unknown;
+  }) => (
+    <div
+      data-testid="upload"
+      data-url={uploadUrl ?? "(component default)"}
+      data-fit={fitPhoto ? "yes" : "no"}
+    />
   ),
 }));
 
@@ -618,6 +628,29 @@ describe("QuestionField — image upload endpoint", () => {
       />,
     );
     expect(uploadUrl()).toBe("(component default)");
+  });
+
+  it("lets the member fit the profile photo, and only that photo", () => {
+    // The round frame is the profile photo's shape; a gear shot keeps the
+    // plain middle square.
+    const fit = () => screen.getByTestId("upload").getAttribute("data-fit");
+    const { unmount } = render(
+      <QuestionField
+        question={imageQuestion("me", "profile_photo")}
+        value={undefined}
+        onChange={() => {}}
+      />,
+    );
+    expect(fit()).toBe("yes");
+    unmount();
+    render(
+      <QuestionField
+        question={imageQuestion("gear.photo")}
+        value={undefined}
+        onChange={() => {}}
+      />,
+    );
+    expect(fit()).toBe("no");
   });
 
   it("offers no upload in the author preview", () => {

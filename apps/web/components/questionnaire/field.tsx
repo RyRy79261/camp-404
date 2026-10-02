@@ -41,6 +41,7 @@ import { RecorderPanel } from "../voice/recorder-panel";
 import { useDictationToggle } from "../voice/use-dictation-toggle";
 import { useVoiceSupported } from "../voice/use-voice-recorder";
 import { cropResizeToSquare } from "@/lib/image";
+import { PhotoCropDialog } from "@/components/profile/photo-crop-dialog";
 
 // AfrikaBurn's questionnaire field (`components/questionnaire/field.tsx`),
 // ported onto @camp404/ui. AB's kinds keep AB's controls; Camp 404's own kinds
@@ -1439,6 +1440,13 @@ function ImageField({
         value={typeof value === "string" ? value : null}
         onChange={(url) => onChange(url)}
         preprocessImage={cropResizeToSquare}
+        // The member fits their profile photo into the circle it will have
+        // everywhere. Any other photo question keeps the plain middle square.
+        fitPhoto={
+          question.role === "profile_photo"
+            ? (fit) => <PhotoCropDialog {...fit} />
+            : undefined
+        }
         uploadUrl={
           question.role === "profile_photo"
             ? undefined

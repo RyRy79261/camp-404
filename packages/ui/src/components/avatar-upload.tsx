@@ -6,6 +6,24 @@ import { cn } from "../lib/utils";
 import { Button } from "./button";
 import { Spinner } from "./spinner";
 
+/** A square of the picked photo, in its own pixels (the member's fit). */
+export interface AvatarCrop {
+  x: number;
+  y: number;
+  size: number;
+}
+
+/** What `fitPhoto` is handed while the member fits a picked photo. */
+export interface AvatarFitProps {
+  file: File;
+  /** The member saved: upload the photo cut to `crop`. */
+  onSave: (crop: AvatarCrop) => void;
+  /** The member backed out: nothing is uploaded. */
+  onCancel: () => void;
+  /** Open the file picker again; a new pick replaces `file`. */
+  onPickAnother: () => void;
+}
+
 export interface AvatarUploadProps {
   /** Current image URL, or null/empty when none is set. */
   value: string | null | undefined;
@@ -16,7 +34,13 @@ export interface AvatarUploadProps {
    * centre-crop + WebP resize). Defaults to passing the file through untouched
    * so the leaf carries no app-specific image logic.
    */
-  preprocessImage?: (file: File) => Promise<Blob | File>;
+  preprocessImage?: (file: File, crop?: AvatarCrop) => Promise<Blob | File>;
+  /**
+   * A step between picking and uploading where the member fits the photo
+   * (the app's "Fit your photo" dialog). Its saved crop goes to
+   * `preprocessImage`. Without it the picked file uploads straight away.
+   */
+  fitPhoto?: (props: AvatarFitProps) => React.ReactNode;
   /** Endpoint that accepts `FormData { image }` and returns `{ url }`. */
   uploadUrl?: string;
   /**
@@ -44,9 +68,12 @@ export function AvatarUpload({
   preprocessImage = passthrough,
   uploadUrl = "/api/uploads/avatar",
   hint = "A clear photo of your face works best.",
+  fitPhoto,
   className,
 }: AvatarUploadProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
+  // The picked photo while the member fits it (only with `fitPhoto`).
+  const [fitting, setFitting] = React.useState<File | null>(null);
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   // Local object-URL preview of the just-uploaded image, shown instead of the
@@ -60,12 +87,21 @@ export function AvatarUpload({
     [preview],
   );
 
-  async function handleFile(file: File | undefined) {
+  function handlePick(file: File | undefined) {
+    if (inputRef.current) inputRef.current.value = "";
     if (!file) return;
+    if (fitPhoto) {
+      setFitting(file);
+      return;
+    }
+    void upload(file);
+  }
+
+  async function upload(file: File, crop?: AvatarCrop) {
     setError(null);
     setUploading(true);
     try {
-      const blob = await preprocessImage(file);
+      const blob = await preprocessImage(file, crop);
       // The useEffect cleanup (keyed on `preview`) revokes the previous URL.
       setPreview(URL.createObjectURL(blob));
       const body = new FormData();
@@ -189,8 +225,20 @@ export function AvatarUpload({
         // The visible button opens this; it is not a second tab stop.
         tabIndex={-1}
         aria-hidden
-        onChange={(e) => handleFile(e.currentTarget.files?.[0] ?? undefined)}
+        onChange={(e) => handlePick(e.currentTarget.files?.[0] ?? undefined)}
       />
+
+      {fitPhoto && fitting
+        ? fitPhoto({
+            file: fitting,
+            onSave: (crop) => {
+              setFitting(null);
+              void upload(fitting, crop);
+            },
+            onCancel: () => setFitting(null),
+            onPickAnother: () => inputRef.current?.click(),
+          })
+        : null}
     </div>
   );
 }

@@ -6,8 +6,8 @@ import { avatarProxyUrl } from "@/lib/avatar-blob";
 import { isE2ETestMode } from "@/lib/test-mode";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
 
-// 5 MB hard cap. The client already centre-crops + downscales to ~512px
-// WebP (see lib/image.ts), so a legitimate upload is well under this; the
+// 5 MB hard cap. The client already cuts the square the member fitted in
+// "Fit your photo" and downscales it to ~512px WebP (see lib/image.ts), so a legitimate upload is well under this; the
 // cap just guards against someone POSTing a raw file directly.
 const MAX_BYTES = 5 * 1024 * 1024;
 
