@@ -20,7 +20,10 @@ vi.mock("@camp404/db/shifts", () => ({
 }));
 vi.mock("@camp404/db/daily-sheet", () => ({ listSheetAllergies: vi.fn() }));
 vi.mock("@/lib/meal-plan", () => ({ getMealPlan: vi.fn() }));
-vi.mock("@/lib/kitchen-menu", () => ({ getKitchenMenu: vi.fn() }));
+vi.mock("@/lib/kitchen-menu", () => ({
+  getKitchenMenu: vi.fn(),
+  listSheetPrepSteps: vi.fn(async () => []),
+}));
 vi.mock("@/lib/lounge", () => ({ getLoungeProgramme: vi.fn() }));
 vi.mock("@/lib/camp-calendar", () => ({ getUpcomingEvents: vi.fn() }));
 vi.mock("@/lib/google-calendar", () => ({
@@ -33,7 +36,7 @@ import { auditReadsAfterResponse } from "@/lib/audit";
 import { getUpcomingEvents } from "@/lib/camp-calendar";
 import { getCampSettings } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
-import { getKitchenMenu } from "@/lib/kitchen-menu";
+import { getKitchenMenu, listSheetPrepSteps } from "@/lib/kitchen-menu";
 import { getLoungeProgramme } from "@/lib/lounge";
 import { getMealPlan } from "@/lib/meal-plan";
 import { PRINT_SHEET_ATTR } from "@/lib/print";
@@ -285,6 +288,37 @@ describe("the daily site sheet print", () => {
     const day2 = screen.getByRole("region", { name: "Day 2 sheet" });
     expect(within(day2).queryByRole("region", { name: "Kitchen" })).toBeNull();
     expect(day2.textContent).not.toContain("Allergies");
+  });
+
+  it("prints a Kitchen prep step due on site as a short line on its day, and gives that day a Kitchen section (#245)", async () => {
+    vi.mocked(listSheetPrepSteps).mockResolvedValue([
+      {
+        dueDate: D2,
+        what: "Soak the oats",
+        recipeTitle: "Overnight oats",
+        day: 3,
+        meal: "breakfast",
+      },
+      {
+        dueDate: "2027-04-20",
+        what: "Cook the chilli base",
+        recipeTitle: "Chilli sin carne",
+        day: 3,
+        meal: "dinner",
+      },
+    ]);
+    render(await open("all"));
+    const day2 = screen.getByRole("region", { name: "Day 2 sheet" });
+    const kitchen = within(day2).getByRole("region", { name: "Kitchen" });
+    expect(
+      within(kitchen)
+        .getAllByTestId("sheet-prep")
+        .map((p) => p.textContent),
+    ).toEqual(["PrepSoak the oats (Overnight oats, Day 3 breakfast)"]);
+    // A step due before we leave is on the task board, never on a sheet.
+    expect(document.body.textContent).not.toContain("Cook the chilli base");
+    const day1 = screen.getByRole("region", { name: "Day 1 sheet" });
+    expect(within(day1).queryAllByTestId("sheet-prep")).toHaveLength(0);
   });
 
   it("lets a captain print too", async () => {

@@ -24,6 +24,8 @@ vi.mock("@/lib/kitchen-menu", () => ({
   getKitchenMenu: vi.fn(),
   getSnacks: vi.fn(),
   listMenuBook: vi.fn(),
+  getMenuDietaryFor: vi.fn(async () => null),
+  getMealChecks: vi.fn(async () => ({ plans: [], prepSteps: [] })),
 }));
 vi.mock("./actions", () => ({
   saveMealPlanAction: vi.fn(),
@@ -31,6 +33,10 @@ vi.mock("./actions", () => ({
   removeMenuItemAction: vi.fn(),
   addSnackAction: vi.fn(),
   removeSnackAction: vi.fn(),
+  recordAllergenPlanAction: vi.fn(),
+  correctAllergensAction: vi.fn(),
+  addPrepStepAction: vi.fn(),
+  removePrepStepAction: vi.fn(),
 }));
 vi.mock("../recipes/actions", () => ({ proofreadPlatesAction: vi.fn() }));
 vi.mock("@camp404/ui/components/toast", () => ({
@@ -414,7 +420,13 @@ describe("the meal plan as a Kitchen lead edits it", () => {
       within(dinner)
         .getAllByRole("listitem")
         .map((li) => li.textContent),
-    ).toEqual(["Camp dalVerified×", "RiceWith Claude…×", "+ Add a recipe"]);
+    ).toEqual([
+      // #245: under each recipe, its allergy line (these versions were
+      // written before Claude marked allergens) and "+ Prep step".
+      "Camp dalVerified×Allergens not marked yet.Change allergens+ Prep step",
+      "RiceWith Claude…×Allergens not marked yet.Change allergens+ Prep step",
+      "+ Add a recipe",
+    ]);
     expect(
       within(dinner).getByRole("button", {
         name: "Take Rice off Day 1, dinner",

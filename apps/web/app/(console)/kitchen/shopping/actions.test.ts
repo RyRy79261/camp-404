@@ -9,12 +9,15 @@ vi.mock("next/navigation", () => ({ unstable_rethrow: vi.fn() }));
 vi.mock("@/lib/captain-gate", () => ({ captainActionGate: vi.fn() }));
 vi.mock("@/lib/kitchen-menu", () => ({
   setShoppingTicks: vi.fn(async () => ({ ok: true })),
+  setShoppingPrice: vi.fn(async () => ({ ok: true, version: 3 })),
 }));
+vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn(async () => []) }));
 
 import { captainActionGate } from "@/lib/captain-gate";
-import { setShoppingTicks } from "@/lib/kitchen-menu";
-import { TICK_REFUSAL } from "@/lib/recipe-copy";
-import { setShoppingTicksAction } from "./actions";
+import { setShoppingPrice, setShoppingTicks } from "@/lib/kitchen-menu";
+import { PRICE_REFUSAL, TICK_REFUSAL } from "@/lib/recipe-copy";
+import { getLeadTeams } from "@/lib/users";
+import { setShoppingPriceAction, setShoppingTicksAction } from "./actions";
 
 const LINES = [{ key: "onions|g", amount: "3.5 kg" }];
 
@@ -60,5 +63,61 @@ describe("setShoppingTicksAction", () => {
       error: "Pick a line to tick.",
     });
     expect(setShoppingTicks).not.toHaveBeenCalled();
+  });
+});
+
+describe("setShoppingPriceAction (#245)", () => {
+  const PRICE = {
+    key: "onions|g",
+    shop: "Vlei Farm Stall",
+    amountCents: 4950,
+    kind: "paid",
+    currency: "ZAR",
+    expectedVersion: 2,
+  };
+  const as = (rank: string, led: string[]) => {
+    vi.mocked(captainActionGate).mockResolvedValue({
+      ok: true,
+      rank,
+      campUser: { id: "lead-1" },
+    } as never);
+    vi.mocked(getLeadTeams).mockResolvedValue(led as never);
+  };
+
+  it("lets a Kitchen lead set a price in rands, as themselves", async () => {
+    as("team_lead", ["kitchen"]);
+    expect(await setShoppingPriceAction({ ...PRICE, actorId: "x" })).toEqual({
+      ok: true,
+      data: { version: 3 },
+    });
+    expect(captainActionGate).toHaveBeenCalledWith("team_lead", PRICE_REFUSAL);
+    expect(setShoppingPrice).toHaveBeenCalledWith({
+      ...PRICE,
+      actorId: "lead-1",
+    });
+  });
+
+  it("refuses a lead of another team, and money that is not rands", async () => {
+    as("team_lead", ["power"]);
+    expect(await setShoppingPriceAction(PRICE)).toEqual({
+      ok: false,
+      error: PRICE_REFUSAL,
+    });
+    as("captain", []);
+    expect(await setShoppingPriceAction({ ...PRICE, currency: "USD" })).toEqual(
+      {
+        ok: false,
+        error: "Money is recorded in rands (ZAR) only.",
+      },
+    );
+    expect(setShoppingPrice).not.toHaveBeenCalled();
+    vi.mocked(setShoppingPrice).mockResolvedValueOnce({
+      ok: false,
+      error: "Late.",
+    });
+    expect(await setShoppingPriceAction(PRICE)).toEqual({
+      ok: false,
+      error: "Late.",
+    });
   });
 });

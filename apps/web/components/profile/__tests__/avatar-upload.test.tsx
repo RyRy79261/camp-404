@@ -40,11 +40,19 @@ afterEach(() => {
 
 describe("AvatarUpload — board S11", () => {
   it("renders the empty state (camera, Add photo, Upload-a-photo trigger)", () => {
-    const { container } = render(<AvatarUpload value={null} onChange={vi.fn()} />);
+    const { container } = render(
+      <AvatarUpload value={null} onChange={vi.fn()} />,
+    );
     expect(screen.getByText("Add photo")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Add a profile photo" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Upload a photo" })).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Remove profile photo" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Add a profile photo" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Upload a photo" }),
+    ).toBeDefined();
+    expect(
+      screen.queryByRole("button", { name: "Remove profile photo" }),
+    ).toBeNull();
     // Hidden file input is sr-only + image-only (a11y / picker contract).
     const input = fileInput(container);
     expect(input.classList.contains("sr-only")).toBe(true);
@@ -55,18 +63,28 @@ describe("AvatarUpload — board S11", () => {
     const { container } = render(
       <AvatarUpload value="/api/avatar?pathname=x" onChange={vi.fn()} />,
     );
-    expect(container.querySelector("img")?.getAttribute("src")).toContain("pathname=x");
-    expect(screen.getByRole("button", { name: "Change profile photo" })).toBeDefined();
+    expect(container.querySelector("img")?.getAttribute("src")).toContain(
+      "pathname=x",
+    );
     expect(
-      screen.getByRole("button", { name: "Remove profile photo" }).getAttribute("aria-label"),
+      screen.getByRole("button", { name: "Change profile photo" }),
+    ).toBeDefined();
+    expect(
+      screen
+        .getByRole("button", { name: "Remove profile photo" })
+        .getAttribute("aria-label"),
     ).toBe("Remove profile photo");
     expect(screen.getByRole("button", { name: "Change photo" })).toBeDefined();
   });
 
   it("circle and trigger buttons both open the hidden file picker", () => {
-    const { container } = render(<AvatarUpload value={null} onChange={vi.fn()} />);
+    const { container } = render(
+      <AvatarUpload value={null} onChange={vi.fn()} />,
+    );
     const clickSpy = vi.spyOn(fileInput(container), "click");
-    fireEvent.click(screen.getByRole("button", { name: "Add a profile photo" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a profile photo" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Upload a photo" }));
     expect(clickSpy).toHaveBeenCalledTimes(2);
   });
@@ -89,7 +107,9 @@ describe("AvatarUpload — board S11", () => {
     );
     pick(fileInput(container));
 
-    await waitFor(() => expect(onChange).toHaveBeenCalledWith("/api/avatar?pathname=new"));
+    await waitFor(() =>
+      expect(onChange).toHaveBeenCalledWith("/api/avatar?pathname=new"),
+    );
     expect(preprocessImage).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/custom/upload");
     expect(fetchMock.mock.calls[0]?.[1]?.method).toBe("POST");
@@ -97,8 +117,13 @@ describe("AvatarUpload — board S11", () => {
 
   it("defaults to /api/uploads/avatar and a passthrough preprocess", async () => {
     const onChange = vi.fn();
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ url: "/u" }) });
-    const { container } = render(<AvatarUpload value={null} onChange={onChange} />);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: "/u" }),
+    });
+    const { container } = render(
+      <AvatarUpload value={null} onChange={onChange} />,
+    );
     pick(fileInput(container));
     await waitFor(() => expect(onChange).toHaveBeenCalledWith("/u"));
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/uploads/avatar");
@@ -117,7 +142,9 @@ describe("AvatarUpload — board S11", () => {
     expect(trigger).toHaveProperty("disabled", true);
     expect(screen.getByText("Uploading photo")).toBeDefined(); // Spinner sr-only label
     expect(container.innerHTML).toContain("bg-[var(--overlay)]"); // scrim
-    expect(container.querySelector("img")?.getAttribute("src")).toBe("blob:preview");
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(
+      "blob:preview",
+    );
 
     resolveFetch({ ok: true, json: async () => ({ url: "/u" }) });
     await waitFor(() => expect(onChange).toHaveBeenCalledWith("/u"));
@@ -169,7 +196,9 @@ describe("AvatarUpload — board S11", () => {
     );
     pick(fileInput(container));
     await waitFor(() =>
-      expect(screen.getByRole("alert").textContent).toMatch(/Canvas crop failed/),
+      expect(screen.getByRole("alert").textContent).toMatch(
+        /Canvas crop failed/,
+      ),
     );
     // "Try again" is wired to re-open the picker.
     const clickSpy = vi.spyOn(fileInput(container), "click");
@@ -179,20 +208,28 @@ describe("AvatarUpload — board S11", () => {
 
   it("remove clears the value and revokes the object-URL preview", async () => {
     const onChange = vi.fn();
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ url: "/u" }) });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: "/u" }),
+    });
     const { container } = render(
       <AvatarUpload value={null} onChange={onChange} preprocessImage={webp} />,
     );
     pick(fileInput(container));
     await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove profile photo" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove profile photo" }),
+    );
     expect(onChange).toHaveBeenCalledWith(null);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:preview");
   });
 
   it("revokes the object-URL preview on unmount", async () => {
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ url: "/u" }) });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: "/u" }),
+    });
     const { container, unmount } = render(
       <AvatarUpload value={null} onChange={vi.fn()} preprocessImage={webp} />,
     );
@@ -204,7 +241,9 @@ describe("AvatarUpload — board S11", () => {
   describe("with a fit step (Fit your photo)", () => {
     const fitStep = ({ onSave, onCancel, onPickAnother }: AvatarFitProps) => (
       <div role="dialog" aria-label="fit">
-        <button onClick={() => onSave({ x: 7, y: 8, size: 90 })}>save fit</button>
+        <button onClick={() => onSave({ x: 7, y: 8, size: 90 })}>
+          save fit
+        </button>
         <button onClick={onCancel}>cancel fit</button>
         <button onClick={onPickAnother}>another</button>
       </div>
@@ -212,10 +251,13 @@ describe("AvatarUpload — board S11", () => {
 
     it("waits for the member's fit, then preprocesses with that crop", async () => {
       const onChange = vi.fn();
-      const preprocessImage = vi.fn(
-        async (_file: File, _crop?: AvatarCrop) => webp(),
+      const preprocessImage = vi.fn(async (_file: File, _crop?: AvatarCrop) =>
+        webp(),
       );
-      fetchMock.mockResolvedValue({ ok: true, json: async () => ({ url: "/u" }) });
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: async () => ({ url: "/u" }),
+      });
       const { container } = render(
         <AvatarUpload
           value={null}

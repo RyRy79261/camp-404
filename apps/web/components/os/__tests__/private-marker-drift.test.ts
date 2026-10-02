@@ -36,6 +36,9 @@ const SIGNS: readonly string[] = [
   // captains' list and the report dialog's preview.
   "ReportScreenshotRow",
   "screenshotProblem",
+  // The dietary pick-list (#245): the member's own form draws each food's
+  // reaction.
+  "FOOD_REACTION_LABELS",
 ];
 
 /**
@@ -45,6 +48,8 @@ const SIGNS: readonly string[] = [
 const NOT_RENDERERS: Record<string, string> = {
   "components/questionnaires/block-editor.tsx":
     "the builder's role picker: it names the roles, and renders no answers",
+  "app/(console)/kitchen/meal-plan/page.tsx":
+    "works out the meal plan's allergy counts and flags on the server and renders no member's data; dietary-box.tsx and meal-checks.tsx draw them, marked",
 };
 
 function sources(): { file: string; text: string }[] {
@@ -84,6 +89,7 @@ describe("every console component that renders private data is marked", () => {
         "app/(console)/captains/camp-management/member-notes.tsx",
         "app/(console)/captains/report-screenshots/report-screenshots-list.tsx",
         "components/feedback/report-screenshot-field.tsx",
+        "app/(console)/tools/forms/dietary/dietary-form.tsx",
       ]),
     );
   });

@@ -97,7 +97,10 @@ function menuItem(itemId: string) {
   const menu = storeKitchenMenu();
   const item = menu.items.find((i) => i.id === itemId);
   if (!item) return null;
-  return { ...item, title: menu.recipes[item.recipeId]?.title ?? "Untitled recipe" };
+  return {
+    ...item,
+    title: menu.recipes[item.recipeId]?.title ?? "Untitled recipe",
+  };
 }
 
 /** A version's correction, for the twin of readKitchenMenu. */
@@ -137,7 +140,8 @@ export const kitchenExtrasTestStore = {
     currency: string;
     expectedVersion: number;
   }): PriceWriteResult<{ version: number }> {
-    if (!isCurrency(input.currency)) return { ok: false, error: PRICE_RANDS_ONLY };
+    if (!isCurrency(input.currency))
+      return { ok: false, error: PRICE_RANDS_ONLY };
     if (
       input.amountCents !== null &&
       (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0)
@@ -190,7 +194,8 @@ export const kitchenExtrasTestStore = {
           {
             dueDate: s.dueDate,
             what: s.what,
-            recipeTitle: menu.recipes[item.recipeId]?.title ?? "Untitled recipe",
+            recipeTitle:
+              menu.recipes[item.recipeId]?.title ?? "Untitled recipe",
             day: item.day,
             meal: item.meal,
           },

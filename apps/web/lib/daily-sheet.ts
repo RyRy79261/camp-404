@@ -105,19 +105,19 @@ export async function getDailySheets(
     calendar,
     prepSteps,
   ] = await Promise.all([
-      usesTestStore()
-        ? shiftsTestStore.readShiftRoster(cycle)
-        : shiftsDb.readShiftRoster(cycle),
-      usesTestStore()
-        ? shiftsTestStore.readBurnDays(cycle)
-        : shiftsDb.readBurnDays(cycle),
-      getMealPlan(cycle),
-      getKitchenMenu(),
-      readAllergies(cycle),
-      getLoungeProgramme(cycle),
-      getUpcomingEvents(CALENDAR_PAGE_RANGE),
-      listSheetPrepSteps(cycle),
-    ]);
+    usesTestStore()
+      ? shiftsTestStore.readShiftRoster(cycle)
+      : shiftsDb.readShiftRoster(cycle),
+    usesTestStore()
+      ? shiftsTestStore.readBurnDays(cycle)
+      : shiftsDb.readBurnDays(cycle),
+    getMealPlan(cycle),
+    getKitchenMenu(),
+    readAllergies(cycle),
+    getLoungeProgramme(cycle),
+    getUpcomingEvents(CALENDAR_PAGE_RANGE),
+    listSheetPrepSteps(cycle),
+  ]);
 
   const days = burnDays.map((day, i) => ({
     day,

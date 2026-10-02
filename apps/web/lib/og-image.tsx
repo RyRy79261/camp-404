@@ -24,85 +24,82 @@ export const SHARE_ALT =
 /** 1200×630 Open Graph / Twitter share card. */
 export function renderShareImage(): ImageResponse {
   return new ImageResponse(
-    (
+    <div
+      style={{
+        height: "100%",
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "space-between",
+        backgroundColor: BACKGROUND,
+        padding: "76px 80px",
+        position: "relative",
+      }}
+    >
+      {/* Soft magenta bloom behind the mark. */}
       <div
         style={{
-          height: "100%",
-          width: "100%",
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          backgroundImage:
+            "radial-gradient(circle at 50% 46%, rgba(255,0,160,0.20), rgba(23,25,27,0) 58%)",
+        }}
+      />
+
+      {/* Kicker + error line. */}
+      <div
+        style={{
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "space-between",
-          backgroundColor: BACKGROUND,
-          padding: "76px 80px",
-          position: "relative",
+          gap: 16,
         }}
       >
-        {/* Soft magenta bloom behind the mark. */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            backgroundImage:
-              "radial-gradient(circle at 50% 46%, rgba(255,0,160,0.20), rgba(23,25,27,0) 58%)",
-          }}
-        />
-
-        {/* Kicker + error line. */}
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 16,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              fontSize: 26,
-              letterSpacing: 18,
-              color: MUTED,
-              textTransform: "uppercase",
-            }}
-          >
-            Camp 404
-          </div>
-          <div
-            style={{
-              display: "flex",
-              fontSize: 26,
-              letterSpacing: 8,
-              color: FOREGROUND,
-              textTransform: "uppercase",
-              textShadow: `-2px 0 0 ${MAGENTA}, 2px 0 0 ${CYAN}`,
-            }}
-          >
-            Error 404 — Camp not found
-          </div>
-        </div>
-
-        {/* The giant glitched 404 — three stacked layers (magenta nudged
-            left, cyan nudged right, foreground on top) reproduce the
-            landing page's RGB-split chromatic aberration. */}
-        <Glitch404 fontSize={320} split={14} glow={80} />
-
-
-        {/* Tagline. */}
-        <div
-          style={{
-            display: "flex",
-            fontSize: 32,
-            letterSpacing: 2,
+            fontSize: 26,
+            letterSpacing: 18,
             color: MUTED,
-            textAlign: "center",
+            textTransform: "uppercase",
           }}
         >
-          A calm command centre for a chaotic desert.
+          Camp 404
+        </div>
+        <div
+          style={{
+            display: "flex",
+            fontSize: 26,
+            letterSpacing: 8,
+            color: FOREGROUND,
+            textTransform: "uppercase",
+            textShadow: `-2px 0 0 ${MAGENTA}, 2px 0 0 ${CYAN}`,
+          }}
+        >
+          Error 404 — Camp not found
         </div>
       </div>
-    ),
+
+      {/* The giant glitched 404 — three stacked layers (magenta nudged
+            left, cyan nudged right, foreground on top) reproduce the
+            landing page's RGB-split chromatic aberration. */}
+      <Glitch404 fontSize={320} split={14} glow={80} />
+
+      {/* Tagline. */}
+      <div
+        style={{
+          display: "flex",
+          fontSize: 32,
+          letterSpacing: 2,
+          color: MUTED,
+          textAlign: "center",
+        }}
+      >
+        A calm command centre for a chaotic desert.
+      </div>
+    </div>,
     { ...SHARE_SIZE },
   );
 }
@@ -110,23 +107,21 @@ export function renderShareImage(): ImageResponse {
 /** Square app icon (Apple touch icon / maskable). `size` is the pixel edge. */
 export function renderSquareIcon(size: number): ImageResponse {
   return new ImageResponse(
-    (
-      <div
-        style={{
-          height: "100%",
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: BACKGROUND,
-        }}
-      >
-        <Glitch404
-          fontSize={Math.round(size * 0.46)}
-          split={Math.max(2, Math.round(size * 0.035))}
-        />
-      </div>
-    ),
+    <div
+      style={{
+        height: "100%",
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: BACKGROUND,
+      }}
+    >
+      <Glitch404
+        fontSize={Math.round(size * 0.46)}
+        split={Math.max(2, Math.round(size * 0.035))}
+      />
+    </div>,
     { width: size, height: size },
   );
 }
@@ -157,10 +152,22 @@ function Glitch404({
   };
   return (
     <div style={{ display: "flex", position: "relative" }}>
-      <div style={{ ...channel, color: MAGENTA, transform: `translate(-${split}px, 0)` }}>
+      <div
+        style={{
+          ...channel,
+          color: MAGENTA,
+          transform: `translate(-${split}px, 0)`,
+        }}
+      >
         404
       </div>
-      <div style={{ ...channel, color: CYAN, transform: `translate(${split}px, 0)` }}>
+      <div
+        style={{
+          ...channel,
+          color: CYAN,
+          transform: `translate(${split}px, 0)`,
+        }}
+      >
         404
       </div>
       <div

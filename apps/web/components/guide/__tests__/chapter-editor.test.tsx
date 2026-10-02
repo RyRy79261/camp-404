@@ -85,8 +85,9 @@ describe("the guide editor's Write and Preview", () => {
   it("hides the tabs from a medium window up", () => {
     editor();
     // The tabs' bar is sticky on a phone and gone from a medium window up.
-    const bar = screen.getByRole("radiogroup", { name: "Write or preview" })
-      .parentElement!;
+    const bar = screen.getByRole("radiogroup", {
+      name: "Write or preview",
+    }).parentElement!;
     expect(bar.className).toContain("page-md:hidden");
     expect(bar.className).toContain("sticky");
   });

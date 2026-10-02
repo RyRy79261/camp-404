@@ -191,7 +191,10 @@ export function useVoiceRecorder({
       safeSet(setAnalyser, node);
 
       const mimeType = pickMimeType();
-      const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const rec = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType } : undefined,
+      );
       recorderRef.current = rec;
       chunksRef.current = [];
 

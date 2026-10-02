@@ -124,9 +124,7 @@ export default async function ShiftsPrintPage({
                   <td className="tabular-nums">{slot.type.timeText}</td>
                   <td>
                     <span className="font-semibold">{slot.type.name}</span>
-                    <span className="block text-xs">
-                      {slot.type.teamLabel}
-                    </span>
+                    <span className="block text-xs">{slot.type.teamLabel}</span>
                     {slot.type.note && (
                       <span className="block text-xs">{slot.type.note}</span>
                     )}

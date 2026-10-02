@@ -23,11 +23,7 @@ import { PerksSection } from "./sections";
 
 afterEach(cleanup);
 
-function Harness({
-  initial,
-}: {
-  initial: JoinSiteContent["perks"];
-}) {
+function Harness({ initial }: { initial: JoinSiteContent["perks"] }) {
   const [value, setValue] = React.useState(initial);
   return <PerksSection value={value} set={setValue} />;
 }
@@ -69,9 +65,7 @@ describe("PerksSection's file editors", () => {
       fireEvent.keyDown(menu, { key: "Enter" });
     });
     await act(async () => {
-      fireEvent.click(
-        await screen.findByRole("menuitem", { name: "Move up" }),
-      );
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Move up" }));
     });
 
     // Beta is now first, so its editor must show "Beta words" there, not
