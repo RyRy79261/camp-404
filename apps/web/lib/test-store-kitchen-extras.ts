@@ -2,10 +2,12 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  addDays,
   campDayStart,
   canAddPrepSteps,
   canCheckMenuAllergens,
   canPriceShoppingList,
+  dayOneShift,
   isCurrency,
   mealPlates,
   prepDueDate,
@@ -118,6 +120,29 @@ export function storeDropMenuItemExtras(itemId: string, actorId: string): void {
     if (step.taskId) testStore.removeTask({ taskId: step.taskId, actorId });
   }
   s.steps = s.steps.filter((x) => x.menuItemId !== itemId);
+}
+
+/** The twin of the meal plan's re-dating when Day 1 moves. */
+export function storeRedatePrepSteps(
+  cycle: number,
+  from: string | null,
+  to: string | null,
+): void {
+  const shift = dayOneShift(from, to);
+  if (shift === null) return;
+  const menu = storeKitchenMenu(cycle);
+  for (const step of state().steps.filter((s) => s.cycle === cycle)) {
+    const due = addDays(step.dueDate, shift);
+    if (!due) continue;
+    step.dueDate = due;
+    const item = menu.items.find((i) => i.id === step.menuItemId);
+    if (step.taskId && item) {
+      testStore.redateTask(step.taskId, campDayStart(due), {
+        from: prepTaskDetails(item.day, item.meal, from),
+        to: prepTaskDetails(item.day, item.meal, to),
+      });
+    }
+  }
 }
 
 export const kitchenExtrasTestStore = {

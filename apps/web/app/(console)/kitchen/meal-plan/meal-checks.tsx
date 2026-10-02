@@ -48,9 +48,10 @@ import {
 //  - The allergy flags: a red line for a food someone coming is anaphylactic
 //    to, with "Record a plan" until a plan is in (then a green line with the
 //    plan and "Change"); an amber line for what someone coming is allergic or
-//    intolerant to. Counts only, never names. "Change allergens" on a flag
-//    opens a small dialog to correct what the recipe holds (Claude marks it
-//    when it proofreads).
+//    intolerant to. Counts only, never names. A quiet "Change allergens"
+//    beside "+ Prep step" under every recipe (the owner, 2026-10-02) opens a
+//    small dialog to correct what the recipe holds (Claude marks it when it
+//    proofreads).
 //  - Prep steps: each with what and when it is due, an × to take it off, and
 //    "+ Prep step", which asks what to do and when (the day before, the same
 //    day, or before we leave and a date). No person responsible (the owner).
@@ -127,17 +128,6 @@ export function MealChecks({
   const [fixing, setFixing] = useState(false);
   const [prepping, setPrepping] = useState(false);
   const redFoods = view.red.map((r) => r.allergen);
-  const change = (
-    <button
-      type="button"
-      className={LINK}
-      aria-label={`Change allergens: ${ctx.title}`}
-      onClick={() => setFixing(true)}
-    >
-      Change allergens
-    </button>
-  );
-
   return (
     <div className="flex flex-col" data-os-private>
       {view.red.length > 0 &&
@@ -183,7 +173,6 @@ export function MealChecks({
               >
                 Record a plan
               </button>
-              {change}
             </span>
           </div>
         ))}
@@ -200,11 +189,7 @@ export function MealChecks({
               </span>
             ))}
           </span>
-          {view.red.length === 0 && change}
         </div>
-      )}
-      {view.red.length > 0 && view.covered && view.amber.length === 0 && (
-        <div className="-mt-0.5 mb-1 text-right">{change}</div>
       )}
       {!view.marked && view.versionId && (
         <div
@@ -215,21 +200,34 @@ export function MealChecks({
           )}
         >
           <span>Allergens not marked yet.</span>
-          {change}
         </div>
       )}
 
       {view.prep.map((step) => (
         <PrepLine key={step.id} step={step} ctx={ctx} />
       ))}
-      <button
-        type="button"
-        className={cn(LINK, "my-1 self-start text-[13px]")}
-        aria-label={`Add a prep step: ${ctx.title}, ${mealWords(ctx)}`}
-        onClick={() => setPrepping(true)}
-      >
-        + Prep step
-      </button>
+      {/* Under every recipe (the owner, 2026-10-02): "+ Prep step", and a
+          quiet "Change allergens" beside it, for what Claude got wrong. */}
+      <div className="my-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <button
+          type="button"
+          className={cn(LINK, "text-[13px]")}
+          aria-label={`Add a prep step: ${ctx.title}, ${mealWords(ctx)}`}
+          onClick={() => setPrepping(true)}
+        >
+          + Prep step
+        </button>
+        {view.versionId && (
+          <button
+            type="button"
+            className="text-xs whitespace-nowrap text-muted-foreground hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            aria-label={`Change allergens: ${ctx.title}, ${mealWords(ctx)}`}
+            onClick={() => setFixing(true)}
+          >
+            Change allergens
+          </button>
+        )}
+      </div>
 
       {view.red.length > 0 && (
         <PlanDialog

@@ -297,7 +297,9 @@ describe("the flags under each recipe", () => {
   it("corrects a recipe's allergens from the flag, with the revision it opened", async () => {
     await renderAs("team_lead");
     fireEvent.click(
-      screen.getByRole("button", { name: "Change allergens: Shakshuka" }),
+      screen.getByRole("button", {
+        name: "Change allergens: Shakshuka, Day 2, Fri 23 Apr, breakfast",
+      }),
     );
     const dialog = screen.getByRole("dialog", {
       name: "Allergens in Shakshuka",
@@ -315,6 +317,47 @@ describe("the flags under each recipe", () => {
       allergens: ["milk", "sesame"],
       expectedRevision: 0,
     });
+  });
+});
+
+describe("Change allergens under every recipe", () => {
+  it("is beside + Prep step under each recipe for a lead, whether it has a flag or not", async () => {
+    await renderAs("team_lead");
+    for (const [name, title, when] of [
+      ["Day 3, breakfast", "Overnight oats", "Day 3, Sat 24 Apr, breakfast"],
+      ["Day 2, breakfast", "Shakshuka", "Day 2, Fri 23 Apr, breakfast"],
+    ] as const) {
+      expect(
+        within(meal(name)).getByRole("button", {
+          name: `Change allergens: ${title}, ${when}`,
+        }),
+      ).toBeTruthy();
+    }
+    // Once per recipe: the flags no longer carry it too.
+    expect(screen.getAllByRole("button", { name: /^Change allergens/ })).toHaveLength(2);
+  });
+
+  it("is there under a recipe nobody coming reacts to, which has no flag", async () => {
+    await renderAs("captain");
+    cleanup();
+    vi.mocked(getMenuDietaryFor).mockResolvedValue({
+      counts: { members: 0, allergies: [], intolerances: [], preferences: [] },
+      oldOnly: 0,
+    });
+    render(await MealPlanPage());
+    expect(screen.queryByTestId("flag-amber")).toBeNull();
+    expect(screen.queryByTestId("flag-red")).toBeNull();
+    expect(
+      within(meal("Day 2, breakfast")).getByRole("button", {
+        name: "Change allergens: Shakshuka, Day 2, Fri 23 Apr, breakfast",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("is not on a member's page", async () => {
+    await renderAs("camp_member");
+    expect(screen.queryByRole("button", { name: /Change allergens/ })).toBeNull();
+    expect(screen.queryByText("Change allergens")).toBeNull();
   });
 });
 

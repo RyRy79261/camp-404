@@ -423,8 +423,8 @@ describe("the meal plan as a Kitchen lead edits it", () => {
     ).toEqual([
       // #245: under each recipe, its allergy line (these versions were
       // written before Claude marked allergens) and "+ Prep step".
-      "Camp dalVerified×Allergens not marked yet.Change allergens+ Prep step",
-      "RiceWith Claude…×Allergens not marked yet.Change allergens+ Prep step",
+      "Camp dalVerified×Allergens not marked yet.+ Prep stepChange allergens",
+      "RiceWith Claude…×Allergens not marked yet.+ Prep stepChange allergens",
       "+ Add a recipe",
     ]);
     expect(

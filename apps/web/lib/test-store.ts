@@ -90,6 +90,7 @@ import { resetKitchenMenuStore } from "./test-store-kitchen-menu";
 import {
   resetKitchenExtrasStore,
   storeAllergenCorrection,
+  storeRedatePrepSteps,
 } from "./test-store-kitchen-extras";
 import { resetRentalStore } from "./test-store-rental";
 import { resetGuideStore } from "./test-store-guide";
@@ -3960,6 +3961,22 @@ export const testStore = {
     return { ok: true };
   },
 
+  /**
+   * The twin of the meal plan's re-dating (#245): a task's new due date, and
+   * its line of detail when nobody edited it; the version moves as an edit's.
+   */
+  redateTask(
+    taskId: string,
+    dueAt: Date,
+    details: { from: string; to: string },
+  ): void {
+    const task = tasks.find((t) => t.id === taskId && t.status !== "cancelled");
+    if (!task) return;
+    task.dueAt = dueAt;
+    if (task.description === details.from) task.description = details.to;
+    task.version += 1;
+  },
+
   removeTask(input: { taskId: string; actorId: string }): TaskWriteResult {
     const task = tasks.find(
       (t) => t.id === input.taskId && t.status !== "cancelled",
@@ -4852,6 +4869,8 @@ export const testStore = {
       version,
       updatedAt: new Date(),
     });
+    // Day 1 moved: the prep steps and their tasks move with it (#245).
+    storeRedatePrepSteps(cycle, before.firstDay, firstDay);
     recipeHistory.push({
       recipeId: null,
       action: "camp.kitchen_meal_plan.changed",

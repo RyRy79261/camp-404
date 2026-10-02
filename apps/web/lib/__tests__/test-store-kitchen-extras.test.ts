@@ -278,4 +278,35 @@ describe("meal twins", () => {
     expect(board()).toEqual([]);
     expect(x.getMealChecks().prepSteps).toEqual([]);
   });
+
+  it("move the prep steps and their tasks when Day 1 moves", () => {
+    const { cook, itemId } = setUp();
+    x.addPrepStep({
+      actorId: cook.id,
+      itemId,
+      what: "Toast the oats",
+      when: "before_leaving",
+      date: "2027-04-20",
+    });
+    x.addPrepStep({ actorId: cook.id, itemId, what: "Soak", when: "same_day", date: null });
+    testStore.setMealPlan({
+      actorId: cook.id,
+      daysOnSite: 2,
+      firstDay: "2027-04-24",
+      days: [
+        { breakfast: 0, dinner: 40 },
+        { breakfast: 60, dinner: 40 },
+      ],
+      expectedVersion: 1,
+    });
+    expect(x.getMealChecks().prepSteps.map((s) => s.dueDate)).toEqual([
+      "2027-04-22",
+      "2027-04-25",
+    ]);
+    const [task] = testStore
+      .listBoardTasks(new Date("2027-04-01"))
+      .filter((t) => t.team === "kitchen");
+    expect(task!.dueAt).toEqual(new Date("2027-04-22T00:00:00+02:00"));
+    expect(task!.description).toBe("For Day 2 breakfast, Sun 25 Apr");
+  });
 });
