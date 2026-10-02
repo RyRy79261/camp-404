@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -210,7 +211,9 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   // the screen allows.
   "new-guide-chapter": WRITE_SIZE,
   "edit-guide-chapter": WRITE_SIZE,
-  "camp-layout": XL_SIZE,
+  // The site plan opens wide enough for the plan, its key and the rail side
+  // by side, the whole plot in view (the approved redesign, 2026-10-01).
+  "camp-layout": WRITE_SIZE,
   "inventory-item": L_SIZE,
   transport: L_SIZE,
   "my-dues": L_SIZE,
@@ -259,6 +262,8 @@ type Action =
       saved: OsWindow<string>[];
       liveKey: string | null;
       viewport: Viewport;
+      /** The live page's opening size, when nothing saved places it. */
+      size?: { w: number; h: number };
     }
   | {
       /**
@@ -378,8 +383,24 @@ function reducer(state: WmState<string>, action: Action): WmState<string> {
     const topZ = others.reduce((z, w) => Math.max(z, w.z), 0);
     const windows = [...others];
     if (live) {
+      // A page opened fresh was placed before the screen was measured (on
+      // FIRST_VIEWPORT, so the server and the browser agree). A bigger screen
+      // gives it the room its own size asks for, or a wide page stays cut to
+      // a small one's; it never shrinks here (hydrate fits it to the screen).
+      const fresh =
+        !savedLive && action.size
+          ? placeAt(
+              others.filter((w) => !w.minimized).length,
+              action.size,
+              action.viewport,
+            )
+          : null;
       windows.push({
         ...live,
+        ...(fresh && {
+          w: Math.max(live.w, fresh.w),
+          h: Math.max(live.h, fresh.h),
+        }),
         ...(savedLive && {
           x: savedLive.x,
           y: savedLive.y,
@@ -1113,7 +1134,9 @@ function DesktopInner({
     (key: string) => allowed.has(key) && !programs.has(key),
     [allowed, programs],
   );
-  useEffect(() => {
+  // A layout effect: the live window takes its place on the measured screen
+  // in the same commit as hydration, so it never grows under a first click.
+  useLayoutEffect(() => {
     if (restored || held) return;
     let saved: OsWindow<string>[] = [];
     try {
@@ -1133,7 +1156,13 @@ function DesktopInner({
       measured && measured.width > 0
         ? { width: measured.width, height: measured.height }
         : viewport;
-    dispatch({ type: "restore", saved, liveKey, viewport: vp });
+    dispatch({
+      type: "restore",
+      saved,
+      liveKey,
+      viewport: vp,
+      size: page ? pageSize(page.programId) : undefined,
+    });
     dispatch({
       type: "pruneTo",
       allowed: [
