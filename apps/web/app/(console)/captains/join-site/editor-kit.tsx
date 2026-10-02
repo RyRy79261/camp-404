@@ -119,7 +119,10 @@ export function Field({
       {htmlFor ? (
         // A plain label, not the kit's: the OS skin sets that one in small
         // pixel capitals, which the audit found too hard to read on a form.
-        <label htmlFor={htmlFor} className="text-[13px] font-semibold leading-4">
+        <label
+          htmlFor={htmlFor}
+          className="text-[13px] font-semibold leading-4"
+        >
           {label}
         </label>
       ) : (
@@ -442,9 +445,7 @@ export function RowTable<T>({
         {groups.map((g, gi) => (
           <React.Fragment key={gi}>
             {g.label ? (
-              <p
-                className="border-t border-border/70 bg-muted/40 px-4 py-2 font-pixel text-[10px] uppercase tracking-[0.15em] text-muted-foreground"
-              >
+              <p className="border-t border-border/70 bg-muted/40 px-4 py-2 font-pixel text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
                 {g.label}
               </p>
             ) : null}
@@ -549,7 +550,9 @@ export function RowTable<T>({
                 variant="secondary"
                 disabled={editing.index === 0}
                 onClick={() => {
-                  open.onChange(move(open.rows, editing.index, editing.index - 1));
+                  open.onChange(
+                    move(open.rows, editing.index, editing.index - 1),
+                  );
                   setEditing({ ...editing, index: editing.index - 1 });
                 }}
               >
@@ -561,7 +564,9 @@ export function RowTable<T>({
                 variant="secondary"
                 disabled={editing.index === open.rows.length - 1}
                 onClick={() => {
-                  open.onChange(move(open.rows, editing.index, editing.index + 1));
+                  open.onChange(
+                    move(open.rows, editing.index, editing.index + 1),
+                  );
                   setEditing({ ...editing, index: editing.index + 1 });
                 }}
               >
@@ -575,7 +580,9 @@ export function RowTable<T>({
                 variant="ghost"
                 className="text-destructive"
                 onClick={() => {
-                  open.onChange(open.rows.filter((_, j) => j !== editing.index));
+                  open.onChange(
+                    open.rows.filter((_, j) => j !== editing.index),
+                  );
                   setEditing(null);
                 }}
               >

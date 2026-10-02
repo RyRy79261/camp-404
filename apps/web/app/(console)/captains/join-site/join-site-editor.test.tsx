@@ -51,7 +51,8 @@ const nav = () => screen.getByRole("navigation", { name: "Sections" });
 const navButton = (name: string) =>
   within(nav()).getAllByRole("button", { name: new RegExp(name) })[0]!;
 const openSection = (name: string) => fireEvent.click(navButton(name));
-const save = () => fireEvent.click(screen.getByRole("button", { name: "Save page" }));
+const save = () =>
+  fireEvent.click(screen.getByRole("button", { name: "Save page" }));
 
 beforeEach(() => {
   vi.mocked(saveJoinPageAction).mockResolvedValue({ ok: true });
@@ -84,9 +85,7 @@ describe("Join site editor", () => {
       target: { value: "Block 7 · Street B" },
     });
     expect(status().textContent).toBe("1 section not saved: Where we are");
-    expect(
-      navButton("Where we are").innerHTML,
-    ).toContain("Not saved");
+    expect(navButton("Where we are").innerHTML).toContain("Not saved");
 
     save();
     await waitFor(() => expect(saveJoinPageAction).toHaveBeenCalledTimes(1));
@@ -192,7 +191,9 @@ describe("Join site editor", () => {
       fireEvent.keyDown(menu, { key: "Enter" });
     });
     await act(async () => {
-      fireEvent.click(await screen.findByRole("menuitem", { name: "Move down" }));
+      fireEvent.click(
+        await screen.findByRole("menuitem", { name: "Move down" }),
+      );
     });
     expect(
       (within(table).getAllByRole("textbox")[1] as HTMLTextAreaElement).value,

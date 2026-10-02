@@ -140,7 +140,9 @@ test.describe("join site editor (test-mode)", () => {
 
     await page.goto("/about");
     await expect(
-      page.getByRole("list", { name: "On site" }).getByText("Lamp-lighting walk."),
+      page
+        .getByRole("list", { name: "On site" })
+        .getByText("Lamp-lighting walk."),
     ).toBeVisible();
   });
 

@@ -49,14 +49,18 @@ describe("About Camp 404", () => {
       screen.getByRole("heading", { level: 1, name: "About Camp 404" }),
     ).toBeTruthy();
     expect(screen.getByText(DEFAULT_JOIN_CONTENT.readme.warning)).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /Edit in Join site/ })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /Edit in Join site/ }),
+    ).toBeNull();
     expect(captainPageGate).toHaveBeenCalledWith("camp_member");
   });
 
   it("offers a team lead no way to edit it either", async () => {
     asRank("team_lead");
     render(await AboutPage());
-    expect(screen.queryByRole("link", { name: /Edit in Join site/ })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /Edit in Join site/ }),
+    ).toBeNull();
   });
 
   it("sends a captain to the Join site program to edit it, saying the join site changes too", async () => {
@@ -79,9 +83,9 @@ describe("About Camp 404", () => {
     for (const name of ["Who we are", "The camp fee", "Getting there"]) {
       expect(within(column!).getByRole("button", { name })).toBeTruthy();
     }
-    expect(
-      screen.getByRole("region", { name: "The camp fee" }).id,
-    ).toBe("about-fee");
+    expect(screen.getByRole("region", { name: "The camp fee" }).id).toBe(
+      "about-fee",
+    );
   });
 
   it("shows bold and italic a captain set in the words", async () => {
