@@ -14,6 +14,7 @@ import {
   Hammer,
   HeartPulse,
   House,
+  ImageIcon,
   Info,
   KanbanSquare,
   Laugh,
@@ -100,6 +101,7 @@ const PAGE_ICONS: Record<string, LucideIcon> = {
   "/captains/claims": ReceiptText,
   "/captains/camp-settings": Settings,
   "/captains/audit": ScrollText,
+  "/captains/report-screenshots": ImageIcon,
   "/captains/system": Activity,
 };
 

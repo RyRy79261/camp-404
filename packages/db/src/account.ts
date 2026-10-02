@@ -285,6 +285,13 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .set({ note: null, declineReason: null })
       .where(eq(schema.paymentRefunds.userId, userId));
 
+    // Screenshots they attached to bug reports (#313): their rows go, and the
+    // web app deletes the pictures themselves after the erasure commits. The
+    // public issues stay; they never held the picture.
+    await tx
+      .delete(schema.reportScreenshots)
+      .where(eq(schema.reportScreenshots.userId, userId));
+
     // Logistics attendance: their answers go. Whether they could help on a
     // pack day is about them, and nothing else hangs off it.
     await tx

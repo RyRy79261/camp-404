@@ -6,6 +6,7 @@ import { montserratFont } from "@/lib/fonts/montserrat";
 import { Toaster } from "@camp404/ui/components/toast";
 import { Providers } from "./providers";
 import { AcknowledgementGate } from "./acknowledgement-gate";
+import { isE2ETestMode } from "@/lib/test-mode";
 import { FeedbackGate } from "./feedback-gate";
 import "./globals.css";
 import { SITE_URL } from "@/lib/site";
@@ -96,7 +97,10 @@ export default function RootLayout({
           <AcknowledgementGate />
           {/* The gate self-gates on the live client session; aiAvailable is a
               server-only env check passed down for the "Improve with AI" toggle. */}
-          <FeedbackGate aiAvailable={!!process.env.ANTHROPIC_API_KEY} />
+          <FeedbackGate
+            aiAvailable={!!process.env.ANTHROPIC_API_KEY}
+            testSession={isE2ETestMode()}
+          />
           {/* App-wide toast outlet. Inert until something calls toast().
               Lifted clear of the desktop's taskbar and pinned strip, and of a
               phone's bottom bar with its home indicator, so a toast never

@@ -17,11 +17,29 @@ export type AnnouncementPresentation = z.infer<typeof AnnouncementPresentation>;
 // team lead this year (owner, 2026-09-23: a captain "can send announcements
 // to just specific teams or just the team leaders"). A team lead may only pick
 // a team they lead (owner's call, 2026-09-16); the server checks that, this
-// only shapes the input. Drivers and individuals are not composed here.
+// only shapes the input.
+//
+// #313 (owner approved 2026-10-02), captains only: "Drivers this year" (everyone
+// driving this year, read again when it is published) and specific people (one
+// or several members a captain picked by name). The people are member ids; the
+// server checks each one is a camp member before it saves them.
+export const ANNOUNCEMENT_PEOPLE_MAX = 100;
 export const AnnouncementAudience = z.discriminatedUnion("scope", [
   z.object({ scope: z.literal("everyone") }),
   z.object({ scope: z.literal("team"), team: Team }),
   z.object({ scope: z.literal("team_leads") }),
+  z.object({ scope: z.literal("drivers") }),
+  z.object({
+    scope: z.literal("individual"),
+    userIds: z
+      .array(z.string().min(1).max(64))
+      .min(1, "Pick at least one person.")
+      .max(
+        ANNOUNCEMENT_PEOPLE_MAX,
+        "That's too many people. Send it to the camp instead.",
+      )
+      .refine((ids) => new Set(ids).size === ids.length, "Each person once."),
+  }),
 ]);
 export type AnnouncementAudience = z.infer<typeof AnnouncementAudience>;
 

@@ -1,7 +1,10 @@
 import { Team } from "@camp404/types";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { listAnnouncements } from "@/lib/notifications";
+import {
+  getAnnouncementPickerData,
+  listAnnouncements,
+} from "@/lib/notifications";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getLeadTeams } from "@/lib/users";
@@ -41,15 +44,26 @@ export default async function AnnouncementsPage({
   const config = cleared ? await getTeamsConfig() : null;
   const teams = config ? activeTeams(config) : [];
   const teamLabels = Object.fromEntries(teams.map((t) => [t.key, t.label]));
-  const announcements = cleared
-    ? await listAnnouncements(isCaptain ? {} : { senderId: campUser.id })
-    : [];
+  // Who a captain may name and who drives this year (#313): captains only,
+  // so a lead's page never fetches the camp's member list.
+  const [announcements, picker] = cleared
+    ? await Promise.all([
+        listAnnouncements(isCaptain ? {} : { senderId: campUser.id }),
+        isCaptain ? getAnnouncementPickerData(campUser.id) : null,
+      ])
+    : [[], null];
   // Only what this sender may pick. The actions check it again.
   const audienceOptions: AudienceOption[] = isCaptain
     ? [
-        { value: "everyone", label: "Everyone in camp" },
-        { value: "team_leads", label: "Team leads" },
-        ...teams.map((t) => ({ value: `team:${t.key}`, label: t.label })),
+        { value: "everyone", label: "Everyone in camp", group: "Camp" },
+        { value: "team_leads", label: "Team leads", group: "Camp" },
+        ...teams.map((t) => ({
+          value: `team:${t.key}`,
+          label: t.label,
+          group: "A team",
+        })),
+        { value: "drivers", label: "Drivers this year", group: "People" },
+        { value: "individual", label: "Specific people…", group: "People" },
       ]
     : leadTeams.map((key) => ({
         value: `team:${key}`,
@@ -67,7 +81,7 @@ export default async function AnnouncementsPage({
         title="Announcements & notifications"
         description={`${
           isCaptain
-            ? "Compose a message, save it as a draft, then publish it to the whole camp, one team, or the team leads. Everyone in it but you receives it."
+            ? "Compose a message, save it as a draft, then publish it to the whole camp, one team, the team leads, the drivers or chosen people. Everyone in it but you receives it."
             : "Compose a message for a team you lead, save it as a draft, then publish it. Everyone on the team but you receives it."
         } A full-screen announcement takes over each member's screen until they acknowledge it.`}
       />
@@ -81,6 +95,7 @@ export default async function AnnouncementsPage({
           // Null for a captain: they may address anything, and so pin to
           // anything. A lead gets their own teams, and no pin elsewhere.
           leadTeams={isCaptain ? null : leadTeams}
+          picker={picker}
           // A team page's "Write announcement" opens the composer on that
           // team, when this sender may address it; anything else is ignored.
           preferredAudience={

@@ -4705,3 +4705,50 @@ export const questionnaireResponses = pgTable(
     defIdx: index("questionnaire_responses_def_idx").on(r.definitionKey),
   }),
 );
+
+// --- Report screenshots (#313) --------------------------------------------
+// A picture a member attached to a bug report (owner approved 2026-10-02:
+// "stored privately in Camp 404, never on GitHub"). The bytes are a PRIVATE
+// Vercel Blob under `report-screenshots/<member id>/`; this row holds only its
+// pathname, which never leaves the server: /api/report-screenshot/<id>
+// streams it to captains and records each read. The public issue says only
+// that a screenshot exists.
+//
+// The row is written when the picture is uploaded, before the report is
+// filed, so the issue can truthfully say one exists. Filing stamps the
+// issue's number, link and words (`filed_at`). A row never filed (the report
+// failed and was given up) is no one's report; the captains' page skips it and
+// clears it after a day. A filed one stays until a captain deletes it (no
+// automatic expiry, owner's rule) or its member is erased.
+export const reportScreenshots = pgTable(
+  "report_screenshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    pathname: text("pathname").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    issueNumber: integer("issue_number"),
+    issueUrl: text("issue_url"),
+    reportTitle: text("report_title"),
+    // The report as filed (already screened for personal details), so a
+    // captain reads the words beside the picture without opening GitHub.
+    reportText: text("report_text"),
+    filedAt: timestamp("filed_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("report_screenshots_user_idx").on(t.userId),
+    filedIdx: index("report_screenshots_filed_idx").on(t.filedAt.desc()),
+    typeCheck: check(
+      "report_screenshots_type_check",
+      sql`${t.contentType} in ('image/png', 'image/jpeg', 'image/webp')`,
+    ),
+    sizeCheck: check(
+      "report_screenshots_size_check",
+      sql`${t.sizeBytes} > 0 and ${t.sizeBytes} <= 5242880`,
+    ),
+  }),
+);

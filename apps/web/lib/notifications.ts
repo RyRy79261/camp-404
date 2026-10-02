@@ -15,6 +15,7 @@ import {
   setAnnouncementPinned as dbSetPinned,
   deleteAnnouncementDraft as dbDeleteDraft,
   getAnnouncementForMember as dbGetAnnouncementForMember,
+  getAnnouncementPickerData as dbGetAnnouncementPickerData,
   getPendingAcknowledgements as dbGetPending,
   listAnnouncements as dbListAnnouncements,
   listInbox as dbListInbox,
@@ -23,6 +24,8 @@ import {
   publishAnnouncement as dbPublish,
   unreadClearableCount as dbUnreadClearableCount,
   updateAnnouncementDraft as dbUpdateDraft,
+  type AnnouncementPerson,
+  type AnnouncementPickerData,
   type AnnouncementPresentation,
   type AnnouncementReading,
   type AnnouncementSummary,
@@ -31,6 +34,7 @@ import {
   type InboxItem,
   type AnnouncementPinContext,
   type InboxPage,
+  type InboxSentTo,
   type PendingAcknowledgement,
   type PinnedAnnouncement,
   type PinResult,
@@ -50,6 +54,9 @@ import { testStore } from "./test-store";
 export type { InboxFilter };
 
 export type {
+  AnnouncementPerson,
+  AnnouncementPickerData,
+  InboxSentTo,
   Audience,
   AnnouncementPinContext,
   AnnouncementPresentation,
@@ -108,6 +115,7 @@ interface NotificationsBackend {
     senderId: string,
     audience: Audience,
   ): Promise<number>;
+  getAnnouncementPickerData(senderId: string): Promise<AnnouncementPickerData>;
   listPinnedForUser(userId: string): Promise<PinnedAnnouncement[]>;
   getAnnouncementPinContext(id: string): Promise<AnnouncementPinContext | null>;
   setAnnouncementPinned(input: PinInput): Promise<PinResult>;
@@ -156,6 +164,7 @@ const realBackend: NotificationsBackend = {
   publishAnnouncement: dbPublish,
   explainDraftRefusal: dbExplainDraftRefusal,
   countAnnouncementAudience: dbCountAnnouncementAudience,
+  getAnnouncementPickerData: dbGetAnnouncementPickerData,
   listPinnedForUser: (userId) => dbListPinnedForUser(userId),
   getAnnouncementPinContext: dbGetPinContext,
   setAnnouncementPinned: dbSetPinned,
@@ -215,6 +224,9 @@ const testBackend: NotificationsBackend = {
   },
   async countAnnouncementAudience(senderId, audience) {
     return testStore.countAnnouncementAudience(senderId, audience);
+  },
+  async getAnnouncementPickerData(senderId) {
+    return testStore.getAnnouncementPickerData(senderId);
   },
   async listPinnedForUser(userId) {
     return testStore.listPinnedForUser(userId);
@@ -330,6 +342,16 @@ export function countAnnouncementAudience(
   audience: Audience,
 ): Promise<number> {
   return backend().countAnnouncementAudience(senderId, audience);
+}
+
+/**
+ * Who a captain may pick for "specific people", and who "Drivers this year"
+ * reaches now (#313). Captain-only data: gate the caller.
+ */
+export function getAnnouncementPickerData(
+  senderId: string,
+): Promise<AnnouncementPickerData> {
+  return backend().getAnnouncementPickerData(senderId);
 }
 
 export function getAnnouncementForMember(

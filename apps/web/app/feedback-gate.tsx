@@ -28,9 +28,21 @@ import type { FeedbackKind } from "@/lib/github-feedback";
  * feature never responds for a logged-out visitor. The server action enforces
  * auth too, as defence in depth.
  */
-export function FeedbackGate({ aiAvailable }: { aiAvailable: boolean }) {
+export function FeedbackGate({
+  aiAvailable,
+  testSession = false,
+}: {
+  aiAvailable: boolean;
+  /**
+   * E2E_TEST_MODE only: the in-memory test login has no Better Auth session
+   * for the client to read, so the gate listens as if signed in and the
+   * report dialog can be driven by Playwright. The server action still
+   * refuses anyone not signed in.
+   */
+  testSession?: boolean;
+}) {
   const { data: session, isPending } = authClient.useSession();
-  const signedIn = !isPending && !!session;
+  const signedIn = testSession || (!isPending && !!session);
   const [open, setOpen] = React.useState(false);
   const [prefill, setPrefill] = React.useState("");
   const [kind, setKind] = React.useState<FeedbackKind>("bug");

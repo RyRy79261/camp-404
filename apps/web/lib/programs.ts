@@ -550,6 +550,17 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "captain",
   },
+  // Screenshots attached to bug reports (#313): captains only, because a
+  // screenshot can show other members' details.
+  {
+    id: "report-screenshots",
+    label: "Report screenshots",
+    fileName: "SCREENSHOTS.EXE",
+    href: "/captains/report-screenshots",
+    icon: "report-screenshots",
+    place: CAPTAINS,
+    rank: "captain",
+  },
   {
     id: "audit",
     label: "Audit log",

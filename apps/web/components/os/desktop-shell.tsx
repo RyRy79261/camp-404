@@ -238,6 +238,7 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   about: { w: 1040, h: 800 },
   "join-site": WRITE_SIZE,
   audit: L_SIZE,
+  "report-screenshots": L_SIZE,
   "new-event": S_SIZE,
   terminal: { w: 640, h: 420 },
   inkblot: { w: 700, h: 440 },

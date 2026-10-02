@@ -13,7 +13,12 @@ const base = {
   createdAt: new Date(),
 };
 
-function renderRow(props: Partial<typeof base> & { href?: string } = {}) {
+function renderRow(
+  props: Partial<typeof base> & {
+    href?: string;
+    sentTo?: InboxItem["sentTo"];
+  } = {},
+) {
   return render(
     <ul>
       <NotificationRow {...base} {...props} />
@@ -87,5 +92,28 @@ describe("NotificationRow", () => {
     unmount();
     renderRow();
     expect(screen.getByText(base.body).className).not.toContain("line-clamp");
+  });
+
+  // #313 (mock-up aud-inbox): who else an announcement went to.
+  it("says an announcement went to the drivers", () => {
+    const { container } = renderRow({ sentTo: { scope: "drivers" } });
+    expect(container.textContent).toContain(
+      "From Captain Mreen · to the drivers",
+    );
+  });
+
+  it("says 'you only' to one chosen person and counts the others", () => {
+    const { container, unmount } = renderRow({
+      sentTo: { scope: "individual", others: 0 },
+    });
+    expect(container.textContent).toContain("to you only");
+    unmount();
+    const again = renderRow({ sentTo: { scope: "individual", others: 2 } });
+    expect(again.container.textContent).toContain("to you and 2 others");
+  });
+
+  it("says nothing about the audience of an ordinary announcement", () => {
+    const { container } = renderRow({ sentTo: null });
+    expect(container.textContent).not.toContain(" to ");
   });
 });

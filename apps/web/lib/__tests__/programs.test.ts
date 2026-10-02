@@ -380,6 +380,7 @@ describe("buildProgramManifest: the personas", () => {
       "gear-rental",
       "camp-settings",
       "join-site",
+      "report-screenshots",
       "audit",
       "system",
     ]);

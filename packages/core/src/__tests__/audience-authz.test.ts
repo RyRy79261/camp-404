@@ -99,6 +99,58 @@ describe("canSendToAudience — team leads", () => {
   });
 });
 
+// #313 (owner approved 2026-10-02): "Drivers this year" and specific people
+// are captains only. A lead is refused both, whatever teams they lead, and
+// anything the rule does not know is refused, a captain's request included.
+describe("canSendToAudience — drivers and chosen people (#313)", () => {
+  const chosen = { userIds: ["a", "b"] };
+  const twoTeamLead: AudienceActor = {
+    rank: "team_lead",
+    leadTeams: ["kitchen", "structures"],
+  };
+
+  it("lets a captain send to the drivers and to chosen people", () => {
+    expect(canSendToAudience(captain, { scope: "drivers" })).toBe(true);
+    expect(canSendToAudience(captain, { scope: "individual", ...chosen })).toBe(
+      true,
+    );
+  });
+
+  it("refuses a team lead both, even a lead of several teams", () => {
+    for (const lead of [kitchenLead, twoTeamLead]) {
+      expect(canSendToAudience(lead, { scope: "drivers" })).toBe(false);
+      expect(canSendToAudience(lead, { scope: "individual", ...chosen })).toBe(
+        false,
+      );
+    }
+  });
+
+  it("refuses a plain member both", () => {
+    expect(canSendToAudience(member, { scope: "drivers" })).toBe(false);
+    expect(canSendToAudience(member, { scope: "individual", ...chosen })).toBe(
+      false,
+    );
+  });
+
+  it("fails closed on an unknown scope or rank, a captain included", () => {
+    const unknownScope = { scope: "whole_internet" } as unknown as Parameters<
+      typeof canSendToAudience
+    >[1];
+    expect(canSendToAudience(captain, unknownScope)).toBe(false);
+    const stranger = {
+      rank: "overlord",
+      leadTeams: [],
+    } as unknown as AudienceActor;
+    expect(canSendToAudience(stranger, { scope: "drivers" })).toBe(false);
+    expect(canSendToAudience(stranger, { scope: "everyone" })).toBe(false);
+  });
+
+  it("refuses a captain a team scope that names no team", () => {
+    expect(canSendToAudience(captain, { scope: "team" })).toBe(false);
+    expect(canSendToAudience(captain, { scope: "team", team: "" })).toBe(false);
+  });
+});
+
 describe("canSendToAudience — plain members", () => {
   it("refuses everything, their own team included", () => {
     expect(canSendToAudience(member, { scope: "team", team: "kitchen" })).toBe(

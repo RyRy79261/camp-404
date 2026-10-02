@@ -4,6 +4,7 @@ import { sanitiseAccount, type SanitiseResult } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "./avatar-blob";
 import { deleteClaimReceiptBlobs } from "./claim-receipts";
 import { deletePaymentProofBlobs } from "./payment-proof";
+import { deleteReportScreenshotBlobs } from "./report-screenshots";
 import { isE2ETestMode, usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -34,6 +35,7 @@ export async function deleteAccount(input: {
     if (usesTestStore()) {
       testStore.deleteDesktopLayout(input.userId);
       testStore.deleteInkblotRuns(input.userId);
+      testStore.deleteReportScreenshotsOf(input.userId);
     }
     return { ok: true, lostCatNumber: 0 };
   }
@@ -56,6 +58,13 @@ export async function deleteAccount(input: {
     await deleteClaimReceiptBlobs(input.userId);
   } catch (err) {
     console.error("claim-receipt cleanup error (account erasure)", err);
+  }
+  // And the screenshots they attached to bug reports (#313), filed under the
+  // camp id; their rows went with the erasure's transaction.
+  try {
+    await deleteReportScreenshotBlobs(input.userId);
+  } catch (err) {
+    console.error("report-screenshot cleanup error (account erasure)", err);
   }
   return result;
 }

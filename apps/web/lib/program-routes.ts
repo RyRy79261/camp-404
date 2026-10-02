@@ -77,6 +77,7 @@ export type ProgramId =
   | "camp-settings"
   | "join-site"
   | "audit"
+  | "report-screenshots"
   | "system"
   | "terminal"
   | "inkblot"
@@ -153,6 +154,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "camp-settings": "Camp settings",
   "join-site": "Join site",
   audit: "Audit log",
+  "report-screenshots": "Report screenshots",
   system: "System status",
   terminal: "Terminal",
   inkblot: "INKBLOT",
@@ -380,6 +382,11 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/captains/camp-settings/cycle", "camp-settings", "SETTINGS.CPL"),
   route("/captains/join-site", "join-site", "JOINSITE.EXE"),
   route("/captains/audit", "audit", "AUDIT.LOG"),
+  route(
+    "/captains/report-screenshots",
+    "report-screenshots",
+    "SCREENSHOTS.EXE",
+  ),
   route("/captains/system", "system", "SYSMON.EXE"),
 
   // The Terminal, and the game it opens (its own window, a child).

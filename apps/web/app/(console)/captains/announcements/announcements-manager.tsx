@@ -30,7 +30,11 @@ import {
 } from "lucide-react";
 import { z } from "zod";
 import { AnnouncementPresentation } from "@camp404/types";
-import type { AnnouncementSummary, Audience } from "@camp404/db/broadcasts";
+import type {
+  AnnouncementPickerData,
+  AnnouncementSummary,
+  Audience,
+} from "@camp404/db/broadcasts";
 import { Alert } from "@camp404/ui/components/alert";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -48,7 +52,10 @@ import { Label } from "@camp404/ui/components/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@camp404/ui/components/select";
@@ -80,6 +87,13 @@ import {
   updateDraftAction,
 } from "./actions";
 import { appendTranscript } from "./transcript";
+import {
+  chosenNames,
+  driversSummary,
+  joinNames,
+  publishLabel,
+} from "./audience-words";
+import { AudienceLine, PeoplePicker } from "./people-picker";
 
 // Captain composer + list, laid out like the AfrikaBurn console's bulletins: the
 // drafts and published announcements as cards in the main column, the composer
@@ -138,8 +152,13 @@ interface FormState {
   title: string;
   body: string;
   presentation: AnnouncementPresentation;
-  /** The picked audience, as an option value ("everyone" or "team:<key>"). */
+  /**
+   * The picked audience, as an option value: "everyone", "team_leads",
+   * "team:<key>", "drivers" or "individual".
+   */
   audience: string;
+  /** The chosen people when the audience is "individual", in pick order. */
+  people: string[];
   /** "Keep it at the top" — the second axis beside presentation. */
   pinned: boolean;
 }
@@ -148,11 +167,17 @@ interface FormState {
 export interface AudienceOption {
   value: string;
   label: string;
+  /** The heading it sits under in the list: "Camp", "A team" or "People". */
+  group?: string;
 }
 
 export function audienceValue(audience: Audience): string {
   if (audience.scope === "team") return `team:${audience.team}`;
   return audience.scope;
+}
+
+function audiencePeople(audience: Audience): string[] {
+  return audience.scope === "individual" ? [...audience.userIds] : [];
 }
 
 /**
@@ -167,11 +192,13 @@ export function markedPinned(
   return a.publishedAt === null ? a.pinOnPublish : a.pinnedAt !== null;
 }
 
-function audienceFromValue(value: string): Audience {
+function audienceFromValue(value: string, people: string[]): Audience {
   if (value.startsWith("team:")) {
     return { scope: "team", team: value.slice(5) } as Audience;
   }
   if (value === "team_leads") return { scope: "team_leads" };
+  if (value === "drivers") return { scope: "drivers" };
+  if (value === "individual") return { scope: "individual", userIds: people };
   return { scope: "everyone" };
 }
 
@@ -187,6 +214,7 @@ const ComposerDraft = z.object({
   body: z.string().max(20_000),
   presentation: AnnouncementPresentation,
   audience: z.string().max(200),
+  people: z.array(z.string().max(64)).max(100).default([]),
   pinned: z.boolean(),
 });
 
@@ -208,6 +236,7 @@ function savedForm(
       body: "",
       presentation: "acknowledge",
       audience: preferredAudience ?? audienceOptions[0]?.value ?? "everyone",
+      people: [],
       pinned: false,
     };
   }
@@ -217,6 +246,7 @@ function savedForm(
     body: editing.body,
     presentation: editing.presentation,
     audience: audienceValue(editing.audience),
+    people: audiencePeople(editing.audience),
     pinned: markedPinned(editing),
   };
 }
@@ -235,6 +265,11 @@ type AnnouncementsManagerProps = {
   leadTeams: string[] | null;
   /** The audience a blank composer starts on (one of `audienceOptions`). */
   preferredAudience?: string;
+  /**
+   * Who a captain may name and who drives this year (#313). Null for a lead,
+   * who may address neither.
+   */
+  picker?: AnnouncementPickerData | null;
 };
 
 /**
@@ -264,12 +299,15 @@ export function AnnouncementsManager(props: AnnouncementsManagerProps) {
           )
         : false;
       const audienceOk = audienceOptions.some((o) => o.value === form.audience);
+      const known = new Set(props.picker?.people.map((p) => p.id) ?? []);
       return {
         ...form,
         editingId: editing ? form.editingId : null,
         audience: audienceOk
           ? form.audience
           : (audienceOptions[0]?.value ?? "everyone"),
+        // Someone erased since the draft was kept is no longer offered.
+        people: form.people.filter((id) => known.has(id)),
       };
     },
   });
@@ -285,6 +323,7 @@ function AnnouncementsManagerView({
   teamLabels,
   leadTeams,
   preferredAudience,
+  picker = null,
   draft,
 }: AnnouncementsManagerProps & { draft: EditorDraft<FormState> }) {
   const router = useRouter();
@@ -348,14 +387,33 @@ function AnnouncementsManagerView({
     leadTeams === null ||
     (audience.scope === "team" && leadTeams.includes(audience.team));
 
-  // "the camp" / "the team leads" / "Kitchen", for the cards and the publish
-  // confirmation.
-  const audienceName = (audience: Audience) =>
-    audience.scope === "team"
-      ? (teamLabels[audience.team] ?? audience.team)
-      : audience.scope === "team_leads"
-        ? "the team leads"
-        : "the camp";
+  // Names for chosen people. Another captain's draft may name this captain,
+  // whom the picker leaves out.
+  const names = new Map(picker?.people.map((p) => [p.id, p.name]) ?? []);
+  names.set(currentUserId, "you");
+  const nameOf = (id: string) => names.get(id);
+  const driverNames = picker?.drivers.map((d) => d.name) ?? [];
+
+  // "the camp" / "the team leads" / "Kitchen" / "the drivers" / "Jess Naidoo
+  // and Sipho Ndlovu", for the cards and the publish confirmation.
+  const audienceName = (audience: Audience) => {
+    switch (audience.scope) {
+      case "team":
+        return teamLabels[audience.team] ?? audience.team;
+      case "team_leads":
+        return "the team leads";
+      case "drivers":
+        return "the drivers";
+      case "individual": {
+        const chosen = chosenNames(audience, nameOf);
+        return chosen.length <= 2
+          ? joinNames(chosen)
+          : `${chosen.length} people`;
+      }
+      default:
+        return "the camp";
+    }
+  };
 
   const reset = () => {
     setForm(emptyForm);
@@ -376,7 +434,7 @@ function AnnouncementsManagerView({
       title: form.title,
       body: form.body,
       presentation: form.presentation,
-      audience: audienceFromValue(form.audience),
+      audience: audienceFromValue(form.audience, form.people),
       pinned: form.pinned,
     };
     startTransition(async () => {
@@ -401,6 +459,7 @@ function AnnouncementsManagerView({
       body: a.body,
       presentation: a.presentation,
       audience: audienceValue(a.audience),
+      people: audiencePeople(a.audience),
       pinned: markedPinned(a),
     });
   };
@@ -514,6 +573,14 @@ function AnnouncementsManagerView({
                   key={a.id}
                   announcement={a}
                   audienceName={audienceName(a.audience)}
+                  publishLabel={publishLabel(
+                    a.audience,
+                    audienceName(a.audience),
+                    {
+                      driverCount: driverNames.length,
+                      names: chosenNames(a.audience, nameOf),
+                    },
+                  )}
                   currentUserId={currentUserId}
                   disabled={pending || rowPending || publishing}
                   busyAction={
@@ -640,17 +707,36 @@ function AnnouncementsManagerView({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {audienceOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <span className="flex items-center gap-2">
-                      <Users className="h-4 w-4" aria-hidden />
-                      {option.label}
-                    </span>
-                  </SelectItem>
+                {audienceGroups(audienceOptions).map((group, i) => (
+                  <SelectGroup key={group.label ?? i}>
+                    {i > 0 && <SelectSeparator />}
+                    {group.label && <SelectLabel>{group.label}</SelectLabel>}
+                    {group.options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        <span className="flex items-center gap-2">
+                          <Users className="h-4 w-4" aria-hidden />
+                          {option.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
+            {form.audience === "drivers" && (
+              <AudienceLine>{driversSummary(driverNames)}</AudienceLine>
+            )}
           </div>
+
+          {form.audience === "individual" && picker && (
+            <PeoplePicker
+              people={picker.people}
+              chosen={form.people}
+              onChange={(people) => setForm((f) => ({ ...f, people }))}
+              teamLabels={teamLabels}
+              disabled={pending}
+            />
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="announcement-presentation">How it lands</Label>
@@ -732,7 +818,11 @@ function AnnouncementsManagerView({
             className="w-full"
             onClick={handleSave}
             disabled={
-              pending || rowPending || !form.title.trim() || !form.body.trim()
+              pending ||
+              rowPending ||
+              !form.title.trim() ||
+              !form.body.trim() ||
+              (form.audience === "individual" && form.people.length === 0)
             }
           >
             {pending && <Loader2 className="animate-spin" aria-hidden />}
@@ -810,8 +900,12 @@ function PublishConfirm({
             ? `No members would get it. Nobody else is on ${audienceName} this year.`
             : a.audience.scope === "team_leads"
               ? "No members would get it. Nobody else leads a team this year."
-              : "No members would get it. Nobody else is in the camp yet."
-          : `It goes to ${members(recipientCount)}${a.audience.scope === "team" ? ` of ${audienceName}` : a.audience.scope === "team_leads" ? (recipientCount === 1 ? " who leads a team" : " who lead teams") : ""} now. You can't edit or recall it after. To fix a mistake, publish a correction.`
+              : a.audience.scope === "drivers"
+                ? "No members would get it. Nobody else has said they are driving this year."
+                : a.audience.scope === "individual"
+                  ? "No members would get it. The people you picked are no longer in the camp."
+                  : "No members would get it. Nobody else is in the camp yet."
+          : `It goes to ${a.audience.scope === "individual" ? audienceName : members(recipientCount)}${a.audience.scope === "team" ? ` of ${audienceName}` : a.audience.scope === "team_leads" ? (recipientCount === 1 ? " who leads a team" : " who lead teams") : a.audience.scope === "drivers" ? " driving this year" : ""} now. You can't edit or recall it after. To fix a mistake, publish a correction.`
       }
       confirmLabel={`Publish to ${members(recipientCount)}`}
       pending={pending}
@@ -863,11 +957,7 @@ function AnnouncementHeader({
             </span>
           )}
           <Badge variant="outline">
-            {a.audience.scope === "team"
-              ? audienceName
-              : a.audience.scope === "team_leads"
-                ? "Team leads"
-                : "Everyone"}
+            {audienceBadge(a.audience, audienceName)}
           </Badge>
         </div>
       </div>
@@ -930,6 +1020,7 @@ const ClampedBody = memo(function ClampedBody({ body }: { body: string }) {
 function DraftCard({
   announcement: a,
   audienceName,
+  publishLabel,
   currentUserId,
   disabled,
   busyAction,
@@ -939,6 +1030,8 @@ function DraftCard({
 }: {
   announcement: AnnouncementSummary;
   audienceName: string;
+  /** "Publish to camp", "Publish to 6 drivers", "Publish to Jess". */
+  publishLabel: string;
   currentUserId: string;
   /** Another write is running, so no new one may start. */
   disabled: boolean;
@@ -960,7 +1053,7 @@ function DraftCard({
           <AnnouncementHeader announcement={a} audienceName={audienceName} />
           <ClampedBody body={a.body} />
           <p className="text-xs text-muted-foreground">
-            Draft · not sent · for {audienceName}
+            Draft · not sent · for {draftFor(a.audience, audienceName)}
             {mine ? "" : ` · by ${a.senderName ?? "another captain"}`}
           </p>
           {mine && (
@@ -991,11 +1084,7 @@ function DraftCard({
                 disabled={disabled}
               >
                 <BusyIcon busy={busyAction === "publish"} icon={Send} />{" "}
-                {a.audience.scope === "team"
-                  ? `Publish to ${audienceName}`
-                  : a.audience.scope === "team_leads"
-                    ? "Publish to team leads"
-                    : "Publish to camp"}
+                {publishLabel}
               </Button>
             </div>
           )}
@@ -1054,6 +1143,7 @@ function PublishedCard({
             Sent to {a.recipientCount} member
             {a.recipientCount === 1 ? "" : "s"}
             {a.audience.scope === "team" ? ` of ${audienceName}` : ""}
+            {a.audience.scope === "drivers" ? " driving this year" : ""}
             {a.senderId === currentUserId ? " · by you" : ""}
           </p>
           <div className="flex flex-col gap-1 pt-1">
@@ -1086,7 +1176,7 @@ function PublishedCard({
             <div className="flex items-center justify-between gap-2 border-t pt-3">
               <p className="text-xs text-muted-foreground">
                 {pinned
-                  ? `Sitting at the top of ${a.audience.scope === "team" ? audienceName : "everyone"}’s pages.`
+                  ? `Sitting at the top of the pages of ${pinWho(a.audience, audienceName)}.`
                   : "Not at the top of anyone’s pages."}
               </p>
               <Button
@@ -1105,4 +1195,51 @@ function PublishedCard({
       </Card>
     </li>
   );
+}
+
+/** The options under their headings, in the order the page gave them. */
+function audienceGroups(
+  options: readonly AudienceOption[],
+): { label: string | undefined; options: AudienceOption[] }[] {
+  const groups: { label: string | undefined; options: AudienceOption[] }[] = [];
+  for (const option of options) {
+    const last = groups.at(-1);
+    if (last && last.label === option.group) last.options.push(option);
+    else groups.push({ label: option.group, options: [option] });
+  }
+  return groups;
+}
+
+/** The audience chip on a card: "Everyone", "Kitchen", "Drivers", "Jess Naidoo". */
+function audienceBadge(audience: Audience, audienceName: string): string {
+  switch (audience.scope) {
+    case "team":
+      return audienceName;
+    case "team_leads":
+      return "Team leads";
+    case "drivers":
+      return "Drivers";
+    case "individual":
+      return audience.userIds.length === 1
+        ? audienceName
+        : `${audience.userIds.length} people`;
+    default:
+      return "Everyone";
+  }
+}
+
+/** "Draft · not sent · for …": "drivers this year", "Jess Naidoo only". */
+function draftFor(audience: Audience, audienceName: string): string {
+  if (audience.scope === "drivers") return "drivers this year";
+  if (audience.scope === "individual" && audience.userIds.length === 1) {
+    return `${audienceName} only`;
+  }
+  return audienceName;
+}
+
+/** Whose pages a pin sits on. */
+function pinWho(audience: Audience, audienceName: string): string {
+  if (audience.scope === "everyone") return "everyone";
+  if (audience.scope === "individual") return "the people it went to";
+  return audienceName;
 }
