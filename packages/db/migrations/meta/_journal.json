@@ -617,6 +617,27 @@
       "when": 1790930995714,
       "tag": "0087_drop_kitchen_lunch",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1790943296353,
+      "tag": "0088_fuel_can_register",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1790943304269,
+      "tag": "0089_fuel_can_names_to_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1790943325397,
+      "tag": "0090_fuel_can_register_drop_stock",
+      "breakpoints": true
     }
   ]
 }

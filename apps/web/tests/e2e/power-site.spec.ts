@@ -9,6 +9,7 @@ import {
   login,
   redeemInviteAtGate,
   resetTestState,
+  seedLift,
   seedTeam,
 } from "./_helpers";
 
@@ -17,10 +18,10 @@ import {
 // each section; a lead of another team (Kitchen) and a plain member read the
 // same section as content, with no button to press.
 //
-//  - Refuelling: there is no signal at the burn, so the paper sheet is the
-//    record and the lead types its lines in after. Five full 20 L cans
-//    (100 L), three lines of 10 L: 70 L in stock. A correction is a new
-//    line; the old one stays, marked Replaced.
+//  - Refuelling: the fuel can register (owner, 2026-10-02). A Power lead
+//    adds a can on a driver's car; "Filled by" is that driver, never picked,
+//    and the driver finds the can on their own card in Transport. The ticks
+//    are made on the printed sheet on site, never in the app.
 //  - Grid: a 3000 W load plugged in at the kitchen, fed by a 10 A cable, is
 //    13 A: over its rating, and the answer names the run. No cable counts as
 //    the camp's until someone says so.
@@ -96,91 +97,102 @@ async function pick(page: Page, combobox: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
-/** Type in one line of the paper sheet. */
-async function typeIn(page: Page, when: string, litres: string, can: string) {
-  await page
-    .getByRole("button", { name: "Type in from the sheet", exact: true })
-    .click();
-  const dialog = page.getByRole("dialog", {
-    name: "Type in a line from the sheet",
-  });
-  // Nothing is guessed: the time is the sheet's, typed in.
-  await expect(dialog.getByLabel("When")).toHaveValue("");
-  await dialog.getByLabel("When").fill(when);
-  await dialog.getByRole("spinbutton", { name: "Litres put in" }).fill(litres);
-  await pick(page, "From can", can);
-  await dialog.getByRole("button", { name: "Log refuelling" }).click();
-  await expect(dialog).toHaveCount(0);
+async function signInAs(page: Page, id: string, displayName: string) {
+  await login(page, { id, email: `${id}@example.com`, displayName });
 }
-
-const logRows = (page: Page) =>
-  page.getByRole("list", { name: "Refuelling log" }).getByRole("listitem");
 
 test.describe("power on site (test-mode)", () => {
   test.beforeEach(async ({ request }) => {
     await resetTestState(request);
   });
 
-  test("a P&L lead types in the paper sheet and the stock drops; a Kitchen lead only reads", async ({
+  test("a P&L lead adds a can on a car, the driver sees it in Transport, and others only read", async ({
     page,
     request,
   }) => {
-    await approvedMember(page, request, "site-lead", "Pat Lead");
-    await seedTeam(request, "site-lead", "power_and_lighting", true);
-    await addGenerator(page);
-
-    await open(page, "/power/fuel-log", "Refuelling");
-    await expect(page.getByText("No cans yet.")).toBeVisible();
-    await expect(page.getByText("Nothing typed in yet.")).toBeVisible();
-
-    await page.getByRole("button", { name: "Add cans", exact: true }).click();
-    const cans = page.getByRole("dialog", { name: "Add cans" });
-    await cans.getByRole("spinbutton", { name: "How many" }).fill("5");
-    await cans.getByRole("button", { name: "Add cans" }).click();
-    await expect(page.getByText("5 cans added")).toBeVisible();
-    await expect(answer(page)).toContainText("100 L in stock");
-
-    await typeIn(page, "2026-04-25T06:00", "10", "Can 1 (20 L)");
-    await typeIn(page, "2026-04-25T12:00", "10", "Can 1 (10 L)");
-    await typeIn(page, "2026-04-25T18:00", "10", "Can 2 (20 L)");
-    await expect(answer(page)).toContainText("70 L in stock");
-    await expect(logRows(page)).toHaveCount(3);
-
-    // A correction is a new entry; the old one stays, marked Replaced.
-    await page
-      .getByRole("button", { name: /^Correct the entry of Sat 25 Apr, 18:00/ })
-      .click();
-    const fix = page.getByRole("dialog", {
-      name: /^Correct the entry of Sat 25 Apr, 18:00/,
+    await approvedMember(page, request, "fuel-driver", "Dana Driver");
+    await seedLift(request, "fuel-driver", {
+      role: "driver",
+      vehicleMake: "Toyota",
+      vehicleModel: "Hilux",
+      seatsOffered: 3,
+      departureCity: "Cape Town",
     });
-    await fix.getByRole("spinbutton", { name: "Litres put in" }).fill("12");
-    await fix.getByRole("button", { name: "Log correction" }).click();
-    await expect(page.getByText("Correction logged")).toBeVisible();
-    await expect(answer(page)).toContainText("68 L in stock");
-    await expect(logRows(page)).toHaveCount(4);
-    await expect(
-      page.getByRole("list", { name: "Refuelling log" }).getByText("Replaced", {
-        exact: true,
-      }),
-    ).toHaveCount(1);
+    await approvedMember(page, request, "fuel-lead", "Pat Lead");
+    await seedTeam(request, "fuel-lead", "power_and_lighting", true);
 
-    // A lead of Kitchen reads it all and has nothing to press but the sheet.
-    await approvedMember(page, request, "site-kitchen", "Kit Chen");
-    await seedTeam(request, "site-kitchen", "kitchen", true);
-    await open(page, "/power/fuel-log", "Refuelling");
-    await expect(answer(page)).toContainText("68 L in stock");
-    await expect(logRows(page)).toHaveCount(4);
-    await expect(page.getByText(READ_ONLY)).toBeVisible();
+    await open(page, "/power/refuelling", "Refuelling");
+    await expect(page.getByText("No cans yet.").first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Add a can", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Add a can" });
+    await expect(dialog.getByText(/as can 1\./)).toBeVisible();
+    await dialog.getByRole("spinbutton", { name: "Size" }).fill("25");
+    await dialog.getByRole("combobox", { name: "Made of" }).click();
+    await page.getByRole("option", { name: "Metal", exact: true }).click();
+    // Nobody fills it until it is on a car; then the car's driver does.
+    const filler = dialog.getByRole("definition");
+    await expect(filler).toHaveText("Nobody yet: choose a car above.");
+    await dialog.getByRole("combobox", { name: "Travels with" }).click();
+    await page
+      .getByRole("option", { name: "Dana's Toyota · Dana Driver" })
+      .click();
+    await expect(filler).toContainText("Dana Driver, the driver");
+    await dialog.getByLabel("Note (optional)").fill("Red, camp stencil");
+    await dialog.getByRole("button", { name: "Add the can" }).click();
+    await expect(page.getByText("Can 1 added")).toBeVisible();
+
+    // A table in a wide window, a card in a narrow one: whichever shows.
+    const can1 = page.locator('[aria-label="Can 1"]:visible');
+    await expect(can1).toContainText("Camp");
+    await expect(can1).toContainText("25 L");
+    await expect(can1).toContainText("Metal");
+    await expect(can1).toContainText("Dana's Toyota");
+    await expect(can1).toContainText("Dana Driver");
     await expect(
-      page.getByRole("link", { name: "Print the log sheet" }),
+      page.getByRole("navigation", { name: "Power" }).getByRole("link", {
+        name: /Refuelling/,
+      }),
+    ).toContainText("1 can, 25 L");
+
+    // The driver finds it on their own card in Transport, and in the Cars.
+    await signInAs(page, "fuel-driver", "Dana Driver");
+    await page.goto("/transport");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Transport" }),
     ).toBeVisible();
+    const fill = page.getByRole("region", { name: "Fill before you leave" });
+    await expect(fill).toContainText("Fill before you leave: 1 can, 25 L");
+    await expect(fill).toContainText("Red, camp stencil");
     await expect(
-      page.getByRole("button", { name: "Type in from the sheet" }),
-    ).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Add cans" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^Correct / })).toHaveCount(
-      0,
-    );
+      fill.getByRole("link", { name: "See all fuel cans in Power ›" }),
+    ).toHaveAttribute("href", "/power/refuelling");
+    await expect(
+      page.getByRole("row", { name: "Dana Driver" }).first(),
+    ).toContainText("1 can, 25 L");
+
+    // A plain member and a lead of Kitchen read the list with nothing to press.
+    await approvedMember(page, request, "fuel-member", "Max Member");
+    await approvedMember(page, request, "fuel-kitchen", "Kit Chen");
+    await seedTeam(request, "fuel-kitchen", "kitchen", true);
+    for (const [id, name] of [
+      ["fuel-member", "Max Member"],
+      ["fuel-kitchen", "Kit Chen"],
+    ] as const) {
+      await signInAs(page, id, name);
+      await open(page, "/power/refuelling", "Refuelling");
+      await expect(can1).toContainText("Dana Driver");
+      await expect(page.getByText(READ_ONLY)).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: "Print the can sheet" }),
+      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Add a can" })).toHaveCount(
+        0,
+      );
+      await expect(
+        page.getByRole("button", { name: /^Edit can / }),
+      ).toHaveCount(0);
+    }
   });
 
   test("the grid names the run over its cable's rating; a member only reads", async ({
@@ -366,7 +378,7 @@ test.describe("power on site (test-mode)", () => {
   }) => {
     await approvedMember(page, request, "sheet-member", "Mem Sheet");
     for (const [path, heading] of [
-      ["/print/power/refuel-sheet", "Refuelling log"],
+      ["/print/power/fuel-cans", "Fuel cans"],
       ["/print/power/grid", "Grid sheet"],
       ["/print/power/sharing", "Sharing a generator"],
     ] as const) {

@@ -64,7 +64,7 @@ describe("the answer rail", () => {
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       "/power/loads",
       "/power/fuel",
-      "/power/fuel-log",
+      "/power/refuelling",
       "/power/grid",
       "/power/readiness",
       "/power/sharing",

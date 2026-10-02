@@ -9,12 +9,12 @@ import type {
   SharingAgreement,
   WorkPlanTaskRow,
 } from "@camp404/db/power-readiness";
-import type { FuelCanRow, RefuelEntryRow } from "@camp404/db/power-site";
+import type { FuelCanRow } from "@camp404/db/power-site";
 import type { PowerWriteResult } from "@camp404/db/power";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
-// Power on site and before it (#255 fuel stock and refuelling log, #256 the
+// Power on site and before it (#255 the fuel can register, #256 the
 // grid plan, #257 readiness, the work plan and sharing), from the database or,
 // under E2E, the test store. The rules live in @camp404/db; the store repeats
 // them. Every write re-checks the actor itself (a captain or a Power &
@@ -24,7 +24,6 @@ export type {
   FuelCanRow,
   GridNodeRow,
   ReadinessItemRow,
-  RefuelEntryRow,
   SharingAgreement,
   WorkPlanTaskRow,
 };
@@ -34,28 +33,16 @@ type Out<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>;
 
 const store = () => usesTestStore();
 
-// --- Fuel stock and the refuelling log (#255) ------------------------------
+// --- The fuel can register (#255) -----------------------------------------
 
 export async function listFuelCans(cycle?: number): Promise<FuelCanRow[]> {
   return store() ? testStore.listFuelCans(cycle) : site.listFuelCans(cycle);
 }
 
-export async function listRefuelEntries(
-  cycle?: number,
-): Promise<RefuelEntryRow[]> {
-  return store()
-    ? testStore.listRefuelEntries(cycle)
-    : site.listRefuelEntries(cycle);
-}
-
-export async function previousRefuelCycle(): Promise<number | null> {
-  return store() ? testStore.previousRefuelCycle() : site.previousRefuelCycle();
-}
-
-export async function addFuelCans(
-  input: In<typeof site.addFuelCans>,
-): Promise<Out<typeof site.addFuelCans>> {
-  return store() ? testStore.addFuelCans(input) : site.addFuelCans(input);
+export async function addFuelCan(
+  input: In<typeof site.addFuelCan>,
+): Promise<Out<typeof site.addFuelCan>> {
+  return store() ? testStore.addFuelCan(input) : site.addFuelCan(input);
 }
 
 export async function updateFuelCan(
@@ -68,24 +55,6 @@ export async function removeFuelCan(
   input: In<typeof site.removeFuelCan>,
 ): Promise<PowerWriteResult> {
   return store() ? testStore.removeFuelCan(input) : site.removeFuelCan(input);
-}
-
-export async function logRefuel(
-  input: In<typeof site.logRefuel>,
-): Promise<Out<typeof site.logRefuel>> {
-  return store() ? testStore.logRefuel(input) : site.logRefuel(input);
-}
-
-export async function correctRefuel(
-  input: In<typeof site.correctRefuel>,
-): Promise<Out<typeof site.correctRefuel>> {
-  return store() ? testStore.correctRefuel(input) : site.correctRefuel(input);
-}
-
-export async function strikeRefuel(
-  input: In<typeof site.strikeRefuel>,
-): Promise<Out<typeof site.strikeRefuel>> {
-  return store() ? testStore.strikeRefuel(input) : site.strikeRefuel(input);
 }
 
 // --- The grid plan (#256) --------------------------------------------------

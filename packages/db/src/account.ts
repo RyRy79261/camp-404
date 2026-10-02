@@ -208,6 +208,16 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .update(schema.transportTrailers)
       .set({ towedByUserId: null })
       .where(eq(schema.transportTrailers.towedByUserId, userId));
+    // The fuel cans (#255): a can they owned becomes the camp's, and a can
+    // in their car goes on no car; the can stays on the sheet.
+    await tx
+      .update(schema.fuelCans)
+      .set({ ownerUserId: null })
+      .where(eq(schema.fuelCans.ownerUserId, userId));
+    await tx
+      .update(schema.fuelCans)
+      .set({ travelsWithUserId: null })
+      .where(eq(schema.fuelCans.travelsWithUserId, userId));
     await tx
       .delete(schema.workshopRsvps)
       .where(eq(schema.workshopRsvps.userId, userId));

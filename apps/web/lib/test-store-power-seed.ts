@@ -1,20 +1,18 @@
 import "server-only";
 
 import {
-  AddFuelCansInput,
-  EditFuelCanInput,
   EditReadinessItemInput,
+  FuelCanInput,
   GeneratorInput,
   GridNodeInput,
   LoadInput,
-  RefuelInput,
   SharingAgreementInput,
 } from "@camp404/types";
 import { testStore } from "./test-store";
 
 // This year's Power plan in the E2E test store, a camp's worth of realistic
 // rows: the approved mock-up's own example (a Honda EU70is that the loads
-// overrun, 8 cans, a grid with one run over its rating and three loads not
+// overrun, the ten fuel cans of the can register mock-up, a grid with one run over its rating and three loads not
 // plugged in, a checklist a third done, a neighbour not yet agreed). The
 // seed-power test route fills it for a spec or a screenshot run, and the
 // Power section tests render it, so both read the same camp. Every row goes
@@ -42,9 +40,34 @@ export const POWER_EXAMPLE_LOADS = [
   ["Drinks fridge", "bar", "refrigeration", 1, 150, null],
 ] as const;
 
+/**
+ * The can register mock-up's ten cans: owner ("pat" is the actor, else the
+ * camp), size, material, which of the given cars (by index; null none), note.
+ */
+export const POWER_EXAMPLE_CANS = [
+  [null, 25, "metal", 0, "Red, camp stencil"],
+  [null, 25, "metal", 0, null],
+  [null, 25, "plastic", 1, null],
+  [null, 20, "plastic", 0, null],
+  ["pat", 20, "metal", 1, "Green, dented lid"],
+  [null, 20, "plastic", 2, null],
+  [null, 20, "plastic", 3, null],
+  [null, 10, "metal", 2, "Spout is in the camp box"],
+  ["pat", 25, "metal", null, null],
+  ["pat", 15, "plastic", null, "Blue"],
+] as const;
+
 export function seedPowerExample(
   actorId: string,
-  { withLog = false }: { withLog?: boolean } = {},
+  {
+    cars = [],
+    firstPoweredDay = null,
+  }: {
+    /** This year's drivers' user ids: the cans go on these cars. */
+    cars?: readonly string[];
+    /** The plan's day 1 (YYYY-MM-DD), which dates the can sheet's days. */
+    firstPoweredDay?: string | null;
+  } = {},
 ): void {
   const honda = must(
     "generator",
@@ -87,6 +110,7 @@ export function seedPowerExample(
         generatorId: honda,
         secondGeneratorNote: "Kipor 10, hired. Only if the Honda fails.",
         daysOnSite: 11,
+        ...(firstPoweredDay ? { firstPoweredDay } : {}),
         safetyMarginPct: 20,
         canLitres: 20,
         cansOwned: 8,
@@ -126,36 +150,18 @@ export function seedPowerExample(
     loadIds.set(name, added.id);
   }
 
-  must(
-    "cans",
-    testStore.addFuelCans({
-      ...AddFuelCansInput.parse({
-        count: 8,
-        capacityLitres: 20,
-        litres: 20,
-        location: "storage",
-      }),
-      actorId,
-    }),
-  );
-  const counts: Record<string, number> = {
-    "Can 1": 0,
-    "Can 2": 5,
-    "Can 3": 6,
-  };
-  for (const can of testStore.listFuelCans()) {
-    const litres = counts[can.label];
-    if (litres === undefined) continue;
+  for (const [i, [owner, size, material, car, note]] of [
+    ...POWER_EXAMPLE_CANS.entries(),
+  ]) {
     must(
-      `count ${can.label}`,
-      testStore.updateFuelCan({
-        ...EditFuelCanInput.parse({
-          canId: can.id,
-          expectedVersion: can.version,
-          label: can.label,
-          capacityLitres: can.capacityLitres,
-          litres,
-          location: can.location,
+      `can ${i + 1}`,
+      testStore.addFuelCan({
+        ...FuelCanInput.parse({
+          ownerUserId: owner === "pat" ? actorId : null,
+          sizeLitres: size,
+          material,
+          travelsWithUserId: car === null ? null : (cars[car] ?? null),
+          note,
         }),
         actorId,
       }),
@@ -270,40 +276,4 @@ export function seedPowerExample(
       actorId,
     }),
   );
-
-  if (withLog) {
-    const can4 = testStore.listFuelCans().find((c) => c.label === "Can 4");
-    must(
-      "refuel",
-      testStore.logRefuel({
-        ...RefuelInput.parse({
-          generatorId: honda,
-          refuelledAt: "2026-04-28T07:30",
-          litres: 12,
-          fromCanId: can4?.id ?? null,
-          doneByUserId: actorId,
-          hourMeter: 412.5,
-          note: null,
-          fromPaper: true,
-        }),
-        actorId,
-      }),
-    );
-    must(
-      "second refuel",
-      testStore.logRefuel({
-        ...RefuelInput.parse({
-          generatorId: honda,
-          refuelledAt: "2026-04-28T19:00",
-          litres: 15,
-          fromCanId: null,
-          doneByUserId: actorId,
-          hourMeter: null,
-          note: "Filled from the spare drum",
-          fromPaper: true,
-        }),
-        actorId,
-      }),
-    );
-  }
 }

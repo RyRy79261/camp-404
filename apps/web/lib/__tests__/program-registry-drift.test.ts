@@ -59,7 +59,7 @@ const EXPLAINED: Record<
     why: "A Power section; PowerFrame gates through powerViewer() at camp_member.",
     via: POWER_GATE,
   },
-  "/power/fuel-log": {
+  "/power/refuelling": {
     rank: "camp_member",
     why: "A Power section; PowerFrame gates through powerViewer() at camp_member.",
     via: POWER_GATE,

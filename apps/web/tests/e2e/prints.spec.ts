@@ -120,7 +120,7 @@ test.describe("prints (test-mode)", () => {
   }) => {
     await approvedMember(page, request, "pr-member", "Mem Print");
     for (const [path, heading] of [
-      ["/print/power/refuel-sheet", "Refuelling log"],
+      ["/print/power/fuel-cans", "Fuel cans"],
       ["/print/power/grid", "Grid sheet"],
       ["/print/power/sharing", "Sharing a generator"],
       ["/print/lounge?day=1", "Lounge programme"],
@@ -156,8 +156,8 @@ test.describe("prints (test-mode)", () => {
   }) => {
     test.setTimeout(120_000);
     await approvedMember(page, request, "pr-pdf", "Pat Pdf");
-    await page.goto("/print/power/refuel-sheet");
-    await sheetWithoutDesktop(page, "Refuelling log");
+    await page.goto("/print/power/fuel-cans");
+    await sheetWithoutDesktop(page, "Fuel cans");
     const pdf = await downloadPdf(page);
     expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
     expect(pdf.length).toBeGreaterThan(1_000);
@@ -179,7 +179,7 @@ test.describe("prints (test-mode)", () => {
     // Signed out: nothing, and no browser is started.
     await page.context().clearCookies();
     const signedOut = await page.request.get(
-      "/print/pdf?from=%2Fprint%2Fpower%2Frefuel-sheet&name=x",
+      "/print/pdf?from=%2Fprint%2Fpower%2Ffuel-cans&name=x",
     );
     expect(signedOut.status()).toBe(401);
   });

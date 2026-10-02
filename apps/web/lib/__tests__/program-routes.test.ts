@@ -45,7 +45,7 @@ describe("matchProgram", () => {
     }
     for (const p of [
       "/power/fuel",
-      "/power/fuel-log",
+      "/power/refuelling",
       "/power/grid",
       "/power/readiness",
     ]) {
@@ -54,7 +54,7 @@ describe("matchProgram", () => {
       );
     }
     // The paper sheets open in a tab of their own, not in a window.
-    expect(matchProgram("/print/power/refuel-sheet")).toBeNull();
+    expect(matchProgram("/print/power/fuel-cans")).toBeNull();
   });
 
   it("opens an inventory item inside the Inventory window, not a window of its own", () => {

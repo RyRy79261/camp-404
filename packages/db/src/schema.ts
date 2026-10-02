@@ -39,7 +39,7 @@ import {
   LOUNGE_NEEDS,
   LOUNGE_OFFER_KINDS,
   LOUNGE_OFFER_STATUSES,
-  CAN_LOCATIONS,
+  CAN_MATERIALS,
   GRID_NODE_KINDS,
   SHARE_GENERATOR_SOURCES,
   NOTIFICATION_KINDS,
@@ -69,7 +69,7 @@ import {
   type LoungeNeed,
   type LoungeOfferKind,
   type LoungeOfferStatus,
-  type CanLocation,
+  type CanMaterial,
   type GridNodeKind,
   type ShareGeneratorSource,
   type BuilderQuestionnaire,
@@ -3781,30 +3781,43 @@ export const powerPlans = pgTable(
 );
 
 // --- Power on site (#255, #256, #257) ---------------------------------------
-// The same team's tools for the burn itself: the fuel in the cans and the
-// refuelling log, the grid of cables from the generator out, each generator's
-// readiness checklist, the team's work plan on the task board, and a year's
-// agreement to share a generator with a neighbouring camp. Written only by a
-// captain or a Power & Lighting lead (canEditPower, re-read in each write's
+// The same team's tools before the burn: the fuel cans the camp prints, the
+// grid of cables from the generator out, each generator's readiness
+// checklist, the team's work plan on the task board, and a year's agreement
+// to share a generator with a neighbouring camp. Written only by a captain or
+// a Power & Lighting lead (canEditPower, re-read in each write's
 // transaction); read by anyone in the camp. No money: litres, amps and dates.
 
-// A can of fuel in this year's stock. Cans are counted per year: the litres
-// in them are this year's. `litres` falls when a refuelling says it came from
-// the can, and a stock-take sets it.
+// The fuel can register (#255; owner, 2026-10-02): one row per jerry can the
+// camp takes this year, in the printed sheet's order (`sort`; its number on
+// the sheet is its place in that order). The camp never refills them at the
+// burn: Fire & Fuel keep them at their depot, and the four ticks (Filled, At
+// fuel depot, At camp, Returned) are made on paper on site, never here.
+//
+// Who fills a can is NOT stored: it is the driver of the car the can travels
+// with (`travels_with_user_id`, the car's driver this year), as fillingCar in
+// @camp404/core derives it. The read counts the car only while its driver
+// drives THIS year, as a trailer's tow does. Both member links are `set null`
+// and erasure clears them itself (packages/db/src/account.ts): an erased
+// member's can becomes the camp's, on no car.
 export const fuelCans = pgTable(
   "fuel_cans",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     cycle: integer("cycle").notNull(),
-    label: text("label").notNull(),
-    capacityLitres: doublePrecision("capacity_litres").notNull(),
-    litres: doublePrecision("litres").notNull(),
-    location: text("location").$type<CanLocation>().notNull(),
-    // The can itself, when the inventory lists it (#246).
-    inventoryItemId: uuid("inventory_item_id").references(
-      () => inventoryItems.id,
-      { onDelete: "set null" },
-    ),
+    // Litres. The column kept its first name when the register replaced the
+    // stock list.
+    sizeLitres: doublePrecision("capacity_litres").notNull(),
+    // The member who owns it; null is the camp's own can.
+    ownerUserId: uuid("owner_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    // Null only on a can listed before the register asked (shown "Not said").
+    material: text("material").$type<CanMaterial>(),
+    travelsWithUserId: uuid("travels_with_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    note: text("note"),
     sort: integer("sort").notNull().default(0),
     version: integer("version").notNull().default(1),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
@@ -3815,61 +3828,11 @@ export const fuelCans = pgTable(
   },
   (c) => ({
     cycleIdx: index("fuel_cans_cycle_idx").on(c.cycle),
-    locationCheck: check(
-      "fuel_cans_location_check",
-      oneOf(c.location, CAN_LOCATIONS),
+    materialCheck: check(
+      "fuel_cans_material_check",
+      sql`${c.material} is null or ${oneOf(c.material, CAN_MATERIALS)}`,
     ),
-    fillCheck: check(
-      "fuel_cans_fill_check",
-      sql`${c.capacityLitres} > 0 and ${c.litres} >= 0 and ${c.litres} <= ${c.capacityLitres}`,
-    ),
-  }),
-);
-
-// The refuelling log. APPEND-ONLY: no write updates or deletes a row. A
-// correction is a new row naming the one it replaces (`corrects_entry_id`);
-// a strike-out is a new row naming it with `voided`. The unique index lets
-// each entry be replaced once, so two people correcting it at once cannot
-// both win. `done_by_user_id` is the member who filled the generator.
-export const refuelEntries = pgTable(
-  "refuel_entries",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    cycle: integer("cycle").notNull(),
-    generatorId: uuid("generator_id")
-      .notNull()
-      .references(() => generators.id),
-    refuelledAt: timestamp("refuelled_at", { mode: "date" }).notNull(),
-    litres: doublePrecision("litres").notNull(),
-    fromCanId: uuid("from_can_id").references(() => fuelCans.id, {
-      onDelete: "set null",
-    }),
-    doneByUserId: uuid("done_by_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    hourMeter: doublePrecision("hour_meter"),
-    note: text("note"),
-    // Typed in afterwards from the paper sheet at the generator.
-    fromPaper: boolean("from_paper").notNull().default(false),
-    correctsEntryId: uuid("corrects_entry_id").references(
-      (): AnyPgColumn => refuelEntries.id,
-    ),
-    voided: boolean("voided").notNull().default(false),
-    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
-  },
-  (r) => ({
-    cycleIdx: index("refuel_entries_cycle_idx").on(r.cycle, r.refuelledAt),
-    correctsUniq: uniqueIndex("refuel_entries_corrects_uniq").on(
-      r.correctsEntryId,
-    ),
-    litresCheck: check("refuel_entries_litres_check", sql`${r.litres} > 0`),
-    voidCheck: check(
-      "refuel_entries_void_check",
-      sql`not ${r.voided} or ${r.correctsEntryId} is not null`,
-    ),
+    sizeCheck: check("fuel_cans_size_check", sql`${c.sizeLitres} > 0`),
   }),
 );
 

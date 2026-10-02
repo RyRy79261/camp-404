@@ -9,20 +9,15 @@ import {
   READINESS_TICKED_FIRST,
   WORK_PLAN_ALREADY_ON_BOARD,
 } from "@camp404/db/power-readiness";
-import {
-  ENTRY_ALREADY_CORRECTED,
-  NOT_A_CAMP_MEMBER,
-  canHoldsOnly,
-} from "@camp404/db/power-site";
+import { CAN_CAR_GONE, CAN_CHANGED } from "@camp404/db/power-site";
 import type { CampConfig } from "@camp404/db/camp-config";
-import { POWER_TEAM, burnRate, effectiveRefuels } from "@camp404/core";
+import { POWER_TEAM, fillingCar } from "@camp404/core";
 import {
-  CorrectRefuelInput,
   EditGridNodeInput,
+  FuelCanInput,
   GeneratorInput,
   GridNodeInput,
   POWER_WORK_PLAN_TEMPLATE,
-  RefuelInput,
   type Team,
 } from "@camp404/types";
 import { testStore } from "../test-store";
@@ -56,8 +51,6 @@ function campYear(year: number) {
   testStore.setTeamsConfig(config);
 }
 
-const NOW = new Date("2026-12-01T00:00:00Z");
-
 describe("test store: power on site", () => {
   let powerLead: { id: string };
   let kitchenLead: { id: string };
@@ -88,92 +81,84 @@ describe("test store: power on site", () => {
     generatorId = gen.id;
   });
 
-  const refuel = (at: string, litres: number, fromCanId: string | null) =>
-    RefuelInput.parse({
-      generatorId,
-      refuelledAt: at,
-      litres,
-      fromCanId,
-      doneByUserId: watcher.id,
+  /** A driver this year, as the driver form leaves them. */
+  function driver(name: string) {
+    const user = makeUser(name);
+    testStore.setUserApprovalStatus(user.id, "approved");
+    testStore.seedDriverProfile({ userId: user.id, vehicleMake: "Toyota" });
+    return user;
+  }
+
+  const can = (over: Partial<FuelCanInput> = {}) =>
+    FuelCanInput.parse({
+      ownerUserId: null,
+      sizeLitres: 20,
+      material: "plastic",
+      travelsWithUserId: null,
+      ...over,
     });
 
-  it("refuses a Kitchen lead, and takes a refuelling out of its can", () => {
+  it("lets a Power lead add a can on a car and refuses a Kitchen lead", () => {
+    const dana = driver("Dana");
+    expect(testStore.addFuelCan({ ...can(), actorId: kitchenLead.id })).toEqual(
+      { ok: false, error: NOT_A_POWER_EDITOR },
+    );
     expect(
-      testStore.addFuelCans({
-        count: 2,
-        capacityLitres: 20,
-        litres: 20,
-        location: "storage",
-        actorId: kitchenLead.id,
+      testStore.addFuelCan({
+        ...can({ ownerUserId: watcher.id, travelsWithUserId: dana.id }),
+        actorId: powerLead.id,
       }),
-    ).toEqual({ ok: false, error: NOT_A_POWER_EDITOR });
-    testStore.addFuelCans({
-      count: 2,
-      capacityLitres: 20,
-      litres: 20,
-      location: "storage",
-      actorId: powerLead.id,
+    ).toMatchObject({ ok: true, number: 1 });
+    const [row] = testStore.listFuelCans();
+    expect(row).toMatchObject({
+      ownerName: "Sam",
+      travelsWithUserId: dana.id,
+      sizeLitres: 20,
     });
-    const [can] = testStore.listFuelCans();
-    expect(
-      testStore.logRefuel({
-        ...refuel("2026-04-25T06:00", 25, can!.id),
-        actorId: powerLead.id,
-        now: NOW,
-      }),
-    ).toEqual({ ok: false, error: canHoldsOnly(20) });
-    for (const at of ["2026-04-25T06:00", "2026-04-25T12:00"]) {
-      const r = testStore.logRefuel({
-        ...refuel(at, 10, can!.id),
-        actorId: powerLead.id,
-        now: NOW,
-      });
-      expect(r.ok).toBe(true);
-    }
-    expect(testStore.listFuelCans().map((c) => c.litres)).toEqual([0, 20]);
-    expect(burnRate(testStore.listRefuelEntries())?.litresPerDay).toBe(40);
+    // The car's driver fills it: derived, never stored.
+    const { cars } = testStore.getTransportBoard();
+    expect(fillingCar(row!, cars)?.driverName).toBe("Dana");
   });
 
-  it("refuses a doer who is not an approved member", () => {
+  it("refuses a car not driving this year and a stale version, like the db", () => {
+    const notDriving = makeUser("Nod");
     expect(
-      testStore.logRefuel({
-        ...refuel("2026-04-25T06:00", 5, null),
-        doneByUserId: "nobody",
+      testStore.addFuelCan({
+        ...can({ travelsWithUserId: notDriving.id }),
         actorId: powerLead.id,
-        now: NOW,
       }),
-    ).toEqual({ ok: false, error: NOT_A_CAMP_MEMBER });
+    ).toEqual({ ok: false, error: CAN_CAR_GONE });
+    const made = testStore.addFuelCan({ ...can(), actorId: powerLead.id });
+    if (!made.ok) throw new Error(made.error);
+    const edit = {
+      ...can({ material: "metal" }),
+      canId: made.id,
+      expectedVersion: 1,
+      actorId: powerLead.id,
+    };
+    expect(testStore.updateFuelCan(edit)).toEqual({ ok: true });
+    expect(testStore.updateFuelCan(edit)).toEqual({
+      ok: false,
+      error: CAN_CHANGED,
+    });
+    expect(
+      testStore.removeFuelCan({
+        canId: made.id,
+        expectedVersion: 2,
+        actorId: powerLead.id,
+      }),
+    ).toEqual({ ok: true });
+    expect(testStore.listFuelCans()).toEqual([]);
   });
 
-  it("replaces an entry once, putting its litres back first", () => {
-    testStore.addFuelCans({
-      count: 1,
-      capacityLitres: 20,
-      litres: 20,
-      location: "on_site",
+  it("drops a car from a can when its driver stops driving", () => {
+    const dana = driver("Dana");
+    testStore.addFuelCan({
+      ...can({ travelsWithUserId: dana.id }),
       actorId: powerLead.id,
     });
-    const [can] = testStore.listFuelCans();
-    const first = testStore.logRefuel({
-      ...refuel("2026-04-25T06:00", 20, can!.id),
-      actorId: powerLead.id,
-      now: NOW,
-    });
-    if (!first.ok) throw new Error(first.error);
-    const fix = CorrectRefuelInput.parse({
-      ...refuel("2026-04-25T06:00", 15, can!.id),
-      correctsEntryId: first.id,
-    });
-    expect(
-      testStore.correctRefuel({ ...fix, actorId: powerLead.id, now: NOW }).ok,
-    ).toBe(true);
-    expect(testStore.listFuelCans()[0]!.litres).toBe(5);
-    expect(
-      testStore.correctRefuel({ ...fix, actorId: powerLead.id, now: NOW }),
-    ).toEqual({ ok: false, error: ENTRY_ALREADY_CORRECTED });
-    expect(
-      effectiveRefuels(testStore.listRefuelEntries()).map((e) => e.litres),
-    ).toEqual([15]);
+    testStore.seedDriverProfile({ userId: dana.id, intendsToDrive: false });
+    expect(testStore.listFuelCans()[0]!.travelsWithUserId).toBeNull();
   });
 
   it("keeps the grid a tree", () => {

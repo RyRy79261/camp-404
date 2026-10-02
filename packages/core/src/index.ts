@@ -104,7 +104,9 @@
 //     surgeHeadroomWatts, amps at MAINS_VOLTS, generatorLoadPct, loadBand,
 //     powerTotals, dayLabel)
 //     and the fuel maths (fuelLine, fuelPerHour, fuelForPlan,
-//     jerryCansNeeded, legacyFuelEstimate) (./power)
+//     jerryCansNeeded, legacyFuelEstimate) (./power); the fuel cans the
+//     camp prints, with who fills each derived from its car (fillingCar,
+//     canTotals, cansToFill, fuelSheetDays) (./power-site)
 //   - logistics: canEditLogistics (a captain or a Transport and Logistics
 //     lead), logisticsEventTitle (plain), logisticsCalendarStep; attendance
 //     (canAskForAttendance, attendanceIsOpen, attendanceBoard, the nudge's

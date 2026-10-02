@@ -15,6 +15,7 @@ import {
   shortCarLabel,
   towChoices,
   trailerCell,
+  transportFuel,
   transportStrip,
 } from "../transport-view";
 
@@ -333,5 +334,56 @@ describe("liftPanel", () => {
   it("reads a driver-form day in UTC", () => {
     expect(dayLabel(new Date("2027-04-26T00:00:00.000Z"))).toBe("Mon 26 Apr");
     expect(dayLabel(null)).toBeNull();
+  });
+});
+
+describe("transportFuel", () => {
+  const dana = car("dana", "Dana van der Merwe");
+  const sipho2 = car("sipho", "Sipho Ndlovu");
+  const fuelCan = (
+    sizeLitres: number,
+    travelsWithUserId: string | null,
+    ownerName: string | null = null,
+  ) => ({
+    ownerUserId: ownerName ? "owner" : null,
+    ownerName,
+    sizeLitres,
+    material: "metal" as const,
+    travelsWithUserId,
+    note: null,
+  });
+  const cans = [
+    fuelCan(25, "dana"),
+    fuelCan(25, "sipho"),
+    fuelCan(20, "dana", "Pat Mokoena"),
+    fuelCan(20, "sipho", "Pat Mokoena"),
+    fuelCan(15, null),
+  ];
+
+  it("totals each car's cans and lists the driver's own, numbered as the sheet", () => {
+    const fuel = transportFuel(cans, [dana, sipho2], "sipho");
+    expect(fuel.byCar.get("dana")).toEqual({ cans: 2, litres: 45 });
+    expect(fuel.byCar.get("sipho")).toEqual({ cans: 2, litres: 45 });
+    expect(fuel.mine).toEqual([
+      {
+        number: 2,
+        ownerName: "Camp",
+        sizeLitres: 25,
+        material: "metal",
+        note: null,
+      },
+      {
+        number: 4,
+        ownerName: "Pat Mokoena",
+        sizeLitres: 20,
+        material: "metal",
+        note: null,
+      },
+    ]);
+  });
+
+  it("gives a rider, or a driver not driving this year, nothing to fill", () => {
+    expect(transportFuel(cans, [dana, sipho2], "rae").mine).toEqual([]);
+    expect(transportFuel(cans, [dana], "sipho").mine).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import { AlertTriangle, Zap } from "lucide-react";
-import { burnRate, dayLabel, fuelLine } from "@camp404/core";
+import { dayLabel, fuelLine } from "@camp404/core";
 import { Alert } from "@camp404/ui/components/alert";
 import { FuelDayByDay, FuelMethod } from "@/components/power/fuel-panels";
 import {
@@ -45,7 +45,6 @@ import {
   type PowerOverview,
   railName,
 } from "@/lib/power-summary";
-import { listRefuelEntries, previousRefuelCycle } from "@/lib/power-site";
 
 export const dynamic = "force-dynamic";
 
@@ -86,17 +85,6 @@ function missing(o: PowerOverview): string {
   return "The estimate needs the load list: add what the camp plugs in there.";
 }
 
-/** The litres a day last year's refuelling log shows, if it shows any. */
-async function lastYearRate(): Promise<{
-  cycle: number;
-  litresPerDay: number;
-} | null> {
-  const cycle = await previousRefuelCycle();
-  if (cycle === null) return null;
-  const rate = burnRate(await listRefuelEntries(cycle), Infinity);
-  return rate ? { cycle, litresPerDay: rate.litresPerDay } : null;
-}
-
 function runsText(from: number | null, to: number | null): string {
   return from === null || to === null
     ? "All day and night · 24 h"
@@ -108,13 +96,12 @@ async function FuelSection() {
     powerViewer(),
     getPowerOverview(),
   ]);
-  const [inventory, earlier, lastYear] = await Promise.all([
+  const [inventory, earlier] = await Promise.all([
     // Only an editor links a generator to the inventory.
     canEdit ? listPowerInventory() : Promise.resolve([]),
     canEdit && o.plan.version === 0
       ? previousPlanCycle()
       : Promise.resolve(null),
-    lastYearRate(),
   ]);
   const plan = o.plan;
   const generator = o.generator;
@@ -169,12 +156,7 @@ async function FuelSection() {
       />
 
       {summary && generator ? (
-        <FuelAnswer
-          o={o}
-          summary={summary}
-          fuelWord={fuelWord}
-          lastYear={lastYear}
-        />
+        <FuelAnswer o={o} summary={summary} fuelWord={fuelWord} />
       ) : (
         <PowerCard label="The answer">
           <EmptyNote title="No estimate yet.">{missing(o)}</EmptyNote>
@@ -313,12 +295,10 @@ function FuelAnswer({
   o,
   summary,
   fuelWord,
-  lastYear,
 }: {
   o: PowerOverview;
   summary: NonNullable<ReturnType<typeof fuelSummary>>;
   fuelWord: string;
-  lastYear: { cycle: number; litresPerDay: number } | null;
 }) {
   const { fuel, totalCans, toBuy } = summary;
   const plan = o.plan;
@@ -350,14 +330,6 @@ function FuelAnswer({
               }
             : { tone: "warn", text: `Buy ${cans(toBuy)}` },
           ...(refills ? [{ tone: "neutral" as const, text: refills }] : []),
-          ...(lastYear
-            ? [
-                {
-                  tone: "neutral" as const,
-                  text: `${lastYear.cycle} used ${formatNumber(lastYear.litresPerDay, 1)} L a day`,
-                },
-              ]
-            : []),
         ]}
       >
         Fill <b>{`${totalCans} jerry can${totalCans === 1 ? "" : "s"}`}</b>:{" "}

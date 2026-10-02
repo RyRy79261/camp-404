@@ -1,4 +1,5 @@
-import { seatsLeft } from "@camp404/core";
+import { canTotals, cansToFill, seatsLeft } from "@camp404/core";
+import type { CanMaterial } from "@camp404/types";
 import type { MyLift } from "@camp404/db/cars";
 import type {
   LiftRequestRow,
@@ -332,6 +333,64 @@ const DAY = new Intl.DateTimeFormat("en-GB", {
  */
 export function dayLabel(date: Date | null): string | null {
   return date ? DAY.format(date).replace(",", "") : null;
+}
+
+/** A fuel can a driver fills before they leave (#255), as their card lists it. */
+export interface FillCan {
+  /** Its number on the can sheet. */
+  number: number;
+  /** "Camp", or the owner's name. */
+  ownerName: string;
+  sizeLitres: number;
+  material: CanMaterial | null;
+  note: string | null;
+}
+
+/** A car's fuel cans in the Cars list: how many, their litres. */
+export interface CarFuel {
+  cans: number;
+  litres: number;
+}
+
+/**
+ * The fuel cans each car brings, by driver, and the ones in `me`'s car, from
+ * this year's can list in the sheet's order. Who fills a can is its car's
+ * driver (canTotals and cansToFill in core); Power changes the list,
+ * Transport only shows it.
+ */
+export function transportFuel<
+  C extends {
+    ownerUserId: string | null;
+    ownerName: string | null;
+    sizeLitres: number;
+    material: CanMaterial | null;
+    travelsWithUserId: string | null;
+    note: string | null;
+  },
+>(
+  cans: readonly C[],
+  cars: readonly TransportCar[],
+  me: string,
+): { byCar: Map<string, CarFuel>; mine: FillCan[] } {
+  const totals = canTotals(cans, cars);
+  const mine = cars.some((c) => c.driverUserId === me)
+    ? cansToFill(cans, me)
+    : [];
+  return {
+    byCar: new Map(
+      totals.cars.map((t) => [
+        t.car.driverUserId,
+        { cans: t.cans, litres: t.litres },
+      ]),
+    ),
+    mine: mine.map((c) => ({
+      number: cans.indexOf(c) + 1,
+      ownerName: c.ownerUserId ? nameOf(c.ownerName) : "Camp",
+      sizeLitres: c.sizeLitres,
+      material: c.material,
+      note: c.note,
+    })),
+  };
 }
 
 export interface LiftPerson {
