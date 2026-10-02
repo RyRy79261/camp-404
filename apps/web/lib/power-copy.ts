@@ -1,5 +1,5 @@
 import type {
-  CanLocation,
+  CanMaterial,
   FuelType,
   GeneratorOwner,
   GridNodeKind,
@@ -16,12 +16,12 @@ import type {
 export const POWER_HOME_PATH = "/power";
 export const POWER_LOADS_PATH = "/power/loads";
 export const POWER_FUEL_PATH = "/power/fuel";
-export const POWER_FUEL_LOG_PATH = "/power/fuel-log";
+export const POWER_REFUELLING_PATH = "/power/refuelling";
 export const POWER_GRID_PATH = "/power/grid";
 export const POWER_READINESS_PATH = "/power/readiness";
 export const POWER_SHARING_PATH = "/power/sharing";
 /** The paper sheets, printed outside the desktop (#249). */
-export const PRINT_REFUEL_SHEET_PATH = "/print/power/refuel-sheet";
+export const PRINT_CAN_SHEET_PATH = "/print/power/fuel-cans";
 export const PRINT_GRID_SHEET_PATH = "/print/power/grid";
 export const PRINT_SHARING_PATH = "/print/power/sharing";
 
@@ -30,7 +30,7 @@ export const POWER_PATHS = [
   POWER_HOME_PATH,
   POWER_LOADS_PATH,
   POWER_FUEL_PATH,
-  POWER_FUEL_LOG_PATH,
+  POWER_REFUELLING_PATH,
   POWER_GRID_PATH,
   POWER_READINESS_PATH,
   POWER_SHARING_PATH,
@@ -46,16 +46,24 @@ export const CHECK_LOAD = "Check the load and try again.";
 export const CHECK_PLAN = "Check the plan settings and try again.";
 export const CHECK_GENERATOR = "Check the generator and try again.";
 export const CHECK_CANS = "Check the cans and try again.";
-export const CHECK_REFUEL = "Check the refuelling and try again.";
 export const CHECK_GRID = "Check the point and try again.";
 export const CHECK_READINESS = "Check the item and try again.";
 export const CHECK_SHARING = "Check the agreement and try again.";
 
-export const CAN_LOCATION_LABELS: Record<CanLocation, string> = {
-  storage: "In storage",
-  vehicle: "On a vehicle",
-  on_site: "On site",
+export const CAN_MATERIAL_LABELS: Record<CanMaterial, string> = {
+  metal: "Metal",
+  plastic: "Plastic",
 };
+
+/** A can's material as the list shows it; a can listed before it was asked. */
+export function materialText(material: CanMaterial | null): string {
+  return material ? CAN_MATERIAL_LABELS[material] : "Not said";
+}
+
+/** "1 can", "3 cans". */
+export function cansText(n: number): string {
+  return `${n} can${n === 1 ? "" : "s"}`;
+}
 
 export const GRID_KIND_LABELS: Record<GridNodeKind, string> = {
   generator: "Generator",

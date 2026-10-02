@@ -52,7 +52,9 @@ book to read, not a console window. Writing and editing stay in the main app.
 **Two PRs tonight already print**, each on its own:
 
 - PR #298: `/print/power/refuel-sheet` (a blank refuelling log), grid and
-  sharing sheets;
+  sharing sheets; [CORRECTION 2026-10-02] the refuelling log is gone (the
+  owner rejected a paper fuel log); `/print/power/fuel-cans` prints the fuel
+  can list and the day-by-day fuel sheet instead;
 - PR #301: `/print/lounge` (day sheets and a blank whiteboard grid).
 
 Both follow #249's proposal: a page outside the console, black on white,

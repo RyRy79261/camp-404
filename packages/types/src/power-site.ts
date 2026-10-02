@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Power on site and before it (#255 fuel stock and refuelling log, #256 the
+// Power on site and before it (#255 the fuel cans the camp prints, #256 the
 // grid plan, #257 generator readiness and sharing with a neighbouring camp).
 // What the Power & Lighting team types; the maths lives in @camp404/core and
 // who may write is the server's rule (canEditPower), never this shape's.
@@ -33,134 +33,55 @@ const optionalNumber = (schema: z.ZodNumber) =>
     schema.nullable(),
   );
 
-// --- Fuel stock (#255) -----------------------------------------------------
+// --- The fuel cans (#255; the owner's register, 2026-10-02) ----------------
+//
+// The camp takes a set number of jerry cans; they are never refilled at the
+// burn. AfrikaBurn's Fire & Fuel keep the full ones at their depot, bring
+// them to camp and take the empties back, and the four ticks (Filled, At fuel
+// depot, At camp, Returned) are made on the printed sheet, never in the app.
+// So the app keeps only the list the sheet prints: each can's owner, size,
+// what it is made of, the car it travels with, and a note. Who fills a can is
+// never stored: it is the driver of the car it travels with.
 
-/** Where a can is: the storage unit, on a vehicle, or on site. */
-export const CAN_LOCATIONS = ["storage", "vehicle", "on_site"] as const;
-export const CanLocation = z.enum(CAN_LOCATIONS);
-export type CanLocation = z.infer<typeof CanLocation>;
+/** What a can is made of. */
+export const CAN_MATERIALS = ["metal", "plastic"] as const;
+export const CanMaterial = z.enum(CAN_MATERIALS);
+export type CanMaterial = z.infer<typeof CanMaterial>;
 
-/** The largest container the stock list takes, in litres. */
+/** The largest container the list takes, in litres. */
 export const MAX_CAN_LITRES = 250;
-/** The most cans one "Add cans" makes. */
-export const MAX_CANS_AT_ONCE = 50;
 
-const canSize = z
-  .number()
-  .gt(0, "Give the can's size.")
-  .max(MAX_CAN_LITRES, `A can holds at most ${MAX_CAN_LITRES} L.`);
-const canLitres = z
-  .number()
-  .min(0, "A can holds 0 litres or more.")
-  .max(MAX_CAN_LITRES, `A can holds at most ${MAX_CAN_LITRES} L.`);
-
-function checkFill(
-  can: { capacityLitres: number; litres: number },
-  ctx: z.RefinementCtx,
-) {
-  if (can.litres > can.capacityLitres) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["litres"],
-      message: "A can can't hold more than its size.",
-    });
-  }
-}
-
-/** One or more cans added to this year's stock, all alike. */
-export const AddFuelCansInput = z
-  .object({
-    count: z
-      .number()
-      .int("Count whole cans.")
-      .min(1, "Add at least 1 can.")
-      .max(MAX_CANS_AT_ONCE, `Add at most ${MAX_CANS_AT_ONCE} cans at once.`),
-    capacityLitres: canSize,
-    litres: canLitres,
-    location: CanLocation,
-  })
-  .superRefine(checkFill);
-export type AddFuelCansInput = z.infer<typeof AddFuelCansInput>;
-
-/** A can as counted: its name, size, litres in it and where it is. */
-export const EditFuelCanInput = z
-  .object({
-    canId: RowId,
-    expectedVersion: z.number().int().min(0),
-    label: z
-      .string()
-      .trim()
-      .min(1, "Name the can.")
-      .max(40, "Keep the name under 40 characters."),
-    capacityLitres: canSize,
-    litres: canLitres,
-    location: CanLocation,
-  })
-  .superRefine(checkFill);
-export type EditFuelCanInput = z.infer<typeof EditFuelCanInput>;
-
-// --- Refuelling log (#255) -------------------------------------------------
-
-/** A camp-local time as a datetime field sends it: YYYY-MM-DDTHH:MM. */
-const LOCAL_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
-
-/** A real day and time: a UTC round trip gives the same text back. */
-export function isLocalDateTime(v: string): boolean {
-  const m = LOCAL_TIME.exec(v);
-  if (!m) return false;
-  const [, y, mo, d, h, mi] = m.map(Number);
-  const date = new Date(Date.UTC(y!, mo! - 1, d!, h!, mi!));
-  return date.toISOString().slice(0, 16) === v;
-}
-
-/** The most one refuelling puts in, in litres. */
-export const MAX_REFUEL_LITRES = 500;
-
-const refuelFields = {
-  generatorId: RowId,
-  /** When, in camp time, as the datetime field sends it. */
-  refuelledAt: z
-    .string()
-    .refine(isLocalDateTime, "Give the day and time it was filled."),
-  litres: z
-    .number()
-    .gt(0, "Give the litres put in.")
-    .max(
-      MAX_REFUEL_LITRES,
-      `One refuelling is at most ${MAX_REFUEL_LITRES} L.`,
-    ),
-  /** The can it came from, which then holds that much less. */
-  fromCanId: RowId.nullish().transform((v) => v ?? null),
-  /** The member who filled it. */
-  doneByUserId: MemberId,
-  hourMeter: optionalNumber(
-    z
-      .number()
-      .min(0, "The hour meter reads 0 or more.")
-      .max(100_000, "Check the hour meter reading."),
-  ),
-  note: optionalText(200, "Keep the note under 200 characters."),
-  /** Typed in afterwards from the paper sheet at the generator. */
-  fromPaper: z.boolean().default(false),
+const canFields = {
+  /** The member who owns it; null is the camp's own can. */
+  ownerUserId: MemberId.nullable(),
+  sizeLitres: z
+    .number({ error: "Give the can's size in litres." })
+    .gt(0, "Give the can's size in litres.")
+    .max(MAX_CAN_LITRES, `A can holds at most ${MAX_CAN_LITRES} L.`),
+  material: CanMaterial,
+  /** The car it travels with, by its driver; null is not on a car yet. */
+  travelsWithUserId: MemberId.nullable(),
+  note: optionalText(80, "Keep the note under 80 characters."),
 };
 
-/** A refuelling, logged. The log is append-only: nothing edits an entry. */
-export const RefuelInput = z.object(refuelFields);
-export type RefuelInput = z.infer<typeof RefuelInput>;
+/** A can added to this year's list. */
+export const FuelCanInput = z.object(canFields);
+export type FuelCanInput = z.infer<typeof FuelCanInput>;
 
-/** A correction: a new entry that replaces an earlier one. */
-export const CorrectRefuelInput = z.object({
-  ...refuelFields,
-  correctsEntryId: RowId,
+/** A can changed, from the version the editor saw. */
+export const EditFuelCanInput = z.object({
+  ...canFields,
+  canId: RowId,
+  expectedVersion: z.number().int().min(0),
 });
-export type CorrectRefuelInput = z.infer<typeof CorrectRefuelInput>;
+export type EditFuelCanInput = z.infer<typeof EditFuelCanInput>;
 
-/** A strike-out: a new entry that says an earlier one never happened. */
-export const StrikeRefuelInput = z.object({
-  entryId: RowId,
-  note: optionalText(200, "Keep the note under 200 characters."),
+/** A can taken off the list, from the version the editor saw. */
+export const RemoveFuelCanInput = z.object({
+  canId: RowId,
+  expectedVersion: z.number().int().min(0),
 });
-export type StrikeRefuelInput = z.infer<typeof StrikeRefuelInput>;
+export type RemoveFuelCanInput = z.infer<typeof RemoveFuelCanInput>;
 
 // --- The grid (#256) -------------------------------------------------------
 

@@ -22,13 +22,13 @@ import type {
   ReadinessItemRow,
   SharingAgreement,
 } from "@camp404/db/power-readiness";
-import type { FuelCanRow, RefuelEntryRow } from "@camp404/db/power-site";
+import type { FuelCanRow } from "@camp404/db/power-site";
 import {
-  POWER_FUEL_LOG_PATH,
   POWER_FUEL_PATH,
   POWER_GRID_PATH,
   POWER_LOADS_PATH,
   POWER_READINESS_PATH,
+  POWER_REFUELLING_PATH,
   POWER_SHARING_PATH,
   formatNumber,
 } from "./power-copy";
@@ -48,8 +48,8 @@ export interface PowerOverview {
   generators: GeneratorRow[];
   /** The plan's generator, archived or not; null with none chosen. */
   generator: GeneratorRow | null;
+  /** This year's fuel cans; a can's car only while its driver drives. */
   cans: FuelCanRow[];
-  entries: RefuelEntryRow[];
   nodes: GridNodeRow[];
   /** Where each load plugs in: load id to grid point id. */
   where: Record<string, string>;
@@ -172,35 +172,21 @@ export function refillText(refillsPerDay: number): string | null {
   return `Tank filled about ${formatNumber(refillsPerDay, 0)} times a day`;
 }
 
-// --- Refuelling (the cans) -----------------------------------------------------
+// --- Refuelling (the fuel can register) ---------------------------------------
 
-export interface StockSummary {
-  onHand: number;
-  full: number;
-  part: number;
-  empty: number;
-  /** The litres the burn needs, with the margin; null with no estimate. */
-  need: number | null;
+export interface CanSummary {
+  cans: number;
+  litres: number;
+  /** Cans on no car this year: nobody fills these yet. */
+  notOnCar: number;
 }
 
-export function stockSummary(
-  o: PowerOverview,
-  fuel: FuelSummary | null,
-): StockSummary {
-  let full = 0;
-  let part = 0;
-  let empty = 0;
-  for (const c of o.cans) {
-    if (c.litres <= 0) empty += 1;
-    else if (c.litres >= c.capacityLitres) full += 1;
-    else part += 1;
-  }
+/** The register in three figures: every can, its litres, those on no car. */
+export function canSummary(o: PowerOverview): CanSummary {
   return {
-    onHand: o.cans.reduce((sum, c) => sum + c.litres, 0),
-    full,
-    part,
-    empty,
-    need: fuel ? fuel.fuel.litresWithMargin : null,
+    cans: o.cans.length,
+    litres: o.cans.reduce((sum, c) => sum + c.sizeLitres, 0),
+    notOnCar: o.cans.filter((c) => c.travelsWithUserId === null).length,
   };
 }
 
@@ -345,7 +331,7 @@ export function sharingSummary(o: PowerOverview): SharingSummary | null {
 export type PowerSection =
   | "loads"
   | "fuel"
-  | "fuel-log"
+  | "refuelling"
   | "grid"
   | "readiness"
   | "sharing";
@@ -411,7 +397,7 @@ export function railName(model: string): string {
 export function powerRail(o: PowerOverview): RailEntry[] {
   const verdict = loadVerdict(o);
   const fuel = fuelSummary(o);
-  const stock = stockSummary(o, fuel);
+  const cans = canSummary(o);
   const grid = gridSummary(o);
   const ready = readinessSummary(o);
   const share = sharingSummary(o);
@@ -436,27 +422,21 @@ export function powerRail(o: PowerOverview): RailEntry[] {
         tone: "mute",
       };
 
-  const stockEntry: RailEntry =
-    stock.need !== null && fuel
-      ? {
-          section: "fuel-log",
-          label: "Refuelling",
-          href: POWER_FUEL_LOG_PATH,
-          answer: `${formatNumber(stock.onHand, 0)} of ${formatNumber(stock.need, 0)} L`,
-          detail:
-            fuel.toBuy > 0
-              ? `${plural(fuel.toBuy, "can")} still to buy`
-              : "Enough cans for the burn",
-          tone: stock.onHand >= stock.need ? "ok" : "warn",
-        }
+  const stockEntry: RailEntry = {
+    section: "refuelling",
+    label: "Refuelling",
+    href: POWER_REFUELLING_PATH,
+    ...(cans.cans === 0
+      ? { answer: "No cans yet", detail: "Add the camp's cans", tone: "mute" }
       : {
-          section: "fuel-log",
-          label: "Refuelling",
-          href: POWER_FUEL_LOG_PATH,
-          answer: `${formatNumber(stock.onHand, 0)} L in stock`,
-          detail: plural(o.cans.length, "can"),
-          tone: "mute",
-        };
+          answer: `${plural(cans.cans, "can")}, ${formatNumber(cans.litres, 0)} L`,
+          detail:
+            cans.notOnCar > 0
+              ? `${plural(cans.notOnCar, "can")} not on a car yet`
+              : "Every can is on a car",
+          tone: cans.notOnCar > 0 ? "warn" : "ok",
+        }),
+  };
 
   const gridBase = {
     section: "grid" as const,

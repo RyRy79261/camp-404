@@ -15,7 +15,13 @@ import {
   listUnseated,
   type UnseatedMember,
 } from "@/lib/transport";
-import { liftPanel, needsSeatRows, transportStrip } from "@/lib/transport-view";
+import {
+  liftPanel,
+  needsSeatRows,
+  transportFuel,
+  transportStrip,
+} from "@/lib/transport-view";
+import { listFuelCans } from "@/lib/power-site";
 import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +31,9 @@ export const metadata = { title: "Transport — Camp 404" };
 // Transport (#270), as the owner approved it (Option A, 2026-10-01): one page
 // of tables, one row per person, one button in one place. The viewer's own
 // lift first, then four counts in one strip, then (for a Transport editor)
-// everyone who still needs a seat, the cars, and the trailers.
+// everyone who still needs a seat, the cars, and the trailers. Each car shows
+// the fuel cans it brings, read-only: Power keeps that list (#255), and a
+// driver's own card lists the cans they fill before they leave.
 //
 // Every approved member reads the cars and trailers (names and cars only: no
 // phone, registration or travel dates of anyone else's car). Filtered here on
@@ -40,13 +48,17 @@ export default async function TransportPage() {
   const canEdit = canEditTransport(rank, leadTeams);
   const me = campUser.id;
 
-  const [board, requests, unseated, lift] = await Promise.all([
+  const [board, requests, unseated, lift, cans] = await Promise.all([
     getTransportBoard(),
     listLiftRequests(),
     canEdit ? listUnseated() : Promise.resolve([] as UnseatedMember[]),
     getMyLift(me),
+    listFuelCans(),
   ]);
   const { cars, trailers } = board;
+  // The fuel cans each car brings (#255): Power keeps the list, and a driver
+  // fills the cans in their car, so their own card lists them.
+  const fuel = transportFuel(cans, cars, me);
   const visible = liftRequestsFor(requests, { userId: me, canEdit });
   const needs = canEdit ? needsSeatRows(unseated, visible, cars) : [];
   const strip = transportStrip({
@@ -67,6 +79,7 @@ export default async function TransportPage() {
         panel={liftPanel({ me, lift, cars, requests: visible })}
         me={me}
         layout="row"
+        fuel={fuel.mine}
       />
 
       <dl
@@ -112,7 +125,12 @@ export default async function TransportPage() {
       </dl>
 
       {canEdit && <NeedsSeatSection rows={needs} cars={cars} />}
-      <CarsSection cars={cars} me={me} canEdit={canEdit} />
+      <CarsSection
+        cars={cars}
+        me={me}
+        canEdit={canEdit}
+        fuel={Object.fromEntries(fuel.byCar)}
+      />
       <TrailersSection trailers={trailers} cars={cars} canEdit={canEdit} />
     </div>
   );

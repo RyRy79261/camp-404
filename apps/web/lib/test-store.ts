@@ -4715,6 +4715,11 @@ export const testStore = {
           }
         : null;
     },
+    drives: (userId, cycle) =>
+      !!findUserById(userId) &&
+      driverProfiles.some(
+        (d) => d.userId === userId && d.cycle === cycle && d.intendsToDrive,
+      ),
     generators: () => generators,
     loads: () => powerLoads,
     task: (id) => tasks.find((t) => t.id === id) ?? null,

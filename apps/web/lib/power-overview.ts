@@ -17,7 +17,6 @@ import {
   listGridNodes,
   listLoadGridPoints,
   listReadinessItems,
-  listRefuelEntries,
 } from "./power-site";
 import type { PowerOverview } from "./power-summary";
 import { listTeamPeople } from "./roster";
@@ -56,27 +55,17 @@ export function namesOr(names: readonly string[]): string {
 }
 
 export const getPowerOverview = cache(async (): Promise<PowerOverview> => {
-  const [
-    loads,
-    plan,
-    generators,
-    cans,
-    entries,
-    nodes,
-    where,
-    items,
-    agreement,
-  ] = await Promise.all([
-    listPowerLoads(),
-    getPowerPlan(),
-    listGenerators(),
-    listFuelCans(),
-    listRefuelEntries(),
-    listGridNodes(),
-    listLoadGridPoints(),
-    listReadinessItems(),
-    getSharingAgreement(),
-  ]);
+  const [loads, plan, generators, cans, nodes, where, items, agreement] =
+    await Promise.all([
+      listPowerLoads(),
+      getPowerPlan(),
+      listGenerators(),
+      listFuelCans(),
+      listGridNodes(),
+      listLoadGridPoints(),
+      listReadinessItems(),
+      getSharingAgreement(),
+    ]);
   // A plan or an agreement may name a generator archived since; it still reads.
   const find = async (id: string | null) =>
     id === null
@@ -92,7 +81,6 @@ export const getPowerOverview = cache(async (): Promise<PowerOverview> => {
     generators,
     generator,
     cans,
-    entries,
     nodes,
     where,
     items,

@@ -81,6 +81,9 @@ export const AUDIT_ACTION_LABELS = {
   "participation.decided": "Decided a member's place this year",
   "participation.withdrawn": "Withdrew from this year",
   "payment.recorded": "Recorded a payment",
+  "power.fuel_can_added": "Added a fuel can",
+  "power.fuel_can_changed": "Changed a fuel can",
+  "power.fuel_can_removed": "Removed a fuel can",
   "payment.status_changed": "Changed a payment",
   "payment.proof_viewed": "Viewed a proof of payment",
   "payment.refund_declined": "Declined a refund",
@@ -606,6 +609,20 @@ export function auditDetail(
       return rows === null
         ? null
         : `${rows} ${rows === 1 ? "member" : "members"}`;
+    }
+    // The fuel cans (#255): which can on the sheet, its size and material.
+    case "power.fuel_can_added":
+    case "power.fuel_can_changed":
+    case "power.fuel_can_removed": {
+      const number = count(metadata, "number");
+      const size = count(metadata, "sizeLitres");
+      const material = text(metadata, "material");
+      const parts = [
+        number === null ? null : `Can ${number}`,
+        size === null ? null : `${size} L`,
+        material,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(", ") : null;
     }
     default:
       return null;

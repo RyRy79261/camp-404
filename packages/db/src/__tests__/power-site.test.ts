@@ -1,49 +1,32 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import {
-  POWER_TEAM,
-  burnRate,
-  daysOfFuelLeft,
-  effectiveRefuels,
-  lowFuelWarning,
-} from "@camp404/core";
-import {
-  AddFuelCansInput,
-  CorrectRefuelInput,
-  GeneratorInput,
-  RefuelInput,
-  type Team,
-} from "@camp404/types";
+import { POWER_TEAM, canTotals, fillingCar } from "@camp404/core";
+import { FuelCanInput, type Team } from "@camp404/types";
 import type { CampConfig } from "../camp-config";
-import { NOT_A_POWER_EDITOR, addGenerator } from "../power";
+import { NOT_A_POWER_EDITOR } from "../power";
 import {
+  CAN_CAR_GONE,
   CAN_CHANGED,
-  ENTRY_ALREADY_CORRECTED,
-  ENTRY_STRUCK_OUT,
-  NOT_A_CAMP_MEMBER,
-  REFUEL_IN_FUTURE,
-  addFuelCans,
-  canHoldsOnly,
-  correctRefuel,
+  CAN_GONE,
+  CAN_OWNER_NOT_MEMBER,
+  addFuelCan,
   listFuelCans,
-  listRefuelEntries,
-  logRefuel,
-  previousRefuelCycle,
   removeFuelCan,
-  strikeRefuel,
   updateFuelCan,
 } from "../power-site";
+import { getTransportBoard } from "../transport";
+import { sanitiseAccount } from "../account";
 import * as schema from "../schema";
 import { assignTeam, setLead } from "../team-memberships";
 import { useTestDb } from "./_harness";
-import { makeUser } from "./_factories";
+import { makeDriverProfile, makeUser } from "./_factories";
 
-// Fuel on site (#255) on a real Postgres (PGlite). What matters: only a
-// captain or a Power & Lighting lead writes, checked inside the write; the log
-// is append-only (a correction or strike-out is a new row, and an entry is
-// replaced once); a refuelling from a can takes its litres out of that can and
-// a correction puts them back; and the days of fuel left and the low-fuel
-// warning come out of the stored rows.
+// The fuel can register (#255; owner, 2026-10-02) on a real Postgres
+// (PGlite). What matters: only a captain or a Power & Lighting lead writes,
+// checked inside the write; a change is a compare-and-set on the version; each
+// write leaves its audit row in the same transaction; a can's car counts only
+// while its driver drives this year; and who fills a can is that car's driver,
+// derived from the stored rows and never stored.
 
 type DB = ReturnType<ReturnType<typeof useTestDb>["db"]>;
 
@@ -70,21 +53,16 @@ async function campYear(db: DB, year: number, earlier: number[] = []) {
     .where(eq(schema.campSettings.id, true));
 }
 
-const GENNY = GeneratorInput.parse({
-  model: "Test 5.5",
-  ratedKva: 5.5,
-  maxKva: 6,
-  tankLitres: 13.5,
-  runtime50Hours: 9.8,
-  runtime100Hours: 5.5,
-  fuelType: "petrol",
-  owner: "camp",
-});
+const can = (over: Partial<FuelCanInput> = {}): FuelCanInput =>
+  FuelCanInput.parse({
+    ownerUserId: null,
+    sizeLitres: 20,
+    material: "plastic",
+    travelsWithUserId: null,
+    ...over,
+  });
 
-/** Well after every refuelling below, so none is "still to come". */
-const NOW = new Date("2026-12-01T00:00:00Z");
-
-describe("fuel on site", () => {
+describe("the fuel can register", () => {
   const h = useTestDb();
 
   async function leadOf(team: Team) {
@@ -99,297 +77,244 @@ describe("fuel on site", () => {
     const captain = await makeUser(h.db(), { rank: "captain" });
     const powerLead = await leadOf(POWER_TEAM as Team);
     const kitchenLead = await leadOf("kitchen");
-    const member = await makeUser(h.db(), { displayName: "Sam Watch" });
-    const gen = await addGenerator({ ...GENNY, actorId: captain.id });
-    if (!gen.ok) throw new Error(gen.error);
-    return { captain, powerLead, kitchenLead, member, generatorId: gen.id };
+    const member = await makeUser(h.db(), { displayName: "Pat Mokoena" });
+    const dana = await makeUser(h.db(), { displayName: "Dana Driver" });
+    await makeDriverProfile(h.db(), { userId: dana.id, cycle: 2026 });
+    const sipho = await makeUser(h.db(), { displayName: "Sipho Ndlovu" });
+    await makeDriverProfile(h.db(), { userId: sipho.id, cycle: 2026 });
+    return { captain, powerLead, kitchenLead, member, dana, sipho };
   }
 
-  async function cans(actorId: string, count: number, litres = 20) {
-    const made = await addFuelCans({
-      ...AddFuelCansInput.parse({
-        count,
-        capacityLitres: 20,
-        litres,
-        location: "on_site",
-      }),
-      actorId,
-    });
+  async function add(actorId: string, over: Partial<FuelCanInput> = {}) {
+    const made = await addFuelCan({ ...can(over), actorId });
     if (!made.ok) throw new Error(made.error);
-    return listFuelCans();
+    return made;
   }
 
-  function refuel(
-    generatorId: string,
-    doneByUserId: string,
-    refuelledAt: string,
-    litres: number,
-    fromCanId: string | null = null,
-  ) {
-    return RefuelInput.parse({
-      generatorId,
-      doneByUserId,
-      refuelledAt,
-      litres,
-      fromCanId,
+  async function audit(action: string) {
+    return h
+      .db()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, action));
+  }
+
+  it("lets a captain and a Power lead add cans, numbered in the sheet's order", async () => {
+    const { captain, powerLead, member, dana } = await setup();
+    const first = await add(captain.id, { sizeLitres: 25, material: "metal" });
+    const second = await add(powerLead.id, {
+      ownerUserId: member.id,
+      travelsWithUserId: dana.id,
+      note: "Green, dented lid",
     });
-  }
+    expect([first.number, second.number]).toEqual([1, 2]);
 
-  async function onHand() {
-    return (await listFuelCans()).reduce((sum, c) => sum + c.litres, 0);
-  }
+    const rows = await listFuelCans();
+    expect(rows.map((r) => [r.sizeLitres, r.material, r.ownerName])).toEqual([
+      [25, "metal", null],
+      [20, "plastic", "Pat Mokoena"],
+    ]);
+    expect(rows[1]!.travelsWithUserId).toBe(dana.id);
+    expect(rows[1]!.note).toBe("Green, dented lid");
+    expect(rows.every((r) => r.cycle === 2026)).toBe(true);
 
-  it("names cans in order and carries on past a removed one", async () => {
-    const { captain } = await setup();
-    const three = await cans(captain.id, 3);
-    expect(three.map((c) => c.label)).toEqual(["Can 1", "Can 2", "Can 3"]);
+    // Each add leaves its row, naming the can and who added it.
+    const added = await audit("power.fuel_can_added");
+    expect(added.map((a) => a.actorId).sort()).toEqual(
+      [captain.id, powerLead.id].sort(),
+    );
+    expect(added.find((a) => a.target === second.id)?.metadata).toMatchObject({
+      cycle: 2026,
+      number: 2,
+      sizeLitres: 20,
+      material: "plastic",
+      ownerUserId: member.id,
+      travelsWithUserId: dana.id,
+    });
+  });
+
+  it("refuses a lead of another team and a plain member, with nothing written", async () => {
+    const { kitchenLead, member } = await setup();
+    for (const actor of [kitchenLead, member]) {
+      expect(await addFuelCan({ ...can(), actorId: actor.id })).toEqual({
+        ok: false,
+        error: NOT_A_POWER_EDITOR,
+      });
+    }
+    expect(await listFuelCans()).toEqual([]);
+    expect(await audit("power.fuel_can_added")).toEqual([]);
+  });
+
+  it("refuses a change or a removal by a member, and leaves the can as it was", async () => {
+    const { powerLead, member } = await setup();
+    const made = await add(powerLead.id);
+    const [row] = await listFuelCans();
+    expect(
+      await updateFuelCan({
+        ...can({ sizeLitres: 5 }),
+        canId: made.id,
+        expectedVersion: row!.version,
+        actorId: member.id,
+      }),
+    ).toEqual({ ok: false, error: NOT_A_POWER_EDITOR });
     expect(
       await removeFuelCan({
-        actorId: captain.id,
-        canId: three[1]!.id,
-        expectedVersion: 1,
+        canId: made.id,
+        expectedVersion: row!.version,
+        actorId: member.id,
+      }),
+    ).toEqual({ ok: false, error: NOT_A_POWER_EDITOR });
+    expect((await listFuelCans())[0]!.sizeLitres).toBe(20);
+  });
+
+  it("changes a can from the version seen, and refuses a stale one", async () => {
+    const { captain, powerLead, sipho } = await setup();
+    const made = await add(powerLead.id);
+    const [before] = await listFuelCans();
+
+    expect(
+      await updateFuelCan({
+        ...can({ material: "metal", travelsWithUserId: sipho.id }),
+        canId: made.id,
+        expectedVersion: before!.version,
+        actorId: powerLead.id,
       }),
     ).toEqual({ ok: true });
-    const after = await cans(captain.id, 1);
-    expect(after.map((c) => c.label)).toEqual(["Can 1", "Can 3", "Can 4"]);
-  });
+    // A second editor still holding the old version loses, with a sentence.
+    expect(
+      await updateFuelCan({
+        ...can({ sizeLitres: 10 }),
+        canId: made.id,
+        expectedVersion: before!.version,
+        actorId: captain.id,
+      }),
+    ).toEqual({ ok: false, error: CAN_CHANGED });
+    expect(
+      await removeFuelCan({
+        canId: made.id,
+        expectedVersion: before!.version,
+        actorId: captain.id,
+      }),
+    ).toEqual({ ok: false, error: CAN_CHANGED });
 
-  it("refuses a lead of another team and a member, inside the write", async () => {
-    const { captain, kitchenLead, member, generatorId } = await setup();
-    const [can] = await cans(captain.id, 1);
-    for (const actor of [kitchenLead, member]) {
-      expect(
-        await addFuelCans({
-          count: 1,
-          capacityLitres: 20,
-          litres: 20,
-          location: "storage",
-          actorId: actor.id,
-        }),
-      ).toEqual({ ok: false, error: NOT_A_POWER_EDITOR });
-      expect(
-        await logRefuel({
-          ...refuel(generatorId, member.id, "2026-04-25T06:00", 10, can!.id),
-          actorId: actor.id,
-          now: NOW,
-        }),
-      ).toEqual({ ok: false, error: NOT_A_POWER_EDITOR });
-    }
-    expect(await listRefuelEntries()).toEqual([]);
-    expect(await onHand()).toBe(20);
-  });
-
-  it("a stock-take is a compare-and-set on the can's version", async () => {
-    const { captain, powerLead } = await setup();
-    const [can] = await cans(captain.id, 1);
-    const take = (actorId: string, litres: number) =>
-      updateFuelCan({
-        canId: can!.id,
-        expectedVersion: 1,
-        label: "Can 1",
-        capacityLitres: 20,
-        litres,
-        location: "vehicle",
-        actorId,
-      });
-    expect(await take(powerLead.id, 12)).toEqual({ ok: true });
-    expect(await take(captain.id, 5)).toEqual({
-      ok: false,
-      error: CAN_CHANGED,
-    });
     const [after] = await listFuelCans();
     expect(after).toMatchObject({
-      litres: 12,
-      location: "vehicle",
-      version: 2,
+      sizeLitres: 20,
+      material: "metal",
+      travelsWithUserId: sipho.id,
+      version: before!.version + 1,
     });
+    expect(await audit("power.fuel_can_changed")).toHaveLength(1);
   });
 
-  it("takes a refuelling out of its can, and refuses more than the can holds", async () => {
-    const { powerLead, member, generatorId } = await setup();
-    const [can] = await cans(powerLead.id, 1, 15);
+  it("removes a can, numbers the rest again, and says when it is already gone", async () => {
+    const { powerLead } = await setup();
+    const one = await add(powerLead.id, { sizeLitres: 25 });
+    await add(powerLead.id, { sizeLitres: 10 });
+    const [first] = await listFuelCans();
     expect(
-      await logRefuel({
-        ...refuel(generatorId, member.id, "2026-04-25T06:00", 16, can!.id),
+      await removeFuelCan({
+        canId: one.id,
+        expectedVersion: first!.version,
         actorId: powerLead.id,
-        now: NOW,
       }),
-    ).toEqual({ ok: false, error: canHoldsOnly(15) });
-    expect(await listRefuelEntries()).toEqual([]);
-
-    const done = await logRefuel({
-      ...refuel(generatorId, member.id, "2026-04-25T06:00", 15, can!.id),
-      actorId: powerLead.id,
-      now: NOW,
-    });
-    expect(done.ok).toBe(true);
-    const [after] = await listFuelCans();
-    expect(after).toMatchObject({ litres: 0, version: 2 });
-    const [entry] = await listRefuelEntries();
-    expect(entry).toMatchObject({
-      litres: 15,
-      fromCanLabel: "Can 1",
-      doneByName: "Sam Watch",
-      generatorModel: "Test 5.5",
-      fromPaper: false,
-    });
-    expect(entry!.refuelledAt.toISOString()).toBe("2026-04-25T04:00:00.000Z");
+    ).toEqual({ ok: true });
+    expect((await listFuelCans()).map((r) => r.sizeLitres)).toEqual([10]);
+    expect(
+      await removeFuelCan({
+        canId: one.id,
+        expectedVersion: first!.version,
+        actorId: powerLead.id,
+      }),
+    ).toEqual({ ok: false, error: CAN_GONE });
+    const [removed] = await audit("power.fuel_can_removed");
+    expect(removed?.metadata).toMatchObject({ number: 1, sizeLitres: 25 });
   });
 
-  it("refuses a time still to come, and a doer who is not an approved member", async () => {
-    const { powerLead, member, generatorId } = await setup();
+  it("refuses an owner who is not a camp member, and a car not driving this year", async () => {
+    const { powerLead, member } = await setup();
     const pending = await makeUser(h.db(), { approvalStatus: "pending" });
     expect(
-      await logRefuel({
-        ...refuel(generatorId, member.id, "2026-12-01T06:00", 10),
+      await addFuelCan({
+        ...can({ ownerUserId: pending.id }),
         actorId: powerLead.id,
-        now: NOW,
       }),
-    ).toEqual({ ok: false, error: REFUEL_IN_FUTURE });
-    expect(
-      await logRefuel({
-        ...refuel(generatorId, pending.id, "2026-04-25T06:00", 10),
-        actorId: powerLead.id,
-        now: NOW,
-      }),
-    ).toEqual({ ok: false, error: NOT_A_CAMP_MEMBER });
-  });
-
-  it("two refuellings give a rate, and a third drops the days of fuel left", async () => {
-    const { powerLead, member, generatorId } = await setup();
-    const [a, b] = await cans(powerLead.id, 5);
-    const log = async (at: string, canId: string) => {
-      const r = await logRefuel({
-        ...refuel(generatorId, member.id, at, 10, canId),
-        actorId: powerLead.id,
-        now: NOW,
-      });
-      if (!r.ok) throw new Error(r.error);
-    };
-    await log("2026-04-25T06:00", a!.id);
-    expect(burnRate(await listRefuelEntries())).toBeNull();
-
-    await log("2026-04-25T12:00", a!.id);
-    let rate = burnRate(await listRefuelEntries())!.litresPerDay;
-    expect(rate).toBe(40);
-    const before = daysOfFuelLeft(await onHand(), rate);
-    expect(before).toBe(2);
-    expect(
-      lowFuelWarning({
-        daysLeft: before,
-        thresholdDays: 2,
-        remainingDays: null,
-      }),
-    ).toBe(false);
-
-    await log("2026-04-25T18:00", b!.id);
-    rate = burnRate(await listRefuelEntries())!.litresPerDay;
-    const after = daysOfFuelLeft(await onHand(), rate);
-    expect(after).toBe(1.75);
-    expect(
-      lowFuelWarning({
-        daysLeft: after,
-        thresholdDays: 2,
-        remainingDays: null,
-      }),
-    ).toBe(true);
-  });
-
-  it("a correction is a new entry, puts the old litres back and takes the new", async () => {
-    const { powerLead, member, generatorId } = await setup();
-    const [can] = await cans(powerLead.id, 1);
-    const first = await logRefuel({
-      ...refuel(generatorId, member.id, "2026-04-25T06:00", 10, can!.id),
-      actorId: powerLead.id,
-      now: NOW,
-    });
-    if (!first.ok) throw new Error(first.error);
-    expect(await onHand()).toBe(10);
-
-    const fix = CorrectRefuelInput.parse({
-      ...refuel(generatorId, member.id, "2026-04-25T06:00", 12, can!.id),
-      correctsEntryId: first.id,
-      note: "It was 12",
-    });
-    const corrected = await correctRefuel({
-      ...fix,
-      actorId: powerLead.id,
-      now: NOW,
-    });
-    expect(corrected.ok).toBe(true);
-    expect(await onHand()).toBe(8);
-
-    const rows = await listRefuelEntries();
-    expect(rows).toHaveLength(2);
-    // The old entry is still there, untouched.
-    expect(rows.find((r) => r.id === first.id)).toMatchObject({ litres: 10 });
-    expect(effectiveRefuels(rows).map((r) => r.litres)).toEqual([12]);
-
-    // An entry is replaced once.
-    expect(
-      await correctRefuel({ ...fix, actorId: powerLead.id, now: NOW }),
-    ).toEqual({ ok: false, error: ENTRY_ALREADY_CORRECTED });
-    expect(await onHand()).toBe(8);
-  });
-
-  it("a strike-out puts the litres back and cannot itself be corrected", async () => {
-    const { powerLead, member, generatorId } = await setup();
-    const [can] = await cans(powerLead.id, 1);
-    const first = await logRefuel({
-      ...refuel(generatorId, member.id, "2026-04-25T06:00", 10, can!.id),
-      actorId: powerLead.id,
-      fromPaper: true,
-      now: NOW,
-    });
-    if (!first.ok) throw new Error(first.error);
-    const struck = await strikeRefuel({
-      entryId: first.id,
-      note: "Logged twice",
-      actorId: powerLead.id,
-    });
-    if (!struck.ok) throw new Error(struck.error);
-    expect(await onHand()).toBe(20);
-    const rows = await listRefuelEntries();
-    expect(effectiveRefuels(rows)).toEqual([]);
-    expect(rows.find((r) => r.id === struck.id)).toMatchObject({
-      voided: true,
-      correctsEntryId: first.id,
-      fromPaper: true,
-      note: "Logged twice",
-    });
-    expect(
-      await correctRefuel({
-        ...CorrectRefuelInput.parse({
-          ...refuel(generatorId, member.id, "2026-04-25T06:00", 5),
-          correctsEntryId: struck.id,
+    ).toEqual({ ok: false, error: CAN_OWNER_NOT_MEMBER });
+    // The member drives no car, and last year's driver is not this year's.
+    const lastYear = await makeUser(h.db());
+    await makeDriverProfile(h.db(), { userId: lastYear.id, cycle: 2025 });
+    for (const driver of [member.id, lastYear.id]) {
+      expect(
+        await addFuelCan({
+          ...can({ travelsWithUserId: driver }),
+          actorId: powerLead.id,
         }),
-        actorId: powerLead.id,
-        now: NOW,
-      }),
-    ).toEqual({ ok: false, error: ENTRY_STRUCK_OUT });
+      ).toEqual({ ok: false, error: CAN_CAR_GONE });
+    }
+    expect(await listFuelCans()).toEqual([]);
   });
 
-  it("keeps each year's log to itself, and finds last year's", async () => {
-    const { powerLead, member, generatorId } = await setup();
+  it("derives who fills each can from its car, and drops a car whose driver stops", async () => {
+    const { powerLead, dana, sipho } = await setup();
+    await add(powerLead.id, { sizeLitres: 25, travelsWithUserId: dana.id });
+    await add(powerLead.id, { sizeLitres: 25, travelsWithUserId: sipho.id });
+    await add(powerLead.id, { sizeLitres: 20, travelsWithUserId: dana.id });
+    await add(powerLead.id, { sizeLitres: 15 });
+
+    const board = await getTransportBoard();
+    let rows = await listFuelCans();
+    expect(rows.map((r) => fillingCar(r, board.cars)?.driverName)).toEqual([
+      "Dana Driver",
+      "Sipho Ndlovu",
+      "Dana Driver",
+      undefined,
+    ]);
+    let totals = canTotals(rows, board.cars);
+    expect(
+      totals.cars.map((c) => [c.car.driverName, c.cans, c.litres]),
+    ).toEqual([
+      ["Dana Driver", 2, 45],
+      ["Sipho Ndlovu", 1, 25],
+    ]);
+    expect(totals.notOnCar).toEqual({ cans: 1, litres: 15 });
+
+    // Sipho stops driving: his can is on no car, and nobody fills it yet.
     await h
       .db()
-      .insert(schema.refuelEntries)
-      .values({
-        cycle: 2025,
-        generatorId,
-        refuelledAt: new Date("2025-04-25T04:00:00Z"),
-        litres: 9,
-        doneByUserId: member.id,
-      });
-    expect(await listRefuelEntries()).toEqual([]);
-    expect(await previousRefuelCycle()).toBe(2025);
-    expect((await listRefuelEntries(2025)).map((r) => r.litres)).toEqual([9]);
-    const made = await logRefuel({
-      ...refuel(generatorId, member.id, "2026-04-25T06:00", 10),
-      actorId: powerLead.id,
-      now: NOW,
+      .update(schema.driverProfiles)
+      .set({ intendsToDrive: false })
+      .where(
+        and(
+          eq(schema.driverProfiles.userId, sipho.id),
+          eq(schema.driverProfiles.cycle, 2026),
+        ),
+      );
+    rows = await listFuelCans();
+    expect(rows[1]!.travelsWithUserId).toBeNull();
+    totals = canTotals(rows, (await getTransportBoard()).cars);
+    expect(totals.notOnCar).toEqual({ cans: 2, litres: 40 });
+    expect(totals.all).toEqual({ cans: 4, litres: 85 });
+  });
+
+  it("keeps last year's cans out of this year's list", async () => {
+    const { powerLead } = await setup();
+    await h
+      .db()
+      .insert(schema.fuelCans)
+      .values({ cycle: 2025, sizeLitres: 20, material: "metal" });
+    await add(powerLead.id, { sizeLitres: 10 });
+    expect((await listFuelCans()).map((r) => r.sizeLitres)).toEqual([10]);
+    expect((await listFuelCans(2025)).map((r) => r.sizeLitres)).toEqual([20]);
+  });
+
+  it("makes an erased member's can the camp's, on no car", async () => {
+    const { powerLead, dana } = await setup();
+    await add(powerLead.id, {
+      ownerUserId: dana.id,
+      travelsWithUserId: dana.id,
     });
-    expect(made.ok).toBe(true);
-    expect((await listRefuelEntries()).map((r) => r.cycle)).toEqual([2026]);
+    await sanitiseAccount(dana.id);
+    const [row] = await listFuelCans();
+    expect(row).toMatchObject({ ownerUserId: null, travelsWithUserId: null });
   });
 });

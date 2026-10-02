@@ -1,6 +1,6 @@
 import "server-only";
 
-import { POWER_TEAM, campLocalInstant, wouldLoop } from "@camp404/core";
+import { POWER_TEAM, wouldLoop } from "@camp404/core";
 import {
   LOAD_GONE,
   NOTHING_TO_COPY,
@@ -36,33 +36,24 @@ import {
   type WorkPlanTaskRow,
 } from "@camp404/db/power-readiness";
 import {
+  CAN_CAR_GONE,
   CAN_CHANGED,
   CAN_GONE,
-  ENTRY_ALREADY_CORRECTED,
-  ENTRY_GONE,
-  ENTRY_STRUCK_OUT,
-  NOT_A_CAMP_MEMBER,
-  REFUEL_GENERATOR_GONE,
-  REFUEL_IN_FUTURE,
-  canHoldsOnly,
+  CAN_OWNER_NOT_MEMBER,
   type FuelCanRow,
-  type RefuelEntryRow,
 } from "@camp404/db/power-site";
 import { GENERATOR_GONE } from "@camp404/db/power";
 import {
   CUSTOM_READINESS_KEY,
   POWER_WORK_PLAN_TEMPLATE,
   READINESS_TEMPLATE,
-  type AddFuelCansInput,
   type AddReadinessItemInput,
-  type CorrectRefuelInput,
   type EditFuelCanInput,
+  type FuelCanInput,
   type EditGridNodeInput,
   type EditReadinessItemInput,
   type GridNodeInput,
-  type RefuelInput,
   type SharingAgreementInput,
-  type StrikeRefuelInput,
   type Team,
 } from "@camp404/types";
 
@@ -72,21 +63,8 @@ import {
 // test-store.ts owns the state (on `S.powerSite`) and hands in what the twins
 // need from it; nothing here keeps state of its own.
 
-interface StoredEntry {
-  id: string;
-  cycle: number;
-  generatorId: string;
-  refuelledAt: Date;
-  litres: number;
-  fromCanId: string | null;
-  doneByUserId: string | null;
-  hourMeter: number | null;
-  note: string | null;
-  fromPaper: boolean;
-  correctsEntryId: string | null;
-  voided: boolean;
-  createdAt: Date;
-}
+/** A can as the store keeps it: the row, less the names a read joins. */
+type StoredCan = Omit<FuelCanRow, "ownerName"> & { createdAt: Date };
 
 interface StoredItem {
   id: string;
@@ -104,8 +82,7 @@ interface StoredItem {
 
 /** The store's rows for power on site. */
 export interface TestPowerSite {
-  cans: (FuelCanRow & { createdAt: Date })[];
-  entries: StoredEntry[];
+  cans: StoredCan[];
   nodes: (GridNodeRow & { createdAt: Date })[];
   /** Load id to the point it plugs in at. */
   loadPoints: Map<string, string>;
@@ -117,7 +94,6 @@ export interface TestPowerSite {
 export function emptyPowerSite(): TestPowerSite {
   return {
     cans: [],
-    entries: [],
     nodes: [],
     loadPoints: new Map(),
     items: [],
@@ -135,6 +111,8 @@ export interface PowerSiteDeps {
   member: (
     userId: string,
   ) => { displayName: string | null; approved: boolean } | null;
+  /** Whether a member drives a car in a year (their driver form says so). */
+  drives: (userId: string, cycle: number) => boolean;
   generators: () => GeneratorRow[];
   loads: () => PowerLoadRow[];
   task: (id: string) => {
@@ -153,8 +131,6 @@ export interface PowerSiteDeps {
     dueAt: Date | null;
   }) => { ok: true; id: string } | { ok: false; error: string };
 }
-
-const FUTURE_SLACK_MS = 10 * 60_000;
 
 export function powerSiteTwins(d: PowerSiteDeps) {
   const S = () => d.state();
@@ -176,68 +152,44 @@ export function powerSiteTwins(d: PowerSiteDeps) {
     id ? (d.member(id)?.displayName ?? null) : null;
   const approved = (id: string) => d.member(id)?.approved === true;
 
-  // --- Fuel -----------------------------------------------------------------
+  // --- Fuel cans --------------------------------------------------------------
 
-  function canOf(cycle: number, id: string | null) {
-    return id
-      ? S().cans.find((c) => c.id === id && c.cycle === cycle)
-      : undefined;
+  function canOf(cycle: number, id: string) {
+    return S().cans.find((c) => c.id === id && c.cycle === cycle);
   }
 
-  /** prepareEntry's twin: every check before any change, then the can. */
-  function prepare(cycle: number, input: RefuelInput, now: Date) {
-    const at = campLocalInstant(input.refuelledAt);
-    if (at.getTime() > now.getTime() + FUTURE_SLACK_MS) return REFUEL_IN_FUTURE;
-    if (!d.generators().some((g) => g.id === input.generatorId)) {
-      return REFUEL_GENERATOR_GONE;
+  const cansOf = (cycle: number) =>
+    S()
+      .cans.filter((c) => c.cycle === cycle)
+      .sort(
+        (a, b) =>
+          a.sort - b.sort ||
+          a.createdAt.getTime() - b.createdAt.getTime() ||
+          a.id.localeCompare(b.id),
+      );
+
+  /** assertOwner and assertCar's twin: the refusal, or null. */
+  function canRefusal(cycle: number, input: FuelCanInput): string | null {
+    if (input.ownerUserId !== null && !approved(input.ownerUserId)) {
+      return CAN_OWNER_NOT_MEMBER;
     }
-    if (!approved(input.doneByUserId)) return NOT_A_CAMP_MEMBER;
-    if (input.fromCanId) {
-      const can = canOf(cycle, input.fromCanId);
-      if (!can) return CAN_GONE;
-      if (can.litres < input.litres - 1e-9) return canHoldsOnly(can.litres);
+    if (
+      input.travelsWithUserId !== null &&
+      !d.drives(input.travelsWithUserId, cycle)
+    ) {
+      return CAN_CAR_GONE;
     }
-    return {
-      at,
-      take: () => {
-        const can = canOf(cycle, input.fromCanId);
-        if (!can) return;
-        can.litres = Math.max(0, can.litres - input.litres);
-        can.version += 1;
-      },
-    };
+    return null;
   }
 
-  function entryValues(cycle: number, input: RefuelInput, at: Date) {
+  function canFields(input: FuelCanInput) {
     return {
-      cycle,
-      generatorId: input.generatorId,
-      refuelledAt: at,
-      litres: input.litres,
-      fromCanId: input.fromCanId,
-      doneByUserId: input.doneByUserId,
-      hourMeter: input.hourMeter,
+      ownerUserId: input.ownerUserId,
+      sizeLitres: input.sizeLitres,
+      material: input.material,
+      travelsWithUserId: input.travelsWithUserId,
       note: input.note,
-      fromPaper: input.fromPaper,
     };
-  }
-
-  /** claimForReplacement's twin, without the change: the refusal or the entry. */
-  function claim(cycle: number, entryId: string): StoredEntry | string {
-    const old = S().entries.find((e) => e.id === entryId && e.cycle === cycle);
-    if (!old) return ENTRY_GONE;
-    if (old.voided) return ENTRY_STRUCK_OUT;
-    if (S().entries.some((e) => e.correctsEntryId === entryId)) {
-      return ENTRY_ALREADY_CORRECTED;
-    }
-    return old;
-  }
-
-  function giveBack(old: StoredEntry) {
-    const can = S().cans.find((c) => c.id === old.fromCanId);
-    if (!can) return;
-    can.litres = Math.min(can.capacityLitres, can.litres + old.litres);
-    can.version += 1;
   }
 
   // --- Grid -----------------------------------------------------------------
@@ -288,69 +240,38 @@ export function powerSiteTwins(d: PowerSiteDeps) {
   }
 
   return {
-    // --- Fuel stock and the refuelling log (#255) -------------------------
+    // --- The fuel can register (#255) ------------------------------------
 
+    /** listFuelCans' twin: a car counts only while its driver drives. */
     listFuelCans(cycle?: number): FuelCanRow[] {
       const year = cycle ?? d.cycle();
-      return S()
-        .cans.filter((c) => c.cycle === year)
-        .sort((a, b) => a.sort - b.sort)
-        .map(({ createdAt: _c, ...c }) => ({ ...c }));
+      return cansOf(year).map(({ createdAt: _c, ...c }) => ({
+        ...c,
+        ownerName: name(c.ownerUserId),
+        travelsWithUserId:
+          c.travelsWithUserId && d.drives(c.travelsWithUserId, c.cycle)
+            ? c.travelsWithUserId
+            : null,
+      }));
     },
 
-    listRefuelEntries(cycle?: number): RefuelEntryRow[] {
-      const year = cycle ?? d.cycle();
-      return S()
-        .entries.filter((e) => e.cycle === year)
-        .sort(
-          (a, b) =>
-            b.refuelledAt.getTime() - a.refuelledAt.getTime() ||
-            b.createdAt.getTime() - a.createdAt.getTime(),
-        )
-        .map((e) => ({
-          ...e,
-          generatorModel:
-            d.generators().find((g) => g.id === e.generatorId)?.model ?? null,
-          fromCanLabel:
-            S().cans.find((c) => c.id === e.fromCanId)?.label ?? null,
-          doneByName: name(e.doneByUserId),
-        }));
-    },
-
-    previousRefuelCycle(): number | null {
-      const now = d.cycle();
-      const earlier = S()
-        .entries.filter((e) => e.cycle < now)
-        .map((e) => e.cycle);
-      return earlier.length > 0 ? Math.max(...earlier) : null;
-    },
-
-    addFuelCans(
-      input: AddFuelCansInput & { actorId: string },
-    ): PowerWriteResult<{ count: number }> {
+    addFuelCan(
+      input: FuelCanInput & { actorId: string },
+    ): PowerWriteResult<{ id: string; number: number }> {
       return write(input.actorId, (cycle) => {
-        const mine = S().cans.filter((c) => c.cycle === cycle);
-        const numbers = mine
-          .map((c) => /^Can (\d{1,6})$/.exec(c.label)?.[1])
-          .filter((n): n is string => n !== undefined)
-          .map(Number);
-        const first = (numbers.length > 0 ? Math.max(...numbers) : 0) + 1;
-        const base =
-          mine.length > 0 ? Math.max(...mine.map((c) => c.sort)) + 1 : 0;
-        for (let i = 0; i < input.count; i++) {
-          S().cans.push({
-            id: crypto.randomUUID(),
-            cycle,
-            label: `Can ${first + i}`,
-            capacityLitres: input.capacityLitres,
-            litres: input.litres,
-            location: input.location,
-            sort: base + i,
-            version: 1,
-            createdAt: new Date(),
-          });
-        }
-        return { count: input.count };
+        const refusal = canRefusal(cycle, input);
+        if (refusal) return refusal;
+        const mine = cansOf(cycle);
+        const id = crypto.randomUUID();
+        S().cans.push({
+          id,
+          cycle,
+          ...canFields(input),
+          sort: mine.length > 0 ? Math.max(...mine.map((c) => c.sort)) + 1 : 0,
+          version: 1,
+          createdAt: new Date(),
+        });
+        return { id, number: mine.length + 1 };
       });
     },
 
@@ -358,16 +279,12 @@ export function powerSiteTwins(d: PowerSiteDeps) {
       input: EditFuelCanInput & { actorId: string },
     ): PowerWriteResult {
       return write(input.actorId, (cycle) => {
+        const refusal = canRefusal(cycle, input);
+        if (refusal) return refusal;
         const can = canOf(cycle, input.canId);
         if (!can) return CAN_GONE;
         if (can.version !== input.expectedVersion) return CAN_CHANGED;
-        Object.assign(can, {
-          label: input.label,
-          capacityLitres: input.capacityLitres,
-          litres: input.litres,
-          location: input.location,
-          version: can.version + 1,
-        });
+        Object.assign(can, { ...canFields(input), version: can.version + 1 });
         return {};
       });
     },
@@ -382,78 +299,7 @@ export function powerSiteTwins(d: PowerSiteDeps) {
         if (!can) return CAN_GONE;
         if (can.version !== input.expectedVersion) return CAN_CHANGED;
         S().cans.splice(S().cans.indexOf(can), 1);
-        for (const e of S().entries) {
-          if (e.fromCanId === can.id) e.fromCanId = null;
-        }
         return {};
-      });
-    },
-
-    logRefuel(
-      input: RefuelInput & { actorId: string; now?: Date },
-    ): PowerWriteResult<{ id: string }> {
-      return write(input.actorId, (cycle) => {
-        const ready = prepare(cycle, input, input.now ?? new Date());
-        if (typeof ready === "string") return ready;
-        ready.take();
-        const id = crypto.randomUUID();
-        S().entries.push({
-          ...entryValues(cycle, input, ready.at),
-          id,
-          correctsEntryId: null,
-          voided: false,
-          createdAt: new Date(),
-        });
-        return { id };
-      });
-    },
-
-    correctRefuel(
-      input: CorrectRefuelInput & { actorId: string; now?: Date },
-    ): PowerWriteResult<{ id: string }> {
-      return write(input.actorId, (cycle) => {
-        const old = claim(cycle, input.correctsEntryId);
-        if (typeof old === "string") return old;
-        // The db puts the old litres back before it checks the new can; so
-        // does the store, and undoes it if the new entry is refused.
-        const before = S().cans.map((c) => ({ ...c }));
-        giveBack(old);
-        const ready = prepare(cycle, input, input.now ?? new Date());
-        if (typeof ready === "string") {
-          S().cans.splice(0, S().cans.length, ...before);
-          return ready;
-        }
-        ready.take();
-        const id = crypto.randomUUID();
-        S().entries.push({
-          ...entryValues(cycle, input, ready.at),
-          id,
-          correctsEntryId: old.id,
-          voided: false,
-          createdAt: new Date(),
-        });
-        return { id };
-      });
-    },
-
-    strikeRefuel(
-      input: StrikeRefuelInput & { actorId: string },
-    ): PowerWriteResult<{ id: string }> {
-      return write(input.actorId, (cycle) => {
-        const old = claim(cycle, input.entryId);
-        if (typeof old === "string") return old;
-        giveBack(old);
-        const id = crypto.randomUUID();
-        S().entries.push({
-          ...old,
-          id,
-          fromCanId: null,
-          note: input.note,
-          correctsEntryId: old.id,
-          voided: true,
-          createdAt: new Date(),
-        });
-        return { id };
       });
     },
 

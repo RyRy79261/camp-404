@@ -287,7 +287,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/inventory/bookings", "inventory", "INVENTRY.DB"),
   route("/inventory/lent", "inventory", "INVENTRY.DB"),
   route("/inventory/[id]", "inventory", "INVENTRY.DB"),
-  route("/power/fuel-log", "power", "POWER.EXE"),
+  route("/power/refuelling", "power", "POWER.EXE"),
   route("/power/grid", "power", "POWER.EXE"),
   route("/power/readiness", "power", "POWER.EXE"),
   route("/power/sharing", "power", "POWER.EXE"),

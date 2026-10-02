@@ -35,9 +35,11 @@ import {
   shortCarLabel,
   towChoices,
   trailerCell,
+  type CarFuel,
   type NeedsSeatRow,
   type ThisYear,
 } from "@/lib/transport-view";
+import { cansText, formatNumber } from "@/lib/power-copy";
 
 // The Transport page's three lists, as the owner approved them (Option A,
 // 2026-10-01): tables, one row per person, one button in one place. Every
@@ -564,14 +566,44 @@ function ChangeRidersButton({
   );
 }
 
+/** A car's fuel cans (#255): "3 cans, 70 L" and who fills them, or None. */
+function FuelCell({
+  car,
+  fuel,
+  inline,
+}: {
+  car: TransportCar;
+  fuel: CarFuel | undefined;
+  inline?: boolean;
+}) {
+  if (!fuel || fuel.cans === 0) {
+    return <span className="text-muted-foreground">None</span>;
+  }
+  const amount = `${cansText(fuel.cans)}, ${formatNumber(fuel.litres, 1)} L`;
+  const who = `${firstName(car.driverName)} fills ${fuel.cans === 1 ? "it" : "them"}`;
+  return inline ? (
+    <span>
+      <b className="font-semibold">{amount}</b>, {who}
+    </span>
+  ) : (
+    <span className="flex flex-col">
+      <b className="font-semibold">{amount}</b>
+      <span className="text-xs text-muted-foreground">{who}</span>
+    </span>
+  );
+}
+
 export function CarsSection({
   cars,
   me,
   canEdit,
+  fuel = {},
 }: {
   cars: TransportCar[];
   me: string;
   canEdit: boolean;
+  /** The fuel cans each car brings, by driver; read-only here. */
+  fuel?: Record<string, CarFuel>;
 }) {
   const { open, toggle } = useOpen();
   // A driver who hasn't filled in the form goes last (stable, so the rest
@@ -588,7 +620,7 @@ export function CarsSection({
         unit={cars.length === 1 ? "driver" : "drivers"}
         description={
           <span className="hidden @min-[48rem]/transport:inline">
-            Who drives, and who rides with them.
+            Who drives, who rides with them, and the fuel cans each car brings.
           </span>
         }
       />
@@ -606,6 +638,7 @@ export function CarsSection({
               <col style={{ width: 112 }} />
               <col />
               <col style={{ width: 136 }} />
+              <col style={{ width: 144 }} />
               {canEdit && <col style={{ width: 160 }} />}
             </colgroup>
             <thead>
@@ -614,6 +647,7 @@ export function CarsSection({
                 <th className={TH}>Seats</th>
                 <th className={TH}>Riders</th>
                 <th className={TH}>Trailer</th>
+                <th className={TH}>Fuel cans</th>
                 {canEdit && <th className={cn(TH, "text-right")}>Action</th>}
               </tr>
             </thead>
@@ -671,6 +705,9 @@ export function CarsSection({
                       >
                         {t.text}
                       </td>
+                      <td className={cn(TD, "py-4")}>
+                        <FuelCell car={car} fuel={fuel[car.driverUserId]} />
+                      </td>
                       {canEdit && (
                         <td className={cn(TD, "py-2.5 text-right")}>
                           <ChangeRidersButton
@@ -684,7 +721,7 @@ export function CarsSection({
                     </tr>
                     {isOpen && (
                       <tr id={panelId}>
-                        <td colSpan={5} className={PANEL}>
+                        <td colSpan={6} className={PANEL}>
                           <RidersPanel car={car} />
                         </td>
                       </tr>
@@ -757,6 +794,14 @@ export function CarsSection({
                         </dd>
                       </>
                     )}
+                    <dt className="text-muted-foreground">Fuel cans</dt>
+                    <dd className="m-0">
+                      <FuelCell
+                        car={car}
+                        fuel={fuel[car.driverUserId]}
+                        inline
+                      />
+                    </dd>
                   </dl>
                   {canEdit && (
                     <div className={FOOT}>

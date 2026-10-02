@@ -10,7 +10,17 @@ import {
   TakeOutButton,
   WithdrawRequestButton,
 } from "@/components/transport/transport-controls";
-import { seatsCell, type LiftPanel as Panel } from "@/lib/transport-view";
+import {
+  POWER_REFUELLING_PATH,
+  cansText,
+  formatNumber,
+  materialText,
+} from "@/lib/power-copy";
+import {
+  seatsCell,
+  type FillCan,
+  type LiftPanel as Panel,
+} from "@/lib/transport-view";
 
 // The viewer's own lift, the same on Transport and on My lift (owner's
 // Option A, 2026-10-01: "a labelled list, the same fields as Your lift").
@@ -97,14 +107,79 @@ function Card({
   );
 }
 
+/**
+ * A driver's fuel cans (#255): filling them is the driver's job, so their own
+ * card lists the cans in their car, read-only; Power changes the list.
+ */
+function FillBeforeYouLeave({ cans }: { cans: FillCan[] }) {
+  const litres = cans.reduce((sum, c) => sum + c.sizeLitres, 0);
+  return (
+    <section
+      aria-label="Fill before you leave"
+      className="mt-4 border border-[color-mix(in_oklab,var(--color-primary)_55%,var(--color-border))] bg-[color-mix(in_oklab,var(--color-primary)_6%,var(--color-card))] px-3 py-3 page-sm:px-4"
+    >
+      <div className="flex min-h-8 flex-col items-start gap-1 page-sm:flex-row page-sm:items-center page-sm:justify-between page-sm:gap-4">
+        <h3 className="m-0 font-sans text-[15px] leading-5 font-bold tracking-normal normal-case">
+          Fill before you leave: {cansText(cans.length)},{" "}
+          {formatNumber(litres, 1)} L
+        </h3>
+        <Link
+          href={POWER_REFUELLING_PATH}
+          className="text-[13px] font-semibold text-primary hover:underline"
+        >
+          See all fuel cans in Power ›
+        </Link>
+      </div>
+      <ul aria-label="Cans you fill" className="mt-2">
+        {cans.map((c) => (
+          <li
+            key={c.number}
+            className="grid min-h-10 grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-3 border-t border-foreground/10 py-2 text-sm leading-5 page-sm:grid-cols-[24px_minmax(0,1fr)_48px_72px_minmax(0,1fr)] page-sm:items-center"
+          >
+            <span className="font-semibold tabular-nums">{c.number}</span>
+            <span className="min-w-0">
+              <span className="font-semibold">{c.ownerName}</span>
+              {c.note && (
+                <span className="block text-xs text-muted-foreground page-sm:hidden">
+                  {c.note}
+                </span>
+              )}
+            </span>
+            <span className="text-right tabular-nums">
+              {formatNumber(c.sizeLitres, 1)} L
+              <span className="page-sm:hidden">
+                {" "}
+                · {materialText(c.material)}
+              </span>
+            </span>
+            <span className="hidden page-sm:inline">
+              {materialText(c.material)}
+            </span>
+            <span className="hidden text-muted-foreground page-sm:inline">
+              {c.note}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 mb-0 text-xs leading-4 text-muted-foreground">
+        You drive these cans to the burn, so you fill them. Ticks for filled,
+        depot, camp and returned go on the printed sheet on site.
+      </p>
+    </section>
+  );
+}
+
 export function LiftPanel({
   panel,
   me,
   layout,
+  fuel = [],
 }: {
   panel: Panel;
   me: string;
   layout: "row" | "stack";
+  /** The fuel cans in the viewer's own car, when they drive (Transport). */
+  fuel?: FillCan[];
 }) {
   if (panel.kind === "rider") {
     return (
@@ -235,6 +310,7 @@ export function LiftPanel({
             ))}
           </ul>
         )}
+        {fuel.length > 0 && <FillBeforeYouLeave cans={fuel} />}
         <div className="mt-3 border-t border-[var(--color-choice-edge,var(--color-border))] pt-3 page-sm:hidden">
           <ChangeSeatsButton
             driverUserId={me}

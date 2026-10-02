@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  AddFuelCansInput,
-  CorrectRefuelInput,
   EditFuelCanInput,
   EditReadinessItemInput,
+  FuelCanInput,
   GridNodeInput,
-  RefuelInput,
   SharingAgreementInput,
-  isLocalDateTime,
   looksLikeContactDetail,
 } from "../power-site";
 
@@ -24,68 +21,42 @@ function messages(result: {
 }
 
 describe("fuel cans", () => {
-  it("refuses more litres than the can holds", () => {
-    const result = AddFuelCansInput.safeParse({
-      count: 2,
-      capacityLitres: 20,
-      litres: 21,
-      location: "storage",
-    });
-    expect(messages(result)).toEqual(["A can can't hold more than its size."]);
-  });
-
-  it("takes an empty can and a full one", () => {
-    for (const litres of [0, 20]) {
-      expect(
-        EditFuelCanInput.safeParse({
-          canId: ID,
-          expectedVersion: 1,
-          label: "Can 1",
-          capacityLitres: 20,
-          litres,
-          location: "on_site",
-        }).success,
-      ).toBe(true);
-    }
-  });
-});
-
-describe("the refuelling log", () => {
-  const entry = {
-    generatorId: ID,
-    refuelledAt: "2027-04-25T06:00",
-    litres: 10,
-    doneByUserId: "test-user-3",
+  const can = {
+    ownerUserId: null,
+    sizeLitres: 20,
+    material: "plastic",
+    travelsWithUserId: null,
   };
 
-  it("reads a datetime field, and refuses a day that does not exist", () => {
-    expect(isLocalDateTime("2027-04-25T06:00")).toBe(true);
-    expect(isLocalDateTime("2027-02-30T06:00")).toBe(false);
-    expect(isLocalDateTime("2027-04-25T24:00")).toBe(false);
-    expect(isLocalDateTime("2027-04-25")).toBe(false);
-  });
-
-  it("fills the blanks: no can, no meter, no note, not from paper", () => {
-    expect(RefuelInput.parse({ ...entry, hourMeter: "", note: " " })).toEqual({
-      ...entry,
-      fromCanId: null,
-      hourMeter: null,
+  it("takes a camp can on no car, with a blank note as none", () => {
+    expect(FuelCanInput.parse({ ...can, note: "  " })).toEqual({
+      ...can,
       note: null,
-      fromPaper: false,
     });
   });
 
-  it("refuses no litres", () => {
-    expect(messages(RefuelInput.safeParse({ ...entry, litres: 0 }))).toEqual([
-      "Give the litres put in.",
-    ]);
+  it("refuses no size, too big a can and an unknown material", () => {
+    expect(messages(FuelCanInput.safeParse({ ...can, sizeLitres: 0 }))).toEqual(
+      ["Give the can's size in litres."],
+    );
+    expect(
+      messages(FuelCanInput.safeParse({ ...can, sizeLitres: 251 })),
+    ).toEqual(["A can holds at most 250 L."]);
+    expect(FuelCanInput.safeParse({ ...can, material: "glass" }).success).toBe(
+      false,
+    );
   });
 
-  it("a correction names the entry it replaces", () => {
-    expect(CorrectRefuelInput.safeParse(entry).success).toBe(false);
-    expect(
-      CorrectRefuelInput.safeParse({ ...entry, correctsEntryId: ID }).success,
-    ).toBe(true);
+  it("has no field for who fills it: that is the car's driver", () => {
+    const parsed = EditFuelCanInput.parse({
+      ...can,
+      canId: ID,
+      expectedVersion: 1,
+      travelsWithUserId: "test-user-3",
+      filledByUserId: "someone-else",
+    });
+    expect(parsed).not.toHaveProperty("filledByUserId");
+    expect(parsed.travelsWithUserId).toBe("test-user-3");
   });
 });
 
