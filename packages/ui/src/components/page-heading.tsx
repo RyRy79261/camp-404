@@ -8,18 +8,54 @@ import type { ReactNode } from "react";
  * title instead of squeezing the title to one word a line. With room for
  * both, the actions sit on the right; when they no longer fit beside a
  * title of at least 18rem, they wrap under it.
+ *
+ * `actionsBesideTitle` keeps short actions (an icon and one button) on the
+ * title's own line at every width, with the description under both: the
+ * Lounge's approved layout (owner, 2026-10-01).
  */
 export function PageHeading({
   eyebrow,
   title,
   description,
   actions,
+  actionsBesideTitle = false,
 }: {
   eyebrow?: string;
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
+  actionsBesideTitle?: boolean;
 }) {
+  if (actionsBesideTitle) {
+    return (
+      <div data-slot="page-heading" className="mb-6 flex flex-col gap-1">
+        {eyebrow && (
+          <p
+            data-slot="page-eyebrow"
+            className="font-mono text-xs uppercase tracking-[0.25em] text-accent"
+          >
+            {eyebrow}
+          </p>
+        )}
+        <div className="flex items-center justify-between gap-2">
+          <h1
+            data-slot="page-title"
+            className="min-w-0 text-2xl font-semibold tracking-tight"
+          >
+            {title}
+          </h1>
+          {actions && (
+            <div className="flex shrink-0 items-center gap-2">{actions}</div>
+          )}
+        </div>
+        {description && (
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            {description}
+          </p>
+        )}
+      </div>
+    );
+  }
   return (
     <div
       data-slot="page-heading"

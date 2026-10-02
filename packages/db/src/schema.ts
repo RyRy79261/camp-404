@@ -3898,8 +3898,11 @@ export const powerGridNodes = pgTable(
     // Typed from the cable's label; null shows "rating unknown", never a guess.
     cableRatedAmps: doublePrecision("cable_rated_amps"),
     adapter: text("adapter"),
-    haveCable: boolean("have_cable").notNull().default(true),
-    haveAdapter: boolean("have_adapter").notNull().default(true),
+    // Whether the camp has the run's cable and adapter: true has it, false
+    // must get it, null nobody has checked yet. No default: a point added
+    // without an answer must not count the cable as the camp's (#256 audit).
+    haveCable: boolean("have_cable"),
+    haveAdapter: boolean("have_adapter"),
     sort: integer("sort").notNull().default(0),
     version: integer("version").notNull().default(1),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
