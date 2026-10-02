@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The neighbour page (#271): public, no sign-in, and nothing typed inside the
-// camp on it. It takes only what getSharedLayout returns, so the real
+// camp on it (no label, no road name). It takes only what getSharedLayout returns, so the real
 // guarantee is neighbourView (core) and getSharedLayout (PGlite); this checks
 // the page answers 404 for a dead link and draws what it is given, and never
 // asks who is signed in.
@@ -40,7 +40,7 @@ describe("the neighbour page", () => {
     vi.mocked(getSharedLayout).mockResolvedValue({
       cycle: 2027,
       layout: {
-        plot: { widthM: 40, depthM: 30, north: "left" },
+        plot: { widthM: 28, depthM: 60, north: "top", part: "left" },
         pieces: [
           { kind: "kitchen", x: 1, y: 1, w: 8, h: 6 },
           { kind: "tent", x: 20, y: 10, w: 3, h: 2.5 },
@@ -56,12 +56,18 @@ describe("the neighbour page", () => {
     expect(
       screen.getByRole("img", { name: /Camp 404's site plan/ }),
     ).toBeTruthy();
+    // The key is by kind: Kitchen is 1 and Tent 2, the number each wears.
     const legend = screen.getByRole("list", { name: "What's on the plan" });
-    expect(legend.textContent).toContain("Kitchen");
-    expect(legend.textContent).toContain("Tent × 2");
+    const rows = [...legend.querySelectorAll("li")].map((li) => li.textContent);
+    expect(rows).toEqual(["1Kitchen×1", "2Tent×2"]);
     const arrivals = screen.getByRole("list", { name: "Arrivals by day" });
     expect(arrivals.textContent).toContain("Fri 23 Apr");
     expect(arrivals.textContent).toContain("11");
-    expect(screen.getByText(/15 people have given/)).toBeTruthy();
+    expect(screen.getByText(/people arriving/).textContent).toContain("15");
+    expect(
+      screen.getByText(/We're on the left half of the block/),
+    ).toBeTruthy();
+    // No road is named: the camp types those, and none leaves it.
+    expect(document.body.textContent).not.toMatch(/ROAD/);
   });
 });
