@@ -14,7 +14,7 @@ import {
   printName,
   timeRangeText,
 } from "@/lib/lounge-copy";
-import { buildProgramme, dayItems } from "@/lib/lounge-view";
+import { buildProgramme, dayItems, openingDay } from "@/lib/lounge-view";
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +41,14 @@ export default async function LoungePrintPage({
   const days = loungeDays(burn);
   const blank = params.sheet === "blank";
   const asked = Number(params.day);
+  const view = buildProgramme(programme, days);
+  // Today during the Burn, otherwise the first day with anything on (audit,
+  // 2026-10-01: it opened on an empty Day 1).
   const day =
     days.find((d) => d.day === asked)?.day ??
-    loungeDayOf(new Date(), days) ??
-    1;
+    openingDay(view.items, days, loungeDayOf(new Date(), days));
   const label = days.find((d) => d.day === day)?.label ?? `Day ${day}`;
-  const items = dayItems(buildProgramme(programme, days), day);
+  const items = dayItems(view, day);
 
   const options = (
     <>

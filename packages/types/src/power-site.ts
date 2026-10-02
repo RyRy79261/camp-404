@@ -191,8 +191,9 @@ const gridFields = {
   ),
   /** The adapter or multiplug at the far end. */
   adapter: optionalText(80, "Keep the adapter under 80 characters."),
-  haveCable: z.boolean().default(true),
-  haveAdapter: z.boolean().default(true),
+  /** True has it, false must get it, null (the default) not checked yet. */
+  haveCable: z.boolean().nullable().default(null),
+  haveAdapter: z.boolean().nullable().default(null),
 };
 
 type GridFields = z.infer<z.ZodObject<typeof gridFields>>;
@@ -224,8 +225,8 @@ function normaliseGridNode<T extends GridFields>(node: T): T {
     cableGaugeMm2: null,
     cableRatedAmps: null,
     adapter: null,
-    haveCable: true,
-    haveAdapter: true,
+    haveCable: null,
+    haveAdapter: null,
   };
 }
 
