@@ -49,21 +49,36 @@ const rands = new Intl.NumberFormat("en-ZA", {
   maximumFractionDigits: 2,
 });
 
+const wholeRands = new Intl.NumberFormat("en-ZA", {
+  style: "currency",
+  currency: "ZAR",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
 /**
  * Cents as rands, the way a South African reads them: `R 1 234,50` (the
  * spaces are no-break spaces). `currency` is the stored code, when the caller
  * has one: anything but ZAR throws rather than print a foreign amount as
  * rands. Throws too for an amount that is not whole cents.
+ *
+ * `wholeRands` drops the ",00" from an amount that has no cents (`R 3 500`),
+ * for a scale or a price list a person reads at a glance; an amount with cents
+ * keeps them.
  */
 export function formatMoney(
   amountMinor: number,
   currency: string = DEFAULT_CURRENCY,
+  options: { wholeRands?: boolean } = {},
 ): string {
   if (!isCurrency(currency)) throw new UnknownCurrencyError(currency);
   if (!Number.isSafeInteger(amountMinor)) {
     throw new RangeError(
       `formatMoney: ${amountMinor} is not a whole number of cents.`,
     );
+  }
+  if (options.wholeRands && amountMinor % 100 === 0) {
+    return wholeRands.format(amountMinor / 100);
   }
   return rands.format(amountMinor / 100);
 }

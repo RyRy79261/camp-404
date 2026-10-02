@@ -3,6 +3,7 @@ import "server-only";
 import {
   DEFAULT_JOIN_CONTENT,
   DEFAULT_TEAM_DESCRIPTIONS,
+  JOIN_SECTION_KEYS,
   JoinSections,
   resolveJoinContent,
   type JoinSectionKey,
@@ -22,7 +23,7 @@ import {
   getCampBlurb as dbGetCampBlurb,
   getJoinSiteContent,
   JoinSectionInvalidError,
-  saveJoinSiteSection,
+  saveJoinSiteSections,
   setCampBlurb as dbSetCampBlurb,
   type CampBlurb,
 } from "@camp404/db/join-site";
@@ -84,28 +85,36 @@ export async function getJoinEditorData(): Promise<JoinEditorData> {
   };
 }
 
-/** Save one section of this year's words. Throws JoinSectionInvalidError. */
-export async function saveJoinSection(input: {
+/**
+ * Save the sections a captain changed, all at once (the editor's one Save).
+ * Throws JoinSectionInvalidError, naming the section, and then saves none.
+ */
+export async function saveJoinSections(input: {
   year: number;
-  section: JoinSectionKey;
-  value: unknown;
+  sections: Partial<Record<JoinSectionKey, unknown>>;
   actorUserId: string;
 }): Promise<void> {
   if (!usesTestStore()) {
-    await saveJoinSiteSection(input);
+    await saveJoinSiteSections(input);
     return;
   }
-  const parsed = JoinSections[input.section].safeParse(input.value);
-  if (!parsed.success) {
-    throw new JoinSectionInvalidError(
-      parsed.error.issues.map((i) => i.message),
-    );
+  const parsed: Partial<Record<JoinSectionKey, unknown>> = {};
+  for (const key of JOIN_SECTION_KEYS) {
+    if (!(key in input.sections)) continue;
+    const result = JoinSections[key].safeParse(input.sections[key]);
+    if (!result.success) {
+      throw new JoinSectionInvalidError(
+        result.error.issues.map((i) => i.message),
+        key,
+      );
+    }
+    parsed[key] = result.data;
   }
   const base = resolveJoinContent(testStore.getJoinContent(input.year));
   testStore.setJoinContent(input.year, {
     ...base,
-    [input.section]: parsed.data,
-  });
+    ...parsed,
+  } as JoinSiteContent);
 }
 
 export type BurnDatesResult =

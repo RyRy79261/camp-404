@@ -51,6 +51,19 @@ describe("formatMoney", () => {
     expect(formatMoney(0)).toMatch(money("R 0,00"));
   });
 
+  it("drops the cents from a whole amount when asked, and only then", () => {
+    expect(formatMoney(350000, "ZAR", { wholeRands: true })).toMatch(
+      money("R 3 500"),
+    );
+    expect(formatMoney(350000, "ZAR", { wholeRands: true })).not.toContain(",");
+    expect(formatMoney(350050, "ZAR", { wholeRands: true })).toMatch(
+      money("R 3 500,50"),
+    );
+    expect(() => formatMoney(100, "USD", { wholeRands: true })).toThrow(
+      UnknownCurrencyError,
+    );
+  });
+
   it("refuses to print another currency's amount as rands", () => {
     for (const code of ["USD", "EUR", "GBP", "zar"]) {
       expect(() => formatMoney(999, code)).toThrow(UnknownCurrencyError);
