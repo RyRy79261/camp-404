@@ -226,6 +226,8 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
     "ANSWERS.TXT",
     keyed("form-answers"),
   ),
+  // The dietary pick-list (#245): a form of its own, before the keyed row.
+  route("/tools/forms/dietary", "form", "FORM.DOC", () => "form:dietary"),
   route("/tools/forms/[key]", "form", "FORM.DOC", keyed("form")),
   route("/tools/invite", "invites", "KEYGEN.EXE"),
   route("/lift", "my-lift", "MY_LIFT.EXE"),
