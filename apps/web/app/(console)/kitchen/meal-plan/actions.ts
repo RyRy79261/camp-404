@@ -211,7 +211,10 @@ export async function recordAllergenPlanAction(
     if (!gate.ok) return gate;
     const parsed = RecordAllergenPlanInput.safeParse(input);
     if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0]?.message ?? CHECK_MENU };
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? CHECK_MENU,
+      };
     }
     const result = await recordAllergenPlan({
       ...parsed.data,
@@ -232,7 +235,10 @@ export async function correctAllergensAction(
     if (!gate.ok) return gate;
     const parsed = CorrectRecipeAllergensInput.safeParse(input);
     if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0]?.message ?? CHECK_MENU };
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? CHECK_MENU,
+      };
     }
     const result = await correctRecipeAllergens({
       ...parsed.data,
@@ -253,7 +259,10 @@ export async function addPrepStepAction(
     if (!gate.ok) return gate;
     const parsed = AddPrepStepInput.safeParse(input);
     if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0]?.message ?? CHECK_PREP };
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? CHECK_PREP,
+      };
     }
     const result = await addPrepStep({
       ...parsed.data,

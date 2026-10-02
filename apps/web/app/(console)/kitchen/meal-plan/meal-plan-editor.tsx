@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Loader2 } from "lucide-react";
 import { z } from "zod";
@@ -112,6 +112,8 @@ type MealPlanEditorProps = {
   menu?: readonly MenuLine[];
   /** The recipe book, for the picker. */
   book?: readonly PickerRecipe[];
+  /** Drawn between the plan's settings and the week (the dietary box, #245). */
+  above?: ReactNode;
 };
 
 /**
@@ -143,9 +145,11 @@ export function MealPlanEditor(props: MealPlanEditorProps) {
 
 function MealPlanEditorForm({
   days: savedDayPlates,
+  firstDay: savedFirstDay,
   version,
   menu = [],
   book = [],
+  above,
   draft,
 }: MealPlanEditorProps & { draft: EditorDraft<MealPlanDraft> }) {
   const router = useRouter();
@@ -357,6 +361,8 @@ function MealPlanEditorForm({
         </div>
       )}
 
+      {above}
+
       {/* The week. On a page at least page-md wide, one table: Day |
           Breakfast | Dinner. Narrower, one card per day. */}
       <div
@@ -426,6 +432,7 @@ function MealPlanEditorForm({
                       lines={lines}
                       allLines={menu}
                       book={book}
+                      firstDay={savedFirstDay}
                       platesControl={
                         <>
                           <div className="flex items-center justify-between gap-3 page-md:justify-start">

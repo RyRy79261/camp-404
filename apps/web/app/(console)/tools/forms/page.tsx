@@ -1,10 +1,10 @@
-import { ClipboardList } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
-import { EmptyState } from "@camp404/ui/components/empty-state";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { requireMemberPage } from "@/lib/member-gate";
 import { getCycles } from "@/lib/camp-config";
+import { getMyDietary } from "@/lib/dietary";
 import { listAnsweredQuestionnaires, listCompletedForms } from "@/lib/forms";
+import { DIETARY_FORM_PATH } from "@/lib/recipe-copy";
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
 import { FormCard } from "./form-card";
 
@@ -21,14 +21,16 @@ const dateFmt = new Intl.DateTimeFormat("en-ZA", {
 
 // Every form this member has finished, as a grid of cards in two sections (the
 // AfrikaBurn directory's layout): the ones they can keep updating, then the
-// questionnaires whose answers are fixed.
+// questionnaires whose answers are fixed. Dietary needs (#245) is always in
+// the first section: every member can fill it in and change it.
 export default async function FormsListPage() {
   const { campUser } = await requireMemberPage();
 
-  const [forms, answered, cycles] = await Promise.all([
+  const [forms, answered, cycles, dietary] = await Promise.all([
     listCompletedForms(campUser.id),
     listAnsweredQuestionnaires(campUser.id),
     getCycles(),
+    getMyDietary(campUser.id),
   ]);
   const yearName = (cycle: number) => {
     if (cycle === UNSET_CYCLE) return null;
@@ -44,15 +46,9 @@ export default async function FormsListPage() {
         description="Questionnaires you've completed. Your burner profile and whether you're coming this year can be updated any time, and we keep a log of what you change. Other questionnaires open read-only: their answers are fixed once you submit."
       />
 
-      {forms.length === 0 && answered.length === 0 ? (
-        <EmptyState
-          icon={<ClipboardList aria-hidden />}
-          title="No forms yet"
-          description="You haven't completed any forms yet."
-        />
-      ) : (
+      {
         <div className="flex flex-col gap-8">
-          {forms.length > 0 && (
+          {
             <section
               aria-labelledby="forms-editable"
               className="flex flex-col gap-4"
@@ -83,9 +79,20 @@ export default async function FormsListPage() {
                     />
                   </li>
                 ))}
+                <li>
+                  <FormCard
+                    href={DIETARY_FORM_PATH}
+                    title="Dietary needs"
+                    description="The foods you react to and how, and your diet. The kitchen checks the menu against them."
+                    lastEdited={
+                      dietary.savedAt ? dateFmt.format(dietary.savedAt) : null
+                    }
+                    editable
+                  />
+                </li>
               </ul>
             </section>
-          )}
+          }
 
           {answered.length > 0 && (
             <section
@@ -125,7 +132,7 @@ export default async function FormsListPage() {
             </section>
           )}
         </div>
-      )}
+      }
     </div>
   );
 }

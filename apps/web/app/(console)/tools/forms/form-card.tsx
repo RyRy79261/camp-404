@@ -6,8 +6,8 @@ interface FormCardProps {
   href: string;
   title: string;
   description: string;
-  /** Pre-formatted "last edited" date. */
-  lastEdited: string;
+  /** Pre-formatted "last edited" date; null when never saved. */
+  lastEdited: string | null;
   /** Whether the answers can still be changed, or only read. */
   editable: boolean;
 }
@@ -40,7 +40,7 @@ export function FormCard({
       </span>
       <span className="mt-auto flex items-center justify-between gap-2 pt-1">
         <span className="text-xs text-muted-foreground">
-          Last edited {lastEdited}
+          {lastEdited ? `Last edited ${lastEdited}` : "Not filled in yet"}
         </span>
         <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-medium text-accent">
           {editable ? "Update" : "View"}

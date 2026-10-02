@@ -12,6 +12,7 @@ import { recipePath, UNREACHABLE } from "@/lib/recipe-copy";
 import { platesLabel } from "@/lib/recipe-labels";
 import { proofreadPlatesAction } from "../recipes/actions";
 import { removeMenuItemAction } from "./actions";
+import { MealChecks, type MealCheckView } from "./meal-checks";
 import { RecipePicker, type PickerRecipe } from "./recipe-picker";
 
 // One meal of the meal plan for a Kitchen lead or a captain (the owner's
@@ -37,6 +38,11 @@ export interface MenuLine {
   verified: boolean;
   /** Claude is working on that count. */
   withClaude: boolean;
+  /**
+   * The allergy flags and prep steps under it (#245): only on the editors'
+   * page, for a captain or a Kitchen lead.
+   */
+  check?: MealCheckView;
 }
 
 const CHIP =
@@ -150,6 +156,7 @@ export function MenuCell({
   allLines,
   book,
   platesControl,
+  firstDay = null,
 }: {
   day: number;
   /** "Day 3 · Sat 24 Apr", for the picker's heading. */
@@ -161,6 +168,8 @@ export function MenuCell({
   allLines: readonly MenuLine[];
   book: readonly PickerRecipe[];
   platesControl: ReactNode;
+  /** The plan's saved date of Day 1, which dates the prep steps. */
+  firstDay?: string | null;
 }) {
   const [picking, setPicking] = useState(false);
   const row = "flex min-h-10 items-center border-t border-border/60";
@@ -186,6 +195,22 @@ export function MenuCell({
               {plates > 0 ? <LineStatus line={line} plates={plates} /> : null}
             </span>
             <RemoveButton line={line} />
+            {line.check && plates > 0 && (
+              <div className="col-span-2 row-start-3 page-md:col-span-3 page-md:row-start-2">
+                <MealChecks
+                  view={line.check}
+                  ctx={{
+                    itemId: line.id,
+                    title: line.title,
+                    day,
+                    meal,
+                    dayLabel,
+                    plates,
+                    firstDay,
+                  }}
+                />
+              </div>
+            )}
           </li>
         ))}
         {plates > 0 ? (
