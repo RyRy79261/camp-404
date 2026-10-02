@@ -129,12 +129,14 @@ beforeEach(() => {
       name: "Megan van der Berg",
       allergies: "Nuts",
       isAnaphylactic: true,
+      foods: null,
     },
     {
       userId: "u2",
       name: "Naledi Mokoena",
       allergies: "No egg",
       isAnaphylactic: false,
+      foods: null,
     },
   ]);
   vi.mocked(getMealPlan).mockResolvedValue({

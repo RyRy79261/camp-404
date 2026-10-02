@@ -158,6 +158,9 @@ const MENU: KitchenMenu = {
         { plates: 50, lines: [] },
       ],
       openPlates: [],
+      allergens: [],
+      allergensMarked: false,
+      allergenRevision: 0,
     },
     [RICE]: {
       recipeId: RICE,
@@ -166,6 +169,9 @@ const MENU: KitchenMenu = {
       categories: [],
       counts: [{ plates: 50, lines: [] }],
       openPlates: [25],
+      allergens: [],
+      allergensMarked: false,
+      allergenRevision: 0,
     },
   },
 };

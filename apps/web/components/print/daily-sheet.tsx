@@ -164,6 +164,17 @@ export function DailySheetPage({
                     {m.dishes.join(", ")}
                   </p>
                 ))}
+              {kitchen &&
+                sheet.prep.map((line, i) => (
+                  <p
+                    key={`prep-${i}`}
+                    data-testid="sheet-prep"
+                    className="border-t border-[#ddd] px-[7px] py-1 text-[10.5px]"
+                  >
+                    <b className="inline-block w-[72px]">Prep</b>
+                    {line}
+                  </p>
+                ))}
               {kitchen && sheet.allergies.length > 0 && (
                 <p
                   data-testid="sheet-allergies"

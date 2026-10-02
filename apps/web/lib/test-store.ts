@@ -87,6 +87,10 @@ import {
 } from "./test-store-dues";
 import { resetClaimsStore } from "./test-store-claims";
 import { resetKitchenMenuStore } from "./test-store-kitchen-menu";
+import {
+  resetKitchenExtrasStore,
+  storeAllergenCorrection,
+} from "./test-store-kitchen-extras";
 import { resetRentalStore } from "./test-store-rental";
 import { resetGuideStore } from "./test-store-guide";
 import {
@@ -299,7 +303,11 @@ import {
   type MealPlanSave,
   type MealPlanWriteResult,
 } from "@camp404/db/meal-plan";
-import type { MenuBookRecipe, MenuRecipeFacts } from "@camp404/db/kitchen-menu";
+import {
+  allergenFacts,
+  type MenuBookRecipe,
+  type MenuRecipeFacts,
+} from "@camp404/db/kitchen-menu";
 import {
   calendarEventRefusal,
   type AddCalendarEventResult,
@@ -5909,6 +5917,7 @@ export const testStore = {
         category: KitchenRecipe["ingredients"][number]["category"];
         quantity: number | null;
         unit: KitchenRecipe["ingredients"][number]["unit"];
+        allergens?: KitchenRecipe["ingredients"][number]["allergens"];
       }[];
     }[];
   }): Record<string, string> {
@@ -6351,6 +6360,10 @@ export const testStore = {
               )
               .map((r) => r.plates!)
           : [],
+        ...allergenFacts(
+          version?.body.ingredients ?? [],
+          version ? storeAllergenCorrection(version.id) : null,
+        ),
       };
     }
     return out;
@@ -6503,6 +6516,7 @@ export const testStore = {
     resetDailySheetStore();
     resetClaimsStore();
     resetKitchenMenuStore();
+    resetKitchenExtrasStore();
   },
 
   // --- INKBLOT's board (the twin of @camp404/db/inkblot) --------------------

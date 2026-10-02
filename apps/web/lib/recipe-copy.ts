@@ -81,3 +81,18 @@ export const SNACK_REFUSAL =
 export const TICK_REFUSAL =
   "Only approved camp members can tick the shopping list.";
 export const CHECK_MENU = "Check the menu and try again.";
+
+// #245: prices, the dietary check, plans and prep steps.
+export const PRICE_REFUSAL =
+  "Only a Kitchen lead or a captain can set shops and prices.";
+export const CHECK_PRICE = "Check the shop and the price and try again.";
+export const PLAN_REFUSAL =
+  "Only a Kitchen lead or a captain can record a plan.";
+export const ALLERGENS_REFUSAL =
+  "Only a Kitchen lead or a captain can change a recipe's allergens.";
+export const PREP_REFUSAL =
+  "Only a Kitchen lead or a captain can add prep steps.";
+export const CHECK_PREP = "Check the prep step and try again.";
+export const DIETARY_FORM_PATH = "/tools/forms/dietary";
+export const DIETARY_SAVED = "Dietary needs saved";
+export const CHECK_DIETARY = "Check your answers and try again.";

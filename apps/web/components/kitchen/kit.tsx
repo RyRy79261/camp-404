@@ -19,7 +19,7 @@ export function FilterToggle<V extends string>({
   className,
 }: {
   label: string;
-  options: readonly { value: V; label: string; count: number }[];
+  options: readonly { value: V; label: string; count?: number }[];
   value: V;
   onChange: (value: V) => void;
   className?: string;
@@ -49,9 +49,11 @@ export function FilterToggle<V extends string>({
             )}
           >
             {o.label}
-            <b className="ml-1 font-bold tabular-nums text-foreground">
-              {o.count}
-            </b>
+            {o.count !== undefined && (
+              <b className="ml-1 font-bold tabular-nums text-foreground">
+                {o.count}
+              </b>
+            )}
           </button>
         );
       })}
