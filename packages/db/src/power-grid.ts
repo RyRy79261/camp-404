@@ -60,8 +60,9 @@ export interface GridNodeRow {
   cableGaugeMm2: number | null;
   cableRatedAmps: number | null;
   adapter: string | null;
-  haveCable: boolean;
-  haveAdapter: boolean;
+  /** True has it, false must get it, null not checked yet. */
+  haveCable: boolean | null;
+  haveAdapter: boolean | null;
   sort: number;
   version: number;
 }

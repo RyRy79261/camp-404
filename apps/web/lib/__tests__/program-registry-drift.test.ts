@@ -20,6 +20,12 @@ import { PROGRAM_REGISTRY } from "../programs";
 
 const CONSOLE = path.resolve(__dirname, "../../app/(console)");
 
+/** Every Power section renders inside PowerFrame, which reads powerViewer(). */
+const POWER_GATE = {
+  file: "../../lib/power-overview.ts",
+  has: 'captainPageGate("camp_member")',
+};
+
 /** Pages whose gate the regex cannot read, each with why and its real bar. */
 const EXPLAINED: Record<
   string,
@@ -40,11 +46,38 @@ const EXPLAINED: Record<
   "/captains/tools": { rank: "none", why: "Redirects to the desktop." },
   "/power": {
     rank: "camp_member",
-    why: "Redirects to /power/loads, which gates at camp_member.",
-    via: {
-      file: "power/loads/page.tsx",
-      has: 'captainPageGate("camp_member")',
-    },
+    why: "The answer rail's home; PowerFrame gates through powerViewer() at camp_member.",
+    via: POWER_GATE,
+  },
+  "/power/loads": {
+    rank: "camp_member",
+    why: "A Power section; PowerFrame gates through powerViewer() at camp_member.",
+    via: POWER_GATE,
+  },
+  "/power/fuel": {
+    rank: "camp_member",
+    why: "A Power section; PowerFrame gates through powerViewer() at camp_member.",
+    via: POWER_GATE,
+  },
+  "/power/fuel-log": {
+    rank: "camp_member",
+    why: "A Power section; PowerFrame gates through powerViewer() at camp_member.",
+    via: POWER_GATE,
+  },
+  "/power/grid": {
+    rank: "camp_member",
+    why: "A Power section; PowerFrame gates through powerViewer() at camp_member.",
+    via: POWER_GATE,
+  },
+  "/power/readiness": {
+    rank: "camp_member",
+    why: "A Power section; PowerFrame gates through powerViewer() at camp_member.",
+    via: POWER_GATE,
+  },
+  "/power/sharing": {
+    rank: "camp_member",
+    why: "A Power section; PowerFrame gates through powerViewer() at camp_member.",
+    via: POWER_GATE,
   },
   "/notifications": {
     rank: "camp_member",

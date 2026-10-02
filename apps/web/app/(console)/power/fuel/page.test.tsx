@@ -1,318 +1,156 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The fuel estimate (#254). Every approved member reads it; only a captain or
-// a Power & Lighting lead edits the plan and the generators. Everyone else
-// sees the same controls PRESENT BUT DISABLED, described by the one refusal
-// line. The figures are worked out on the server: for the issue's example (a
-// 1065 W load all day on a 5.5 kVA generator, 13.5 L tank, 9.8 h at 50%,
-// 5.5 h at 100%) that is 19.73 L a day at 24 h, 197.3 L over 10 days,
-// 236.7 L with 20%, and 12 cans of 20 L.
+// The fuel estimate in the approved redesign (option B): the answer first
+// ("Fill 23 jerry cans: 446 L of petrol for 11 days."), then how the figure is
+// reached, then the plan as a list of facts. An editor (a captain or a Power &
+// Lighting lead) changes the plan behind "Change the plan" and keeps the
+// generators; everyone else reads the same page with no button at all. The
+// camp is the mock-up's own (tests/power-camp.ts), from the test store: 32.6
+// kWh a day on the Honda EU70is, 11 days, a 20% margin, 20 L cans, 8 owned.
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
 }));
-vi.mock("@/app/(console)/power/actions", () => ({
-  saveFuelPlanAction: vi.fn(),
-  copyLastYearPlanAction: vi.fn(),
-  addGeneratorAction: vi.fn(),
-  updateGeneratorAction: vi.fn(),
-  archiveGeneratorAction: vi.fn(),
+vi.mock("@/lib/test-mode", () => ({
+  usesTestStore: () => true,
+  isE2ETestMode: () => true,
 }));
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/users", () => ({ getLeadTeams: vi.fn(async () => []) }));
-vi.mock("@/lib/power-site", () => ({
-  previousRefuelCycle: vi.fn(async () => null),
-  listRefuelEntries: vi.fn(async () => []),
-}));
-vi.mock("@/lib/power", () => ({
-  listPowerLoads: vi.fn(),
-  getPowerPlan: vi.fn(),
-  listGenerators: vi.fn(),
-  getGenerator: vi.fn(async () => null),
-  listPowerInventory: vi.fn(async () => []),
-  previousPlanCycle: vi.fn(async () => null),
-}));
+vi.mock("@/app/(console)/power/actions");
 
 import { captainPageGate } from "@/lib/captain-gate";
-import {
-  getPowerPlan,
-  listGenerators,
-  listPowerInventory,
-  listPowerLoads,
-  previousPlanCycle,
-} from "@/lib/power";
-import { POWER_REFUSAL } from "@/lib/power-copy";
-import { listRefuelEntries, previousRefuelCycle } from "@/lib/power-site";
+import { POWER_READ_ONLY } from "@/lib/power-copy";
 import { getLeadTeams } from "@/lib/users";
+import { setUpPowerCamp, type PowerCamp } from "@/tests/power-camp";
+import { renderServer } from "@/tests/render-server";
 import PowerFuelPage from "./page";
 
-const GEN_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
-
-const GENERATOR = {
-  id: GEN_ID,
-  model: "Test 5.5",
-  ratedKva: 5.5,
-  maxKva: 6,
-  tankLitres: 13.5,
-  runtime50Hours: 9.8,
-  runtime100Hours: 5.5,
-  fuelType: "petrol",
-  owner: "member_lent",
-  inventoryItemId: null,
-  noiseNote: "Quiet inverter",
-  archivedAt: null,
-  version: 1,
-  createdAt: new Date("2026-09-20T08:00:00Z"),
-  updatedAt: new Date("2026-09-20T08:00:00Z"),
-};
-
-const LOAD = {
-  id: "load-1",
-  cycle: 2026,
-  name: "Everything",
-  area: "camp",
-  category: "other",
-  quantity: 1,
-  wattsEach: 1065,
-  surgeWattsEach: null,
-  dutyPct: 100,
-  schedule: "full_time",
-  hoursPerDay: null,
-  windows: null,
-  fromDay: null,
-  toDay: null,
-  volts: 230,
-  current: "ac",
-  owner: "camp",
-  neighbourCamp: null,
-  inventoryItemId: null,
-  circuit: null,
-  sort: 0,
-  version: 1,
-  createdAt: new Date("2026-09-20T08:00:00Z"),
-  updatedAt: new Date("2026-09-20T08:00:00Z"),
-};
-
-const PLAN = {
-  cycle: 2026,
-  generatorId: GEN_ID,
-  secondGeneratorNote: null,
-  powerFactor: 0.8,
-  daysOnSite: 10,
-  firstPoweredDay: null,
-  runFromHour: null,
-  runToHour: null,
-  lowLoadFactor: 1,
-  safetyMarginPct: 20,
-  canLitres: 20,
-  cansOwned: 0,
-  version: 2,
-  updatedAt: new Date("2026-09-20T08:00:00Z"),
-};
+let camp: PowerCamp;
 
 async function renderAs(
+  who: keyof PowerCamp,
   rank: "camp_member" | "team_lead" | "captain",
   leads: string[] = [],
 ) {
   vi.mocked(captainPageGate).mockResolvedValue({
-    campUser: { id: "viewer" },
+    campUser: { id: camp[who].id },
     rank,
     cleared: true,
   } as never);
-  vi.mocked(getLeadTeams).mockResolvedValue(leads);
-  render(await PowerFuelPage());
+  vi.mocked(getLeadTeams).mockResolvedValue(leads as never);
+  await renderServer(PowerFuelPage());
+}
+
+/** The figure beside a line of "How we get there". */
+function ledger(label: string | RegExp): string {
+  const card = screen.getByRole("region", { name: "How we get there" });
+  const term = within(card).getByText(label);
+  return term.nextElementSibling?.textContent ?? "";
 }
 
 afterEach(cleanup);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getPowerPlan).mockResolvedValue(PLAN as never);
-  vi.mocked(listGenerators).mockResolvedValue([GENERATOR] as never);
-  vi.mocked(listPowerLoads).mockResolvedValue([LOAD] as never);
-  vi.mocked(previousPlanCycle).mockResolvedValue(null);
-  vi.mocked(previousRefuelCycle).mockResolvedValue(null);
+  camp = setUpPowerCamp();
 });
 
 describe("the fuel estimate", () => {
-  it("shows last year's actual litres a day beside the estimate (#255)", async () => {
-    vi.mocked(previousRefuelCycle).mockResolvedValue(2025);
-    const entry = (at: string, id: string) => ({
-      id,
-      refuelledAt: new Date(at),
-      litres: 10,
-      correctsEntryId: null,
-      voided: false,
-    });
-    vi.mocked(listRefuelEntries).mockResolvedValue([
-      entry("2025-04-25T04:00:00Z", "a"),
-      entry("2025-04-25T10:00:00Z", "b"),
-    ] as never);
-    await renderAs("camp_member");
-    expect(listRefuelEntries).toHaveBeenCalledWith(2025);
-    expect(
-      within(screen.getByRole("article", { name: "Litres a day" })).getByText(
-        /2025 used 40 L a day/,
-      ),
-    ).toBeTruthy();
-  });
-
-  it("says nothing of last year when it has no log", async () => {
-    await renderAs("camp_member");
-    expect(
-      within(screen.getByRole("article", { name: "Litres a day" })).queryByText(
-        /used .* L a day/,
-      ),
-    ).toBeNull();
-  });
-
-  it("shows a member every control disabled, pointing at the one refusal line", async () => {
-    await renderAs("camp_member");
-    const refusal = screen.getByText(POWER_REFUSAL);
-    const save = screen.getByRole("button", { name: /^Save plan/ });
-    expect(save).toHaveProperty("disabled", true);
-    expect(save.getAttribute("aria-describedby")).toBe(refusal.id);
-    expect(screen.getByRole("combobox", { name: "Generator" })).toHaveProperty(
-      "disabled",
-      true,
+  it("opens on the answer: the cans to fill, the litres and the days", async () => {
+    await renderAs("mem", "camp_member");
+    const answer = screen.getByRole("region", { name: "The answer" });
+    expect(answer.textContent).toContain(
+      "Fill 23 jerry cans: 446 L of petrol for 11 days.",
     );
-    expect(
-      screen.getByRole("spinbutton", { name: /^Days on site/ }),
-    ).toHaveProperty("disabled", true);
-    expect(
-      screen.getByRole("radio", { name: "24 h", checked: true }),
-    ).toBeTruthy();
-    for (const radio of screen.getAllByRole("radio")) {
-      expect(radio).toHaveProperty("disabled", true);
-    }
-    // The run-hours choice says why it is disabled too.
-    expect(
-      screen
-        .getByRole("radiogroup", { name: "Hours running" })
-        .getAttribute("aria-describedby"),
-    ).toBe(refusal.id);
-    const add = screen.getByRole("button", { name: /^Add generator/ });
-    expect(add).toHaveProperty("disabled", true);
-    expect(add.getAttribute("aria-describedby")).toBe(refusal.id);
-    expect(
-      screen.getAllByRole("button", {
-        name: "Archive Test 5.5 — not available to you",
-      })[0],
-    ).toHaveProperty("disabled", true);
-    expect(listPowerInventory).not.toHaveBeenCalled();
-  });
-
-  it("refuses a Kitchen lead the same way, and enables a Power & Lighting lead", async () => {
-    await renderAs("team_lead", ["kitchen"]);
-    expect(screen.getByRole("button", { name: /^Save plan/ })).toHaveProperty(
-      "disabled",
-      true,
+    expect(within(answer).getByText("We own 8 cans: buy 15")).toBeTruthy();
+    // The answer comes before the working and the plan, never under a form.
+    const regions = screen
+      .getAllByRole("region")
+      .map((r) => r.getAttribute("aria-label"));
+    expect(regions.indexOf("The answer")).toBeLessThan(
+      regions.indexOf("How we get there"),
     );
-
-    cleanup();
-    await renderAs("team_lead", ["kitchen", "power_and_lighting"]);
-    expect(screen.queryByText(POWER_REFUSAL)).toBeNull();
-    const save = screen.getByRole("button", { name: "Save plan" });
-    expect(save).toHaveProperty("disabled", false);
-    expect(
-      screen.getByRole("spinbutton", { name: /^Days on site/ }),
-    ).toHaveProperty("disabled", false);
-    expect(listPowerInventory).toHaveBeenCalled();
+    expect(regions.indexOf("How we get there")).toBeLessThan(
+      regions.indexOf("The plan"),
+    );
   });
 
-  it("works out litres, cans and refills on the server, running 24 h", async () => {
-    await renderAs("captain");
-    const kpi = (name: string) => screen.getByRole("article", { name });
-    // 0.3006 L/h idle + 2.1540 × (1.065 ÷ 0.8 ÷ 5.5) = 0.822 L/h × 24 h.
-    expect(within(kpi("Litres a day")).getByText("19.73 L")).toBeTruthy();
-    expect(
-      within(kpi("Litres for the burn")).getByText("197.3 L"),
-    ).toBeTruthy();
-    expect(within(kpi("With margin")).getByText("236.7 L")).toBeTruthy();
-    expect(within(kpi("Jerry cans needed")).getByText("12")).toBeTruthy();
-    // 19.73 ÷ 13.5 L tank = 1.5 a day; 24 h ÷ 1.46 = every 16.4 h.
-    const refills = kpi("Tank refills a day");
-    expect(within(refills).getByText("1.5")).toBeTruthy();
-    expect(within(refills).getByText(/about every 16\.4 h/)).toBeTruthy();
-
-    // The generator runs 24/7 (owner, 2026-09-24): one schedule, and no
-    // second, comparison schedule beside it.
-    expect(
-      screen.queryByRole("table", { name: "Scenario compare" }),
-    ).toBeNull();
-    expect(screen.queryByText(/Comparison/)).toBeNull();
-    expect(screen.getAllByRole("radio", { name: "24 h" })).toHaveLength(1);
-    expect(
-      within(kpi("Litres a day")).getByText("on the busiest day, running 24 h"),
-    ).toBeTruthy();
-
-    // Running all day, nothing falls in the off hours: no warning.
-    expect(
-      screen.queryByText(/falls in hours the generator is off/),
-    ).toBeNull();
-    expect(screen.getByText("0.301 L/h")).toBeTruthy();
-    expect(screen.getByText("Day 10")).toBeTruthy();
+  it("shows how the figure is reached, line by line", async () => {
+    await renderAs("mem", "camp_member");
+    expect(ledger(/^Fuel a day for 32\.6 kWh on the Honda$/)).toBe("33.8 L");
+    expect(ledger("× 11 days on site")).toBe("371.8 L");
+    expect(ledger("+ 20% safety margin")).toBe("74.4 L");
+    expect(ledger("Litres for the burn")).toBe("446.2 L");
+    expect(ledger("÷ 20 L a can, rounded up")).toBe("23 cans");
+    expect(ledger("− cans we already own")).toBe("8");
+    expect(ledger("Cans to buy")).toBe("15");
   });
 
-  it("warns of energy in the off hours, and of an overload", async () => {
-    vi.mocked(getPowerPlan).mockResolvedValue({
-      ...PLAN,
-      runFromHour: 18,
-      runToHour: 6,
-    } as never);
-    await renderAs("captain");
-    expect(
-      screen.getByText(/^12\.78 kWh a day falls in hours the generator is off/),
-    ).toBeTruthy();
-    expect(
-      within(
-        screen.getByRole("article", { name: "Jerry cans needed" }),
-      ).getByText("6"),
-    ).toBeTruthy();
-    expect(screen.queryByText(/goes over the generator's rating/)).toBeNull();
+  it("reads the plan as facts, the spare generator in plain words", async () => {
+    await renderAs("mem", "camp_member");
+    const plan = screen.getByRole("region", { name: "The plan" });
+    const fact = (label: string) =>
+      within(plan).getByText(label).nextElementSibling?.textContent;
+    expect(fact("Generator")).toBe("Honda EU70is · 5.5 kVA");
+    expect(fact("Runs")).toBe("All day and night · 24 h");
+    expect(fact("Days on site")).toBe("11");
+    expect(fact("Spare generator")).toBe(
+      "Kipor 10, hired. Only if the Honda fails. Not in the sums.",
+    );
+    // No form field anywhere: a reader gets facts, not a disabled form.
+    expect(screen.queryAllByRole("textbox")).toHaveLength(0);
+    expect(screen.queryAllByRole("spinbutton")).toHaveLength(0);
+  });
 
+  it("marks the generator in the plan", async () => {
+    await renderAs("mem", "camp_member");
+    const list = screen.getByRole("list", { name: "Generators" });
+    const honda = within(list).getByRole("listitem", { name: "Honda EU70is" });
+    expect(within(honda).getByText("In the plan")).toBeTruthy();
+    const kipor = within(list).getByRole("listitem", { name: "Kipor 10" });
+    expect(within(kipor).queryByText("In the plan")).toBeNull();
+    expect(kipor.textContent).toContain("Hired");
+  });
+
+  it("gives a member and a Kitchen lead no button at all", async () => {
+    await renderAs("mem", "camp_member");
+    expect(screen.getByText(POWER_READ_ONLY)).toBeTruthy();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
     cleanup();
-    vi.mocked(listPowerLoads).mockResolvedValue([
-      { ...LOAD, wattsEach: 5000 },
-    ] as never);
-    await renderAs("captain");
+    await renderAs("kim", "team_lead", ["kitchen"]);
+    expect(screen.getByText(POWER_READ_ONLY)).toBeTruthy();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("gives a Power & Lighting lead the plan and the generators to change", async () => {
+    await renderAs("pat", "team_lead", ["power_and_lighting"]);
+    expect(screen.queryByText(POWER_READ_ONLY)).toBeNull();
     expect(
-      screen.getByText(/^Load goes over the generator's rating/),
+      screen.getByRole("button", { name: "Change the plan" }),
     ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Add a generator" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Edit Honda EU70is" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit Kipor 10" })).toBeTruthy();
   });
 
   it("says what is missing before there is an estimate", async () => {
-    vi.mocked(getPowerPlan).mockResolvedValue({
-      ...PLAN,
-      generatorId: null,
-    } as never);
-    await renderAs("captain");
-    expect(screen.getByText("No generator chosen")).toBeTruthy();
-    expect(screen.queryByRole("article", { name: "Litres a day" })).toBeNull();
-
-    cleanup();
-    vi.mocked(getPowerPlan).mockResolvedValue(PLAN as never);
-    vi.mocked(listPowerLoads).mockResolvedValue([]);
-    await renderAs("captain");
-    expect(screen.getByText("No loads yet")).toBeTruthy();
-  });
-
-  it("names a lent generator without a member, and offers last year's plan only to a year with none", async () => {
-    vi.mocked(previousPlanCycle).mockResolvedValue(2025);
-    await renderAs("captain");
-    expect(screen.getAllByText("Lent by a member").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /Copy last year/ })).toBeNull();
-
-    cleanup();
-    vi.mocked(getPowerPlan).mockResolvedValue({
-      ...PLAN,
-      version: 0,
-      updatedAt: null,
-    } as never);
-    await renderAs("captain");
+    camp = setUpPowerCamp({ empty: true });
+    await renderAs("cap", "captain");
+    const answer = screen.getByRole("region", { name: "The answer" });
+    expect(within(answer).getByText("No estimate yet.")).toBeTruthy();
+    expect(answer.textContent).toContain(
+      "Add the generator below and choose it in the plan",
+    );
     expect(
-      screen.getByRole("button", { name: /Copy last year's plan/ }),
-    ).toHaveProperty("disabled", false);
+      within(screen.getByRole("region", { name: "The plan" })).getByText(
+        "None chosen yet",
+      ),
+    ).toBeTruthy();
   });
 });
