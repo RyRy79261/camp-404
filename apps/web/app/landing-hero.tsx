@@ -1,12 +1,15 @@
 import type { CSSProperties } from "react";
-import { Inter } from "next/font/google";
+import { interFont } from "@/lib/fonts/inter";
 import { Button } from "@camp404/ui/components/button";
 
 // The landing page keeps Camp 404's own look (owner's call, 2026-09-23): the
 // AfrikaBurn restyle was for the console — its components and dashboards —
 // not this page. The site-wide theme is now AfrikaBurn's, so the landing sets
 // its original palette and face on itself; nothing outside this page changes.
-const inter = Inter({ subsets: ["latin"], display: "swap" });
+// Self-hosted (lib/fonts/inter) rather than `next/font/google`, so
+// `next build` makes no Google Fonts request; only its `.className` is used
+// here, same as before.
+const inter = interFont;
 
 // The pre-restyle Camp 404 palette (packages/ui globals.css before #221):
 // midnight-violet base, magenta primary, electric-blue accent.

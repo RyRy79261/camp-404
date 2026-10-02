@@ -1,19 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Silkscreen } from "next/font/google";
+import { interFont } from "@/lib/fonts/inter";
+import { silkscreenFont } from "@/lib/fonts/silkscreen";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
+// Self-hosted (lib/fonts/*) rather than `next/font/google`, so
+// `next build` makes no Google Fonts request.
+const inter = interFont;
 // The pixel face for the OS chrome: window titles, icon labels, headings.
-const silkscreen = Silkscreen({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-silkscreen",
-  display: "swap",
-});
+const silkscreen = silkscreenFont;
 
 // Short on purpose (owner, 2026-09-25): "Are you lost? Join 404".
 const TITLE = "Join 404";

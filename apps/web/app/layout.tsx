@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import {
-  Inter,
-  JetBrains_Mono,
-  Montserrat,
-  Silkscreen,
-} from "next/font/google";
+import { interFont } from "@/lib/fonts/inter";
+import { silkscreenFont } from "@/lib/fonts/silkscreen";
+import { jetbrainsMonoFont } from "@/lib/fonts/jetbrains-mono";
+import { montserratFont } from "@/lib/fonts/montserrat";
 import { Toaster } from "@camp404/ui/components/toast";
 import { Providers } from "./providers";
 import { AcknowledgementGate } from "./acknowledgement-gate";
@@ -19,35 +17,19 @@ const OS_THEME_CSS = osThemeCss();
 
 // Brand faces, exposed as CSS vars consumed by --font-sans / --font-mono in
 // @camp404/ui globals.css. Montserrat is the AfrikaBurn app's face (body 500,
-// headings up to 800); JetBrains Mono sets eyebrows and data.
-const montserrat = Montserrat({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-  variable: "--font-brand",
-  display: "swap",
-});
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-brand-mono",
-  display: "swap",
-});
+// headings up to 800); JetBrains Mono sets eyebrows and data. Self-hosted
+// (@camp404/ui/fonts/*) rather than `next/font/google`, so `next build`
+// makes no Google Fonts request.
+const montserrat = montserratFont;
+const jetbrainsMono = jetbrainsMonoFont;
 
 // The 404 OS faces (owner's approval of the prototype, 2026-09-26, decision
 // 10): Inter for body text and Silkscreen, the pixel face, for the chrome
 // (window titles, icon labels, buttons, headings), as Join loads them. The
 // desktop and the gate screens wear them (`data-os-skin`, globals.css); the
-// sign-in pages keep Montserrat.
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
-const silkscreen = Silkscreen({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-silkscreen",
-  display: "swap",
-});
+// sign-in pages keep Montserrat. Both self-hosted for the same reason.
+const inter = interFont;
+const silkscreen = silkscreenFont;
 
 const SITE_DESCRIPTION = "A calm command centre for a chaotic desert.";
 
