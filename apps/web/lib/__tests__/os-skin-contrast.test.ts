@@ -445,6 +445,8 @@ const TITLE_BARS = new Set([
   "apps/web/components/os/phone-chrome.tsx",
   // The welcome wizard's practice window.
   "apps/web/components/os/welcome-wizard.tsx",
+  // The neighbour page's window title bar (no sign-in, outside the desktop).
+  "apps/web/app/neighbours/[token]/page.tsx",
 ]);
 
 function sources(dir: string): string[] {

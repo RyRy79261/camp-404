@@ -171,8 +171,10 @@ flowchart LR
   called after the transaction, never inside it.
 - **The neighbour page reads an allowlist.** `getSharedLayout`
   (`@camp404/db/camp-layout`) returns only `neighbourView`'s fields (each
-  piece's kind, size and place) and arrival counts per day. The link is off
-  until a captain turns it on (`canShareLayout`, audited).
+  piece's kind, size and place; the plot's size, north and which half of the
+  block it is) and arrival counts per day. No label and no road or side name
+  leaves the camp. The link is off until a captain turns it on
+  (`canShareLayout`, audited).
 - **Private columns are encrypted.** ID and passport numbers and bank details
   are AES-256-GCM encrypted at the write boundary
   (`packages/db/src/crypto.ts`).

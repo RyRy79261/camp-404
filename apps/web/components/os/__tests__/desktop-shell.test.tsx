@@ -146,6 +146,35 @@ describe("the URL is the focused window", () => {
   });
 });
 
+describe("where the page's window opens", () => {
+  it("opens a wide page at its own size on a wide screen, not the guess it rendered with", () => {
+    // The desktop measures 1440 x 816 (a 1440 x 900 screen under the bars);
+    // the first render guessed 1280 x 720, which cuts a 1120 px page to 920.
+    const measure = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 1440,
+        bottom: 816,
+        width: 1440,
+        height: 816,
+        toJSON: () => ({}),
+      });
+    nav.pathname = "/camp-layout";
+    render(<Desktop {...props()} />);
+    const win = document.querySelector<HTMLElement>(
+      '[data-window="camp-layout"]',
+    )!;
+    // Right of the icons (308 px), leaving the Today handle its 52 px.
+    expect(win.style.getPropertyValue("--win-w")).toBe("1080px");
+    expect(win.style.getPropertyValue("--win-h")).toBe("792px");
+    measure.mockRestore();
+  });
+});
+
 describe("the stack kept for this tab", () => {
   it("restores console windows as frames with no copy, and drops the rest", () => {
     const rect = { x: 0, y: 0, w: 400, h: 300 };
