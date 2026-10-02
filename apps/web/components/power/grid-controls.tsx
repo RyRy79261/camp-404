@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy } from "lucide-react";
 import { suggestedAmpsForGauge } from "@camp404/core";
 import {
   EditGridNodeInput,
@@ -11,7 +11,6 @@ import {
   type GridNodeKind,
 } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
-import { AckRow } from "@camp404/ui/components/checkbox";
 import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 import {
   Dialog,
@@ -30,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@camp404/ui/components/select";
+import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { toast } from "@camp404/ui/components/toast";
 import {
@@ -39,23 +39,14 @@ import {
   removeGridNodeAction,
   updateGridNodeAction,
 } from "@/app/(console)/power/grid/actions";
+import { cn } from "@camp404/ui/lib/utils";
 import { GRID_KIND_LABELS } from "@/lib/power-copy";
 
 // The grid plan's controls (#256), laid out as the load list's: Add opens a
-// dialog, each point has Edit and Remove, and for a viewer who may not edit
-// every control is PRESENT BUT DISABLED and describes to the page's one
-// refusal line. The cable's rating is typed from its label; the form can
+// dialog, each point has one Edit with Remove at the foot of its dialog, and
+// only an editor is shown any of them. The cable's rating is typed from its label; the form can
 // suggest a usual rating for a conductor size, but only fills it when asked,
 // so the app never guesses a rating on its own.
-
-function refusalProps(canEdit: boolean, name: string, refusalId: string) {
-  return canEdit
-    ? { "aria-label": name }
-    : {
-        "aria-label": `${name} — not available to you`,
-        "aria-describedby": refusalId,
-      };
-}
 
 /** A point as the dialog edits it. */
 export interface EditablePoint {
@@ -69,8 +60,9 @@ export interface EditablePoint {
   cableGaugeMm2: number | null;
   cableRatedAmps: number | null;
   adapter: string | null;
-  haveCable: boolean;
-  haveAdapter: boolean;
+  /** True has it, false must get it, null not checked yet. */
+  haveCable: boolean | null;
+  haveAdapter: boolean | null;
 }
 
 /** A point another can be fed from, with the ids that may not feed each. */
@@ -97,8 +89,8 @@ interface FormState {
   cableGaugeMm2: string;
   cableRatedAmps: string;
   adapter: string;
-  haveCable: boolean;
-  haveAdapter: boolean;
+  haveCable: boolean | null;
+  haveAdapter: boolean | null;
 }
 
 /** The Select's value for "fed from nothing"; Radix has no empty value. */
@@ -118,8 +110,9 @@ function initialState(
     cableGaugeMm2: text(point?.cableGaugeMm2),
     cableRatedAmps: text(point?.cableRatedAmps),
     adapter: point?.adapter ?? "",
-    haveCable: point?.haveCable ?? true,
-    haveAdapter: point?.haveAdapter ?? true,
+    // Not checked until someone says so: a new point's cable is not the camp's.
+    haveCable: point ? point.haveCable : null,
+    haveAdapter: point ? point.haveAdapter : null,
   };
 }
 
@@ -128,10 +121,13 @@ function GridPointDialog({
   onOpenChange,
   editing,
   feeds,
+  onRemove,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing?: EditablePoint;
+  /** Offers Remove at the foot of the dialog, for a point already drawn. */
+  onRemove?: () => void;
   /** Points this one may be fed from: generators and junctions, not itself or beyond. */
   feeds: FeedOption[];
 }) {
@@ -220,7 +216,10 @@ function GridPointDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        data-window-tint
+        className="max-h-[90svh] overflow-y-auto sm:max-w-xl"
+      >
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
             <DialogTitle>{editing ? "Edit point" : "Add a point"}</DialogTitle>
@@ -241,7 +240,6 @@ function GridPointDialog({
                 id={id("name")}
                 value={form.name}
                 maxLength={60}
-                placeholder="Main junction"
                 onChange={(e) => set("name", e.target.value)}
                 aria-invalid={errors.name ? true : undefined}
               />
@@ -301,12 +299,12 @@ function GridPointDialog({
                   label="Cable (optional)"
                   htmlFor={id("cable")}
                   error={errors.cable}
+                  help="Such as a 25 m extension reel."
                 >
                   <Input
                     id={id("cable")}
                     value={form.cable}
                     maxLength={80}
-                    placeholder="25 m extension reel"
                     onChange={(e) => set("cable", e.target.value)}
                   />
                 </Field>
@@ -381,29 +379,29 @@ function GridPointDialog({
                 label="Adapter at the far end (optional)"
                 htmlFor={id("adapter")}
                 error={errors.adapter}
+                help="Such as a 4-way multiplug."
               >
                 <Input
                   id={id("adapter")}
                   value={form.adapter}
                   maxLength={80}
-                  placeholder="4-way multiplug"
                   onChange={(e) => set("adapter", e.target.value)}
                 />
               </Field>
 
-              <div className="grid gap-2 sm:grid-cols-2">
-                <AckRow
-                  checked={form.haveCable}
-                  onCheckedChange={(v) => set("haveCable", v === true)}
-                >
-                  We have the cable
-                </AckRow>
-                <AckRow
-                  checked={form.haveAdapter}
-                  onCheckedChange={(v) => set("haveAdapter", v === true)}
-                >
-                  We have the adapter
-                </AckRow>
+              <div className="flex flex-col gap-4">
+                <HaveField
+                  label="The cable"
+                  value={form.haveCable}
+                  onChange={(v) => set("haveCable", v)}
+                />
+                {form.adapter.trim() !== "" && (
+                  <HaveField
+                    label="The adapter"
+                    value={form.haveAdapter}
+                    onChange={(v) => set("haveAdapter", v)}
+                  />
+                )}
               </div>
             </>
           )}
@@ -415,6 +413,21 @@ function GridPointDialog({
           ) : null}
 
           <DialogFooter>
+            {onRemove && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                className="text-destructive sm:mr-auto"
+                onClick={() => {
+                  reset();
+                  onOpenChange(false);
+                  onRemove();
+                }}
+              >
+                Remove point
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -436,48 +449,28 @@ function GridPointDialog({
   );
 }
 
-export function AddPointButton({
-  canEdit,
-  refusalId,
-  feeds,
-}: {
-  canEdit: boolean;
-  refusalId: string;
-  feeds: FeedOption[];
-}) {
+/** Adds a point to the grid. Only an editor is shown it. */
+export function AddPointButton({ feeds }: { feeds: FeedOption[] }) {
   const [open, setOpen] = React.useState(false);
   return (
     <>
-      <Button
-        disabled={!canEdit}
-        onClick={() => setOpen(true)}
-        {...refusalProps(canEdit, "Add point", refusalId)}
-      >
-        <Plus aria-hidden />
-        Add point
-      </Button>
-      {canEdit && (
-        <GridPointDialog
-          key={feeds.map((f) => f.id).join(",")}
-          open={open}
-          onOpenChange={setOpen}
-          feeds={feeds}
-        />
-      )}
+      <Button onClick={() => setOpen(true)}>Add a point</Button>
+      <GridPointDialog
+        key={feeds.map((f) => f.id).join(",")}
+        open={open}
+        onOpenChange={setOpen}
+        feeds={feeds}
+      />
     </>
   );
 }
 
-/** Edit and Remove for one point. Only the control that was used spins. */
+/** One Edit button for a point; Remove sits at the foot of its dialog. */
 export function PointRowActions({
   point,
-  canEdit,
-  refusalId,
   feeds,
 }: {
   point: EditablePoint;
-  canEdit: boolean;
-  refusalId: string;
   feeds: FeedOption[];
 }) {
   const router = useRouter();
@@ -502,51 +495,152 @@ export function PointRowActions({
   }
 
   return (
-    <span className="flex shrink-0 items-center justify-end gap-1">
+    <>
       <Button
-        variant="ghost"
-        size="icon"
-        disabled={!canEdit || removing}
+        variant="outline"
+        size="sm"
+        className="h-7 shrink-0 px-2.5 text-[10px]"
+        disabled={removing}
         onClick={() => setEditOpen(true)}
-        {...refusalProps(canEdit, `Edit ${point.name}`, refusalId)}
+        aria-label={`Edit ${point.name}`}
       >
-        <Pencil aria-hidden />
+        {removing ? <Spinner size="sm" label="Removing…" /> : "Edit"}
       </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={!canEdit || removing}
-        onClick={() => setConfirming(true)}
-        {...refusalProps(canEdit, `Remove ${point.name}`, refusalId)}
-      >
-        {removing ? (
-          <Spinner size="sm" label="Removing…" />
-        ) : (
-          <Trash2 aria-hidden />
-        )}
-      </Button>
-      {canEdit && (
-        <>
-          <GridPointDialog
-            key={`${point.id}:${point.version}`}
-            open={editOpen}
-            onOpenChange={setEditOpen}
-            editing={point}
-            feeds={feeds}
-          />
-          <ConfirmDialog
-            open={confirming}
-            onOpenChange={setConfirming}
-            title={`Remove ${point.name}?`}
-            description="It comes off this year's grid. Anything plugged in there is left off the grid until you plug it in somewhere else."
-            confirmLabel="Remove point"
-            destructive
-            pending={removing}
-            onConfirm={confirmRemove}
-          />
-        </>
-      )}
-    </span>
+      <GridPointDialog
+        key={`${point.id}:${point.version}`}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        editing={point}
+        feeds={feeds}
+        onRemove={() => setConfirming(true)}
+      />
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Remove ${point.name}?`}
+        description="It comes off this year's grid. Anything plugged in there is left off the grid until you plug it in somewhere else."
+        confirmLabel="Remove point"
+        destructive
+        pending={removing}
+        onConfirm={confirmRemove}
+      />
+    </>
+  );
+}
+
+const HAVE_OPTIONS = [
+  { value: "unchecked", label: "Not checked" },
+  { value: "have", label: "Have it" },
+  { value: "need", label: "Need to get" },
+];
+
+function haveValue(have: boolean | null): string {
+  return have === null ? "unchecked" : have ? "have" : "need";
+}
+
+function haveFrom(value: string): boolean | null {
+  return value === "unchecked" ? null : value === "have";
+}
+
+/** The camp has it, must get it, or nobody has checked yet. */
+function HaveField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean | null;
+  onChange: (value: boolean | null) => void;
+}) {
+  return (
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="mb-1.5 text-sm font-medium">{label}</legend>
+      <SegmentedControl
+        aria-label={label}
+        options={HAVE_OPTIONS}
+        value={haveValue(value)}
+        onValueChange={(v) => onChange(haveFrom(v))}
+      />
+    </fieldset>
+  );
+}
+
+/**
+ * Have it or Need to get, for one cable or adapter, in one tap: it saves the
+ * point with the version it was drawn from, and a failure is a toast.
+ */
+export function HaveToggle({
+  point,
+  which,
+  name,
+}: {
+  point: EditablePoint;
+  which: "cable" | "adapter";
+  name: string;
+}) {
+  const router = useRouter();
+  const current = which === "cable" ? point.haveCable : point.haveAdapter;
+  const [value, setValue] = React.useState(current);
+  const [pending, startTransition] = React.useTransition();
+
+  function pick(next: boolean) {
+    if (next === value) return;
+    const before = value;
+    setValue(next);
+    startTransition(async () => {
+      const result = await updateGridNodeAction({
+        nodeId: point.id,
+        expectedVersion: point.version,
+        name: point.name,
+        kind: point.kind,
+        parentId: point.parentId,
+        cable: point.cable,
+        cableLengthM: point.cableLengthM,
+        cableGaugeMm2: point.cableGaugeMm2,
+        cableRatedAmps: point.cableRatedAmps,
+        adapter: point.adapter,
+        haveCable: which === "cable" ? next : point.haveCable,
+        haveAdapter: which === "adapter" ? next : point.haveAdapter,
+      });
+      if (!result.ok) {
+        setValue(before);
+        toast.error(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  return (
+    <div
+      role="group"
+      aria-label={name}
+      className="inline-grid w-full grid-cols-2 border border-[var(--color-choice-edge,var(--color-border))] bg-[var(--color-choice,var(--color-card))] page-sm:w-auto"
+    >
+      {(
+        [
+          [true, "Have it"],
+          [false, "Need to get"],
+        ] as const
+      ).map(([have, label], i) => (
+        <button
+          key={label}
+          type="button"
+          aria-pressed={value === have}
+          disabled={pending}
+          onClick={() => pick(have)}
+          className={cn(
+            "h-[30px] whitespace-nowrap px-3 text-xs font-semibold",
+            i === 1 &&
+              "border-l border-[var(--color-choice-edge,var(--color-border))]",
+            value === have &&
+              "bg-[var(--color-pick,var(--color-card))] shadow-[inset_0_0_0_1px_var(--color-primary)]",
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -590,16 +684,16 @@ export function LoadPointSelect({
   }
 
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex w-full items-center gap-2 page-sm:w-auto">
       <Select value={value} onValueChange={change} disabled={pending}>
         <SelectTrigger
           aria-label={`Where ${loadName} plugs in`}
-          className="min-w-44"
+          className="h-8 w-full rounded-none border-[var(--color-choice-edge)] bg-[var(--color-choice)] text-[13px] font-medium page-sm:w-[216px]"
         >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={OFF_GRID}>Not on the grid yet</SelectItem>
+          <SelectItem value={OFF_GRID}>Plug in at…</SelectItem>
           {points.map((p) => (
             <SelectItem key={p.id} value={p.id}>
               {p.label}
@@ -613,22 +707,13 @@ export function LoadPointSelect({
 }
 
 /** Copies the most recent earlier year's grid into an empty year. */
-export function CopyLastYearGridButton({
-  fromCycle,
-  canEdit,
-  refusalId,
-}: {
-  fromCycle: number;
-  canEdit: boolean;
-  refusalId: string;
-}) {
+export function CopyLastYearGridButton({ fromCycle }: { fromCycle: number }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   return (
     <Button
       variant="outline"
-      disabled={!canEdit || pending}
-      {...refusalProps(canEdit, "Copy last year's grid", refusalId)}
+      disabled={pending}
       onClick={() =>
         startTransition(async () => {
           const result = await copyLastYearGridAction();

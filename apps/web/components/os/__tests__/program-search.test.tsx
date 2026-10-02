@@ -127,7 +127,7 @@ describe("ProgramSearch", () => {
     fireEvent.keyDown(field(), { key: "ArrowUp" });
     fireEvent.keyDown(field(), { key: "Enter" });
     expect(open).toHaveBeenCalledTimes(1);
-    expect(open.mock.calls[0]![0].href).toBe("/power/loads");
+    expect(open.mock.calls[0]![0].href).toBe("/power");
     expect(dialog()).toBeNull();
   });
 

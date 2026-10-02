@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Ban, Fuel, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   AddFuelCansInput,
   CAN_LOCATIONS,
@@ -38,29 +37,17 @@ import {
   correctRefuelAction,
   logRefuelAction,
   removeFuelCanAction,
-  saveLowFuelDaysAction,
   strikeRefuelAction,
   updateFuelCanAction,
 } from "@/app/(console)/power/fuel-log/actions";
 import { CAN_LOCATION_LABELS, formatNumber } from "@/lib/power-copy";
 
 // The refuelling page's controls (#255), laid out as the load list's: Add
-// opens a dialog, each row has its own buttons, and for a viewer who may not
-// edit every control is PRESENT BUT DISABLED and describes to the page's one
-// refusal line. A problem with what was typed shows beside its field; a
-// refusal from the server at the foot of the dialog; a one-tap change on a
-// row reports its failure as a toast. The log has no Edit and no Delete: a
+// opens a dialog, each row has one button, and only an editor is shown any.
+// A problem with what was typed shows beside its field; a refusal from the
+// server at the foot of the dialog; a one-tap change on a row reports its
+// failure as a toast. The log has no Edit and no Delete: a
 // correction and a strike-out are new entries (append-only).
-
-/** What a disabled control says it is, and where it points for the reason. */
-function refusalProps(canEdit: boolean, name: string, refusalId: string) {
-  return canEdit
-    ? { "aria-label": name }
-    : {
-        "aria-label": `${name} — not available to you`,
-        "aria-describedby": refusalId,
-      };
-}
 
 /** A blank or unreadable figure is 0, so the schema's own sentence names it. */
 function figure(value: string): number {
@@ -207,7 +194,10 @@ function AddCansDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
+      <DialogContent
+        data-window-tint
+        className="max-h-[90svh] overflow-y-auto sm:max-w-lg"
+      >
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
             <DialogTitle>Add cans</DialogTitle>
@@ -251,27 +241,14 @@ function AddCansDialog({
   );
 }
 
-export function AddCansButton({
-  canEdit,
-  refusalId,
-}: {
-  canEdit: boolean;
-  refusalId: string;
-}) {
+export function AddCansButton() {
   const [open, setOpen] = React.useState(false);
   return (
     <>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!canEdit}
-        onClick={() => setOpen(true)}
-        {...refusalProps(canEdit, "Add cans", refusalId)}
-      >
-        <Plus aria-hidden />
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         Add cans
       </Button>
-      {canEdit && <AddCansDialog open={open} onOpenChange={setOpen} />}
+      <AddCansDialog open={open} onOpenChange={setOpen} />
     </>
   );
 }
@@ -280,10 +257,12 @@ function EditCanDialog({
   can,
   open,
   onOpenChange,
+  onRemove,
 }: {
   can: EditableCan;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onRemove: () => void;
 }) {
   const router = useRouter();
   const initial = {
@@ -341,7 +320,10 @@ function EditCanDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
+      <DialogContent
+        data-window-tint
+        className="max-h-[90svh] overflow-y-auto sm:max-w-lg"
+      >
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
             <DialogTitle>Count this can</DialogTitle>
@@ -416,6 +398,18 @@ function EditCanDialog({
               type="button"
               variant="ghost"
               disabled={pending}
+              className="text-destructive sm:mr-auto"
+              onClick={() => {
+                onOpenChange(false);
+                onRemove();
+              }}
+            >
+              Remove can
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={pending}
               onClick={() => onOpenChange(false)}
             >
               Cancel
@@ -430,16 +424,11 @@ function EditCanDialog({
   );
 }
 
-/** Count and Remove for one can. Only the control that was used spins. */
-export function CanRowActions({
-  can,
-  canEdit,
-  refusalId,
-}: {
-  can: EditableCan;
-  canEdit: boolean;
-  refusalId: string;
-}) {
+/**
+ * A can's name, which opens its own dialog for an editor: what is in it,
+ * where it is, and Remove at the foot. Only the control that was used spins.
+ */
+export function CanRowActions({ can }: { can: EditableCan }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = React.useState(false);
   const [confirming, setConfirming] = React.useState(false);
@@ -462,50 +451,192 @@ export function CanRowActions({
   }
 
   return (
-    <span className="flex items-center justify-end gap-1">
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={!canEdit || removing}
+    <>
+      <button
+        type="button"
+        className="truncate text-left font-semibold underline decoration-muted-foreground/50 underline-offset-4 hover:text-primary"
+        disabled={removing}
         onClick={() => setEditOpen(true)}
-        {...refusalProps(canEdit, `Count ${can.label}`, refusalId)}
+        aria-label={`Count ${can.label}`}
       >
-        <Pencil aria-hidden />
-      </Button>
+        {removing ? <Spinner size="sm" label="Removing…" /> : can.label}
+      </button>
+      <EditCanDialog
+        key={`${can.id}:${can.version}`}
+        can={can}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onRemove={() => setConfirming(true)}
+      />
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Remove ${can.label}?`}
+        description="It comes out of this year's stock. Refuellings from it keep their litres."
+        confirmLabel="Remove can"
+        destructive
+        pending={removing}
+        onConfirm={confirmRemove}
+      />
+    </>
+  );
+}
+
+/**
+ * Count every can at once: one litres field a can, and Save writes the cans
+ * that changed, each with the version it was counted from.
+ */
+export function CountCansButton({ cans }: { cans: EditableCan[] }) {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  const initial = () =>
+    Object.fromEntries(cans.map((c) => [c.id, String(c.litres)]));
+  const [values, setValues] = React.useState<Record<string, string>>(initial);
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [error, setError] = React.useState<string | null>(null);
+  const [pending, startTransition] = React.useTransition();
+  const idBase = React.useId();
+
+  function reset() {
+    setValues(initial());
+    setErrors({});
+    setError(null);
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const changed = cans.filter((c) => figure(values[c.id] ?? "") !== c.litres);
+    const next: Record<string, string> = {};
+    const payloads = changed.map((c) => ({
+      canId: c.id,
+      expectedVersion: c.version,
+      label: c.label,
+      capacityLitres: c.capacityLitres,
+      litres: figure(values[c.id] ?? ""),
+      location: c.location,
+    }));
+    for (const payload of payloads) {
+      const check = EditFuelCanInput.safeParse(payload);
+      if (!check.success) {
+        next[payload.canId] = check.error.issues[0]?.message ?? "Check it.";
+      }
+    }
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
+    if (payloads.length === 0) {
+      setOpen(false);
+      return;
+    }
+    startTransition(async () => {
+      for (const payload of payloads) {
+        const result = await updateFuelCanAction(payload);
+        if (!result.ok) {
+          setError(`${payload.label}: ${result.error}`);
+          router.refresh();
+          return;
+        }
+      }
+      toast.success(
+        `${payloads.length} can${payloads.length === 1 ? "" : "s"} counted`,
+      );
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <>
       <Button
-        variant="ghost"
-        size="icon"
-        disabled={!canEdit || removing}
-        onClick={() => setConfirming(true)}
-        {...refusalProps(canEdit, `Remove ${can.label}`, refusalId)}
+        variant="outline"
+        size="sm"
+        disabled={cans.length === 0}
+        onClick={() => setOpen(true)}
       >
-        {removing ? (
-          <Spinner size="sm" label="Removing…" />
-        ) : (
-          <Trash2 aria-hidden />
-        )}
+        Count the cans
       </Button>
-      {canEdit && (
-        <>
-          <EditCanDialog
-            key={`${can.id}:${can.version}`}
-            can={can}
-            open={editOpen}
-            onOpenChange={setEditOpen}
-          />
-          <ConfirmDialog
-            open={confirming}
-            onOpenChange={setConfirming}
-            title={`Remove ${can.label}?`}
-            description="It comes out of this year's stock. Refuellings from it keep their litres."
-            confirmLabel="Remove can"
-            destructive
-            pending={removing}
-            onConfirm={confirmRemove}
-          />
-        </>
-      )}
-    </span>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (pending) return;
+          if (!next) reset();
+          setOpen(next);
+        }}
+      >
+        <DialogContent
+          data-window-tint
+          className="max-h-[90svh] overflow-y-auto sm:max-w-lg"
+        >
+          <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+            <DialogHeader>
+              <DialogTitle>Count the cans</DialogTitle>
+              <DialogDescription>
+                The litres in each can now. Only the cans you change are saved.
+              </DialogDescription>
+            </DialogHeader>
+            <ul className="flex flex-col gap-3">
+              {cans.map((c) => (
+                <li
+                  key={c.id}
+                  className="grid grid-cols-[minmax(0,1fr)_112px_56px] items-center gap-3"
+                >
+                  <label
+                    htmlFor={`${idBase}-${c.id}`}
+                    className="truncate text-sm font-semibold"
+                  >
+                    {c.label}
+                  </label>
+                  <Input
+                    id={`${idBase}-${c.id}`}
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    max={c.capacityLitres}
+                    step="any"
+                    value={values[c.id] ?? ""}
+                    onChange={(e) =>
+                      setValues((v) => ({ ...v, [c.id]: e.target.value }))
+                    }
+                    aria-invalid={errors[c.id] ? true : undefined}
+                    aria-describedby={
+                      errors[c.id] ? `${idBase}-${c.id}-error` : undefined
+                    }
+                  />
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    of {formatNumber(c.capacityLitres, 1)} L
+                  </span>
+                  {errors[c.id] && (
+                    <p
+                      id={`${idBase}-${c.id}-error`}
+                      className="col-span-3 text-xs font-medium text-destructive"
+                    >
+                      {errors[c.id]}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <ServerError error={error} />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                onClick={() => {
+                  reset();
+                  setOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving…" : "Save the count"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -556,15 +687,19 @@ function RefuelDialog({
   onOpenChange,
   options,
   correcting,
+  onStrike,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   options: RefuelOptions;
   correcting?: EditableEntry;
+  /** Offers Strike out at the foot of a correction. */
+  onStrike?: () => void;
 }) {
   const router = useRouter();
   const initial = (): RefuelForm => ({
-    refuelledAt: correcting?.refuelledAt ?? options.now,
+    // Typed in after the burn from the paper sheet: no "now" to guess at.
+    refuelledAt: correcting?.refuelledAt ?? "",
     litres: correcting ? String(correcting.litres) : "",
     generatorId:
       correcting?.generatorId ??
@@ -576,7 +711,7 @@ function RefuelDialog({
     hourMeter:
       correcting?.hourMeter != null ? String(correcting.hourMeter) : "",
     note: correcting?.note ?? "",
-    fromPaper: correcting?.fromPaper ?? false,
+    fromPaper: correcting?.fromPaper ?? true,
   });
   const [form, setForm] = React.useState<RefuelForm>(initial);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -651,16 +786,21 @@ function RefuelDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        data-window-tint
+        className="max-h-[90svh] overflow-y-auto sm:max-w-xl"
+      >
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           <DialogHeader>
             <DialogTitle>
-              {correcting ? `Correct ${correcting.label}` : "Log a refuelling"}
+              {correcting
+                ? `Correct ${correcting.label}`
+                : "Type in a line from the sheet"}
             </DialogTitle>
             <DialogDescription>
               {correcting
                 ? "Give the right figures. The old entry stays in the log, marked as corrected."
-                : "Each time the generator is filled. Say which can it came from, and that can goes down by the litres."}
+                : "One line of the paper log kept at the generator. Say which can it came from, and that can goes down by the litres."}
             </DialogDescription>
           </DialogHeader>
 
@@ -810,6 +950,21 @@ function RefuelDialog({
 
           <ServerError error={error} />
           <DialogFooter>
+            {onStrike && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                className="text-destructive sm:mr-auto"
+                onClick={() => {
+                  reset();
+                  onOpenChange(false);
+                  onStrike();
+                }}
+              >
+                Strike out
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"
@@ -835,26 +990,18 @@ function RefuelDialog({
   );
 }
 
-export function LogRefuelButton({
-  canEdit,
-  refusalId,
-  options,
-}: {
-  canEdit: boolean;
-  refusalId: string;
-  options: RefuelOptions | null;
-}) {
+/**
+ * Types in a line from the paper sheet. The sheet at the generator is the
+ * record on site (there is no signal there); the app is filled in after.
+ * Only an editor is shown it.
+ */
+export function LogRefuelButton({ options }: { options: RefuelOptions }) {
   const [open, setOpen] = React.useState(false);
-  const ready = canEdit && options !== null && options.generators.length > 0;
+  const ready = options.generators.length > 0;
   return (
     <>
-      <Button
-        disabled={!ready}
-        onClick={() => setOpen(true)}
-        {...refusalProps(canEdit, "Log refuelling", refusalId)}
-      >
-        <Fuel aria-hidden />
-        Log refuelling
+      <Button variant="outline" disabled={!ready} onClick={() => setOpen(true)}>
+        Type in from the sheet
       </Button>
       {ready && (
         <RefuelDialog open={open} onOpenChange={setOpen} options={options} />
@@ -863,17 +1010,16 @@ export function LogRefuelButton({
   );
 }
 
-/** Correct and Strike out for one entry of the log. */
+/**
+ * One Correct button for an entry that counts; Strike out sits at the foot
+ * of the correction dialog and asks first. Neither deletes anything.
+ */
 export function RefuelRowActions({
   entry,
-  canEdit,
-  refusalId,
   options,
 }: {
   entry: EditableEntry;
-  canEdit: boolean;
-  refusalId: string;
-  options: RefuelOptions | null;
+  options: RefuelOptions;
 }) {
   const router = useRouter();
   const [correcting, setCorrecting] = React.useState(false);
@@ -894,133 +1040,34 @@ export function RefuelRowActions({
   }
 
   return (
-    <span className="flex items-center justify-end gap-1">
+    <>
       <Button
-        variant="ghost"
-        size="icon"
-        disabled={!canEdit || pending}
+        variant="outline"
+        size="sm"
+        className="h-7 px-2.5 text-[10px]"
+        disabled={pending}
         onClick={() => setCorrecting(true)}
-        {...refusalProps(canEdit, `Correct ${entry.label}`, refusalId)}
+        aria-label={`Correct ${entry.label}`}
       >
-        <Pencil aria-hidden />
+        {pending ? <Spinner size="sm" label="Striking out…" /> : "Correct"}
       </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={!canEdit || pending}
-        onClick={() => setStriking(true)}
-        {...refusalProps(canEdit, `Strike out ${entry.label}`, refusalId)}
-      >
-        {pending ? (
-          <Spinner size="sm" label="Striking out…" />
-        ) : (
-          <Ban aria-hidden />
-        )}
-      </Button>
-      {canEdit && options && (
-        <>
-          <RefuelDialog
-            open={correcting}
-            onOpenChange={setCorrecting}
-            options={options}
-            correcting={entry}
-          />
-          <ConfirmDialog
-            open={striking}
-            onOpenChange={setStriking}
-            title={`Strike out ${entry.label}?`}
-            description="Use this when it never happened, such as an entry logged twice. It stays in the log, struck out, and its litres go back into its can."
-            confirmLabel="Strike out"
-            destructive
-            pending={pending}
-            onConfirm={strike}
-          />
-        </>
-      )}
-    </span>
-  );
-}
-
-// --- The warning --------------------------------------------------------------
-
-export function LowFuelForm({
-  lowFuelDays,
-  version,
-  canEdit,
-  refusalId,
-}: {
-  lowFuelDays: number;
-  version: number;
-  canEdit: boolean;
-  refusalId: string;
-}) {
-  const router = useRouter();
-  const [value, setValue] = React.useState(String(lowFuelDays));
-  const [error, setError] = React.useState<string | null>(null);
-  const [pending, startTransition] = React.useTransition();
-  const idBase = React.useId();
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    // A blank field is not 0: 0 turns the warning off for everyone.
-    if (value.trim() === "" || !Number.isFinite(Number(value))) {
-      setError("Give a number of days, or 0 to turn the warning off.");
-      return;
-    }
-    startTransition(async () => {
-      const result = await saveLowFuelDaysAction({
-        lowFuelDays: Number(value),
-        expectedVersion: version,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      toast.success("Warning saved");
-      router.refresh();
-    });
-  }
-
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-2" noValidate>
-      <label
-        htmlFor={`${idBase}-days`}
-        className="text-sm font-medium leading-none text-foreground"
-      >
-        Warn when the fuel left covers fewer days than
-      </label>
-      <div className="flex flex-col gap-3 page-sm:flex-row page-sm:items-center">
-        <Input
-          id={`${idBase}-days`}
-          type="number"
-          inputMode="numeric"
-          min={0}
-          step={1}
-          value={value}
-          disabled={!canEdit}
-          onChange={(e) => setValue(e.target.value)}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={canEdit ? `${idBase}-help` : refusalId}
-          className="page-sm:max-w-40"
-        />
-        <Button
-          type="submit"
-          variant="outline"
-          disabled={!canEdit || pending}
-          {...refusalProps(canEdit, "Save warning", refusalId)}
-        >
-          {pending ? "Saving…" : "Save warning"}
-        </Button>
-      </div>
-      {error ? (
-        <p className="text-xs font-medium text-destructive">{error}</p>
-      ) : (
-        <p id={`${idBase}-help`} className="text-xs text-muted-foreground">
-          0 turns the warning off. Near the end of the burn it asks only for the
-          days still to come.
-        </p>
-      )}
-    </form>
+      <RefuelDialog
+        open={correcting}
+        onOpenChange={setCorrecting}
+        options={options}
+        correcting={entry}
+        onStrike={() => setStriking(true)}
+      />
+      <ConfirmDialog
+        open={striking}
+        onOpenChange={setStriking}
+        title={`Strike out ${entry.label}?`}
+        description="Use this when it never happened, such as an entry typed in twice. It stays in the log, struck out, and its litres go back into its can."
+        confirmLabel="Strike out"
+        destructive
+        pending={pending}
+        onConfirm={strike}
+      />
+    </>
   );
 }
