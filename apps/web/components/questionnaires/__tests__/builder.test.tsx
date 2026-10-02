@@ -292,6 +292,72 @@ describe("QuestionnaireBuilderV2 — adding blocks", () => {
   });
 });
 
+describe("QuestionnaireBuilderV2 — page break", () => {
+  const pageBreak = () =>
+    fireEvent.click(
+      within(
+        screen.getByRole("complementary", { name: "Add a block" }),
+      ).getByRole("button", { name: "Section / page break" }),
+    );
+  const titles = () =>
+    screen
+      .getAllByLabelText(/^Section \d+ title$/)
+      .map((input) => (input as HTMLInputElement).value);
+
+  it("splits the section after the block being worked on", async () => {
+    renderBuilder();
+    fireEvent.click(
+      within(section(1)).getByRole("group", { name: /Favourite colour/ }),
+    );
+    pageBreak();
+
+    // The questions below the break start a new section right after it,
+    // before the section that followed.
+    expect(titles()).toEqual([
+      "Gear check",
+      "Gear check (continued)",
+      "Second",
+    ]);
+    expect(
+      within(section(1))
+        .getAllByRole("group")
+        .map((g) => g.id),
+    ).toEqual(["block-colour"]);
+    expect(
+      within(section(2))
+        .getAllByRole("group")
+        .map((g) => g.id),
+    ).toEqual(["block-tent"]);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByLabelText("Section 2 title"),
+      ),
+    );
+    expect(screen.getByText("3 sections · 2 questions")).toBeTruthy();
+
+    // An edit like any other: unsaved until "Save draft" writes it.
+    expect(status().textContent).toContain("Unsaved changes");
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(updateDefinitionAction).toHaveBeenCalled());
+    const pages = saved().pages as QuestionsPage[];
+    expect(pages.map((p) => p.questions.map((q) => q.id))).toEqual([
+      ["colour"],
+      ["tent"],
+      [],
+    ]);
+    expect(pages[2]!.id).toBe("s2");
+  });
+
+  it("with the section itself chosen, adds an empty section right after it, not at the end", () => {
+    renderBuilder();
+    fireEvent.focus(screen.getByLabelText("Section 1 title"));
+    pageBreak();
+    expect(titles()).toEqual(["Gear check", "Section 2", "Second"]);
+    expect(within(section(1)).getAllByRole("group")).toHaveLength(2);
+    expect(within(section(2)).queryAllByRole("group")).toHaveLength(0);
+  });
+});
+
 describe("QuestionnaireBuilderV2 — reordering", () => {
   const order = () =>
     within(section(1))

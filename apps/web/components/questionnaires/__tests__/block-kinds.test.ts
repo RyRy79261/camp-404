@@ -17,6 +17,7 @@ import {
   createSection,
   duplicateBlock,
   roleFits,
+  splitSection,
   takenIds,
 } from "../block-kinds";
 
@@ -271,3 +272,124 @@ describe("blockLabel and createSection", () => {
     });
   });
 });
+
+describe("splitSection (the page break)", () => {
+  const q = (id: string): PageBlock => ({
+    id,
+    kind: "short_text",
+    prompt: `Question ${id}`,
+    maxLength: 120,
+    required: false,
+  });
+  const definition: Questionnaire = {
+    version: "1",
+    title: "Gear check",
+    pages: [
+      {
+        id: "s1",
+        kind: "questions",
+        title: "Gear",
+        subtitle: "What you bring",
+        pageType: "question",
+        questions: [q("a"), q("b"), q("c")],
+        next: "s3",
+        leadsOnly: true,
+        requiredToContinue: true,
+        visibleIf: { fieldId: "x", op: "eq", value: "yes" },
+      },
+      { id: "s2", kind: "questions", title: "Empty", questions: [] },
+      { id: "s3", kind: "questions", title: "Last", questions: [q("d")] },
+    ],
+  };
+
+  it("splits in the middle: the blocks after the break follow in a new section right after", () => {
+    const { definition: next, pageIndex } = splitSection(
+      definition,
+      0,
+      "a",
+      "s4",
+    );
+    expect(pageIndex).toBe(1);
+    expect(next.pages.map((p) => p.id)).toEqual(["s1", "s4", "s2", "s3"]);
+    // The first part keeps its title, description and settings, and now
+    // falls through to its continuation.
+    expect(next.pages[0]).toEqual({
+      id: "s1",
+      kind: "questions",
+      title: "Gear",
+      subtitle: "What you bring",
+      pageType: "question",
+      questions: [q("a")],
+      leadsOnly: true,
+      requiredToContinue: true,
+      visibleIf: { fieldId: "x", op: "eq", value: "yes" },
+    });
+    // The second part carries on where the section left off: its jump, and
+    // the settings its questions had.
+    expect(next.pages[1]).toEqual({
+      id: "s4",
+      kind: "questions",
+      title: "Gear (continued)",
+      pageType: "question",
+      questions: [q("b"), q("c")],
+      next: "s3",
+      leadsOnly: true,
+      requiredToContinue: true,
+      visibleIf: { fieldId: "x", op: "eq", value: "yes" },
+    });
+    // Nothing else changed, and the input is untouched.
+    expect(next.pages.slice(2)).toEqual(definition.pages.slice(1));
+    expect(
+      definition.pages[0]!.kind === "questions" &&
+        definition.pages[0]!.questions,
+    ).toHaveLength(3);
+  });
+
+  it("after the last block, or with no block chosen, adds an empty section right after", () => {
+    for (const after of ["c", null]) {
+      const { definition: next, pageIndex } = splitSection(
+        definition,
+        0,
+        after,
+        "s4",
+      );
+      expect(pageIndex).toBe(1);
+      expect(next.pages.map((p) => p.id)).toEqual(["s1", "s4", "s2", "s3"]);
+      expect(next.pages[0]).toMatchObject({
+        questions: [q("a"), q("b"), q("c")],
+      });
+      expect(next.pages[0]).not.toHaveProperty("next");
+      // A plain new section that still leads where the section led.
+      expect(next.pages[1]).toEqual({
+        ...createSection("s4", 1),
+        next: "s3",
+      });
+    }
+  });
+
+  it("in an empty section, adds an empty section right after it, not at the end", () => {
+    const { definition: next, pageIndex } = splitSection(
+      definition,
+      1,
+      null,
+      "s4",
+    );
+    expect(pageIndex).toBe(2);
+    expect(next.pages.map((p) => p.id)).toEqual(["s1", "s2", "s4", "s3"]);
+    expect(next.pages[2]).toEqual(createSection("s4", 2));
+  });
+
+  it("names the continuation of an untitled section like any new one", () => {
+    const untitled: Questionnaire = {
+      ...definition,
+      pages: [{ ...definition.pages[0]!, title: " " } as QuestionnairePageT],
+    };
+    const { definition: next } = splitSection(untitled, 0, "b", "s4");
+    expect(next.pages[1]).toMatchObject({
+      title: "Section 2",
+      questions: [q("c")],
+    });
+  });
+});
+
+type QuestionnairePageT = Questionnaire["pages"][number];
