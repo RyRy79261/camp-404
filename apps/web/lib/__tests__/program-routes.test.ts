@@ -57,6 +57,18 @@ describe("matchProgram", () => {
     expect(matchProgram("/print/power/refuel-sheet")).toBeNull();
   });
 
+  it("opens an inventory item inside the Inventory window, not a window of its own", () => {
+    for (const p of [
+      "/inventory/needs",
+      "/inventory/bookings",
+      "/inventory/lent",
+      "/inventory/3f1c9a52-7d2b-4c39-9a61-0d6f2b8e4a10",
+    ]) {
+      expect(matchProgram(p), p).toEqual(matchProgram("/inventory"));
+    }
+    expect(matchProgram("/print/inventory/strike")).toBeNull();
+  });
+
   it("gives each document its own window", () => {
     expect(matchProgram("/meetings/m-1")).toEqual({
       programId: "meeting",

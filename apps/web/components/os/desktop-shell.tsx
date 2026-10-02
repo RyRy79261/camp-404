@@ -217,7 +217,6 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   // The site plan opens wide enough for the plan, its key and the rail side
   // by side, the whole plot in view (the approved redesign, 2026-10-01).
   "camp-layout": WRITE_SIZE,
-  "inventory-item": L_SIZE,
   transport: L_SIZE,
   "my-dues": L_SIZE,
   "my-gear": L_SIZE,

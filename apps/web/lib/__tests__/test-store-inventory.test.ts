@@ -6,8 +6,10 @@ import type { CampConfig } from "@camp404/db/camp-config";
 import {
   ALREADY_BOOKED,
   FULLY_BOOKED,
+  ITEM_BROKEN,
   ITEM_CHANGED,
   LOAN_TOO_MANY,
+  NONE_FREE,
   NOT_AN_INVENTORY_EDITOR,
   NOT_YOUR_BOOKING,
   PROPOSAL_DECIDED,
@@ -83,8 +85,8 @@ describe("test store: inventory", () => {
     };
   }
 
-  function cooler(actorId: string) {
-    const made = inventoryStore.addInventoryItem({ ...COOLER, actorId });
+  function cooler(actorId: string, item = COOLER) {
+    const made = inventoryStore.addInventoryItem({ ...item, actorId });
     if (!made.ok) throw new Error(made.error);
     return made.id;
   }
@@ -179,6 +181,44 @@ describe("test store: inventory", () => {
         actorId: p.soundLead.id,
       }),
     ).toEqual({ ok: false, error: NOT_YOUR_BOOKING });
+  });
+
+  it("books none of a broken item, and takes lent-out units off what can be booked", () => {
+    const p = people();
+    const broken = cooler(
+      p.captain.id,
+      InventoryItemInput.parse({ ...COOLER, condition: "broken" }),
+    );
+    expect(
+      inventoryStore.bookInventoryItem({
+        itemId: broken,
+        actorId: p.member.id,
+      }),
+    ).toEqual({ ok: false, error: ITEM_BROKEN });
+
+    const id = cooler(
+      p.captain.id,
+      InventoryItemInput.parse({ ...COOLER, bookableCount: 3 }),
+    );
+    const lent = inventoryStore.lendInventoryItem({
+      itemId: id,
+      quantity: 3,
+      borrowerCamp: "Next Door",
+      borrowerAddress: "7:30 and C",
+      actorId: p.captain.id,
+    });
+    expect(lent.ok).toBe(true);
+    expect(
+      inventoryStore.bookInventoryItem({ itemId: id, actorId: p.member.id }).ok,
+    ).toBe(true);
+    expect(
+      inventoryStore.bookInventoryItem({ itemId: id, actorId: p.other.id }),
+    ).toEqual({ ok: false, error: NONE_FREE });
+    expect(
+      inventoryStore
+        .listBookableItems(p.member.id)
+        .find((r) => r.itemId === id),
+    ).toMatchObject({ quantity: 4, lentOut: 3, booked: 1 });
   });
 
   it("keeps needs to their year and lends no more than the camp has", () => {

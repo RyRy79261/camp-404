@@ -1,45 +1,148 @@
 import Link from "next/link";
-import { ClipboardList } from "lucide-react";
+import { Check, ClipboardList } from "lucide-react";
 import { stillNeeded } from "@camp404/core";
-import { Badge } from "@camp404/ui/components/badge";
 import { EmptyState } from "@camp404/ui/components/empty-state";
-import { PageHeading } from "@camp404/ui/components/page-heading";
+import { SelectFilters } from "@/components/inventory/gear-filters";
+import { InventoryFrame } from "@/components/inventory/inventory-tabs";
 import {
-  ResponsiveDataTable,
-  type ResponsiveColumn,
-} from "@camp404/ui/components/responsive-data-table";
-import { RowActions } from "@camp404/ui/components/row-actions";
-import { InventoryTabs } from "@/components/inventory/inventory-tabs";
+  ActionSlot,
+  CountLine,
+  GroupItem,
+  GroupRow,
+  InvCard,
+  Meter,
+  SubLine,
+  TABLE,
+  TD,
+  TD_ACTION,
+  TD_MENU,
+  TH,
+} from "@/components/inventory/inventory-table";
 import {
   AddNeedButton,
   NeedRowActions,
   PledgeButton,
-  WithdrawPledgeButton,
 } from "@/components/inventory/need-controls";
+import { PrintLink } from "@/components/inventory/print-link";
 import {
   listInventoryItems,
   listInventoryNeeds,
   type InventoryNeedRow,
 } from "@/lib/inventory";
-import { inventoryItemPath } from "@/lib/inventory-copy";
+import {
+  INVENTORY_NEEDS_PATH,
+  INVENTORY_PRINT_NEEDS_PATH,
+  inventoryItemPath,
+} from "@/lib/inventory-copy";
+import { Team } from "@camp404/types";
 import { captainPageGate } from "@/lib/captain-gate";
-import { inventoryViewer } from "@/lib/inventory-viewer";
+import { inventoryViewer, type InventoryViewer } from "@/lib/inventory-viewer";
+import { listTeamPeople } from "@/lib/roster";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Needs this year — Camp 404" };
 
 // What each team needs at the burn this year, against what the camp has
-// (#246): still needed = need − the camp's own item − bought − pledged. A
-// captain or a lead of the team keeps its list; any member pledges to bring
-// some, and every member sees the pledges by name under the need.
+// (#246; redesign option A, owner 2026-10-01): still to find = need − the
+// camp's own item − bought − pledged. One table, the teams as header rows in
+// the camp's own team order. Every row has ONE button in the same slot:
+// "Pledge", "Edit my pledge" once you have, or a quiet "Covered" when nothing
+// is left to find. A captain or a lead of the team keeps its list through the
+// "···" in its own narrow column. Every member sees the pledges by name, the
+// viewer's own first as "You".
 
-const REFUSAL_ID = "inventory-needs-refusal";
+type Row = InventoryNeedRow & {
+  pledged: number;
+  still: number;
+  covered: number;
+  mine: { quantity: number; note: string | null } | null;
+};
 
-type Row = InventoryNeedRow & { pledged: number; still: number };
+const SHOW = [
+  { value: "open", label: "Still to find" },
+  { value: "covered", label: "Covered" },
+];
 
-export default async function InventoryNeedsPage() {
+function pledgeLine(row: Row, viewer: InventoryViewer) {
+  const ordered = [...row.pledges].sort(
+    (a, b) =>
+      Number(b.userId === viewer.userId) - Number(a.userId === viewer.userId),
+  );
+  return ordered.map((p, i) => (
+    <span key={p.userId}>
+      {i > 0 && " · "}
+      <b className="font-semibold text-foreground">
+        {p.userId === viewer.userId ? "You" : p.displayName} {p.quantity}
+      </b>
+      {p.note ? ` (${p.note})` : ""}
+    </span>
+  ));
+}
+
+/** The phone's short pledge words: "Max 2, Sam 1" (first names). */
+function othersShort(row: Row, viewer: InventoryViewer): string {
+  return row.pledges
+    .filter((p) => p.userId !== viewer.userId)
+    .map((p) => `${p.displayName.split(" ")[0]} ${p.quantity}`)
+    .join(", ");
+}
+
+/** A team's header row: who leads it this year. */
+function leadText(leads: string[]): string {
+  if (leads.length === 0) return "No lead yet";
+  return `${leads.length === 1 ? "Lead" : "Leads"}: ${leads.join(", ")}`;
+}
+
+function needLine(row: Row, viewer: InventoryViewer) {
+  if (row.pledges.length > 0) return <>Pledged: {pledgeLine(row, viewer)}</>;
+  if (row.note) return row.note;
+  if (row.boughtQuantity >= row.quantity) return "Bought by the camp";
+  return "No pledges yet";
+}
+
+function Owned({ row }: { row: Row }) {
+  const text = `${row.have} owned · ${row.boughtQuantity} bought`;
+  if (!row.itemId) return <>{text}</>;
+  return (
+    <Link
+      href={inventoryItemPath(row.itemId)}
+      className="underline-offset-4 hover:text-foreground hover:underline"
+    >
+      {text}
+    </Link>
+  );
+}
+
+function Action({ row }: { row: Row }) {
+  if (!row.mine && row.still === 0) {
+    return (
+      <ActionSlot tone="ok">
+        <Check aria-hidden className="size-3.5" />
+        Covered
+      </ActionSlot>
+    );
+  }
+  return (
+    <PledgeButton
+      needId={row.id}
+      name={row.name}
+      still={row.still}
+      mine={row.mine}
+      className="w-full"
+    />
+  );
+}
+
+export default async function InventoryNeedsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const viewer = await inventoryViewer(await captainPageGate("camp_member"));
+  const params = await searchParams;
+  const teamFilter = typeof params.team === "string" ? params.team : "";
+  const show = typeof params.show === "string" ? params.show : "";
   const canAdd = viewer.editableTeams.length > 0;
   const [needs, items] = await Promise.all([
     listInventoryNeeds(),
@@ -49,6 +152,7 @@ export default async function InventoryNeedsPage() {
 
   const rows: Row[] = needs.map((n) => {
     const pledged = n.pledges.reduce((sum, p) => sum + p.quantity, 0);
+    const mine = n.pledges.find((p) => p.userId === viewer.userId);
     return {
       ...n,
       pledged,
@@ -58,177 +162,271 @@ export default async function InventoryNeedsPage() {
         bought: n.boughtQuantity,
         pledged,
       }),
+      covered: Math.min(n.quantity, n.have + n.boughtQuantity + pledged),
+      mine: mine ? { quantity: mine.quantity, note: mine.note } : null,
     };
   });
-  const teams = [...new Set(rows.map((r) => r.team))];
+  const open = rows.filter((r) => r.still > 0).length;
+  const shown = rows.filter(
+    (r) =>
+      (!teamFilter || r.team === teamFilter) &&
+      (show !== "open" || r.still > 0) &&
+      (show !== "covered" || r.still === 0),
+  );
+  const teams = [...new Set(shown.map((r) => r.team))].sort(
+    (a, b) =>
+      viewer.teamOrder(a) - viewer.teamOrder(b) ||
+      viewer.teamLabel(a).localeCompare(viewer.teamLabel(b)),
+  );
+  // Each team's leads for its header row (the mock-up's "Lead: Kim
+  // Kitchen"); every approved member reads who leads which team.
+  const leads = await Promise.all(
+    teams.map(async (team) => {
+      const parsed = Team.safeParse(team);
+      if (!parsed.success) return [];
+      const people = await listTeamPeople(parsed.data);
+      return people.filter((p) => p.isLead).map((p) => p.displayName);
+    }),
+  );
+  const groups = teams.map((team, i) => ({
+    team,
+    leads: leads[i] ?? [],
+    rows: shown.filter((r) => r.team === team),
+  }));
+  const teamOptions = [...new Set(rows.map((r) => r.team))]
+    .sort((a, b) => viewer.teamOrder(a) - viewer.teamOrder(b))
+    .map((t) => ({ value: t, label: viewer.teamLabel(t) }));
+  // The lead tools' column is there only for someone who may use it.
+  const tools = canAdd;
+  const cols = tools ? 5 : 4;
 
-  const columns: ResponsiveColumn<Row>[] = [
-    {
-      id: "name",
-      header: "Need",
-      role: "title",
-      cellClassName: "font-medium",
-      cell: (n) => (
-        <span className="flex flex-col">
-          <span>{n.name}</span>
-          {n.itemId && n.itemName && (
-            <Link
-              href={inventoryItemPath(n.itemId)}
-              className="text-xs font-normal text-muted-foreground underline-offset-4 hover:underline"
-            >
-              Camp item: {n.itemName}
-            </Link>
-          )}
-          {n.note && (
-            <span className="text-xs font-normal text-muted-foreground">
-              {n.note}
-            </span>
-          )}
-        </span>
-      ),
-    },
-    {
-      id: "still",
-      header: "Still needed",
-      role: "badge",
-      cell: (n) =>
-        n.still === 0 ? (
-          <Badge variant="success">Covered</Badge>
-        ) : (
-          <Badge variant="warning">{n.still} to find</Badge>
-        ),
-    },
-    {
-      id: "needed",
-      header: "Needed",
-      align: "right",
-      cellClassName: "tabular-nums",
-      cell: (n) => n.quantity,
-    },
-    {
-      id: "have",
-      header: "Camp has",
-      align: "right",
-      cellClassName: "tabular-nums text-muted-foreground",
-      cell: (n) => n.have,
-    },
-    {
-      id: "bought",
-      header: "Bought",
-      align: "right",
-      cellClassName: "tabular-nums text-muted-foreground",
-      cell: (n) => n.boughtQuantity,
-    },
-    {
-      id: "pledges",
-      header: "Pledged",
-      cell: (n) =>
-        n.pledges.length === 0 ? (
-          <span className="text-muted-foreground">None yet</span>
-        ) : (
-          <ul className="flex flex-col text-sm">
-            {n.pledges.map((p) => (
-              <li key={p.userId}>
-                {p.userId === viewer.userId ? "You" : p.displayName}:{" "}
-                <span className="tabular-nums">{p.quantity}</span>
-                {p.note && (
-                  <span className="text-muted-foreground"> · {p.note}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        ),
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      role: "actions",
-      hideHeader: true,
-      align: "right",
-      // One main button (pledge) in the same place on every row; taking a
-      // pledge back, Edit and Remove are quiet icons in a slot that keeps its
-      // width on every row of the team's table.
-      cell: (n) => {
-        const mine = n.pledges.find((p) => p.userId === viewer.userId) ?? null;
-        const edits = viewer.canEdit(n.team);
-        return (
-          <RowActions
-            label={`Actions for ${n.name}`}
-            primary={<PledgeButton needId={n.id} name={n.name} mine={mine} />}
-            secondarySlots={edits ? 3 : 1}
-            secondary={
-              <>
-                {mine && <WithdrawPledgeButton needId={n.id} name={n.name} />}
-                {edits && (
-                  <NeedRowActions
-                    need={{
-                      id: n.id,
-                      version: n.version,
-                      team: n.team,
-                      name: n.name,
-                      quantity: n.quantity,
-                      itemId: n.itemId,
-                      boughtQuantity: n.boughtQuantity,
-                      note: n.note,
-                    }}
-                    teams={viewer.editableTeams}
-                    items={itemOptions}
-                  />
-                )}
-              </>
-            }
-          />
-        );
-      },
-    },
-  ];
+  const editable = (r: Row) => ({
+    id: r.id,
+    version: r.version,
+    team: r.team,
+    name: r.name,
+    quantity: r.quantity,
+    itemId: r.itemId,
+    boughtQuantity: r.boughtQuantity,
+    note: r.note,
+  });
 
   return (
-    <div className="flex flex-col">
-      <PageHeading
-        eyebrow="Camp gear"
-        title="Needs this year"
-        description="What each team needs at the burn, what the camp already has, and who is bringing the rest. Pledge to bring something; captains and each team's leads keep their team's list."
-        actions={
-          canAdd ? (
-            <AddNeedButton
-              teams={viewer.editableTeams}
-              items={itemOptions}
-              refusalId={REFUSAL_ID}
-            />
-          ) : undefined
-        }
-      />
-      <InventoryTabs current="needs" />
-
-      <div className="flex flex-col gap-6">
-        {rows.length === 0 ? (
-          <EmptyState
-            icon={<ClipboardList />}
-            title="No needs yet this year"
-            description="When a team lists what it needs, it shows here and members can pledge to bring it."
+    <InventoryFrame
+      current="needs"
+      actions={
+        <>
+          <PrintLink
+            href={INVENTORY_PRINT_NEEDS_PATH}
+            className="hidden page-sm:inline-flex"
+          >
+            Print who brings what (A4)
+          </PrintLink>
+          <AddNeedButton teams={viewer.editableTeams} items={itemOptions} />
+        </>
+      }
+    >
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={<ClipboardList />}
+          title="No needs yet this year"
+          description="When a team lists what it needs, it shows here and members can pledge to bring it."
+        />
+      ) : (
+        <>
+          {/* The filters show in a row on desktop; on a phone they fold
+              behind a "Filters" button, the same as the Gear tab's. */}
+          <SelectFilters
+            action={INVENTORY_NEEDS_PATH}
+            label="Filter the needs"
+            selects={[
+              {
+                name: "team",
+                label: "Team",
+                placeholder: "All teams",
+                options: teamOptions,
+                value: teamFilter,
+              },
+              {
+                name: "show",
+                label: "Show",
+                placeholder: "All needs",
+                options: SHOW,
+                value: show,
+              },
+            ]}
           />
-        ) : (
-          teams.map((team) => (
-            <section
-              key={team}
-              aria-labelledby={`needs-${team}`}
-              className="flex flex-col gap-3"
-            >
-              <h2 id={`needs-${team}`} className="text-base font-semibold">
-                {viewer.teamLabel(team)}
-              </h2>
-              <ResponsiveDataTable
-                columns={columns}
-                data={rows.filter((r) => r.team === team)}
-                getRowKey={(r) => r.id}
-                label={`${viewer.teamLabel(team)} needs`}
-                framed
-              />
-            </section>
-          ))
-        )}
-      </div>
-    </div>
+          <CountLine
+            aside={
+              <>
+                <span className="hidden page-md:inline">
+                  Teams in camp order
+                </span>
+                <PrintLink
+                  href={INVENTORY_PRINT_NEEDS_PATH}
+                  size="sm"
+                  className="page-sm:hidden"
+                >
+                  Print list (A4)
+                </PrintLink>
+              </>
+            }
+          >
+            <span className="hidden page-md:inline">
+              {rows.length === 1 ? "1 need" : `${rows.length} needs`} ·{" "}
+            </span>
+            {open} still to find · {rows.length - open} covered
+          </CountLine>
+          {groups.length === 0 ? (
+            <EmptyState
+              icon={<ClipboardList />}
+              title="Nothing matches"
+              description="Try another team, or show all needs."
+            />
+          ) : (
+            <InvCard>
+              <div className="hidden page-md:block">
+                <table className={TABLE}>
+                  <caption className="sr-only">
+                    What the teams need this year
+                  </caption>
+                  <colgroup>
+                    <col />
+                    <col className="w-48" />
+                    <col className="w-24" />
+                    <col className="w-40" />
+                    {tools && <col className="w-11" />}
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th scope="col" className={TH}>
+                        Need
+                      </th>
+                      <th scope="col" className={TH}>
+                        Covered so far
+                      </th>
+                      <th scope="col" className={`${TH} text-right`}>
+                        Still to find
+                      </th>
+                      <th scope="col" className={`${TH} pl-0`}>
+                        Your pledge
+                      </th>
+                      {tools && (
+                        <th scope="col" className={`${TH} px-0`}>
+                          <span className="sr-only">Team lead tools</span>
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  {groups.map((g) => (
+                    <tbody key={g.team}>
+                      <GroupRow
+                        colSpan={cols}
+                        title={viewer.teamLabel(g.team)}
+                        aside={leadText(g.leads)}
+                      />
+                      {g.rows.map((r) => (
+                        <tr key={r.id}>
+                          <td className={TD}>
+                            <span
+                              className="block truncate font-semibold"
+                              title={r.name}
+                            >
+                              {r.name}
+                            </span>
+                            <SubLine>{needLine(r, viewer)}</SubLine>
+                            {r.pledges.length > 0 && r.note && (
+                              <SubLine>{r.note}</SubLine>
+                            )}
+                          </td>
+                          <td className={TD}>
+                            <span className="tabular-nums">
+                              {r.covered} of {r.quantity}
+                            </span>
+                            <Meter value={r.covered} max={r.quantity} />
+                            <SubLine>
+                              <Owned row={r} />
+                            </SubLine>
+                          </td>
+                          <td
+                            className={`${TD} text-right tabular-nums ${r.still === 0 ? "text-muted-foreground" : "font-bold"}`}
+                          >
+                            {r.still}
+                          </td>
+                          <td className={TD_ACTION}>
+                            <Action row={r} />
+                          </td>
+                          {tools && (
+                            <td className={TD_MENU}>
+                              {viewer.canEdit(r.team) && (
+                                <NeedRowActions
+                                  need={editable(r)}
+                                  teams={viewer.editableTeams}
+                                  items={itemOptions}
+                                />
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  ))}
+                </table>
+              </div>
+
+              <ul className="page-md:hidden" aria-label="What the teams need">
+                {groups.map((g) => (
+                  <li key={g.team}>
+                    <ul>
+                      <GroupItem title={viewer.teamLabel(g.team)} />
+                      {g.rows.map((r) => (
+                        <li
+                          key={r.id}
+                          className={`grid items-center gap-3 border-t border-border px-4 py-3 ${tools ? "grid-cols-[1fr_7.5rem_2rem]" : "grid-cols-[1fr_7.5rem]"}`}
+                        >
+                          <span className="min-w-0">
+                            <span className="line-clamp-2 font-semibold">
+                              {r.name}
+                            </span>
+                            <SubLine>
+                              {r.covered} of {r.quantity}
+                              {r.still > 0 && (
+                                <>
+                                  {" "}
+                                  ·{" "}
+                                  <b className="font-semibold text-foreground">
+                                    {r.still} to find
+                                  </b>
+                                </>
+                              )}
+                              {r.mine && ` · you bring ${r.mine.quantity}`}
+                              {othersShort(r, viewer) &&
+                                ` · ${othersShort(r, viewer)}`}
+                            </SubLine>
+                            <Meter value={r.covered} max={r.quantity} />
+                          </span>
+                          <Action row={r} />
+                          {tools && (
+                            <span>
+                              {viewer.canEdit(r.team) && (
+                                <NeedRowActions
+                                  need={editable(r)}
+                                  teams={viewer.editableTeams}
+                                  items={itemOptions}
+                                />
+                              )}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </InvCard>
+          )}
+        </>
+      )}
+    </InventoryFrame>
   );
 }
