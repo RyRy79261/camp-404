@@ -14,6 +14,10 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()) }));
 vi.mock("@/lib/feedback-ai", () => ({ structureWithAi: vi.fn() }));
+vi.mock("@/lib/report-screenshots", () => ({
+  isUnfiledScreenshotOf: vi.fn(async () => true),
+  markReportScreenshotFiled: vi.fn(async () => true),
+}));
 
 import { submitFeedbackAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -21,6 +25,11 @@ import { findCampUserByAuthId } from "@/lib/users";
 import { isE2ETestMode } from "@/lib/test-mode";
 import { rateLimiter } from "@/lib/rate-limit";
 import { structureWithAi } from "@/lib/feedback-ai";
+import {
+  isUnfiledScreenshotOf,
+  markReportScreenshotFiled,
+} from "@/lib/report-screenshots";
+import { SCREENSHOT_ISSUE_LINE } from "@/lib/report-screenshot-copy";
 
 const VALID = {
   kind: "bug" as const,
@@ -381,5 +390,84 @@ describe("submitFeedbackAction", () => {
       },
     });
     expect(res.ok).toBe(false);
+  });
+
+  // #313 (owner approved 2026-10-02): a screenshot stays private in Camp 404.
+  // The issue says one exists and carries nothing else of it.
+  describe("a report with a screenshot", () => {
+    const SHOT = "6f1c1d8e-2b1a-4c55-9a77-0d3c1f6b9e21";
+
+    it("files an issue that only says a screenshot exists, then keeps it", async () => {
+      const fetchFn = mockFetch({
+        status: 201,
+        json: async () => ({
+          number: 412,
+          html_url: "https://github.com/RyRy79261/camp-404/issues/412",
+        }),
+      });
+      const res = await submitFeedbackAction({ ...VALID, screenshotId: SHOT });
+      expect(res).toEqual({
+        ok: true,
+        number: 412,
+        url: "https://github.com/RyRy79261/camp-404/issues/412",
+        screenshotKept: true,
+      });
+      expect(isUnfiledScreenshotOf).toHaveBeenCalledWith(SHOT, "camp-1");
+
+      const body = JSON.parse(
+        (fetchFn.mock.calls[0]![1] as RequestInit).body as string,
+      ).body as string;
+      expect(body).toContain(SCREENSHOT_ISSUE_LINE);
+      // Nothing that could show the picture: no image markdown, no <img>, no
+      // blob store address, not even the picture's id.
+      expect(body).not.toMatch(/!\[/);
+      expect(body).not.toMatch(/<img/i);
+      expect(body).not.toMatch(/blob|vercel-storage|report-screenshots\//i);
+      expect(body).not.toContain(SHOT);
+
+      expect(markReportScreenshotFiled).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: SHOT,
+          userId: "camp-1",
+          issueNumber: 412,
+          issueUrl: "https://github.com/RyRy79261/camp-404/issues/412",
+        }),
+      );
+    });
+
+    it("says nothing about a screenshot when there is none", async () => {
+      const fetchFn = mockFetch({
+        status: 201,
+        json: async () => ({
+          number: 1,
+          html_url: "https://github.com/RyRy79261/camp-404/issues/1",
+        }),
+      });
+      await submitFeedbackAction(VALID);
+      const body = JSON.parse(
+        (fetchFn.mock.calls[0]![1] as RequestInit).body as string,
+      ).body as string;
+      expect(body).not.toContain(SCREENSHOT_ISSUE_LINE);
+      expect(markReportScreenshotFiled).not.toHaveBeenCalled();
+    });
+
+    it("refuses a screenshot that is not the member's own unfiled upload, and files nothing", async () => {
+      vi.mocked(isUnfiledScreenshotOf).mockResolvedValueOnce(false);
+      const fetchFn = mockFetch({ status: 201 });
+      const res = await submitFeedbackAction({ ...VALID, screenshotId: SHOT });
+      expect(res).toEqual({
+        ok: false,
+        error: expect.stringMatching(/screenshot/),
+      });
+      expect(fetchFn).not.toHaveBeenCalled();
+      expect(markReportScreenshotFiled).not.toHaveBeenCalled();
+    });
+
+    it("keeps the picture untouched when GitHub refuses the report", async () => {
+      mockFetch({ status: 500 });
+      const res = await submitFeedbackAction({ ...VALID, screenshotId: SHOT });
+      expect(res.ok).toBe(false);
+      expect(markReportScreenshotFiled).not.toHaveBeenCalled();
+    });
   });
 });

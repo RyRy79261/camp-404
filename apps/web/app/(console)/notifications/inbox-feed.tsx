@@ -114,6 +114,7 @@ export function InboxFeed({
                     title={item.title}
                     body={item.body}
                     senderName={item.senderName}
+                    sentTo={item.sentTo ?? null}
                     isNew={item.readAt === null}
                     acknowledgedAt={item.acknowledgedAt}
                     createdAt={item.createdAt}

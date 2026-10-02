@@ -20,6 +20,7 @@ import {
   Lightbulb,
   Link as LinkIcon,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { DictatePill } from "@camp404/ui/components/dictate-pill";
 import { CHOICE_OFF, CHOICE_ON } from "@camp404/ui/lib/choice";
@@ -28,6 +29,10 @@ import { RecorderPanel } from "../voice/recorder-panel";
 import { useDictationToggle } from "../voice/use-dictation-toggle";
 import { useVoiceSupported } from "../voice/use-voice-recorder";
 import { ReportDiagnosticsPanel } from "./report-diagnostics";
+import {
+  ReportScreenshotField,
+  type ChosenScreenshot,
+} from "./report-screenshot-field";
 import {
   submitFeedbackAction,
   type FeedbackResult,
@@ -74,6 +79,12 @@ export function ReportBugDialog({
   const [attached, setAttached] = React.useState<ReportDiagnostics | null>(
     null,
   );
+  // The screenshot (#313), and the id the upload gave it. The id is kept, so a
+  // retry after a failed filing does not upload the same picture twice.
+  const [screenshot, setScreenshot] = React.useState<ChosenScreenshot | null>(
+    null,
+  );
+  const [screenshotId, setScreenshotId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<Extract<
     FeedbackResult,
@@ -90,6 +101,8 @@ export function ReportBugDialog({
     dictation.setDictating(false);
     setDictated(false);
     setUseAi(true);
+    setScreenshot(null);
+    setScreenshotId(null);
     setError(null);
     setResult(null);
   }, [open, defaultKind, defaultDescription]);
@@ -114,12 +127,25 @@ export function ReportBugDialog({
     setSentHeight(contentRef.current?.offsetHeight ?? null);
     startTransition(async () => {
       try {
+        // The picture goes first, to Camp 404 only, so the issue can say one
+        // exists. It never goes to GitHub.
+        let shotId = screenshotId;
+        if (screenshot && !shotId) {
+          const uploaded = await uploadScreenshot(screenshot.file);
+          if (!uploaded.ok) {
+            setError(uploaded.error);
+            return;
+          }
+          shotId = uploaded.id;
+          setScreenshotId(shotId);
+        }
         const res = await submitFeedbackAction({
           kind,
           description,
           dictated,
           useAi: aiAvailable && useAi,
           ...(attached ? { diagnostics: attached } : {}),
+          ...(screenshot && shotId ? { screenshotId: shotId } : {}),
           route:
             typeof window !== "undefined"
               ? window.location.pathname
@@ -178,6 +204,18 @@ export function ReportBugDialog({
                 ? `View issue #${result.number}`
                 : "Open the tracker"}
             </a>
+            {result.screenshotKept && (
+              <p className="flex items-start gap-2 border-l-2 border-primary bg-primary/10 px-3 py-2 text-xs leading-relaxed">
+                <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span>
+                  <strong className="font-semibold">
+                    Your screenshot is not on GitHub.
+                  </strong>{" "}
+                  It stays in Camp 404, where only captains can see it. The
+                  issue only says that one exists.
+                </span>
+              </p>
+            )}
             <div className="mt-auto flex justify-end">
               <Button onClick={() => onOpenChange(false)}>Done</Button>
             </div>
@@ -259,6 +297,17 @@ export function ReportBugDialog({
                   />
                 )}
               </div>
+
+              {/* One picture, kept privately in Camp 404 (#313). */}
+              <ReportScreenshotField
+                value={screenshot}
+                onChange={(next) => {
+                  setScreenshot(next);
+                  // A new picture is a new upload.
+                  setScreenshotId(null);
+                }}
+                disabled={isPending}
+              />
 
               {/* Improve with AI — only when the server has a Claude key. */}
               {aiAvailable && (
@@ -393,4 +442,30 @@ function KindOption({
       </span>
     </button>
   );
+}
+
+/** Send the picture to Camp 404's private store; the id names it in the report. */
+async function uploadScreenshot(
+  file: File,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const form = new FormData();
+  form.set("screenshot", file);
+  try {
+    const res = await fetch("/api/uploads/report-screenshot", {
+      method: "POST",
+      body: form,
+    });
+    const data = (await res.json().catch(() => null)) as {
+      screenshotId?: string;
+      error?: string;
+    } | null;
+    if (res.ok && data?.screenshotId)
+      return { ok: true, id: data.screenshotId };
+    return {
+      ok: false,
+      error: data?.error ?? "Your screenshot didn't upload. Try again.",
+    };
+  } catch {
+    return { ok: false, error: "Your screenshot didn't upload. Try again." };
+  }
 }

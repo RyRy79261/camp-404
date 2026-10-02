@@ -69,6 +69,7 @@ const LINE: Readonly<Record<string, IconKey>> = {
   "camp-settings": "settings",
   "join-site": "joinsite",
   audit: "audit",
+  "report-screenshots": "review",
   system: "sysmon",
   form: "myforms",
   "form-answers": "myforms",

@@ -13,6 +13,7 @@ import {
   createAnnouncementDraft,
   deleteAnnouncementDraft,
   explainDraftRefusal,
+  getAnnouncementPickerData,
   getAnnouncementPinContext,
   publishAnnouncement,
   setAnnouncementPinned,
@@ -23,7 +24,7 @@ import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainActionGate } from "@/lib/captain-gate";
 import { getLeadTeams } from "@/lib/users";
 import { runAction, type ActionResult } from "@/lib/action-result";
-import { NOT_YOUR_PIN, NOT_YOUR_TEAM } from "./audience-copy";
+import { NOT_YOUR_PIN, NOT_YOUR_TEAM, PERSON_GONE } from "./audience-copy";
 import { deliverAfterResponse } from "@/lib/background-work";
 
 type TeamKey = Extract<Audience, { scope: "team" }>["team"];
@@ -69,21 +70,30 @@ function audienceActor(sender: Sender): AudienceActor {
 
 /**
  * Whether this sender may address this audience. A captain may pick the whole
- * camp or any active team; a lead only a team they lead. The lead half is
- * `canSendToAudience`'s answer verbatim; the captain half adds the one thing
- * that rule does not know, which team keys the camp still has switched on.
+ * camp, any active team, the team leads, the drivers, or chosen people; a lead
+ * only a team they lead. Who may address what is `canSendToAudience`'s answer
+ * verbatim, for both; the captain half adds what that rule does not know:
+ * which team keys the camp still has switched on, and whether each chosen
+ * person is still a camp member.
  */
 async function audienceRefusal(
   sender: Sender,
   audience: Audience,
 ): Promise<string | null> {
-  if (!sender.isCaptain) {
-    return canSendToAudience(audienceActor(sender), audience)
-      ? null
-      : NOT_YOUR_TEAM;
+  if (!canSendToAudience(audienceActor(sender), audience)) {
+    return NOT_YOUR_TEAM;
   }
-  // The camp and the team leads are always addressable; only a team can have
-  // been switched off.
+  if (!sender.isCaptain) return null;
+  // Chosen people (#313): each one must be someone the picker offers, an
+  // approved member who is not erased and not the sender. The ids came from
+  // the browser, so they are checked against the camp, not trusted.
+  if (audience.scope === "individual") {
+    const { people } = await getAnnouncementPickerData(sender.senderId);
+    const members = new Set(people.map((p) => p.id));
+    return audience.userIds.every((id) => members.has(id)) ? null : PERSON_GONE;
+  }
+  // The camp, the team leads and the drivers are always addressable; only a
+  // team can have been switched off.
   if (audience.scope !== "team") return null;
   const active = activeTeams(await getTeamsConfig()).map((t) => t.key);
   return active.includes(audience.team)

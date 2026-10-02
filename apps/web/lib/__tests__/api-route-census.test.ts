@@ -58,6 +58,8 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   "notifications/pending": "camp-access",
   "notifications/popups": "camp-access",
   "push/tokens": "camp-access",
+  // A bug report's screenshot (#313): captains only; every read is audited.
+  "report-screenshot/[id]": "captain-gate",
   "telegram/webhook": "webhook-secret",
   "test/complete-onboarding": "test-only",
   "test/inspect": "test-only",
@@ -82,6 +84,8 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   // A member's own proof of payment (#240), stored in their own folder.
   "uploads/payment-proof": "camp-access",
   "uploads/questionnaire-image": "camp-access",
+  // A bug report's screenshot (#313), stored privately in the member's folder.
+  "uploads/report-screenshot": "camp-access",
   "voice/transcribe": "camp-access",
 };
 

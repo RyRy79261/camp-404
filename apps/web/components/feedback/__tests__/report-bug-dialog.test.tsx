@@ -123,4 +123,98 @@ describe("ReportBugDialog", () => {
     );
     expect(sent.diagnostics.errors).toEqual([]);
   });
+
+  // #313: one screenshot, uploaded to Camp 404 first, then named in the report.
+  describe("a screenshot", () => {
+    const PNG = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+
+    function attach(file: File) {
+      fireEvent.change(screen.getByLabelText("Screenshot file"), {
+        target: { files: [file] },
+      });
+    }
+
+    it("refuses a file that is not a PNG, JPG or WebP picture", () => {
+      render(<ReportBugDialog open onOpenChange={() => {}} />);
+      attach(new File(["x"], "notes.pdf", { type: "application/pdf" }));
+      expect(screen.getByRole("alert").textContent).toMatch(/PNG, JPG or WebP/);
+      expect(screen.queryByRole("img", { name: "Your screenshot" })).toBeNull();
+    });
+
+    it("refuses a picture over 5 MB", () => {
+      render(<ReportBugDialog open onOpenChange={() => {}} />);
+      const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.png", {
+        type: "image/png",
+      });
+      attach(big);
+      expect(screen.getByRole("alert").textContent).toMatch(/over 5 MB/);
+    });
+
+    it("shows the picture as private, uploads it, then names it in the report", async () => {
+      URL.createObjectURL = vi.fn(() => "blob:local-preview");
+      URL.revokeObjectURL = vi.fn();
+      const fetchFn = vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          screenshotId: "6f1c1d8e-2b1a-4c55-9a77-0d3c1f6b9e21",
+        }),
+      }));
+      vi.stubGlobal("fetch", fetchFn);
+      vi.mocked(submitFeedbackAction).mockResolvedValue({
+        ok: true,
+        number: 412,
+        url: "https://github.com/RyRy79261/camp-404/issues/412",
+        screenshotKept: true,
+      });
+      render(<ReportBugDialog open onOpenChange={() => {}} />);
+      attach(new File([PNG], "Screenshot.png", { type: "image/png" }));
+
+      const preview = screen.getByRole("img", { name: "Your screenshot" });
+      // Blanked in the desktop's last-seen copy of a background window.
+      expect(preview.hasAttribute("data-os-private")).toBe(true);
+      expect(screen.getByText(/Kept private\./)).toBeDefined();
+
+      fillAndSend();
+      await waitFor(() =>
+        expect(screen.getByText("Report filed")).toBeDefined(),
+      );
+      expect(fetchFn).toHaveBeenCalledWith(
+        "/api/uploads/report-screenshot",
+        expect.objectContaining({ method: "POST" }),
+      );
+      expect(vi.mocked(submitFeedbackAction).mock.lastCall?.[0]).toMatchObject({
+        screenshotId: "6f1c1d8e-2b1a-4c55-9a77-0d3c1f6b9e21",
+      });
+      expect(
+        screen.getByText(/Your screenshot is not on GitHub\./),
+      ).toBeDefined();
+      vi.unstubAllGlobals();
+    });
+
+    it("does not file the report when the picture fails to upload", async () => {
+      URL.createObjectURL = vi.fn(() => "blob:local-preview");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({
+          ok: false,
+          json: async () => ({
+            error: "Too many uploads. Wait a few minutes and try again.",
+          }),
+        })),
+      );
+      vi.mocked(submitFeedbackAction).mockClear();
+      render(<ReportBugDialog open onOpenChange={() => {}} />);
+      attach(new File([PNG], "Screenshot.png", { type: "image/png" }));
+      fillAndSend();
+      await waitFor(() =>
+        expect(screen.getByRole("alert").textContent).toMatch(
+          /Too many uploads/,
+        ),
+      );
+      expect(submitFeedbackAction).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    });
+  });
 });

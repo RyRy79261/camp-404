@@ -10,6 +10,7 @@
 // between "untrusted" markers with a one-line note that they are a report, not
 // instructions, and the footer says what redaction removed.
 
+import { SCREENSHOT_ISSUE_LINE } from "./report-screenshot-copy";
 import {
   describeFlags,
   describeRedactions,
@@ -87,7 +88,10 @@ function fenced(content: string): string {
  * is client-supplied to the action and a crafted request could carry either.
  */
 function inlineCode(value: string): string {
-  return value.replace(/`/g, "").replace(/\s*\n\s*/g, " ").trim();
+  return value
+    .replace(/`/g, "")
+    .replace(/\s*\n\s*/g, " ")
+    .trim();
 }
 
 /**
@@ -125,6 +129,12 @@ export interface BuildIssueInput {
   diagnostics?: ReportDiagnostics | null;
   /** The member attached diagnostics, but the screen withheld them. */
   diagnosticsWithheld?: boolean;
+  /**
+   * The member attached a screenshot (#313). The picture is NEVER sent to
+   * GitHub: it stays private in Camp 404, and the issue only says one exists.
+   * This is a flag on purpose, so no address or bytes can reach the body.
+   */
+  hasScreenshot?: boolean;
 }
 
 export interface BuiltIssue {
@@ -219,7 +229,8 @@ export function buildFeedbackIssue(input: BuildIssueInput): BuiltIssue {
   const safeRoute = input.route ? inlineCode(scrub(input.route, 300)) : null;
   const reporter = inlineCode(input.reporterRef);
   const footer = `_${[
-    "Filed via the in-app reporter" + (input.dictated ? " (voice-dictated)" : ""),
+    "Filed via the in-app reporter" +
+      (input.dictated ? " (voice-dictated)" : ""),
     `reporter: \`${reporter}\``,
     safeRoute ? `from: \`${safeRoute}\`` : null,
   ]
@@ -240,6 +251,9 @@ export function buildFeedbackIssue(input: BuildIssueInput): BuiltIssue {
     // Ours, and first: whoever opens the issue sees "a person must read this"
     // before a word the member wrote.
     describeFlags(flags) || null,
+    // Ours too, and before the member's words so a long report cannot push
+    // it past the length cap.
+    input.hasScreenshot ? `_${SCREENSHOT_ISSUE_LINE}_` : null,
     UNTRUSTED_BEGIN,
     ...sections,
     diagnostics,

@@ -7,6 +7,9 @@ vi.mock("@camp404/db/account", () => ({ sanitiseAccount: vi.fn() }));
 vi.mock("@/lib/avatar-blob", () => ({ deleteAvatarBlobs: vi.fn() }));
 vi.mock("@/lib/payment-proof", () => ({ deletePaymentProofBlobs: vi.fn() }));
 vi.mock("@/lib/claim-receipts", () => ({ deleteClaimReceiptBlobs: vi.fn() }));
+vi.mock("@/lib/report-screenshots", () => ({
+  deleteReportScreenshotBlobs: vi.fn(),
+}));
 vi.mock("@/lib/test-mode", () => ({
   isE2ETestMode: vi.fn(() => false),
   usesTestStore: vi.fn(() => false),
@@ -17,6 +20,7 @@ import { sanitiseAccount } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "@/lib/avatar-blob";
 import { deleteClaimReceiptBlobs } from "@/lib/claim-receipts";
 import { deletePaymentProofBlobs } from "@/lib/payment-proof";
+import { deleteReportScreenshotBlobs } from "@/lib/report-screenshots";
 import { isE2ETestMode, usesTestStore } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
 
@@ -66,6 +70,43 @@ describe("deleteAccount", () => {
     testStore.reset();
   });
 
+  it("deletes only the erased member's report screenshots from the test store", async () => {
+    vi.mocked(isE2ETestMode).mockReturnValue(true);
+    vi.mocked(usesTestStore).mockReturnValue(true);
+    testStore.reset();
+    const member = testStore.createUser({
+      authUserId: "auth-erased",
+      displayName: "Erased",
+      inviteCode: "seed",
+    });
+    const other = testStore.createUser({
+      authUserId: "auth-kept",
+      displayName: "Kept",
+      inviteCode: "seed",
+    });
+    const stamp = {
+      issueNumber: 1,
+      issueUrl: "https://example.com/1",
+      reportTitle: "t",
+      reportText: "x",
+    };
+    for (const u of [member, other]) {
+      const { id } = testStore.createReportScreenshot({
+        userId: u.id,
+        contentType: "image/png",
+        bytes: new Uint8Array([1]),
+      });
+      testStore.markReportScreenshotFiled({ id, userId: u.id, ...stamp });
+    }
+
+    await deleteAccount({ userId: member.id, authUserId: member.authUserId });
+
+    expect(testStore.listReportScreenshots().map((r) => r.userId)).toEqual([
+      other.id,
+    ]);
+    testStore.reset();
+  });
+
   it("scrubs the DB, then deletes all the member's avatar blobs", async () => {
     const res = await deleteAccount({ userId: "u1", authUserId: "auth-1" });
     expect(res).toEqual({ ok: true, lostCatNumber: 7 });
@@ -77,6 +118,8 @@ describe("deleteAccount", () => {
     // Proof-of-payment files are filed under the camp id (#240).
     expect(deletePaymentProofBlobs).toHaveBeenCalledExactlyOnceWith("u1");
     expect(deleteClaimReceiptBlobs).toHaveBeenCalledExactlyOnceWith("u1");
+    // A bug report's screenshots (#313), filed under the camp id.
+    expect(deleteReportScreenshotBlobs).toHaveBeenCalledExactlyOnceWith("u1");
   });
 
   it("takes no avatar blobs with it when the DB refused the erasure", async () => {
@@ -92,6 +135,7 @@ describe("deleteAccount", () => {
     expect(deleteAvatarBlobs).not.toHaveBeenCalled();
     expect(deletePaymentProofBlobs).not.toHaveBeenCalled();
     expect(deleteClaimReceiptBlobs).not.toHaveBeenCalled();
+    expect(deleteReportScreenshotBlobs).not.toHaveBeenCalled();
   });
 
   it("swallows a blob-cleanup failure (the DB scrub stands) and logs it", async () => {

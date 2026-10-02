@@ -26,6 +26,13 @@ vi.mock("@/lib/notifications", () => ({
   createAnnouncementDraft: vi.fn(async () => ({ id: "draft-1" })),
   deleteAnnouncementDraft: vi.fn(),
   explainDraftRefusal: vi.fn(),
+  getAnnouncementPickerData: vi.fn(async () => ({
+    people: [
+      { id: "jess", name: "Jess Naidoo", teams: ["kitchen"] },
+      { id: "sipho", name: "Sipho Ndlovu", teams: [] },
+    ],
+    drivers: [{ id: "sipho", name: "Sipho Ndlovu", teams: [] }],
+  })),
   getAnnouncementPinContext: vi.fn(async () => ({
     audience: { scope: "everyone" },
     published: true,
@@ -43,7 +50,7 @@ import {
   saveDraftAction,
   setPinnedAction,
 } from "./actions";
-import { NOT_YOUR_PIN, NOT_YOUR_TEAM } from "./audience-copy";
+import { NOT_YOUR_PIN, NOT_YOUR_TEAM, PERSON_GONE } from "./audience-copy";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getLeadTeams, isTeamLead } from "@/lib/users";
 import {
@@ -281,5 +288,62 @@ describe("pinning an announcement", () => {
       actorId: "user-1",
       pinned: false,
     });
+  });
+});
+
+// #313: "Drivers this year" and specific people, captains only.
+describe("drivers and chosen people (#313)", () => {
+  const people = { scope: "individual", userIds: ["jess", "sipho"] };
+
+  it("lets a captain save a draft to the drivers or to chosen people", async () => {
+    signIn("captain");
+    expect(
+      (await saveDraftAction({ ...DRAFT, audience: { scope: "drivers" } })).ok,
+    ).toBe(true);
+    expect(createAnnouncementDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ audience: { scope: "drivers" } }),
+    );
+    expect((await saveDraftAction({ ...DRAFT, audience: people })).ok).toBe(
+      true,
+    );
+    expect(createAnnouncementDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ audience: people }),
+    );
+  });
+
+  it("refuses a team lead both, and saves nothing", async () => {
+    signIn("member", ["kitchen"]);
+    for (const audience of [{ scope: "drivers" }, people]) {
+      expect(await saveDraftAction({ ...DRAFT, audience })).toEqual({
+        ok: false,
+        error: NOT_YOUR_TEAM,
+      });
+      expect(await previewPublishAction(audience)).toEqual({
+        ok: false,
+        error: NOT_YOUR_TEAM,
+      });
+    }
+    expect(createAnnouncementDraft).not.toHaveBeenCalled();
+    expect(countAnnouncementAudience).not.toHaveBeenCalled();
+  });
+
+  it("refuses a person who is not in the camp's list", async () => {
+    signIn("captain");
+    expect(
+      await saveDraftAction({
+        ...DRAFT,
+        audience: { scope: "individual", userIds: ["jess", "stranger"] },
+      }),
+    ).toEqual({ ok: false, error: PERSON_GONE });
+    expect(createAnnouncementDraft).not.toHaveBeenCalled();
+  });
+
+  it("refuses an empty pick", async () => {
+    signIn("captain");
+    const result = await saveDraftAction({
+      ...DRAFT,
+      audience: { scope: "individual", userIds: [] },
+    });
+    expect(result).toEqual({ ok: false, error: "Pick at least one person." });
   });
 });

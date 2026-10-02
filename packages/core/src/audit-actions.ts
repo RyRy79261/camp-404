@@ -86,6 +86,8 @@ export const AUDIT_ACTION_LABELS = {
   "power.fuel_can_removed": "Removed a fuel can",
   "payment.status_changed": "Changed a payment",
   "payment.proof_viewed": "Viewed a proof of payment",
+  "report_screenshot.deleted": "Deleted a bug report's screenshot",
+  "report_screenshot.viewed": "Viewed a bug report's screenshot",
   "payment.refund_declined": "Declined a refund",
   "payment.refund_requested": "Asked for a refund",
   "payment.refunded": "Refunded a payment",
@@ -457,6 +459,11 @@ export function auditDetail(
     case "payment.proof_viewed":
     case "payment.refund_declined":
       return text(metadata, "reference");
+    case "report_screenshot.deleted":
+    case "report_screenshot.viewed": {
+      const issue = count(metadata, "issueNumber");
+      return issue && issue > 0 ? `Issue #${issue}` : null;
+    }
     case "reimbursement.status_changed": {
       const from = text(metadata, "from");
       const to = text(metadata, "to");
@@ -522,6 +529,9 @@ export function auditDetail(
     case "announcement.unpinned": {
       const scope = text(metadata, "scope");
       if (scope === "everyone") return "The whole camp";
+      if (scope === "team_leads") return "The team leads";
+      if (scope === "drivers") return "The drivers";
+      if (scope === "individual") return "Chosen people";
       const team = text(metadata, "team");
       return scope === "team" && team ? teamLabel(team) : null;
     }

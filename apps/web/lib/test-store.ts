@@ -60,6 +60,9 @@ import {
   type PinResult,
   TEAM_ANNOUNCEMENT_LIMIT,
   type TeamAnnouncement,
+  inboxSentTo,
+  type AnnouncementPickerData,
+  type InboxSentTo,
 } from "@camp404/db/broadcasts";
 import {
   NOT_A_TEAM_EDITOR,
@@ -467,6 +470,19 @@ interface TestBroadcast {
   createdAt: Date;
 }
 
+interface TestReportScreenshot {
+  id: string;
+  userId: string;
+  contentType: string;
+  bytes: Uint8Array;
+  issueNumber: number | null;
+  issueUrl: string | null;
+  reportTitle: string | null;
+  reportText: string | null;
+  filedAt: Date | null;
+  createdAt: Date;
+}
+
 interface TestDelivery {
   id: string;
   broadcastId: string | null;
@@ -793,6 +809,11 @@ interface TestStoreState {
   liftRequests: TestLiftRequest[];
   /** `broadcasts` of kind `car_message`: the sender, for the inbox's name. */
   carMessages: { id: string; senderId: string }[];
+  /**
+   * `report_screenshots` (#313), with the picture's bytes kept here because
+   * the store has no blob store. Optional: added by `??=` below.
+   */
+  reportScreenshots?: TestReportScreenshot[];
   /** `desktop_layouts`: each member's saved desktop, by user id. */
   desktopLayouts: Map<string, unknown>;
   /** `desktop_layouts.preferences`: the stored value, by user id. */
@@ -1017,6 +1038,8 @@ const recipePlateCounts = S.recipePlateCounts;
 const ingredientCatalogue = S.ingredientCatalogue;
 const recipeLessons = S.recipeLessons;
 const recipeHistory = S.recipeHistory;
+S.reportScreenshots ??= [];
+const reportScreenshots = S.reportScreenshots;
 S.driverProfiles ??= [];
 S.carMembers ??= [];
 const driverProfiles = S.driverProfiles;
@@ -1056,6 +1079,17 @@ function findUserById(userId: string): TestUser | null {
     if (user.id === userId) return user;
   }
   return null;
+}
+
+/** The inbox's "to …" for a delivery's announcement (inboxSentTo's twin). */
+function announcementSentTo(broadcastId: string | null): InboxSentTo | null {
+  const b = broadcasts.find((x) => x.id === broadcastId);
+  if (!b) return null;
+  return inboxSentTo(
+    "announcement",
+    b.audience.scope,
+    b.audience.scope === "individual" ? b.audience.userIds.length : null,
+  );
 }
 
 function nextId(): string {
@@ -2180,6 +2214,22 @@ export const testStore = {
     );
     if (audience.scope === "everyone") return everyone;
     const cycle = currentCycleNumber();
+    // #313: this year's drivers (the read Transport makes), or exactly the
+    // people a captain picked — computeAudience's two captain-only cases.
+    if (audience.scope === "drivers") {
+      const driving = new Set(
+        driverProfiles
+          .filter((d) => d.cycle === cycle && d.intendsToDrive)
+          .map((d) => d.userId),
+      );
+      return everyone.filter(
+        (u) => u.approvalStatus === "approved" && driving.has(u.id),
+      );
+    }
+    if (audience.scope === "individual") {
+      const chosen = new Set(audience.userIds);
+      return everyone.filter((u) => chosen.has(u.id));
+    }
     // This year's leads of any team, or this year's members of one team —
     // the same year-scoped reads @camp404/db's resolveAudience makes.
     const chosen = new Set(
@@ -2200,6 +2250,27 @@ export const testStore = {
     audience: Audience = { scope: "everyone" },
   ): number {
     return testStore.announcementRecipients(senderId, audience).length;
+  },
+  /** Twin of getAnnouncementPickerData in @camp404/db/broadcasts. */
+  getAnnouncementPickerData(senderId: string): AnnouncementPickerData {
+    const cycle = currentCycleNumber();
+    const people = [...usersByAuthId.values()]
+      .filter((u) => u.id !== senderId && u.approvalStatus === "approved")
+      .map((u) => ({
+        id: u.id,
+        name: u.displayName?.trim() || "Member with no name",
+        teams: teamMemberships
+          .filter((m) => m.userId === u.id && m.cycle === cycle)
+          .map((m) => m.team)
+          .sort(),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    const driving = new Set(
+      driverProfiles
+        .filter((d) => d.cycle === cycle && d.intendsToDrive)
+        .map((d) => d.userId),
+    );
+    return { people, drivers: people.filter((p) => driving.has(p.id)) };
   },
 
   // --- Pins --------------------------------------------------------------
@@ -2419,6 +2490,7 @@ export const testStore = {
       createdAt: Date;
       kind: NotificationKind;
       link: string;
+      sentTo: InboxSentTo | null;
     }>;
     nextCursor: string | null;
   } {
@@ -2473,6 +2545,8 @@ export const testStore = {
           createdAt: d.createdAt,
           kind: d.kind,
           link: notificationLink(d.refType, d.refId),
+          // Every store broadcast is an announcement (car messages live apart).
+          sentTo: announcementSentTo(d.broadcastId),
         };
       }),
       nextCursor: hasMore && page.length ? cursorOf(page.at(-1)!) : null,
@@ -6379,6 +6453,7 @@ export const testStore = {
     questionnaireEdits.length = 0;
     broadcasts.length = 0;
     deliveries.length = 0;
+    reportScreenshots.length = 0;
     promotionRequests.length = 0;
     teamMemberships.length = 0;
     requiredActions.length = 0;
@@ -6468,6 +6543,107 @@ export const testStore = {
   /** Account erasure's delete of the member's `inkblot_scores` rows. */
   deleteInkblotRuns(userId: string): void {
     S.inkblotRuns = S.inkblotRuns.filter((run) => run.userId !== userId);
+  },
+
+  // --- Report screenshots (#313; the twin of @camp404/db/report-screenshots) --
+  // The bytes live on the row, standing in for the private blob.
+
+  createReportScreenshot(input: {
+    userId: string;
+    contentType: string;
+    bytes: Uint8Array;
+  }): { id: string } {
+    const id = crypto.randomUUID();
+    reportScreenshots.push({
+      id,
+      ...input,
+      issueNumber: null,
+      issueUrl: null,
+      reportTitle: null,
+      reportText: null,
+      filedAt: null,
+      createdAt: new Date(),
+    });
+    return { id };
+  },
+  isUnfiledScreenshotOf(id: string, userId: string): boolean {
+    return reportScreenshots.some(
+      (r) => r.id === id && r.userId === userId && r.filedAt === null,
+    );
+  },
+  markReportScreenshotFiled(input: {
+    id: string;
+    userId: string;
+    issueNumber: number;
+    issueUrl: string;
+    reportTitle: string;
+    reportText: string;
+  }): boolean {
+    const row = reportScreenshots.find(
+      (r) =>
+        r.id === input.id && r.userId === input.userId && r.filedAt === null,
+    );
+    if (!row) return false;
+    row.issueNumber = input.issueNumber;
+    row.issueUrl = input.issueUrl;
+    row.reportTitle = input.reportTitle;
+    row.reportText = input.reportText;
+    row.filedAt = new Date();
+    return true;
+  },
+  listReportScreenshots(): Array<{
+    id: string;
+    userId: string;
+    fromName: string | null;
+    issueNumber: number | null;
+    issueUrl: string | null;
+    reportTitle: string | null;
+    reportText: string | null;
+    filedAt: Date;
+  }> {
+    return reportScreenshots
+      .filter((r): r is TestReportScreenshot & { filedAt: Date } => !!r.filedAt)
+      .sort((a, b) => b.filedAt.getTime() - a.filedAt.getTime())
+      .map((r) => ({
+        id: r.id,
+        userId: r.userId,
+        fromName: findUserById(r.userId)?.displayName ?? null,
+        issueNumber: r.issueNumber,
+        issueUrl: r.issueUrl,
+        reportTitle: r.reportTitle,
+        reportText: r.reportText,
+        filedAt: r.filedAt,
+      }));
+  },
+  getReportScreenshot(
+    id: string,
+  ): {
+    userId: string;
+    contentType: string;
+    bytes: Uint8Array;
+    issueNumber: number | null;
+  } | null {
+    const row = reportScreenshots.find((r) => r.id === id && r.filedAt);
+    return row
+      ? {
+          userId: row.userId,
+          contentType: row.contentType,
+          bytes: row.bytes,
+          issueNumber: row.issueNumber,
+        }
+      : null;
+  },
+  deleteReportScreenshot(id: string): boolean {
+    const at = reportScreenshots.findIndex((r) => r.id === id && r.filedAt);
+    if (at === -1) return false;
+    reportScreenshots.splice(at, 1);
+    return true;
+  },
+  deleteReportScreenshotsOf(userId: string): void {
+    for (let i = reportScreenshots.length - 1; i >= 0; i--) {
+      if (reportScreenshots[i]!.userId === userId)
+        reportScreenshots.splice(i, 1);
+    }
   },
 
   // --- Desktop layouts (the twin of @camp404/db/desktop-layouts) ----------

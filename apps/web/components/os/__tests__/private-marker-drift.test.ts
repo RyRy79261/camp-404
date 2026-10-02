@@ -32,6 +32,10 @@ const SIGNS: readonly string[] = [
   "dietary_allergies",
   "dietary_anaphylactic",
   "dietary.allergies",
+  // A bug report's screenshot (#313) can show other members' details: the
+  // captains' list and the report dialog's preview.
+  "ReportScreenshotRow",
+  "screenshotProblem",
 ];
 
 /**
@@ -78,6 +82,8 @@ describe("every console component that renders private data is marked", () => {
         "components/questionnaire/field.tsx",
         "app/(console)/captains/camp-management/member-profile.tsx",
         "app/(console)/captains/camp-management/member-notes.tsx",
+        "app/(console)/captains/report-screenshots/report-screenshots-list.tsx",
+        "components/feedback/report-screenshot-field.tsx",
       ]),
     );
   });

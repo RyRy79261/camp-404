@@ -20,10 +20,23 @@ import {
   type ReportDiagnostics,
 } from "@/lib/github-feedback";
 import { structureWithAi } from "@/lib/feedback-ai";
+import {
+  isUnfiledScreenshotOf,
+  markReportScreenshotFiled,
+} from "@/lib/report-screenshots";
 
 export type FeedbackResult =
-  | { ok: true; number: number; url: string }
+  | {
+      ok: true;
+      number: number;
+      url: string;
+      /** A screenshot went with it, kept privately in Camp 404 (#313). */
+      screenshotKept?: boolean;
+    }
   | { ok: false; error: string };
+
+const SCREENSHOT_LOST =
+  "Your screenshot didn't arrive. Remove it and add it again, or send the report without it.";
 
 const InputSchema = z.object({
   kind: z.enum(["bug", "feature"]),
@@ -60,6 +73,10 @@ const InputSchema = z.object({
         .max(DL.errors),
     })
     .optional(),
+  // A screenshot uploaded to /api/uploads/report-screenshot just before
+  // (#313). Only its id: the picture never comes through here, and never
+  // goes to GitHub.
+  screenshotId: z.string().uuid().optional(),
 });
 
 /** Every piece of text in the diagnostics, for the redaction screen. */
@@ -151,8 +168,15 @@ export async function submitFeedbackAction(
       error: parsed.error.issues[0]?.message ?? "Invalid input.",
     };
   }
-  const { kind, description, dictated, route, useAi, diagnostics } =
-    parsed.data;
+  const {
+    kind,
+    description,
+    dictated,
+    route,
+    useAi,
+    diagnostics,
+    screenshotId,
+  } = parsed.data;
 
   // Sanitize once: reject input that's empty after PII/HTML stripping (e.g.
   // HTML-only) so we never file a blank issue, and use the clean text as the
@@ -169,12 +193,56 @@ export async function submitFeedbackAction(
   const campUser = await findCampUserByAuthId(user.id);
   const reporterRef = campUser?.id || "unlinked";
 
+  // A screenshot must be this member's own, uploaded and not yet filed: a
+  // report cannot claim someone else's picture, or one already filed.
+  if (
+    screenshotId &&
+    (!campUser || !(await isUnfiledScreenshotOf(screenshotId, campUser.id)))
+  ) {
+    return { ok: false, error: SCREENSHOT_LOST };
+  }
+
+  // After the issue exists: stamp it on the picture, so captains see the
+  // picture beside the report. A failed stamp loses nothing the member can
+  // act on (the issue is filed), so it is logged, not shown.
+  async function keepScreenshot(issue: {
+    number: number;
+    url: string;
+    title: string;
+  }): Promise<boolean> {
+    if (!screenshotId || !campUser) return false;
+    try {
+      const stamped = await markReportScreenshotFiled({
+        id: screenshotId,
+        userId: campUser.id,
+        issueNumber: issue.number,
+        issueUrl: issue.url,
+        reportTitle: issue.title,
+        reportText: sanitized,
+      });
+      if (!stamped)
+        console.error("submitFeedbackAction: screenshot not stamped");
+      return stamped;
+    } catch (err) {
+      console.error("submitFeedbackAction: screenshot stamp failed", err);
+      return false;
+    }
+  }
+
   // E2E mode exercises auth + validation but never calls the AI or GitHub.
   if (isE2ETestMode()) {
+    const url = `https://github.com/${DEFAULT_FEEDBACK_REPO}/issues`;
+    const firstLine = sanitized.split("\n")[0]?.trim().slice(0, 120);
+    const screenshotKept = await keepScreenshot({
+      number: 0,
+      url,
+      title: firstLine || (kind === "bug" ? "Bug report" : "Feature request"),
+    });
     return {
       ok: true,
       number: 0,
-      url: `https://github.com/${DEFAULT_FEEDBACK_REPO}/issues`,
+      url,
+      ...(screenshotId ? { screenshotKept } : {}),
     };
   }
 
@@ -209,6 +277,7 @@ export async function submitFeedbackAction(
     flags: screen.flags,
     diagnostics: withhold ? null : diagnostics,
     diagnosticsWithheld: withhold,
+    hasScreenshot: screenshotId !== undefined,
   });
 
   if (!tracker?.ok) {
@@ -253,10 +322,16 @@ export async function submitFeedbackAction(
           error: "Your report was filed, but we couldn't read GitHub's reply.",
         };
       }
+      const screenshotKept = await keepScreenshot({
+        number: parsed.data.number,
+        url: parsed.data.html_url,
+        title: issue.title,
+      });
       return {
         ok: true,
         number: parsed.data.number,
         url: parsed.data.html_url,
+        ...(screenshotId ? { screenshotKept } : {}),
       };
     }
 

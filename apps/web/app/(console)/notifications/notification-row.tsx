@@ -9,6 +9,8 @@ interface NotificationRowProps {
   title: string;
   body: string;
   senderName: InboxItem["senderName"];
+  /** "to the drivers" / "to you only" (#313); null says nothing. */
+  sentTo?: InboxItem["sentTo"];
   /** Unread at the point the inbox was snapshotted (before markRead). */
   isNew: boolean;
   acknowledgedAt: InboxItem["acknowledgedAt"];
@@ -29,6 +31,7 @@ export function NotificationRow({
   title,
   body,
   senderName,
+  sentTo = null,
   isNew,
   acknowledgedAt,
   createdAt,
@@ -45,6 +48,10 @@ export function NotificationRow({
         ? `From ${senderName} · awaiting acknowledgement`
         : `From ${senderName}`
     : null;
+  // Who else it went to, when that says something (#313, mock-up aud-inbox):
+  // a message to the drivers, or to a few chosen people, reads differently
+  // from one to the whole camp.
+  const to = sentToWords(sentTo);
 
   const frame = "flex items-start gap-3 rounded-lg px-3 py-3 text-left";
   const content = (
@@ -90,8 +97,16 @@ export function NotificationRow({
         >
           {plainPreview(body)}
         </p>
-        {attribution ? (
-          <p className="text-xs text-muted-foreground">{attribution}</p>
+        {attribution || to ? (
+          <p className="text-xs text-muted-foreground">
+            {attribution}
+            {to ? (
+              <>
+                {attribution ? " · " : ""}to{" "}
+                <strong className="font-semibold text-foreground">{to}</strong>
+              </>
+            ) : null}
+          </p>
         ) : null}
       </div>
     </>
@@ -114,4 +129,12 @@ export function NotificationRow({
       )}
     </li>
   );
+}
+
+/** "the drivers", "you only", "you and 2 others". */
+export function sentToWords(sentTo: InboxItem["sentTo"] | null): string | null {
+  if (!sentTo) return null;
+  if (sentTo.scope === "drivers") return "the drivers";
+  if (sentTo.others === 0) return "you only";
+  return `you and ${sentTo.others} ${sentTo.others === 1 ? "other" : "others"}`;
 }

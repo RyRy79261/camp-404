@@ -62,11 +62,20 @@ function isOwnedAnnouncementDraft(id: string, senderId: string) {
 
 type Team = (typeof schema.teamEnum.enumValues)[number];
 
-/** Who an announcement goes to. Mirrors AnnouncementAudience in @camp404/types. */
+/**
+ * Who an announcement goes to. Mirrors AnnouncementAudience in @camp404/types.
+ *
+ * `drivers` and `individual` are captains only (#313, owner approved
+ * 2026-10-02; `canSendToAudience` in @camp404/core). The chosen people of an
+ * `individual` announcement are rows in `broadcast_targets`, written with the
+ * draft and read back with it; the broadcast row itself stores only the scope.
+ */
 export type Audience =
   | { scope: "everyone" }
   | { scope: "team"; team: Team }
-  | { scope: "team_leads" };
+  | { scope: "team_leads" }
+  | { scope: "drivers" }
+  | { scope: "individual"; userIds: string[] };
 
 function audienceColumns(audience: Audience) {
   switch (audience.scope) {
@@ -74,17 +83,63 @@ function audienceColumns(audience: Audience) {
       return { scope: "team" as const, team: audience.team };
     case "team_leads":
       return { scope: "team_leads" as const, team: null };
+    case "drivers":
+      return { scope: "drivers" as const, team: null };
+    case "individual":
+      return { scope: "individual" as const, team: null };
     default:
       return { scope: "everyone" as const, team: null };
   }
 }
 
-/** Read an announcement row's audience back. Anything else reads as everyone. */
-function audienceOf(row: { scope: string; team: Team | null }): Audience {
+/** The chosen people of an audience, or none when it is not `individual`. */
+function audienceTargets(audience: Audience | undefined): string[] {
+  return audience?.scope === "individual" ? [...new Set(audience.userIds)] : [];
+}
+
+/**
+ * Read an announcement row's audience back. Anything else reads as everyone.
+ * `targets` are its `broadcast_targets` user ids, for an `individual` row.
+ */
+function audienceOf(
+  row: { scope: string; team: Team | null },
+  targets: readonly string[] = [],
+): Audience {
   if (row.scope === "team" && row.team)
     return { scope: "team", team: row.team };
   if (row.scope === "team_leads") return { scope: "team_leads" };
+  if (row.scope === "drivers") return { scope: "drivers" };
+  if (row.scope === "individual") {
+    return { scope: "individual", userIds: [...targets] };
+  }
   return { scope: "everyone" };
+}
+
+/** An announcement's chosen people, as a JSON array of user ids. */
+const targetIdsJson = sql<string[] | null>`(
+  select json_agg(bt.user_id order by bt.user_id)
+  from broadcast_targets bt
+  where bt.broadcast_id = ${schema.broadcasts.id}
+)`;
+
+/**
+ * Replace a draft's chosen people with `userIds`, inside the caller's
+ * transaction. Every other audience keeps no targets, so a draft moved from
+ * "specific people" to the camp drops them here.
+ */
+async function writeTargets(
+  tx: DbOrTx,
+  broadcastId: string,
+  userIds: readonly string[],
+): Promise<void> {
+  await tx
+    .delete(schema.broadcastTargets)
+    .where(eq(schema.broadcastTargets.broadcastId, broadcastId));
+  if (userIds.length === 0) return;
+  await tx
+    .insert(schema.broadcastTargets)
+    .values(userIds.map((userId) => ({ broadcastId, userId })))
+    .onConflictDoNothing();
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -154,7 +209,11 @@ export async function countAnnouncementAudience(
   audience: Audience = { scope: "everyone" },
 ): Promise<number> {
   const ids = await resolveAudience(
-    { id: "", ...audienceColumns(audience) },
+    {
+      id: "",
+      ...audienceColumns(audience),
+      targetUserIds: audienceTargets(audience),
+    },
     senderId,
   );
   return ids.length;
@@ -172,7 +231,17 @@ export async function countAnnouncementAudience(
  * would still get this year's kitchen announcement.
  */
 export async function resolveAudience(
-  broadcast: { id: string; scope: BroadcastScope; team: string | null },
+  broadcast: {
+    id: string;
+    scope: BroadcastScope;
+    team: string | null;
+    /**
+     * The chosen people of an `individual` audience that has no row yet (the
+     * publish preview counts a draft as composed). Absent, they are read from
+     * `broadcast_targets` by the broadcast's id.
+     */
+    targetUserIds?: readonly string[];
+  },
   senderId: string | null,
   db: DbOrTx = createHttpDb(),
 ): Promise<string[]> {
@@ -204,12 +273,14 @@ export async function resolveAudience(
             eq(schema.driverProfiles.cycle, cycle),
           ),
         ),
-      broadcast.scope === "individual"
-        ? db
-            .select({ userId: schema.broadcastTargets.userId })
-            .from(schema.broadcastTargets)
-            .where(eq(schema.broadcastTargets.broadcastId, broadcast.id))
-        : Promise.resolve([] as { userId: string }[]),
+      broadcast.scope === "individual" && broadcast.targetUserIds
+        ? Promise.resolve(broadcast.targetUserIds.map((userId) => ({ userId })))
+        : broadcast.scope === "individual"
+          ? db
+              .select({ userId: schema.broadcastTargets.userId })
+              .from(schema.broadcastTargets)
+              .where(eq(schema.broadcastTargets.broadcastId, broadcast.id))
+          : Promise.resolve([] as { userId: string }[]),
       broadcast.scope === "car" && senderId
         ? carRidersOf(db, senderId, cycle)
         : Promise.resolve([] as { userId: string }[]),
@@ -256,6 +327,80 @@ function carRidersOf(
         eq(schema.carMembers.cycle, cycle),
       ),
     );
+}
+
+/** A member a captain may pick for a "specific people" announcement. */
+export interface AnnouncementPerson {
+  id: string;
+  name: string;
+  /** The teams they are on this year, by key, for telling two Jesses apart. */
+  teams: string[];
+}
+
+/** What the captain's "Who it's for" needs: who can be picked, who drives. */
+export interface AnnouncementPickerData {
+  /** Every approved camp member but the sender, by name. */
+  people: AnnouncementPerson[];
+  /**
+   * Who "Drivers this year" reaches right now: approved members driving this
+   * year (`driver_profiles.intends_to_drive`, the read Transport makes), the
+   * sender left out as the fan-out leaves them out.
+   */
+  drivers: AnnouncementPerson[];
+}
+
+/**
+ * The people a captain may name, and the drivers a "Drivers this year"
+ * announcement would reach. Never the sender, never an erased or system
+ * account, never someone not yet approved. Captain-only data: gate the caller.
+ */
+export async function getAnnouncementPickerData(
+  senderId: string,
+): Promise<AnnouncementPickerData> {
+  const db = createHttpDb();
+  const cycle = await currentCycleNumber(db);
+  const [members, memberships, driving] = await Promise.all([
+    db
+      .select({ id: schema.users.id, name: schema.users.displayName })
+      .from(schema.users)
+      .where(
+        and(
+          eq(schema.users.isSystem, false),
+          eq(schema.users.sanitised, false),
+          eq(schema.users.approvalStatus, "approved"),
+          ne(schema.users.id, senderId),
+        ),
+      ),
+    db
+      .select({
+        userId: schema.teamMemberships.userId,
+        team: schema.teamMemberships.team,
+      })
+      .from(schema.teamMemberships)
+      .where(eq(schema.teamMemberships.cycle, cycle)),
+    db
+      .select({ userId: schema.driverProfiles.userId })
+      .from(schema.driverProfiles)
+      .where(
+        and(
+          eq(schema.driverProfiles.intendsToDrive, true),
+          eq(schema.driverProfiles.cycle, cycle),
+        ),
+      ),
+  ]);
+  const teamsOf = new Map<string, string[]>();
+  for (const m of memberships) {
+    teamsOf.set(m.userId, [...(teamsOf.get(m.userId) ?? []), m.team]);
+  }
+  const people = members
+    .map((m) => ({
+      id: m.id,
+      name: m.name?.trim() || "Member with no name",
+      teams: (teamsOf.get(m.id) ?? []).sort(),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  const drivers = new Set(driving.map((d) => d.userId));
+  return { people, drivers: people.filter((p) => drivers.has(p.id)) };
 }
 
 export interface AnnouncementSummary {
@@ -325,6 +470,7 @@ export async function listAnnouncements(
         where nd.broadcast_id = ${schema.broadcasts.id}
           and nd.read_at is not null
       )`,
+      targetIds: targetIdsJson,
     })
     .from(schema.broadcasts)
     .leftJoin(schema.users, eq(schema.users.id, schema.broadcasts.senderId))
@@ -338,9 +484,9 @@ export async function listAnnouncements(
     )
     .orderBy(desc(schema.broadcasts.createdAt));
 
-  return rows.map(({ scope, team, ...r }) => ({
+  return rows.map(({ scope, team, targetIds, ...r }) => ({
     ...r,
-    audience: audienceOf({ scope, team }),
+    audience: audienceOf({ scope, team }, targetIds ?? []),
     recipientCount: r.recipientCount ?? 0,
     acknowledgedCount: r.acknowledgedCount ?? 0,
     readCount: r.readCount ?? 0,
@@ -381,20 +527,25 @@ function pinIntentColumns(pinned: boolean | undefined) {
 export async function createAnnouncementDraft(
   input: DraftInput,
 ): Promise<{ id: string }> {
-  const db = createHttpDb();
-  const [row] = await db
-    .insert(schema.broadcasts)
-    .values({
-      senderId: input.senderId,
-      kind: "announcement",
-      ...audienceColumns(input.audience ?? { scope: "everyone" }),
-      title: input.title,
-      body: input.body,
-      presentation: input.presentation,
-      ...pinIntentColumns(input.pinned),
-    })
-    .returning({ id: schema.broadcasts.id });
-  return { id: row!.id };
+  // The row and its chosen people commit together, or not at all: a draft for
+  // "specific people" with no people would reach nobody.
+  return withTransaction(async (tx) => {
+    const [row] = await tx
+      .insert(schema.broadcasts)
+      .values({
+        senderId: input.senderId,
+        kind: "announcement",
+        ...audienceColumns(input.audience ?? { scope: "everyone" }),
+        title: input.title,
+        body: input.body,
+        presentation: input.presentation,
+        ...pinIntentColumns(input.pinned),
+      })
+      .returning({ id: schema.broadcasts.id });
+    const targets = audienceTargets(input.audience);
+    if (targets.length > 0) await writeTargets(tx, row!.id, targets);
+    return { id: row!.id };
+  });
 }
 
 /**
@@ -410,19 +561,24 @@ export async function updateAnnouncementDraft(input: {
   audience?: Audience;
   pinned?: boolean;
 }): Promise<boolean> {
-  const db = createHttpDb();
-  const rows = await db
-    .update(schema.broadcasts)
-    .set({
-      title: input.title,
-      body: input.body,
-      presentation: input.presentation,
-      ...audienceColumns(input.audience ?? { scope: "everyone" }),
-      ...pinIntentColumns(input.pinned),
-    })
-    .where(isOwnedAnnouncementDraft(input.id, input.senderId))
-    .returning({ id: schema.broadcasts.id });
-  return rows.length > 0;
+  return withTransaction(async (tx) => {
+    const rows = await tx
+      .update(schema.broadcasts)
+      .set({
+        title: input.title,
+        body: input.body,
+        presentation: input.presentation,
+        ...audienceColumns(input.audience ?? { scope: "everyone" }),
+        ...pinIntentColumns(input.pinned),
+      })
+      .where(isOwnedAnnouncementDraft(input.id, input.senderId))
+      .returning({ id: schema.broadcasts.id });
+    if (rows.length === 0) return false;
+    // Only a draft this sender owns reaches here, so its people are theirs to
+    // replace; they change with the audience in the same commit.
+    await writeTargets(tx, input.id, audienceTargets(input.audience));
+    return true;
+  });
 }
 
 /** Delete a draft. Refuses (returns false) once published or if not the author. */
@@ -752,7 +908,12 @@ export async function lockSenderReach(
   return led.map((r) => r.team);
 }
 
-/** A lead's claim narrows the WHERE to the teams they lead; a captain's does not. */
+/**
+ * A lead's claim narrows the WHERE to the teams they lead; a captain's does
+ * not. So a `drivers` or `individual` announcement (#313, captains only) is
+ * claimable by a captain alone: the reach read inside the transaction is what
+ * refuses a lead, or a captain demoted a moment ago, whatever the screen said.
+ */
 function reachClaim(reach: readonly Team[] | undefined) {
   if (!reach) return undefined;
   return and(
@@ -1129,6 +1290,31 @@ export interface InboxItem {
   kind: NotificationKind;
   /** Where tapping it goes (notificationLink; the inbox when it points nowhere). */
   link: string;
+  /**
+   * Who else an announcement went to, when that is worth saying (#313): "to
+   * the drivers", or "to you only" / "to you and 2 others" for chosen people.
+   * Null for every other audience and every other kind of notice.
+   */
+  sentTo?: InboxSentTo | null;
+}
+
+/** See InboxItem.sentTo. */
+export type InboxSentTo =
+  | { scope: "drivers" }
+  | { scope: "individual"; others: number };
+
+/** The inbox's "to …" for one row, from its broadcast's scope and people. */
+export function inboxSentTo(
+  kind: string | null,
+  scope: string | null,
+  targetCount: number | null,
+): InboxSentTo | null {
+  if (kind !== "announcement") return null;
+  if (scope === "drivers") return { scope: "drivers" };
+  if (scope === "individual") {
+    return { scope: "individual", others: Math.max(0, (targetCount ?? 1) - 1) };
+  }
+  return null;
 }
 
 /** How many notifications the inbox shows at a time. */
@@ -1203,6 +1389,12 @@ export async function listInbox(
       kind: schema.notificationDeliveries.kind,
       refType: schema.notificationDeliveries.refType,
       refId: schema.notificationDeliveries.refId,
+      broadcastKind: schema.broadcasts.kind,
+      broadcastScope: schema.broadcasts.scope,
+      targetCount: sql<number | null>`(
+        select count(*)::int from broadcast_targets bt
+        where bt.broadcast_id = ${schema.notificationDeliveries.broadcastId}
+      )`,
       cursorAt: sql<string>`to_char(${schema.notificationDeliveries.createdAt}, 'YYYY-MM-DD"T"HH24:MI:SS.US')`,
     })
     .from(schema.notificationDeliveries)
@@ -1228,10 +1420,21 @@ export async function listInbox(
   const page = rows.slice(0, limit);
   const last = page.at(-1);
   return {
-    items: page.map(({ refType, refId, cursorAt: _cursorAt, ...row }) => ({
-      ...row,
-      link: notificationLink(refType, refId),
-    })),
+    items: page.map(
+      ({
+        refType,
+        refId,
+        cursorAt: _cursorAt,
+        broadcastKind,
+        broadcastScope,
+        targetCount,
+        ...row
+      }) => ({
+        ...row,
+        link: notificationLink(refType, refId),
+        sentTo: inboxSentTo(broadcastKind, broadcastScope, targetCount),
+      }),
+    ),
     nextCursor:
       rows.length > limit && last ? `${last.cursorAt}~${last.id}` : null,
   };
