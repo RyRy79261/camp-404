@@ -1,3 +1,4 @@
+import { PROGRAMME_DAY_START } from "./lounge";
 import { shiftTimeText } from "./shifts";
 
 // The daily site sheet (#249; the owner's layout, 2026-10-02: three columns,
@@ -61,8 +62,8 @@ export interface SheetTeamSection {
  * settings lists them); a team the order does not name (one added later, or
  * archived) comes after, by its key. Only teams with a needed task that day
  * appear, and the teams in `include` (the Kitchen on a day with a menu).
- * Within a team, by start time; two at the same time keep the roster's
- * order. `nameOf` gives each member's name as the sheet prints it.
+ * Within a team, by start time from 06:00 (a midnight watch comes last);
+ * two at the same time keep the roster's order. `nameOf` gives each member's name as the sheet prints it.
  */
 export function groupSlotsByTeam(input: {
   day: string;
@@ -94,7 +95,12 @@ export function groupSlotsByTeam(input: {
         names,
         blanks: Math.max(0, type.places - names.length),
       },
-      start: type.startMinute,
+      // The camp's day runs from 06:00 (as the lounge programme's): a night
+      // watch from midnight is the end of the day, not its start.
+      start:
+        type.startMinute < PROGRAMME_DAY_START
+          ? type.startMinute + 24 * 60
+          : type.startMinute,
       order: input.types.indexOf(type) * 10_000 + order,
     });
     byTeam.set(type.team, list);

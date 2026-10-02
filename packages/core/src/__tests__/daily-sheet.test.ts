@@ -140,6 +140,27 @@ describe("groupSlotsByTeam", () => {
     ]);
   });
 
+  it("runs the day from 06:00: a midnight watch is the day's last task", () => {
+    const watches = [
+      type("w0", "power_and_lighting", "Night watch", 0, 3),
+      type("w6", "power_and_lighting", "Morning watch", 6 * 60, 3),
+      type("w18", "power_and_lighting", "Evening watch", 18 * 60, 3),
+    ];
+    const [power] = groupSlotsByTeam({
+      day: DAY,
+      types: watches,
+      slots: [slot("a", "w0"), slot("b", "w6"), slot("c", "w18")],
+      signups: [],
+      teams: TEAMS,
+      nameOf,
+    });
+    expect(power!.tasks.map((t) => t.timeText)).toEqual([
+      "06:00–07:00",
+      "18:00–19:00",
+      "00:00–01:00",
+    ]);
+  });
+
   it("includes a team asked for even with no task (the Kitchen on a menu day)", () => {
     const sections = groupSlotsByTeam({
       day: DAY,

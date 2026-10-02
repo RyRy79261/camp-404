@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/captain-gate", () => ({ captainPageGate: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ auditReadsAfterResponse: vi.fn() }));
-vi.mock("@/lib/test-mode", () => ({ usesTestStore: () => false }));
+vi.mock("@/lib/test-mode", () => ({ usesTestStore: vi.fn(() => false) }));
 vi.mock("@/lib/test-store-shifts", () => ({ shiftsTestStore: {} }));
 vi.mock("@/lib/test-store-daily-sheet", () => ({ dailySheetTestStore: {} }));
 vi.mock("@/lib/camp-config", () => ({ getCampSettings: vi.fn() }));

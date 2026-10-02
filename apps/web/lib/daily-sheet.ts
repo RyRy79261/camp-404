@@ -40,7 +40,7 @@ import { shiftsTestStore } from "./test-store-shifts";
 const KITCHEN = "kitchen";
 
 export interface DailySheetEvent {
-  /** "14:00", or "All day". */
+  /** "14:00", camp time. */
   time: string;
   title: string;
   place: string | null;
@@ -153,7 +153,11 @@ export async function getDailySheets(
       include: meals.length > 0 ? [KITCHEN] : [],
     });
 
-    const loungeDay = lounge.find((d) => d.date === day)?.day;
+    // The programme's day with this date; with no Burn dates on the year,
+    // its Day N is the Burn's day N.
+    const loungeDay =
+      lounge.find((d) => d.date === day)?.day ??
+      (lounge.every((d) => d.date === null) ? number : undefined);
     const events: (DailySheetEvent & { sort: number })[] = [
       ...(loungeDay === undefined ? [] : dayItems(loungeView, loungeDay)).map(
         (item) => ({
@@ -168,11 +172,9 @@ export async function getDailySheets(
         }),
       ),
       ...calendarEvents.flatMap((e) => {
-        if (e.allDay) {
-          return e.start === day
-            ? [{ time: "All day", title: e.title, place: e.location, sort: -1 }]
-            : [];
-        }
+        // Timed events only: an all-day entry is a phase or a deadline
+        // ("Burn", "DDT deadline"), not something happening at camp.
+        if (e.allDay) return [];
         const at = new Date(e.start);
         if (Number.isNaN(at.getTime()) || campDayKey(at) !== day) return [];
         const time = CLOCK.format(at);

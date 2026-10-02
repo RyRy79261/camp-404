@@ -154,7 +154,7 @@ export function PrintPage({
           <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-neutral-600">
             Camp 404 · {area}
           </p>
-          <h2 className="mt-px mb-0.5 text-[21px] font-bold leading-tight">
+          <h2 className="mt-px mb-0.5 text-[21px] font-bold normal-case leading-tight tracking-normal">
             {title}
           </h2>
           {subtitle && (

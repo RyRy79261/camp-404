@@ -290,7 +290,7 @@ export function GeneralPage({
         <tbody>
           {Array.from({ length: GENERAL_ROWS }, (_, i) => (
             <tr key={i} data-testid="general-row">
-              <td className="h-[30px] border-t border-[#ccc]" />
+              <td className="h-[27px] border-t border-[#ccc]" />
               <td className="border-t border-[#ccc]" />
               <td className="border-t border-[#ccc]" />
               <td className="border-t border-[#ccc]" />

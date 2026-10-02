@@ -11,6 +11,7 @@ import {
   dailySheetHref,
 } from "@/lib/daily-sheet-copy";
 import { SHIFTS_PATH } from "@/lib/shifts-copy";
+import { usesTestStore } from "@/lib/test-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,8 @@ export default async function DailySheetPrintPage({
   const every = asked === EVERY_DAY;
   const current = every ? null : (data.sheets[0]?.day ?? null);
 
-  if (data.allergyReaders.length > 0) {
+  // The test store keeps no audit log (E2E has no database to write to).
+  if (data.allergyReaders.length > 0 && !usesTestStore()) {
     auditReadsAfterResponse(
       data.allergyReaders.map((memberId) => ({
         actorId: gate.campUser.id,
