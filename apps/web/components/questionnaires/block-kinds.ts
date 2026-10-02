@@ -40,6 +40,7 @@ import {
   type PageBlock,
   type Questionnaire,
   type QuestionnairePage,
+  type QuestionsPage,
 } from "@camp404/types";
 import { TRUE_FALSE_SCALE } from "@camp404/core";
 
@@ -779,8 +780,62 @@ function withoutUndefined(value: Record<string, unknown>): PageBlock {
   ) as PageBlock;
 }
 
+/**
+ * The page break: split section `pageIndex` after block `afterBlockId`. The
+ * blocks after the break move into a new section (id `newId`) placed right
+ * after it, so a break lands where the author put it rather than at the end.
+ *
+ * The first part keeps its id (so every jump to it still lands), title,
+ * description and settings. The new part continues it: it takes the
+ * section's "after this section, go to", so the route through the
+ * questionnaire is unchanged, and, when questions move into it, the settings
+ * those questions had (shown only when, leads only, required to continue,
+ * shuffle, content only), titled "<title> (continued)".
+ *
+ * A break after the last block, with no block chosen (`afterBlockId` null or
+ * not in the section), in an empty section, or on an interstitial page adds
+ * an empty section right after it, which still takes the section's "go to".
+ */
+export function splitSection(
+  definition: Questionnaire,
+  pageIndex: number,
+  afterBlockId: string | null,
+  newId: string,
+): { definition: Questionnaire; pageIndex: number } {
+  const page = definition.pages[pageIndex];
+  if (!page) return { definition, pageIndex };
+  const blocks = pageBlocks(page);
+  const at = blocks.findIndex((b) => b.id === afterBlockId);
+  const cut = at < 0 ? blocks.length : at + 1;
+  const moved = blocks.slice(cut);
+  const { next, ...rest } = page;
+  const insertAt = pageIndex + 1;
+
+  let first: QuestionnairePage = rest;
+  const fresh = createSection(newId, insertAt);
+  let second: QuestionnairePage = fresh;
+  if (rest.kind === "questions" && moved.length > 0) {
+    const { subtitle: _subtitle, ...settings } = rest;
+    first = { ...rest, questions: blocks.slice(0, cut) };
+    second = {
+      ...settings,
+      id: newId,
+      title: rest.title.trim()
+        ? `${rest.title.trim()} (continued)`
+        : fresh.title,
+      pageType: rest.pageType ?? "question",
+      questions: moved,
+    };
+  }
+  if (next !== undefined) second = { ...second, next };
+
+  const pages = [...definition.pages];
+  pages.splice(pageIndex, 1, first, second);
+  return { definition: { ...definition, pages }, pageIndex: insertAt };
+}
+
 /** A fresh empty section (page). */
-export function createSection(id: string, index: number): QuestionnairePage {
+export function createSection(id: string, index: number): QuestionsPage {
   return {
     id,
     kind: "questions",

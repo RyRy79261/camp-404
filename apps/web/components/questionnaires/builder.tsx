@@ -82,6 +82,7 @@ import {
   createSection,
   duplicateBlock,
   idPrefixFor,
+  splitSection,
   takenIds,
   type PaletteKind,
 } from "./block-kinds";
@@ -193,6 +194,9 @@ export function QuestionnaireBuilderV2({
   const [saveState, setSaveState] = React.useState<SaveState>("idle");
   const [busy, setBusy] = React.useState<"save" | "publish" | null>(null);
   const [activeSection, setActiveSection] = React.useState(0);
+  // The block last clicked or focused in the active section: a page break
+  // goes after it. Null when the author last worked on the section itself.
+  const [activeBlock, setActiveBlock] = React.useState<string | null>(null);
   const [focusTarget, setFocusTarget] = React.useState<string | null>(null);
 
   // Which rules the panel shows: none until the author tries a save or a
@@ -326,6 +330,19 @@ export function QuestionnaireBuilderV2({
     update((prev) => ({ ...prev, pages: [...prev.pages, section] }));
     setActiveSection(draft.pages.length);
     setFocusTarget(sectionAnchor(section));
+  }
+
+  // "Section / page break": split the active section after the block being
+  // worked on, so the blocks below it start a new section right after it.
+  function pageBreak() {
+    const index = Math.min(activeSection, draft.pages.length - 1);
+    const id = allocateId("section", takenIds(draft));
+    const split = splitSection(draft, index, activeBlock, id);
+    const added = split.definition.pages[split.pageIndex];
+    update(() => split.definition);
+    setActiveSection(split.pageIndex);
+    setActiveBlock(null);
+    if (added) setFocusTarget(sectionAnchor(added));
   }
 
   function moveSection(index: number, delta: number) {
@@ -526,7 +543,7 @@ export function QuestionnaireBuilderV2({
         <PaletteRail
           activeLabel={activePage ? sectionLabel(activePage, activeIndex) : "—"}
           onAdd={(kind) => addBlock(kind)}
-          onAddSection={addSection}
+          onAddSection={pageBreak}
         />
 
         <div className="flex min-w-0 flex-col gap-5">
@@ -575,7 +592,10 @@ export function QuestionnaireBuilderV2({
               issues={issues}
               questionnaireKey={questionnaireKey}
               reducedMotion={reducedMotion}
-              onActivate={() => setActiveSection(pageIndex)}
+              onActivate={(blockId) => {
+                setActiveSection(pageIndex);
+                setActiveBlock(blockId);
+              }}
               onChangePage={(next) => updatePage(pageIndex, next)}
               onChangeBlocks={(blocks) => updateBlocks(pageIndex, blocks)}
               onMoveSection={(delta) => moveSection(pageIndex, delta)}
@@ -772,6 +792,7 @@ function SortableBlock({
   return (
     <div
       ref={setNodeRef}
+      data-block-id={id}
       style={{ transform: CSS.Translate.toString(transform), transition }}
     >
       {children(handle, isDragging)}
@@ -803,7 +824,8 @@ function SectionEditor({
   issues: readonly LocatedIssue[];
   questionnaireKey: string;
   reducedMotion: boolean;
-  onActivate: () => void;
+  /** The section, or a block in it (its id), is being worked on. */
+  onActivate: (blockId: string | null) => void;
   onChangePage: (next: QuestionnairePage) => void;
   onChangeBlocks: (blocks: PageBlock[]) => void;
   onMoveSection: (delta: number) => void;
@@ -850,6 +872,15 @@ function SectionEditor({
     onChangeBlocks(arrayMove(blocks, from, to));
   }
 
+  function activate(event: React.SyntheticEvent<HTMLElement>) {
+    const target = event.target instanceof Element ? event.target : null;
+    // A block's menus open in a portal, outside this section's DOM: that is
+    // still work on the same block, so it does not move the page break.
+    if (!target || !event.currentTarget.contains(target)) return;
+    const block = target.closest<HTMLElement>("[data-block-id]");
+    onActivate(block?.dataset.blockId ?? null);
+  }
+
   const dragged = blocks.find((b) => b.id === draggingId);
   const sectionFields = fieldsBefore(definition, page.id, null);
   const questionsHere = blocks.filter((b) => "prompt" in b).length;
@@ -858,8 +889,8 @@ function SectionEditor({
     <section
       id={sectionAnchor(page)}
       aria-label={`Section ${number}`}
-      onFocusCapture={onActivate}
-      onClick={onActivate}
+      onFocusCapture={activate}
+      onClick={activate}
       className={cn(
         "flex scroll-mt-32 flex-col gap-3 rounded-lg border p-4 transition-colors",
         active ? "border-accent/60 bg-accent/5" : "border-border",
