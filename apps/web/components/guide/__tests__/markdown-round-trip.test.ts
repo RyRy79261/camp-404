@@ -6,9 +6,10 @@ import {
 } from "../markdown-extensions";
 import { linkHref } from "../markdown-editor";
 
-// The Survival Guide is stored as Markdown and edited in a WYSIWYG editor
-// (owner, 2026-10-01). Opening a chapter and saving it untouched must give
-// back the Markdown it was opened on, or every save would rewrite chapters
+// Long text (the Survival Guide, meeting notes) is stored as Markdown and
+// edited in a WYSIWYG editor
+// (owner, 2026-10-01). Opening a text and saving it untouched must give
+// back the Markdown it was opened on, or every save would rewrite text
 // nobody changed.
 
 const editors: Editor[] = [];
@@ -26,7 +27,7 @@ function roundTrip(markdown: string): string {
   return editorMarkdown(editor);
 }
 
-describe("the guide editor's Markdown round trip", () => {
+describe("the Markdown editor's round trip", () => {
   it.each([
     [
       "headings, bullet lists and bold",
@@ -38,7 +39,20 @@ describe("the guide editor's Markdown round trip", () => {
     ],
     ["a quote", "> Never pour liquid into the burn barrel."],
     ["a top-level heading", "# Kitchen safety\n\nTurn the gas off."],
-    ["a line break inside a paragraph", "Ice goes in at 07:00\nand again at 17:00."],
+    [
+      "a line break inside a paragraph",
+      "Ice goes in at 07:00\nand again at 17:00.",
+    ],
+    [
+      "a meeting's agenda and notes",
+      "- The menu for the week\n- Who cooks which night\n\n**Dinner is at 19:00** every night. The camp does no lunch.",
+    ],
+    // Older notes were typed into a textarea that said "Markdown works": the
+    // editor offers none of these, but must not drop them on the next save.
+    ["inline code", "Use `gas valve` carefully."],
+    ["strike-through", "~~cancelled~~ moved to Friday"],
+    ["a rule", "Before\n\n---\n\nAfter"],
+    ["a code block", "```\nline one\nline two\n```"],
   ])("keeps %s unchanged", (_what, markdown) => {
     expect(roundTrip(markdown)).toBe(markdown);
   });
