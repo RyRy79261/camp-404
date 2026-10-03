@@ -266,9 +266,18 @@ describe("a shift's duty card", () => {
       title: "A chapter",
       kind: "chapter",
     });
+    // Published, but with no version row at its published number: nothing
+    // members could read, as the roster's own read sees it.
+    const noVersion = await dutyCard(h.db(), { slug: "torn", title: "Torn" });
+    await h
+      .db()
+      .update(schema.documents)
+      .set({ publishedVersion: 2 })
+      .where(eq(schema.documents.id, noVersion.id));
     for (const dutyCardId of [
       draft.id,
       chapter.id,
+      noVersion.id,
       "00000000-0000-4000-8000-000000000000",
       "not-a-uuid",
     ]) {

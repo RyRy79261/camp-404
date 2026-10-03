@@ -719,6 +719,7 @@ async function assertDutyCard(tx: Tx, id: string): Promise<void> {
   const [card] = await tx
     .select({ id: cardDoc.id })
     .from(cardDoc)
+    .innerJoin(cardVersion, liveCardVersion)
     .where(
       and(
         eq(cardDoc.id, id),
@@ -745,6 +746,7 @@ async function earlierYearsCard(
     .select({ id: schema.shiftTypes.dutyCardId })
     .from(schema.shiftTypes)
     .innerJoin(cardDoc, readableCard)
+    .innerJoin(cardVersion, liveCardVersion)
     .where(
       and(
         lt(schema.shiftTypes.cycle, cycle),
