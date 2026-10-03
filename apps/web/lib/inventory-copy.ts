@@ -19,6 +19,7 @@ export const INVENTORY_LOANS_PATH = "/inventory/lent";
 export const INVENTORY_PRINT_NEEDS_PATH = "/print/inventory/needs";
 export const INVENTORY_PRINT_BOOKINGS_PATH = "/print/inventory/bookings";
 export const INVENTORY_PRINT_STRIKE_PATH = "/print/inventory/strike";
+export const INVENTORY_PRINT_LOADING_PATH = "/print/inventory/loading";
 
 export function inventoryItemPath(id: string): string {
   return `${INVENTORY_PATH}/${id}`;

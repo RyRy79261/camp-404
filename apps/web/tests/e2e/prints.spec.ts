@@ -10,6 +10,7 @@ import {
   login,
   redeemInviteAtGate,
   resetTestState,
+  seedTeam,
   setRank,
 } from "./_helpers";
 import { osBar } from "./lib/console-nav";
@@ -45,7 +46,11 @@ async function asCaptain(page: Page, request: APIRequestContext) {
 }
 
 /** The sheet is drawn (present first), then nothing of the desktop is. */
-async function sheetWithoutDesktop(page: Page, heading: string) {
+async function sheetWithoutDesktop(
+  page: Page,
+  heading: string,
+  { landscape = false }: { landscape?: boolean } = {},
+) {
   await expect(
     page.getByRole("heading", { level: 1, name: heading }),
   ).toBeVisible();
@@ -62,18 +67,20 @@ async function sheetWithoutDesktop(page: Page, heading: string) {
       .locator("[data-print-sheet]")
       .evaluate((el) => getComputedStyle(el).textRendering),
   ).toBe("geometricprecision");
-  await staysA4(page);
+  await staysA4(page, landscape ? A4_LONG_PX : A4_PX);
 }
 
 /** A4 is 210 mm: 793.7 CSS pixels. */
 const A4_PX = (210 * 96) / 25.4;
+/** A4 on its side is 297 mm wide. */
+const A4_LONG_PX = (297 * 96) / 25.4;
 
 /**
  * A print is A4 paper, never a phone layout (owner, 2026-10-01): on a 390 px
  * screen the sheet keeps its A4 width, scaled down to fit, and the page
  * never scrolls sideways.
  */
-async function staysA4(page: Page) {
+async function staysA4(page: Page, widthPx = A4_PX) {
   const size = page.viewportSize();
   await page.setViewportSize({ width: 390, height: 844 });
   const sheet = page.locator("[data-print-sheet]");
@@ -81,7 +88,7 @@ async function staysA4(page: Page) {
   // Its own width is A4's, whatever the screen.
   expect(
     await sheet.evaluate((el) => parseFloat(getComputedStyle(el).width)),
-  ).toBeCloseTo(A4_PX, 0);
+  ).toBeCloseTo(widthPx, 0);
   // Scaled to fit: on screen it is no wider than the phone.
   await expect
     .poll(async () => (await sheet.boundingBox())?.width ?? Infinity)
@@ -227,5 +234,150 @@ test.describe("prints (test-mode)", () => {
       `/print/pdf?from=${encodeURIComponent(`/print/kitchen/recipes/${id}?plates=45`)}&name=x`,
     );
     expect(refused.status()).toBe(403);
+  });
+
+  test("a Kitchen lead downloads the shopping list PDF by shop with prices; a member's print has no price", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(150_000);
+    // A Kitchen lead: Overnight oats on Day 2's breakfast for 60, and a
+    // price on the peanut butter.
+    await approvedMember(page, request, "pr-klead", "Kay Lead");
+    await seedTeam(request, "pr-klead", "kitchen", true);
+    await page.goto("/kitchen/meal-plan");
+    await page.getByLabel("Days on site").fill("2");
+    await page.getByLabel("Day 1 date").fill("2027-04-22");
+    await page.getByLabel("Day 2 breakfast").fill("60");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Meal plan saved")).toBeVisible();
+    const seeded = await request.post("/api/test/seed-kitchen-book", {
+      data: {
+        authUserId: "pr-klead",
+        recipes: [
+          {
+            title: "Overnight oats",
+            plates: [60],
+            ingredients: [
+              {
+                name: "Rolled oats",
+                category: "grain",
+                quantity: 3,
+                unit: "kg",
+              },
+              {
+                name: "Peanut butter",
+                category: "other",
+                quantity: 1,
+                unit: "kg",
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(seeded.ok()).toBe(true);
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Add a recipe to Day 2, breakfast" })
+      .click();
+    const picker = page.getByRole("dialog", {
+      name: "Add recipes to breakfast",
+    });
+    await picker
+      .getByRole("button", { name: "Add Overnight oats to Day 2, breakfast" })
+      .click();
+    await picker.getByRole("button", { name: "Done" }).click();
+
+    await page.goto("/kitchen/shopping");
+    await page
+      .getByRole("button", {
+        name: "Shop, price and where it comes from: Peanut butter",
+      })
+      .click();
+    await page.getByLabel("Shop: Peanut butter").fill("Vlei Farm Stall");
+    await page.getByLabel("Price in rands: Peanut butter").fill("96,00");
+    await page.getByLabel("Price in rands: Peanut butter").blur();
+    await expect(
+      page.getByText(/Vlei Farm Stall · R\s96,00 estimate/),
+    ).toBeVisible();
+
+    // The list's own heading links to the print.
+    await expect(
+      page.getByRole("link", { name: "Print list" }),
+    ).toHaveAttribute("href", "/print/kitchen/shopping");
+    await page.goto("/print/kitchen/shopping");
+    await sheetWithoutDesktop(page, "Shopping list");
+    const shop = page.getByRole("table", { name: "Vlei Farm Stall" });
+    await expect(shop).toContainText("Peanut butter");
+    await expect(shop).toContainText(/Shop total\s*R\s96,00/);
+    await expect(
+      page.getByRole("table", { name: "No shop yet" }),
+    ).toContainText("Rolled oats");
+    await expect(page.getByTestId("all-shops-total")).toContainText(
+      /To spend, all shops \(estimate\)\s*R\s96,00/,
+    );
+    const pdf = await downloadPdf(page);
+    expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    expect(pdf.length).toBeGreaterThan(1_000);
+
+    // A member prints the same list by shop area, with no shop and no price.
+    await approvedMember(page, request, "pr-kmember", "Mem Ber");
+    await page.goto("/print/kitchen/shopping");
+    await sheetWithoutDesktop(page, "Shopping list");
+    await expect(page.getByRole("table", { name: "Other" })).toContainText(
+      "Peanut butter",
+    );
+    await expect(page.getByText("Vlei Farm Stall")).toHaveCount(0);
+    await expect(page.getByText(/R\s96,00/)).toHaveCount(0);
+    await expect(page.getByText("Shop total")).toHaveCount(0);
+    await expect(page.getByTestId("all-shops-total")).toHaveCount(0);
+  });
+
+  test("any member prints the burn timeline and the loading checklist; the prep plan is the Kitchen's", async ({
+    page,
+    request,
+  }) => {
+    await asCaptain(page, request);
+    const seeded = await request.post("/api/test/seed-prints", {
+      data: { authUserId: "pr-cap" },
+    });
+    expect(seeded.ok(), await seeded.text()).toBe(true);
+
+    await approvedMember(page, request, "pr-timeline", "Tim Line");
+    await page.goto("/logistics");
+    await expect(
+      page.getByRole("link", { name: "Print the timeline" }),
+    ).toHaveAttribute("href", "/print/logistics/timeline");
+    await page.goto("/print/logistics/timeline");
+    await sheetWithoutDesktop(page, "Burn timeline", { landscape: true });
+    const strip = page.getByTestId("timeline-strip");
+    // Pack: 7 going, +3 maybe; burn days: the 10 accepted members.
+    await expect(strip.getByTestId("timeline-people").first()).toHaveText("7");
+    await expect(strip).toContainText("+3");
+    await expect(strip.getByTestId("timeline-people").nth(5)).toHaveText("10");
+    // Counts only: no member's name anywhere on the sheet.
+    await expect(page.locator("[data-print-sheet]")).not.toContainText("Pat");
+
+    await page.goto("/inventory");
+    await expect(
+      page.getByRole("link", { name: "Print loading checklist" }),
+    ).toHaveAttribute("href", "/print/inventory/loading");
+    await page.goto("/print/inventory/loading");
+    await sheetWithoutDesktop(page, "Loading checklist");
+    await expect(page.getByTestId("loading-vehicles")).toContainText(
+      "Big Red, behind Pat's car",
+    );
+    await expect(
+      page.getByRole("columnheader", { name: /^Cooler boxes and fridges/ }),
+    ).toBeVisible();
+    await expect(page.getByTestId("loading-item")).toHaveCount(20);
+
+    // The prep plan: refused to a member, outside the sheet.
+    await page.goto("/print/kitchen/prep");
+    await expect(page.getByTestId("prep-refusal")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Download PDF" }),
+    ).toHaveCount(0);
   });
 });

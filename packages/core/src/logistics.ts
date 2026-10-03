@@ -2,6 +2,7 @@ import {
   AFRIKABURN_DATE_KINDS,
   ATTENDANCE_ANSWERS,
   ATTENDANCE_PHASES,
+  LOGISTICS_PHASES,
   LOGISTICS_PHASE_LABELS,
   ViewerRank,
   type AfrikaburnDateKind,
@@ -385,4 +386,115 @@ export function afrikaburnEventTitle(row: {
 }): string {
   const name = (row.kind && afrikaburnDate(row.kind)?.name) || row.title;
   return /^afrikaburn\b/i.test(name) ? name : `${EVENT_PREFIX}${name}`;
+}
+
+// --- Burn timeline (#249) ----------------------------------------------------
+
+/** A phase with its days, as the timeline reads it. */
+export interface TimelinePhase {
+  phase: LogisticsPhase;
+  /** YYYY-MM-DD, or null when not set yet. */
+  startDate: string | null;
+  endDate: string | null;
+}
+
+/** One column of the day strip: a day, or a run of days with nothing on. */
+export type TimelineColumn =
+  | {
+      kind: "day";
+      /** YYYY-MM-DD */
+      date: string;
+      phase: LogisticsPhase;
+      /** The phase's first day: its band's label goes here. */
+      first: boolean;
+      /** The whole camp is asked to help (an attendance phase). */
+      allHands: boolean;
+      /** Going: the phase's going count; on burn days, the accepted members. Null: not asked (travel). */
+      people: number | null;
+      /** Maybe, on the phases asked; null elsewhere. */
+      maybe: number | null;
+    }
+  | {
+      kind: "gap";
+      /** The first and last day with nothing on, YYYY-MM-DD. */
+      from: string;
+      to: string;
+    };
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+function nextDay(iso: string): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The burn timeline's day strip (Option A of design/print-burn-timeline.html,
+ * owner 2026-10-02): every day from the first phase's first day to the last
+ * phase's last day, each under its phase; a run of days between phases with
+ * nothing on is one shaded column. Where two phases share a day, the later
+ * phase in the camp's order has it. Counts only, never names: the attendance
+ * phases (pack, build, strike, unpack) show who said going and maybe, and
+ * are all hands; burn days show the members the captains accepted; travel
+ * has no answers, so no count.
+ */
+export function burnTimeline(input: {
+  phases: readonly TimelinePhase[];
+  /** Going and maybe per attendance phase. */
+  answers: Partial<Record<AttendancePhase, { going: number; maybe: number }>>;
+  /** Members the captains accepted this year. */
+  accepted: number;
+}): TimelineColumn[] {
+  const order = (p: LogisticsPhase) => LOGISTICS_PHASES.indexOf(p);
+  const dated = input.phases.filter(
+    (p): p is TimelinePhase & { startDate: string; endDate: string } =>
+      p.startDate !== null &&
+      p.endDate !== null &&
+      ISO.test(p.startDate) &&
+      ISO.test(p.endDate) &&
+      p.startDate <= p.endDate,
+  );
+  if (dated.length === 0) return [];
+  const start = dated.map((p) => p.startDate).sort()[0]!;
+  const end = dated
+    .map((p) => p.endDate)
+    .sort()
+    .at(-1)!;
+
+  const columns: TimelineColumn[] = [];
+  let previous: LogisticsPhase | null = null;
+  // A guard far past any real year: phases run 31 days at most each.
+  for (let day = start, n = 0; day <= end && n < 400; day = nextDay(day), n++) {
+    const on = dated
+      .filter((p) => p.startDate <= day && day <= p.endDate)
+      .sort((a, b) => order(b.phase) - order(a.phase))[0];
+    if (!on) {
+      const last = columns.at(-1);
+      if (last?.kind === "gap") last.to = day;
+      else columns.push({ kind: "gap", from: day, to: day });
+      previous = null;
+      continue;
+    }
+    const phase = on.phase;
+    const asked = (ATTENDANCE_PHASES as readonly string[]).includes(phase);
+    const answers = asked
+      ? (input.answers[phase as AttendancePhase] ?? { going: 0, maybe: 0 })
+      : null;
+    columns.push({
+      kind: "day",
+      date: day,
+      phase,
+      first: previous !== phase,
+      allHands: asked,
+      people: answers
+        ? answers.going
+        : phase === "burn"
+          ? input.accepted
+          : null,
+      maybe: answers ? answers.maybe : null,
+    });
+    previous = phase;
+  }
+  return columns;
 }

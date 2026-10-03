@@ -17,6 +17,7 @@ import {
   askForAttendance,
   attendanceClosed,
   clearLogisticsPhase,
+  countAcceptedMembers,
   listAttendance,
   listLogisticsPhases,
   markLogisticsCalendarSynced,
@@ -611,5 +612,38 @@ describe("logistics attendance", () => {
     expect((await sanitiseAccount(dee.id)).ok).toBe(true);
     const rows = await h.db().select().from(schema.logisticsAttendance);
     expect(rows.map((r) => r.userId)).toEqual([kept.id]);
+  });
+
+  it("counts the members the captains accepted this year, real and approved only (#249)", async () => {
+    await campYear(h.db(), 2027);
+    const statuses: ParticipationStatus[] = [
+      "accepted",
+      "accepted",
+      "applied",
+      "maybe",
+      "waitlisted",
+      "not_attending",
+    ];
+    for (const status of statuses) {
+      await place((await makeUser(h.db())).id, status);
+    }
+    // Another year's acceptance is not this year's.
+    const lastYear = await makeUser(h.db());
+    await h.db().insert(schema.campParticipations).values({
+      userId: lastYear.id,
+      cycle: 2026,
+      status: "accepted",
+      intent: "yes",
+    });
+    // Erased, or not approved: not counted.
+    const erased = await makeUser(h.db());
+    await place(erased.id, "accepted");
+    expect((await sanitiseAccount(erased.id)).ok).toBe(true);
+    const pending = await makeUser(h.db(), { approvalStatus: "pending" });
+    await place(pending.id, "accepted");
+
+    expect(await countAcceptedMembers(2027)).toBe(2);
+    expect(await countAcceptedMembers(2026)).toBe(1);
+    expect(await countAcceptedMembers(2030)).toBe(0);
   });
 });

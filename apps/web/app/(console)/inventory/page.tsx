@@ -10,6 +10,7 @@ import { GearFilters } from "@/components/inventory/gear-filters";
 import { AddItemButton } from "@/components/inventory/item-dialog";
 import { ReviewButtons } from "@/components/inventory/item-actions";
 import { InventoryFrame } from "@/components/inventory/inventory-tabs";
+import { PrintLink } from "@/components/inventory/print-link";
 import {
   CountLine,
   GroupItem,
@@ -32,6 +33,7 @@ import {
   CATEGORY_LABELS,
   CONDITION_LABELS,
   INVENTORY_PATH,
+  INVENTORY_PRINT_LOADING_PATH,
   LOCATION_LABELS,
   countText,
   inventoryItemPath,
@@ -193,15 +195,21 @@ export default async function InventoryPage({
     <InventoryFrame
       current="items"
       actions={
-        canAdd ? (
-          <AddItemButton
-            teams={viewer.editableTeams}
-            members={members.map((m) => ({
-              value: m.id,
-              label: m.displayName,
-            }))}
-          />
-        ) : undefined
+        <>
+          {/* Every item by category, a sheet per Pack day (#249). */}
+          <PrintLink href={INVENTORY_PRINT_LOADING_PATH}>
+            Print loading checklist
+          </PrintLink>
+          {canAdd && (
+            <AddItemButton
+              teams={viewer.editableTeams}
+              members={members.map((m) => ({
+                value: m.id,
+                label: m.displayName,
+              }))}
+            />
+          )}
+        </>
       }
     >
       {reviewable.length > 0 && (

@@ -1,4 +1,9 @@
-import { Team, ViewerRank } from "@camp404/types";
+import {
+  INVENTORY_CATEGORIES,
+  Team,
+  ViewerRank,
+  type InventoryCategory,
+} from "@camp404/types";
 
 // Inventory (#246). Pure: no DB, no session, no next/*.
 //
@@ -149,4 +154,64 @@ export function maintenanceDue(
     item.lastMaintainedAt,
   );
   return next !== null && next.getTime() <= now.getTime();
+}
+
+// --- Loading checklist (#249) ------------------------------------------------
+
+/** What the loading checklist needs of an item. */
+export interface LoadingItem {
+  name: string;
+  category: InventoryCategory;
+  /** Its weight in kg as the camp keeps it, or null when not weighed. */
+  weightKg: number | null;
+}
+
+export interface LoadingGroup<I> {
+  category: InventoryCategory;
+  /** By name. */
+  items: I[];
+}
+
+export interface LoadingChecklist<I> {
+  /** In the inventory's category order (the Gear tab's); empty ones left out. */
+  groups: LoadingGroup<I>[];
+  count: number;
+  /** Every weight the camp knows, added up; 0 when none is weighed. */
+  weightKg: number;
+  /** Whether any item is weighed at all. */
+  weighed: boolean;
+}
+
+/**
+ * The loading checklist's list (the owner, 2026-10-02: "With inventory we
+ * don't really have shelves and things. We have categories of stuff that we
+ * own."): every item the camp owns, grouped by the inventory's categories in
+ * the Gear tab's order, by name inside each, and the weight of what is
+ * weighed. Nothing says whether an item goes this year, so every item is
+ * listed and the sheet says to cross out what stays home.
+ */
+export function loadingChecklist<I extends LoadingItem>(
+  items: readonly I[],
+): LoadingChecklist<I> {
+  const groups = INVENTORY_CATEGORIES.map((category) => ({
+    category,
+    items: items
+      .filter((i) => i.category === category)
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, "en", { sensitivity: "base" }),
+      ),
+  })).filter((g) => g.items.length > 0);
+  const weights = items.flatMap((i) =>
+    i.weightKg !== null && Number.isFinite(i.weightKg) && i.weightKg > 0
+      ? [i.weightKg]
+      : [],
+  );
+  // Weights keep two decimals: add in hundredths so 0.1 + 0.2 stays 0.3.
+  const hundredths = weights.reduce((n, w) => n + Math.round(w * 100), 0);
+  return {
+    groups,
+    count: items.length,
+    weightKg: hundredths / 100,
+    weighed: weights.length > 0,
+  };
 }

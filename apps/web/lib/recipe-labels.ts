@@ -140,6 +140,21 @@ export function formatAmount(
   return `${range} ${plural && !one ? plural : unit}`;
 }
 
+/**
+ * A shopping line's amount as the list (and its print) shows it: "2.5 kg",
+ * "1–1.5 kg", "10 g + to taste", "To taste".
+ */
+export function shoppingAmountLabel(amount: {
+  quantity: number | null;
+  quantityMax: number | null;
+  unit: RecipeLineUnit | null;
+  toTaste: boolean;
+}): string {
+  const main = formatAmount(amount.quantity, amount.quantityMax, amount.unit);
+  if (!main) return "To taste";
+  return amount.toTaste ? `${main} + to taste` : main;
+}
+
 function formatMinutes(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
   if (minutes < 1_440) {

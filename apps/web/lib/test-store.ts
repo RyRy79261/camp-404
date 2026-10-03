@@ -5938,8 +5938,16 @@ export const testStore = {
       title: string;
       summary?: string | null;
       totalMinutes?: number | null;
+      activeMinutes?: number | null;
       plates: number[];
       open?: number[];
+      /** The method; one "Cook it." step using every line when left out. */
+      steps?: {
+        instruction: string;
+        uses?: string[];
+        durationMinutes?: number | null;
+      }[];
+      notes?: { kind: KitchenRecipe["notes"][number]["kind"]; body: string }[];
       ingredients: {
         name: string;
         category: KitchenRecipe["ingredients"][number]["category"];
@@ -5982,13 +5990,15 @@ export const testStore = {
         summary: seed.summary ?? null,
         plates: first,
         totalTimeMinutes: seed.totalMinutes ?? null,
+        activeTimeMinutes: seed.activeMinutes ?? null,
         ingredients: seed.ingredients,
-        steps: [
+        steps: seed.steps ?? [
           {
             instruction: "Cook it.",
             uses: seed.ingredients.map((l) => l.name),
           },
         ],
+        notes: seed.notes ?? [],
       });
       const { versionId } = addStoreVersion(findRecipe(id)!, {
         authorId: input.authorId,

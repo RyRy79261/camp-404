@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Loader2 } from "lucide-react";
+import { CalendarDays, Loader2, Printer } from "lucide-react";
 import { z } from "zod";
 import { mealPlanDayLabel } from "@camp404/core";
 import {
@@ -27,7 +28,7 @@ import {
   QUIET_BUTTON,
   splitDayLabel,
 } from "@/components/kitchen/labels";
-import { UNREACHABLE } from "@/lib/recipe-copy";
+import { PREP_PLAN_PRINT_PATH, UNREACHABLE } from "@/lib/recipe-copy";
 import { saveMealPlanAction } from "./actions";
 import { MenuCell, type MenuLine } from "./menu-cell";
 import type { PickerRecipe } from "./recipe-picker";
@@ -255,15 +256,31 @@ function MealPlanEditorForm({
             Meal plan
           </h1>
         </div>
-        {/* The mock-up's pink Save, in sentence case. */}
-        <button
-          type="submit"
-          disabled={pending}
-          className="inline-flex h-9 shrink-0 items-center justify-center gap-2 bg-primary px-6 text-sm font-bold text-primary-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
-        >
-          {pending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-          Save
-        </button>
+        <div className="flex items-center gap-2">
+          {/* The prep steps on A4, before we leave then each day (#249). */}
+          <Link
+            href={PREP_PLAN_PRINT_PATH}
+            target="_blank"
+            rel="noopener"
+            aria-label="Print the prep plan"
+            title="Print the prep plan (A4)"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 border border-input px-3 text-sm font-medium hover:bg-foreground/[0.04] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <Printer className="h-4 w-4" aria-hidden />
+            <span className="hidden page-sm:inline">Prep plan</span>
+          </Link>
+          {/* The mock-up's pink Save, in sentence case. */}
+          <button
+            type="submit"
+            disabled={pending}
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 bg-primary px-6 text-sm font-bold text-primary-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60"
+          >
+            {pending && (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            )}
+            Save
+          </button>
+        </div>
         <p className="col-span-2 mt-2 max-w-[600px] text-[13px] leading-5 text-muted-foreground page-md:col-span-1 page-md:text-sm">
           Plates and dates are kept when you press Save. Adding or taking off a
           recipe is kept at once. Only ✓&nbsp;Verified recipes go on the

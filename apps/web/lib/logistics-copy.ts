@@ -6,6 +6,9 @@ import { logisticsPhaseDays } from "@camp404/types";
 
 export const LOGISTICS_PATH = "/logistics";
 
+/** The burn timeline to print (#249), A4 landscape. */
+export const BURN_TIMELINE_PRINT_PATH = "/print/logistics/timeline";
+
 /** What anyone who is not an editor is told, on the page and by the action. */
 export const LOGISTICS_REFUSAL =
   "Only captains and Transport and Logistics leads can change the logistics days.";

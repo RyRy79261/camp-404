@@ -38,6 +38,15 @@ export function recipeCardPath(recipeId: string, plates?: number): string {
   return `/print/kitchen/recipes/${recipeId}${plates ? `?plates=${plates}` : ""}`;
 }
 
+/** The Kitchen's A4 prints (#249's prints round, the owner's Option A of each). */
+export const SHOPPING_PRINT_PATH = "/print/kitchen/shopping";
+export const RECIPE_BOOK_PRINT_PATH = "/print/kitchen/book";
+export const PREP_PLAN_PRINT_PATH = "/print/kitchen/prep";
+
+/** Who may print the prep plan: the people who read prep steps. */
+export const PREP_PLAN_REFUSAL =
+  "The prep plan is for captains and Kitchen leads, who keep the prep steps.";
+
 /** A recipe's source editor. */
 export function recipeEditPath(recipeId: string): string {
   return `${recipePath(recipeId)}/edit`;
