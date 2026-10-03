@@ -29,6 +29,7 @@ import {
   CATEGORY_LABEL,
   platesLabel,
   shoppingAmountLabel,
+  shoppingBuyLabel,
 } from "@/lib/recipe-labels";
 import { FoodCostBox } from "./food-cost";
 import type { LinePrice } from "./price-editor";
@@ -123,6 +124,7 @@ export default async function ShoppingListPage() {
         key: line.key,
         name: line.name,
         amount,
+        buy: shoppingBuyLabel(line.amount),
         sources: line.sources.map((s) => ({
           meal: `${dayName(s.day)}, ${s.meal}`,
           title: s.title,

@@ -307,7 +307,7 @@ export default async function InventoryItemPage({
               )}
               {item.weightKg !== null && (
                 <Fact label="Weight">
-                  <span className="tabular-nums">{item.weightKg} kg each</span>
+                  <span className="tabular-nums">{item.weightKg} kg</span>
                 </Fact>
               )}
               {item.wattsEach !== null && (

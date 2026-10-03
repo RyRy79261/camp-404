@@ -347,3 +347,67 @@ export function buildShoppingList(input: {
 
   return { groups, notCounted, meals: meals.size };
 }
+
+// --- What to buy ---------------------------------------------------------------
+
+/** Rounds `value` up to a multiple of `step`, ignoring float dust (0.1 + 0.2). */
+function ceilTo(value: number, step: number): number {
+  const up = Math.ceil(value / step - 1e-9);
+  // Back from steps in a way that keeps one decimal clean: 11 * 0.1 is 1.1.
+  return Number((up * step).toFixed(6));
+}
+
+/** Weights and volumes: the small unit and its big one. */
+const SMALL_TO_BIG: Partial<Record<RecipeLineUnit, RecipeLineUnit>> = {
+  g: "kg",
+  ml: "l",
+};
+const BIG: ReadonlySet<RecipeLineUnit> = new Set<RecipeLineUnit>(["kg", "l"]);
+
+function buyOne(
+  quantity: number,
+  unit: RecipeLineUnit | null,
+): { quantity: number; unit: RecipeLineUnit | null } {
+  const big = unit === null ? undefined : SMALL_TO_BIG[unit];
+  if (big) {
+    // Under 1 kg (1 l): up to the next 10 g (10 ml); at 1000 and over, in the
+    // big unit.
+    const small = ceilTo(quantity, 10);
+    if (small < 1000) return { quantity: small, unit };
+    return { quantity: ceilTo(quantity / 1000, 0.1), unit: big };
+  }
+  if (unit !== null && BIG.has(unit)) {
+    return { quantity: ceilTo(quantity, 0.1), unit };
+  }
+  // Counted things (eggs, bunches, bottles, cloves, tins …): whole ones.
+  return { quantity: ceilTo(quantity, 1), unit };
+}
+
+/**
+ * A shopping line's amount as the camp buys it: always rounded UP, so the
+ * kitchen never runs short. Counted things (no unit, or a unit such as a
+ * bunch, a bottle or a clove) to whole ones: 367.6 eggs are 368. Grams and
+ * millilitres to the next 10 under a kilo or a litre: 286.4 g is 290 g.
+ * Kilograms and litres to one decimal: 1.07 kg is 1.1 kg. A "to taste" line
+ * stays as it is. Only the amount shown to buy rounds: the sums, each meal's
+ * share, the ticks and the costing stay exact.
+ */
+export function amountToBuy(amount: ShoppingAmount): ShoppingAmount {
+  if (amount.quantity === null) return amount;
+  const low = buyOne(amount.quantity, amount.unit);
+  if (amount.quantityMax === null) {
+    return { ...amount, quantity: low.quantity, unit: low.unit };
+  }
+  // A range reads in one unit: the top end's.
+  const high = buyOne(amount.quantityMax, amount.unit);
+  const lowInHigh =
+    low.unit === high.unit
+      ? low.quantity
+      : buyOne(amount.quantity / 1000, high.unit).quantity;
+  return {
+    ...amount,
+    quantity: lowInHigh,
+    quantityMax: high.quantity === lowInHigh ? null : high.quantity,
+    unit: high.unit,
+  };
+}

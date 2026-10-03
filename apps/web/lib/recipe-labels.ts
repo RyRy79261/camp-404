@@ -1,4 +1,4 @@
-import { CAMP_TIME_ZONE } from "@camp404/core";
+import { CAMP_TIME_ZONE, amountToBuy } from "@camp404/core";
 import type {
   IngredientCategory,
   RecipeLineUnit,
@@ -153,6 +153,16 @@ export function shoppingAmountLabel(amount: {
   const main = formatAmount(amount.quantity, amount.quantityMax, amount.unit);
   if (!main) return "To taste";
   return amount.toTaste ? `${main} + to taste` : main;
+}
+
+/**
+ * A shopping line's amount to buy, rounded up (amountToBuy): "368", "290 g",
+ * "1.1 kg". The exact amount (shoppingAmountLabel) stays the line's tick key.
+ */
+export function shoppingBuyLabel(
+  amount: Parameters<typeof amountToBuy>[0],
+): string {
+  return shoppingAmountLabel(amountToBuy(amount));
 }
 
 function formatMinutes(minutes: number): string {

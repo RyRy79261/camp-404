@@ -12,6 +12,7 @@ import {
   CATEGORY_LABEL,
   platesLabel,
   shoppingAmountLabel,
+  shoppingBuyLabel,
 } from "./recipe-labels";
 
 // The shopping list to print (#249; the owner approved Option A of
@@ -30,6 +31,7 @@ import {
 export interface PrintShoppingLine {
   key: string;
   name: string;
+  /** The amount to buy, rounded up (amountToBuy). */
   amount: string;
   /** Its shop area: "Produce", "Snacks". */
   area: string;
@@ -73,17 +75,21 @@ export function shoppingPrint(
   const tickedAt = new Map(ticks.map((t) => [t.key, t.amount]));
   const priceOf = prices ? new Map(prices.map((p) => [p.key, p])) : null;
 
-  const all: { id: string; label: string; lines: PrintShoppingLine[] }[] =
-    list.groups.map((group) => ({
-      id: group.category,
-      label: CATEGORY_LABEL[group.category],
-      lines: group.lines.map((line) => ({
-        key: line.key,
-        name: line.name,
-        amount: shoppingAmountLabel(line.amount),
-        area: CATEGORY_LABEL[group.category],
-      })),
-    }));
+  const all: {
+    id: string;
+    label: string;
+    lines: (PrintShoppingLine & { exact: string })[];
+  }[] = list.groups.map((group) => ({
+    id: group.category,
+    label: CATEGORY_LABEL[group.category],
+    lines: group.lines.map((line) => ({
+      key: line.key,
+      name: line.name,
+      amount: shoppingBuyLabel(line.amount),
+      area: CATEGORY_LABEL[group.category],
+      exact: shoppingAmountLabel(line.amount),
+    })),
+  }));
   if (snacks.length > 0) {
     all.push({
       id: "snacks",
@@ -93,6 +99,7 @@ export function shoppingPrint(
         name: snack.name,
         amount: snack.amount ?? "",
         area: "Snacks",
+        exact: snack.amount ?? "",
       })),
     });
   }
@@ -101,10 +108,11 @@ export function shoppingPrint(
   const areas = all
     .map((group) => ({
       ...group,
-      lines: group.lines.filter((line) => {
-        const done = tickedAt.get(line.key) === line.amount;
+      lines: group.lines.flatMap(({ exact, ...line }) => {
+        // A tick is saved against the exact amount the list needs.
+        const done = tickedAt.get(line.key) === exact;
         if (done) bought++;
-        return !done;
+        return done ? [] : [line];
       }),
     }))
     .filter((group) => group.lines.length > 0);

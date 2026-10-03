@@ -2,6 +2,7 @@ import "server-only";
 
 import type { ParticipationStatus } from "@camp404/types";
 import { InventoryItemInput } from "@camp404/types";
+import { reachRank } from "@camp404/db/power";
 import { testStore } from "./test-store";
 import { inventoryStore } from "./test-store-inventory";
 import { logisticsTestStore } from "./test-store-logistics";
@@ -12,7 +13,8 @@ import { logisticsTestStore } from "./test-store-logistics";
 // and drivers, all from the approved mock-ups (design/prints-round.html,
 // 2026-10-02). The seed-prints test route fills it for a spec or a screenshot
 // run. Every write goes through the store's own rules as `actorId`, who must
-// already be a captain. Throws on the first refused write.
+// already be a captain, checked before anything is written. Throws on the
+// first refused write.
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -201,7 +203,18 @@ const GEAR = [
   ["Toolbox", "structures", "tools", "good", 1, null, 22, null],
 ] as const;
 
+/** The seed writes every team's rows, so only a captain may run it. */
+export const SEED_PRINTS_CAPTAINS_ONLY =
+  "Only a captain can seed the prints example.";
+
 export function seedPrintsExample(actorId: string): void {
+  // Checked before the first write, so a refused seed leaves nothing behind.
+  if (
+    testStore.findUserById(actorId) === null ||
+    reachRank(testStore.senderReach(actorId)) !== "captain"
+  ) {
+    throw new Error(SEED_PRINTS_CAPTAINS_ONLY);
+  }
   const members = NAMES.map((name, i) => {
     const authUserId = `prints-seed-${i}`;
     const user =

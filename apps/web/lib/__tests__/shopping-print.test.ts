@@ -76,3 +76,24 @@ describe("shoppingPrint", () => {
     expect(shoppingPrint(shoppingFacts(), paid).estimate).toBe(false);
   });
 });
+
+describe("shoppingPrint's amounts", () => {
+  it("prints what to buy rounded up, and still knows a line ticked at its exact amount", () => {
+    const facts = shoppingFacts();
+    const shak = facts.menu.recipes.shak!;
+    shak.counts[0]!.lines[1] = {
+      ...shak.counts[0]!.lines[1]!,
+      quantity: 367.6,
+    };
+    shak.counts[0]!.lines[0] = { ...shak.counts[0]!.lines[0]!, quantity: 1.57 };
+    // 1.57 kg + 500 g = 2.07 kg; the ticks name the exact amount.
+    facts.ticks = [{ key: "tomatoes|g", amount: "2.07 kg" }];
+    const sheet = shoppingPrint(facts, null);
+    const lines = sheet.areas.flatMap((a) => a.lines);
+    expect(lines.find((l) => l.name === "Eggs")?.amount).toBe("368");
+    expect(lines.find((l) => l.name === "Tomatoes")).toBeUndefined();
+    expect(sheet.bought).toBe(1);
+    expect(lines.find((l) => l.name === "Red lentils")?.amount).toBe("1.5 kg");
+    expect(lines.find((l) => l.name === "Salt")?.amount).toBe("To taste");
+  });
+});

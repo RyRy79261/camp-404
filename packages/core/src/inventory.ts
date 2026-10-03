@@ -162,7 +162,11 @@ export function maintenanceDue(
 export interface LoadingItem {
   name: string;
   category: InventoryCategory;
-  /** Its weight in kg as the camp keeps it, or null when not weighed. */
+  /**
+   * Its weight in kg, or null when not weighed: the TOTAL for all of them
+   * (the form asks "Weight in kg" beside "Watts each"; the type and the
+   * column say total), so it is added once, never times How many.
+   */
   weightKg: number | null;
 }
 

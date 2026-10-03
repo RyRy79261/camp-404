@@ -42,7 +42,10 @@ export interface ShoppingSourceView {
 export interface ShoppingLineView {
   key: string;
   name: string;
+  /** The exact amount the list needs: what a tick is saved against. */
   amount: string;
+  /** The amount to buy, rounded up (amountToBuy); the exact one when absent. */
+  buy?: string;
   /** Each recipe and meal it adds up; empty for a snack. */
   sources: ShoppingSourceView[];
   ticked: boolean;
@@ -369,7 +372,7 @@ function Line({
       {line.tickedWhen !== null && (
         <span className="mt-1 block text-xs font-medium text-warning">
           Ticked when it was {line.tickedWhen || "no amount"}.
-          {line.amount ? ` The list now needs ${line.amount}.` : ""}
+          {line.amount ? ` The list now needs ${line.buy ?? line.amount}.` : ""}
         </span>
       )}
       {price && <PriceLine price={price} />}
@@ -383,7 +386,7 @@ function Line({
         done ? "font-medium text-muted-foreground" : "font-bold",
       )}
     >
-      {line.amount}
+      {line.buy ?? line.amount}
     </span>
   );
   return (
@@ -393,7 +396,9 @@ function Line({
           type="button"
           role="checkbox"
           aria-checked={done}
-          aria-label={line.amount ? `${line.name}, ${line.amount}` : line.name}
+          aria-label={
+            line.amount ? `${line.name}, ${line.buy ?? line.amount}` : line.name
+          }
           disabled={busy}
           onClick={() => onTick(!done)}
           className="grid min-h-14 w-full grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-x-3 py-3 pl-4 text-left hover:bg-foreground/[0.04] disabled:cursor-progress page-md:min-h-12 page-md:grid-cols-[20px_minmax(0,1fr)_auto]"
