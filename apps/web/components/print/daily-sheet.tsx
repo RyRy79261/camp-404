@@ -209,6 +209,14 @@ export function DailySheetPage({
                         </td>
                         <td className={`${CELL} w-[34%] font-semibold`}>
                           {t.name}
+                          {t.dutyCard && (
+                            <span
+                              data-testid="sheet-task-card"
+                              className="block text-[9.5px] font-normal text-neutral-600"
+                            >
+                              Card: {t.dutyCard}
+                            </span>
+                          )}
                         </td>
                         <td className={CELL}>
                           <Who names={t.names} blanks={t.blanks} />

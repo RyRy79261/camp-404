@@ -43,6 +43,8 @@ function Change({
       triggerClassName={className}
       missingDays={t.missingDays}
       hasPeople={t.hasPeople}
+      dutyCards={view.dutyCards ?? []}
+      shiftTypes={view.types}
     />
   );
 }
@@ -75,7 +77,12 @@ export function ShiftTypesTable({
         </div>
         {canAdd && (
           <div className="hidden @min-[48rem]/types:block">
-            <ShiftTypeDialog teams={view.teams} triggerClassName="h-8" />
+            <ShiftTypeDialog
+              teams={view.teams}
+              triggerClassName="h-8"
+              dutyCards={view.dutyCards ?? []}
+              shiftTypes={view.types}
+            />
           </div>
         )}
       </div>
@@ -191,7 +198,12 @@ export function ShiftTypesTable({
 
       {canAdd && (
         <div className="border-t border-border p-4 @min-[48rem]/types:hidden">
-          <ShiftTypeDialog teams={view.teams} triggerClassName="h-8 w-full" />
+          <ShiftTypeDialog
+            teams={view.teams}
+            triggerClassName="h-8 w-full"
+            dutyCards={view.dutyCards ?? []}
+            shiftTypes={view.types}
+          />
         </div>
       )}
     </section>

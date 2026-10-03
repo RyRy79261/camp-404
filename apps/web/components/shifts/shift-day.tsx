@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight } from "lucide-react";
+import { BookOpen, ChevronRight } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { Combobox } from "@camp404/ui/components/combobox";
 import { Spinner } from "@camp404/ui/components/spinner";
@@ -34,6 +35,10 @@ import type { ShiftDayView } from "@/lib/shifts";
 //
 // A one-tap change reports its failure as a toast and only the pressed
 // control spins (AGENTS.md); the member picker shows its problem beside it.
+//
+// A shift with a duty card (#250, the owner's Option A, 2026-10-02) says
+// "Duty card" under its name, linking to the card in the Survival Guide; on a
+// phone the same, under the team.
 
 type Slot = ShiftDayView["slots"][number];
 type Result = { ok: true } | { ok: false; error: string };
@@ -63,6 +68,28 @@ function useOneTap() {
 /** "Morning clean on Wed 29 Apr", for accessible names. */
 const slotLabel = (slot: Slot, day: ShiftDayView) =>
   `${slot.type.name} on ${day.label}`;
+
+/** "Duty card", under the shift's name, opening it in the Survival Guide. */
+export function DutyCardLink({
+  card,
+  shiftName,
+}: {
+  card: { title: string; href: string } | null;
+  shiftName: string;
+}) {
+  if (!card) return null;
+  return (
+    <Link
+      href={card.href}
+      title={card.title}
+      aria-label={`Duty card for ${shiftName}: ${card.title}`}
+      className="mt-1.5 flex w-fit items-center gap-1.5 text-sm leading-5 text-primary underline underline-offset-4 hover:text-primary/80"
+    >
+      <BookOpen aria-hidden className="h-3.5 w-3.5 shrink-0" />
+      Duty card
+    </Link>
+  );
+}
 
 /** The member's own button: always the same slot, whatever the viewer. */
 function MainButton({
@@ -550,6 +577,10 @@ export function ShiftDay({
                         >
                           {slot.type.teamLabel}
                         </span>
+                        <DutyCardLink
+                          card={slot.type.dutyCard}
+                          shiftName={slot.type.name}
+                        />
                       </td>
                       <td className={cn(TX, off && "opacity-60")}>
                         <WhoIsOn slot={slot} day={day} />
@@ -624,6 +655,10 @@ export function ShiftDay({
                         >
                           {slot.type.teamLabel}
                         </span>
+                        <DutyCardLink
+                          card={slot.type.dutyCard}
+                          shiftName={slot.type.name}
+                        />
                       </div>
                       {canOpen(slot) && (
                         <Arrow

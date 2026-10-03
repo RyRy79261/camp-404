@@ -98,7 +98,13 @@ const line = (what: string) =>
       `Keep each ${what} under ${DUTY_CARD_MAX.line} characters.`,
     );
 
-/** A shift type's key, as the shift roster will name it (#248). */
+/**
+ * The typed key a card once used to name its shift (like morning-clean).
+ * Replaced by a real link: each shift type picks its duty card in its set-up
+ * (`shift_types.duty_card_id`), and migration 0094 linked the keys that
+ * matched a shift's name exactly. Kept, optional, so a key already on a card
+ * stays readable; the editor no longer asks for one.
+ */
 export const DutyCardShiftKey = z
   .string()
   .trim()
@@ -134,7 +140,7 @@ export type DutyCardSubRole = z.infer<typeof DutyCardSubRole>;
  */
 export const DutyCard = z
   .object({
-    shiftTypeKey: DutyCardShiftKey,
+    shiftTypeKey: z.union([z.literal(""), DutyCardShiftKey]).optional(),
     subRoles: z
       .array(DutyCardSubRole)
       .min(1, "Add at least one sub-role.")
@@ -171,7 +177,7 @@ export type DutyCard = z.infer<typeof DutyCard>;
  * full (DutyCard) when it is published.
  */
 export const DutyCardDraft = z.object({
-  shiftTypeKey: z.string().trim().max(DUTY_CARD_MAX.shiftTypeKey),
+  shiftTypeKey: z.string().trim().max(DUTY_CARD_MAX.shiftTypeKey).optional(),
   subRoles: z
     .array(
       z.object({
@@ -195,7 +201,6 @@ export const DutyCardDraft = z.object({
 export type DutyCardDraft = z.infer<typeof DutyCardDraft>;
 
 export const EMPTY_DUTY_CARD: DutyCardDraft = {
-  shiftTypeKey: "",
   subRoles: [],
   steps: [],
   hardRules: [],

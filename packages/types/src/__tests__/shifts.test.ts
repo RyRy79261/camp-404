@@ -29,6 +29,19 @@ const firstError = (r: {
 }) => (r.success ? null : r.error!.issues[0]!.message);
 
 describe("SaveShiftTypeInput", () => {
+  it("takes a duty card id, null for none, or leaves it out (#250)", () => {
+    expect(
+      SaveShiftTypeInput.parse({ ...SHIFT, dutyCardId: ID }).dutyCardId,
+    ).toBe(ID);
+    expect(
+      SaveShiftTypeInput.parse({ ...SHIFT, dutyCardId: null }).dutyCardId,
+    ).toBeNull();
+    expect("dutyCardId" in SaveShiftTypeInput.parse(SHIFT)).toBe(false);
+    expect(
+      SaveShiftTypeInput.safeParse({ ...SHIFT, dutyCardId: "dishes" }).success,
+    ).toBe(false);
+  });
+
   it("trims the name and makes an empty note no note", () => {
     const parsed = SaveShiftTypeInput.parse(SHIFT);
     expect(parsed.name).toBe("Morning clean");

@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import {
   SHIFTS_ACTION_KEY,
   SHIFTS_ACTION_TITLE,
@@ -45,6 +45,12 @@ import * as schema from "./schema";
 //    sign-up is not: it is theirs.
 //  - The minimum (SHIFT_MINIMUM) is a reminder only. A captain's "Ask
 //    everyone" opens the shared nudge; reaching the minimum closes it.
+//  - A shift type links to its duty card in the Survival Guide (#250,
+//    `duty_card_id`), picked in its set-up under the same rule as the rest of
+//    the set-up. Any published duty card may serve any number of shifts. A
+//    new shift whose set-up leaves the card unpicked takes the card of the
+//    newest earlier year's shift with the same name (owner's default,
+//    2026-10-02); the lead may change it.
 //
 // PGlite has ONE connection: everything inside a transaction goes through
 // `tx`, never createHttpDb().
@@ -81,6 +87,8 @@ export const NOT_A_SHIFT_ASKER = "Only captains can ask everyone about shifts.";
 export const TOO_MANY_VOLUNTEER_SHIFTS = `You can list ${MAX_VOLUNTEER_SHIFTS} AfrikaBurn shifts at most.`;
 export const VOLUNTEER_SHIFT_GONE =
   "That AfrikaBurn shift isn't there any more. Reload the page.";
+export const DUTY_CARD_GONE =
+  "That duty card isn't in the Survival Guide any more. Pick another.";
 
 /** Fewer places than people already on one of its days. */
 export function placesBelowTaken(taken: number): string {
@@ -100,7 +108,21 @@ export interface ShiftTypeRow {
   durationMinutes: number;
   places: number;
   note: string | null;
+  /** The duty card picked for it, published or not (see RosterShiftType). */
+  dutyCardId: string | null;
   version: number;
+}
+
+/** A shift's duty card, as a reader opens it: only while it is published. */
+export interface ShiftDutyCard {
+  id: string;
+  slug: string;
+  title: string;
+}
+
+/** A shift type on the roster, with its duty card when members can read it. */
+export interface RosterShiftType extends ShiftTypeRow {
+  dutyCard: ShiftDutyCard | null;
 }
 
 export interface ShiftSlotRow {
@@ -121,7 +143,7 @@ export interface ShiftSignupRow {
 
 /** The year's roster: its shift types, their days, and who is on each. */
 export interface ShiftRosterRead {
-  types: ShiftTypeRow[];
+  types: RosterShiftType[];
   slots: ShiftSlotRow[];
   signups: ShiftSignupRow[];
 }
@@ -143,8 +165,23 @@ const TYPE_COLUMNS = {
   durationMinutes: schema.shiftTypes.durationMinutes,
   places: schema.shiftTypes.places,
   note: schema.shiftTypes.note,
+  dutyCardId: schema.shiftTypes.dutyCardId,
   version: schema.shiftTypes.version,
 };
+
+const cardDoc = schema.documents;
+const cardVersion = schema.documentVersions;
+
+/** A duty card members can read: on the guide, at its published version. */
+const readableCard = and(
+  eq(cardDoc.id, schema.shiftTypes.dutyCardId),
+  eq(cardDoc.kind, "duty_card"),
+  eq(cardDoc.published, true),
+);
+const liveCardVersion = and(
+  eq(cardVersion.documentId, cardDoc.id),
+  eq(cardVersion.version, cardDoc.publishedVersion),
+);
 
 const SLOT_COLUMNS = {
   id: schema.shiftSlots.id,
@@ -370,8 +407,14 @@ export async function readShiftRoster(cycle: number): Promise<ShiftRosterRead> {
   const db = createHttpDb();
   const [types, slots, signups] = await Promise.all([
     db
-      .select(TYPE_COLUMNS)
+      .select({
+        ...TYPE_COLUMNS,
+        cardSlug: cardDoc.slug,
+        cardTitle: cardVersion.title,
+      })
       .from(schema.shiftTypes)
+      .leftJoin(cardDoc, readableCard)
+      .leftJoin(cardVersion, liveCardVersion)
       .where(eq(schema.shiftTypes.cycle, cycle))
       .orderBy(
         asc(schema.shiftTypes.startMinute),
@@ -409,10 +452,67 @@ export async function readShiftRoster(cycle: number): Promise<ShiftRosterRead> {
       .orderBy(asc(schema.shiftSignups.createdAt)),
   ]);
   return {
-    types,
+    types: types.map(({ cardSlug, cardTitle, ...t }) => ({
+      ...t,
+      dutyCard:
+        t.dutyCardId && cardSlug && cardTitle
+          ? { id: t.dutyCardId, slug: cardSlug, title: cardTitle }
+          : null,
+    })),
     slots,
     signups: signups.map((s) => ({ ...s, name: nameOf(s.name) })),
   };
+}
+
+/** One of this year's shifts that uses a duty card, for the card's page. */
+export interface DutyCardShift {
+  id: string;
+  team: Team;
+  name: string;
+  startMinute: number;
+  durationMinutes: number;
+  /** Burn days it is needed on (open slots). */
+  days: number;
+}
+
+/**
+ * This year's shifts that use a duty card, in time order. Every approved
+ * member reads them (the roster is theirs to read too).
+ */
+export async function listShiftsForDutyCard(
+  documentId: string,
+  cycle: number,
+): Promise<DutyCardShift[]> {
+  if (!UUID.test(documentId)) return [];
+  const rows = await createHttpDb()
+    .select({
+      id: schema.shiftTypes.id,
+      team: schema.shiftTypes.team,
+      name: schema.shiftTypes.name,
+      startMinute: schema.shiftTypes.startMinute,
+      durationMinutes: schema.shiftTypes.durationMinutes,
+      days: sql<number>`count(${schema.shiftSlots.id}) filter (where ${schema.shiftSlots.status} = 'open')`.mapWith(
+        Number,
+      ),
+    })
+    .from(schema.shiftTypes)
+    .leftJoin(
+      schema.shiftSlots,
+      eq(schema.shiftSlots.typeId, schema.shiftTypes.id),
+    )
+    .where(
+      and(
+        eq(schema.shiftTypes.cycle, cycle),
+        eq(schema.shiftTypes.dutyCardId, documentId),
+      ),
+    )
+    .groupBy(schema.shiftTypes.id)
+    .orderBy(
+      asc(schema.shiftTypes.startMinute),
+      asc(schema.shiftTypes.createdAt),
+      asc(schema.shiftTypes.id),
+    );
+  return rows;
 }
 
 /** This year's Burn days, as the roster runs them. */
@@ -501,6 +601,12 @@ export async function saveShiftType(input: {
   durationMinutes: number;
   places: number;
   note: string | null;
+  /**
+   * The duty card: an id to link, null for none. Left out, a change keeps
+   * the card it has and a new shift takes last year's card for a shift of the
+   * same name, if there was one.
+   */
+  dutyCardId?: string | null;
   expectedVersion: number;
   /** For tests; the server's clock otherwise. */
   now?: Date;
@@ -510,6 +616,14 @@ export async function saveShiftType(input: {
     assertKeeper(keeper, input.team);
     const cycle = await currentCycleNumber(tx);
     const now = input.now ?? new Date();
+    let pickedUp = false;
+    let dutyCardId: string | null | undefined = input.dutyCardId;
+    if (dutyCardId) {
+      await assertDutyCard(tx, dutyCardId);
+    } else if (dutyCardId === undefined && !input.id) {
+      dutyCardId = await earlierYearsCard(tx, input.name, input.team, cycle);
+      pickedUp = dutyCardId !== null;
+    }
     const fields = {
       team: input.team,
       name: input.name,
@@ -517,6 +631,7 @@ export async function saveShiftType(input: {
       durationMinutes: input.durationMinutes,
       places: input.places,
       note: input.note,
+      ...(dutyCardId === undefined ? {} : { dutyCardId }),
       updatedByUserId: input.actorId,
       updatedAt: now,
     };
@@ -589,11 +704,60 @@ export async function saveShiftType(input: {
         startMinute: type.startMinute,
         durationMinutes: type.durationMinutes,
         places: type.places,
+        dutyCardId: type.dutyCardId,
+        ...(pickedUp ? { dutyCardPickedUp: true } : {}),
         daysAdded,
       },
     });
     return { type, daysAdded };
   });
+}
+
+/** Refuse a duty card that is not one members can read on the guide. */
+async function assertDutyCard(tx: Tx, id: string): Promise<void> {
+  if (!UUID.test(id)) refuse(DUTY_CARD_GONE);
+  const [card] = await tx
+    .select({ id: cardDoc.id })
+    .from(cardDoc)
+    .where(
+      and(
+        eq(cardDoc.id, id),
+        eq(cardDoc.kind, "duty_card"),
+        eq(cardDoc.published, true),
+      ),
+    )
+    .for("share");
+  if (!card) refuse(DUTY_CARD_GONE);
+}
+
+/**
+ * The duty card of the newest earlier year's shift with this name (any case,
+ * spaces trimmed), when it is still on the guide; a shift of the same team
+ * first when that year had several. Null when there is none.
+ */
+async function earlierYearsCard(
+  tx: Tx,
+  name: string,
+  team: Team,
+  cycle: number,
+): Promise<string | null> {
+  const [row] = await tx
+    .select({ id: schema.shiftTypes.dutyCardId })
+    .from(schema.shiftTypes)
+    .innerJoin(cardDoc, readableCard)
+    .where(
+      and(
+        lt(schema.shiftTypes.cycle, cycle),
+        sql`lower(trim(${schema.shiftTypes.name})) = lower(trim(${name}))`,
+      ),
+    )
+    .orderBy(
+      desc(schema.shiftTypes.cycle),
+      desc(sql`${schema.shiftTypes.team} = ${team}`),
+      desc(schema.shiftTypes.updatedAt),
+    )
+    .limit(1);
+  return row?.id ?? null;
 }
 
 /** Remove a shift type and its days, only while nobody is on it. */

@@ -63,7 +63,6 @@ test.describe("survival guide (test-mode)", () => {
     ).toBeVisible();
     await page.getByRole("radio", { name: "Duty card" }).click();
     await page.getByLabel("Title").fill("Morning clean");
-    await page.getByLabel("Shift type").fill("morning-clean");
     await page.getByLabel("Who to ask").fill("The Sanitation lead");
     await page.getByRole("button", { name: "Add sub-role" }).click();
     await page.getByLabel("Job").fill("Dishes");

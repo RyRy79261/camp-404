@@ -55,7 +55,6 @@ export default async function NewGuideChapterPage() {
           team: isCaptain ? WHOLE_CAMP : (teams[0]?.value ?? WHOLE_CAMP),
           markdown: "",
           card: {
-            shiftTypeKey: "",
             subRoles: [],
             steps: [],
             hardRules: [],

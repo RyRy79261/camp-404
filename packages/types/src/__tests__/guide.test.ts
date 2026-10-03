@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DutyCard,
   DutyCardDraft,
   EMPTY_DUTY_CARD,
   GuideSlug,
@@ -95,5 +96,27 @@ describe("the Survival Guide's shapes", () => {
     expect(containsPhoneNumber("+27-82-555-1234")).toBe(true);
     expect(containsPhoneNumber("(021) 555.1234")).toBe(true);
     expect(containsPhoneNumber("Shift 06:00–08:00, 2–3 people")).toBe(false);
+  });
+
+  it("publishes a card with no typed shift key: shifts link to their card now (#250)", () => {
+    const card = {
+      subRoles: [{ name: "Washing", min: 2, max: 2 }],
+      steps: ["Fill the basins."],
+      hardRules: [],
+      checklist: [],
+      askRole: "The Kitchen lead",
+    };
+    expect(DutyCard.safeParse(card).success).toBe(true);
+    // A key typed before stays readable, and an empty one is no key.
+    expect(
+      DutyCard.safeParse({ ...card, shiftTypeKey: "morning-clean" }).success,
+    ).toBe(true);
+    expect(DutyCard.safeParse({ ...card, shiftTypeKey: "" }).success).toBe(
+      true,
+    );
+    expect(
+      DutyCard.safeParse({ ...card, shiftTypeKey: "Morning Clean!" }).success,
+    ).toBe(false);
+    expect(EMPTY_DUTY_CARD).not.toHaveProperty("shiftTypeKey");
   });
 });

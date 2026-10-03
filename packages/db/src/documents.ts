@@ -220,6 +220,24 @@ export async function listPublishedChapters(
     .orderBy(asc(v.title), asc(d.slug));
 }
 
+/** A published duty card, as a shift's set-up offers it (#250). */
+export interface DutyCardChoice {
+  id: string;
+  slug: string;
+  title: string;
+  team: DocumentTeam | null;
+}
+
+/** Every duty card members can read, by title: the shift set-up's choices. */
+export async function listPublishedDutyCards(): Promise<DutyCardChoice[]> {
+  return createHttpDb()
+    .select({ id: d.id, slug: d.slug, title: v.title, team: v.team })
+    .from(d)
+    .innerJoin(v, liveVersion)
+    .where(and(eq(d.published, true), eq(d.kind, "duty_card")))
+    .orderBy(asc(v.title), asc(d.slug));
+}
+
 const publisher = alias(schema.users, "publisher");
 
 /** Every published version of a chapter, newest first. */
@@ -482,7 +500,6 @@ export async function createGuideChapter(
     const card =
       input.kind === "duty_card"
         ? (input.card ?? {
-            shiftTypeKey: "",
             subRoles: [],
             steps: [],
             hardRules: [],

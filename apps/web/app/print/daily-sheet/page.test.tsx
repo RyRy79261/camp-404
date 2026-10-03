@@ -83,6 +83,12 @@ beforeEach(() => {
         durationMinutes: 120,
         places: 3,
         note: "Call Sipho on 082 555 1234 if the gas runs out",
+        dutyCardId: "card-cooks",
+        dutyCard: {
+          id: "card-cooks",
+          slug: "breakfast-cooking",
+          title: "Breakfast cooking",
+        },
         version: 1,
       },
       {
@@ -94,6 +100,8 @@ beforeEach(() => {
         durationMinutes: 30,
         places: 2,
         note: null,
+        dutyCardId: null,
+        dutyCard: null,
         version: 1,
       },
     ],
@@ -219,6 +227,10 @@ describe("the daily site sheet print", () => {
     expect(kitchen.textContent).toContain("Breakfast cooks");
     expect(kitchen.textContent).toContain("07:00–09:00");
     expect(kitchen.textContent).toContain("Sipho, Naledi");
+    // The details are on the duty card: the task names it (#250).
+    expect(within(kitchen).getByTestId("sheet-task-card").textContent).toBe(
+      "Card: Breakfast cooking",
+    );
     // One open place: a line to write a name on.
     expect(within(kitchen).getAllByLabelText("Open place")).toHaveLength(1);
     expect(kitchen.textContent).toContain("Shakshuka");
@@ -229,6 +241,7 @@ describe("the daily site sheet print", () => {
       name: "Sanitation and MOOP",
     });
     expect(san.textContent).toContain("Tumi");
+    expect(within(san).queryByTestId("sheet-task-card")).toBeNull();
     // Only teams with tasks that day.
     expect(
       within(sheet).queryByRole("region", { name: "Power and Lighting" }),

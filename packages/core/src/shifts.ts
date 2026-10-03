@@ -144,6 +144,30 @@ export function shiftTimeText(
   return `${clockText(startMinute)}–${clockText(startMinute + durationMinutes)}`;
 }
 
+/**
+ * How often a shift runs, for its duty card's page (#250): "every day" when
+ * it is needed on each of the Burn's days, else "on N days".
+ */
+export function shiftDaysText(days: number, burnDays: number): string {
+  if (days <= 0) return "on no days yet";
+  if (burnDays > 0 && days >= burnDays) return "every day";
+  return days === 1 ? "on 1 day" : `on ${days} days`;
+}
+
+/**
+ * The other shifts that use the same duty card as `typeId`, by name (the
+ * set-up's "also on Dinner dishes"). Empty when the card serves none.
+ */
+export function dutyCardAlsoOn(
+  cardId: string,
+  typeId: string | null,
+  types: readonly { id: string; name: string; dutyCardId: string | null }[],
+): string[] {
+  return types
+    .filter((t) => t.dutyCardId === cardId && t.id !== typeId)
+    .map((t) => t.name);
+}
+
 /** Something on a member's week: a shift, or an AfrikaBurn volunteer shift. */
 export interface TimedItem {
   key: string;
