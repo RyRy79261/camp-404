@@ -93,7 +93,8 @@ async function gateCaptain(): Promise<CaptainGate> {
 //   2. `canSendToAudience()` — the AUDIENCE gate. A team lead may address ONE
 //      thing: a `team` scope they themselves lead. `everyone`, `team_leads`,
 //      `drivers`, `individual` and `opt_in` are all refused, so there is no
-//      arrangement of the form that reaches the whole camp.
+//      arrangement of the form that reaches the whole camp. `opt_in` (#313)
+//      is asked again inside sendActivation's own transaction.
 //
 // Dropping the gate to `team_lead` WITHOUT step 2 would have put every member
 // of the camp one questionnaire away from a lead; the audience rule is what
@@ -392,12 +393,16 @@ export async function unpublishAction(key: string): Promise<QResult> {
 
 const SendForm = z
   .object({
-    scope: z.enum(["everyone", "team", "team_leads", "individual"]),
+    // `opt_in` (#313): "Anyone may answer (optional)". Captains only; the
+    // audience gate below refuses anyone else, and the write asks again.
+    scope: z.enum(["everyone", "team", "team_leads", "individual", "opt_in"]),
     team: Team.nullish(),
     blocking: z.boolean(),
     // ISO datetime string from the client, or null for no deadline.
     dueAt: z.string().datetime().nullish(),
     targetUserIds: z.array(z.string().uuid()).optional(),
+    // "Tell everyone it's there", for an optional questionnaire only.
+    announce: z.boolean().optional(),
   })
   .refine((d) => d.scope !== "team" || Boolean(d.team), {
     message: "Choose a team to send to.",
@@ -434,14 +439,18 @@ export async function sendAction(
     team: parsed.data.team ?? null,
   });
   if (!allowed.ok) return allowed;
+  // An optional questionnaire asks nobody: it is never blocking, has no
+  // deadline and names nobody, whatever the request says.
+  const optIn = parsed.data.scope === "opt_in";
   const result = await sendActivation({
     questionnaireKey: key,
     scope: parsed.data.scope,
-    team: parsed.data.team ?? null,
-    blocking: parsed.data.blocking,
-    dueAt: parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
+    team: optIn ? null : (parsed.data.team ?? null),
+    blocking: optIn ? false : parsed.data.blocking,
+    dueAt: !optIn && parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
     activatedByUserId: gate.campUser.id,
-    targetUserIds: parsed.data.targetUserIds,
+    targetUserIds: optIn ? undefined : parsed.data.targetUserIds,
+    announce: optIn ? (parsed.data.announce ?? false) : undefined,
   });
   if (!result.ok) return result;
   deliverAfterResponse();
@@ -458,9 +467,8 @@ export async function sendAction(
 // `computeAudience`. A preview computed a different way is a preview that lies.
 
 const PreviewSpec = z.object({
-  // Deliberately accepts `opt_in` so the preview can REFUSE it the way
-  // openActivation does, rather than reporting a count for a scope that cannot
-  // send at all. Every other questionnaire scope is a push scope.
+  // `opt_in` asks nobody; its count is the camp members who will see it under
+  // Optional in My forms (the `everyone` audience), for captains only.
   scope: z.enum(["everyone", "team", "team_leads", "individual", "opt_in"]),
   team: Team.nullish(),
   targetUserIds: z.array(z.string().uuid()).optional(),
@@ -495,12 +503,7 @@ export async function previewAudienceCount(
   // `const` destructuring, so the narrowing below survives into the closure.
   const { scope, targetUserIds = [] } = parsed.data;
   const team = parsed.data.team ?? null;
-  if (scope === "opt_in") {
-    // Mirrors openActivation exactly — opt_in is a pull model with no upfront
-    // fan-out, so there is no audience to count.
-    return { ok: false, error: "opt_in activations are not yet supported." };
-  }
-  if (!PUSH_SCOPES.has(scope)) {
+  if (scope !== "opt_in" && !PUSH_SCOPES.has(scope)) {
     return { ok: false, error: `Unsupported activation scope: ${scope}.` };
   }
   // An incomplete audience has no honest count yet. `ok:false` (not `count:0`)
@@ -534,7 +537,8 @@ export async function previewAudienceCount(
     // actor may address — for a lead, the size of the team they lead.
     const roster = await getCampManagementRoster();
     const count = computeAudience(
-      { scope, team },
+      // An optional questionnaire shows to the whole camp: count `everyone`.
+      { scope: scope === "opt_in" ? "everyone" : scope, team },
       {
         members: roster.map((m) => ({
           id: m.id,

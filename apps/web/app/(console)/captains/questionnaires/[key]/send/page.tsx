@@ -23,13 +23,15 @@ import {
   teamPickerOptions,
 } from "@/lib/camp-config";
 import { getCampManagementRoster } from "@/lib/roster";
+import { countOptInMembers } from "@camp404/db/activations";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { parseSendPrefill } from "./prefill";
 
-// The scopes this screen offers a captain, in picker order. `drivers` is
-// broadcast-only and `opt_in` has no send path yet, so neither is listed — but
-// both are named by the shared vocabulary, which is what keeps this list a
-// CHOICE rather than an accident. A team lead is offered `team` alone.
+// The audiences this screen offers a captain who chose "People you choose must
+// answer", in picker order. `drivers` is broadcast-only, so it is not listed.
+// `opt_in` is not an audience in that list: it is the other answer to "Who
+// answers?" (#313), which only a captain is asked. A team lead is offered
+// `team` alone.
 const SEND_SCOPES = ["everyone", "team", "team_leads", "individual"] as const;
 const LEAD_SCOPES = ["team"] as const;
 
@@ -100,14 +102,18 @@ export default async function SendPage({
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  const [openActivation, roster, config, year, query] = await Promise.all([
-    getOpenActivationForKey(key),
-    // Members are picked only for an `individual` send, which a lead can't make.
-    isCaptain ? getCampManagementRoster() : Promise.resolve([]),
-    getTeamsConfig(),
-    getCurrentCycle(),
-    searchParams,
-  ]);
+  const [openActivation, roster, config, year, query, campMembers] =
+    await Promise.all([
+      getOpenActivationForKey(key),
+      // Members are picked only for an `individual` send, which a lead can't
+      // make.
+      isCaptain ? getCampManagementRoster() : Promise.resolve([]),
+      getTeamsConfig(),
+      getCurrentCycle(),
+      searchParams,
+      // "For all N camp members": only a captain is offered the optional send.
+      isCaptain ? countOptInMembers() : Promise.resolve(null),
+    ]);
 
   // Both pickers and the member subtitles come from the camp config through the
   // one audience vocabulary — teamPickerOptions drops ARCHIVED teams, and
@@ -161,9 +167,13 @@ export default async function SendPage({
         initialAudience={initialAudience}
         initialBlocking={prefill.blocking}
         initialDueAt={prefill.dueAt}
+        offerOptIn={isCaptain}
+        campMemberCount={campMembers}
       />
     </div>,
     title,
-    "Choose an audience and delivery options, then send.",
+    isCaptain
+      ? "Choose who answers, then send."
+      : "Choose an audience and delivery options, then send.",
   );
 }

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, lte } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lte } from "drizzle-orm";
 import {
   safeParseStoredDefinition,
   type Questionnaire,
@@ -47,11 +47,17 @@ export async function upsertQuestionnaireResponse(input: {
   responses: QuestionnaireResponses;
   activationId?: string | null;
   completedAt?: Date | null;
-}): Promise<void> {
+  /**
+   * Leave a FINISHED row alone (an optional send, #313): a draft save that
+   * lands after the member submitted must not reopen their answers. Returns
+   * false when the row was already finished and nothing was written.
+   */
+  keepCompleted?: boolean;
+}): Promise<boolean> {
   const db = createHttpDb();
   const activationId = input.activationId ?? null;
   const completedAt = input.completedAt ?? null;
-  await db
+  const written = await db
     .insert(questionnaireResponses)
     .values({
       userId: input.userId,
@@ -75,7 +81,12 @@ export async function upsertQuestionnaireResponse(input: {
         completedAt,
         updatedAt: new Date(),
       },
-    });
+      ...(input.keepCompleted
+        ? { setWhere: isNull(questionnaireResponses.completedAt) }
+        : {}),
+    })
+    .returning({ userId: questionnaireResponses.userId });
+  return written.length > 0;
 }
 
 /**

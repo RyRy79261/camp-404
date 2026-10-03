@@ -290,6 +290,140 @@ describe("ActivationForm — a team lead", () => {
   });
 });
 
+// --- "Who answers?" (#313) ----------------------------------------------------
+// A captain chooses between today's send and an optional questionnaire that
+// sits in My forms for anyone who wants it. A team lead is never asked.
+
+describe("ActivationForm — who answers (optional questionnaires)", () => {
+  function captainForm() {
+    return renderForm({
+      offerOptIn: true,
+      campMemberCount: 38,
+      yearLabel: "2027",
+    });
+  }
+
+  it("asks a captain first, with today's send chosen and unchanged", () => {
+    captainForm();
+    const who = screen.getByRole("radiogroup", { name: "Who answers?" });
+    expect(who).toBeTruthy();
+    expect(
+      screen
+        .getByRole("radio", { name: /People you choose must answer/ })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(screen.getByText("Audience")).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Blocking" })).toBeTruthy();
+    expect(sendButton()).toBeTruthy();
+  });
+
+  it("the optional choice says what happens, drops the audience and Blocking, and keeps the button in place", () => {
+    captainForm();
+    fireEvent.click(
+      screen.getByRole("radio", { name: /Anyone may answer \(optional\)/ }),
+    );
+    expect(screen.getByText("What happens when you send")).toBeTruthy();
+    expect(
+      screen.getByText(/in My forms for all 38 camp members\./),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Nobody is blocked, and it is not on anyone's to-do list.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("No reminders go out.")).toBeTruthy();
+    expect(screen.queryByText("Audience")).toBeNull();
+    expect(screen.queryByRole("switch", { name: "Blocking" })).toBeNull();
+    expect(screen.queryByLabelText("Due date (optional)")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Send questionnaire" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Put it in My forms" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("Opens for 2027 in My forms. No message goes out."),
+    ).toBeTruthy();
+    // Nothing to count: nobody is asked.
+    expect(screen.queryByText(/will receive this/)).toBeNull();
+  });
+
+  it("puts it in My forms quietly by default", async () => {
+    captainForm();
+    fireEvent.click(
+      screen.getByRole("radio", { name: /Anyone may answer \(optional\)/ }),
+    );
+    const tell = screen.getByRole("switch", {
+      name: "Tell everyone it's there",
+    });
+    expect(tell.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Put it in My forms" }));
+    await waitFor(() => expect(sendAction).toHaveBeenCalledTimes(1));
+    expect(sendAction).toHaveBeenCalledWith("feedback", {
+      scope: "opt_in",
+      blocking: false,
+      announce: false,
+    });
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith("/captains/questionnaires/feedback"),
+    );
+  });
+
+  it("tells everyone once when the captain switches it on", async () => {
+    captainForm();
+    fireEvent.click(
+      screen.getByRole("radio", { name: /Anyone may answer \(optional\)/ }),
+    );
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Tell everyone it's there" }),
+    );
+    expect(
+      screen.getByText(
+        "Opens for 2027 in My forms. Each member gets one inbox note.",
+      ),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Put it in My forms" }));
+    await waitFor(() =>
+      expect(sendAction).toHaveBeenCalledWith(
+        "feedback",
+        expect.objectContaining({ scope: "opt_in", announce: true }),
+      ),
+    );
+  });
+
+  it("reports the server's refusal and stays put", async () => {
+    vi.mocked(sendAction).mockResolvedValue({
+      ok: false,
+      error: "You can only send to a team you lead.",
+    });
+    captainForm();
+    fireEvent.click(
+      screen.getByRole("radio", { name: /Anyone may answer \(optional\)/ }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Put it in My forms" }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("Could not put it in My forms", {
+        description: "You can only send to a team you lead.",
+      }),
+    );
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("never asks a team lead", () => {
+    renderForm({
+      members: [],
+      scopeOptions: [{ value: "team", label: "A team" }],
+      teamOptions: teamOptions.slice(0, 1),
+      asLead: true,
+    });
+    expect(
+      screen.queryByRole("radiogroup", { name: "Who answers?" }),
+    ).toBeNull();
+    expect(screen.queryByText(/Anyone may answer/)).toBeNull();
+    expect(sendButton()).toBeTruthy();
+  });
+});
+
 // --- The live audience count ------------------------------------------------
 // Zero is SHOWN: a team with nobody on it reaches nobody and the send would
 // still report success. An incomplete audience asks the server nothing.

@@ -32,8 +32,9 @@ const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({
 // docs/specs/2026-05-30-pii-at-rest-encryption-design.md.
 //
 // NOTE on the team-interest pickers: [CORRECTION 2026-09-28] nothing sends a
-// follow-up questionnaire from these answers (there is no `opt_in` send; audit
-// #134). Captains read them in the member panel when they put teams
+// follow-up questionnaire from these answers (audit #134; [CORRECTION
+// 2026-10-03] an `opt_in` send now exists, #313, but it is open to every camp
+// member, not addressed by these answers). Captains read them in the member panel when they put teams
 // together, and a team's leads may send their own team a questionnaire. The
 // page's copy says only that. Copy is not shape, so the change did not bump
 // QUESTIONNAIRE_VERSION (see below): a bump would make every member re-submit.

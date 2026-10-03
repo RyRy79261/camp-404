@@ -190,14 +190,17 @@ describe("openActivation — fan-out", () => {
     expect((await getActivationById(act.id))?.status).toBe("open");
   });
 
-  it("rejects a missing activation and an opt_in scope", async () => {
+  it("rejects a missing activation, and opens an opt_in scope with no gates", async () => {
     const db = h.db();
+    const u = await makeUser(db);
     expect(await openActivation(NIL_UUID)).toEqual({
       ok: false,
       error: "Activation not found.",
     });
+    // An optional questionnaire (#313) asks nobody.
     const optin = await makeActivation(db, { scope: "opt_in" });
-    expect((await openActivation(optin.id)).ok).toBe(false);
+    expect(await openActivation(optin.id)).toEqual({ ok: true, created: 0 });
+    expect(await requiredActionsFor(db, u.id)).toEqual([]);
   });
 
   it("the partial unique index forbids a second concurrent open for one key", async () => {

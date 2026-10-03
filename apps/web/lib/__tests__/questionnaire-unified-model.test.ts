@@ -46,7 +46,8 @@ describe("the burner_profile definition under the unified model", () => {
 
 describe("the team-interest page's promise", () => {
   // Audit #134: the page promised a team's follow-up questionnaire for any
-  // team rated above zero, but nothing sends one (no `opt_in` send exists).
+  // team rated above zero, but nothing sends one (an optional `opt_in` send,
+  // #313, is open to everyone, not addressed by these ratings).
   // It may only say what happens: captains read the answers.
   const text = BURNER_PROFILE_TEMPLATE.pages
     .filter((page) => page.id.startsWith(TEAM_INTERESTS_PAGE_ID))

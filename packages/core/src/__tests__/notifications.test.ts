@@ -9,6 +9,7 @@ import {
   notificationMentionsAny,
   payloadLink,
   questionnaireReleaseNotification,
+  optInQuestionnaireNotification,
   questionnaireReminderNotification,
   releaseBody,
   reminderBody,
@@ -87,6 +88,18 @@ describe("payload builders", () => {
     expect(release.kind).toBe("questionnaire_release");
     expect(release.body).toBe(releaseBody(TITLE, null, false));
     expect(payloadLink(release)).toBe(`/questionnaires/${ACTIVATION}`);
+
+    // An optional questionnaire's note (#313) says nobody has to answer, and
+    // opens the form like any other questionnaire notice.
+    const optIn = optInQuestionnaireNotification({
+      activationId: ACTIVATION,
+      title: TITLE,
+    });
+    expect(optIn.kind).toBe("questionnaire_release");
+    expect(optIn.body).toBe(
+      `${TITLE} is in My forms under Optional. Nobody has to fill it in: answer it if you want to.`,
+    );
+    expect(payloadLink(optIn)).toBe(`/questionnaires/${ACTIVATION}`);
 
     const reminder = questionnaireReminderNotification({
       activationId: ACTIVATION,
@@ -287,6 +300,7 @@ describe("notificationMentionsAny", () => {
         title: TITLE,
         dueAt: new Date("2026-03-10T22:30:00Z"),
       }),
+      optInQuestionnaireNotification({ activationId: ACTIVATION, title: TITLE }),
       approvalNotification(),
       captainPromotionNotification({
         requestId: BROADCAST,

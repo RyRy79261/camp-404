@@ -1,4 +1,7 @@
+import Link from "next/link";
 import { aggregateQuestions, CAMP_TIME_ZONE } from "@camp404/core";
+import { countOptInMembers } from "@camp404/db/activations";
+import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { ProgressBar } from "@camp404/ui/components/progress-bar";
 import {
@@ -9,6 +12,7 @@ import {
 import { audienceLabel, getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { answerColumns, formatAnswer } from "../responses/answer-values";
 import { responsesCsvHref } from "../responses/csv-export";
+import { CloseActivationButton } from "./close-send-button";
 import { ReminderButton } from "./reminder-button";
 import {
   emptyStateFor,
@@ -113,14 +117,24 @@ async function ResultsBody({
       )
     : null;
 
+  // An optional send (#313) asked nobody, so it has no completion rate: its
+  // card counts who chose to answer, out of the camp members who can see it.
+  const optIn = active?.scope === "opt_in";
+  const campMembers =
+    optIn && active.status === "open" ? await countOptInMembers() : null;
+
   return (
     <ResultsShell view={view} audience={audience}>
-      {(active || summary.respondents > 0) && (
-        <CompletionCard
-          view={view}
-          summary={summary}
-          questionCount={view.questions.length}
-        />
+      {optIn ? (
+        <OptInCard view={view} summary={summary} campMembers={campMembers} />
+      ) : (
+        (active || summary.respondents > 0) && (
+          <CompletionCard
+            view={view}
+            summary={summary}
+            questionCount={view.questions.length}
+          />
+        )
       )}
       <ResultsView
         questionnaireKey={view.key}
@@ -143,6 +157,64 @@ async function ResultsBody({
 
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
+}
+
+/**
+ * The top card for an optional questionnaire (#313): how many chose to
+ * answer. No percentage, no "still to answer" and no Remind button, because
+ * nobody was asked, so there is nothing to complete. The camp size is there
+ * for scale while it is open. Close send and See each answer sit here, in the
+ * card, as in the approved design.
+ */
+function OptInCard({
+  view,
+  summary,
+  campMembers,
+}: {
+  view: ResultsViewData;
+  summary: ResultsSummary;
+  /** Camp members who can see it in My forms, or null once closed. */
+  campMembers: number | null;
+}) {
+  const active = view.activeActivation;
+  const open = active?.status === "open";
+  const facts = [
+    `${summary.inProgress} started and haven't finished`,
+    open && campMembers !== null
+      ? `${plural(campMembers, "camp member", "camp members")} can see it`
+      : "Closed: it is no longer in My forms",
+  ];
+  return (
+    <Card className="mb-6">
+      <CardContent className="flex flex-col gap-4 p-5 page-sm:flex-row page-sm:items-center page-sm:justify-between page-sm:gap-6">
+        <div className="flex flex-col">
+          <span className="text-3xl font-semibold tabular-nums">
+            {summary.respondents}
+          </span>
+          <span className="text-sm">chose to answer</span>
+          <span className="mt-1 text-xs text-muted-foreground">
+            {facts.join(" · ")}
+          </span>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {open && active && (
+            <CloseActivationButton
+              activationId={active.id}
+              questionnaireKey={view.key}
+              optIn
+            />
+          )}
+          <Button asChild size="sm">
+            <Link
+              href={`/captains/questionnaires/${encodeURIComponent(view.key)}/responses?cycle=${view.cycle}`}
+            >
+              See each answer
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 /**

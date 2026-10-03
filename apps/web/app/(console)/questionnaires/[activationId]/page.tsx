@@ -8,7 +8,11 @@ import {
   hasCampAccess,
   syncOpenGates,
 } from "@/lib/users";
-import { getActivationById, getRequiredAction } from "@camp404/db/activations";
+import {
+  getActivationById,
+  getOptInAccess,
+  getRequiredAction,
+} from "@camp404/db/activations";
 import { loadQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { viewerSeesLeadsOnly } from "@/lib/questionnaire-viewer";
@@ -47,30 +51,39 @@ export default async function QuestionnaireFillPage({
   const activation = await getActivationById(activationId);
   if (!activation) return <RunnerEdgeCard kind="closed" />;
 
-  // Access predicate: the questionnaire must have been sent to this viewer and
-  // still be pending — a completed/waived/expired obligation can't answer here.
-  // A member who joined the audience after the send opened is gated first, so
-  // a link from a reminder or a teammate does not say "not invited".
-  await syncOpenGates(campUser.id);
-  const targeted = await getRequiredAction(
-    campUser.id,
-    activation.questionnaireKey,
-  );
-  if (!targeted) return <RunnerEdgeCard kind="not-invited" />;
-  // Must be a PENDING obligation that belongs to THIS activation — a stale row
-  // pointing at a different (e.g. older) activation for the same key can't answer
-  // here (nextGate routes them to the right one).
-  if (
-    targeted.status === "completed" &&
-    targeted.activationId === activation.id
-  ) {
-    return <RunnerEdgeCard kind="completed" />;
-  }
-  if (
-    targeted.status !== "pending" ||
-    targeted.activationId !== activation.id
-  ) {
-    return <RunnerEdgeCard kind="closed" />;
+  const optIn = activation.scope === "opt_in";
+  if (optIn) {
+    // An optional questionnaire (#313) asked nobody, so there is no gate to
+    // hold: any camp member may answer it once, while it is open.
+    const access = await getOptInAccess(campUser.id, activation);
+    if (access !== "answer") return <RunnerEdgeCard kind={access} />;
+  } else {
+    // Access predicate: the questionnaire must have been sent to this viewer
+    // and still be pending — a completed/waived/expired obligation can't
+    // answer here. A member who joined the audience after the send opened is
+    // gated first, so a link from a reminder or a teammate does not say "not
+    // invited".
+    await syncOpenGates(campUser.id);
+    const targeted = await getRequiredAction(
+      campUser.id,
+      activation.questionnaireKey,
+    );
+    if (!targeted) return <RunnerEdgeCard kind="not-invited" />;
+    // Must be a PENDING obligation that belongs to THIS activation — a stale
+    // row pointing at a different (e.g. older) activation for the same key
+    // can't answer here (nextGate routes them to the right one).
+    if (
+      targeted.status === "completed" &&
+      targeted.activationId === activation.id
+    ) {
+      return <RunnerEdgeCard kind="completed" />;
+    }
+    if (
+      targeted.status !== "pending" ||
+      targeted.activationId !== activation.id
+    ) {
+      return <RunnerEdgeCard kind="closed" />;
+    }
   }
 
   // A direct link must not bypass an EARLIER pending blocking gate.
@@ -123,7 +136,11 @@ export default async function QuestionnaireFillPage({
   return (
     <RunnerFrame className="max-w-xl">
       <div className="flex flex-col gap-6">
-        <RunnerHeader title={activation.title} blocking={activation.blocking} />
+        <RunnerHeader
+          title={activation.title}
+          blocking={activation.blocking}
+          laterHref={optIn ? "/tools/forms" : undefined}
+        />
         {activation.blocking ? (
           <>
             <Card>

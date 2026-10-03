@@ -422,6 +422,78 @@ describe("sendAction — the audience gate", () => {
   });
 });
 
+// --- sendAction: optional questionnaires (#313) ------------------------------
+// "Anyone may answer (optional)" puts a questionnaire in every camp member's
+// My forms. Captains only: a lead is refused here (and again inside the
+// write, covered by the PGlite suite), and whatever the request says, an
+// optional send is never blocking, has no deadline and names nobody.
+
+describe("sendAction — optional questionnaires (opt_in)", () => {
+  beforeEach(() => {
+    vi.mocked(sendActivation).mockResolvedValue({
+      ok: true,
+      activationId: "act1",
+      created: 0,
+    });
+  });
+
+  it("lets a captain put one in My forms, never blocking and with no deadline", async () => {
+    asViewer("captain");
+    expect(
+      await sendAction("feedback", {
+        scope: "opt_in",
+        blocking: true,
+        dueAt: "2026-07-01T12:00:00.000Z",
+        team: "kitchen",
+        targetUserIds: [ADA],
+        announce: true,
+      }),
+    ).toEqual({ ok: true, activationId: "act1" });
+    expect(sendActivation).toHaveBeenCalledWith({
+      questionnaireKey: "feedback",
+      scope: "opt_in",
+      team: null,
+      blocking: false,
+      dueAt: null,
+      activatedByUserId: "u1",
+      targetUserIds: undefined,
+      announce: true,
+    });
+  });
+
+  it("tells nobody unless the captain switched it on", async () => {
+    asViewer("captain");
+    await sendAction("feedback", { scope: "opt_in", blocking: false });
+    expect(vi.mocked(sendActivation).mock.calls[0]![0].announce).toBe(false);
+  });
+
+  it("refuses a team lead, even a lead of several teams", async () => {
+    asViewer("member", ["kitchen", "structures"]);
+    expect(
+      canSendToAudience(
+        { rank: "team_lead", leadTeams: ["kitchen", "structures"] },
+        { scope: "opt_in" },
+      ),
+    ).toBe(false);
+    expect(
+      await sendAction("feedback", { scope: "opt_in", blocking: false }),
+    ).toEqual({ ok: false, error: REFUSED });
+    expect(await previewAudienceCount({ scope: "opt_in" })).toEqual({
+      ok: false,
+      error: REFUSED,
+    });
+    expect(sendActivation).not.toHaveBeenCalled();
+  });
+
+  it("refuses a plain member at the rank gate", async () => {
+    asViewer("member");
+    expect(
+      await sendAction("feedback", { scope: "opt_in", blocking: false }),
+    ).toEqual({ ok: false, error: "Team-lead access only." });
+    expect(sendActivation).not.toHaveBeenCalled();
+  });
+});
+
 describe("unpublishAction", () => {
   beforeEach(() => asViewer("captain"));
 
@@ -518,21 +590,12 @@ describe("previewAudienceCount — refusals cost nothing", () => {
     vi.mocked(getCampManagementRoster).mockResolvedValue(ROSTER);
   });
 
-  it("rejects opt_in with ZERO database round-trips", async () => {
-    const res = await previewAudienceCount({ scope: "opt_in" });
-    expect(res).toEqual({
-      ok: false,
-      error: "opt_in activations are not yet supported.",
-    });
+  it("rejects a scope the send cannot use at all with ZERO database round-trips", async () => {
+    const res = await previewAudienceCount({ scope: "drivers" });
+    expect(res.ok).toBe(false);
     // Not even the auth/gate reads ran: the scope check is pure and comes first,
     // so a debounced client typing through an audience cannot fan out queries.
     expect(getAuthenticatedUser).not.toHaveBeenCalled();
-    expect(getCampManagementRoster).not.toHaveBeenCalled();
-  });
-
-  it("rejects a scope the send cannot use at all", async () => {
-    const res = await previewAudienceCount({ scope: "drivers" });
-    expect(res.ok).toBe(false);
     expect(getCampManagementRoster).not.toHaveBeenCalled();
   });
 
@@ -610,6 +673,18 @@ describe("previewAudienceCount — the count agrees with the send", () => {
       null,
     ).length;
     expect(await previewAudienceCount({ scope: "everyone" })).toEqual({
+      ok: true,
+      count: expected,
+    });
+  });
+
+  it("counts the whole camp for an optional questionnaire (#313)", async () => {
+    const expected = computeAudience(
+      { scope: "everyone", team: null },
+      AUDIENCE_DATA,
+      null,
+    ).length;
+    expect(await previewAudienceCount({ scope: "opt_in" })).toEqual({
       ok: true,
       count: expected,
     });

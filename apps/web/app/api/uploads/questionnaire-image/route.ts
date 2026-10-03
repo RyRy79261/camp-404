@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { flattenQuestions, type Question } from "@camp404/types";
-import { getActivationById, getRequiredAction } from "@camp404/db/activations";
+import {
+  getActivationById,
+  getOptInAccess,
+  getRequiredAction,
+} from "@camp404/db/activations";
 import { getAuthenticatedUser, type AuthenticatedUser } from "@/lib/auth";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { getQuestionnaireForResponses } from "@/lib/questionnaire-config";
@@ -235,16 +239,23 @@ async function resolveImageQuestion(
   const campUser = await ensureCampUser(authUser);
   const activation = await getActivationById(activationId);
   if (!activation || activation.status !== "open") return FORBIDDEN;
-  const targeted = await getRequiredAction(
-    campUser.id,
-    activation.questionnaireKey,
-  );
-  if (
-    !targeted ||
-    targeted.status !== "pending" ||
-    targeted.activationId !== activation.id
-  ) {
-    return FORBIDDEN;
+  if (activation.scope === "opt_in") {
+    // An optional questionnaire (#313): any camp member who has not answered.
+    if ((await getOptInAccess(campUser.id, activation)) !== "answer") {
+      return FORBIDDEN;
+    }
+  } else {
+    const targeted = await getRequiredAction(
+      campUser.id,
+      activation.questionnaireKey,
+    );
+    if (
+      !targeted ||
+      targeted.status !== "pending" ||
+      targeted.activationId !== activation.id
+    ) {
+      return FORBIDDEN;
+    }
   }
 
   // The version this activation PINNED, so a question the head has since

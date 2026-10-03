@@ -7,7 +7,10 @@ import { Button } from "@camp404/ui/components/button";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { toast } from "@camp404/ui/components/toast";
 import { closeActivationAction } from "../../actions";
-import { CLOSE_SEND_CONFIRM } from "../lifecycle-controls";
+import {
+  CLOSE_OPT_IN_CONFIRM,
+  CLOSE_SEND_CONFIRM,
+} from "../lifecycle-controls";
 
 /**
  * Close an open send from the results page (AfrikaBurn's
@@ -17,16 +20,21 @@ import { CLOSE_SEND_CONFIRM } from "../lifecycle-controls";
 export function CloseActivationButton({
   activationId,
   questionnaireKey,
+  optIn = false,
 }: {
   activationId: string;
   questionnaireKey: string;
+  /** An optional questionnaire (#313): closing takes it out of My forms. */
+  optIn?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [confirm, confirmDialog] = useConfirm();
 
   async function close() {
-    if (!(await confirm(CLOSE_SEND_CONFIRM))) return;
+    if (!(await confirm(optIn ? CLOSE_OPT_IN_CONFIRM : CLOSE_SEND_CONFIRM))) {
+      return;
+    }
     startTransition(async () => {
       const result = await closeActivationAction(
         activationId,
