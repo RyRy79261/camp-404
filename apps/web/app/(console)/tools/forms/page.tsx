@@ -1,9 +1,17 @@
+import Link from "next/link";
+import { Check } from "lucide-react";
 import { CAMP_TIME_ZONE } from "@camp404/core";
+import { Button } from "@camp404/ui/components/button";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { requireMemberPage } from "@/lib/member-gate";
 import { getCycles } from "@/lib/camp-config";
 import { getMyDietary } from "@/lib/dietary";
-import { listAnsweredQuestionnaires, listCompletedForms } from "@/lib/forms";
+import {
+  getJustAnswered,
+  listAnsweredQuestionnaires,
+  listCompletedForms,
+  listOptionalForms,
+} from "@/lib/forms";
 import { DIETARY_FORM_PATH } from "@/lib/recipe-copy";
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
 import { FormCard } from "./form-card";
@@ -19,19 +27,30 @@ const dateFmt = new Intl.DateTimeFormat("en-ZA", {
   timeZone: CAMP_TIME_ZONE,
 });
 
-// Every form this member has finished, as a grid of cards in two sections (the
-// AfrikaBurn directory's layout): the ones they can keep updating, then the
-// questionnaires whose answers are fixed. Dietary needs (#245) is always in
-// the first section: every member can fill it in and change it.
-export default async function FormsListPage() {
+// Every form this member can fill in or has finished, as a grid of cards in
+// sections (the AfrikaBurn directory's layout): optional questionnaires nobody
+// has to answer (#313, drawn only when one is open), the ones they can keep
+// updating, then the questionnaires whose answers are fixed. Dietary needs
+// (#245) is always in "Update any time": every member can fill it in and
+// change it. After an optional questionnaire is submitted, the runner comes
+// back here with `?answered=<activation id>` and a strip thanks them.
+export default async function FormsListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ answered?: string }>;
+}) {
   const { campUser } = await requireMemberPage();
+  const { answered: answeredId } = await searchParams;
 
-  const [forms, answered, cycles, dietary] = await Promise.all([
-    listCompletedForms(campUser.id),
-    listAnsweredQuestionnaires(campUser.id),
-    getCycles(),
-    getMyDietary(campUser.id),
-  ]);
+  const [forms, answered, cycles, dietary, optional, justAnswered] =
+    await Promise.all([
+      listCompletedForms(campUser.id),
+      listAnsweredQuestionnaires(campUser.id),
+      getCycles(),
+      getMyDietary(campUser.id),
+      listOptionalForms(campUser.id),
+      getJustAnswered(campUser.id, answeredId),
+    ]);
   const yearName = (cycle: number) => {
     if (cycle === UNSET_CYCLE) return null;
     const name = cycles.find((c) => c.year === cycle)?.name;
@@ -43,11 +62,59 @@ export default async function FormsListPage() {
       <PageHeading
         eyebrow="Tools / My forms"
         title="My forms"
-        description="Questionnaires you've completed. Your burner profile and whether you're coming this year can be updated any time, and we keep a log of what you change. Other questionnaires open read-only: their answers are fixed once you submit."
+        description="Questionnaires you can fill in, and the ones you've completed."
       />
+
+      {justAnswered && (
+        <div
+          role="status"
+          className="mb-6 flex flex-col gap-2 border border-success/50 bg-success/10 px-4 py-3 text-sm page-sm:flex-row page-sm:items-center page-sm:justify-between"
+        >
+          <span className="flex items-center gap-2">
+            <Check className="h-4 w-4 shrink-0 text-success" aria-hidden />
+            Thanks. Your answers to {justAnswered.title} are saved.
+          </span>
+          <Button asChild variant="outline" size="sm" className="shrink-0">
+            <Link href={justAnswered.answersHref}>View my answers</Link>
+          </Button>
+        </div>
+      )}
 
       {
         <div className="flex flex-col gap-8">
+          {optional.length > 0 && (
+            <section
+              aria-labelledby="forms-optional"
+              className="flex flex-col gap-4"
+            >
+              <div className="flex flex-col gap-0.5">
+                <h2
+                  id="forms-optional"
+                  className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                  Optional
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Nobody has to fill these in. Answer if you want to.
+                </p>
+              </div>
+              <ul className="grid gap-4 page-sm:grid-cols-2 page-lg:grid-cols-3">
+                {optional.map((form) => (
+                  <li key={form.activationId}>
+                    <FormCard
+                      href={`/questionnaires/${form.activationId}`}
+                      title={form.title}
+                      description={form.description}
+                      lastEdited={null}
+                      kind="optional"
+                      started={form.started}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {
             <section
               aria-labelledby="forms-editable"
@@ -75,7 +142,7 @@ export default async function FormsListPage() {
                       lastEdited={dateFmt.format(
                         new Date(form.updatedAt ?? form.completedAt),
                       )}
-                      editable
+                      kind="editable"
                     />
                   </li>
                 ))}
@@ -87,7 +154,7 @@ export default async function FormsListPage() {
                     lastEdited={
                       dietary.savedAt ? dateFmt.format(dietary.savedAt) : null
                     }
-                    editable
+                    kind="editable"
                   />
                 </li>
               </ul>
@@ -123,7 +190,7 @@ export default async function FormsListPage() {
                           year ? `Your answers for ${year}.` : "Your answers."
                         }
                         lastEdited={dateFmt.format(a.updatedAt)}
-                        editable={false}
+                        kind="submitted"
                       />
                     </li>
                   );

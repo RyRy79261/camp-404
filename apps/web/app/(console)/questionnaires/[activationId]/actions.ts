@@ -16,6 +16,7 @@ import { viewerSeesLeadsOnly } from "@/lib/questionnaire-viewer";
 import {
   completeBuilderResponse,
   getActivationById,
+  getOptInAccess,
   getRequiredAction,
 } from "@camp404/db/activations";
 import { upsertQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
@@ -25,6 +26,8 @@ const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again — if it keeps happening, let a camp captain know.";
 const SAVE_REJECTED =
   "We couldn't save that — your answers are unreadable or too large. Please reload and try again.";
+const ALREADY_ANSWERED =
+  "You've already answered this. Your answers are in My forms.";
 const LEADS_ONLY_REFUSED =
   "Some of these answers are for team leads only. Reload the page and try again.";
 
@@ -55,20 +58,34 @@ export async function saveBuilderResponses(
   if (!activation || activation.status !== "open") {
     return { ok: false, errors: { _form: "This form is closed." } };
   }
-  // Access predicate — the viewer must have a PENDING obligation for this
-  // questionnaire. A completed/waived/expired row must NOT write: a stale
-  // partial save (completedAt=null) would otherwise wipe a completed row's
-  // completedAt and diverge from required_actions.status.
-  const targeted = await getRequiredAction(
-    campUser.id,
-    activation.questionnaireKey,
-  );
-  if (
-    !targeted ||
-    targeted.status !== "pending" ||
-    targeted.activationId !== activation.id
-  ) {
-    return { ok: false, errors: { _form: "This form is closed." } };
+  // An optional questionnaire (#313) has no gate: any camp member may answer
+  // it once, while it is open. Its writes below are compare-and-sets on "not
+  // finished yet", so a second submit or a late draft cannot reopen it.
+  const optIn = activation.scope === "opt_in";
+  if (optIn) {
+    const access = await getOptInAccess(campUser.id, activation);
+    if (access === "completed") {
+      return { ok: false, errors: { _form: ALREADY_ANSWERED } };
+    }
+    if (access !== "answer") {
+      return { ok: false, errors: { _form: "This form is closed." } };
+    }
+  } else {
+    // Access predicate — the viewer must have a PENDING obligation for this
+    // questionnaire. A completed/waived/expired row must NOT write: a stale
+    // partial save (completedAt=null) would otherwise wipe a completed row's
+    // completedAt and diverge from required_actions.status.
+    const targeted = await getRequiredAction(
+      campUser.id,
+      activation.questionnaireKey,
+    );
+    if (
+      !targeted ||
+      targeted.status !== "pending" ||
+      targeted.activationId !== activation.id
+    ) {
+      return { ok: false, errors: { _form: "This form is closed." } };
+    }
   }
 
   // Structurally validate on EVERY save (not just final) so a malformed client
@@ -123,12 +140,13 @@ export async function saveBuilderResponses(
     toStore = draft.responses;
   }
 
+  let written: boolean;
   try {
     if (final) {
       // Atomic: upsert the completed response + satisfy the gate in one
       // transaction, so a response can't be marked complete while the gate
       // stays pending.
-      await completeBuilderResponse({
+      written = await completeBuilderResponse({
         userId: campUser.id,
         definitionKey: activation.questionnaireKey,
         definitionVersion: activation.version,
@@ -140,9 +158,10 @@ export async function saveBuilderResponses(
         // Answers marked for the app's own tables (allergies, driving this
         // year, arrival day…) land there in the same transaction.
         mirror: questionnaireRoleMirror(definition, toStore),
+        firstSubmitOnly: optIn,
       });
     } else {
-      await upsertQuestionnaireResponse({
+      written = await upsertQuestionnaireResponse({
         userId: campUser.id,
         definitionKey: activation.questionnaireKey,
         definitionVersion: activation.version,
@@ -150,11 +169,16 @@ export async function saveBuilderResponses(
         responses: toStore,
         activationId: activation.id,
         completedAt: null,
+        keepCompleted: optIn,
       });
     }
   } catch (err) {
     console.error("saveBuilderResponses persistence failed", err);
     return { ok: false, errors: { _form: SAVE_FAILED } };
+  }
+  // Lost the race to another submit of the same optional questionnaire.
+  if (optIn && !written) {
+    return { ok: false, errors: { _form: ALREADY_ANSWERED } };
   }
 
   // redirect() throws a control-flow signal, so it lives outside the try/catch.
@@ -166,7 +190,13 @@ export async function saveBuilderResponses(
     // completion screen and every page after it stayed headerless until a
     // reload (owner's report, 2026-09-25). Refresh from the root layout down.
     revalidateManifest();
-    redirect(`/questionnaires/${activation.id}/complete`);
+    // An optional questionnaire goes back to My forms, which says it is saved
+    // and moves it under Submitted questionnaires.
+    redirect(
+      optIn
+        ? `/tools/forms?answered=${activation.id}`
+        : `/questionnaires/${activation.id}/complete`,
+    );
   }
   return { ok: true };
 }

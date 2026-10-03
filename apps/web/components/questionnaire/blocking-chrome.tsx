@@ -42,10 +42,16 @@ export function BlockingBadge({ blocking }: { blocking: boolean }) {
 export function RunnerHeader({
   title,
   blocking,
+  laterHref = "/notifications",
   children,
 }: {
   title: string;
   blocking: boolean;
+  /**
+   * Where "Later" goes: the inbox, where a sent questionnaire stays listed. An
+   * optional one (#313) waits in My forms instead.
+   */
+  laterHref?: "/notifications" | "/tools/forms";
   /** A line or two under the title. */
   children?: ReactNode;
 }) {
@@ -61,7 +67,7 @@ export function RunnerHeader({
           </OutsideBlockingLayer>
         ) : (
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link href="/notifications">Later</Link>
+            <Link href={laterHref}>Later</Link>
           </Button>
         )}
       </div>

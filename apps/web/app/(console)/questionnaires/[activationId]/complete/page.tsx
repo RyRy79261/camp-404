@@ -42,6 +42,11 @@ export default async function QuestionnaireCompletePage({
 
   const activation = await getActivationById(activationId);
   if (!activation) redirect("/");
+  // An optional questionnaire (#313) has no gate to complete: its thank-you
+  // is the strip on My forms.
+  if (activation.scope === "opt_in") {
+    redirect(`/tools/forms?answered=${activation.id}`);
+  }
   // Only a member who has finished THIS send sees its completion screen.
   // Anyone else goes to the form, which explains their own state.
   const own = await getRequiredAction(campUser.id, activation.questionnaireKey);

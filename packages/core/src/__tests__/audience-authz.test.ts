@@ -304,3 +304,29 @@ describe("canSendToAudience — the car", () => {
     }
   });
 });
+
+// #313 (owner approved 2026-10-03): an optional questionnaire sits in every
+// camp member's My forms, so putting one there is a captain's call alone. A
+// lead is refused whatever teams they lead, and an unknown rank fails closed.
+describe("canSendToAudience — optional questionnaires (opt_in, #313)", () => {
+  it("lets a captain put one in My forms", () => {
+    expect(canSendToAudience(captain, { scope: "opt_in" })).toBe(true);
+  });
+
+  it("refuses a team lead, even one naming a team they lead", () => {
+    expect(canSendToAudience(kitchenLead, { scope: "opt_in" })).toBe(false);
+    expect(
+      canSendToAudience(kitchenLead, { scope: "opt_in", team: "kitchen" }),
+    ).toBe(false);
+  });
+
+  it("refuses a plain member and an unknown rank", () => {
+    expect(canSendToAudience(member, { scope: "opt_in" })).toBe(false);
+    expect(
+      canSendToAudience(
+        { rank: "owner" as never, leadTeams: ["kitchen"] },
+        { scope: "opt_in" },
+      ),
+    ).toBe(false);
+  });
+});

@@ -123,6 +123,9 @@ export function ResultsShell({
   children: ReactNode;
 }) {
   const active = view.activeActivation;
+  // An optional send (#313) carries its own Close send in the count card, and
+  // its audience badge ("Anyone may answer") already says nobody must.
+  const optIn = active?.scope === "opt_in";
   const year = cycleLabel(view.cycle, view.currentCycle, view.cycleNames);
   const isPastYear =
     view.currentCycle !== null && view.cycle < view.currentCycle;
@@ -140,12 +143,12 @@ export function ResultsShell({
         title={view.title}
         description={
           active
-            ? `${active.status === "open" ? "Sent" : "Last sent"} ${SENT_ON.format(active.openedAt ?? active.createdAt)} · version ${active.version}`
+            ? `${active.status === "open" ? (optIn ? "Open since" : "Sent") : optIn ? "Opened" : "Last sent"} ${SENT_ON.format(active.openedAt ?? active.createdAt)} · version ${active.version}`
             : `Not sent in ${year}.`
         }
         actions={
           <>
-            {active?.status === "open" && (
+            {active?.status === "open" && !optIn && (
               <CloseActivationButton
                 activationId={active.id}
                 questionnaireKey={view.key}
@@ -158,7 +161,7 @@ export function ResultsShell({
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <Badge variant={isPastYear ? "outline" : "default"}>{year}</Badge>
-        {active && <BlockingBadge blocking={active.blocking} />}
+        {active && !optIn && <BlockingBadge blocking={active.blocking} />}
         {active && (
           <Badge variant={active.status === "open" ? "success" : "outline"}>
             {active.status === "open" ? "Open" : "Closed"}

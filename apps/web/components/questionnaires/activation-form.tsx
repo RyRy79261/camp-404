@@ -4,8 +4,12 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  BellOff,
+  ChartNoAxesColumn,
   Check,
+  Folder,
   Loader2,
+  LockOpen,
   Search,
   Send,
   ShieldCheck,
@@ -53,9 +57,15 @@ import { CLOSE_SEND_CONFIRM } from "@/app/(console)/captains/questionnaires/[key
 // and the due date, and the Send row.
 //
 // The audiences are Camp 404's: everyone, a team, the team leads, or members
-// picked by name. `opt_in` has no send path (openActivation refuses it), so it
-// is not offered. A team lead is offered only a team, and only the teams they
+// picked by name. A team lead is offered only a team, and only the teams they
 // lead; the page narrows the options and `sendAction` checks the rule again.
+//
+// A captain is asked "Who answers?" first (#313, owner approved 2026-10-03):
+// "People you choose must answer" is the audience and delivery form below,
+// unchanged; "Anyone may answer (optional)" puts the questionnaire under
+// Optional in every camp member's My forms (scope `opt_in`), asking nobody: no
+// audience, no Blocking switch, no due date, just whether to tell everyone
+// it's there. A team lead never sees the question.
 
 /** A member the individual picker offers. */
 export interface MemberOption {
@@ -159,6 +169,39 @@ export interface ActivationFormProps {
   initialBlocking?: boolean;
   /** A `datetime-local` value. */
   initialDueAt?: string;
+  /**
+   * Captains only: offer "Who answers?", with "Anyone may answer (optional)".
+   * A team lead's screen never shows it, and the server refuses them anyway.
+   */
+  offerOptIn?: boolean;
+  /** How many camp members an optional questionnaire would show to now. */
+  campMemberCount?: number | null;
+}
+
+/** "Who answers?": the people the captain picks, or anyone who wants to. */
+export type AnswerMode = "asked" | "optional";
+
+const ANSWER_MODES: readonly AudienceOption[] = [
+  { value: "asked", label: "People you choose must answer" },
+  { value: "optional", label: "Anyone may answer (optional)" },
+];
+
+const ANSWER_MODE_CAPTION: Record<AnswerMode, string> = {
+  asked:
+    "It goes to the people you pick, waits in their inbox, and they get reminders.",
+  optional:
+    "Nobody is asked. It sits in My forms for anyone who wants to fill it in.",
+};
+
+/** The line beside the send button for an optional questionnaire. */
+export function optionalSendNote(
+  yearLabel: string | null | undefined,
+  announce: boolean,
+): string {
+  const opens = yearLabel
+    ? `Opens for ${yearLabel} in My forms.`
+    : "Opens in My forms.";
+  return `${opens} ${announce ? "Each member gets one inbox note." : "No message goes out."}`;
 }
 
 export function ActivationForm({
@@ -173,10 +216,15 @@ export function ActivationForm({
   initialAudience,
   initialBlocking,
   initialDueAt,
+  offerOptIn = false,
+  campMemberCount = null,
 }: ActivationFormProps) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [confirm, confirmDialog] = useConfirm();
+  const [mode, setMode] = React.useState<AnswerMode>("asked");
+  const [announce, setAnnounce] = React.useState(false);
+  const optional = offerOptIn && mode === "optional";
 
   const offered = scopeOptions.map((o) => o.value).filter(isSendScope);
   const [scope, setScope] = React.useState<SendScope>(() =>
@@ -209,13 +257,15 @@ export function ActivationForm({
     team,
     selectedCount: selected.size,
   });
-  const specKey = incomplete
-    ? ""
-    : JSON.stringify({
-        scope,
-        team: scope === "team" ? team : null,
-        targetUserIds: scope === "individual" ? [...selected].sort() : [],
-      });
+  // An optional questionnaire has no audience to count: nothing is asked.
+  const specKey =
+    incomplete || optional
+      ? ""
+      : JSON.stringify({
+          scope,
+          team: scope === "team" ? team : null,
+          targetUserIds: scope === "individual" ? [...selected].sort() : [],
+        });
 
   // LIVE count of who this reaches, computed on the server by the same gate
   // and resolver the send uses. Debounced 300 ms so ticking through a member
@@ -268,6 +318,24 @@ export function ActivationForm({
   const backHref = asLead
     ? ("/captains/questionnaires" as const)
     : (`/captains/questionnaires/${questionnaireKey}` as const);
+
+  function putInMyForms() {
+    startTransition(async () => {
+      const result = await sendAction(questionnaireKey, {
+        scope: "opt_in",
+        blocking: false,
+        announce,
+      });
+      if (!result.ok) {
+        toast.error("Could not put it in My forms", {
+          description: result.error,
+        });
+        return;
+      }
+      toast.success("It's in My forms");
+      router.push(backHref);
+    });
+  }
 
   function doSend() {
     setConfirmOpen(false);
@@ -362,175 +430,231 @@ export function ActivationForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Audience</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <RadioCardGroup
-            aria-label={`Who should answer “${title}”?`}
-            className={cn(
-              "grid gap-3",
-              scopeOptions.length > 1 && "page-sm:grid-cols-2",
-              scopeOptions.length > 2 && "page-lg:grid-cols-4",
-            )}
-            value={scope}
-            onValueChange={(v) => {
-              if (isSendScope(v)) setScope(v);
-            }}
-            options={scopeOptions.filter((o) => isSendScope(o.value))}
-            render={(option, active) => {
-              const card = SCOPE_CARD[option.value as SendScope];
-              return (
-                <AudienceModeCard
+      {offerOptIn && (
+        <Card>
+          <CardHeader>
+            <CardTitle id="send-who-answers">Who answers?</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RadioCardGroup
+              aria-labelledby="send-who-answers"
+              className="grid gap-3 page-sm:grid-cols-2"
+              value={mode}
+              onValueChange={(v) => {
+                if (v === "asked" || v === "optional") setMode(v);
+              }}
+              options={ANSWER_MODES}
+              render={(option, active) => (
+                <AnswerModeCard
                   active={active}
-                  icon={card.icon}
                   title={option.label}
-                  caption={(asLead && card.leadCaption) || card.caption}
-                />
-              );
-            }}
-          />
-
-          {scope === "team" && (
-            <div className="flex flex-col gap-2">
-              <span id="send-team-label" className="text-sm font-medium">
-                Which team?
-              </span>
-              {teamOptions.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  There are no active teams to send to.
-                </p>
-              ) : (
-                <RadioCardGroup
-                  aria-labelledby="send-team-label"
-                  className="flex flex-wrap gap-2"
-                  itemClassName="rounded-full"
-                  value={team}
-                  onValueChange={setTeam}
-                  options={teamOptions}
-                  render={(option, active) => (
-                    <Chip active={active} label={option.label} />
-                  )}
+                  caption={ANSWER_MODE_CAPTION[option.value as AnswerMode]}
                 />
               )}
-            </div>
-          )}
+            />
+          </CardContent>
+        </Card>
+      )}
 
-          {scope === "individual" && (
-            <div className="flex flex-col gap-2">
-              <span className="text-sm font-medium">
-                Choose members ({selected.size} selected)
-              </span>
-              <div className="flex items-center gap-2 rounded-md border border-input bg-background px-3">
-                <Search aria-hidden className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.currentTarget.value)}
-                  placeholder="Search members"
-                  aria-label="Search members"
-                  className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+      {optional ? (
+        <OptionalSendCard
+          campMemberCount={campMemberCount}
+          announce={announce}
+          onAnnounceChange={setAnnounce}
+        />
+      ) : (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Audience</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <RadioCardGroup
+                aria-label={`Who should answer “${title}”?`}
+                className={cn(
+                  "grid gap-3",
+                  scopeOptions.length > 1 && "page-sm:grid-cols-2",
+                  scopeOptions.length > 2 && "page-lg:grid-cols-4",
+                )}
+                value={scope}
+                onValueChange={(v) => {
+                  if (isSendScope(v)) setScope(v);
+                }}
+                options={scopeOptions.filter((o) => isSendScope(o.value))}
+                render={(option, active) => {
+                  const card = SCOPE_CARD[option.value as SendScope];
+                  return (
+                    <AudienceModeCard
+                      active={active}
+                      icon={card.icon}
+                      title={option.label}
+                      caption={(asLead && card.leadCaption) || card.caption}
+                    />
+                  );
+                }}
+              />
+
+              {scope === "team" && (
+                <div className="flex flex-col gap-2">
+                  <span id="send-team-label" className="text-sm font-medium">
+                    Which team?
+                  </span>
+                  {teamOptions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      There are no active teams to send to.
+                    </p>
+                  ) : (
+                    <RadioCardGroup
+                      aria-labelledby="send-team-label"
+                      className="flex flex-wrap gap-2"
+                      itemClassName="rounded-full"
+                      value={team}
+                      onValueChange={setTeam}
+                      options={teamOptions}
+                      render={(option, active) => (
+                        <Chip active={active} label={option.label} />
+                      )}
+                    />
+                  )}
+                </div>
+              )}
+
+              {scope === "individual" && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm font-medium">
+                    Choose members ({selected.size} selected)
+                  </span>
+                  <div className="flex items-center gap-2 rounded-md border border-input bg-background px-3">
+                    <Search
+                      aria-hidden
+                      className="h-4 w-4 text-muted-foreground"
+                    />
+                    <Input
+                      value={query}
+                      onChange={(e) => setQuery(e.currentTarget.value)}
+                      placeholder="Search members"
+                      aria-label="Search members"
+                      className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                    />
+                  </div>
+                  <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-md border border-border p-1">
+                    {filtered.length === 0 ? (
+                      <li className="px-2 py-3 text-center text-sm text-muted-foreground">
+                        No members match “{query}”.
+                      </li>
+                    ) : (
+                      filtered.map((m) => (
+                        <li key={m.id}>
+                          <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted">
+                            <Checkbox
+                              checked={selected.has(m.id)}
+                              onCheckedChange={() => toggleMember(m.id)}
+                              aria-label={m.label}
+                            />
+                            <span className="flex min-w-0 flex-col">
+                              <span className="truncate text-sm font-medium">
+                                {m.label}
+                              </span>
+                              {m.sub && (
+                                <span className="truncate text-xs text-muted-foreground">
+                                  {m.sub}
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              <AudiencePreview
+                preview={preview}
+                prompt={incomplete ? promptFor(scope) : null}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Delivery</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="send-blocking">Blocking</Label>
+                  <p
+                    id="send-blocking-help"
+                    className="max-w-md text-xs text-muted-foreground"
+                  >
+                    A blocking questionnaire is a hard gate — members can do
+                    nothing else in the app until they answer. Leave it off and
+                    it waits in their inbox instead.
+                  </p>
+                </div>
+                <Switch
+                  id="send-blocking"
+                  aria-describedby="send-blocking-help"
+                  className="mt-1"
+                  checked={blocking}
+                  onCheckedChange={setBlocking}
                 />
               </div>
-              <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-md border border-border p-1">
-                {filtered.length === 0 ? (
-                  <li className="px-2 py-3 text-center text-sm text-muted-foreground">
-                    No members match “{query}”.
-                  </li>
-                ) : (
-                  filtered.map((m) => (
-                    <li key={m.id}>
-                      <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted">
-                        <Checkbox
-                          checked={selected.has(m.id)}
-                          onCheckedChange={() => toggleMember(m.id)}
-                          aria-label={m.label}
-                        />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="truncate text-sm font-medium">
-                            {m.label}
-                          </span>
-                          {m.sub && (
-                            <span className="truncate text-xs text-muted-foreground">
-                              {m.sub}
-                            </span>
-                          )}
-                        </span>
-                      </label>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
-          )}
 
-          <AudiencePreview
-            preview={preview}
-            prompt={incomplete ? promptFor(scope) : null}
-          />
-        </CardContent>
-      </Card>
+              <div>
+                <BlockingBadge blocking={blocking} />
+              </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Delivery</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="send-blocking">Blocking</Label>
-              <p
-                id="send-blocking-help"
-                className="max-w-md text-xs text-muted-foreground"
-              >
-                A blocking questionnaire is a hard gate — members can do nothing
-                else in the app until they answer. Leave it off and it waits in
-                their inbox instead.
-              </p>
-            </div>
-            <Switch
-              id="send-blocking"
-              aria-describedby="send-blocking-help"
-              className="mt-1"
-              checked={blocking}
-              onCheckedChange={setBlocking}
-            />
-          </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="send-due">Due date (optional)</Label>
+                <Input
+                  id="send-due"
+                  type="datetime-local"
+                  className="max-w-xs"
+                  value={dueAtLocal}
+                  onChange={(e) => setDueAtLocal(e.currentTarget.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
-          <div>
-            <BlockingBadge blocking={blocking} />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="send-due">Due date (optional)</Label>
-            <Input
-              id="send-due"
-              type="datetime-local"
-              className="max-w-xs"
-              value={dueAtLocal}
-              onChange={(e) => setDueAtLocal(e.currentTarget.value)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* The send row stays in one place whichever way the captain chose. */}
       <div className="flex flex-col gap-3 border-t border-border pt-4 page-sm:flex-row page-sm:items-center page-sm:justify-between">
         <p className="text-xs text-muted-foreground">
-          Sending asks everyone this audience matches now, and anyone who joins
-          it while the send is open
-          {yearLabel ? `, for ${yearLabel}` : ""}.
+          {optional ? (
+            optionalSendNote(yearLabel, announce)
+          ) : (
+            <>
+              Sending asks everyone this audience matches now, and anyone who
+              joins it while the send is open
+              {yearLabel ? `, for ${yearLabel}` : ""}.
+            </>
+          )}
         </p>
         <div className="flex shrink-0 justify-end gap-2">
           <Button asChild variant="outline">
             <Link href={backHref}>Cancel</Link>
           </Button>
-          <Button type="button" onClick={attemptSend} disabled={pending}>
+          <Button
+            type="button"
+            onClick={optional ? putInMyForms : attemptSend}
+            disabled={pending}
+          >
             {pending ? (
               <Loader2 className="animate-spin" aria-hidden />
             ) : (
               <Send aria-hidden />
             )}
-            {pending ? "Sending…" : "Send questionnaire"}
+            {optional
+              ? pending
+                ? "Putting it in My forms…"
+                : "Put it in My forms"
+              : pending
+                ? "Sending…"
+                : "Send questionnaire"}
           </Button>
         </div>
       </div>
@@ -647,6 +771,116 @@ function RadioCardGroup({
         );
       })}
     </div>
+  );
+}
+
+/** A "Who answers?" card: a radio dot, the choice and what it means. */
+function AnswerModeCard({
+  active,
+  title,
+  caption,
+}: {
+  active: boolean;
+  title: string;
+  caption: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "flex h-full items-start gap-3 rounded-lg border p-4 text-left transition-colors",
+        active ? CHOICE_ON : CHOICE_OFF,
+      )}
+    >
+      <span
+        aria-hidden
+        className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-primary"
+      >
+        {active && <span className="h-2 w-2 rounded-full bg-primary" />}
+      </span>
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="text-sm font-semibold">{title}</span>
+        <span className="text-xs text-muted-foreground">{caption}</span>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * What an optional questionnaire does, said before it goes (the design's
+ * "What happens when you send"), and the one choice it has: whether to tell
+ * everyone it's there.
+ */
+function OptionalSendCard({
+  campMemberCount,
+  announce,
+  onAnnounceChange,
+}: {
+  campMemberCount: number | null;
+  announce: boolean;
+  onAnnounceChange: (on: boolean) => void;
+}) {
+  const everyone =
+    campMemberCount === null
+      ? "for every camp member"
+      : `for all ${campMemberCount} camp ${campMemberCount === 1 ? "member" : "members"}`;
+  const facts: { icon: React.ReactNode; text: React.ReactNode }[] = [
+    {
+      icon: <Folder />,
+      text: (
+        <>
+          It shows under <strong>Optional</strong> in My forms {everyone}.
+        </>
+      ),
+    },
+    {
+      icon: <LockOpen />,
+      text: "Nobody is blocked, and it is not on anyone's to-do list.",
+    },
+    { icon: <BellOff />, text: "No reminders go out." },
+    {
+      icon: <ChartNoAxesColumn />,
+      text: "Results show how many chose to answer. It stays open until you close it.",
+    },
+  ];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>What happens when you send</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <ul className="flex flex-col gap-3">
+          {facts.map((fact, i) => (
+            <li key={i} className="flex items-start gap-3 text-sm">
+              <span
+                aria-hidden
+                className="mt-0.5 text-os-accent [&_svg]:h-4 [&_svg]:w-4"
+              >
+                {fact.icon}
+              </span>
+              <span>{fact.text}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-3">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="send-announce">{"Tell everyone it's there"}</Label>
+            <p
+              id="send-announce-help"
+              className="text-xs text-muted-foreground"
+            >
+              {"One note in each member's inbox. Off: no message at all."}
+            </p>
+          </div>
+          <Switch
+            id="send-announce"
+            aria-describedby="send-announce-help"
+            className="mt-1"
+            checked={announce}
+            onCheckedChange={onAnnounceChange}
+          />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

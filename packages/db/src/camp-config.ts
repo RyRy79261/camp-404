@@ -459,7 +459,7 @@ export const AUDIENCE_SCOPE_LABELS: Readonly<Record<AudienceScope, string>> = {
   team_leads: "Team leads",
   drivers: "Drivers",
   individual: "Specific members",
-  opt_in: "Anyone who opts in",
+  opt_in: "Anyone may answer",
   car: "The people in my car",
 };
 

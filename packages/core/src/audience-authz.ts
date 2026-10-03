@@ -92,6 +92,12 @@ export interface AudienceSpec {
  * because neither is "a team they lead". The send path re-reads the sender's
  * rank inside its own transaction (`lockSenderReach` in @camp404/db), so a
  * captain demoted mid-send cannot slip through on this answer.
+ *
+ * OPTIONAL QUESTIONNAIRES (#313, owner approved 2026-10-03). `opt_in` puts a
+ * questionnaire under Optional in every camp member's My forms, asking nobody.
+ * Captains only, for the same reason: it reaches the whole camp. The send path
+ * (`sendActivation` in @camp404/db) asks this function again inside its own
+ * transaction, on the sender's rank and lead teams read there.
  */
 const CAPTAIN_SCOPES: ReadonlySet<string> = new Set([
   "everyone",

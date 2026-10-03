@@ -89,6 +89,24 @@ export function questionnaireReleaseNotification(input: {
 }
 
 /**
+ * A captain put an optional questionnaire in My forms and chose "Tell everyone
+ * it's there" (#313, owner approved 2026-10-03). Nobody is asked: the note
+ * says where it is and that it is up to them. The tap opens the form.
+ */
+export function optInQuestionnaireNotification(input: {
+  activationId: string;
+  title: string;
+}): NotificationPayload {
+  return {
+    kind: "questionnaire_release",
+    title: input.title,
+    body: `${input.title} is in My forms under Optional. Nobody has to fill it in: answer it if you want to.`,
+    refType: QUESTIONNAIRE_REF_TYPE,
+    refId: input.activationId,
+  };
+}
+
+/**
  * The reminder line (§7.4: there is no custom message in v1). A send with no
  * deadline gets the deadline-free phrasing rather than "undefined" where a date
  * should be.

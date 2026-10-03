@@ -19,6 +19,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@camp404/db/activations", () => ({
   completeBuilderResponse: vi.fn(),
   getActivationById: vi.fn(),
+  getOptInAccess: vi.fn(),
   getRequiredAction: vi.fn(),
 }));
 vi.mock("@camp404/db/questionnaire-responses", () => ({
@@ -42,6 +43,7 @@ import { ensureCampUser, hasCampAccess, isTeamLead } from "@/lib/users";
 import {
   completeBuilderResponse,
   getActivationById,
+  getOptInAccess,
   getRequiredAction,
 } from "@camp404/db/activations";
 import { upsertQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
@@ -549,5 +551,92 @@ describe("saveBuilderResponses — team leads only questions (#251)", () => {
     );
     expect(completeBuilderResponse).toHaveBeenCalledTimes(1);
     expect(isTeamLead).not.toHaveBeenCalled();
+  });
+});
+
+// An optional questionnaire (#313) asked nobody, so there is no gate: any camp
+// member may answer it once while it is open. Its access comes from
+// getOptInAccess, never a required_actions row, and both writes are
+// compare-and-sets so a second submit cannot change fixed answers.
+describe("saveBuilderResponses — an optional questionnaire (opt_in)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getAuthenticatedUserOrRedirect).mockResolvedValue({
+      id: "auth-1",
+      primaryEmail: "member@example.com",
+      displayName: "Member",
+    } as never);
+    vi.mocked(ensureCampUser).mockResolvedValue({ id: "camp-1" } as never);
+    vi.mocked(hasCampAccess).mockReturnValue(true);
+    vi.mocked(getActivationById).mockResolvedValue({
+      id: "act-1",
+      status: "open",
+      scope: "opt_in",
+      questionnaireKey: "kitchen_shift",
+      version: "v2",
+      cycle: 3,
+      carryOver: false,
+    } as never);
+    vi.mocked(getOptInAccess).mockResolvedValue("answer");
+    vi.mocked(getBuilderDefinition).mockResolvedValue(definition);
+    vi.mocked(upsertQuestionnaireResponse).mockResolvedValue(true);
+    vi.mocked(completeBuilderResponse).mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("saves a draft without any gate, never reopening a finished answer", async () => {
+    expect(await saveBuilderResponses("act-1", { name: "Ada" }, false)).toEqual(
+      {
+        ok: true,
+      },
+    );
+    expect(getRequiredAction).not.toHaveBeenCalled();
+    expect(
+      vi.mocked(upsertQuestionnaireResponse).mock.calls[0]![0],
+    ).toMatchObject({ cycle: 3, completedAt: null, keepCompleted: true });
+  });
+
+  it("submits once and goes back to My forms, which thanks the member", async () => {
+    await saveBuilderResponses("act-1", { name: "Ada" }, true);
+    expect(vi.mocked(completeBuilderResponse).mock.calls[0]![0]).toMatchObject({
+      cycle: 3,
+      firstSubmitOnly: true,
+    });
+    expect(redirect).toHaveBeenCalledWith("/tools/forms?answered=act-1");
+  });
+
+  it("refuses a member who already answered, writing nothing", async () => {
+    vi.mocked(getOptInAccess).mockResolvedValue("completed");
+    expect(await saveBuilderResponses("act-1", { name: "Ada" }, true)).toEqual({
+      ok: false,
+      errors: {
+        _form: "You've already answered this. Your answers are in My forms.",
+      },
+    });
+    expect(completeBuilderResponse).not.toHaveBeenCalled();
+  });
+
+  it("says so when another submit won the race", async () => {
+    vi.mocked(completeBuilderResponse).mockResolvedValue(false);
+    expect(await saveBuilderResponses("act-1", { name: "Ada" }, true)).toEqual({
+      ok: false,
+      errors: {
+        _form: "You've already answered this. Your answers are in My forms.",
+      },
+    });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("refuses someone it is not open to, and a closed send", async () => {
+    for (const access of ["not-invited", "closed"] as const) {
+      vi.mocked(getOptInAccess).mockResolvedValue(access);
+      expect(
+        await saveBuilderResponses("act-1", { name: "Ada" }, false),
+      ).toEqual({ ok: false, errors: { _form: "This form is closed." } });
+    }
+    expect(upsertQuestionnaireResponse).not.toHaveBeenCalled();
   });
 });

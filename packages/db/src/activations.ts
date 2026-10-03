@@ -7,15 +7,23 @@ import { meetsRequiredVersion } from "./versions";
 import { currentCycleNumber } from "./cycles";
 import type { DbOrTx } from "./audit";
 import { applyParticipationIntent } from "./participations";
-import type { QuestionnaireResponses, RoleMirror } from "@camp404/types";
+import {
+  safeParseStoredDefinition,
+  type Questionnaire,
+  type QuestionnaireResponses,
+  type RoleMirror,
+} from "@camp404/types";
 
 // The required_actions gating producer + satisfaction. A questionnaire
 // activation fans out one required_actions row per matched member (the generic
 // "what blocks this user" mechanism); a bespoke feature satisfies its row by
 // flipping status to completed when it writes its own domain table.
 
-// questionnaire scope subset the producer supports today. `opt_in` is a pull
-// model (members self-select) — deferred. `drivers` is broadcast-only.
+// The questionnaire scopes the producer fans out over: each matched member gets
+// a required_actions row. `opt_in` (#313) is the pull model: it opens with NO
+// gates, so it blocks nobody, sits on nobody's to-do list and is never
+// reminded; it shows under Optional in every camp member's My forms instead
+// (listOptionalQuestionnaires). `drivers` is broadcast-only.
 // Exported because the cycle rollover previews the same fan-out and must agree
 // with the producer on which scopes have an audience at all.
 export const PUSH_SCOPES = new Set([
@@ -181,30 +189,13 @@ async function upsertGatesTx(
 }
 
 /**
- * Open a questionnaire activation: mark it open and fan out one
- * `required_actions` row per matched member. Idempotent / re-activation-safe
- * via the `(user_id, action_key)` unique index — a re-open re-points the row
- * to this activation/version and re-sets it to pending. A `carry` activation
- * skips members who already answered at a satisfying version (§7.3a).
+ * Who a push send gates: the members its scope matches, read for the send's
+ * FROZEN year.
  */
-export async function openActivation(
-  activationId: string,
-): Promise<OpenActivationResult> {
+async function pushRecipients(
+  act: typeof schema.questionnaireActivations.$inferSelect,
+): Promise<string[]> {
   const httpDb = createHttpDb();
-  const [act] = await httpDb
-    .select()
-    .from(schema.questionnaireActivations)
-    .where(eq(schema.questionnaireActivations.id, activationId))
-    .limit(1);
-  if (!act) return { ok: false, error: "Activation not found." };
-  if (act.scope === "opt_in") {
-    // TODO(opt_in): pull model — members self-select; no upfront fan-out.
-    return { ok: false, error: "opt_in activations are not yet supported." };
-  }
-  if (!PUSH_SCOPES.has(act.scope)) {
-    return { ok: false, error: `Unsupported activation scope: ${act.scope}.` };
-  }
-
   const [members, memberships, targets] = await Promise.all([
     httpDb
       .select({
@@ -234,7 +225,7 @@ export async function openActivation(
 
   // Questionnaire scope never targets drivers; pass [] for that axis. No sender
   // to exclude for an activation.
-  const recipientIds = computeAudience(
+  return computeAudience(
     { scope: act.scope as BroadcastScope, team: act.team },
     {
       members,
@@ -244,6 +235,34 @@ export async function openActivation(
     },
     null,
   );
+}
+
+/**
+ * Open a questionnaire activation: mark it open and fan out one
+ * `required_actions` row per matched member. Idempotent / re-activation-safe
+ * via the `(user_id, action_key)` unique index — a re-open re-points the row
+ * to this activation/version and re-sets it to pending. A `carry` activation
+ * skips members who already answered at a satisfying version (§7.3a). An
+ * `opt_in` activation opens with no rows at all (#313).
+ */
+export async function openActivation(
+  activationId: string,
+): Promise<OpenActivationResult> {
+  const httpDb = createHttpDb();
+  const [act] = await httpDb
+    .select()
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.id, activationId))
+    .limit(1);
+  if (!act) return { ok: false, error: "Activation not found." };
+  // An optional questionnaire asks nobody: it opens with no gates at all, under
+  // the same year lock as any send.
+  const optIn = act.scope === "opt_in";
+  if (!optIn && !PUSH_SCOPES.has(act.scope)) {
+    return { ok: false, error: `Unsupported activation scope: ${act.scope}.` };
+  }
+
+  const recipientIds = optIn ? [] : await pushRecipients(act);
 
   return await withTransaction(async (tx) => {
     // Serialise with the year. advanceCycle and setFoundingYear hold FOR UPDATE
@@ -619,6 +638,210 @@ export async function listPendingQuestionnaires(
   return rows;
 }
 
+// --- Optional questionnaires (opt_in, #313) ---------------------------------
+// Owner approved 2026-10-03: "Build the opt in questionnaire and label it
+// optional". A captain puts a questionnaire in My forms for the whole camp and
+// asks nobody. There are no required_actions rows behind it, so it blocks
+// nobody, is on nobody's to-do list or "needs your answer" list, and no
+// reminder can find it. Who may answer is the camp's `everyone` audience, read
+// live: approved members who are not system or erased accounts. A member has
+// answered when they hold a FINISHED response for the questionnaire in the
+// send's year; answers are fixed once submitted, as for every builder send.
+
+/** One open optional questionnaire a member has not answered yet. */
+export interface OptionalQuestionnaire {
+  activationId: string;
+  questionnaireKey: string;
+  title: string;
+  /** The year the send is filed under (its frozen cycle). */
+  cycle: number;
+  openedAt: Date | null;
+  /** True when the member saved part of it and has not submitted. */
+  started: boolean;
+  /** The version the send pinned, as the member will see it, or null. */
+  questionnaire: Questionnaire | null;
+}
+
+/** Whether a member is one of the camp members an optional send is open to. */
+function isOptInMember(
+  user:
+    | { isSystem: boolean; sanitised: boolean; approvalStatus: string }
+    | undefined,
+): boolean {
+  return (
+    !!user &&
+    !user.isSystem &&
+    !user.sanitised &&
+    user.approvalStatus === "approved"
+  );
+}
+
+/**
+ * Every open optional questionnaire this member has not answered, newest
+ * first: the Optional section of My forms. Empty for anyone who is not an
+ * approved camp member. Two reads in the usual state (the open optional sends,
+ * then the member and their answers together), one when nothing is open.
+ */
+export async function listOptionalQuestionnaires(
+  userId: string,
+): Promise<OptionalQuestionnaire[]> {
+  const db = createHttpDb();
+  const open = await db
+    .select({
+      activationId: schema.questionnaireActivations.id,
+      questionnaireKey: schema.questionnaireActivations.questionnaireKey,
+      title: schema.questionnaireActivations.title,
+      cycle: schema.questionnaireActivations.cycle,
+      openedAt: schema.questionnaireActivations.openedAt,
+      definition: schema.questionnaireVersions.definition,
+    })
+    .from(schema.questionnaireActivations)
+    .leftJoin(
+      schema.questionnaireVersions,
+      and(
+        eq(
+          schema.questionnaireVersions.definitionKey,
+          schema.questionnaireActivations.questionnaireKey,
+        ),
+        eq(
+          schema.questionnaireVersions.version,
+          schema.questionnaireActivations.version,
+        ),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.questionnaireActivations.status, "open"),
+        eq(schema.questionnaireActivations.scope, "opt_in"),
+      ),
+    )
+    .orderBy(
+      sql`${schema.questionnaireActivations.openedAt} desc nulls last`,
+      asc(schema.questionnaireActivations.title),
+    );
+  if (open.length === 0) return [];
+
+  const [[me], answers] = await Promise.all([
+    db
+      .select({
+        isSystem: schema.users.isSystem,
+        sanitised: schema.users.sanitised,
+        approvalStatus: schema.users.approvalStatus,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1),
+    db
+      .select({
+        definitionKey: schema.questionnaireResponses.definitionKey,
+        cycle: schema.questionnaireResponses.cycle,
+        completedAt: schema.questionnaireResponses.completedAt,
+      })
+      .from(schema.questionnaireResponses)
+      .where(
+        and(
+          eq(schema.questionnaireResponses.userId, userId),
+          inArray(
+            schema.questionnaireResponses.definitionKey,
+            open.map((o) => o.questionnaireKey),
+          ),
+        ),
+      ),
+  ]);
+  if (!isOptInMember(me)) return [];
+
+  const out: OptionalQuestionnaire[] = [];
+  for (const act of open) {
+    const mine = answers.find(
+      (a) =>
+        a.definitionKey === act.questionnaireKey && a.cycle === act.cycle,
+    );
+    if (mine?.completedAt) continue;
+    out.push({
+      activationId: act.activationId,
+      questionnaireKey: act.questionnaireKey,
+      title: act.title,
+      cycle: act.cycle,
+      openedAt: act.openedAt,
+      started: !!mine,
+      questionnaire:
+        act.definition == null
+          ? null
+          : safeParseStoredDefinition(act.definition),
+    });
+  }
+  return out;
+}
+
+/**
+ * Where a member stands on one optional send, for the runner, its save action
+ * and its upload route (the opt_in half of their access predicate):
+ *   - `answer`: an approved camp member, the send is open, not answered yet;
+ *   - `completed`: they finished it for the send's year;
+ *   - `closed`: the send is not open;
+ *   - `not-invited`: not a camp member it is open to (pending, rejected).
+ */
+export type OptInAccess = "answer" | "completed" | "closed" | "not-invited";
+
+export async function getOptInAccess(
+  userId: string,
+  activation: Pick<
+    ActivationRow,
+    "questionnaireKey" | "cycle" | "status" | "scope"
+  >,
+): Promise<OptInAccess> {
+  if (activation.scope !== "opt_in") return "not-invited";
+  const db = createHttpDb();
+  const [[me], [mine]] = await Promise.all([
+    db
+      .select({
+        isSystem: schema.users.isSystem,
+        sanitised: schema.users.sanitised,
+        approvalStatus: schema.users.approvalStatus,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1),
+    db
+      .select({ completedAt: schema.questionnaireResponses.completedAt })
+      .from(schema.questionnaireResponses)
+      .where(
+        and(
+          eq(schema.questionnaireResponses.userId, userId),
+          eq(
+            schema.questionnaireResponses.definitionKey,
+            activation.questionnaireKey,
+          ),
+          eq(schema.questionnaireResponses.cycle, activation.cycle),
+        ),
+      )
+      .limit(1),
+  ]);
+  if (!isOptInMember(me)) return "not-invited";
+  if (mine?.completedAt) return "completed";
+  return activation.status === "open" ? "answer" : "closed";
+}
+
+/**
+ * How many camp members an optional send is open to right now: the
+ * `everyone` audience (approved, not system, not erased). The Send screen's
+ * "for all N camp members" and the results' "N camp members can see it".
+ */
+export async function countOptInMembers(): Promise<number> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.users)
+    .where(
+      and(
+        eq(schema.users.isSystem, false),
+        eq(schema.users.sanitised, false),
+        eq(schema.users.approvalStatus, "approved"),
+      ),
+    );
+  return row?.count ?? 0;
+}
+
 export interface ActivationRow {
   id: string;
   questionnaireKey: string;
@@ -634,6 +857,11 @@ export interface ActivationRow {
    */
   cycle: number;
   carryOver: boolean;
+  /**
+   * Who the send is for. `opt_in` (#313) asks nobody: any camp member may
+   * answer it from My forms, and it has no required_actions rows.
+   */
+  scope: (typeof schema.questionnaireScopeEnum.enumValues)[number];
 }
 
 /** Read a single activation by id, or null. The generic runner loads by id. */
@@ -651,6 +879,7 @@ export async function getActivationById(
       blocking: schema.questionnaireActivations.blocking,
       cycle: schema.questionnaireActivations.cycle,
       carryOver: schema.questionnaireActivations.carryOver,
+      scope: schema.questionnaireActivations.scope,
     })
     .from(schema.questionnaireActivations)
     .where(eq(schema.questionnaireActivations.id, id))
@@ -787,11 +1016,17 @@ export async function completeBuilderResponse(input: {
    * half applied.
    */
   mirror?: RoleMirror;
-}): Promise<void> {
+  /**
+   * Write only if the member has not already finished this questionnaire for
+   * this year (an optional send, #313, where nothing else stops a second
+   * submit). A compare-and-set on `completed_at IS NULL`: a lost race writes
+   * nothing, not even the role mirror, and returns false.
+   */
+  firstSubmitOnly?: boolean;
+}): Promise<boolean> {
   const now = new Date();
-  await withTransaction(async (tx) => {
-    await writeRoleMirror(tx, input, now);
-    await tx
+  return await withTransaction(async (tx) => {
+    const written = await tx
       .insert(schema.questionnaireResponses)
       .values({
         userId: input.userId,
@@ -818,7 +1053,13 @@ export async function completeBuilderResponse(input: {
           completedAt: now,
           updatedAt: now,
         },
-      });
+        ...(input.firstSubmitOnly
+          ? { setWhere: isNull(schema.questionnaireResponses.completedAt) }
+          : {}),
+      })
+      .returning({ userId: schema.questionnaireResponses.userId });
+    if (written.length === 0) return false;
+    await writeRoleMirror(tx, input, now);
     const [ra] = await tx
       .select({
         id: schema.requiredActions.id,
@@ -843,5 +1084,6 @@ export async function completeBuilderResponse(input: {
         .set({ status: "completed", completedAt: now })
         .where(eq(schema.requiredActions.id, ra.id));
     }
+    return true;
   });
 }

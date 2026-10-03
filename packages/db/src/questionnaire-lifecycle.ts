@@ -2,8 +2,10 @@ import { and, asc, eq, gt, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import {
   QUESTIONNAIRE_REF_TYPE,
   REQUIRED_ACTION_REF_TYPE,
+  canSendToAudience,
   classifyChange,
   definitionLimitErrors,
+  optInQuestionnaireNotification,
   questionnaireReleaseNotification,
   questionnaireReminderNotification,
   requiredActionReminderNotification,
@@ -22,6 +24,7 @@ import {
   type PooledTx,
 } from "./activations";
 import { carryOverFor, currentCycleNumber } from "./cycles";
+import { lockSenderReach } from "./broadcasts";
 
 // Builder-questionnaire lifecycle: publish (snapshot + cosmetic-vs-version-bump),
 // unpublish (status + cascade close), send (open an activation with the one-open
@@ -335,6 +338,7 @@ export async function getOpenActivationForKey(
       blocking: schema.questionnaireActivations.blocking,
       cycle: schema.questionnaireActivations.cycle,
       carryOver: schema.questionnaireActivations.carryOver,
+      scope: schema.questionnaireActivations.scope,
     })
     .from(schema.questionnaireActivations)
     .where(
@@ -356,7 +360,15 @@ export interface SendInput {
   activatedByUserId: string;
   /** Recipients for scope = 'individual'. */
   targetUserIds?: string[];
+  /**
+   * For scope = 'opt_in' only: "Tell everyone it's there". One quiet inbox
+   * note to every camp member (no push, no email). Off: no message at all.
+   */
+  announce?: boolean;
 }
+
+/** The refusal when the sender may not address the audience they chose. */
+export const SEND_REFUSED = "You can only send to a team you lead.";
 
 export type SendResult =
   | { ok: true; activationId: string; created: number }
@@ -404,7 +416,29 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
     carryOverFor(input.questionnaireKey),
   ]);
 
+  // An optional questionnaire (#313) asks nobody: nothing to block on, no
+  // deadline to remind about, nobody picked by name.
+  const optIn = input.scope === "opt_in";
+
   const activationId = await withTransaction(async (tx) => {
+    if (optIn) {
+      // The action asked canSendToAudience on the screen's answer; ask again
+      // on the sender's rank and lead teams read under lock here, so a captain
+      // demoted a moment ago cannot put a questionnaire in the whole camp's My
+      // forms on the old answer.
+      const reach = await lockSenderReach(tx, input.activatedByUserId);
+      const actor =
+        reach === undefined
+          ? { rank: "captain" as const, leadTeams: [] }
+          : {
+              rank:
+                reach.length > 0
+                  ? ("team_lead" as const)
+                  : ("camp_member" as const),
+              leadTeams: reach,
+            };
+      if (!canSendToAudience(actor, { scope: "opt_in" })) return null;
+    }
     const [act] = await tx
       .insert(schema.questionnaireActivations)
       .values({
@@ -412,9 +446,9 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
         version: def.version!,
         title: def.title,
         scope: input.scope,
-        team: input.team ?? null,
-        blocking: input.blocking,
-        dueAt: input.dueAt ?? null,
+        team: optIn ? null : (input.team ?? null),
+        blocking: optIn ? false : input.blocking,
+        dueAt: optIn ? null : (input.dueAt ?? null),
         activatedByUserId: input.activatedByUserId,
         status: "draft",
         cycle,
@@ -435,6 +469,7 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
     }
     return act!.id;
   });
+  if (!activationId) return { ok: false, error: SEND_REFUSED };
 
   // Fan out the gates and flip the activation open. The partial unique index is
   // the backstop for a concurrent second send slipping past the pre-check above:
@@ -444,12 +479,21 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
   try {
     const opened = await openActivation(activationId);
     if (!opened.ok) return { ok: false, error: opened.error };
-    // Tell the members it just gated. The send has committed, so a failure
-    // here is logged, not reported as a failed send.
-    await notifyQuestionnaireReleased({
-      activationId,
-      senderId: input.activatedByUserId,
-    }).catch((err: unknown) => {
+    // Tell the members it just gated (an optional send: everyone, and only if
+    // the captain asked). The send has committed, so a failure here is
+    // logged, not reported as a failed send.
+    const notice = optIn
+      ? input.announce
+        ? notifyOptInOpened({
+            activationId,
+            senderId: input.activatedByUserId,
+          })
+        : null
+      : notifyQuestionnaireReleased({
+          activationId,
+          senderId: input.activatedByUserId,
+        });
+    await notice?.catch((err: unknown) => {
       console.error("sendActivation: release notice failed", err);
     });
     return { ok: true, activationId, created: opened.created };
@@ -624,6 +668,91 @@ export async function notifyQuestionnaireReleased(input: {
   });
 }
 
+/**
+ * "Tell everyone it's there" for an optional questionnaire (#313): one quiet
+ * note in each camp member's inbox. In the app only: no push and no email,
+ * because nobody is asked to do anything. Addressed to the `everyone` audience
+ * at this moment (approved members, no system or erased accounts), the same
+ * people the Optional section shows it to.
+ *
+ * Best-effort, like the release notice: the send has already committed.
+ */
+export async function notifyOptInOpened(input: {
+  activationId: string;
+  senderId: string | null;
+  now?: Date;
+}): Promise<number> {
+  const now = input.now ?? new Date();
+  const db = createHttpDb();
+  const [act] = await db
+    .select({
+      id: schema.questionnaireActivations.id,
+      title: schema.questionnaireActivations.title,
+      status: schema.questionnaireActivations.status,
+      scope: schema.questionnaireActivations.scope,
+    })
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.id, input.activationId))
+    .limit(1);
+  if (!act || act.status !== "open" || act.scope !== "opt_in") return 0;
+
+  return await withTransaction(async (tx) => {
+    const members = await tx
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(
+        and(
+          eq(schema.users.isSystem, false),
+          eq(schema.users.sanitised, false),
+          eq(schema.users.approvalStatus, "approved"),
+        ),
+      );
+    const targets = members.map((m) => m.id);
+    if (targets.length === 0) return 0;
+    const payload = optInQuestionnaireNotification({
+      activationId: act.id,
+      title: act.title,
+    });
+    const [broadcast] = await tx
+      .insert(schema.broadcasts)
+      .values({
+        senderId: input.senderId,
+        kind: "system",
+        scope: "individual",
+        title: payload.title,
+        body: payload.body,
+        channel: "in_app",
+        presentation: "feed",
+        refType: payload.refType,
+        refId: payload.refId,
+        publishedAt: now,
+        dispatchedAt: now,
+      })
+      .returning({ id: schema.broadcasts.id });
+    const broadcastId = broadcast!.id;
+    await tx
+      .insert(schema.broadcastTargets)
+      .values(targets.map((userId) => ({ broadcastId, userId })));
+    await tx
+      .insert(schema.notificationDeliveries)
+      .values(
+        targets.map((userId) => ({
+          ...deliveryValues(payload, {
+            userId,
+            broadcastId,
+            channel: "in_app",
+            presentation: "feed",
+            createdAt: now,
+          }),
+          // Quiet: nobody is asked anything, so no email either.
+          emailStatus: "skipped" as const,
+        })),
+      )
+      .onConflictDoNothing();
+    return targets.length;
+  });
+}
+
 export type ReminderResult =
   /** Delivered. `suppressed` counts pending members inside their 24h window. */
   | {
@@ -683,11 +812,19 @@ export async function sendReminder(input: {
       title: schema.questionnaireActivations.title,
       status: schema.questionnaireActivations.status,
       dueAt: schema.questionnaireActivations.dueAt,
+      scope: schema.questionnaireActivations.scope,
     })
     .from(schema.questionnaireActivations)
     .where(eq(schema.questionnaireActivations.id, input.activationId))
     .limit(1);
   if (!act) return { ok: false, error: "Activation not found." };
+  if (act.scope === "opt_in") {
+    // An optional questionnaire asks nobody (#313): no reminder ever goes out.
+    return {
+      ok: false,
+      error: "Nobody was asked to answer this, so there is nobody to remind.",
+    };
+  }
   if (act.status !== "open") {
     // A closed send expired its pending gates, so there is nobody to remind —
     // but "nobody is outstanding" would read as "everyone answered", which is a

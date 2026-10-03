@@ -164,6 +164,14 @@ export const CLOSE_SEND_CONFIRM = {
   confirmLabel: "Close send",
 } as const;
 
+/** The same question for an optional questionnaire (#313), which asked nobody. */
+export const CLOSE_OPT_IN_CONFIRM = {
+  title: "Close the current send?",
+  description:
+    "It leaves Optional in every member's My forms. Answers already in are kept, and you can send it again.",
+  confirmLabel: "Close send",
+} as const;
+
 /**
  * The lifecycle card: status; Publish (or Re-publish); for a published
  * questionnaire Send (or Close send while one is open), See results and

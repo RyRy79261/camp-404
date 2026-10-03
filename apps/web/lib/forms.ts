@@ -20,6 +20,10 @@ import {
   type CompletedQuestionnaireAnswers,
 } from "@camp404/db/questionnaire-responses";
 import {
+  getActivationById,
+  listOptionalQuestionnaires as listOptionalDb,
+} from "@camp404/db/activations";
+import {
   validateBurnerProfileReplay,
   type ReplayValidation,
 } from "./burner-profile-replay";
@@ -295,6 +299,80 @@ export async function getAnsweredQuestionnaire(
     cycle,
   });
   return answers ?? null;
+}
+
+// --- Optional questionnaires (#313) -------------------------------------
+// A captain may put a questionnaire in My forms that nobody has to answer
+// (owner approved 2026-10-03: "Build the opt in questionnaire and label it
+// optional"). The Optional section lists the open ones this member has not
+// answered; once they submit, the card moves to Submitted questionnaires
+// (listAnsweredQuestionnaires above), like every other builder answer.
+
+/** One card in the Optional section of My forms. */
+export interface OptionalForm {
+  activationId: string;
+  title: string;
+  description: string;
+  /** True when the member saved part of it and has not submitted. */
+  started: boolean;
+}
+
+const OPTIONAL_FALLBACK =
+  "Open to every camp member. Answer it if you want to.";
+
+/**
+ * The line under an optional questionnaire's title: the first section's
+ * description, else its intro text, else a plain sentence saying it is open
+ * to everyone. The card clamps it to three lines.
+ */
+export function optionalFormDescription(
+  questionnaire: Questionnaire | null,
+): string {
+  for (const page of questionnaire?.pages ?? []) {
+    const text = page.kind === "intro" ? page.body : page.subtitle;
+    if (text?.trim()) return text.trim();
+  }
+  return OPTIONAL_FALLBACK;
+}
+
+/** The open optional questionnaires this member has not answered, newest first. */
+export async function listOptionalForms(
+  userId: string,
+): Promise<OptionalForm[]> {
+  // The E2E store models no builder questionnaires, so nothing is optional.
+  if (usesTestStore()) return [];
+  const rows = await listOptionalDb(userId);
+  return rows.map((row) => ({
+    activationId: row.activationId,
+    title: row.title,
+    description: optionalFormDescription(row.questionnaire),
+    started: row.started,
+  }));
+}
+
+/**
+ * The questionnaire a member just submitted from Optional, for the strip that
+ * thanks them on My forms (`?answered=<activation id>`), or null when the id
+ * names nothing they have finished. The link goes to their read-only answers.
+ */
+export async function getJustAnswered(
+  userId: string,
+  activationId: string | undefined,
+): Promise<{ title: string; answersHref: string } | null> {
+  if (!activationId || usesTestStore()) return null;
+  if (!/^[0-9a-f-]{36}$/i.test(activationId)) return null;
+  const activation = await getActivationById(activationId);
+  if (!activation || activation.scope !== "opt_in") return null;
+  const answers = await getAnsweredQuestionnaire(
+    userId,
+    activation.questionnaireKey,
+    activation.cycle,
+  );
+  if (!answers) return null;
+  return {
+    title: activation.title,
+    answersHref: `/tools/forms/answers/${encodeURIComponent(activation.questionnaireKey)}/${activation.cycle}`,
+  };
 }
 
 // --- Edit change log ----------------------------------------------------

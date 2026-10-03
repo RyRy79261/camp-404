@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, ne, or } from "drizzle-orm";
 import type { QuestionnaireResponses } from "@camp404/types";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
@@ -262,7 +262,14 @@ export async function listOpenSendGates(): Promise<OpenSendGateRow[]> {
         schema.questionnaireActivations.id,
       ),
     )
-    .where(eq(schema.questionnaireActivations.status, "open"))
+    .where(
+      and(
+        eq(schema.questionnaireActivations.status, "open"),
+        // An optional questionnaire (#313) asked nobody, so it has no "answered
+        // out of reached": its results page counts who chose to answer.
+        ne(schema.questionnaireActivations.scope, "opt_in"),
+      ),
+    )
     .orderBy(
       asc(schema.questionnaireActivations.title),
       asc(schema.questionnaireActivations.id),
