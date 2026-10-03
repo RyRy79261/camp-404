@@ -5,6 +5,7 @@ import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { SignUpButton } from "@/components/shifts/shift-controls";
+import { DutyCardLink } from "@/components/shifts/shift-day";
 import {
   AddVolunteerShift,
   RemoveVolunteerShift,
@@ -22,7 +23,8 @@ export const metadata = { title: "My shifts — Camp 404" };
 // as a reminder (never a block). Below, their own AfrikaBurn volunteer shifts
 // (Rangers, Greeters, Sanctuary), which only they see, so the clash check
 // covers them too. A pocket card prints from here: on site there is no
-// internet, so the paper is what they carry.
+// internet, so the paper is what they carry. A shift with a duty card links
+// to it (#250), as on Shifts.
 
 function ClashLine({ with: others }: { with: string[] }) {
   if (others.length === 0) return null;
@@ -105,6 +107,7 @@ export default async function MyShiftsPage() {
                         <p className="text-sm tabular-nums text-muted-foreground">
                           {s.dayLabel} · {s.timeText}
                         </p>
+                        <DutyCardLink card={s.dutyCard} shiftName={s.name} />
                         {s.note && (
                           <p className="whitespace-pre-line text-sm text-muted-foreground">
                             {s.note}

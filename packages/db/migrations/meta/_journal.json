@@ -652,6 +652,20 @@
       "when": 1790962355349,
       "tag": "0092_kitchen_prices_allergies_prep",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1790988309578,
+      "tag": "0093_shift_duty_card",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1790988319404,
+      "tag": "0094_link_duty_cards_by_typed_key",
+      "breakpoints": true
     }
   ]
 }

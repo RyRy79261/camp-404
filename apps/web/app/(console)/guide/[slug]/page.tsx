@@ -10,6 +10,7 @@ import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ChapterView } from "@/components/guide/chapter-view";
+import { DutyCardShifts } from "@/components/guide/duty-card-shifts";
 import { ReviewButton } from "@/components/guide/review-button";
 import { VersionsCard } from "@/components/guide/versions-card";
 import { getCurrentCycle, getTeamsConfig } from "@/lib/camp-config";
@@ -26,6 +27,8 @@ import {
   guideEditPath,
   WHOLE_CAMP_LABEL,
 } from "@/lib/guide-copy";
+import { getDutyCardShifts } from "@/lib/shifts";
+import { SHIFTS_PATH } from "@/lib/shifts-copy";
 import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +54,7 @@ export async function generateMetadata({
 // A writer who may change it gets Edit, and "Still right for <year>" when it
 // was last checked in an earlier year. A writer opening a chapter that is not
 // on the guide is sent to its editor; anyone else gets the not-found page.
+// A duty card lists the shifts that use it this year first (#250).
 
 export default async function GuideChapterPage({
   params,
@@ -80,6 +84,8 @@ export default async function GuideChapterPage({
     version: chapter.version,
   });
 
+  const dutyShifts =
+    chapter.kind === "duty_card" ? await getDutyCardShifts(chapter.id) : null;
   const canEdit = canEditGuideChapter(rank, leadTeams, chapter.team);
   const teamLabel = chapter.team
     ? (config.teams.find((t) => t.key === chapter.team)?.label ?? chapter.team)
@@ -124,7 +130,10 @@ export default async function GuideChapterPage({
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 page-lg:grid-cols-3">
-        <div className="page-lg:col-span-2">
+        <div className="flex flex-col gap-6 page-lg:col-span-2">
+          {dutyShifts ? (
+            <DutyCardShifts shifts={dutyShifts} shiftsHref={SHIFTS_PATH} />
+          ) : null}
           <ChapterView
             kind={chapter.kind}
             card={chapter.card}

@@ -17,6 +17,7 @@ import {
   NOT_A_PUBLIC_MARKER,
   type DocumentKind,
   type DocumentTeam,
+  type DutyCardChoice,
   type GuideChapter,
   type GuideChapterFields,
   type GuideChapterSummary,
@@ -167,6 +168,31 @@ function documentRow(c: StoredChapter) {
 }
 
 export const guideTestStore = {
+  listPublishedDutyCards(): DutyCardChoice[] {
+    return state()
+      .chapters.map((c) => [c, live(c)] as const)
+      .filter(
+        (pair): pair is [StoredChapter, StoredVersion] =>
+          !!pair[1] && pair[0].kind === "duty_card",
+      )
+      .map(([c, v]) => ({
+        id: c.id,
+        slug: c.slug,
+        title: v.title,
+        team: v.team,
+      }))
+      .sort(byTitle);
+  },
+
+  /** A duty card members can read, by id, or null (the shift store's link). */
+  readableDutyCard(
+    id: string,
+  ): { id: string; slug: string; title: string } | null {
+    const c = state().chapters.find((x) => x.id === id);
+    const v = c && c.kind === "duty_card" ? live(c) : null;
+    return c && v ? { id: c.id, slug: c.slug, title: v.title } : null;
+  },
+
   listPublishedChapters(input: { query?: string } = {}): GuideChapterSummary[] {
     const q = input.query?.trim().toLowerCase();
     return state()
@@ -300,7 +326,6 @@ export const guideTestStore = {
           input.kind === "duty_card"
             ? structuredClone(
                 input.card ?? {
-                  shiftTypeKey: "",
                   subRoles: [],
                   steps: [],
                   hardRules: [],

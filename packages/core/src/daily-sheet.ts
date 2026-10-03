@@ -11,7 +11,8 @@ import { shiftTimeText } from "./shifts";
 // each row is the time, the task and the first names of who signed up, with a
 // blank line for each open place and a done box. Only teams with a task that
 // day get a section, and a team added later gets one by itself. No shift
-// details on the sheet: they live on the duty cards. Kitchen's section adds
+// details on the sheet: they live on the duty cards, so a task names its
+// card's title (#250) when it has one. Kitchen's section adds
 // the day's dishes (breakfast and dinner only, no plate counts) and the
 // allergy line, with first names: the cooks act on them.
 
@@ -23,6 +24,8 @@ export interface SheetShiftType {
   startMinute: number;
   durationMinutes: number;
   places: number;
+  /** Its duty card in the Survival Guide (#250), when it has one. */
+  dutyCard?: { title: string } | null;
 }
 
 /** One day's slot of a shift type. "not_needed" slots are left off. */
@@ -49,6 +52,8 @@ export interface SheetTask {
   names: string[];
   /** Open places, each a blank line to write a name on. */
   blanks: number;
+  /** The title of its duty card, where the details are; null for none. */
+  dutyCard: string | null;
 }
 
 /** One team's section: its tasks that day, in time order. */
@@ -95,6 +100,7 @@ export function groupSlotsByTeam(input: {
         name: type.name,
         names,
         blanks: Math.max(0, type.places - names.length),
+        dutyCard: type.dutyCard?.title ?? null,
       },
       // The camp's day runs from 06:00 (as the lounge programme's): a night
       // watch from midnight is the end of the day, not its start.

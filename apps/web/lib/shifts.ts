@@ -7,6 +7,7 @@ import {
   isAskedForShifts as isComingForShifts,
   shiftChangesOpen,
   shiftClashes,
+  shiftDaysText,
   shiftDayLabel,
   shiftDayLong,
   shiftDayTab,
@@ -16,10 +17,11 @@ import {
   type ShiftFairnessRow,
 } from "@camp404/core";
 import * as db from "@camp404/db/shifts";
+import * as documentsDb from "@camp404/db/documents";
+import type { DutyCardChoice } from "@camp404/db/documents";
 import type {
   ShiftRosterRead,
   ShiftSlotRow,
-  ShiftTypeRow,
   ShiftWriteResult,
   VolunteerShiftRow,
 } from "@camp404/db/shifts";
@@ -37,9 +39,11 @@ import type {
   ViewerRank,
 } from "@camp404/types";
 import { getCampSettings } from "./camp-config";
+import { guideChapterPath } from "./guide-copy";
 import { getMyParticipation } from "./participations";
 import { printName } from "./lounge-copy";
 import { usesTestStore } from "./test-mode";
+import { guideTestStore } from "./test-store-guide";
 import { shiftsTestStore } from "./test-store-shifts";
 
 // The shift roster (#248): from the database or, under E2E, the test store.
@@ -54,8 +58,25 @@ import { shiftsTestStore } from "./test-store-shifts";
 //    minimum) is for leads and captains: whether someone is coming reads at
 //    team lead (MEMBER_FIELD_READERS).
 //  - A member's AfrikaBurn volunteer shifts reach only that member.
+//  - A shift's duty card (#250) reaches every member while the card is on the
+//    Survival Guide; the set-up's list of cards only reaches leads and
+//    captains, who see the dialog.
 
 export type { ShiftWriteResult };
+
+/** A shift's duty card, as the row links to it. */
+export interface ShiftDutyCardLink {
+  id: string;
+  title: string;
+  href: string;
+}
+
+const cardLink = (
+  card: { id: string; slug: string; title: string } | null,
+): ShiftDutyCardLink | null =>
+  card
+    ? { id: card.id, title: card.title, href: guideChapterPath(card.slug) }
+    : null;
 
 /** One day's slot of one shift type, as a viewer may see it. */
 export interface ShiftSlotView {
@@ -88,6 +109,10 @@ export interface ShiftTypeView {
   note: string | null;
   version: number;
   timeText: string;
+  /** The duty card picked in its set-up, published or not (the dialog's). */
+  dutyCardId: string | null;
+  /** Its duty card while members can read it: the row's "Duty card" link. */
+  dutyCard: ShiftDutyCardLink | null;
   /** The viewer may set this shift up. */
   canManage: boolean;
   /** Burn days this shift has no slot for yet. */
@@ -127,6 +152,14 @@ export interface ShiftsView {
   fairness: ShiftFairnessRow[] | null;
   /** Viewers who manage a team: every approved member, to put one on. */
   members: { userId: string; name: string }[] | null;
+  /** Leads and captains: the guide's duty cards, for the set-up's picker. */
+  dutyCards: DutyCardChoice[] | null;
+}
+
+async function listDutyCards(): Promise<DutyCardChoice[]> {
+  return usesTestStore()
+    ? guideTestStore.listPublishedDutyCards()
+    : documentsDb.listPublishedDutyCards();
 }
 
 async function readRoster(cycle: number): Promise<ShiftRosterRead> {
@@ -185,7 +218,7 @@ export async function getShiftsView(viewer: {
   const camp = await getCampSettings();
   const cycle = camp.cycleNumber;
   const lead = viewer.rank !== "camp_member";
-  const [roster, burnDays, place, coming] = await Promise.all([
+  const [roster, burnDays, place, coming, dutyCards] = await Promise.all([
     readRoster(cycle),
     readBurnDays(cycle),
     getMyParticipation(viewer.userId),
@@ -194,6 +227,7 @@ export async function getShiftsView(viewer: {
         ? shiftsTestStore.listComingForShifts(cycle)
         : db.listComingForShifts(cycle)
       : Promise.resolve(null),
+    lead ? listDutyCards() : Promise.resolve(null),
   ]);
   const today = campDayKey(viewer.now ?? new Date());
   const labels = new Map(camp.teams.teams.map((t) => [t.key, t.label]));
@@ -211,7 +245,7 @@ export async function getShiftsView(viewer: {
     : null;
 
   const taken = new Set(roster.signups.map((s) => s.slotId));
-  const types: ShiftTypeView[] = roster.types.map((t: ShiftTypeRow) => {
+  const types: ShiftTypeView[] = roster.types.map((t) => {
     const own = roster.slots.filter((s) => s.typeId === t.id);
     const have = new Set(own.map((s) => s.day));
     return {
@@ -225,6 +259,8 @@ export async function getShiftsView(viewer: {
       note: t.note,
       version: t.version,
       timeText: shiftTimeText(t.startMinute, t.durationMinutes),
+      dutyCardId: t.dutyCardId,
+      dutyCard: cardLink(t.dutyCard),
       canManage: canManageShifts(viewer.rank, viewer.ledTeams, t.team),
       missingDays: burnDays.filter((d) => !have.has(d)).length,
       hasPeople: own.some((s) => taken.has(s.id)),
@@ -281,6 +317,7 @@ export async function getShiftsView(viewer: {
         )
       : null,
     members,
+    dutyCards: managesAny ? dutyCards : null,
   };
 }
 
@@ -307,6 +344,7 @@ export interface MyShiftView {
   teamLabel: string;
   timeText: string;
   note: string | null;
+  dutyCard: ShiftDutyCardLink | null;
   open: boolean;
   /** What else of theirs runs at the same time. */
   clashesWith: string[];
@@ -389,6 +427,7 @@ export async function getMyShifts(
       teamLabel: labels.get(type.team) ?? type.team,
       timeText: shiftTimeText(type.startMinute, type.durationMinutes),
       note: type.note,
+      dutyCard: cardLink(type.dutyCard),
       open: shiftChangesOpen(slot.day, today),
       clashesWith: clashes.get(`s:${slot.id}`) ?? [],
     })),
@@ -402,6 +441,41 @@ export async function getMyShifts(
     reminder: reminderFor(place, slots.length),
     burnDays,
   };
+}
+
+/** One of this year's shifts that uses a duty card, as its page lists it. */
+export interface DutyCardShiftView {
+  id: string;
+  name: string;
+  teamLabel: string;
+  timeText: string;
+  /** "every day", "on 3 days". */
+  daysText: string;
+}
+
+/**
+ * This year's shifts that use a duty card (#250), for the card's page. Every
+ * approved member reads them, as they read the roster.
+ */
+export async function getDutyCardShifts(
+  documentId: string,
+): Promise<DutyCardShiftView[]> {
+  const camp = await getCampSettings();
+  const cycle = camp.cycleNumber;
+  const [shifts, burnDays] = await Promise.all([
+    usesTestStore()
+      ? shiftsTestStore.listShiftsForDutyCard(documentId, cycle)
+      : db.listShiftsForDutyCard(documentId, cycle),
+    readBurnDays(cycle),
+  ]);
+  const labels = new Map(camp.teams.teams.map((t) => [t.key, t.label]));
+  return shifts.map((s) => ({
+    id: s.id,
+    name: s.name,
+    teamLabel: labels.get(s.team) ?? s.team,
+    timeText: shiftTimeText(s.startMinute, s.durationMinutes),
+    daysText: shiftDaysText(s.days, burnDays.length),
+  }));
 }
 
 /** Whether a captain's "Ask everyone" is still open for this member. */

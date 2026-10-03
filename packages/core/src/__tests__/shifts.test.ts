@@ -5,6 +5,7 @@ import {
   SHIFTS_REF_TYPE,
   canAskForShifts,
   canManageShifts,
+  dutyCardAlsoOn,
   isAskedForShifts,
   shiftChangesOpen,
   shiftClashes,
@@ -12,6 +13,7 @@ import {
   shiftDayLong,
   shiftDayTab,
   shiftDays,
+  shiftDaysText,
   shiftFairness,
   shiftReminderText,
   shiftTeamsFor,
@@ -174,5 +176,31 @@ describe("shiftFairness", () => {
       { userId: "u1", name: "Ann Able", count: 1, below: true },
       { userId: "u3", name: "Bea Busy", count: 3, below: false },
     ]);
+  });
+});
+
+describe("a shift's duty card (#250)", () => {
+  it("says how often a shift runs: every day, or on how many", () => {
+    expect(shiftDaysText(7, 7)).toBe("every day");
+    expect(shiftDaysText(3, 7)).toBe("on 3 days");
+    expect(shiftDaysText(1, 7)).toBe("on 1 day");
+    expect(shiftDaysText(0, 7)).toBe("on no days yet");
+    // With no Burn days set, a count is all there is.
+    expect(shiftDaysText(2, 0)).toBe("on 2 days");
+  });
+
+  it("names the other shifts a card already serves, never the shift itself", () => {
+    const types = [
+      { id: "b", name: "Breakfast dishes", dutyCardId: "dishes" },
+      { id: "d", name: "Dinner dishes", dutyCardId: "dishes" },
+      { id: "c", name: "Breakfast cooks", dutyCardId: "cooks" },
+      { id: "x", name: "Lounge host", dutyCardId: null },
+    ];
+    expect(dutyCardAlsoOn("dishes", "b", types)).toEqual(["Dinner dishes"]);
+    expect(dutyCardAlsoOn("dishes", null, types)).toEqual([
+      "Breakfast dishes",
+      "Dinner dishes",
+    ]);
+    expect(dutyCardAlsoOn("toilets", null, types)).toEqual([]);
   });
 });

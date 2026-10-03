@@ -94,6 +94,12 @@ export const SaveShiftTypeInput = z.object({
     .nullable()
     .optional()
     .transform((v) => (v ? v : null)),
+  /**
+   * The Survival Guide duty card for this shift (#250): an id, or null for
+   * none. Left out, a change keeps its card and a new shift takes last year's
+   * card for a shift of the same name.
+   */
+  dutyCardId: uuid.nullable().optional(),
   /** The version the editor saw; 0 for a new shift. */
   expectedVersion: z.number().int().min(0),
 });

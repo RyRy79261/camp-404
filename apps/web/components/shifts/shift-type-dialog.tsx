@@ -16,7 +16,9 @@ import { Input } from "@camp404/ui/components/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@camp404/ui/components/select";
@@ -30,6 +32,7 @@ import {
   SaveShiftTypeInput,
   type Team,
 } from "@camp404/types";
+import { dutyCardAlsoOn } from "@camp404/core";
 import { saveShiftTypeAction } from "@/app/(console)/shifts/actions";
 import {
   FillDaysButton,
@@ -42,6 +45,22 @@ import { clockFromMinutes, minutesFromClock } from "@/lib/shifts-copy";
 // problem with what was typed shows beside it; a refusal or a lost race shows
 // in the dialog. Only teams the viewer may set up are offered; the server
 // checks again. A shift may run past midnight (a night watch).
+//
+// The duty card (#250, the owner's Option A, 2026-10-02): a pick from the
+// Survival Guide's duty cards, the shift's own team's first, then the other
+// teams', then None. A card may serve several shifts, so each says which
+// other shifts it is already on. A new shift left unpicked takes the card
+// last year's shift of the same name had (the server's rule).
+
+/** A duty card the picker offers. */
+export interface DutyCardOption {
+  id: string;
+  title: string;
+  team: string | null;
+}
+
+/** "none" picks no card; undefined leaves it to the server (see above). */
+const NO_CARD = "none";
 
 export interface EditableShiftType {
   id: string;
@@ -51,6 +70,7 @@ export interface EditableShiftType {
   durationMinutes: number;
   places: number;
   note: string | null;
+  dutyCardId: string | null;
   version: number;
 }
 
@@ -64,6 +84,8 @@ export function ShiftTypeDialog({
   triggerClassName,
   missingDays = 0,
   hasPeople = false,
+  dutyCards = [],
+  shiftTypes = [],
 }: {
   /** The shift to change; absent to add one. */
   type?: EditableShiftType;
@@ -75,6 +97,10 @@ export function ShiftTypeDialog({
   missingDays?: number;
   /** Someone is on one of its days: it cannot be removed. */
   hasPeople?: boolean;
+  /** The Survival Guide's duty cards, for the picker. */
+  dutyCards?: DutyCardOption[];
+  /** The year's shifts, to say which other shifts a card is on. */
+  shiftTypes?: { id: string; name: string; dutyCardId: string | null }[];
 }) {
   const router = useRouter();
   const initial = {
@@ -86,6 +112,23 @@ export function ShiftTypeDialog({
       : "",
     places: type ? String(type.places) : "",
     note: type?.note ?? "",
+    // A card that is off the guide now is left as it is (undefined).
+    card:
+      type === undefined
+        ? undefined
+        : type.dutyCardId === null
+          ? NO_CARD
+          : dutyCards.some((c) => c.id === type.dutyCardId)
+            ? type.dutyCardId
+            : undefined,
+  } as {
+    team: string;
+    name: string;
+    start: string;
+    end: string;
+    places: string;
+    note: string;
+    card: string | undefined;
   };
   const [open, setOpen] = React.useState(false);
   const [form, setForm] = React.useState(initial);
@@ -117,6 +160,9 @@ export function ShiftTypeDialog({
       durationMinutes: duration,
       places: Number(form.places || "0"),
       note: form.note,
+      ...(form.card === undefined
+        ? {}
+        : { dutyCardId: form.card === NO_CARD ? null : form.card }),
       expectedVersion: type?.version ?? 0,
     };
     const check = SaveShiftTypeInput.safeParse(payload);
@@ -292,6 +338,18 @@ export function ShiftTypeDialog({
                 />
               </Field>
             </div>
+            <DutyCardPicker
+              id={id("card")}
+              value={form.card}
+              onChange={(card) => setForm((f) => ({ ...f, card }))}
+              cards={dutyCards}
+              team={form.team}
+              teamLabel={teams.find((t) => t.key === form.team)?.label}
+              typeId={type?.id ?? null}
+              shiftTypes={shiftTypes}
+              offGuide={type?.dutyCardId != null && form.card === undefined}
+              isNew={!type}
+            />
             <Field
               label="What to do (optional)"
               htmlFor={id("note")}
@@ -354,5 +412,91 @@ export function ShiftTypeDialog({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** The duty card pick: this team's cards, the other teams', then None. */
+function DutyCardPicker({
+  id,
+  value,
+  onChange,
+  cards,
+  team,
+  teamLabel,
+  typeId,
+  shiftTypes,
+  offGuide,
+  isNew,
+}: {
+  id: string;
+  value: string | undefined;
+  onChange: (card: string) => void;
+  cards: DutyCardOption[];
+  team: string;
+  teamLabel: string | undefined;
+  typeId: string | null;
+  shiftTypes: { id: string; name: string; dutyCardId: string | null }[];
+  offGuide: boolean;
+  isNew: boolean;
+}) {
+  const own = team ? cards.filter((c) => c.team === team) : [];
+  const others = cards.filter((c) => !own.includes(c));
+  const picked = cards.find((c) => c.id === value);
+  const item = (c: DutyCardOption) => {
+    const also = dutyCardAlsoOn(c.id, typeId, shiftTypes);
+    return (
+      <SelectItem key={c.id} value={c.id} className="py-2">
+        <span className="flex flex-col">
+          <span>{c.title}</span>
+          {also.length > 0 && (
+            <span className="text-xs opacity-70">
+              also on {also.join(", ")}
+            </span>
+          )}
+        </span>
+      </SelectItem>
+    );
+  };
+  return (
+    <Field
+      label="Duty card"
+      htmlFor={id}
+      help={
+        offGuide
+          ? "Its card is off the Survival Guide for now. Pick another, or leave it."
+          : isNew && value === undefined
+            ? "Left unpicked, it takes the card last year's shift of the same name had."
+            : cards.length === 0
+              ? "No duty cards in the Survival Guide yet."
+              : "Opens from the shift's row, in the Survival Guide."
+      }
+    >
+      <Select value={value ?? ""} onValueChange={onChange}>
+        <SelectTrigger id={id}>
+          <SelectValue placeholder="None">
+            {value === NO_CARD ? "None" : picked?.title}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {own.length > 0 && (
+            <SelectGroup>
+              <SelectLabel className="pl-8 font-pixel text-[10px] font-normal uppercase tracking-[0.15em] text-muted-foreground">
+                {teamLabel ?? "This team"}
+              </SelectLabel>
+              {own.map(item)}
+            </SelectGroup>
+          )}
+          {others.length > 0 && (
+            <SelectGroup>
+              <SelectLabel className="pl-8 font-pixel text-[10px] font-normal uppercase tracking-[0.15em] text-muted-foreground">
+                {own.length > 0 ? "Other teams" : "Duty cards"}
+              </SelectLabel>
+              {others.map(item)}
+            </SelectGroup>
+          )}
+          <SelectItem value={NO_CARD}>None</SelectItem>
+        </SelectContent>
+      </Select>
+    </Field>
   );
 }

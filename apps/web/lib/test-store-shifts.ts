@@ -15,6 +15,7 @@ import {
 } from "@camp404/core";
 import { reachRank } from "@camp404/db/power";
 import {
+  DUTY_CARD_GONE,
   NOT_A_SHIFT_ASKER,
   NOT_A_SHIFT_KEEPER,
   NO_BURN_DAYS,
@@ -35,6 +36,7 @@ import {
   TOO_MANY_VOLUNTEER_SHIFTS,
   VOLUNTEER_SHIFT_GONE,
   placesBelowTaken,
+  type DutyCardShift,
   type ShiftRosterRead,
   type ShiftSlotRow,
   type ShiftTypeRow,
@@ -48,6 +50,7 @@ import {
   type Team,
 } from "@camp404/types";
 import { testStore } from "./test-store";
+import { guideTestStore } from "./test-store-guide";
 
 // The in-memory twin of the shift roster (@camp404/db/shifts), for
 // E2E_TEST_MODE. The same rules, sentences and results over the store's own
@@ -56,7 +59,7 @@ import { testStore } from "./test-store";
 // to one member; the minimum is a nudge through the store's shared nudge. The
 // store keeps no audit log and is one synchronous process, so there is
 // nothing to lock. Kept apart from test-store.ts, which calls in here only to
-// reset.
+// reset. A shift's duty card is read from the guide's twin (test-store-guide).
 
 interface Signup {
   slotId: string;
@@ -266,7 +269,12 @@ export const shiftsTestStore = {
       // Start time, then the order they were added in (a stable sort over
       // the insertion order), as the database orders them.
       .sort((a, b) => a.startMinute - b.startMinute)
-      .map((t) => ({ ...t }));
+      .map((t) => ({
+        ...t,
+        dutyCard: t.dutyCardId
+          ? guideTestStore.readableDutyCard(t.dutyCardId)
+          : null,
+      }));
     const ids = new Set(types.map((t) => t.id));
     const slots = state()
       .slots.filter((s) => ids.has(s.typeId))
@@ -287,6 +295,22 @@ export const shiftsTestStore = {
 
   readBurnDays(cycle: number): string[] {
     return burnDays(cycle);
+  },
+
+  listShiftsForDutyCard(documentId: string, cycle: number): DutyCardShift[] {
+    return state()
+      .types.filter((t) => t.cycle === cycle && t.dutyCardId === documentId)
+      .sort((a, b) => a.startMinute - b.startMinute)
+      .map((t) => ({
+        id: t.id,
+        team: t.team,
+        name: t.name,
+        startMinute: t.startMinute,
+        durationMinutes: t.durationMinutes,
+        days: state().slots.filter(
+          (s) => s.typeId === t.id && s.status === "open",
+        ).length,
+      }));
   },
 
   listShiftMembers(): { userId: string; name: string }[] {
@@ -340,6 +364,7 @@ export const shiftsTestStore = {
     durationMinutes: number;
     places: number;
     note: string | null;
+    dutyCardId?: string | null;
     expectedVersion: number;
     now?: Date;
   }): ShiftWriteResult<{ type: ShiftTypeRow; daysAdded: number }> {
@@ -347,6 +372,30 @@ export const shiftsTestStore = {
       const keeper = keeperOf(input.actorId);
       assertKeeper(keeper, input.team);
       const cycle = testStore.currentCycleNumber();
+      let dutyCardId = input.dutyCardId;
+      if (dutyCardId) {
+        if (!guideTestStore.readableDutyCard(dutyCardId)) {
+          refuse(DUTY_CARD_GONE);
+        }
+      } else if (dutyCardId === undefined && !input.id) {
+        // The newest earlier year's shift of the same name, its own team
+        // first, as earlierYearsCard in @camp404/db/shifts.
+        const name = input.name.trim().toLowerCase();
+        const earlier = state()
+          .types.filter(
+            (t) =>
+              t.cycle < cycle &&
+              t.name.trim().toLowerCase() === name &&
+              t.dutyCardId &&
+              guideTestStore.readableDutyCard(t.dutyCardId),
+          )
+          .sort(
+            (a, b) =>
+              b.cycle - a.cycle ||
+              Number(b.team === input.team) - Number(a.team === input.team),
+          );
+        dutyCardId = earlier[0]?.dutyCardId ?? null;
+      }
       const fields = {
         team: input.team,
         name: input.name,
@@ -354,13 +403,20 @@ export const shiftsTestStore = {
         durationMinutes: input.durationMinutes,
         places: input.places,
         note: input.note,
+        ...(dutyCardId === undefined ? {} : { dutyCardId }),
       };
       let type: ShiftTypeRow;
       if (!input.id) {
         if (input.expectedVersion !== 0) refuse(SHIFT_TYPE_CHANGED);
         const year = state().types.filter((t) => t.cycle === cycle);
         if (year.length >= MAX_SHIFT_TYPES) refuse(TOO_MANY_SHIFT_TYPES);
-        type = { id: randomUUID(), cycle, version: 1, ...fields };
+        type = {
+          id: randomUUID(),
+          cycle,
+          version: 1,
+          dutyCardId: null,
+          ...fields,
+        };
         state().types.push(type);
       } else {
         const current = typeOf(input.id, cycle);

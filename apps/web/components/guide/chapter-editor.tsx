@@ -172,7 +172,9 @@ export function ChapterEditor({
   const [team, setTeam] = React.useState(initial.team);
   const [markdown, setMarkdown] = React.useState(initial.markdown);
   const card = initial.card;
-  const [shiftKey, setShiftKey] = React.useState(card?.shiftTypeKey ?? "");
+  // A key typed before shifts linked to their cards (#250) is kept as it is,
+  // unseen: each shift now picks its card in its own set-up.
+  const legacyShiftKey = card?.shiftTypeKey;
   const [subRoles, setSubRoles] = React.useState<SubRoleRow[]>(
     (card?.subRoles ?? []).map((r, i) => ({
       key: i,
@@ -202,7 +204,7 @@ export function ChapterEditor({
   const cardDraft: DutyCardDraft | null =
     kind === "duty_card"
       ? {
-          shiftTypeKey: shiftKey.trim(),
+          ...(legacyShiftKey ? { shiftTypeKey: legacyShiftKey } : {}),
           subRoles: subRoles
             .filter((r) => r.name.trim() || r.min || r.max)
             .map((r) => ({
@@ -489,21 +491,11 @@ export function ChapterEditor({
                   The card is pinned up where anyone can read it: name roles,
                   never phone numbers.
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  Which shifts use it is set on Shifts: each shift&apos;s set-up
+                  picks its duty card.
+                </p>
                 <div className="grid gap-4 page-sm:grid-cols-2">
-                  <Field
-                    label="Shift type"
-                    htmlFor="card-shift"
-                    required
-                    help="The shift's short name, like morning-clean."
-                  >
-                    <Input
-                      id="card-shift"
-                      value={shiftKey}
-                      maxLength={DUTY_CARD_MAX.shiftTypeKey}
-                      onChange={(e) => setShiftKey(e.target.value)}
-                      disabled={pending}
-                    />
-                  </Field>
                   <Field
                     label="Who to ask"
                     htmlFor="card-ask"

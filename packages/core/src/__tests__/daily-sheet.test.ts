@@ -53,6 +53,30 @@ const names = new Map([
 const nameOf = (id: string) => names.get(id) ?? "?";
 
 describe("groupSlotsByTeam", () => {
+  it("names a task's duty card, where its details are (#250)", () => {
+    const [kitchen] = groupSlotsByTeam({
+      day: DAY,
+      types: [
+        {
+          ...type("t-wash", "kitchen", "Breakfast dishes", 9 * 60),
+          dutyCard: { title: "Dishes" },
+        },
+        {
+          ...type("t-cook", "kitchen", "Breakfast cooks", 7 * 60),
+          dutyCard: null,
+        },
+      ],
+      slots: [slot("s-wash", "t-wash"), slot("s-cook", "t-cook")],
+      signups: [],
+      teams: TEAMS,
+      nameOf: (id) => id,
+    });
+    expect(kitchen!.tasks.map((t) => [t.name, t.dutyCard])).toEqual([
+      ["Breakfast cooks", null],
+      ["Breakfast dishes", "Dishes"],
+    ]);
+  });
+
   const types = [
     type("t-gen", "power_and_lighting", "Generator watch", 6 * 60, 3),
     type("t-cook", "kitchen", "Dinner cooks", 17 * 60),

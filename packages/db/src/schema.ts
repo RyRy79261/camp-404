@@ -4309,6 +4309,14 @@ export const shiftTypes = pgTable(
     durationMinutes: integer("duration_minutes").notNull(),
     places: integer("places").notNull(),
     note: text("note"),
+    // The Survival Guide's duty card for this shift (#250), picked in the
+    // shift's set-up. Year-scoped with the shift type itself; one card may
+    // serve several shifts (one Dishes card for breakfast and dinner dishes).
+    // A chapter deleted for good unlinks it; one taken off the guide stays
+    // linked and is simply not shown until it is back.
+    dutyCardId: uuid("duty_card_id").references(() => documents.id, {
+      onDelete: "set null",
+    }),
     version: integer("version").notNull().default(1),
     createdByUserId: uuid("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -4321,6 +4329,7 @@ export const shiftTypes = pgTable(
   },
   (t) => ({
     cycleIdx: index("shift_types_cycle_idx").on(t.cycle),
+    dutyCardIdx: index("shift_types_duty_card_idx").on(t.dutyCardId),
     startCheck: check(
       "shift_types_start_check",
       sql`${t.startMinute} >= 0 and ${t.startMinute} < 1440`,
