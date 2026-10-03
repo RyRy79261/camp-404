@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import {
   test,
   expect,
@@ -159,7 +160,9 @@ test.describe("survival guide (test-mode)", () => {
     await page.keyboard.press("Enter");
     await page.keyboard.type("Name and date.");
     await expect(
-      page.getByTestId("preview-panel").getByRole("heading", { name: "Labels" }),
+      page
+        .getByTestId("preview-panel")
+        .getByRole("heading", { name: "Labels" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Save draft" }).click();
     await expect(page).toHaveURL(/\/guide\/fridge-rules\/edit$/);
@@ -187,5 +190,98 @@ test.describe("survival guide (test-mode)", () => {
     await expect(
       page.getByRole("textbox", { name: "The chapter" }),
     ).toHaveCount(0);
+  });
+
+  test("a duty card prints on A4: any member prints a published card or all of them, and only a writer prints a draft", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(150_000);
+    await approvedMember(page, request, "dp-cap", "Cap Tain");
+    await setRank(request, "dp-cap", "captain");
+
+    await page.goto("/guide/new");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "New chapter" }),
+    ).toBeVisible();
+    await page.getByRole("radio", { name: "Duty card" }).click();
+    await page.getByLabel("Title").fill("Evening clean");
+    await page.getByLabel("Who to ask").fill("Kitchen lead on shift");
+    await page.getByRole("button", { name: "Add sub-role" }).click();
+    await page.getByLabel("Job").fill("Washer");
+    await page.getByLabel("Fewest").fill("2");
+    await page.getByLabel("Most").fill("2");
+    await page
+      .getByLabel("Steps")
+      .fill("Boil water for the wash basin.\nScrape plates first.");
+    await page
+      .getByLabel("Hard rules")
+      .fill("No grey water on the ground, ever.");
+    await page
+      .getByLabel("Lead's end-of-shift checklist")
+      .fill("Gas off at the bottle");
+    await page.getByRole("button", { name: "Publish" }).click();
+    await expect(page).toHaveURL(/\/guide\/evening-clean$/);
+    await expect(
+      page.getByRole("link", { name: "Print card" }),
+    ).toHaveAttribute("href", "/print/guide/duty-cards/evening-clean");
+
+    // A second card, saved but never published.
+    await page.goto("/guide/new");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "New chapter" }),
+    ).toBeVisible();
+    await page.getByRole("radio", { name: "Duty card" }).click();
+    await page.getByLabel("Title").fill("Half written");
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await expect(page).toHaveURL(/\/guide\/half-written\/edit$/);
+    await expect(
+      page.getByRole("link", { name: "Print draft" }),
+    ).toHaveAttribute("href", "/print/guide/duty-cards/half-written?draft=1");
+    await page.goto("/print/guide/duty-cards/half-written?draft=1");
+    await expect(page.getByTestId("duty-card")).toContainText(
+      "Duty card (draft)",
+    );
+
+    // A plain member prints the published card, and every published card.
+    await approvedMember(page, request, "dp-member", "Mo Member");
+    await openGuide(page);
+    await expect(
+      page.getByRole("link", { name: "Print all duty cards" }),
+    ).toHaveAttribute("href", "/print/guide/duty-cards");
+    await page.goto("/print/guide/duty-cards/evening-clean");
+    const card = page.getByTestId("duty-card");
+    await expect(
+      card.getByRole("heading", { level: 2, name: "Evening clean" }),
+    ).toBeVisible();
+    await expect(card).toContainText("Stuck? Ask the Kitchen lead on shift.");
+    await expect(
+      card.getByRole("list", { name: "Who does what" }),
+    ).toContainText("2 people");
+    await expect(card).toContainText("Never skip these");
+    await expect(card).toContainText("page 1 of 1");
+    await expect(page.locator("[data-os-skin]")).toHaveCount(0);
+
+    await page.goto("/print/guide/duty-cards");
+    await expect(page.getByTestId("duty-card")).toHaveCount(1);
+    await expect(page.getByTestId("duty-card")).toContainText("Evening clean");
+    await expect(page.locator("[data-print-sheet]")).not.toContainText(
+      "Half written",
+    );
+    const [download] = await Promise.all([
+      page.waitForEvent("download", { timeout: 45_000 }),
+      page.getByRole("button", { name: "Download PDF" }).click(),
+    ]);
+    const pdf = await readFile(await download.path());
+    expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+
+    // The draft is not theirs to print: refused outside the sheet, no PDF.
+    await page.goto("/print/guide/duty-cards/half-written?draft=1");
+    await expect(page.getByTestId("duty-card-refusal")).toBeVisible();
+    await expect(page.locator("[data-print-sheet]")).toHaveCount(0);
+    const refused = await page.request.get(
+      `/print/pdf?from=${encodeURIComponent("/print/guide/duty-cards/half-written?draft=1")}&name=x`,
+    );
+    expect(refused.status()).toBe(403);
   });
 });

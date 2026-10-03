@@ -110,3 +110,55 @@ export function dutyCardProblem(
 export function headcountLabel(min: number, max: number): string {
   return min === max ? `${min}` : `${min}–${max}`;
 }
+
+/** A sub-role's headcount in words: "1 person", "2 people", "1–2 people". */
+export function headcountText(min: number, max: number): string {
+  return `${headcountLabel(min, max)} ${min === max && max === 1 ? "person" : "people"}`;
+}
+
+/**
+ * Who to ask, split for "Stuck? Ask the <role>." (#250's print): the article
+ * the writer typed is kept ("Any captain" asks "any captain"), and a role with
+ * none gets "the". Empty when the card names no one yet.
+ */
+export function askRoleParts(
+  askRole: string,
+): { article: string; role: string } | null {
+  const text = askRole.trim();
+  if (text === "") return null;
+  const typed = /^(the|a|an|any|your)\s+(.+)$/i.exec(text);
+  if (typed) return { article: typed[1]!.toLowerCase(), role: typed[2]! };
+  return { article: "the", role: text };
+}
+
+/** A duty card as it prints: every part trimmed, and empty lines left out. */
+export interface PrintableDutyCard {
+  subRoles: { name: string; headcount: string }[];
+  steps: string[];
+  hardRules: string[];
+  checklist: string[];
+  ask: { article: string; role: string } | null;
+}
+
+/**
+ * The parts of a published card, or of a writer's draft, as the duty card
+ * print draws them (#250). A draft may still have blank lines and unnamed
+ * sub-roles; those are left out, and a section with nothing in it is not
+ * drawn at all.
+ */
+export function printableDutyCard(card: DutyCardDraft): PrintableDutyCard {
+  const lines = (list: readonly string[]) =>
+    list.map((l) => l.trim()).filter((l) => l !== "");
+  return {
+    subRoles: card.subRoles
+      .filter((r) => r.name.trim() !== "")
+      .map((r) => ({
+        name: r.name.trim(),
+        headcount: headcountText(r.min, Math.max(r.min, r.max)),
+      })),
+    steps: lines(card.steps),
+    hardRules: lines(card.hardRules),
+    checklist: lines(card.checklist),
+    ask: askRoleParts(card.askRole),
+  };
+}

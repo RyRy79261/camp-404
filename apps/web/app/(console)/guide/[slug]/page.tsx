@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Pencil, Printer } from "lucide-react";
 import {
   canEditAnyGuideChapter,
   canEditGuideChapter,
@@ -21,6 +21,7 @@ import {
   recordChapterReadAfterResponse,
 } from "@/lib/guide";
 import {
+  dutyCardPrintPath,
   GUIDE_PATH,
   guideCategoryLabel,
   guideDay,
@@ -108,6 +109,19 @@ export default async function GuideChapterPage({
                 Contents
               </Link>
             </Button>
+            {/* The card on A4, to laminate and pin up (#250). */}
+            {chapter.kind === "duty_card" ? (
+              <Button asChild variant={canEdit ? "outline" : "default"}>
+                <Link
+                  href={dutyCardPrintPath(chapter.slug)}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <Printer aria-hidden />
+                  Print card
+                </Link>
+              </Button>
+            ) : null}
             {canEdit ? (
               <Button asChild>
                 <Link href={guideEditPath(chapter.slug)}>

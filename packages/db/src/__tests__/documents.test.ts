@@ -20,6 +20,7 @@ import {
   listDocumentDrafts,
   listGuideDrafts,
   listPublishedChapters,
+  listPublishedDutyCardsInFull,
   markGuideChapterReviewed,
   publishGuideChapter,
   recordChapterRead,
@@ -337,6 +338,57 @@ describe("survival guide chapters", () => {
       ),
     ).toEqual(["morning-clean"]);
     expect(await listPublishedChapters({ query: "100%" })).toEqual([]);
+  });
+
+  it("prints every published duty card at its published version, and no draft, plain chapter or card taken off", async () => {
+    const boss = await captain();
+    const card = async (slug: string, title: string) => {
+      await createGuideChapter({
+        actorId: boss.id,
+        slug,
+        title,
+        category: "on_site",
+        team: "kitchen",
+        kind: "duty_card",
+        markdown: "Gloves in the blue crate.",
+        card: CARD,
+      });
+    };
+    await card("evening-clean", "Evening clean");
+    await card("morning-clean", "Morning clean");
+    await card("gate-shift", "Gate shift");
+    await card("half-written", "Half written");
+    await chapter(boss.id);
+    for (const slug of [
+      "evening-clean",
+      "morning-clean",
+      "gate-shift",
+      "dishwashing",
+    ]) {
+      await publishGuideChapter({ actorId: boss.id, slug });
+    }
+    await unpublishGuideChapter({ actorId: boss.id, slug: "gate-shift" });
+    // An edit not yet published: the print keeps the published words.
+    await saveGuideChapter({
+      actorId: boss.id,
+      slug: "evening-clean",
+      expectedVersion: 1,
+      change: { card: { ...CARD, steps: ["Not published yet."] } },
+    });
+
+    const cards = await listPublishedDutyCardsInFull();
+    expect(cards.map((c) => c.slug)).toEqual([
+      "evening-clean",
+      "morning-clean",
+    ]);
+    expect(cards[0]).toMatchObject({
+      title: "Evening clean",
+      team: "kitchen",
+      kind: "duty_card",
+      version: 1,
+      markdown: "Gloves in the blue crate.",
+      card: CARD,
+    });
   });
 
   it("lets only a captain mark a chapter public", async () => {

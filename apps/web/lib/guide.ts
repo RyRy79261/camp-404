@@ -8,6 +8,7 @@ import type {
   GuideChapterVersion,
   GuideDraft,
   GuideWriteResult,
+  PublishedDutyCard,
 } from "@camp404/db/documents";
 import { usesTestStore } from "./test-mode";
 import { guideTestStore } from "./test-store-guide";
@@ -21,6 +22,7 @@ export type {
   GuideChapterVersion,
   GuideDraft,
   GuideWriteResult,
+  PublishedDutyCard,
 };
 
 export async function listPublishedChapters(
@@ -29,6 +31,24 @@ export async function listPublishedChapters(
   return usesTestStore()
     ? guideTestStore.listPublishedChapters(input)
     : db.listPublishedChapters(input);
+}
+
+/** Every published duty card, by title (no card): the shift set-up's choices. */
+export async function listPublishedDutyCards(): ReturnType<
+  typeof db.listPublishedDutyCards
+> {
+  return usesTestStore()
+    ? guideTestStore.listPublishedDutyCards()
+    : db.listPublishedDutyCards();
+}
+
+/** Every published duty card with its card, for "Print all duty cards". */
+export async function listPublishedDutyCardsInFull(): Promise<
+  PublishedDutyCard[]
+> {
+  return usesTestStore()
+    ? guideTestStore.listPublishedDutyCardsInFull()
+    : db.listPublishedDutyCardsInFull();
 }
 
 export async function getPublishedChapter(

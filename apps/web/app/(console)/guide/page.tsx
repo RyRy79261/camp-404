@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, FilePen, Plus, Search } from "lucide-react";
+import { BookOpen, FilePen, Plus, Printer, Search } from "lucide-react";
 import {
   canEditAnyGuideChapter,
   canEditGuideChapter,
@@ -26,8 +26,10 @@ import {
   listChapterReads,
   listGuideDrafts,
   listPublishedChapters,
+  listPublishedDutyCards,
 } from "@/lib/guide";
 import {
+  DUTY_CARDS_PRINT_PATH,
   GUIDE_PATH,
   guideCategoryLabel,
   guideEditPath,
@@ -65,13 +67,16 @@ export default async function GuidePage({
 
   const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
   const writer = canEditAnyGuideChapter(rank, leadTeams);
-  const [chapters, reads, config, cycle, drafts] = await Promise.all([
-    listPublishedChapters({ query }),
-    listChapterReads(campUser.id),
-    getTeamsConfig(),
-    getCurrentCycle(),
-    writer ? listGuideDrafts() : Promise.resolve([]),
-  ]);
+  const [chapters, reads, config, cycle, drafts, dutyCards] = await Promise.all(
+    [
+      listPublishedChapters({ query }),
+      listChapterReads(campUser.id),
+      getTeamsConfig(),
+      getCurrentCycle(),
+      writer ? listGuideDrafts() : Promise.resolve([]),
+      listPublishedDutyCards(),
+    ],
+  );
   const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
   const teamLabel = (team: string | null) =>
     team === null
@@ -99,14 +104,29 @@ export default async function GuidePage({
         title="Survival Guide"
         description="What every member needs to know, from before you leave home to strike. Captains write it, and each team's leads write their team's chapters."
         actions={
-          writer ? (
-            <Button asChild>
-              <Link href={NEW_GUIDE_CHAPTER_PATH}>
-                <Plus aria-hidden />
-                New chapter
-              </Link>
-            </Button>
-          ) : null
+          <>
+            {/* Every published duty card, one per A4 page, in one PDF. */}
+            {dutyCards.length > 0 ? (
+              <Button asChild variant="outline">
+                <Link
+                  href={DUTY_CARDS_PRINT_PATH}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <Printer aria-hidden />
+                  Print all duty cards
+                </Link>
+              </Button>
+            ) : null}
+            {writer ? (
+              <Button asChild>
+                <Link href={NEW_GUIDE_CHAPTER_PATH}>
+                  <Plus aria-hidden />
+                  New chapter
+                </Link>
+              </Button>
+            ) : null}
+          </>
         }
       />
 
