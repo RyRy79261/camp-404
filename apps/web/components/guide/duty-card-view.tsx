@@ -6,7 +6,7 @@ import {
   Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { headcountLabel } from "@camp404/core";
+import { headcountText } from "@camp404/core";
 import type { DutyCard } from "@camp404/types";
 import {
   Card,
@@ -69,8 +69,7 @@ export function DutyCardView({ card }: { card: DutyCard }) {
               >
                 <span className="font-medium">{r.name}</span>
                 <span className="tabular-nums text-muted-foreground">
-                  {headcountLabel(r.min, r.max)}{" "}
-                  {r.max === 1 ? "person" : "people"}
+                  {headcountText(r.min, r.max)}
                 </span>
               </li>
             ))}

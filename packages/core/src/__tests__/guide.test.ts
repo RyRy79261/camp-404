@@ -7,7 +7,10 @@ import {
   dutyCardProblem,
   guideReadMark,
   guideReviewDue,
+  askRoleParts,
   headcountLabel,
+  headcountText,
+  printableDutyCard,
 } from "../guide";
 
 const KITCHEN = Team.enum.kitchen;
@@ -124,5 +127,83 @@ describe("headcountLabel", () => {
   it("prints one number or a range", () => {
     expect(headcountLabel(2, 2)).toBe("2");
     expect(headcountLabel(2, 3)).toBe("2–3");
+  });
+});
+
+describe("headcountText", () => {
+  it("says person for one and people for more or a range", () => {
+    expect(headcountText(1, 1)).toBe("1 person");
+    expect(headcountText(2, 2)).toBe("2 people");
+    expect(headcountText(1, 2)).toBe("1–2 people");
+    expect(headcountText(0, 0)).toBe("0 people");
+  });
+});
+
+describe("askRoleParts", () => {
+  it("adds 'the' to a bare role and keeps an article the writer typed", () => {
+    expect(askRoleParts("Kitchen lead on shift")).toEqual({
+      article: "the",
+      role: "Kitchen lead on shift",
+    });
+    expect(askRoleParts("The Sanitation lead")).toEqual({
+      article: "the",
+      role: "Sanitation lead",
+    });
+    expect(askRoleParts("Any captain")).toEqual({
+      article: "any",
+      role: "captain",
+    });
+    // "Theatre lead" starts with "the" but has no article.
+    expect(askRoleParts("Theatre lead")).toEqual({
+      article: "the",
+      role: "Theatre lead",
+    });
+  });
+
+  it("is empty when the card names no one", () => {
+    expect(askRoleParts("   ")).toBeNull();
+  });
+});
+
+describe("printableDutyCard", () => {
+  it("words each sub-role's headcount and keeps every filled part", () => {
+    const out = printableDutyCard({
+      subRoles: [
+        { name: "Washer", min: 2, max: 2 },
+        { name: "Dryer", min: 1, max: 2 },
+        { name: "Shift lead", min: 1, max: 1 },
+      ],
+      steps: ["Boil water.", "Scrape plates."],
+      hardRules: ["No grey water on the ground."],
+      checklist: ["Gas off"],
+      askRole: "Kitchen lead on shift",
+    });
+    expect(out.subRoles).toEqual([
+      { name: "Washer", headcount: "2 people" },
+      { name: "Dryer", headcount: "1–2 people" },
+      { name: "Shift lead", headcount: "1 person" },
+    ]);
+    expect(out.steps).toEqual(["Boil water.", "Scrape plates."]);
+    expect(out.hardRules).toHaveLength(1);
+    expect(out.checklist).toEqual(["Gas off"]);
+    expect(out.ask).toEqual({ article: "the", role: "Kitchen lead on shift" });
+  });
+
+  it("leaves out a draft's blank lines and unnamed sub-roles, so an empty section is not drawn", () => {
+    const out = printableDutyCard({
+      subRoles: [
+        { name: "  ", min: 0, max: 0 },
+        { name: " Washer ", min: 2, max: 1 },
+      ],
+      steps: ["", " Fill the basins. "],
+      hardRules: ["  "],
+      checklist: [],
+      askRole: "",
+    });
+    expect(out.subRoles).toEqual([{ name: "Washer", headcount: "2 people" }]);
+    expect(out.steps).toEqual(["Fill the basins."]);
+    expect(out.hardRules).toEqual([]);
+    expect(out.checklist).toEqual([]);
+    expect(out.ask).toBeNull();
   });
 });

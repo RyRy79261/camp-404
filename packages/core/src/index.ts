@@ -161,8 +161,8 @@
 //   - survival guide: canEditGuideChapter (a captain, or a lead of the
 //     chapter's team; a whole-camp chapter is a captain's; fails closed),
 //     canEditAnyGuideChapter, canSetGuideChapterPublic (a captain),
-//     guideReadMark, guideReviewDue, dutyCardProblem, headcountLabel
-//     (./guide)
+//     guideReadMark, guideReviewDue, dutyCardProblem, headcountLabel,
+//     headcountText, askRoleParts, printableDutyCard (./guide)
 //   - team programs: canEditTeamProgram (a captain, or a lead of that team;
 //     fails closed on an unknown rank or team) (./team-programs)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has

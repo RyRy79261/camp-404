@@ -460,22 +460,41 @@ export interface DutyCardShiftView {
 export async function getDutyCardShifts(
   documentId: string,
 ): Promise<DutyCardShiftView[]> {
+  return (await getShiftsForDutyCards([documentId])).get(documentId) ?? [];
+}
+
+/**
+ * This year's shifts for each of several duty cards, by card id (the "Print
+ * all duty cards" sheet): the camp's settings and the Burn's days read once.
+ */
+export async function getShiftsForDutyCards(
+  documentIds: readonly string[],
+): Promise<Map<string, DutyCardShiftView[]>> {
   const camp = await getCampSettings();
   const cycle = camp.cycleNumber;
-  const [shifts, burnDays] = await Promise.all([
-    usesTestStore()
-      ? shiftsTestStore.listShiftsForDutyCard(documentId, cycle)
-      : db.listShiftsForDutyCard(documentId, cycle),
+  const [lists, burnDays] = await Promise.all([
+    Promise.all(
+      documentIds.map((id) =>
+        usesTestStore()
+          ? shiftsTestStore.listShiftsForDutyCard(id, cycle)
+          : db.listShiftsForDutyCard(id, cycle),
+      ),
+    ),
     readBurnDays(cycle),
   ]);
   const labels = new Map(camp.teams.teams.map((t) => [t.key, t.label]));
-  return shifts.map((s) => ({
-    id: s.id,
-    name: s.name,
-    teamLabel: labels.get(s.team) ?? s.team,
-    timeText: shiftTimeText(s.startMinute, s.durationMinutes),
-    daysText: shiftDaysText(s.days, burnDays.length),
-  }));
+  return new Map(
+    documentIds.map((id, i) => [
+      id,
+      (lists[i] ?? []).map((s) => ({
+        id: s.id,
+        name: s.name,
+        teamLabel: labels.get(s.team) ?? s.team,
+        timeText: shiftTimeText(s.startMinute, s.durationMinutes),
+        daysText: shiftDaysText(s.days, burnDays.length),
+      })),
+    ]),
+  );
 }
 
 /** Whether a captain's "Ask everyone" is still open for this member. */

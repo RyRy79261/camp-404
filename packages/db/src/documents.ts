@@ -238,6 +238,28 @@ export async function listPublishedDutyCards(): Promise<DutyCardChoice[]> {
     .orderBy(asc(v.title), asc(d.slug));
 }
 
+/** A published duty card with its card, as the "Print all" sheet draws it. */
+export interface PublishedDutyCard extends GuideChapterSummary {
+  markdown: string;
+  card: DutyCard | null;
+}
+
+/**
+ * Every duty card members can read, each at its published version, by title
+ * (#250's "Print all duty cards"). A draft, or a card taken off the guide, is
+ * never in it.
+ */
+export async function listPublishedDutyCardsInFull(): Promise<
+  PublishedDutyCard[]
+> {
+  return createHttpDb()
+    .select({ ...summaryColumns(), markdown: v.markdown, card: v.card })
+    .from(d)
+    .innerJoin(v, liveVersion)
+    .where(and(eq(d.published, true), eq(d.kind, "duty_card")))
+    .orderBy(asc(v.title), asc(d.slug));
+}
+
 const publisher = alias(schema.users, "publisher");
 
 /** Every published version of a chapter, newest first. */

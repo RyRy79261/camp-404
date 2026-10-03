@@ -163,3 +163,18 @@ export function guideSlugFor(title: string, suffix: string): string {
   }
   return GuideSlug.safeParse(slug).success ? slug : `chapter-${suffix}`;
 }
+
+/** Every published duty card on A4, one per page (#250). */
+export const DUTY_CARDS_PRINT_PATH = "/print/guide/duty-cards";
+
+/**
+ * One duty card on A4: its published version, or with `draft` the writer's
+ * saved working copy (only someone who may edit the card may open that).
+ */
+export function dutyCardPrintPath(
+  slug: string,
+  { draft = false }: { draft?: boolean } = {},
+): string {
+  const path = `${DUTY_CARDS_PRINT_PATH}/${encodeURIComponent(slug)}`;
+  return draft ? `${path}?draft=1` : path;
+}

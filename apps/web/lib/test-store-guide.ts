@@ -24,6 +24,7 @@ import {
   type GuideChapterVersion,
   type GuideDraft,
   type GuideWriteResult,
+  type PublishedDutyCard,
 } from "@camp404/db/documents";
 import { reachRank } from "@camp404/db/power";
 import { DutyCard, type DutyCardDraft } from "@camp404/types";
@@ -180,6 +181,21 @@ export const guideTestStore = {
         slug: c.slug,
         title: v.title,
         team: v.team,
+      }))
+      .sort(byTitle);
+  },
+
+  listPublishedDutyCardsInFull(): PublishedDutyCard[] {
+    return state()
+      .chapters.map((c) => [c, live(c)] as const)
+      .filter(
+        (pair): pair is [StoredChapter, StoredVersion] =>
+          !!pair[1] && pair[0].kind === "duty_card",
+      )
+      .map(([c, v]) => ({
+        ...summary(c, v),
+        markdown: v.markdown,
+        card: v.card ? structuredClone(v.card) : null,
       }))
       .sort(byTitle);
   },
