@@ -856,14 +856,26 @@ export type MealPlanDay = z.infer<typeof MealPlanDay>;
 export const MEALS_OF_THE_DAY = MEALS;
 export type MealOfTheDay = (typeof MEALS_OF_THE_DAY)[number];
 
+/** A calendar day, typed as YYYY-MM-DD, that is a real day. */
+const CalendarDay = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  });
+
 /**
- * A save of the year's meal plan: one row of plates for each day on site, and
- * the version the editor opened (0 when there was no plan yet). The days on
- * site and the date of Day 1 are not the meal plan's: they come from the
- * camp's days in Logistics (the owner, 2026-10-03), and the save checks the
- * rows against them.
+ * A save of the year's meal plan: one row of plates for each day on site, the
+ * Day 1 the editor opened with (null when Logistics had no dates), and the
+ * version it opened (0 when there was no plan yet). The days on site and the
+ * date of Day 1 are not the meal plan's: they come from the camp's days in
+ * Logistics (the owner, 2026-10-03), and the save checks the rows and that
+ * Day 1 against them, so plates typed for one set of dates never land on
+ * another.
  */
 export const MealPlanInput = z.object({
+  firstDay: CalendarDay.nullable(),
   days: z
     .array(MealPlanDay)
     .min(1, "Give the plates for every day on site.")

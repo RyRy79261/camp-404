@@ -92,6 +92,7 @@ describe("kitchen menu twins", () => {
     expect(
       testStore.setMealPlan({
         actorId: cook.id,
+        firstDay: "2027-04-22",
         days: [{ breakfast: 0, dinner: 20 }],
         expectedVersion: 0,
       }),
@@ -210,6 +211,7 @@ describe("kitchen menu twins", () => {
     // No Logistics days: the plan's 11 undated days.
     testStore.setMealPlan({
       actorId: cook.id,
+      firstDay: null,
       days: [
         { breakfast: 0, dinner: 30 },
         ...Array.from({ length: 10 }, () => ({ breakfast: 0, dinner: 0 })),

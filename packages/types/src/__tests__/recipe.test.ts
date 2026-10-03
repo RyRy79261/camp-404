@@ -548,24 +548,51 @@ describe("the review inputs", () => {
 describe("MealPlanInput", () => {
   const day = { breakfast: 20, dinner: 25 };
 
-  it("takes one row of whole plates, 0 to 500, for each day", () => {
+  it("takes one row of whole plates, 0 to 500, for each day, and the Day 1 they were typed for", () => {
     expect(
       MealPlanInput.safeParse({
+        firstDay: "2026-04-25",
         days: [day, { breakfast: 500, dinner: 0 }],
+        expectedVersion: 0,
+      }).success,
+    ).toBe(true);
+    expect(
+      MealPlanInput.safeParse({
+        firstDay: null,
+        days: [day],
         expectedVersion: 0,
       }).success,
     ).toBe(true);
     expect(MEAL_PLAN_DEFAULT_DAYS).toBe(11);
   });
 
-  it("carries no days on site and no date: both come from Logistics", () => {
+  it("carries no days on site: they come from Logistics", () => {
     const parsed = MealPlanInput.parse({
       daysOnSite: 1,
       firstDay: "2026-04-25",
       days: [day],
       expectedVersion: 0,
     });
-    expect(parsed).toEqual({ days: [day], expectedVersion: 0 });
+    expect(parsed).toEqual({
+      firstDay: "2026-04-25",
+      days: [day],
+      expectedVersion: 0,
+    });
+  });
+
+  it("refuses a Day 1 that is not a real day, or left out", () => {
+    for (const firstDay of [
+      "2027-02-29",
+      "2026-04-31",
+      "25 April",
+      undefined,
+    ]) {
+      expect(
+        MealPlanInput.safeParse({ firstDay, days: [day], expectedVersion: 0 })
+          .success,
+        String(firstDay),
+      ).toBe(false);
+    }
   });
 
   it("refuses plates outside 0 to 500, a part plate, no rows and too many", () => {
@@ -577,13 +604,14 @@ describe("MealPlanInput", () => {
       Array.from({ length: MEAL_PLAN_MAX_DAYS + 1 }, () => day),
     ]) {
       expect(
-        MealPlanInput.safeParse({ days, expectedVersion: 0 }).success,
+        MealPlanInput.safeParse({ firstDay: null, days, expectedVersion: 0 })
+          .success,
         JSON.stringify(days),
       ).toBe(false);
     }
     expect(
-      MealPlanInput.safeParse({ days: [], expectedVersion: 0 }).error?.issues[0]
-        ?.message,
+      MealPlanInput.safeParse({ firstDay: null, days: [], expectedVersion: 0 })
+        .error?.issues[0]?.message,
     ).toBe("Give the plates for every day on site.");
   });
 });

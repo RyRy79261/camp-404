@@ -4930,10 +4930,10 @@ export const testStore = {
     if (!isKitchenReviewer(input.actorId)) {
       return { ok: false, error: NOT_A_MEAL_PLAN_EDITOR };
     }
-    const { days, expectedVersion } = parsed.data;
+    const { firstDay, days, expectedVersion } = parsed.data;
     const cycle = currentCycleNumber();
     const before = storeMealPlan(cycle);
-    if (days.length !== before.daysOnSite) {
+    if (days.length !== before.daysOnSite || firstDay !== before.firstDay) {
       return { ok: false, error: MEAL_PLAN_DAYS_MOVED };
     }
     if (before.version !== expectedVersion) {

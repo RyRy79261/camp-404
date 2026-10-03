@@ -149,6 +149,7 @@ describe("MealPlanEditor's dates", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(saveMealPlanAction).toHaveBeenCalledWith({
+        firstDay: null,
         days: [
           { breakfast: 42, dinner: 10 },
           ...Array.from({ length: 10 }, () => ({ breakfast: 10, dinner: 10 })),

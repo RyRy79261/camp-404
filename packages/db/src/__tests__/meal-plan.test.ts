@@ -149,6 +149,7 @@ describe("meal plan", () => {
     expect(
       await setMealPlan({
         actorId: kitchenLead.id,
+        firstDay: "2026-04-25",
         days: THREE_DAYS,
         expectedVersion: 0,
       }),
@@ -164,6 +165,7 @@ describe("meal plan", () => {
     expect(
       await setMealPlan({
         actorId: captain.id,
+        firstDay: "2026-04-25",
         days: three,
         expectedVersion: 1,
       }),
@@ -186,6 +188,7 @@ describe("meal plan", () => {
     const { captain } = await people();
     await setMealPlan({
       actorId: captain.id,
+      firstDay: "2026-04-25",
       days: THREE_DAYS,
       expectedVersion: 0,
     });
@@ -194,6 +197,7 @@ describe("meal plan", () => {
     expect((await getMealPlan()).days).toEqual(THREE_DAYS.slice(0, 2));
     await setMealPlan({
       actorId: captain.id,
+      firstDay: "2026-04-25",
       days: [day(1, 1), day(2, 2)],
       expectedVersion: 1,
     });
@@ -212,6 +216,7 @@ describe("meal plan", () => {
     expect(
       await setMealPlan({
         actorId: captain.id,
+        firstDay: "2026-04-25",
         days: THREE_DAYS,
         expectedVersion: 0,
       }),
@@ -220,12 +225,61 @@ describe("meal plan", () => {
     expect(await auditRows()).toEqual([]);
   });
 
+  it("refuses rows typed for a Day 1 that Logistics has moved since, even with the same count", async () => {
+    const { captain } = await people();
+    expect(
+      await setMealPlan({
+        actorId: captain.id,
+        firstDay: "2026-04-25",
+        days: THREE_DAYS,
+        expectedVersion: 0,
+      }),
+    ).toEqual({ ok: true, version: 1 });
+    // The page opened on Day 1 Sat 25 Apr; Build then moves a day later,
+    // still three days.
+    await phase(h.db(), 2026, "build", "2026-04-26", "2026-04-28");
+    const other = [day(9, 9), day(9, 9), day(9, 9)];
+    expect(
+      await setMealPlan({
+        actorId: captain.id,
+        firstDay: "2026-04-25",
+        days: other,
+        expectedVersion: 1,
+      }),
+    ).toEqual({ ok: false, error: MEAL_PLAN_DAYS_MOVED });
+    expect(await getMealPlan()).toMatchObject({
+      firstDay: "2026-04-26",
+      days: THREE_DAYS,
+      version: 1,
+    });
+    expect(await auditRows()).toHaveLength(1);
+    // Rows typed with no dates are refused once Logistics has some.
+    expect(
+      await setMealPlan({
+        actorId: captain.id,
+        firstDay: null,
+        days: other,
+        expectedVersion: 1,
+      }),
+    ).toEqual({ ok: false, error: MEAL_PLAN_DAYS_MOVED });
+    // Typed for the new Day 1, it saves.
+    expect(
+      await setMealPlan({
+        actorId: captain.id,
+        firstDay: "2026-04-26",
+        days: other,
+        expectedVersion: 1,
+      }),
+    ).toEqual({ ok: true, version: 2 });
+  });
+
   it("refuses a member and a lead of another team inside the write, and writes nothing", async () => {
     const { member, powerLead } = await people();
     for (const actor of [member, powerLead]) {
       expect(
         await setMealPlan({
           actorId: actor.id,
+          firstDay: "2026-04-25",
           days: THREE_DAYS,
           expectedVersion: 0,
         }),
@@ -241,6 +295,7 @@ describe("meal plan", () => {
     expect(
       await setMealPlan({
         actorId: kitchenLead.id,
+        firstDay: "2026-04-25",
         days: THREE_DAYS,
         expectedVersion: 0,
       }),
@@ -251,6 +306,7 @@ describe("meal plan", () => {
     const { captain, kitchenLead } = await people();
     const first = await setMealPlan({
       actorId: captain.id,
+      firstDay: "2026-04-25",
       days: THREE_DAYS,
       expectedVersion: 0,
     });
@@ -260,6 +316,7 @@ describe("meal plan", () => {
     expect(
       await setMealPlan({
         actorId: kitchenLead.id,
+        firstDay: "2026-04-25",
         days: other,
         expectedVersion: 0,
       }),
@@ -267,12 +324,14 @@ describe("meal plan", () => {
     // And from a version that has moved on.
     await setMealPlan({
       actorId: captain.id,
+      firstDay: "2026-04-25",
       days: THREE_DAYS,
       expectedVersion: 1,
     });
     expect(
       await setMealPlan({
         actorId: kitchenLead.id,
+        firstDay: "2026-04-25",
         days: other,
         expectedVersion: 1,
       }),
@@ -293,6 +352,7 @@ describe("meal plan", () => {
     ]) {
       const result = await setMealPlan({
         actorId: captain.id,
+        firstDay: "2026-04-25",
         days,
         expectedVersion: 0,
       });
@@ -305,6 +365,7 @@ describe("meal plan", () => {
     const { captain } = await people();
     await setMealPlan({
       actorId: captain.id,
+      firstDay: "2026-04-25",
       days: THREE_DAYS,
       expectedVersion: 0,
     });
@@ -321,6 +382,7 @@ describe("meal plan", () => {
     const { captain } = await people();
     await setMealPlan({
       actorId: captain.id,
+      firstDay: "2026-04-25",
       days: THREE_DAYS,
       expectedVersion: 0,
     });

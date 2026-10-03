@@ -330,6 +330,7 @@ describe("the meal plan as a Kitchen lead edits it", () => {
     ).toBeTruthy();
     await save();
     expect(saveMealPlanAction).toHaveBeenCalledWith({
+      firstDay: "2026-04-25",
       days: DAYS,
       expectedVersion: 4,
     });
@@ -353,6 +354,7 @@ describe("the meal plan as a Kitchen lead edits it", () => {
     fireEvent.change(plates("Day 2 dinner"), { target: { value: "" } });
     await save();
     expect(saveMealPlanAction).toHaveBeenCalledWith({
+      firstDay: null,
       days: [
         { breakfast: 20, dinner: 25 },
         ...Array.from({ length: 10 }, () => ({ breakfast: 0, dinner: 0 })),
@@ -374,6 +376,7 @@ describe("the meal plan as a Kitchen lead edits it", () => {
     });
     await save();
     expect(saveMealPlanAction).toHaveBeenCalledWith({
+      firstDay: null,
       days: [DAYS[0], DAYS[0], DAYS[0]],
       expectedVersion: 4,
     });
@@ -392,6 +395,29 @@ describe("the meal plan as a Kitchen lead edits it", () => {
         ?.textContent,
     ).toBe("Give at most 500 plates.");
     expect(plates("Day 3 breakfast").getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("asks for a reload when Logistics moved the dates after the page opened", async () => {
+    await renderAs("captain", [], {
+      daysOnSite: 3,
+      days: DAYS,
+      version: 4,
+      firstDay: "2026-04-25",
+    });
+    vi.mocked(saveMealPlanAction).mockResolvedValueOnce({
+      ok: false,
+      error: "The camp's dates changed in Logistics. Reload the page.",
+    });
+    await save();
+    // The rows go with the Day 1 they were typed for.
+    expect(saveMealPlanAction).toHaveBeenCalledWith(
+      expect.objectContaining({ firstDay: "2026-04-25" }),
+    );
+    expect(screen.getByRole("alert").textContent).toBe(
+      "The camp's dates changed in Logistics. Reload the page.",
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("says why a save was refused, beside Save", async () => {

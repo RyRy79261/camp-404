@@ -160,6 +160,7 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
     expect(
       await setMealPlan({
         actorId: captain.id,
+        firstDay: "2027-04-22",
         days: [
           { breakfast: 0, dinner: 50 },
           { breakfast: 60, dinner: 50 },

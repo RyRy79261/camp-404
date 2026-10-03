@@ -236,8 +236,10 @@ export async function readMealPlanPeaks(db: DbOrTx = createHttpDb()) {
  * Saves this year's plates. `expectedVersion` 0 means the editor saw no plan
  * (the defaults), so the save inserts one, and if someone saved first the
  * insert finds their row and refuses. Otherwise it is a compare-and-set on
- * version. The rows must be the days on site in Logistics as they are now: a
- * Logistics change since the page opened says so in a sentence. Days 1 to
+ * version. The rows and the Day 1 the editor opened with must be the days on
+ * site in Logistics as they are now: a Logistics change since the page opened
+ * (a moved Day 1 with the same count too) says so in a sentence, writing
+ * nothing. Days 1 to
  * the days on site are replaced; a day past them keeps its plates, so a day
  * range that shrinks and grows again loses nothing. The audit row says what
  * the plates were and what they became.
@@ -252,7 +254,7 @@ export async function setMealPlan(
       error: parsed.error.issues[0]?.message ?? CHECK_MEAL_PLAN,
     };
   }
-  const { days, expectedVersion } = parsed.data;
+  const { firstDay, days, expectedVersion } = parsed.data;
   try {
     return await withTransaction(async (tx: Tx) => {
       if (!(await lockMealPlanEditor(tx, input.actorId))) {
@@ -260,7 +262,11 @@ export async function setMealPlan(
       }
       const cycle = await currentCycleNumber(tx);
       const before = await readMealPlan(tx, cycle, { lock: true });
-      if (days.length !== before.daysOnSite) refuse(MEAL_PLAN_DAYS_MOVED);
+      // The rows are for the days the editor opened: the same count and the
+      // same Day 1, read under the share lock, or Logistics moved them.
+      if (days.length !== before.daysOnSite || firstDay !== before.firstDay) {
+        refuse(MEAL_PLAN_DAYS_MOVED);
+      }
       const now = new Date();
       let version: number;
       if (expectedVersion === 0) {

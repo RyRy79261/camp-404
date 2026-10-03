@@ -126,6 +126,7 @@ describe("kitchen menu and shopping list", () => {
     expect(
       await setMealPlan({
         actorId: captain.id,
+        firstDay: "2026-04-22",
         days: [
           { breakfast: 0, dinner: 50 },
           { breakfast: 30, dinner: 50 },
@@ -533,6 +534,7 @@ describe("kitchen menu and shopping list", () => {
     expect(
       await setMealPlan({
         actorId: captain.id,
+        firstDay: "2027-04-22",
         days: [
           { breakfast: 0, dinner: 50 },
           { breakfast: 30, dinner: 50 },

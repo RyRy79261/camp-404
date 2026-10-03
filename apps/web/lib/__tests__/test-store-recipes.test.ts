@@ -1331,6 +1331,7 @@ describe("recipe twins", () => {
       expect(
         testStore.setMealPlan({
           actorId: captain.id,
+          firstDay: null,
           // No Logistics days: the plan's 11 undated days.
           days: [
             { breakfast: 45, dinner: 60 },
@@ -1416,6 +1417,7 @@ describe("meal plan twin", () => {
       expect(
         testStore.setMealPlan({
           actorId: actor.id,
+          firstDay: "2026-04-25",
           ...two,
           expectedVersion: 0,
         }),
@@ -1424,6 +1426,7 @@ describe("meal plan twin", () => {
     expect(
       testStore.setMealPlan({
         actorId: kitchen.id,
+        firstDay: "2026-04-25",
         ...two,
         expectedVersion: 0,
       }),
@@ -1432,6 +1435,7 @@ describe("meal plan twin", () => {
     expect(
       testStore.setMealPlan({
         actorId: captain.id,
+        firstDay: "2026-04-25",
         ...two,
         expectedVersion: 0,
       }),
@@ -1439,6 +1443,7 @@ describe("meal plan twin", () => {
     expect(
       testStore.setMealPlan({
         actorId: captain.id,
+        firstDay: "2026-04-25",
         days: [
           { breakfast: 501, dinner: 0 },
           { breakfast: 0, dinner: 0 },
@@ -1463,6 +1468,7 @@ describe("meal plan twin", () => {
     expect(
       testStore.setMealPlan({
         actorId: captain.id,
+        firstDay: "2026-04-25",
         days: [{ breakfast: 20, dinner: 25 }],
         expectedVersion: 0,
       }),
@@ -1475,14 +1481,29 @@ describe("meal plan twin", () => {
     expect(
       testStore.setMealPlan({
         actorId: captain.id,
+        firstDay: "2026-04-25",
         days: three,
         expectedVersion: 0,
       }),
     ).toEqual({ ok: true, version: 1 });
-    // Build cut to two days and back: the third day's plates are kept.
-    expect(build(captain.id, "2026-04-25", "2026-04-26", 1).ok).toBe(true);
-    expect(testStore.getMealPlan().days).toEqual(three.slice(0, 2));
+    // Build moves a day later, still three days: rows typed for Sat 25 Apr
+    // are refused, and nothing is written.
+    expect(build(captain.id, "2026-04-26", "2026-04-28", 1).ok).toBe(true);
+    expect(
+      testStore.setMealPlan({
+        actorId: captain.id,
+        firstDay: "2026-04-25",
+        days: three.map(() => ({ breakfast: 9, dinner: 9 })),
+        expectedVersion: 1,
+      }),
+    ).toEqual({ ok: false, error: MEAL_PLAN_DAYS_MOVED });
+    expect(testStore.getMealPlan()).toMatchObject({ days: three, version: 1 });
     expect(build(captain.id, "2026-04-25", "2026-04-27", 2).ok).toBe(true);
+
+    // Build cut to two days and back: the third day's plates are kept.
+    expect(build(captain.id, "2026-04-25", "2026-04-26", 3).ok).toBe(true);
+    expect(testStore.getMealPlan().days).toEqual(three.slice(0, 2));
+    expect(build(captain.id, "2026-04-25", "2026-04-27", 4).ok).toBe(true);
     expect(testStore.getMealPlan().days).toEqual(three);
   });
 });

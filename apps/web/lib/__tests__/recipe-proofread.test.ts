@@ -271,6 +271,7 @@ describe("processRuns with a queued source run", () => {
     expect(
       testStore.setMealPlan({
         actorId: captainId,
+        firstDay: null,
         // No Logistics days: the plan's 11 undated days.
         days: [
           { breakfast: 30, dinner: 45 },

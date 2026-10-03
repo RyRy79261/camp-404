@@ -54,6 +54,7 @@ function actAs(rank: ViewerRank, led: string[] = [], id = "user-1") {
 }
 
 const PLAN = {
+  firstDay: null,
   days: [
     { breakfast: 20, dinner: 25 },
     { breakfast: 45, dinner: 50 },
@@ -107,7 +108,7 @@ describe("saveMealPlanAction", () => {
     );
   });
 
-  it("never passes a date or a day count on: both come from Logistics", async () => {
+  it("passes on the Day 1 the rows were typed for, never a day count, and refuses a date that is not a day", async () => {
     expect(
       (
         await saveMealPlanAction({
@@ -119,8 +120,14 @@ describe("saveMealPlanAction", () => {
     ).toBe(true);
     expect(setMealPlan).toHaveBeenCalledWith({
       ...PLAN,
+      firstDay: "2026-04-25",
       actorId: "captain-1",
     });
+    vi.mocked(setMealPlan).mockClear();
+    expect(
+      (await saveMealPlanAction({ ...PLAN, firstDay: "2026-02-30" })).ok,
+    ).toBe(false);
+    expect(setMealPlan).not.toHaveBeenCalled();
   });
 
   it("saves as a captain without reading their teams", async () => {

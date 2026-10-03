@@ -175,6 +175,9 @@ function MealPlanEditorForm({
     event.preventDefault();
     setRefusal(null);
     const payload = {
+      // The Day 1 these rows were typed for: the save refuses them if
+      // Logistics has moved it since.
+      firstDay,
       days: rows.map((r) => ({
         breakfast: plates(r.breakfast),
         dinner: plates(r.dinner),

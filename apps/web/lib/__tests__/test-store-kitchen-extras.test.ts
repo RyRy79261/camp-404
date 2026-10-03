@@ -75,6 +75,7 @@ function setUp() {
   expect(setBuild("2027-04-22", "2027-04-23", 0)).toMatchObject({ ok: true });
   testStore.setMealPlan({
     actorId: cook.id,
+    firstDay: "2027-04-22",
     days: [
       { breakfast: 0, dinner: 40 },
       { breakfast: 60, dinner: 40 },
