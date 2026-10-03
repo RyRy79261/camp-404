@@ -216,9 +216,10 @@ export const RemovePrepStepInput = z.object({ stepId: RowId });
 export type RemovePrepStepInput = z.infer<typeof RemovePrepStepInput>;
 
 /**
- * Why a meal plan cannot be saved with Day 1 cleared: its prep steps are dated
- * from Day 1, and a step with no Day 1 has no date to keep. The editor shows
- * it beside the date box.
+ * Why the Logistics days that set Day 1 cannot be cleared: the meal plan's
+ * prep steps are dated from Day 1 (the first Build day, else the first Burn
+ * day), and a step with no Day 1 has no date to keep. The Logistics page
+ * shows it in the phase's dialog.
  */
 export const DAY_ONE_NEEDED_FOR_PREP =
-  "Day 1 needs a date while there are prep steps: remove them first, or set a date.";
+  "The meal plan's prep steps are dated from the first day on site: keep a Build or Burn date, or remove the prep steps first.";

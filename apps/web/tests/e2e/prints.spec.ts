@@ -13,6 +13,7 @@ import {
   seedTeam,
   setRank,
 } from "./_helpers";
+import { setPhaseDays } from "./lib/logistics";
 import { osBar } from "./lib/console-nav";
 import { acceptedAt50, DISH } from "./lib/kitchen";
 
@@ -245,9 +246,10 @@ test.describe("prints (test-mode)", () => {
     // price on the peanut butter.
     await approvedMember(page, request, "pr-klead", "Kay Lead");
     await seedTeam(request, "pr-klead", "kitchen", true);
+    // Day 1 is the first Build day in Logistics: two days from Thu 22 Apr.
+    await seedTeam(request, "pr-klead", "transport_and_logistics", true);
+    await setPhaseDays(page, "Build", "2027-04-22", "2027-04-23");
     await page.goto("/kitchen/meal-plan");
-    await page.getByLabel("Days on site").fill("2");
-    await page.getByLabel("Day 1 date").fill("2027-04-22");
     await page.getByLabel("Day 2 breakfast").fill("60");
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Meal plan saved")).toBeVisible();

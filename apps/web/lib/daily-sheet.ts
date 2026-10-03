@@ -49,7 +49,11 @@ export interface DailySheetEvent {
 
 export interface DailySheet {
   day: string;
-  /** Its place in the Burn: day 1 is the Burn's first day. */
+  /**
+   * Its day on site, as the meal plan numbers it: Day 1 is the camp's first
+   * day on site in Logistics (the first Build day, else the first Burn day),
+   * so Day N here is Day N on the meal plan.
+   */
   number: number;
   /** "Wednesday 29 April" */
   longLabel: string;
@@ -119,9 +123,15 @@ export async function getDailySheets(
     listSheetPrepSteps(cycle),
   ]);
 
+  // Day N is the meal plan's Day N (the owner, 2026-10-03: one set of
+  // dates): counted from Day 1 in Logistics, which the plan reads too. With
+  // no Day 1 (no Build or Burn days) there are no Burn days to list either;
+  // a day before Day 1 (mistyped days) falls back to its place in the Burn.
+  const burnIndex = new Map(burnDays.map((day, i) => [day, i + 1]));
   const days = burnDays.map((day, i) => ({
     day,
-    number: i + 1,
+    number:
+      mealPlanDayOf(day, plan.firstDay, Number.POSITIVE_INFINITY) ?? i + 1,
     longLabel: shiftDayLong(day),
   }));
   const today = campDayKey(now);
@@ -170,7 +180,7 @@ export async function getDailySheets(
     // its Day N is the Burn's day N.
     const loungeDay =
       lounge.find((d) => d.date === day)?.day ??
-      (lounge.every((d) => d.date === null) ? number : undefined);
+      (lounge.every((d) => d.date === null) ? burnIndex.get(day) : undefined);
     const events: (DailySheetEvent & { sort: number })[] = [
       ...(loungeDay === undefined ? [] : dayItems(loungeView, loungeDay)).map(
         (item) => ({

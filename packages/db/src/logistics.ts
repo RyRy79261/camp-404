@@ -7,14 +7,19 @@ import {
   attendanceAskNotification,
   attendanceIsOpen,
   campDayKey,
+  campOnSite,
   canAskForAttendance,
   canEditLogistics,
+  dayOneShift,
   isAskedForAttendance,
   type AttendanceEntry,
+  type PhaseDays,
 } from "@camp404/core";
 import {
   ATTENDANCE_PHASES,
+  DAY_ONE_NEEDED_FOR_PREP,
   LOGISTICS_PHASE_LABELS,
+  MEAL_PLAN_MAX_DAYS,
   type AttendanceAnswer,
   type AttendancePhase,
   type LogisticsPhase,
@@ -23,6 +28,7 @@ import { writeAuditEvent, type DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
+import { redatePrepSteps } from "./meal-plan";
 import { openNudges, closeNudge } from "./nudges";
 import { reachRank } from "./power";
 import * as schema from "./schema";
@@ -44,6 +50,12 @@ import * as schema from "./schema";
 //    Google is called: the caller then puts the event under that id, so a
 //    re-save, a retry or two editors at once can never make a second event.
 //    Google is called after the transaction, never inside it.
+//  - The days set the meal plan's Day 1 (the owner, 2026-10-03: one place
+//    to set dates; campOnSite: the first Build day, else the first Burn day).
+//    A write that moves Day 1 re-dates the Kitchen's prep steps and their
+//    tasks in the same transaction, audited (redatePrepSteps), and a clear
+//    that would leave no Day 1 while prep steps exist is refused in a
+//    sentence (DAY_ONE_NEEDED_FOR_PREP).
 //
 // PGlite has ONE connection: everything inside a transaction goes through
 // `tx`, never createHttpDb().
@@ -128,6 +140,64 @@ async function assertLogisticsEditor(tx: Tx, actorId: string): Promise<void> {
   }
 }
 
+/**
+ * The year's phase days, locked for the write: a prep step added at the same
+ * time (which reads Day 1 with a share lock) either lands first and is
+ * re-dated here, or waits and reads the new Day 1.
+ */
+async function lockPhaseDays(tx: Tx, cycle: number): Promise<PhaseDays[]> {
+  return tx
+    .select({
+      phase: schema.logisticsPhases.phase,
+      startDate: schema.logisticsPhases.startDate,
+      endDate: schema.logisticsPhases.endDate,
+    })
+    .from(schema.logisticsPhases)
+    .where(eq(schema.logisticsPhases.cycle, cycle))
+    .for("update");
+}
+
+/**
+ * After a phase's days changed from `before` to `row`: when Day 1 moved, move
+ * the prep steps and their tasks with it; when Day 1 is gone and prep steps
+ * exist, refuse (the whole write rolls back).
+ */
+async function followDayOne(
+  tx: Tx,
+  input: {
+    actorId: string;
+    cycle: number;
+    before: readonly PhaseDays[];
+    row: PhaseDays;
+  },
+): Promise<void> {
+  const after = [
+    ...input.before.filter((p) => p.phase !== input.row.phase),
+    input.row,
+  ];
+  const from = campOnSite(input.before, MEAL_PLAN_MAX_DAYS)?.firstDay ?? null;
+  const to = campOnSite(after, MEAL_PLAN_MAX_DAYS)?.firstDay ?? null;
+  if (from !== null && to === null) {
+    const [step] = await tx
+      .select({ id: schema.kitchenPrepSteps.id })
+      .from(schema.kitchenPrepSteps)
+      .where(eq(schema.kitchenPrepSteps.cycle, input.cycle))
+      .limit(1)
+      .for("update");
+    if (step) refuse(DAY_ONE_NEEDED_FOR_PREP);
+    return;
+  }
+  const shift = dayOneShift(from, to);
+  if (shift === null) return;
+  await redatePrepSteps(tx, {
+    actorId: input.actorId,
+    cycle: input.cycle,
+    shift,
+    from: from!,
+    to: to!,
+  });
+}
+
 // --- Reads -------------------------------------------------------------------
 
 /** This year's phases that have a row, in the camp's order. */
@@ -149,8 +219,9 @@ export async function listLogisticsPhases(
 /**
  * Set one phase's days for this year, as a captain or a Transport and
  * Logistics lead. `newEventId` is the Google event id to claim if the phase
- * has none yet; a phase that has one keeps it. Returns the row as saved, for
- * the calendar step.
+ * has none yet; a phase that has one keeps it. When the days move Day 1, the
+ * meal plan's prep steps and their tasks move with it, in this transaction.
+ * Returns the row as saved, for the calendar step.
  */
 export async function setLogisticsPhase(input: {
   actorId: string;
@@ -165,6 +236,7 @@ export async function setLogisticsPhase(input: {
   return write(async (tx) => {
     await assertLogisticsEditor(tx, input.actorId);
     const cycle = await currentCycleNumber(tx);
+    const before = await lockPhaseDays(tx, cycle);
     const now = new Date();
     const fields = {
       startDate: input.startDate,
@@ -208,6 +280,7 @@ export async function setLogisticsPhase(input: {
         .returning(COLUMNS);
     }
     if (!row) refuse(PHASE_CHANGED);
+    await followDayOne(tx, { actorId: input.actorId, cycle, before, row });
     await writeAuditEvent(tx, {
       actorId: input.actorId,
       action: "logistics.phase_set",
@@ -224,7 +297,8 @@ export async function setLogisticsPhase(input: {
 }
 
 /**
- * Clear one phase's days (and its place and note) for this year. The row
+ * Clear one phase's days (and its place and note) for this year. Refused
+ * while prep steps exist if it would leave the meal plan with no Day 1. The row
  * keeps its Google event id until the caller has taken the event off the
  * calendar (markLogisticsCalendarSynced), so a failed delete is not lost.
  */
@@ -236,6 +310,7 @@ export async function clearLogisticsPhase(input: {
   return write(async (tx) => {
     await assertLogisticsEditor(tx, input.actorId);
     const cycle = await currentCycleNumber(tx);
+    const before = await lockPhaseDays(tx, cycle);
     const [row] = await tx
       .update(schema.logisticsPhases)
       .set({
@@ -256,6 +331,7 @@ export async function clearLogisticsPhase(input: {
       )
       .returning(COLUMNS);
     if (!row) refuse(PHASE_CHANGED);
+    await followDayOne(tx, { actorId: input.actorId, cycle, before, row });
     await writeAuditEvent(tx, {
       actorId: input.actorId,
       action: "logistics.phase_cleared",

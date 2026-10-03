@@ -32,6 +32,7 @@ import {
 } from "@camp404/db/recipes";
 import {
   MEAL_PLAN_CHANGED,
+  MEAL_PLAN_DAYS_MOVED,
   NOT_A_MEAL_PLAN_EDITOR,
 } from "@camp404/db/meal-plan";
 import { sourceFromText, sourceText } from "@camp404/core";
@@ -1330,8 +1331,11 @@ describe("recipe twins", () => {
       expect(
         testStore.setMealPlan({
           actorId: captain.id,
-          daysOnSite: 1,
-          days: [{ breakfast: 45, dinner: 60 }],
+          // No Logistics days: the plan's 11 undated days.
+          days: [
+            { breakfast: 45, dinner: 60 },
+            ...Array.from({ length: 10 }, () => ({ breakfast: 0, dinner: 0 })),
+          ],
           expectedVersion: 0,
         }),
       ).toEqual({ ok: true, version: 1 });
@@ -1377,6 +1381,20 @@ describe("recipe twins", () => {
 });
 
 describe("meal plan twin", () => {
+  /** A captain sets the Build days in Logistics. */
+  function build(actorId: string, start: string, end: string, version = 0) {
+    return testStore.setLogisticsPhase({
+      actorId,
+      phase: "build",
+      startDate: start,
+      endDate: end,
+      place: null,
+      note: null,
+      expectedVersion: version,
+      newEventId: "evbuild",
+    });
+  }
+
   it("reads 11 empty days, saves for a Kitchen lead or a captain, compare-and-set, audited", () => {
     const captain = makeUser("Cap", "captain");
     const kitchen = lead("Kai", "kitchen");
@@ -1384,10 +1402,11 @@ describe("meal plan twin", () => {
     const member = makeUser("Mo");
     expect(testStore.getMealPlan()).toMatchObject({
       daysOnSite: 11,
+      firstDay: null,
       version: 0,
     });
+    expect(build(captain.id, "2026-04-25", "2026-04-26").ok).toBe(true);
     const two = {
-      daysOnSite: 2,
       days: [
         { breakfast: 20, dinner: 25 },
         { breakfast: 45, dinner: 50 },
@@ -1420,41 +1439,51 @@ describe("meal plan twin", () => {
     expect(
       testStore.setMealPlan({
         actorId: captain.id,
-        daysOnSite: 1,
-        days: [{ breakfast: 501, dinner: 0 }],
+        days: [
+          { breakfast: 501, dinner: 0 },
+          { breakfast: 0, dinner: 0 },
+        ],
         expectedVersion: 1,
       }).ok,
     ).toBe(false);
-    expect(testStore.getMealPlan()).toMatchObject({ ...two, version: 1 });
+    expect(testStore.getMealPlan()).toMatchObject({
+      ...two,
+      daysOnSite: 2,
+      version: 1,
+    });
   });
 
-  it("keeps the date of day 1 with the plan, and refuses one that is not a date", () => {
+  it("takes Day 1 and the days on site from Logistics, and refuses rows for other days", () => {
     const captain = makeUser("Cap", "captain");
-    const plan = {
-      daysOnSite: 1,
-      days: [{ breakfast: 20, dinner: 25 }],
-    };
-    expect(testStore.getMealPlan().firstDay).toBeNull();
+    expect(build(captain.id, "2026-04-25", "2026-04-27").ok).toBe(true);
+    expect(testStore.getMealPlan()).toMatchObject({
+      firstDay: "2026-04-25",
+      daysOnSite: 3,
+    });
     expect(
       testStore.setMealPlan({
         actorId: captain.id,
-        ...plan,
-        firstDay: "2026-04-31",
+        days: [{ breakfast: 20, dinner: 25 }],
         expectedVersion: 0,
       }),
-    ).toEqual({ ok: false, error: "Pick the date of day 1." });
+    ).toEqual({ ok: false, error: MEAL_PLAN_DAYS_MOVED });
+    const three = [
+      { breakfast: 1, dinner: 1 },
+      { breakfast: 2, dinner: 2 },
+      { breakfast: 3, dinner: 3 },
+    ];
     expect(
       testStore.setMealPlan({
         actorId: captain.id,
-        ...plan,
-        firstDay: "2026-04-25",
+        days: three,
         expectedVersion: 0,
       }),
     ).toEqual({ ok: true, version: 1 });
-    expect(testStore.getMealPlan()).toMatchObject({
-      firstDay: "2026-04-25",
-      version: 1,
-    });
+    // Build cut to two days and back: the third day's plates are kept.
+    expect(build(captain.id, "2026-04-25", "2026-04-26", 1).ok).toBe(true);
+    expect(testStore.getMealPlan().days).toEqual(three.slice(0, 2));
+    expect(build(captain.id, "2026-04-25", "2026-04-27", 2).ok).toBe(true);
+    expect(testStore.getMealPlan().days).toEqual(three);
   });
 });
 

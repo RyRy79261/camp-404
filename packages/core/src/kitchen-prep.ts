@@ -37,7 +37,7 @@ export function addDays(iso: string, days: number): string | null {
 }
 
 export const PREP_NEEDS_DAY_ONE =
-  "Set the date of Day 1 on the meal plan first, so the step has a date.";
+  "Set the camp's dates in Logistics first, so the step has a date.";
 export const PREP_DATE_NOT_BEFORE =
   "Pick a date before Day 1: on site, use the day before or the same day.";
 export const PREP_BAD_DATE = "Pick the date.";

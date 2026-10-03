@@ -645,7 +645,11 @@ Decisions baked into the schema — keep new code consistent with them:
   click starts each run. [2026-09-24] The plates come from the year's meal
   plan (`kitchen_meal_plans` + `kitchen_meal_plan_days`, `/kitchen/meal-plan`,
   `@camp404/db/meal-plan`), not Camp settings: a recipe's plate chips are its
-  distinct counts, and Claude writes a new recipe for the largest. A recipe
+  distinct counts, and Claude writes a new recipe for the largest.
+  [2026-10-03] The meal plan stores no dates: Day 1 and the days on site are
+  read from Logistics (`campOnSite`: the first Build day, else the first Burn
+  day, through the last Strike day), and a Logistics save that moves Day 1
+  re-dates the prep steps and their tasks in its own transaction. A recipe
   already in the book is revised, not rewritten: the run carries its accepted
   version and the questions and answers that settled it
   (`recipeSourceRevisionPrompt`, recorded as `PROMPT_VERSIONS.recipeSourceRevision`).

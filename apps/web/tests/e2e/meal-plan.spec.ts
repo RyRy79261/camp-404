@@ -12,15 +12,18 @@ import {
   seedTeam,
   setRank,
 } from "./_helpers";
+import { setPhaseDays } from "./lib/logistics";
 
 // The Kitchen's meal plan (the owner's sketch, 2026-09-24, test-mode): this
 // year's days on site and the plates at breakfast and dinner (the camp does
 // no lunch), reached from the recipe book. A captain or a Kitchen lead edits
 // it (Save in the heading, "Copy Day 1's plates to every day"), and it
 // persists; a member reads the menu as a card per day and changes nothing; a
-// lead of another team the same. The editor sets the date of day 1 beside
-// the days on site, and every day then shows its date ("Day 1 · Sat 25
-// Apr"), for the editor and a member alike. The page fits a phone.
+// lead of another team the same. The dates are not the meal plan's (the
+// owner, 2026-10-03): Day 1 and the days on site come from Logistics (the
+// first Build day), said in a plain line with a link there, and every day
+// then shows its date ("Day 1 · Sat 25 Apr"), for the editor and a member
+// alike. The page fits a phone.
 
 async function member(
   page: Page,
@@ -58,8 +61,15 @@ test.describe("meal plan (test-mode)", () => {
       page.getByRole("heading", { level: 1, name: "Meal plan" }),
     ).toBeVisible();
 
-    // Eleven empty days to start with.
-    await expect(page.getByLabel("Days on site")).toHaveValue("11");
+    // No dates in Logistics yet: eleven empty days, by number.
+    await expect(
+      page.getByText("Set the camp’s dates in Logistics first"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Change the dates in Logistics" }),
+    ).toHaveAttribute("href", "/logistics");
+    await expect(page.getByLabel("Days on site")).toHaveCount(0);
+    await expect(page.getByLabel("Day 1 date")).toHaveCount(0);
     await expect(page.getByRole("rowheader", { name: "Day 11" })).toBeVisible();
     await expect(page.getByLabel("Day 1 breakfast")).toHaveValue("0");
 
@@ -69,8 +79,22 @@ test.describe("meal plan (test-mode)", () => {
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Give at most 500 plates.")).toBeVisible();
 
-    await page.getByLabel("Days on site").fill("3");
-    await expect(page.getByRole("rowheader", { name: "Day 4" })).toHaveCount(0);
+    // Nothing left unsaved, so leaving the page asks nothing.
+    await page.getByLabel("Day 1 dinner").fill("0");
+
+    // Three days of Build in Logistics: Day 1 is Sat 25 Apr, three days on
+    // site, and every row is dated at once.
+    await setPhaseDays(page, "Build", "2026-04-25", "2026-04-27");
+    await page.goto("/kitchen/meal-plan");
+    await expect(
+      page.getByText("Day 1: Sat 25 Apr · 3 days on site, from Logistics"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("rowheader", { name: "Day 1 · Sat 25 Apr" }),
+    ).toBeVisible();
+    await expect(page.getByRole("rowheader", { name: /^Day 4/ })).toHaveCount(
+      0,
+    );
     await page.getByLabel("Day 1 breakfast").fill("20");
     await page.getByLabel("Day 1 dinner").fill("25");
     await page
@@ -78,24 +102,18 @@ test.describe("meal plan (test-mode)", () => {
       .click();
     await expect(page.getByLabel("Day 3 dinner")).toHaveValue("25");
     await page.getByLabel("Day 2 dinner").fill("50");
-    // The date of day 1, beside the days on site, dates every row at once.
-    await expect(page.getByLabel("Day 1 date")).toHaveValue("");
-    await page.getByLabel("Day 1 date").fill("2026-04-25");
-    await expect(
-      page.getByRole("rowheader", { name: "Day 1 · Sat 25 Apr" }),
-    ).toBeVisible();
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Meal plan saved")).toBeVisible();
 
     await page.reload();
-    await expect(page.getByLabel("Day 1 date")).toHaveValue("2026-04-25");
     await expect(
       page.getByRole("rowheader", { name: "Day 3 · Mon 27 Apr" }),
     ).toBeVisible();
-    await expect(page.getByLabel("Days on site")).toHaveValue("3");
     await expect(page.getByLabel("Day 2 dinner")).toHaveValue("50");
     await expect(page.getByLabel("Day 3 breakfast")).toHaveValue("20");
-    await expect(page.getByRole("rowheader", { name: "Day 4" })).toHaveCount(0);
+    await expect(page.getByRole("rowheader", { name: /^Day 4/ })).toHaveCount(
+      0,
+    );
 
     // At phone width the page never scrolls sideways.
     await page.setViewportSize({ width: 390, height: 900 });

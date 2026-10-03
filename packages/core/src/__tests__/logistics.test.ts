@@ -17,6 +17,7 @@ import {
   attendanceAskNotification,
   attendanceBoard,
   attendanceIsOpen,
+  campOnSite,
   canAskForAttendance,
   canEditLogistics,
   canManageDeadlines,
@@ -26,6 +27,72 @@ import {
   logisticsEventTitle,
 } from "../logistics";
 import { payloadLink } from "../notifications";
+
+describe("campOnSite", () => {
+  const days = (
+    phase: "build" | "burn" | "strike" | "pack",
+    startDate: string | null,
+    endDate: string | null,
+  ) => ({ phase, startDate, endDate });
+
+  it("starts on the first Build day and runs to the last Strike day", () => {
+    expect(
+      campOnSite(
+        [
+          days("pack", "2027-04-17", "2027-04-17"),
+          days("build", "2027-04-22", "2027-04-26"),
+          days("burn", "2027-04-27", "2027-05-02"),
+          days("strike", "2027-05-03", "2027-05-04"),
+        ],
+        30,
+      ),
+    ).toEqual({ firstDay: "2027-04-22", daysOnSite: 13 });
+  });
+
+  it("starts on the first Burn day with no Build days, and ends on the last Burn day with no Strike", () => {
+    expect(
+      campOnSite(
+        [days("build", null, null), days("burn", "2027-04-27", "2027-05-02")],
+        30,
+      ),
+    ).toEqual({ firstDay: "2027-04-27", daysOnSite: 6 });
+    expect(campOnSite([days("build", "2027-04-22", "2027-04-24")], 30)).toEqual(
+      { firstDay: "2027-04-22", daysOnSite: 3 },
+    );
+  });
+
+  it("is null with no Build or Burn days, or with dates that are not days", () => {
+    expect(campOnSite([], 30)).toBeNull();
+    expect(
+      campOnSite([days("strike", "2027-05-03", "2027-05-04")], 30),
+    ).toBeNull();
+    expect(
+      campOnSite([days("build", "2027-02-30", "2027-03-02")], 30),
+    ).toBeNull();
+  });
+
+  it("holds the count between 1 and the most a plan takes", () => {
+    expect(
+      campOnSite(
+        [
+          days("build", "2027-04-01", "2027-04-05"),
+          days("strike", "2027-05-20", "2027-05-21"),
+        ],
+        30,
+      ),
+    ).toEqual({ firstDay: "2027-04-01", daysOnSite: 30 });
+    // A Strike typed before the Build: at least Day 1.
+    expect(
+      campOnSite(
+        [
+          days("build", "2027-04-22", "2027-04-24"),
+          days("strike", "2027-04-01", "2027-04-01"),
+        ],
+        30,
+      ),
+    ).toEqual({ firstDay: "2027-04-22", daysOnSite: 1 });
+  });
+});
 
 describe("canEditLogistics", () => {
   it("names a real team", () => {

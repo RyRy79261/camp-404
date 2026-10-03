@@ -103,9 +103,18 @@ describe("kitchen menu and shopping list", () => {
     return { recipeId: row!.id, versionId };
   }
 
-  /** Two days: 50 at dinner on both, 30 at breakfast on day 2. */
+  /**
+   * Two days on site (two days of Build in Logistics): 50 at dinner on both,
+   * 30 at breakfast on day 2.
+   */
   async function setUp() {
     await campYear(h.db(), 2026);
+    await h.db().insert(schema.logisticsPhases).values({
+      cycle: 2026,
+      phase: "build",
+      startDate: "2026-04-22",
+      endDate: "2026-04-23",
+    });
     const captain = await makeUser(h.db(), {
       rank: "captain",
       approvalStatus: "approved",
@@ -117,7 +126,6 @@ describe("kitchen menu and shopping list", () => {
     expect(
       await setMealPlan({
         actorId: captain.id,
-        daysOnSite: 2,
         days: [
           { breakfast: 0, dinner: 50 },
           { breakfast: 30, dinner: 50 },
@@ -510,7 +518,14 @@ describe("kitchen menu and shopping list", () => {
   });
 
   it("is adopted by the founding year: the plan and its days, the menu, the snacks and the ticks", async () => {
-    // No year yet: everything is written under the sentinel.
+    // No year yet: everything is written under the sentinel, the Build
+    // days in Logistics too (two days on site).
+    await h.db().insert(schema.logisticsPhases).values({
+      cycle: 1,
+      phase: "build",
+      startDate: "2027-04-22",
+      endDate: "2027-04-23",
+    });
     const captain = await makeUser(h.db(), {
       rank: "captain",
       approvalStatus: "approved",
@@ -518,7 +533,6 @@ describe("kitchen menu and shopping list", () => {
     expect(
       await setMealPlan({
         actorId: captain.id,
-        daysOnSite: 2,
         days: [
           { breakfast: 0, dinner: 50 },
           { breakfast: 30, dinner: 50 },

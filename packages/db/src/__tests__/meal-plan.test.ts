@@ -5,6 +5,7 @@ import type { MealPlanDay, Team } from "@camp404/types";
 import type { CampConfig } from "../camp-config";
 import {
   MEAL_PLAN_CHANGED,
+  MEAL_PLAN_DAYS_MOVED,
   NOT_A_MEAL_PLAN_EDITOR,
   getMealPlan,
   readMealPlanPeaks,
@@ -16,10 +17,12 @@ import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
 
 // The kitchen's meal plan (2026-09-24) on a real Postgres (PGlite). What
-// matters: anyone reads it, and before a save it is 11 empty days; only a
-// captain or a Kitchen lead saves, checked again inside the write; a save is
-// a compare-and-set on version and writes its audit row with it; and a plan
-// belongs to the year it was saved in.
+// matters: anyone reads it, and before a save it is empty days; its days on
+// site and Day 1 come from the year's Logistics days (the owner, 2026-10-03),
+// 11 undated days when there are none; only a captain or a Kitchen lead
+// saves, checked again inside the write; a save is a compare-and-set on
+// version and writes its audit row with it; the plates are kept by day
+// number; and a plan belongs to the year it was saved in.
 
 type DB = ReturnType<ReturnType<typeof useTestDb>["db"]>;
 
@@ -54,6 +57,23 @@ const day = (breakfast: number, dinner: number): MealPlanDay => ({
 
 const THREE_DAYS = [day(20, 25), day(45, 50), day(45, 60)];
 
+/** A Logistics phase's days, written straight in (the fixture). */
+async function phase(
+  db: DB,
+  cycle: number,
+  name: "build" | "burn" | "strike",
+  startDate: string | null,
+  endDate: string | null,
+) {
+  await db
+    .insert(schema.logisticsPhases)
+    .values({ cycle, phase: name, startDate, endDate })
+    .onConflictDoUpdate({
+      target: [schema.logisticsPhases.cycle, schema.logisticsPhases.phase],
+      set: { startDate, endDate },
+    });
+}
+
 describe("meal plan", () => {
   const h = useTestDb();
 
@@ -65,8 +85,10 @@ describe("meal plan", () => {
     return user;
   }
 
+  /** The people, in 2026, on site 3 days from Sat 25 Apr (Build only). */
   async function people() {
     await campYear(h.db(), 2026);
+    await phase(h.db(), 2026, "build", "2026-04-25", "2026-04-27");
     const captain = await makeUser(h.db(), { rank: "captain" });
     const kitchenLead = await leadOf("kitchen");
     const powerLead = await leadOf(POWER_TEAM as Team);
@@ -82,12 +104,44 @@ describe("meal plan", () => {
       .where(eq(schema.auditLog.action, "camp.kitchen_meal_plan.changed"));
   }
 
-  it("reads as 11 empty days at version 0 before anyone saves", async () => {
+  it("reads as 11 empty undated days at version 0 with no Logistics days", async () => {
     await campYear(h.db(), 2026);
     const plan = await getMealPlan();
-    expect(plan).toMatchObject({ cycle: 2026, daysOnSite: 11, version: 0 });
+    expect(plan).toMatchObject({
+      cycle: 2026,
+      daysOnSite: 11,
+      firstDay: null,
+      version: 0,
+    });
     expect(plan.days).toHaveLength(11);
     expect(plan.days.every((d) => d.breakfast + d.dinner === 0)).toBe(true);
+  });
+
+  it("takes Day 1 from the first Build day and the days on site through the last Strike day", async () => {
+    await campYear(h.db(), 2026);
+    await phase(h.db(), 2026, "build", "2026-04-22", "2026-04-26");
+    await phase(h.db(), 2026, "burn", "2026-04-27", "2026-05-02");
+    expect(await getMealPlan()).toMatchObject({
+      firstDay: "2026-04-22",
+      daysOnSite: 11,
+    });
+    await phase(h.db(), 2026, "strike", "2026-05-03", "2026-05-04");
+    const plan = await getMealPlan();
+    expect(plan).toMatchObject({ firstDay: "2026-04-22", daysOnSite: 13 });
+    expect(plan.days).toHaveLength(13);
+  });
+
+  it("takes Day 1 from the first Burn day when no Build days are set", async () => {
+    await campYear(h.db(), 2026);
+    await phase(h.db(), 2026, "burn", "2026-04-27", "2026-05-02");
+    await phase(h.db(), 2026, "build", null, null);
+    expect(await getMealPlan()).toMatchObject({
+      firstDay: "2026-04-27",
+      daysOnSite: 6,
+    });
+    // Another year's days are not this year's.
+    await phase(h.db(), 2025, "build", "2025-04-20", "2025-04-21");
+    expect((await getMealPlan()).firstDay).toBe("2026-04-27");
   });
 
   it("lets a Kitchen lead and a captain save, each audited in the same write", async () => {
@@ -95,86 +149,75 @@ describe("meal plan", () => {
     expect(
       await setMealPlan({
         actorId: kitchenLead.id,
-        daysOnSite: 3,
         days: THREE_DAYS,
         expectedVersion: 0,
       }),
     ).toEqual({ ok: true, version: 1 });
     expect(await getMealPlan()).toMatchObject({
       daysOnSite: 3,
+      firstDay: "2026-04-25",
       days: THREE_DAYS,
       version: 1,
     });
 
-    const two = [day(30, 30), day(30, 30)];
+    const three = [day(30, 30), day(30, 30), day(0, 30)];
     expect(
       await setMealPlan({
         actorId: captain.id,
-        daysOnSite: 2,
-        days: two,
+        days: three,
         expectedVersion: 1,
       }),
     ).toEqual({ ok: true, version: 2 });
-    // The third day's row is gone, not left behind.
-    expect(await getMealPlan()).toMatchObject({ daysOnSite: 2, days: two });
-    const dayRows = await h.db().select().from(schema.kitchenMealPlanDays);
-    expect(dayRows).toHaveLength(2);
+    expect(await getMealPlan()).toMatchObject({ daysOnSite: 3, days: three });
 
     const audit = await auditRows();
     expect(audit.map((r) => r.actorId)).toEqual([kitchenLead.id, captain.id]);
     expect(audit[1]!.metadata).toMatchObject({
       cycle: 2026,
       version: 2,
-      before: { daysOnSite: 3, days: THREE_DAYS },
-      after: { daysOnSite: 2, days: two },
+      daysOnSite: 3,
+      firstDay: "2026-04-25",
+      before: { days: THREE_DAYS },
+      after: { days: three },
     });
   });
 
-  it("stores the date of day 1 with the plan, audited, and clears it when blanked", async () => {
+  it("keeps the plates by day number when the days on site shrink and grow again", async () => {
     const { captain } = await people();
-    expect((await getMealPlan()).firstDay).toBeNull();
+    await setMealPlan({
+      actorId: captain.id,
+      days: THREE_DAYS,
+      expectedVersion: 0,
+    });
+    // Build is cut to two days: the plan shows two, the third is kept.
+    await phase(h.db(), 2026, "build", "2026-04-25", "2026-04-26");
+    expect((await getMealPlan()).days).toEqual(THREE_DAYS.slice(0, 2));
+    await setMealPlan({
+      actorId: captain.id,
+      days: [day(1, 1), day(2, 2)],
+      expectedVersion: 1,
+    });
+    await phase(h.db(), 2026, "build", "2026-04-25", "2026-04-27");
+    expect((await getMealPlan()).days).toEqual([
+      day(1, 1),
+      day(2, 2),
+      THREE_DAYS[2],
+    ]);
+  });
+
+  it("refuses rows that no longer match the days on site in Logistics", async () => {
+    const { captain } = await people();
+    // The page opened on three days; Logistics now says two.
+    await phase(h.db(), 2026, "build", "2026-04-25", "2026-04-26");
     expect(
       await setMealPlan({
         actorId: captain.id,
-        daysOnSite: 3,
-        firstDay: "2026-04-25",
         days: THREE_DAYS,
         expectedVersion: 0,
       }),
-    ).toEqual({ ok: true, version: 1 });
-    expect(await getMealPlan()).toMatchObject({
-      firstDay: "2026-04-25",
-      version: 1,
-    });
-    // A date that is not a real calendar day is refused, with nothing saved.
-    expect(
-      await setMealPlan({
-        actorId: captain.id,
-        daysOnSite: 3,
-        firstDay: "2027-02-29",
-        days: THREE_DAYS,
-        expectedVersion: 1,
-      }),
-    ).toEqual({ ok: false, error: "Pick the date of day 1." });
-    expect(
-      await setMealPlan({
-        actorId: captain.id,
-        daysOnSite: 3,
-        firstDay: null,
-        days: THREE_DAYS,
-        expectedVersion: 1,
-      }),
-    ).toEqual({ ok: true, version: 2 });
-    expect((await getMealPlan()).firstDay).toBeNull();
-    const audit = await auditRows();
-    expect(audit[0]!.metadata).toMatchObject({
-      before: { firstDay: null },
-      after: { firstDay: "2026-04-25" },
-    });
-    expect(audit[1]!.metadata).toMatchObject({
-      before: { firstDay: "2026-04-25" },
-      after: { firstDay: null },
-    });
+    ).toEqual({ ok: false, error: MEAL_PLAN_DAYS_MOVED });
+    expect((await getMealPlan()).version).toBe(0);
+    expect(await auditRows()).toEqual([]);
   });
 
   it("refuses a member and a lead of another team inside the write, and writes nothing", async () => {
@@ -183,7 +226,6 @@ describe("meal plan", () => {
       expect(
         await setMealPlan({
           actorId: actor.id,
-          daysOnSite: 3,
           days: THREE_DAYS,
           expectedVersion: 0,
         }),
@@ -199,7 +241,6 @@ describe("meal plan", () => {
     expect(
       await setMealPlan({
         actorId: kitchenLead.id,
-        daysOnSite: 3,
         days: THREE_DAYS,
         expectedVersion: 0,
       }),
@@ -210,32 +251,29 @@ describe("meal plan", () => {
     const { captain, kitchenLead } = await people();
     const first = await setMealPlan({
       actorId: captain.id,
-      daysOnSite: 3,
       days: THREE_DAYS,
       expectedVersion: 0,
     });
     expect(first).toEqual({ ok: true, version: 1 });
+    const other = [day(99, 99), day(99, 99), day(99, 99)];
     // Both opened the page before any plan existed.
     expect(
       await setMealPlan({
         actorId: kitchenLead.id,
-        daysOnSite: 1,
-        days: [day(99, 99)],
+        days: other,
         expectedVersion: 0,
       }),
     ).toEqual({ ok: false, error: MEAL_PLAN_CHANGED });
     // And from a version that has moved on.
     await setMealPlan({
       actorId: captain.id,
-      daysOnSite: 3,
       days: THREE_DAYS,
       expectedVersion: 1,
     });
     expect(
       await setMealPlan({
         actorId: kitchenLead.id,
-        daysOnSite: 1,
-        days: [day(99, 99)],
+        days: other,
         expectedVersion: 1,
       }),
     ).toEqual({ ok: false, error: MEAL_PLAN_CHANGED });
@@ -245,16 +283,17 @@ describe("meal plan", () => {
 
   it("refuses plates outside 0 to 500, and days that do not match the days on site", async () => {
     const { captain } = await people();
-    for (const bad of [
-      { daysOnSite: 1, days: [day(501, 0)] },
-      { daysOnSite: 1, days: [day(-1, 0)] },
-      { daysOnSite: 1, days: [day(2.5, 0)] },
-      { daysOnSite: 2, days: [day(1, 1)] },
-      { daysOnSite: 31, days: Array.from({ length: 31 }, () => day(1, 1)) },
+    for (const days of [
+      [day(501, 0), day(0, 0), day(0, 0)],
+      [day(-1, 0), day(0, 0), day(0, 0)],
+      [day(2.5, 0), day(0, 0), day(0, 0)],
+      [day(1, 1)],
+      [],
+      Array.from({ length: 31 }, () => day(1, 1)),
     ]) {
       const result = await setMealPlan({
         actorId: captain.id,
-        ...bad,
+        days,
         expectedVersion: 0,
       });
       expect(result.ok).toBe(false);
@@ -266,12 +305,15 @@ describe("meal plan", () => {
     const { captain } = await people();
     await setMealPlan({
       actorId: captain.id,
-      daysOnSite: 3,
       days: THREE_DAYS,
       expectedVersion: 0,
     });
     await campYear(h.db(), 2027, [2026]);
-    expect(await getMealPlan()).toMatchObject({ cycle: 2027, version: 0 });
+    expect(await getMealPlan()).toMatchObject({
+      cycle: 2027,
+      version: 0,
+      firstDay: null,
+    });
     expect((await getMealPlan(2026)).days).toEqual(THREE_DAYS);
   });
 
@@ -279,7 +321,6 @@ describe("meal plan", () => {
     const { captain } = await people();
     await setMealPlan({
       actorId: captain.id,
-      daysOnSite: 3,
       days: THREE_DAYS,
       expectedVersion: 0,
     });

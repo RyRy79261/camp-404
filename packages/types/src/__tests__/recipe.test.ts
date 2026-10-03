@@ -548,10 +548,9 @@ describe("the review inputs", () => {
 describe("MealPlanInput", () => {
   const day = { breakfast: 20, dinner: 25 };
 
-  it("takes one row of whole plates, 0 to 500, for each day on site", () => {
+  it("takes one row of whole plates, 0 to 500, for each day", () => {
     expect(
       MealPlanInput.safeParse({
-        daysOnSite: 2,
         days: [day, { breakfast: 500, dinner: 0 }],
         expectedVersion: 0,
       }).success,
@@ -559,51 +558,32 @@ describe("MealPlanInput", () => {
     expect(MEAL_PLAN_DEFAULT_DAYS).toBe(11);
   });
 
-  it("takes the date of day 1 as a real calendar day, or none", () => {
-    const plan = { daysOnSite: 1, days: [day], expectedVersion: 0 };
-    expect(MealPlanInput.parse(plan).firstDay).toBeNull();
-    expect(MealPlanInput.parse({ ...plan, firstDay: "" }).firstDay).toBeNull();
-    expect(
-      MealPlanInput.parse({ ...plan, firstDay: null }).firstDay,
-    ).toBeNull();
-    expect(
-      MealPlanInput.parse({ ...plan, firstDay: "2026-04-25" }).firstDay,
-    ).toBe("2026-04-25");
-    expect(
-      MealPlanInput.parse({ ...plan, firstDay: "2028-02-29" }).firstDay,
-    ).toBe("2028-02-29");
-    for (const bad of ["2027-02-29", "2026-04-31", "25 April", "2026-4-25"]) {
-      expect(
-        MealPlanInput.safeParse({ ...plan, firstDay: bad }).error?.issues[0]
-          ?.message,
-        bad,
-      ).toBe("Pick the date of day 1.");
-    }
+  it("carries no days on site and no date: both come from Logistics", () => {
+    const parsed = MealPlanInput.parse({
+      daysOnSite: 1,
+      firstDay: "2026-04-25",
+      days: [day],
+      expectedVersion: 0,
+    });
+    expect(parsed).toEqual({ days: [day], expectedVersion: 0 });
   });
 
-  it("refuses plates outside 0 to 500, a part plate, and rows that do not match the days", () => {
-    for (const bad of [
-      { daysOnSite: 1, days: [{ ...day, breakfast: -1 }] },
-      { daysOnSite: 1, days: [{ ...day, dinner: 501 }] },
-      { daysOnSite: 1, days: [{ ...day, breakfast: 2.5 }] },
-      { daysOnSite: 2, days: [day] },
-      { daysOnSite: 0, days: [] },
-      {
-        daysOnSite: MEAL_PLAN_MAX_DAYS + 1,
-        days: Array.from({ length: MEAL_PLAN_MAX_DAYS + 1 }, () => day),
-      },
+  it("refuses plates outside 0 to 500, a part plate, no rows and too many", () => {
+    for (const days of [
+      [{ ...day, breakfast: -1 }],
+      [{ ...day, dinner: 501 }],
+      [{ ...day, breakfast: 2.5 }],
+      [],
+      Array.from({ length: MEAL_PLAN_MAX_DAYS + 1 }, () => day),
     ]) {
       expect(
-        MealPlanInput.safeParse({ ...bad, expectedVersion: 0 }).success,
-        JSON.stringify(bad),
+        MealPlanInput.safeParse({ days, expectedVersion: 0 }).success,
+        JSON.stringify(days),
       ).toBe(false);
     }
     expect(
-      MealPlanInput.safeParse({
-        daysOnSite: 2,
-        days: [day],
-        expectedVersion: 0,
-      }).error?.issues[0]?.message,
+      MealPlanInput.safeParse({ days: [], expectedVersion: 0 }).error?.issues[0]
+        ?.message,
     ).toBe("Give the plates for every day on site.");
   });
 });

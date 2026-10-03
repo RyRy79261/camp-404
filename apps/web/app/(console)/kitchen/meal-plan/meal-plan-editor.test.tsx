@@ -92,14 +92,69 @@ describe("MealPlanEditor's unsaved numbers", () => {
   });
 });
 
-describe("MealPlanEditor's Day 1 date", () => {
-  it("reads in the camp's words, not the browser's, and follows the box", () => {
-    editor();
-    expect(screen.getByText("Pick a date")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Day 1 date"), {
-      target: { value: "2027-04-22" },
-    });
-    expect(screen.getByText("Thu 22 Apr 2027")).toBeTruthy();
-    expect(screen.queryByText("Pick a date")).toBeNull();
+// The camp's dates come from Logistics (the owner, 2026-10-03): a plain line
+// and a link there, never a box to type in.
+describe("MealPlanEditor's dates", () => {
+  function dated(firstDay: string | null, daysOnSite: number) {
+    render(
+      <DraftWindow windowKey="meal-plan">
+        <MealPlanEditor
+          daysOnSite={daysOnSite}
+          firstDay={firstDay}
+          days={Array.from({ length: daysOnSite }, () => ({
+            breakfast: 10,
+            dinner: 10,
+          }))}
+          version={3}
+        />
+      </DraftWindow>,
+    );
+  }
+
+  const link = () =>
+    screen.getByRole("link", { name: "Change the dates in Logistics" });
+
+  it("say Day 1 and the days on site from Logistics, with a link there, and no date or count box", () => {
+    dated("2027-04-22", 11);
+    expect(
+      screen.getByText("Day 1: Thu 22 Apr · 11 days on site, from Logistics"),
+    ).toBeTruthy();
+    expect(link().getAttribute("href")).toBe("/logistics");
+    expect(screen.queryByLabelText("Day 1 date")).toBeNull();
+    expect(screen.queryByLabelText("Days on site")).toBeNull();
+    // Each day is named with its date from Day 1.
+    expect(
+      screen.getByRole("rowheader", { name: "Day 3 · Sat 24 Apr" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Copy Day 1’s plates to every day" }),
+    ).toBeTruthy();
+  });
+
+  it("say one day in the singular", () => {
+    dated("2027-04-22", 1);
+    expect(
+      screen.getByText("Day 1: Thu 22 Apr · 1 day on site, from Logistics"),
+    ).toBeTruthy();
+  });
+
+  it("ask for the dates in Logistics when there are none, and the plan still runs by day number", async () => {
+    dated(null, 11);
+    expect(
+      screen.getByText("Set the camp’s dates in Logistics first"),
+    ).toBeTruthy();
+    expect(link().getAttribute("href")).toBe("/logistics");
+    expect(screen.getByRole("rowheader", { name: "Day 11" })).toBeTruthy();
+    fireEvent.change(breakfast(), { target: { value: "42" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(saveMealPlanAction).toHaveBeenCalledWith({
+        days: [
+          { breakfast: 42, dinner: 10 },
+          ...Array.from({ length: 10 }, () => ({ breakfast: 10, dinner: 10 })),
+        ],
+        expectedVersion: 3,
+      }),
+    );
   });
 });

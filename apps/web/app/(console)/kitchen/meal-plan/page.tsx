@@ -43,8 +43,9 @@ export const metadata = { title: "Meal plan — Camp 404" };
 // (approved-rp.html, Option B); every other member reads the menu as a card
 // per day (approved-kmenu.html, Option A), and is never sent the book.
 // Every write checks again inside its own transaction and writes an audit
-// row. The plan holds the date of day 1 (the owner, 2026-09-24), so each day
-// is named with its date; with no date set yet it is "Day 1", "Day 2".
+// row. Day 1 and the days on site come from the camp's days in Logistics
+// (the owner, 2026-10-03: one place to set dates), so each day is named with
+// its date; with no dates there yet it is "Day 1", "Day 2".
 //
 // #245 (the owner's Option A of kitchen-dietary.html and kitchen-prep.html,
 // 2026-10-02): the editors also get the dietary counts box above the week

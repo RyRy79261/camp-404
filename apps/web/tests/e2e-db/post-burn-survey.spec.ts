@@ -81,9 +81,9 @@ test("a captain sends the post-burn survey, members rate two meals, results show
   await resetTestState(request);
   const captain = await signInCaptain(browser, request);
 
-  // This year's meal plan serves dinner on day 1 and breakfast on day 2.
+  // This year's meal plan serves dinner on day 1 and breakfast on day 2 (no
+  // Logistics days: 11 undated days, the rest empty).
   await captain.goto("/kitchen/meal-plan");
-  await captain.getByLabel("Days on site").fill("2");
   await captain.getByLabel("Day 1 dinner").fill("30");
   await captain.getByLabel("Day 2 breakfast").fill("30");
   await captain.getByRole("button", { name: "Save" }).click();

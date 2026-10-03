@@ -93,6 +93,67 @@ export function logisticsCalendarStep(
   return phase.calendarEventId ? "remove" : "none";
 }
 
+// --- The days on site ----------------------------------------------------------
+
+/** One phase's days, as the days on site are worked out from them. */
+export interface PhaseDays {
+  phase: LogisticsPhase;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+/** The camp's days on site, from the logistics days. */
+export interface CampOnSite {
+  /** Day 1 (YYYY-MM-DD): the first Build day, or the first Burn day. */
+  firstDay: string;
+  /** How many days from Day 1 to the last day on site, both counted. */
+  daysOnSite: number;
+}
+
+const ISO_DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+function dayKeyTime(key: string | null | undefined): number | null {
+  if (!key || !ISO_DAY_KEY.test(key)) return null;
+  const time = Date.parse(`${key}T00:00:00Z`);
+  if (Number.isNaN(time)) return null;
+  return new Date(time).toISOString().slice(0, 10) === key ? time : null;
+}
+
+/**
+ * The camp's days on site, from the year's logistics days (the owner,
+ * 2026-10-03: the meal plan takes its dates from Logistics). Day 1 is the
+ * first Build day, or the first Burn day when no Build days are set; the
+ * last day on site is the last Strike day, else the last Burn day, else the
+ * last Build day. Null when neither Build nor Burn has days: the meal plan
+ * then runs by day number. The count is held to `maxDays` (the most a meal
+ * plan holds) and is at least 1.
+ */
+export function campOnSite(
+  phases: readonly PhaseDays[],
+  maxDays: number,
+): CampOnSite | null {
+  const of = (phase: LogisticsPhase) => {
+    const row = phases.find((p) => p.phase === phase);
+    return row &&
+      dayKeyTime(row.startDate) !== null &&
+      dayKeyTime(row.endDate) !== null
+      ? { start: row.startDate!, end: row.endDate! }
+      : null;
+  };
+  const build = of("build");
+  const burn = of("burn");
+  const strike = of("strike");
+  const first = build?.start ?? burn?.start;
+  if (!first) return null;
+  const last = strike?.end ?? burn?.end ?? build?.end ?? first;
+  const days =
+    Math.round((dayKeyTime(last)! - dayKeyTime(first)!) / 86_400_000) + 1;
+  return {
+    firstDay: first,
+    daysOnSite: Math.min(Math.max(days, 1), maxDays),
+  };
+}
+
 // --- Attendance --------------------------------------------------------------
 
 /**

@@ -334,6 +334,44 @@ describe("the daily site sheet print", () => {
     expect(within(day1).queryAllByTestId("sheet-prep")).toHaveLength(0);
   });
 
+  it("numbers each day as the meal plan does: Day 1 is the first Build day in Logistics", async () => {
+    // Build starts four days before the Burn: the Burn's first day is Day 5
+    // on the meal plan, and its dishes are Day 5's.
+    vi.mocked(getMealPlan).mockResolvedValue({
+      cycle: 2027,
+      daysOnSite: 11,
+      firstDay: "2027-04-23",
+      days: [],
+      version: 1,
+      updatedAt: null,
+    });
+    vi.mocked(getKitchenMenu).mockResolvedValue({
+      cycle: 2027,
+      items: [
+        { id: "m1", day: 5, meal: "breakfast", position: 1, recipeId: "r1" },
+        { id: "m2", day: 1, meal: "dinner", position: 1, recipeId: "r2" },
+      ],
+      recipes: {
+        r1: { title: "Shakshuka", counts: [{ plates: 40, lines: [] }] },
+        r2: { title: "Bobotie", counts: [{ plates: 40, lines: [] }] },
+      },
+    } as never);
+    render(await open("all"));
+    const first = screen.getByRole("region", { name: "Day 5 sheet" });
+    expect(
+      within(first).getByRole("heading", {
+        level: 2,
+        name: "Day 5 · Tuesday 27 April",
+      }),
+    ).toBeTruthy();
+    expect(first.textContent).toContain("Shakshuka");
+    expect(first.textContent).not.toContain("Bobotie");
+    // The Lounge keeps its own Burn days: its Day 1 is still the 27th.
+    expect(first.textContent).toContain("Kombucha tasting");
+    expect(screen.getByRole("region", { name: "Day 6 sheet" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Day 1 sheet" })).toBeNull();
+  });
+
   it("lets a captain print too", async () => {
     gate("captain");
     const { container } = render(await open(D2));

@@ -37,6 +37,8 @@ import {
   carMessageNotification,
   vehicleLabel,
   mealPlanPeaks,
+  campOnSite,
+  dayOneShift,
   sameSections,
   sourceFromText,
   sourceText,
@@ -299,8 +301,10 @@ import {
 import {
   CHECK_MEAL_PLAN,
   MEAL_PLAN_CHANGED,
+  MEAL_PLAN_DAYS_MOVED,
   NOT_A_MEAL_PLAN_EDITOR,
   defaultMealPlan,
+  mealPlanDays,
   type MealPlan,
   type MealPlanSave,
   type MealPlanWriteResult,
@@ -331,6 +335,7 @@ import {
   InkblotRun,
   KitchenRecipe,
   MealPlanInput,
+  MEAL_PLAN_MAX_DAYS,
   DAY_ONE_NEEDED_FOR_PREP,
   PROOFREAD_ANSWER_MAX,
   PlateProofread,
@@ -356,6 +361,7 @@ import {
   type LoadInput,
   LOGISTICS_PHASES,
   type LogisticsPhase,
+  type MealPlanDay,
   type MembershipTier,
   Team as TeamKeys,
 } from "@camp404/types";
@@ -407,6 +413,14 @@ import {
 
 type TestRank = "captain" | "member";
 type TestApprovalStatus = "pending" | "approved" | "rejected";
+
+/** A year's saved plates by day number (`kitchen_meal_plans` + its days). */
+interface StoredMealPlan {
+  cycle: number;
+  days: Map<number, MealPlanDay>;
+  version: number;
+  updatedAt: Date;
+}
 
 interface TestUser {
   id: string;
@@ -799,8 +813,11 @@ interface TestStoreState {
   recipeLessons: TestRecipeLesson[];
   recipeHistory: TestRecipeEvent[];
   /** The kitchen's settings. Reassigned on every edit, so it lives on `S`. */
-  /** `kitchen_meal_plans` with their days, keyed by year. */
-  mealPlans: Map<number, MealPlan>;
+  /**
+   * `kitchen_meal_plans` with their days, keyed by year: the plates by day
+   * number. The days on site and Day 1 come from the logistics days.
+   */
+  mealPlans: Map<number, StoredMealPlan>;
   nextSerial: number;
   // The camp team config (Phase 2). Reassigned wholesale on every edit, so —
   // like `nextSerial` — it lives on `S`, not a stable binding. Seeded with a
@@ -937,7 +954,7 @@ function globalState(): TestStoreState {
       ingredientCatalogue: [] as TestIngredient[],
       recipeLessons: [] as TestRecipeLesson[],
       recipeHistory: [] as TestRecipeEvent[],
-      mealPlans: new Map<number, MealPlan>(),
+      mealPlans: new Map<number, StoredMealPlan>(),
       nextSerial: 1,
       teamsConfig: structuredClone(DEFAULT_CAMP_CONFIG),
       joinContent: new Map<number, Partial<JoinSiteContent>>(),
@@ -1037,7 +1054,7 @@ S.recipePlateCounts ??= [];
 S.ingredientCatalogue ??= [];
 S.recipeLessons ??= [];
 S.recipeHistory ??= [];
-S.mealPlans ??= new Map<number, MealPlan>();
+S.mealPlans ??= new Map<number, StoredMealPlan>();
 S.desktopLayouts ??= new Map<string, unknown>();
 S.desktopPreferences ??= new Map<string, Record<string, unknown>>();
 S.inkblotRuns ??= [];
@@ -1471,16 +1488,66 @@ function storePreviousVersion(
   };
 }
 
-/** A year's meal plan, or the defaults (the twin of readMealPlan). */
+/** A year's days on site from its logistics days (the twin of readCampOnSite). */
+function storeCampOnSite(cycle: number) {
+  return campOnSite(
+    LOGISTICS_PHASES.flatMap((phase) => {
+      const row = logisticsPhases.get(`${cycle}:${phase}`);
+      return row ? [row] : [];
+    }),
+    MEAL_PLAN_MAX_DAYS,
+  );
+}
+
+/**
+ * A year's meal plan, or the defaults (the twin of readMealPlan): the plates
+ * by day number, on the days on site from the logistics days.
+ */
 function storeMealPlan(cycle: number): MealPlan {
+  const onSite = storeCampOnSite(cycle);
   const plan = S.mealPlans.get(cycle);
-  return plan
-    ? {
-        ...plan,
-        firstDay: plan.firstDay ?? null,
-        days: plan.days.map((d) => ({ ...d })),
-      }
-    : defaultMealPlan(cycle);
+  if (!plan) return defaultMealPlan(cycle, onSite);
+  const base = defaultMealPlan(cycle, onSite);
+  return {
+    ...base,
+    days: mealPlanDays(
+      base.daysOnSite,
+      [...plan.days].map(([day, d]) => ({ day, ...d })),
+    ),
+    version: plan.version,
+    updatedAt: plan.updatedAt,
+  };
+}
+
+/**
+ * After a logistics phase changed (the twin of followDayOne): a clear that
+ * leaves no Day 1 while prep steps exist is refused, before anything is
+ * written; otherwise `apply` writes and the prep steps follow Day 1.
+ */
+function followStoreDayOne<T>(
+  cycle: number,
+  after: {
+    phase: LogisticsPhase;
+    startDate: string | null;
+    endDate: string | null;
+  },
+  apply: () => T,
+): T | { ok: false; error: string } {
+  const before = storeCampOnSite(cycle)?.firstDay ?? null;
+  const phases = LOGISTICS_PHASES.flatMap((phase) => {
+    if (phase === after.phase) return [after];
+    const row = logisticsPhases.get(`${cycle}:${phase}`);
+    return row ? [row] : [];
+  });
+  const to = campOnSite(phases, MEAL_PLAN_MAX_DAYS)?.firstDay ?? null;
+  if (before !== null && to === null && storeHasPrepSteps(cycle)) {
+    return { ok: false, error: DAY_ONE_NEEDED_FOR_PREP };
+  }
+  const result = apply();
+  if (dayOneShift(before, to) !== null) {
+    storeRedatePrepSteps(cycle, before, to);
+  }
+  return result;
 }
 
 /** A recipe's newest source version, or null (the twin of latestSource). */
@@ -4111,8 +4178,11 @@ export const testStore = {
       version: expected + 1,
       updatedAt: new Date(),
     };
-    logisticsPhases.set(key, row);
-    return { ok: true, row: { ...row } };
+    // The days set the meal plan's Day 1: the prep steps follow it.
+    return followStoreDayOne(cycle, row, () => {
+      logisticsPhases.set(key, row);
+      return { ok: true as const, row: { ...row } };
+    });
   },
 
   clearLogisticsPhase(input: {
@@ -4124,7 +4194,8 @@ export const testStore = {
     if (!canEditLogistics(reachRank(reach), reach ?? [])) {
       return { ok: false, error: NOT_A_LOGISTICS_EDITOR };
     }
-    const key = `${currentCycleNumber()}:${input.phase}`;
+    const cycle = currentCycleNumber();
+    const key = `${cycle}:${input.phase}`;
     const current = logisticsPhases.get(key);
     if (!current || current.version !== input.expectedVersion) {
       return { ok: false, error: PHASE_CHANGED };
@@ -4138,8 +4209,11 @@ export const testStore = {
       version: current.version + 1,
       updatedAt: new Date(),
     };
-    logisticsPhases.set(key, row);
-    return { ok: true, row: { ...row } };
+    // Refused while prep steps need the Day 1 this phase gave.
+    return followStoreDayOne(cycle, row, () => {
+      logisticsPhases.set(key, row);
+      return { ok: true as const, row: { ...row } };
+    });
   },
 
   markLogisticsCalendarSynced(input: {
@@ -4856,30 +4930,25 @@ export const testStore = {
     if (!isKitchenReviewer(input.actorId)) {
       return { ok: false, error: NOT_A_MEAL_PLAN_EDITOR };
     }
-    const { daysOnSite, firstDay, days, expectedVersion } = parsed.data;
+    const { days, expectedVersion } = parsed.data;
     const cycle = currentCycleNumber();
     const before = storeMealPlan(cycle);
+    if (days.length !== before.daysOnSite) {
+      return { ok: false, error: MEAL_PLAN_DAYS_MOVED };
+    }
     if (before.version !== expectedVersion) {
       return { ok: false, error: MEAL_PLAN_CHANGED };
     }
-    if (
-      firstDay === null &&
-      before.firstDay !== null &&
-      storeHasPrepSteps(cycle)
-    ) {
-      return { ok: false, error: DAY_ONE_NEEDED_FOR_PREP };
-    }
     const version = expectedVersion + 1;
+    // Days 1 to the days on site are replaced; a day past them is kept.
+    const stored = new Map(S.mealPlans.get(cycle)?.days ?? []);
+    days.forEach((d, i) => stored.set(i + 1, { ...d }));
     S.mealPlans.set(cycle, {
       cycle,
-      daysOnSite,
-      firstDay,
-      days: days.map((d) => ({ ...d })),
+      days: stored,
       version,
       updatedAt: new Date(),
     });
-    // Day 1 moved: the prep steps and their tasks move with it (#245).
-    storeRedatePrepSteps(cycle, before.firstDay, firstDay);
     recipeHistory.push({
       recipeId: null,
       action: "camp.kitchen_meal_plan.changed",
@@ -4887,12 +4956,10 @@ export const testStore = {
       metadata: {
         cycle,
         version,
-        before: {
-          daysOnSite: before.daysOnSite,
-          firstDay: before.firstDay,
-          days: before.days,
-        },
-        after: { daysOnSite, firstDay, days },
+        daysOnSite: before.daysOnSite,
+        firstDay: before.firstDay,
+        before: { days: before.days },
+        after: { days },
       },
       createdAt: new Date(),
     });
@@ -6667,9 +6734,7 @@ export const testStore = {
         filedAt: r.filedAt,
       }));
   },
-  getReportScreenshot(
-    id: string,
-  ): {
+  getReportScreenshot(id: string): {
     userId: string;
     contentType: string;
     bytes: Uint8Array;
