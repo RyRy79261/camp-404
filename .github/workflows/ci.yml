@@ -183,6 +183,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # package.json pnpm.auditConfig.ignoreGhsas holds GHSA-vfj7-8cjw-p6xm
+      # (braces, stack exhaustion on deeply nested patterns; owner, 2026-10-03).
+      # braces has no fixed version yet, and it only reaches us through the
+      # lint tooling (eslint-config-next > fast-glob > micromatch), never the
+      # app. Drop the ignore once braces publishes a fix.
       - name: Audit dependencies
         run: pnpm audit --audit-level high
 
