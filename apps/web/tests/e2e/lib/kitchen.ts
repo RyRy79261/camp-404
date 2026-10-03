@@ -28,8 +28,8 @@ export async function acceptedAt50(
   await completeOnboarding(request, "kp-cap");
   await setRank(request, "kp-cap", "captain");
 
+  // No Logistics days: the plan's 11 undated days, all copied from Day 1.
   await page.goto("/kitchen/meal-plan");
-  await page.getByLabel("Days on site").fill("2");
   await page.getByLabel("Day 1 breakfast").fill("45");
   await page.getByLabel("Day 1 dinner").fill("50");
   await page

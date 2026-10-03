@@ -453,9 +453,13 @@ export async function addPrepStep(input: {
     if (!what) refuse(PREP_NEEDS_WORDS);
     if (!isTiming(input.when)) refuse(PREP_NEEDS_WORDS);
     const cycle = await currentCycleNumber(tx);
+    // Day 1 comes from Logistics: read it with a share lock BEFORE the menu
+    // item, in the order a Logistics save that moves it takes them (phases,
+    // then the steps and their menu items), so the two never deadlock and
+    // this step is either re-dated by that save or dated from its new Day 1.
+    const plan = await readMealPlan(tx, cycle, { lock: true });
     const item = await lockMenuItem(tx, input.itemId, cycle);
     if (!item) refuse(MEAL_ITEM_GONE);
-    const plan = await readMealPlan(tx, cycle);
     const due = prepDueDate({
       firstDay: plan.firstDay,
       day: item.day,

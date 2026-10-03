@@ -856,47 +856,32 @@ export type MealPlanDay = z.infer<typeof MealPlanDay>;
 export const MEALS_OF_THE_DAY = MEALS;
 export type MealOfTheDay = (typeof MEALS_OF_THE_DAY)[number];
 
-/** A calendar day, typed as YYYY-MM-DD. */
-const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-/**
- * A real calendar day: a UTC round trip gives the same text back. Date.parse
- * alone rolls "2027-02-30" over to 2 March instead of refusing it.
- */
-function isCalendarDay(v: string): boolean {
-  if (!ISO_DAY.test(v)) return false;
-  const [y, m, d] = v.split("-").map(Number);
-  const date = new Date(Date.UTC(y!, m! - 1, d!));
-  return date.toISOString().slice(0, 10) === v;
-}
-
-/**
- * A save of the year's meal plan: the days on site, the date of day 1 (null
- * when not known yet), one row of plates for each day, and the version the
- * editor opened (0 when there was no plan yet).
- */
-export const MealPlanInput = z
-  .object({
-    daysOnSite: z
-      .number({ error: "Give the days on site." })
-      .int("Count whole days.")
-      .min(1, "Count at least 1 day.")
-      .max(MEAL_PLAN_MAX_DAYS, `Count at most ${MEAL_PLAN_MAX_DAYS} days.`),
-    firstDay: z.preprocess(
-      (v) => (typeof v === "string" && v.trim() === "" ? null : v),
-      z
-        .string()
-        .refine(isCalendarDay, "Pick the date of day 1.")
-        .nullable()
-        .default(null),
-    ),
-    days: z.array(MealPlanDay).max(MEAL_PLAN_MAX_DAYS),
-    expectedVersion: z.number().int().min(0),
-  })
-  .refine((plan) => plan.days.length === plan.daysOnSite, {
-    message: "Give the plates for every day on site.",
-    path: ["days"],
+/** A calendar day, typed as YYYY-MM-DD, that is a real day. */
+const CalendarDay = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
   });
+
+/**
+ * A save of the year's meal plan: one row of plates for each day on site, the
+ * Day 1 the editor opened with (null when Logistics had no dates), and the
+ * version it opened (0 when there was no plan yet). The days on site and the
+ * date of Day 1 are not the meal plan's: they come from the camp's days in
+ * Logistics (the owner, 2026-10-03), and the save checks the rows and that
+ * Day 1 against them, so plates typed for one set of dates never land on
+ * another.
+ */
+export const MealPlanInput = z.object({
+  firstDay: CalendarDay.nullable(),
+  days: z
+    .array(MealPlanDay)
+    .min(1, "Give the plates for every day on site.")
+    .max(MEAL_PLAN_MAX_DAYS),
+  expectedVersion: z.number().int().min(0),
+});
 export type MealPlanInput = z.infer<typeof MealPlanInput>;
 
 // --- Legacy ----------------------------------------------------------------

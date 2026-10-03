@@ -47,7 +47,6 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh, push: vi.fn() }),
 }));
 
-import { DAY_ONE_NEEDED_FOR_PREP } from "@camp404/types";
 import { toast } from "@camp404/ui/components/toast";
 import type { KitchenMenu, MenuBookRecipe } from "@camp404/db/kitchen-menu";
 import { captainPageGate } from "@/lib/captain-gate";
@@ -306,12 +305,23 @@ describe("the meal plan as a Kitchen lead edits it", () => {
     }
   });
 
-  it("dates every day from the date of day 1, and saves it", async () => {
-    await renderAs("team_lead", ["kitchen"]);
-    const date = screen.getByLabelText("Day 1 date") as HTMLInputElement;
-    expect(date.type).toBe("date");
-    expect(date.value).toBe("");
-    fireEvent.change(date, { target: { value: "2026-04-25" } });
+  it("dates every day from Day 1 in Logistics, said in a line with a link there, and saves the plates only", async () => {
+    await renderAs("team_lead", ["kitchen"], {
+      daysOnSite: 3,
+      days: DAYS,
+      version: 4,
+      firstDay: "2026-04-25",
+    });
+    expect(
+      screen.getByText("Day 1: Sat 25 Apr · 3 days on site, from Logistics"),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("link", { name: "Change the dates in Logistics" })
+        .getAttribute("href"),
+    ).toBe("/logistics");
+    expect(screen.queryByLabelText("Day 1 date")).toBeNull();
+    expect(screen.queryByLabelText("Days on site")).toBeNull();
     expect(
       screen.getByRole("rowheader", { name: "Day 1 · Sat 25 Apr" }),
     ).toBeTruthy();
@@ -320,45 +330,39 @@ describe("the meal plan as a Kitchen lead edits it", () => {
     ).toBeTruthy();
     await save();
     expect(saveMealPlanAction).toHaveBeenCalledWith({
-      daysOnSite: 3,
       firstDay: "2026-04-25",
       days: DAYS,
       expectedVersion: 4,
     });
   });
 
-  it("starts from 11 days and saves the plates typed, with the version it opened", async () => {
+  it("asks for the dates in Logistics when there are none, and runs 11 days by number", async () => {
     await renderAs("team_lead", ["kitchen"], {
       daysOnSite: 11,
       days: Array.from({ length: 11 }, () => ({ breakfast: 0, dinner: 0 })),
       version: 0,
     });
-    expect(plates("Days on site").value).toBe("11");
+    expect(
+      screen.getByText("Set the camp’s dates in Logistics first"),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Change the dates in Logistics" }),
+    ).toBeTruthy();
     expect(screen.getByRole("rowheader", { name: "Day 11" })).toBeTruthy();
-    fireEvent.change(plates("Days on site"), { target: { value: "2" } });
-    expect(screen.queryByRole("rowheader", { name: "Day 3" })).toBeNull();
     fireEvent.change(plates("Day 1 breakfast"), { target: { value: "20" } });
     fireEvent.change(plates("Day 1 dinner"), { target: { value: "25" } });
     fireEvent.change(plates("Day 2 dinner"), { target: { value: "" } });
     await save();
     expect(saveMealPlanAction).toHaveBeenCalledWith({
-      daysOnSite: 2,
       firstDay: null,
       days: [
         { breakfast: 20, dinner: 25 },
-        { breakfast: 0, dinner: 0 },
+        ...Array.from({ length: 10 }, () => ({ breakfast: 0, dinner: 0 })),
       ],
       expectedVersion: 0,
     });
     expect(toast.success).toHaveBeenCalledWith("Meal plan saved");
     expect(refresh).toHaveBeenCalled();
-  });
-
-  it("keeps the days already filled in when the days on site grow", async () => {
-    await renderAs("captain");
-    fireEvent.change(plates("Days on site"), { target: { value: "4" } });
-    expect(plates("Day 3 dinner").value).toBe("60");
-    expect(plates("Day 4 dinner").value).toBe("0");
   });
 
   it("copies Day 1's plates to every day", async () => {
@@ -372,7 +376,6 @@ describe("the meal plan as a Kitchen lead edits it", () => {
     });
     await save();
     expect(saveMealPlanAction).toHaveBeenCalledWith({
-      daysOnSite: 3,
       firstDay: null,
       days: [DAYS[0], DAYS[0], DAYS[0]],
       expectedVersion: 4,
@@ -392,16 +395,9 @@ describe("the meal plan as a Kitchen lead edits it", () => {
         ?.textContent,
     ).toBe("Give at most 500 plates.");
     expect(plates("Day 3 breakfast").getAttribute("aria-invalid")).toBe("true");
-
-    fireEvent.change(plates("Day 2 dinner"), { target: { value: "50" } });
-    fireEvent.change(plates("Day 3 breakfast"), { target: { value: "45" } });
-    fireEvent.change(plates("Days on site"), { target: { value: "31" } });
-    await save();
-    expect(screen.getByText("Count at most 30 days.")).toBeTruthy();
-    expect(saveMealPlanAction).not.toHaveBeenCalled();
   });
 
-  it("says beside the date when Day 1 cannot be cleared while there are prep steps", async () => {
+  it("asks for a reload when Logistics moved the dates after the page opened", async () => {
     await renderAs("captain", [], {
       daysOnSite: 3,
       days: DAYS,
@@ -410,18 +406,18 @@ describe("the meal plan as a Kitchen lead edits it", () => {
     });
     vi.mocked(saveMealPlanAction).mockResolvedValueOnce({
       ok: false,
-      error: DAY_ONE_NEEDED_FOR_PREP,
-    });
-    fireEvent.change(screen.getByLabelText("Day 1 date"), {
-      target: { value: "" },
+      error: "The camp's dates changed in Logistics. Reload the page.",
     });
     await save();
-    expect(document.getElementById("first-day-error")?.textContent).toBe(
-      DAY_ONE_NEEDED_FOR_PREP,
+    // The rows go with the Day 1 they were typed for.
+    expect(saveMealPlanAction).toHaveBeenCalledWith(
+      expect.objectContaining({ firstDay: "2026-04-25" }),
     );
-    expect(
-      screen.getByLabelText("Day 1 date").getAttribute("aria-invalid"),
-    ).toBe("true");
+    expect(screen.getByRole("alert").textContent).toBe(
+      "The camp's dates changed in Logistics. Reload the page.",
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("says why a save was refused, beside Save", async () => {

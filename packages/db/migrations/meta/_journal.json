@@ -666,6 +666,20 @@
       "when": 1790988319404,
       "tag": "0094_link_duty_cards_by_typed_key",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1791013507020,
+      "tag": "0095_meal_plan_day_one_from_logistics",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1791013533192,
+      "tag": "0096_meal_plan_dates_from_logistics",
+      "breakpoints": true
     }
   ]
 }

@@ -1,17 +1,18 @@
-import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import {
   addDays,
   campDayStart,
+  campOnSite,
   canEditMealPlan,
-  dayOneShift,
   mealPlanPeaks,
   prepTaskDetails,
+  type CampOnSite,
 } from "@camp404/core";
 import {
   MEAL_PLAN_DEFAULT_DAYS,
+  MEAL_PLAN_MAX_DAYS,
   MealPlanInput,
   type MealPlanDay,
-  DAY_ONE_NEEDED_FOR_PREP,
 } from "@camp404/types";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
@@ -21,10 +22,19 @@ import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // The kitchen's meal plan (the owner's sketch, 2026-09-24): for the camp's
-// current year, the days on site, the date of day 1 and the plates at
-// breakfast and dinner on each. The camp does no lunch (the owner,
-// 2026-10-01): the table never had a lunch column read anywhere, so the
-// one it had was dropped (migration drop_kitchen_lunch).
+// current year, the plates at breakfast and dinner on each day on site. The
+// camp does no lunch (the owner, 2026-10-01): the table never had a lunch
+// column read anywhere, so the one it had was dropped (migration
+// drop_kitchen_lunch).
+//
+//  - The days on site and the date of Day 1 are NOT the meal plan's (the
+//    owner, 2026-10-03: "one place to set dates"). They are read from the
+//    year's Logistics days every time (campOnSite): Day 1 is the first Build
+//    day, else the first Burn day, and the last day on site the last Strike
+//    day. With no Build or Burn days the plan runs by day number, 11 days.
+//    The plates are kept by day number, so a day range that moves keeps them.
+//    When the Logistics days move Day 1, the Logistics write re-dates the prep
+//    steps and their tasks in its own transaction (redatePrepSteps, below).
 //
 //  - Anyone approved reads it (the page gates that). A recipe in the book is
 //    shown at each distinct count in it (mealPlanPlateCounts), and the
@@ -50,20 +60,23 @@ export const NOT_A_MEAL_PLAN_EDITOR =
 export const MEAL_PLAN_CHANGED =
   "Someone changed the meal plan first. Reload the page.";
 export const CHECK_MEAL_PLAN = "Check the meal plan and try again.";
+export const MEAL_PLAN_DAYS_MOVED =
+  "The camp's dates changed in Logistics. Reload the page.";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** A save as the caller sends it: the date of day 1 may be left out (none). */
-export type MealPlanSave = { actorId: string } & Omit<
-  MealPlanInput,
-  "firstDay"
-> & { firstDay?: string | null };
+/** A save as the caller sends it. */
+export type MealPlanSave = { actorId: string } & MealPlanInput;
 
 /** A year's meal plan. Version 0 means none is saved: these are the defaults. */
 export interface MealPlan {
   cycle: number;
+  /** From Logistics: Day 1 to the last day on site; 11 with no dates. */
   daysOnSite: number;
-  /** The date of day 1 (YYYY-MM-DD), or null when nobody has set it. */
+  /**
+   * The date of Day 1 (YYYY-MM-DD), from Logistics: the first Build day, else
+   * the first Burn day. Null when Logistics has neither.
+   */
   firstDay: string | null;
   /** One row per day on site, day 1 first. */
   days: MealPlanDay[];
@@ -73,15 +86,20 @@ export interface MealPlan {
 
 const EMPTY_DAY: MealPlanDay = { breakfast: 0, dinner: 0 };
 
-/** The plan a year has before anyone saves one: 11 days, no plates. */
-export function defaultMealPlan(cycle: number): MealPlan {
+/**
+ * The plan a year has before anyone saves one: no plates, on the days in
+ * Logistics (`onSite`), or 11 days with no date.
+ */
+export function defaultMealPlan(
+  cycle: number,
+  onSite: CampOnSite | null = null,
+): MealPlan {
+  const daysOnSite = onSite?.daysOnSite ?? MEAL_PLAN_DEFAULT_DAYS;
   return {
     cycle,
-    daysOnSite: MEAL_PLAN_DEFAULT_DAYS,
-    firstDay: null,
-    days: Array.from({ length: MEAL_PLAN_DEFAULT_DAYS }, () => ({
-      ...EMPTY_DAY,
-    })),
+    daysOnSite,
+    firstDay: onSite?.firstDay ?? null,
+    days: Array.from({ length: daysOnSite }, () => ({ ...EMPTY_DAY })),
     version: 0,
     updatedAt: null,
   };
@@ -131,16 +149,53 @@ export async function lockMealPlanEditor(
 
 // --- Reads -------------------------------------------------------------------
 
-/** A year's meal plan, read through `db`. */
+/** The Logistics phases the days on site come from. */
+const ON_SITE_PHASES = ["build", "burn", "strike"] as const;
+
+/**
+ * A year's days on site from its Logistics days (campOnSite), or null when
+ * neither Build nor Burn has days. `lock` takes a share lock on the phase
+ * rows, so a write that depends on Day 1 (a prep step's date) waits for a
+ * Logistics save that moves it, and then reads the new days.
+ */
+export async function readCampOnSite(
+  db: DbOrTx,
+  cycle: number,
+  options: { lock?: boolean } = {},
+): Promise<CampOnSite | null> {
+  const query = db
+    .select({
+      phase: schema.logisticsPhases.phase,
+      startDate: schema.logisticsPhases.startDate,
+      endDate: schema.logisticsPhases.endDate,
+    })
+    .from(schema.logisticsPhases)
+    .where(
+      and(
+        eq(schema.logisticsPhases.cycle, cycle),
+        inArray(schema.logisticsPhases.phase, [...ON_SITE_PHASES]),
+      ),
+    );
+  const rows = options.lock ? await query.for("share") : await query;
+  return campOnSite(rows, MEAL_PLAN_MAX_DAYS);
+}
+
+/**
+ * A year's meal plan, read through `db`: its plates by day number, on the
+ * days on site from Logistics. `lock` as readCampOnSite's.
+ */
 export async function readMealPlan(
   db: DbOrTx,
   cycle: number,
+  options: { lock?: boolean } = {},
 ): Promise<MealPlan> {
+  const onSite = await readCampOnSite(db, cycle, options);
   const [plan] = await db
     .select()
     .from(schema.kitchenMealPlans)
     .where(eq(schema.kitchenMealPlans.cycle, cycle));
-  if (!plan) return defaultMealPlan(cycle);
+  if (!plan) return defaultMealPlan(cycle, onSite);
+  const daysOnSite = onSite?.daysOnSite ?? MEAL_PLAN_DEFAULT_DAYS;
   const rows = await db
     .select({
       day: schema.kitchenMealPlanDays.day,
@@ -152,9 +207,9 @@ export async function readMealPlan(
     .orderBy(asc(schema.kitchenMealPlanDays.day));
   return {
     cycle,
-    daysOnSite: plan.daysOnSite,
-    firstDay: plan.firstDay,
-    days: mealPlanDays(plan.daysOnSite, rows),
+    daysOnSite,
+    firstDay: onSite?.firstDay ?? null,
+    days: mealPlanDays(daysOnSite, rows),
     version: plan.version,
     updatedAt: plan.updatedAt,
   };
@@ -178,11 +233,16 @@ export async function readMealPlanPeaks(db: DbOrTx = createHttpDb()) {
 // --- Write -------------------------------------------------------------------
 
 /**
- * Saves this year's meal plan. `expectedVersion` 0 means the editor saw no
- * plan (the defaults), so the save inserts one, and if someone saved first
- * the insert finds their row and refuses. Otherwise it is a compare-and-set
- * on version. The year's day rows are replaced, and the audit row says what
- * the plan was and what it became.
+ * Saves this year's plates. `expectedVersion` 0 means the editor saw no plan
+ * (the defaults), so the save inserts one, and if someone saved first the
+ * insert finds their row and refuses. Otherwise it is a compare-and-set on
+ * version. The rows and the Day 1 the editor opened with must be the days on
+ * site in Logistics as they are now: a Logistics change since the page opened
+ * (a moved Day 1 with the same count too) says so in a sentence, writing
+ * nothing. Days 1 to
+ * the days on site are replaced; a day past them keeps its plates, so a day
+ * range that shrinks and grows again loses nothing. The audit row says what
+ * the plates were and what they became.
  */
 export async function setMealPlan(
   input: MealPlanSave,
@@ -194,24 +254,18 @@ export async function setMealPlan(
       error: parsed.error.issues[0]?.message ?? CHECK_MEAL_PLAN,
     };
   }
-  const { daysOnSite, firstDay, days, expectedVersion } = parsed.data;
+  const { firstDay, days, expectedVersion } = parsed.data;
   try {
     return await withTransaction(async (tx: Tx) => {
       if (!(await lockMealPlanEditor(tx, input.actorId))) {
         refuse(NOT_A_MEAL_PLAN_EDITOR);
       }
       const cycle = await currentCycleNumber(tx);
-      const before = await readMealPlan(tx, cycle);
-      // Prep steps are dated from Day 1: clearing it would leave their dates
-      // and their tasks' deadlines with nothing to follow (#245).
-      if (firstDay === null && before.firstDay !== null) {
-        const [step] = await tx
-          .select({ id: schema.kitchenPrepSteps.id })
-          .from(schema.kitchenPrepSteps)
-          .where(eq(schema.kitchenPrepSteps.cycle, cycle))
-          .limit(1)
-          .for("update");
-        if (step) refuse(DAY_ONE_NEEDED_FOR_PREP);
+      const before = await readMealPlan(tx, cycle, { lock: true });
+      // The rows are for the days the editor opened: the same count and the
+      // same Day 1, read under the share lock, or Logistics moved them.
+      if (days.length !== before.daysOnSite || firstDay !== before.firstDay) {
+        refuse(MEAL_PLAN_DAYS_MOVED);
       }
       const now = new Date();
       let version: number;
@@ -220,8 +274,6 @@ export async function setMealPlan(
           .insert(schema.kitchenMealPlans)
           .values({
             cycle,
-            daysOnSite,
-            firstDay,
             version: 1,
             updatedByUserId: input.actorId,
             updatedAt: now,
@@ -234,8 +286,6 @@ export async function setMealPlan(
         const [row] = await tx
           .update(schema.kitchenMealPlans)
           .set({
-            daysOnSite,
-            firstDay,
             version: sql`${schema.kitchenMealPlans.version} + 1`,
             updatedByUserId: input.actorId,
             updatedAt: now,
@@ -252,7 +302,12 @@ export async function setMealPlan(
       }
       await tx
         .delete(schema.kitchenMealPlanDays)
-        .where(eq(schema.kitchenMealPlanDays.cycle, cycle));
+        .where(
+          and(
+            eq(schema.kitchenMealPlanDays.cycle, cycle),
+            lte(schema.kitchenMealPlanDays.day, days.length),
+          ),
+        );
       await tx.insert(schema.kitchenMealPlanDays).values(
         days.map((d, i) => ({
           cycle,
@@ -261,19 +316,6 @@ export async function setMealPlan(
           dinner: d.dinner,
         })),
       );
-      // Day 1 moved: every prep step moves by the same days, and its task
-      // with it (the owner, 2026-10-02: "If Day 1 changes everything needs
-      // to redate").
-      const shift = dayOneShift(before.firstDay, firstDay);
-      if (shift !== null) {
-        await redatePrepSteps(tx, {
-          actorId: input.actorId,
-          cycle,
-          shift,
-          from: before.firstDay!,
-          to: firstDay!,
-        });
-      }
       await writeAuditEvent(tx, {
         actorId: input.actorId,
         action: "camp.kitchen_meal_plan.changed",
@@ -281,12 +323,10 @@ export async function setMealPlan(
         metadata: {
           cycle,
           version,
-          before: {
-            daysOnSite: before.daysOnSite,
-            firstDay: before.firstDay,
-            days: before.days,
-          },
-          after: { daysOnSite, firstDay, days },
+          daysOnSite: before.daysOnSite,
+          firstDay: before.firstDay,
+          before: { days: before.days },
+          after: { days },
         },
       });
       return { ok: true as const, version };
@@ -299,7 +339,8 @@ export async function setMealPlan(
 
 /**
  * Moves a year's prep steps by `shift` days because Day 1 moved from `from`
- * to `to`, inside the meal plan's save: "the day before" and "the same day"
+ * to `to`, inside the Logistics save that moved it (setLogisticsPhase and
+ * clearLogisticsPhase in ./logistics): "the day before" and "the same day"
  * stay with their meal, and a "before we leave" date moves by the same days.
  * Each step's Kitchen task (one not taken off the board) gets the new due
  * date, and its line of detail ("For Day 3 breakfast, Sat 24 Apr") the new
@@ -307,7 +348,7 @@ export async function setMealPlan(
  * so an edit dialog opened before cannot put the old date back. One audit row
  * says what moved. Nothing to move writes nothing.
  */
-async function redatePrepSteps(
+export async function redatePrepSteps(
   tx: Tx,
   input: {
     actorId: string;

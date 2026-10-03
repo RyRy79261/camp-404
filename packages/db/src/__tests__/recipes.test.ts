@@ -2289,10 +2289,12 @@ describe("recipes", () => {
       expect(
         await setMealPlan({
           actorId: captain.id,
-          daysOnSite: 2,
+          firstDay: null,
+          // No Logistics days: the plan's 11 undated days.
           days: [
             { breakfast: 45, dinner: 50 },
             { breakfast: 45, dinner: 60 },
+            ...Array.from({ length: 9 }, () => ({ breakfast: 0, dinner: 0 })),
           ],
           expectedVersion: 0,
         }),

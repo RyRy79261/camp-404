@@ -69,10 +69,30 @@ describe("kitchen menu twins", () => {
 
   it("refuse a day off the plan, a meal with no plates, and a recipe not in the book", () => {
     const cook = lead("cook", "kitchen");
+    // One day on site: one day of Build in Logistics.
+    const captain = testStore.createUser({
+      authUserId: "auth-captain",
+      displayName: "Captain",
+      inviteCode: "seeded",
+      rank: "captain",
+      approvalStatus: "approved",
+    });
+    expect(
+      testStore.setLogisticsPhase({
+        actorId: captain.id,
+        phase: "build",
+        startDate: "2027-04-22",
+        endDate: "2027-04-22",
+        place: null,
+        note: null,
+        expectedVersion: 0,
+        newEventId: "evbuild",
+      }),
+    ).toMatchObject({ ok: true });
     expect(
       testStore.setMealPlan({
         actorId: cook.id,
-        daysOnSite: 1,
+        firstDay: "2027-04-22",
         days: [{ breakfast: 0, dinner: 20 }],
         expectedVersion: 0,
       }),
@@ -188,10 +208,14 @@ describe("kitchen menu twins", () => {
       },
     ]);
     // A seeded recipe is in the book: it can go on the menu.
+    // No Logistics days: the plan's 11 undated days.
     testStore.setMealPlan({
       actorId: cook.id,
-      daysOnSite: 1,
-      days: [{ breakfast: 0, dinner: 30 }],
+      firstDay: null,
+      days: [
+        { breakfast: 0, dinner: 30 },
+        ...Array.from({ length: 10 }, () => ({ breakfast: 0, dinner: 0 })),
+      ],
       expectedVersion: 0,
     });
     expect(

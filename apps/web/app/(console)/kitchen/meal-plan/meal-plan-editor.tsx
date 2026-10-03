@@ -3,11 +3,10 @@
 import { useState, useTransition, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Loader2, Printer } from "lucide-react";
+import { Loader2, Printer } from "lucide-react";
 import { z } from "zod";
-import { mealPlanDayLabel } from "@camp404/core";
+import { mealPlanDayLabel, shortDay } from "@camp404/core";
 import {
-  DAY_ONE_NEEDED_FOR_PREP,
   MEALS_OF_THE_DAY,
   MEAL_PLAN_MAX_DAYS,
   MealPlanInput,
@@ -15,7 +14,6 @@ import {
   type MealPlanDay,
 } from "@camp404/types";
 import { cn } from "@camp404/ui/lib/utils";
-import { DateControl } from "@camp404/ui/components/date-control";
 import { Input } from "@camp404/ui/components/input";
 import { toast } from "@camp404/ui/components/toast";
 import {
@@ -28,6 +26,7 @@ import {
   QUIET_BUTTON,
   splitDayLabel,
 } from "@/components/kitchen/labels";
+import { LOGISTICS_PATH } from "@/lib/logistics-copy";
 import { PREP_PLAN_PRINT_PATH, UNREACHABLE } from "@/lib/recipe-copy";
 import { saveMealPlanAction } from "./actions";
 import { MenuCell, type MenuLine } from "./menu-cell";
@@ -35,17 +34,20 @@ import type { PickerRecipe } from "./recipe-picker";
 
 // The meal plan for a Kitchen lead or a captain (the owner's approved
 // mock-up, design/approved-kmp.html, Option A, 2026-10-01): Save in the
-// heading; the days on site, the date of day 1 and "Copy Day 1's plates to
-// every day" in one card; then the week as a table, Day | Breakfast | Dinner,
+// heading; the camp's dates and "Copy Day 1's plates to every day" in one
+// card; then the week as a table, Day | Breakfast | Dinner,
 // each meal with its plates and, under them, its recipes, each on its own
 // line with where its count stands in a fixed column. On a phone each day is
 // a card, its meals stacked. The camp does no lunch (the owner, 2026-10-01).
 //
-// Plates and dates are kept when Save is pressed: the whole plan goes with
+// The dates are not set here (the owner, 2026-10-03): Day 1 and the days on
+// site come from the camp's days in Logistics, shown as a plain line with a
+// link there ("Day 1: Thu 22 Apr · 11 days on site, from Logistics"); with no
+// dates yet, "Set the camp's dates in Logistics first", and the plan runs by
+// day number. Plates are kept when Save is pressed: the whole plan goes with
 // the version the page opened; a problem with a number shows beside it, a
 // refusal beside Save. Adding or taking off a recipe is kept at once
-// (menu-cell.tsx). Changing the days on site keeps the days already filled in
-// and adds empty ones. Everyone else reads the menu (member-menu.tsx).
+// (menu-cell.tsx). Everyone else reads the menu (member-menu.tsx).
 
 const MEAL_LABELS: Record<MealOfTheDay, string> = {
   breakfast: "Breakfast",
@@ -53,8 +55,6 @@ const MEAL_LABELS: Record<MealOfTheDay, string> = {
 };
 
 type Row = Record<MealOfTheDay, string>;
-
-const EMPTY_ROW: Row = { breakfast: "0", dinner: "0" };
 
 function toRows(days: readonly MealPlanDay[]): Row[] {
   return days.map((d) => ({
@@ -68,7 +68,7 @@ function plates(value: string): number {
   return value.trim() === "" ? 0 : Number(value);
 }
 
-/** Each problem keyed by where it is: "daysOnSite", or "day.meal". */
+/** Each problem keyed by where it is: "day.meal", or the field's name. */
 function problems(
   issues: readonly { path: readonly PropertyKey[]; message: string }[],
 ): Record<string, string> {
@@ -95,8 +95,6 @@ const NUMBER_BOX =
 const PlatesField = z.string().max(20);
 const MealPlanDraft = z.object({
   version: z.number().int(),
-  daysOnSite: z.string().max(20),
-  firstDay: z.string().max(40),
   rows: z
     .array(z.object({ breakfast: PlatesField, dinner: PlatesField }))
     .max(MEAL_PLAN_MAX_DAYS),
@@ -104,8 +102,9 @@ const MealPlanDraft = z.object({
 type MealPlanDraft = z.infer<typeof MealPlanDraft>;
 
 type MealPlanEditorProps = {
+  /** From Logistics: Day 1 to the last day on site (11 with no dates). */
   daysOnSite: number;
-  /** The date of day 1 (YYYY-MM-DD), or null when not set. */
+  /** Day 1 (YYYY-MM-DD) from Logistics, or null when it has no dates. */
   firstDay: string | null;
   days: MealPlanDay[];
   /** The version the page opened; 0 when no plan is saved yet. */
@@ -125,13 +124,11 @@ type MealPlanEditorProps = {
  * draft would need a note the owner has not approved.
  */
 export function MealPlanEditor(props: MealPlanEditorProps) {
-  const { daysOnSite, firstDay, days, version } = props;
+  const { days, version } = props;
   const draft = useEditorDraft<MealPlanDraft>({
     editor: "meal-plan",
     baseline: {
       version,
-      daysOnSite: String(daysOnSite),
-      firstDay: firstDay ?? "",
       rows: toRows(days),
     },
     restore: false,
@@ -147,7 +144,8 @@ export function MealPlanEditor(props: MealPlanEditorProps) {
 
 function MealPlanEditorForm({
   days: savedDayPlates,
-  firstDay: savedFirstDay,
+  daysOnSite,
+  firstDay,
   version,
   menu = [],
   book = [],
@@ -156,29 +154,10 @@ function MealPlanEditorForm({
 }: MealPlanEditorProps & { draft: EditorDraft<MealPlanDraft> }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [daysOnSite, setDaysOnSite] = useState(draft.start.daysOnSite);
-  const [firstDay, setFirstDay] = useState(draft.start.firstDay);
   const [rows, setRows] = useState<Row[]>(() => draft.start.rows);
-  const { saved } = useDraftAutosave(draft, {
-    version,
-    daysOnSite,
-    firstDay,
-    rows,
-  });
+  const { saved } = useDraftAutosave(draft, { version, rows });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [refusal, setRefusal] = useState<string | null>(null);
-
-  function changeDays(value: string) {
-    setDaysOnSite(value);
-    const n = Number(value);
-    // Only a count the plan can hold moves the rows; the save names the rest.
-    if (Number.isInteger(n) && n >= 1 && n <= MEAL_PLAN_MAX_DAYS) {
-      // The days already filled in stay; a new day starts with no meals.
-      setRows((current) =>
-        Array.from({ length: n }, (_, i) => current[i] ?? { ...EMPTY_ROW }),
-      );
-    }
-  }
 
   function changePlates(index: number, meal: MealOfTheDay, value: string) {
     setRows((current) =>
@@ -196,8 +175,9 @@ function MealPlanEditorForm({
     event.preventDefault();
     setRefusal(null);
     const payload = {
-      daysOnSite: daysOnSite.trim() === "" ? Number.NaN : Number(daysOnSite),
-      firstDay: firstDay.trim() === "" ? null : firstDay,
+      // The Day 1 these rows were typed for: the save refuses them if
+      // Logistics has moved it since.
+      firstDay,
       days: rows.map((r) => ({
         breakfast: plates(r.breakfast),
         dinner: plates(r.dinner),
@@ -219,12 +199,7 @@ function MealPlanEditorForm({
         return;
       }
       if (!result.ok) {
-        // A problem with the date shows beside the date box (#245).
-        if (result.error === DAY_ONE_NEEDED_FOR_PREP) {
-          setErrors({ firstDay: result.error });
-        } else {
-          setRefusal(result.error);
-        }
+        setRefusal(result.error);
         return;
       }
       saved();
@@ -282,9 +257,8 @@ function MealPlanEditorForm({
           </button>
         </div>
         <p className="col-span-2 mt-2 max-w-[600px] text-[13px] leading-5 text-muted-foreground page-md:col-span-1 page-md:text-sm">
-          Plates and dates are kept when you press Save. Adding or taking off a
-          recipe is kept at once. Only ✓&nbsp;Verified recipes go on the
-          shopping list.
+          Plates are kept when you press Save. Adding or taking off a recipe is
+          kept at once. Only ✓&nbsp;Verified recipes go on the shopping list.
         </p>
       </div>
 
@@ -294,95 +268,37 @@ function MealPlanEditorForm({
         </p>
       )}
 
-      {/* The plan's settings: labels above their boxes, in one row. */}
-      <div className="mb-4 grid grid-cols-[112px_minmax(0,1fr)] items-end gap-4 border border-border bg-card p-4 page-md:flex page-md:gap-6">
-        <div className="flex flex-col gap-2 page-md:w-28">
-          <label htmlFor="days-on-site" className={PIXEL_LABEL}>
-            Days on site
-          </label>
-          <Input
-            id="days-on-site"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={MEAL_PLAN_MAX_DAYS}
-            step={1}
-            value={daysOnSite}
-            disabled={pending}
-            aria-invalid={errors.daysOnSite ? true : undefined}
-            aria-describedby={
-              errors.daysOnSite ? "days-on-site-error" : undefined
-            }
-            className={NUMBER_BOX}
-            onChange={(e) => changeDays(e.target.value)}
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-2 page-md:w-48">
-          <label htmlFor="first-day" className={PIXEL_LABEL}>
-            Day 1 date
-          </label>
-          {/* The browser's date box draws the date its own way
-              ("04/22/2027"); the mock-up reads "Thu 22 Apr 2027". So the
-              real date box lies on top, invisible, and opens its picker on a
-              tap; the face under it shows the date in the camp's words. */}
-          <div className="relative h-8 w-full border border-input bg-background focus-within:outline-2 focus-within:-outline-offset-1 focus-within:outline-primary">
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 flex items-center justify-between gap-2 px-3 text-sm"
-            >
-              <span
-                className={cn("truncate", !firstDay && "text-muted-foreground")}
-              >
-                {longDate(firstDay) ?? "Pick a date"}
-              </span>
-              <CalendarDays
-                className="h-4 w-4 shrink-0 text-muted-foreground"
-                aria-hidden
-              />
-            </span>
-            <DateControl
-              id="first-day"
-              value={firstDay}
-              disabled={pending}
-              aria-invalid={errors.firstDay ? true : undefined}
-              aria-describedby={errors.firstDay ? "first-day-error" : undefined}
-              className="absolute inset-0 h-full w-full cursor-pointer border-0 opacity-0"
-              onClick={(e) => {
-                try {
-                  e.currentTarget.showPicker?.();
-                } catch {
-                  // Not allowed here (an old browser): typing still works.
-                }
-              }}
-              onChange={(e) => setFirstDay(e.target.value)}
-            />
-          </div>
-        </div>
+      {/* The camp's dates, from Logistics (the owner, 2026-10-03): a plain
+          line and a link there, never a box to type in. */}
+      <div className="mb-4 flex flex-col items-start gap-x-6 gap-y-3 border border-border bg-card p-4 page-md:flex-row page-md:flex-wrap page-md:items-center">
+        <p className="min-w-0 text-sm leading-6">
+          {firstDay
+            ? `Day 1: ${shortDay(firstDay)} · ${
+                daysOnSite === 1 ? "1 day" : `${daysOnSite} days`
+              } on site, from Logistics`
+            : "Set the camp’s dates in Logistics first"}
+        </p>
+        <Link
+          href={LOGISTICS_PATH}
+          className="text-sm font-semibold text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          Change the dates in Logistics
+        </Link>
         {rows.length > 1 && (
           <button
             type="button"
             disabled={pending}
             onClick={copyFirstDay}
-            className={cn(QUIET_BUTTON, "col-span-2 page-md:ml-auto")}
+            className={cn(
+              QUIET_BUTTON,
+              // Full width on a phone, as it always was; at the end wide.
+              "self-stretch page-md:ml-auto page-md:self-auto",
+            )}
           >
             Copy Day 1&rsquo;s plates to every day
           </button>
         )}
       </div>
-      {(errors.daysOnSite || errors.firstDay) && (
-        <div className="-mt-2 mb-4 flex flex-col gap-1">
-          {errors.daysOnSite && (
-            <p id="days-on-site-error" className="text-sm text-destructive">
-              {errors.daysOnSite}
-            </p>
-          )}
-          {errors.firstDay && (
-            <p id="first-day-error" className="text-sm text-destructive">
-              {errors.firstDay}
-            </p>
-          )}
-        </div>
-      )}
 
       {above}
 
@@ -455,7 +371,7 @@ function MealPlanEditorForm({
                       lines={lines}
                       allLines={menu}
                       book={book}
-                      firstDay={savedFirstDay}
+                      firstDay={firstDay}
                       platesControl={
                         <>
                           <div className="flex items-center justify-between gap-3 page-md:justify-start">
@@ -509,21 +425,4 @@ function MealPlanEditorForm({
       </div>
     </form>
   );
-}
-
-/** "2027-04-22" as "Thu 22 Apr 2027", or null for no date or a bad one. */
-function longDate(iso: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
-  const date = new Date(`${iso}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).formatToParts(date);
-  const part = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((p) => p.type === type)?.value ?? "";
-  return `${part("weekday")} ${part("day")} ${part("month")} ${part("year")}`;
 }

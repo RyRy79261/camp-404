@@ -45,12 +45,36 @@ function lead(name: string, team: "kitchen" | "power_and_lighting") {
   return u;
 }
 
-/** A Kitchen lead, a plan from 22 Apr, and Overnight oats on Day 2 breakfast. */
+/** A captain sets the Build days in Logistics (the camp's Day 1). */
+function setBuild(start: string, end: string, expectedVersion: number) {
+  const captain = testStore.createUser({
+    authUserId: `auth-captain-${expectedVersion}`,
+    displayName: "Captain",
+    inviteCode: "seeded",
+    rank: "captain",
+    approvalStatus: "approved",
+  });
+  return testStore.setLogisticsPhase({
+    actorId: captain.id,
+    phase: "build",
+    startDate: start,
+    endDate: end,
+    place: null,
+    note: null,
+    expectedVersion,
+    newEventId: "evbuild",
+  });
+}
+
+/**
+ * A Kitchen lead, two days of Build from 22 Apr in Logistics, and Overnight
+ * oats on Day 2 breakfast.
+ */
 function setUp() {
   const cook = lead("Cook", "kitchen");
+  expect(setBuild("2027-04-22", "2027-04-23", 0)).toMatchObject({ ok: true });
   testStore.setMealPlan({
     actorId: cook.id,
-    daysOnSite: 2,
     firstDay: "2027-04-22",
     days: [
       { breakfast: 0, dinner: 40 },
@@ -280,7 +304,7 @@ describe("meal twins", () => {
     expect(x.getMealChecks().prepSteps).toEqual([]);
   });
 
-  it("move the prep steps and their tasks when Day 1 moves", () => {
+  it("move the prep steps and their tasks when the Build days move Day 1 in Logistics", () => {
     const { cook, itemId } = setUp();
     x.addPrepStep({
       actorId: cook.id,
@@ -296,15 +320,9 @@ describe("meal twins", () => {
       when: "same_day",
       date: null,
     });
-    testStore.setMealPlan({
-      actorId: cook.id,
-      daysOnSite: 2,
-      firstDay: "2027-04-24",
-      days: [
-        { breakfast: 0, dinner: 40 },
-        { breakfast: 60, dinner: 40 },
-      ],
-      expectedVersion: 1,
+    // Build starts two days later in Logistics.
+    expect(setBuild("2027-04-24", "2027-04-25", 1)).toMatchObject({
+      ok: true,
     });
     expect(x.getMealChecks().prepSteps.map((s) => s.dueDate)).toEqual([
       "2027-04-22",
@@ -317,7 +335,7 @@ describe("meal twins", () => {
     expect(task!.description).toBe("For Day 2 breakfast, Sun 25 Apr");
   });
 
-  it("refuse to clear Day 1 while there are prep steps, as the database does", () => {
+  it("refuse to clear the Build days that give Day 1 while there are prep steps, as the database does", () => {
     const { cook, itemId } = setUp();
     x.addPrepStep({
       actorId: cook.id,
@@ -326,18 +344,24 @@ describe("meal twins", () => {
       when: "same_day",
       date: null,
     });
+    const captain = testStore.createUser({
+      authUserId: "auth-clearer",
+      displayName: "Clearer",
+      inviteCode: "seeded",
+      rank: "captain",
+      approvalStatus: "approved",
+    });
     expect(
-      testStore.setMealPlan({
-        actorId: cook.id,
-        daysOnSite: 2,
-        firstDay: null,
-        days: [
-          { breakfast: 0, dinner: 40 },
-          { breakfast: 60, dinner: 40 },
-        ],
+      testStore.clearLogisticsPhase({
+        actorId: captain.id,
+        phase: "build",
         expectedVersion: 1,
       }),
     ).toEqual({ ok: false, error: DAY_ONE_NEEDED_FOR_PREP });
+    expect(testStore.listLogisticsPhases()[0]).toMatchObject({
+      startDate: "2027-04-22",
+      version: 1,
+    });
     expect(testStore.getMealPlan(testStore.currentCycleNumber()).firstDay).toBe(
       "2027-04-22",
     );

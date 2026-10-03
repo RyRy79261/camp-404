@@ -108,7 +108,9 @@
 //     camp prints, with who fills each derived from its car (fillingCar,
 //     canTotals, cansToFill, fuelSheetDays) (./power-site)
 //   - logistics: canEditLogistics (a captain or a Transport and Logistics
-//     lead), logisticsEventTitle (plain), logisticsCalendarStep; attendance
+//     lead), logisticsEventTitle (plain), logisticsCalendarStep; the days
+//     on site the meal plan follows (campOnSite: Day 1 is the first Build
+//     day, else the first Burn day); attendance
 //     (canAskForAttendance, attendanceIsOpen, attendanceBoard, the nudge's
 //     key and notice); AfrikaBurn dates (canManageDeadlines,
 //     deadlineCalendarStep, the standard AFRIKABURN_DATES and their calendar

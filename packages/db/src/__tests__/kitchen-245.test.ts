@@ -42,6 +42,7 @@ import {
   getShoppingPricesFor,
   setShoppingPrice,
 } from "../kitchen-prices";
+import { clearLogisticsPhase, setLogisticsPhase } from "../logistics";
 import { getMealPlan, setMealPlan } from "../meal-plan";
 import * as schema from "../schema";
 import { assignTeam, setLead } from "../team-memberships";
@@ -137,9 +138,18 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
     return user;
   }
 
-  /** Day 1 is Thu 22 Apr 2027; 60 at breakfast on day 2, 50 at dinner. */
+  /**
+   * Day 1 is Thu 22 Apr 2027, the first Build day in Logistics (two days of
+   * Build, version 1); 60 at breakfast on day 2, 50 at dinner.
+   */
   async function setUp() {
     await campYear(h.db(), YEAR);
+    await h.db().insert(schema.logisticsPhases).values({
+      cycle: YEAR,
+      phase: "build",
+      startDate: "2027-04-22",
+      endDate: "2027-04-23",
+    });
     const captain = await makeUser(h.db(), {
       rank: "captain",
       approvalStatus: "approved",
@@ -150,7 +160,6 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
     expect(
       await setMealPlan({
         actorId: captain.id,
-        daysOnSite: 2,
         firstDay: "2027-04-22",
         days: [
           { breakfast: 0, dinner: 50 },
@@ -700,11 +709,12 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
           date: "2027-04-22",
         }),
       ).toMatchObject({ ok: false });
+      // Logistics has no Build or Burn days: there is no Day 1.
       await h
         .db()
-        .update(schema.kitchenMealPlans)
-        .set({ firstDay: null })
-        .where(eq(schema.kitchenMealPlans.cycle, YEAR));
+        .update(schema.logisticsPhases)
+        .set({ startDate: null, endDate: null })
+        .where(eq(schema.logisticsPhases.cycle, YEAR));
       const out = await addPrepStep({
         actorId: captain.id,
         itemId,
@@ -719,7 +729,7 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
   });
 
   describe("Day 1 moves", () => {
-    it("moves every prep step and its Kitchen task by the same days, audited, and keeps an edited line of detail", async () => {
+    it("moves every prep step and its Kitchen task by the same days when Build moves in Logistics, audited, and keeps an edited line of detail", async () => {
       const { captain, kitchenLead, itemId } = await setUp();
       const before = await addPrepStep({
         actorId: kitchenLead.id,
@@ -755,34 +765,35 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
         .set({ description: "Ask Thandi which milk" })
         .where(eq(schema.tasks.id, buyStep!.taskId!));
 
-      // Saved with no new date: nothing moves.
+      // Build gets a longer end in Logistics: Day 1 stays, nothing moves.
       expect(
-        await setMealPlan({
+        await setLogisticsPhase({
           actorId: captain.id,
-          daysOnSite: 2,
-          firstDay: "2027-04-22",
-          days: [
-            { breakfast: 0, dinner: 50 },
-            { breakfast: 60, dinner: 50 },
-          ],
+          phase: "build",
+          startDate: "2027-04-22",
+          endDate: "2027-04-25",
+          place: null,
+          note: null,
           expectedVersion: 1,
+          newEventId: "evbuild1",
         }),
-      ).toEqual({ ok: true, version: 2 });
+      ).toMatchObject({ ok: true });
       expect(await audit("camp.kitchen_prep.redated")).toEqual([]);
 
-      // Day 1 moves two days later.
+      // Build starts two days later in Logistics: Day 1 moves with it.
       expect(
-        await setMealPlan({
-          actorId: kitchenLead.id,
-          daysOnSite: 2,
-          firstDay: "2027-04-24",
-          days: [
-            { breakfast: 0, dinner: 50 },
-            { breakfast: 60, dinner: 50 },
-          ],
+        await setLogisticsPhase({
+          actorId: captain.id,
+          phase: "build",
+          startDate: "2027-04-24",
+          endDate: "2027-04-25",
+          place: null,
+          note: null,
           expectedVersion: 2,
+          newEventId: "evbuild1",
         }),
-      ).toEqual({ ok: true, version: 3 });
+      ).toMatchObject({ ok: true });
+      expect((await getMealPlan()).firstDay).toBe("2027-04-24");
 
       const steps = await h
         .db()
@@ -818,7 +829,7 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
       const rows = await audit("camp.kitchen_prep.redated");
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({
-        actorId: kitchenLead.id,
+        actorId: captain.id,
         metadata: {
           from: "2027-04-22",
           to: "2027-04-24",
@@ -830,22 +841,42 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
     });
   });
 
-  describe("Day 1 cleared", () => {
-    const plan = (
-      actorId: string,
-      firstDay: string | null,
-      expectedVersion: number,
-    ) =>
-      setMealPlan({
-        actorId,
-        daysOnSite: 2,
-        firstDay,
-        days: [
-          { breakfast: 0, dinner: 50 },
-          { breakfast: 60, dinner: 50 },
-        ],
-        expectedVersion,
+  describe("Day 1 moves to the Burn", () => {
+    it("moves the steps to the first Burn day when the Build days are cleared", async () => {
+      const { captain, itemId } = await setUp();
+      await h.db().insert(schema.logisticsPhases).values({
+        cycle: YEAR,
+        phase: "burn",
+        startDate: "2027-04-26",
+        endDate: "2027-05-01",
       });
+      const step = await addPrepStep({
+        actorId: captain.id,
+        itemId,
+        what: "Soak the oats",
+        when: "same_day",
+        date: null,
+      });
+      expect(step).toMatchObject({ ok: true, due: "2027-04-23" });
+      expect(
+        await clearLogisticsPhase({
+          actorId: captain.id,
+          phase: "build",
+          expectedVersion: 1,
+        }),
+      ).toMatchObject({ ok: true });
+      expect(await getMealPlan()).toMatchObject({
+        firstDay: "2027-04-26",
+        daysOnSite: 6,
+      });
+      const [stored] = await h.db().select().from(schema.kitchenPrepSteps);
+      expect(stored!.dueDate).toBe("2027-04-27");
+    });
+  });
+
+  describe("Day 1 cleared in Logistics", () => {
+    const clearBuild = (actorId: string) =>
+      clearLogisticsPhase({ actorId, phase: "build", expectedVersion: 1 });
 
     it("is refused while there are prep steps, and nothing changes", async () => {
       const { captain, itemId } = await setUp();
@@ -857,21 +888,25 @@ describe("kitchen #245: prices, dietary, plans and prep", () => {
         date: "2027-04-19",
       });
       expect(step.ok).toBe(true);
-      expect(await plan(captain.id, null, 1)).toEqual({
+      expect(await clearBuild(captain.id)).toEqual({
         ok: false,
         error: DAY_ONE_NEEDED_FOR_PREP,
       });
-      const kept = await getMealPlan();
-      expect(kept).toMatchObject({ firstDay: "2027-04-22", version: 1 });
+      expect(await getMealPlan()).toMatchObject({ firstDay: "2027-04-22" });
+      const [build] = await h.db().select().from(schema.logisticsPhases);
+      expect(build).toMatchObject({ startDate: "2027-04-22", version: 1 });
       const [stored] = await h.db().select().from(schema.kitchenPrepSteps);
       expect(stored!.dueDate).toBe("2027-04-19");
-      expect(await audit("camp.kitchen_meal_plan.changed")).toHaveLength(1);
+      expect(await audit("logistics.phase_cleared")).toEqual([]);
     });
 
     it("still works with no prep steps", async () => {
       const { captain } = await setUp();
-      expect(await plan(captain.id, null, 1)).toEqual({ ok: true, version: 2 });
-      expect((await getMealPlan()).firstDay).toBeNull();
+      expect(await clearBuild(captain.id)).toMatchObject({ ok: true });
+      expect(await getMealPlan()).toMatchObject({
+        firstDay: null,
+        daysOnSite: 11,
+      });
     });
   });
 });

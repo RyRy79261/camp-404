@@ -12,6 +12,7 @@ import {
   seedParticipation,
   seedTeam,
 } from "./_helpers";
+import { setPhaseDays } from "./lib/logistics";
 
 // Kitchen #245 (test-mode), as the owner approved it on 2026-10-02 (Option A
 // of design/kitchen-prices.html, kitchen-costing.html, kitchen-dietary.html
@@ -39,9 +40,10 @@ async function member(page: Page, request: APIRequestContext, id: string) {
 async function kitchenLeadWithOats(page: Page, request: APIRequestContext) {
   await member(page, request, "k5-lead");
   await seedTeam(request, "k5-lead", "kitchen", true);
+  // Day 1 is the first Build day in Logistics: two days from Thu 22 Apr.
+  await seedTeam(request, "k5-lead", "transport_and_logistics", true);
+  await setPhaseDays(page, "Build", "2027-04-22", "2027-04-23");
   await page.goto("/kitchen/meal-plan");
-  await page.getByLabel("Days on site").fill("2");
-  await page.getByLabel("Day 1 date").fill("2027-04-22");
   await page.getByLabel("Day 2 breakfast").fill("60");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Meal plan saved")).toBeVisible();

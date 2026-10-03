@@ -29,6 +29,10 @@ import {
 import { deliverAfterResponse } from "@/lib/background-work";
 import { getLeadTeams } from "@/lib/users";
 
+/** The Kitchen's pages, which name the days on site, and the task board. */
+const KITCHEN_PATH = "/kitchen";
+const TASKS_PATH = "/tasks";
+
 // The logistics calendar's writes (#247). Each action: the gate (a captain or
 // a Transport and Logistics lead), the Zod boundary, then the facade with the
 // actor's id alone. The gate answers the screen; the rule is checked again
@@ -48,12 +52,18 @@ async function logisticsGate(): Promise<Gate | { ok: false; error: string }> {
   return gate;
 }
 
-/** The pages that show the phases: this one, the calendar, Home, the team. */
+/**
+ * The pages that show the phases: this one, the calendar, Home, the team; and
+ * the ones the days set Day 1 for (the owner, 2026-10-03): the meal plan, its
+ * prep steps on the task board, and the Kitchen's pages that name its days.
+ */
 function revalidateLogistics(): void {
   revalidatePath(LOGISTICS_PATH);
   revalidatePath("/calendar");
   revalidatePath("/");
   revalidatePath("/teams/transport_and_logistics");
+  revalidatePath(KITCHEN_PATH, "layout");
+  revalidatePath(TASKS_PATH);
 }
 
 /** Set one phase's days, place and note, and put it on the camp calendar. */

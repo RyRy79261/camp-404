@@ -54,7 +54,7 @@ function actAs(rank: ViewerRank, led: string[] = [], id = "user-1") {
 }
 
 const PLAN = {
-  daysOnSite: 2,
+  firstDay: null,
   days: [
     { breakfast: 20, dinner: 25 },
     { breakfast: 45, dinner: 50 },
@@ -89,7 +89,6 @@ describe("saveMealPlanAction", () => {
     ).toEqual({ ok: true, data: { version: 2 } });
     expect(setMealPlan).toHaveBeenCalledWith({
       ...PLAN,
-      firstDay: null,
       actorId: "lead-1",
     });
     expect(revalidatePath).toHaveBeenCalledWith("/kitchen/meal-plan");
@@ -109,17 +108,25 @@ describe("saveMealPlanAction", () => {
     );
   });
 
-  it("passes the date of day 1 through, and refuses one that is not a date", async () => {
+  it("passes on the Day 1 the rows were typed for, never a day count, and refuses a date that is not a day", async () => {
     expect(
-      (await saveMealPlanAction({ ...PLAN, firstDay: "2026-04-25" })).ok,
+      (
+        await saveMealPlanAction({
+          ...PLAN,
+          daysOnSite: 9,
+          firstDay: "2026-04-25",
+        })
+      ).ok,
     ).toBe(true);
-    expect(setMealPlan).toHaveBeenCalledWith(
-      expect.objectContaining({ firstDay: "2026-04-25" }),
-    );
+    expect(setMealPlan).toHaveBeenCalledWith({
+      ...PLAN,
+      firstDay: "2026-04-25",
+      actorId: "captain-1",
+    });
     vi.mocked(setMealPlan).mockClear();
     expect(
-      await saveMealPlanAction({ ...PLAN, firstDay: "2026-02-30" }),
-    ).toEqual({ ok: false, error: "Pick the date of day 1." });
+      (await saveMealPlanAction({ ...PLAN, firstDay: "2026-02-30" })).ok,
+    ).toBe(false);
     expect(setMealPlan).not.toHaveBeenCalled();
   });
 

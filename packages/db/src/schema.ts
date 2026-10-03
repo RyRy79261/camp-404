@@ -2238,39 +2238,27 @@ export const recipeLessons = pgTable(
   }),
 );
 
-// The kitchen's meal plan for one year (the owner's sketch, 2026-09-24): how
-// many days the camp is on site, the date of day 1, and the plates at
-// breakfast and dinner on each day (the camp does no lunch, owner,
-// 2026-10-01). A recipe in the book is shown at
-// each distinct count in it, and the largest is what Claude writes a new
-// recipe for. Anyone approved reads it; a captain or a Kitchen lead saves it,
-// audited and compare-and-set on `version`. No row means the defaults (11
-// empty days, no date).
-export const kitchenMealPlans = pgTable(
-  "kitchen_meal_plans",
-  {
-    cycle: integer("cycle").primaryKey(),
-    daysOnSite: integer("days_on_site").notNull().default(11),
-    // The date of day 1 (YYYY-MM-DD), which dates every day on the page;
-    // null until someone sets it.
-    firstDay: date("first_day", { mode: "string" }),
-    version: integer("version").notNull().default(1),
-    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
-  },
-  (p) => ({
-    // The bounds mirror MEAL_PLAN_MAX_DAYS in @camp404/types.
-    daysCheck: check(
-      "kitchen_meal_plans_days_check",
-      sql`${p.daysOnSite} between 1 and 30`,
-    ),
+// The kitchen's meal plan for one year (the owner's sketch, 2026-09-24): the
+// plates at breakfast and dinner on each day on site (the camp does no lunch,
+// owner, 2026-10-01). The days on site and the date of day 1 are not stored
+// here: they come from the year's Logistics days (the owner, 2026-10-03: one
+// place to set dates; campOnSite in @camp404/core), so this row holds only
+// the plan's version. A recipe in the book is shown at each distinct count in
+// it, and the largest is what Claude writes a new recipe for. Anyone approved
+// reads it; a captain or a Kitchen lead saves it, audited and compare-and-set
+// on `version`. No row means the defaults (no plates).
+export const kitchenMealPlans = pgTable("kitchen_meal_plans", {
+  cycle: integer("cycle").primaryKey(),
+  version: integer("version").notNull().default(1),
+  updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+    onDelete: "set null",
   }),
-);
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+});
 
-// One day of a year's meal plan: the plates at each meal, 0 for no meal.
-// Days 1 to days_on_site; a save replaces the year's rows.
+// One day of a year's meal plan: the plates at each meal, 0 for no meal, by
+// day number. A save replaces days 1 to the days on site; a day past them
+// keeps its row, so a day range that moves in Logistics loses no plates.
 export const kitchenMealPlanDays = pgTable(
   "kitchen_meal_plan_days",
   {

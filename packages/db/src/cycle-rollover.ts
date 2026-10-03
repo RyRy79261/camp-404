@@ -692,9 +692,8 @@ export async function setFoundingYear(input: {
     // founding year, its days follow, and the sentinel plan goes.
     await tx.execute(sql`
       insert into kitchen_meal_plans
-        (cycle, days_on_site, first_day, version, updated_by_user_id, updated_at)
-      select ${input.year}, days_on_site, first_day, version,
-             updated_by_user_id, updated_at
+        (cycle, version, updated_by_user_id, updated_at)
+      select ${input.year}, version, updated_by_user_id, updated_at
       from kitchen_meal_plans where cycle = ${UNSET_CYCLE}
       on conflict (cycle) do nothing
     `);
