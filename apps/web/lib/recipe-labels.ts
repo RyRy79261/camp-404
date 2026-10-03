@@ -1,4 +1,4 @@
-import { CAMP_TIME_ZONE } from "@camp404/core";
+import { CAMP_TIME_ZONE, amountToBuy } from "@camp404/core";
 import type {
   IngredientCategory,
   RecipeLineUnit,
@@ -138,6 +138,31 @@ export function formatAmount(
   const plural = PLURAL_UNIT[unit];
   const one = range === "1";
   return `${range} ${plural && !one ? plural : unit}`;
+}
+
+/**
+ * A shopping line's amount as the list (and its print) shows it: "2.5 kg",
+ * "1–1.5 kg", "10 g + to taste", "To taste".
+ */
+export function shoppingAmountLabel(amount: {
+  quantity: number | null;
+  quantityMax: number | null;
+  unit: RecipeLineUnit | null;
+  toTaste: boolean;
+}): string {
+  const main = formatAmount(amount.quantity, amount.quantityMax, amount.unit);
+  if (!main) return "To taste";
+  return amount.toTaste ? `${main} + to taste` : main;
+}
+
+/**
+ * A shopping line's amount to buy, rounded up (amountToBuy): "368", "290 g",
+ * "1.1 kg". The exact amount (shoppingAmountLabel) stays the line's tick key.
+ */
+export function shoppingBuyLabel(
+  amount: Parameters<typeof amountToBuy>[0],
+): string {
+  return shoppingAmountLabel(amountToBuy(amount));
 }
 
 function formatMinutes(minutes: number): string {

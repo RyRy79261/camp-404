@@ -73,6 +73,7 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   "test/seed-lounge": "test-only",
   "test/seed-participation": "test-only",
   "test/seed-power": "test-only",
+  "test/seed-prints": "test-only",
   "test/seed-team": "test-only",
   "test/set-approval": "test-only",
   "test/set-rank": "test-only",

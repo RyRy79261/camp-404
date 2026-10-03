@@ -190,6 +190,17 @@ export const logisticsTestStore = {
     return { entries: answersOf(cycle), coming: comingOf(cycle) };
   },
 
+  /** countAcceptedMembers' twin: approved members a captain accepted. */
+  countAcceptedMembers(cycle: number): number {
+    return testStore
+      .allUsers()
+      .filter(
+        (u) =>
+          u.approvalStatus === "approved" &&
+          testStore.getParticipation(u.id, cycle)?.status === "accepted",
+      ).length;
+  },
+
   hasOpenAttendanceAsk(userId: string): boolean {
     return testStore.hasOpenNudge(userId, ATTENDANCE_ACTION_KEY);
   },

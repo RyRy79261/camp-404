@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { BookOpen, CalendarDays, ClipboardCheck, Download } from "lucide-react";
+import {
+  BookOpen,
+  CalendarDays,
+  ClipboardCheck,
+  Download,
+  Printer,
+} from "lucide-react";
 import { canApproveRecipe } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
@@ -18,7 +24,11 @@ import {
 } from "@camp404/ui/components/responsive-data-table";
 import { RecipeStatusBadge } from "@/components/recipes/recipe-status-badge";
 import { captainPageGate } from "@/lib/captain-gate";
-import { MEAL_PLAN_PATH, recipePath } from "@/lib/recipe-copy";
+import {
+  MEAL_PLAN_PATH,
+  RECIPE_BOOK_PRINT_PATH,
+  recipePath,
+} from "@/lib/recipe-copy";
 import { formatDay } from "@/lib/recipe-labels";
 import {
   listAwaitingAcceptance,
@@ -221,6 +231,13 @@ function PageHeadingWithActions({
             <Link href={MEAL_PLAN_PATH}>
               <CalendarDays aria-hidden />
               Meal plan
+            </Link>
+          </Button>
+          {/* The menu's recipes, each at its plates, on A4 (#249). */}
+          <Button asChild variant="outline">
+            <Link href={RECIPE_BOOK_PRINT_PATH} target="_blank" rel="noopener">
+              <Printer aria-hidden />
+              Print book
             </Link>
           </Button>
           {reviewCount !== null && (

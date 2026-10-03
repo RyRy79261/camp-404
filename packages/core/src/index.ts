@@ -139,6 +139,8 @@
 //     (./kitchen-dietary)
 //   - prep steps: canAddPrepSteps, prepDueDate, prepGoesOnBoard,
 //     prepTaskTitle, prepSheetLines (./kitchen-prep)
+//   - the Kitchen's prints (#249): shoppingByShop (shop totals), recipeBook
+//     (contents and page numbers), servedText, prepPlan (./kitchen-prints)
 //   - recipe sources: sourceText (the Markdown-like text Claude reads),
 //     sourceFromText (pasted text into sections), emptySourceSections,
 //     sameSections and sameSource (./recipe-source)
@@ -223,6 +225,7 @@ export * from "./kitchen-menu";
 export * from "./kitchen-costing";
 export * from "./kitchen-dietary";
 export * from "./kitchen-prep";
+export * from "./kitchen-prints";
 export * from "./recipe-source";
 export * from "./calendar-titles";
 export * from "./meeting-notes";

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Printer } from "lucide-react";
 import {
   buildShoppingList,
   canTickShoppingList,
@@ -8,8 +9,8 @@ import {
   mealPlanDayLabel,
   personDays,
   snackKey,
-  type ShoppingAmount,
 } from "@camp404/core";
+import { Button } from "@camp404/ui/components/button";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { captainPageGate } from "@/lib/captain-gate";
 import { listBudgetTotals } from "@/lib/claims";
@@ -19,8 +20,17 @@ import {
   type ShoppingPrice,
 } from "@/lib/kitchen-menu";
 import { ledgerCycle } from "@/lib/payments";
-import { MEAL_PLAN_PATH, recipePath } from "@/lib/recipe-copy";
-import { CATEGORY_LABEL, formatAmount, platesLabel } from "@/lib/recipe-labels";
+import {
+  MEAL_PLAN_PATH,
+  SHOPPING_PRINT_PATH,
+  recipePath,
+} from "@/lib/recipe-copy";
+import {
+  CATEGORY_LABEL,
+  platesLabel,
+  shoppingAmountLabel,
+  shoppingBuyLabel,
+} from "@/lib/recipe-labels";
 import { FoodCostBox } from "./food-cost";
 import type { LinePrice } from "./price-editor";
 import {
@@ -82,13 +92,6 @@ function linePrice(
   };
 }
 
-/** "2.5 kg", "1–1.5 kg", "10 g + to taste", "To taste". */
-function amountLabel(amount: ShoppingAmount): string {
-  const main = formatAmount(amount.quantity, amount.quantityMax, amount.unit);
-  if (!main) return "To taste";
-  return amount.toTaste ? `${main} + to taste` : main;
-}
-
 export default async function ShoppingListPage() {
   const { rank, campUser } = await captainPageGate("camp_member");
   const [{ plan, menu, snacks, ticks }, priceRows] = await Promise.all([
@@ -116,16 +119,17 @@ export default async function ShoppingListPage() {
     id: group.category,
     label: CATEGORY_LABEL[group.category],
     lines: group.lines.map((line) => {
-      const amount = amountLabel(line.amount);
+      const amount = shoppingAmountLabel(line.amount);
       return {
         key: line.key,
         name: line.name,
         amount,
+        buy: shoppingBuyLabel(line.amount),
         sources: line.sources.map((s) => ({
           meal: `${dayName(s.day)}, ${s.meal}`,
           title: s.title,
           plates: platesLabel(s.plates),
-          amount: amountLabel(s.amount),
+          amount: shoppingAmountLabel(s.amount),
           href: `${recipePath(s.recipeId)}?plates=${s.plates}`,
         })),
         ...tickState(line.key, amount),
@@ -190,6 +194,16 @@ export default async function ShoppingListPage() {
           empty
             ? undefined
             : `From ${list.meals} meal${list.meals === 1 ? "" : "s"} on the menu. Ticks are shared: everyone sees what is already bought.`
+        }
+        actions={
+          // What is still to buy, on A4 (#249): by shop with prices for a
+          // captain or a Kitchen lead, by shop area for everyone else.
+          <Button asChild variant="outline">
+            <Link href={SHOPPING_PRINT_PATH} target="_blank" rel="noopener">
+              <Printer aria-hidden />
+              Print list
+            </Link>
+          </Button>
         }
       />
 

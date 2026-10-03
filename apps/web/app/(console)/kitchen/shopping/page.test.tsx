@@ -256,6 +256,29 @@ describe("shopping list page", () => {
     expect(group("Legumes").textContent).toContain("1 of 1 bought");
   });
 
+  it("shows each line's amount to buy rounded up, and ticks it at the exact amount", async () => {
+    const data = facts();
+    const dal = data.menu.recipes[DAL]!;
+    // Two dinners at 50: 2 × 286.4 g of onions and 2 × 1.07 kg of lentils.
+    dal.counts[0]!.lines = [
+      line("Red lentils", 1.07, "kg"),
+      line("Onions", 286.4, "g"),
+      line("Salt", null, null),
+    ];
+    await renderAs("camp_member", data);
+    // 572.8 g is 580 g; 2.14 kg is 2.2 kg; to taste stays.
+    expect(box("Onions").getAttribute("aria-label")).toBe("Onions, 580 g");
+    expect(box("Red lentils").textContent).toContain("2.2 kg");
+    expect(box("Salt").textContent).toContain("To taste");
+    await act(async () => {
+      fireEvent.click(box("Onions"));
+    });
+    expect(setShoppingTicksAction).toHaveBeenCalledWith({
+      lines: [{ key: "onions|g", amount: "572.8 g" }],
+      ticked: true,
+    });
+  });
+
   it("lets a plain member tick a line with a tap, and a whole shop area", async () => {
     await renderAs("camp_member");
     await act(async () => {

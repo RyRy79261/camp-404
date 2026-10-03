@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { MealPlanDay } from "@camp404/types";
 import {
+  amountToBuy,
   buildShoppingList,
   canTickShoppingList,
   shoppingKey,
@@ -211,5 +212,70 @@ describe("the list's helpers", () => {
     expect(canTickShoppingList("captain")).toBe(true);
     expect(canTickShoppingList("applicant")).toBe(false);
     expect(canTickShoppingList("")).toBe(false);
+  });
+});
+
+describe("amountToBuy", () => {
+  const buy = (
+    quantity: number | null,
+    unit: Parameters<typeof amountToBuy>[0]["unit"],
+    quantityMax: number | null = null,
+    toTaste = false,
+  ) => amountToBuy({ quantity, quantityMax, unit, toTaste });
+
+  it("rounds counted things up to whole ones", () => {
+    expect(buy(367.6, null).quantity).toBe(368);
+    expect(buy(54.9, null).quantity).toBe(55);
+    expect(buy(3.8, "bunch")).toMatchObject({ quantity: 4, unit: "bunch" });
+    expect(buy(3.1, "bottle").quantity).toBe(4);
+    expect(buy(12.2, "clove").quantity).toBe(13);
+    expect(buy(12, null).quantity).toBe(12);
+  });
+
+  it("rounds grams and millilitres up to the next 10, into kilos and litres at 1000", () => {
+    expect(buy(286.4, "g")).toMatchObject({ quantity: 290, unit: "g" });
+    expect(buy(111.9, "g").quantity).toBe(120);
+    expect(buy(500, "ml")).toMatchObject({ quantity: 500, unit: "ml" });
+    expect(buy(995, "g")).toMatchObject({ quantity: 1, unit: "kg" });
+    expect(buy(1040, "ml")).toMatchObject({ quantity: 1.1, unit: "l" });
+  });
+
+  it("rounds kilograms and litres up to one decimal", () => {
+    expect(buy(1.07, "kg")).toMatchObject({ quantity: 1.1, unit: "kg" });
+    expect(buy(2.21, "l").quantity).toBe(2.3);
+    expect(buy(2.5, "kg").quantity).toBe(2.5);
+    expect(buy(1.2, "kg").quantity).toBe(1.2);
+    expect(buy(6, "kg").quantity).toBe(6);
+  });
+
+  it("rounds both ends of a range up, in one unit", () => {
+    expect(buy(1.01, "kg", 1.52)).toMatchObject({
+      quantity: 1.1,
+      quantityMax: 1.6,
+      unit: "kg",
+    });
+    expect(buy(900, "g", 1200)).toMatchObject({
+      quantity: 0.9,
+      quantityMax: 1.2,
+      unit: "kg",
+    });
+    expect(buy(3.2, null, 3.9)).toMatchObject({
+      quantity: 4,
+      quantityMax: null,
+    });
+  });
+
+  it("leaves a to-taste line as it is", () => {
+    const toTaste = {
+      quantity: null,
+      quantityMax: null,
+      unit: null,
+      toTaste: true,
+    };
+    expect(amountToBuy(toTaste)).toEqual(toTaste);
+    expect(buy(10.2, "g", null, true)).toMatchObject({
+      quantity: 20,
+      toTaste: true,
+    });
   });
 });

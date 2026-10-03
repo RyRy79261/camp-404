@@ -380,6 +380,29 @@ export async function comingMembers(
     .map((r) => ({ userId: r.userId, name: nameOf(r.name) }));
 }
 
+/**
+ * How many members the captains accepted this year: real, approved members
+ * only. A count, never names (the burn timeline prints it for burn days; the
+ * join site shows the camp's headcount publicly too).
+ */
+export async function countAcceptedMembers(cycle: number): Promise<number> {
+  const [row] = await createHttpDb()
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.campParticipations)
+    .innerJoin(
+      schema.users,
+      eq(schema.users.id, schema.campParticipations.userId),
+    )
+    .where(
+      and(
+        eq(schema.campParticipations.cycle, cycle),
+        eq(schema.campParticipations.status, "accepted"),
+        realMember,
+      ),
+    );
+  return row?.n ?? 0;
+}
+
 /** Whether the member's "Ask everyone" nudge is still open. */
 export async function hasOpenAttendanceAsk(userId: string): Promise<boolean> {
   if (!UUID.test(userId)) return false;

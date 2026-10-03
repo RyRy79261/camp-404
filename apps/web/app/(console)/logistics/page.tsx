@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type * as React from "react";
-import { CalendarDays, CalendarX, MapPin, Pencil } from "lucide-react";
+import { CalendarDays, CalendarX, MapPin, Pencil, Printer } from "lucide-react";
 import {
   AFRIKABURN_DATE_GROUPS,
   AFRIKABURN_DATES,
@@ -39,6 +39,7 @@ import {
   type LogisticsPhaseRow,
 } from "@/lib/logistics";
 import {
+  BURN_TIMELINE_PRINT_PATH,
   CALENDAR_NOT_CONNECTED_NOTE,
   DEADLINES_SETTINGS_HREF,
   deadlineDateText,
@@ -547,6 +548,17 @@ export default async function LogisticsPage() {
               <Link href="/calendar">
                 <CalendarDays aria-hidden />
                 Open the calendar
+              </Link>
+            </Button>
+            {/* Pack to Unpack on A4, counts only (#249). */}
+            <Button asChild variant="link" className="h-auto px-0">
+              <Link
+                href={BURN_TIMELINE_PRINT_PATH}
+                target="_blank"
+                rel="noopener"
+              >
+                <Printer aria-hidden />
+                Print the timeline
               </Link>
             </Button>
           </div>

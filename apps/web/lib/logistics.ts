@@ -412,6 +412,13 @@ export async function getAttendanceView(viewer: {
   };
 }
 
+/** How many members the captains accepted this year: a count, never names. */
+export async function countAcceptedMembers(cycle: number): Promise<number> {
+  return usesTestStore()
+    ? logisticsTestStore.countAcceptedMembers(cycle)
+    : db.countAcceptedMembers(cycle);
+}
+
 /** Whether a captain's "Ask everyone" is still open for this member. */
 export async function isAskedForAttendance(userId: string): Promise<boolean> {
   return usesTestStore()
