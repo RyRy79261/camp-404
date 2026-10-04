@@ -31,9 +31,10 @@ export default async function CampManagementPage({
   // check adds that key to the filter dropdown so the select's value is one of
   // its options). A stale or invented key opens the full roster rather than an
   // empty, silently-filtered one.
-  // `?member=` opens a captain's roster with that member's panel open (the
-  // Applications page links each name here). An id not on the roster opens
-  // nothing.
+  // `?member=` opens the roster with that member's card open: a captain's
+  // panel (the Applications page links each name here), or a member's public
+  // card (a Ctrl+K search result, #326). An id not on the rows this viewer
+  // gets opens nothing.
   searchParams: Promise<{ team?: string; member?: string }>;
 }) {
   // Every approved member may browse; the captain bar only picks the full or
@@ -68,6 +69,10 @@ export default async function CampManagementPage({
   const roster = rosterForViewer(members, isCaptain, undefined, {
     thisYearForLead: lead,
   });
+  const initialMember =
+    requestedMember && roster.rows.some((r) => r.id === requestedMember)
+      ? requestedMember
+      : null;
   const active = activeTeams(config);
   const teamLabels = teamLabelMap(config);
   // A team the config actually names — archived ones included, because the
@@ -117,11 +122,7 @@ export default async function CampManagementPage({
           teams={teams}
           teamLabels={teamLabels}
           initialTeam={initialTeam}
-          initialMember={
-            requestedMember && roster.rows.some((r) => r.id === requestedMember)
-              ? requestedMember
-              : null
-          }
+          initialMember={initialMember}
         />
       ) : (
         <MemberRoster
@@ -129,6 +130,7 @@ export default async function CampManagementPage({
           teams={teams}
           teamLabels={teamLabels}
           initialTeam={initialTeam}
+          initialMember={initialMember}
         />
       )}
     </div>

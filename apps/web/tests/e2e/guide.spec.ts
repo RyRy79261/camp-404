@@ -128,7 +128,13 @@ test.describe("survival guide (test-mode)", () => {
 
     // Search finds it by a word on the card.
     await page.getByLabel("Search the guide").fill("barrel");
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    // The guide's own Search, in its form; the taskbar's Ctrl+K hint is a
+    // "Search" button too.
+    await page
+      .locator("form")
+      .filter({ has: page.getByLabel("Search the guide") })
+      .getByRole("button", { name: "Search", exact: true })
+      .click();
     await expect(chapterRow(page, "Morning clean")).toBeVisible();
 
     // The editor is not theirs.

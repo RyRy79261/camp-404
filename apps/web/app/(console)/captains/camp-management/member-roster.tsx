@@ -35,6 +35,7 @@ export function MemberRoster({
   teams,
   teamLabels = {},
   initialTeam = null,
+  initialMember = null,
 }: {
   rows: PublicRosterRow[];
   teams: readonly { key: string; label: string }[];
@@ -42,6 +43,8 @@ export function MemberRoster({
   teamLabels?: Record<string, string>;
   /** The team filter to open with — `?team=`, checked by the page. */
   initialTeam?: string | null;
+  /** The card to open with — `?member=` (a search result), checked by the page. */
+  initialMember?: string | null;
 }) {
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<PublicRosterChip>("all");
@@ -53,7 +56,19 @@ export function MemberRoster({
     setUrlTeam(initialTeam);
     setTeam(initialTeam);
   }
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialMember);
+  // A search result for another member while the roster is open keeps this
+  // component mounted: the card follows the address, as the team does.
+  const [urlMember, setUrlMember] = useState(initialMember);
+  if (urlMember !== initialMember) {
+    setUrlMember(initialMember);
+    if (initialMember) {
+      // Nothing typed or picked may hide the card the link asked for.
+      setQuery("");
+      setChip("all");
+      setSelectedId(initialMember);
+    }
+  }
 
   // Counted over every row this member HAS, so each chip's badge is exactly
   // how many rows pressing it shows.

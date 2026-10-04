@@ -1,5 +1,6 @@
 import { durationText } from "@camp404/core";
 import type { LoungeOfferRow } from "@/lib/lounge";
+import { SEARCH_FOCUS_CLASS, searchFocusProps } from "@/lib/search-focus";
 import { KIND_LABELS, timeRangeText } from "@/lib/lounge-copy";
 import { offerStage, wantsText } from "@/lib/lounge-view";
 import { MyOfferActions, OfferButton } from "./lounge-controls";
@@ -43,7 +44,10 @@ export function MyOffers({
   slots,
   days,
   musicPolicy,
+  focusOffer,
 }: {
+  /** The offer a search result named (`?offer=`): its card is marked. */
+  focusOffer?: string;
   offers: readonly LoungeOfferRow[];
   /** The programme's places, to say where each accepted offer is. */
   slots: readonly { offerId: string; day: number; startMinute: number }[];
@@ -83,7 +87,8 @@ export function MyOffers({
               key={o.id}
               data-testid="my-offer"
               aria-label={o.title}
-              className="flex flex-col gap-3 border border-border bg-card p-4"
+              {...searchFocusProps(o.id === focusOffer)}
+              className={`flex flex-col gap-3 border border-border bg-card p-4 ${o.id === focusOffer ? SEARCH_FOCUS_CLASS : ""}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">

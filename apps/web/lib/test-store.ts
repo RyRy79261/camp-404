@@ -79,7 +79,8 @@ import type {
 } from "@camp404/db/roster";
 import type { PaymentRow, RecordPaymentInput } from "@camp404/db/payments";
 import { MoneyRefused, NOT_A_MONEY_KEEPER } from "@camp404/db/dues";
-import type { PaymentMethod, PaymentSource } from "@camp404/types";
+import type { PaymentMethod, PaymentSource, ViewerRank } from "@camp404/types";
+import type { SearchEntryRow } from "@camp404/db/search";
 import {
   chargeFeeOnAccept,
   duesSettledInStore,
@@ -7352,6 +7353,136 @@ export const testStore = {
   setCampBlurb(userId: string, blurb: TestCampBlurb): void {
     S.campBlurbs.set(userId, { ...blurb });
   },
+  /**
+   * Twin of `searchEntries` / `resolveEntries` in @camp404/db/search (#326),
+   * for the kinds this store keeps: every row the viewer's pages would open,
+   * before the typed words narrow them (test-store-search.ts does that, and
+   * adds the kinds the other stores keep). The same rules as the SQL.
+   */
+  searchCandidates(viewer: {
+    userId: string;
+    rank: ViewerRank;
+    runsLounge: boolean;
+    reviewsRecipes: boolean;
+    now: Date;
+  }): { cycle: number; rows: SearchEntryRow[] } {
+    const cycle = currentCycleNumber();
+    const me = viewer.userId;
+    const blank = {
+      team: null,
+      at: null,
+      num: null,
+      num2: null,
+      label: null,
+      extra: null,
+      ref: null,
+      flag: false,
+    };
+    const rows: SearchEntryRow[] = [];
+    for (const r of recipes) {
+      const own = r.submitterId === me;
+      if (!(r.acceptedVersionId || own || viewer.reviewsRecipes)) continue;
+      const version = recipeVersions.find((v) => v.id === r.acceptedVersionId);
+      rows.push({
+        ...blank,
+        kind: "recipe",
+        id: r.id,
+        title: r.title,
+        num: version ? version.body.plates : null,
+        label: r.acceptedVersionId ? null : r.status,
+        flag: own,
+      });
+    }
+    for (const n of meetingNotes) {
+      rows.push({
+        ...blank,
+        kind: "meeting",
+        id: n.id,
+        title: n.title,
+        team: n.team,
+        at: n.heldAt.getTime(),
+      });
+    }
+    const doneSince = viewer.now.getTime() - DONE_VISIBLE_DAYS * 86_400_000;
+    for (const t of tasks) {
+      const onBoard =
+        t.status === "open" ||
+        t.status === "in_progress" ||
+        (t.status === "done" &&
+          t.completedAt !== null &&
+          t.completedAt.getTime() >= doneSince);
+      if (!onBoard) continue;
+      rows.push({
+        ...blank,
+        kind: "task",
+        id: t.id,
+        title: t.title,
+        team: t.team,
+        at: t.dueAt ? t.dueAt.getTime() : null,
+        label: t.status,
+      });
+    }
+    for (const o of loungeOffers) {
+      if (o.cycle !== cycle) continue;
+      const slot = loungeSlots
+        .filter((x) => x.offerId === o.id && x.cycle === cycle)
+        .sort((a, b) => a.day - b.day || a.startMinute - b.startMinute)[0];
+      const own = o.hostId === me;
+      const onProgramme = o.status === "accepted" && slot !== undefined;
+      if (!(viewer.runsLounge || own || onProgramme)) continue;
+      rows.push({
+        ...blank,
+        kind: "lounge",
+        id: o.id,
+        title: o.title,
+        num: slot ? slot.day : null,
+        num2: slot ? slot.startMinute : null,
+        label: o.status,
+        flag: own,
+      });
+    }
+    for (const u of usersByAuthId.values()) {
+      if (u.approvalStatus !== "approved" || !u.displayName) continue;
+      const mine = teamMemberships.filter(
+        (m) => m.userId === u.id && m.cycle === cycle,
+      );
+      rows.push({
+        ...blank,
+        kind: "person",
+        id: u.id,
+        title: u.displayName,
+        label: u.rank,
+        extra:
+          mine
+            .map((m) => m.team)
+            // The enum's order, as the SQL's `order by tm.team`.
+            .sort(
+              (a, b) =>
+                TeamKeys.options.indexOf(a) - TeamKeys.options.indexOf(b),
+            )
+            .join(",") || null,
+        flag: mine.some((m) => m.isLead),
+      });
+    }
+    for (const d of deliveries) {
+      if (d.userId !== me || d.kind !== "announcement" || !d.broadcastId) {
+        continue;
+      }
+      const b = broadcasts.find((x) => x.id === d.broadcastId);
+      if (!b?.publishedAt) continue;
+      rows.push({
+        ...blank,
+        kind: "announcement",
+        id: b.id,
+        title: d.title,
+        team: b.audience.scope === "team" ? b.audience.team : null,
+        at: b.publishedAt.getTime(),
+        label: b.audience.scope,
+      });
+    }
+    return { cycle, rows };
+  },
+
   /** Captains who chose to be shown, by name (getJoinCaptains' twin). */
   listJoinCaptains(): { name: string; title: string; blurb: string }[] {
     const out: { name: string; title: string; blurb: string }[] = [];

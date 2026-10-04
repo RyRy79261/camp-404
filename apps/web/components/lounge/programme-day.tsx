@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { SEARCH_FOCUS_CLASS, searchFocusProps } from "@/lib/search-focus";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal, Printer } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
@@ -120,7 +121,10 @@ export function ProgrammeDay({
   canRun,
   initialDay,
   today,
+  focusOffer,
 }: {
+  /** The offer a search result named (`?offer=`): its item is marked. */
+  focusOffer?: string;
   days: readonly DayHeading[];
   items: readonly ProgrammeItem[];
   canRun: boolean;
@@ -261,7 +265,14 @@ export function ProgrammeDay({
                   </td>
                 </tr>
               ) : (
-                <tr key={row.item.id} data-testid="programme-item">
+                <tr
+                  key={row.item.id}
+                  data-testid="programme-item"
+                  {...searchFocusProps(row.item.offerId === focusOffer)}
+                  className={cn(
+                    row.item.offerId === focusOffer && SEARCH_FOCUS_CLASS,
+                  )}
+                >
                   <td className={cn(TD, "whitespace-nowrap tabular-nums")}>
                     {timeRangeText(
                       row.item.startMinute,
@@ -317,7 +328,11 @@ export function ProgrammeDay({
               <li
                 key={row.item.id}
                 data-testid="programme-item"
-                className="grid grid-cols-[96px_1fr_auto] items-start gap-3 border-t border-border px-4 py-3 text-sm leading-5 first:border-t-0"
+                {...searchFocusProps(row.item.offerId === focusOffer)}
+                className={cn(
+                  "grid grid-cols-[96px_1fr_auto] items-start gap-3 border-t border-border px-4 py-3 text-sm leading-5 first:border-t-0",
+                  row.item.offerId === focusOffer && SEARCH_FOCUS_CLASS,
+                )}
               >
                 <span className="whitespace-nowrap text-muted-foreground tabular-nums">
                   {timeRangeText(

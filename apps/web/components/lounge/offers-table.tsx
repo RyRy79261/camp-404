@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { SEARCH_FOCUS_CLASS, searchFocusProps } from "@/lib/search-focus";
 import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import {
@@ -791,11 +792,14 @@ export function OffersTable({
   days,
   placed,
   initialFilter,
+  focusOffer,
 }: {
   rows: readonly OfferRowData[];
   days: readonly PlaceDay[];
   placed: readonly Placed[];
   initialFilter: OfferFilter;
+  /** The offer a search result named (`?offer=`): its row is marked. */
+  focusOffer?: string;
 }) {
   const [filter, setFilter] = React.useState<OfferFilter>(initialFilter);
   const [placing, setPlacing] = React.useState<string | null>(null);
@@ -913,7 +917,11 @@ export function OffersTable({
                         data-testid="offer-row"
                         data-stage={row.stage}
                         aria-label={row.title}
-                        className={cn(open && sel)}
+                        {...searchFocusProps(row.id === focusOffer)}
+                        className={cn(
+                          open && sel,
+                          row.id === focusOffer && SEARCH_FOCUS_CLASS,
+                        )}
                       >
                         <td className={TD}>
                           <span className="block font-semibold break-words">
@@ -987,7 +995,11 @@ export function OffersTable({
                     data-testid="offer-row"
                     data-stage={row.stage}
                     aria-label={row.title}
-                    className="flex flex-col gap-3 border-t border-border p-4 first:border-t-0"
+                    {...searchFocusProps(row.id === focusOffer)}
+                    className={cn(
+                      "flex flex-col gap-3 border-t border-border p-4 first:border-t-0",
+                      row.id === focusOffer && SEARCH_FOCUS_CLASS,
+                    )}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">

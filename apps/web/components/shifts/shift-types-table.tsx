@@ -1,5 +1,6 @@
 import { cn } from "@camp404/ui/lib/utils";
 import { ShiftTypeDialog } from "@/components/shifts/shift-type-dialog";
+import { SEARCH_FOCUS_CLASS, searchFocusProps } from "@/lib/search-focus";
 import type { ShiftsView, ShiftTypeView } from "@/lib/shifts";
 
 // "The shifts" (#248), as the owner approved it with the day table (Option A,
@@ -52,8 +53,11 @@ function Change({
 export function ShiftTypesTable({
   view,
   arrows,
+  focusType,
 }: {
   view: ShiftsView;
+  /** The shift a search result named (`?shift=`): its row is marked. */
+  focusType?: string;
   /** The day table has a lead-tools column: keep this one in line with it. */
   arrows: boolean;
 }) {
@@ -120,8 +124,10 @@ export function ShiftTypesTable({
                 <tr
                   key={t.id}
                   aria-label={t.name}
+                  {...searchFocusProps(t.id === focusType)}
                   className={cn(
                     i < view.types.length - 1 && "border-b border-border",
+                    t.id === focusType && SEARCH_FOCUS_CLASS,
                   )}
                 >
                   {arrows && <td className="pr-0 pl-4" />}
@@ -160,9 +166,11 @@ export function ShiftTypesTable({
               <li
                 key={t.id}
                 aria-label={t.name}
+                {...searchFocusProps(t.id === focusType)}
                 className={cn(
                   "grid grid-cols-[48px_minmax(0,1fr)_96px] items-start gap-x-3 p-4",
                   i > 0 && "border-t border-border",
+                  t.id === focusType && SEARCH_FOCUS_CLASS,
                 )}
               >
                 <div className="row-span-2 flex flex-col tabular-nums">

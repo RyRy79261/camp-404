@@ -8,6 +8,7 @@ import { cn } from "@camp404/ui/lib/utils";
 import { AskShifts } from "@/components/shifts/shift-controls";
 import { ShiftDay } from "@/components/shifts/shift-day";
 import { ShiftTypesTable } from "@/components/shifts/shift-types-table";
+import { SearchFocus } from "@/components/search/search-focus";
 import { captainPageGate } from "@/lib/captain-gate";
 import {
   getShiftsView,
@@ -43,9 +44,17 @@ function pickDay(
   days: ShiftDayView[],
   asked: string | undefined,
   today: string,
+  focusType: string | undefined,
 ) {
+  // A search result's shift (`?shift=`): the next day it runs, else its
+  // first day; the shift's row is marked on that day.
+  const runs = (d: ShiftDayView) => d.slots.some((s) => s.typeId === focusType);
+  const forShift = focusType
+    ? (days.find((d) => d.day >= today && runs(d)) ?? days.find(runs))
+    : undefined;
   return (
     days.find((d) => d.day === asked) ??
+    forShift ??
     days.find((d) => d.day >= today) ??
     days[0] ??
     null
@@ -153,7 +162,7 @@ function Fairness({ view }: { view: ShiftsView }) {
 export default async function ShiftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ day?: string }>;
+  searchParams: Promise<{ day?: string; shift?: string }>;
 }) {
   // Every approved member reads the roster and signs up.
   const { campUser, rank } = await captainPageGate("camp_member");
@@ -164,7 +173,10 @@ export default async function ShiftsPage({
   ]);
   const view = await getShiftsView({ userId: campUser.id, rank, ledTeams });
   const today = campDayKey(new Date());
-  const day = pickDay(view.days, params.day, today);
+  const focusType = view.types.some((t) => t.id === params.shift)
+    ? params.shift
+    : undefined;
+  const day = pickDay(view.days, params.day, today, focusType);
   // A member gets no lead-tools column at all; a lead or a captain does.
   const arrows = view.members !== null;
 
@@ -237,11 +249,17 @@ export default async function ShiftsPage({
         {day && (
           <div className="flex flex-col gap-4">
             <DayTabs days={view.days} current={day.day} />
-            <ShiftDay day={day} members={view.members} arrows={arrows} />
+            <ShiftDay
+              day={day}
+              members={view.members}
+              arrows={arrows}
+              focusType={focusType}
+            />
           </div>
         )}
 
-        <ShiftTypesTable view={view} arrows={arrows} />
+        <ShiftTypesTable view={view} arrows={arrows} focusType={focusType} />
+        {focusType && <SearchFocus key={`focus:${focusType}`} />}
         <Fairness view={view} />
       </div>
     </div>

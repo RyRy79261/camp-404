@@ -22,10 +22,10 @@ export const metadata = { title: "Tasks — Camp 404" };
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ team?: string; add?: string }>;
+  searchParams: Promise<{ team?: string; add?: string; task?: string }>;
 }) {
   const { campUser, rank } = await captainPageGate("camp_member");
-  const { team: askedTeam, add } = await searchParams;
+  const { team: askedTeam, add, task: askedTask } = await searchParams;
   const isCaptain = rank === "captain";
   const leadTeams =
     rank === "team_lead"
@@ -48,6 +48,10 @@ export default async function TasksPage({
   const cards = tasks.map((task) =>
     presentTask(task, { viewer, now, teamLabels }),
   );
+
+  // `?task=` (a Ctrl+K result, #326) marks one card, when it is on the board.
+  const focusTask =
+    askedTask && cards.some((c) => c.id === askedTask) ? askedTask : undefined;
 
   // The teams the filter offers: active ones, plus any an old task still has.
   const filterTeams: TeamOption[] = [
@@ -78,6 +82,9 @@ export default async function TasksPage({
         }
       />
       <TaskBoard
+        // A new search result starts the board afresh on its card.
+        key={focusTask ?? "board"}
+        focusTask={focusTask}
         // A team page's "See all tasks" and a team folder's "<Team> tasks"
         // land filtered to the team; its "Add task" opens the form on it.
         initialTeam={
