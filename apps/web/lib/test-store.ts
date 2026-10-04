@@ -7455,7 +7455,11 @@ export const testStore = {
         extra:
           mine
             .map((m) => m.team)
-            .sort()
+            // The enum's order, as the SQL's `order by tm.team`.
+            .sort(
+              (a, b) =>
+                TeamKeys.options.indexOf(a) - TeamKeys.options.indexOf(b),
+            )
             .join(",") || null,
         flag: mine.some((m) => m.isLead),
       });

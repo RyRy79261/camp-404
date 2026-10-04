@@ -891,13 +891,16 @@ function DesktopInner({
   const openSearchEntry = useCallback(
     (href: string) => {
       const m = matchProgram(href);
+      // navigateTo asks the leave guard only when the window changes; a
+      // result in the live window replaces its page, so ask here too.
+      if (liveKey && m?.instanceKey === liveKey && !mayLeave(liveKey)) return;
       if (!m) {
         startNav(() => router.push(href as Route));
         return;
       }
       navigateTo(href, m.instanceKey, false);
     },
-    [navigateTo, router],
+    [liveKey, mayLeave, navigateTo, router],
   );
 
   const openFolder = useCallback(
