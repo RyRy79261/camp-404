@@ -456,7 +456,7 @@ describe("ProgramSearch", () => {
     expect(power.getAttribute("aria-selected")).toBe("true");
     expect(power.textContent).toContain("Fuel cans · Power and Lighting");
     expect(power.querySelector("mark")?.textContent).toBe("Fuel");
-    expect(option(/^Transport, Program, Fuel money/)).toBeTruthy();
+    expect(option(/^Transport, Program, Fuel cans/)).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

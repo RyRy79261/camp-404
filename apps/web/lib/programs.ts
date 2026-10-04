@@ -372,7 +372,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "transport",
     label: "Transport",
-    keywords: ["Lifts", "Fuel money", "Cars", "Trailers", "Seats"],
+    keywords: ["Lifts", "Fuel cans", "Cars", "Trailers", "Seats"],
     fileName: "CARPOOL.EXE",
     href: "/transport",
     icon: "transport",

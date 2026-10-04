@@ -166,7 +166,7 @@ describe("filterPrograms: search words (#350)", () => {
       text: "Fuel cans",
       marks: [{ start: 0, length: 4 }],
     });
-    expect(hits[1]!.keyword?.text).toBe("Fuel money");
+    expect(hits[1]!.keyword?.text).toBe("Fuel cans");
   });
 
   it("ranks a name match above a search-word match", () => {

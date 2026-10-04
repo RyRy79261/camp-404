@@ -719,7 +719,7 @@ describe("buildProgramManifest: what reaches the browser", () => {
     expect(power?.keywords).toContain("Generator");
     const transport = m.search.find((p) => p.id === "transport");
     expect(transport?.keywords).toEqual(
-      expect.arrayContaining(["Lifts", "Fuel money"]),
+      expect.arrayContaining(["Lifts", "Fuel cans"]),
     );
     // Only the place's own keys.
     for (const place of m.search) {
