@@ -1,6 +1,6 @@
 // Whether a signed-in camp user is cleared to obtain an MCP token. Mirrors
-// the app's own gate: a user must have camp access (god email or a redeemed
-// invite), a completed burner profile, AND captain approval before the OAuth
+// the app's own gate: a user must have camp access (a founder email or a
+// redeemed invite), a completed burner profile, AND captain approval before the OAuth
 // authorize endpoint issues a token. Kept as a pure function over pre-computed
 // booleans so the route owns the (server-only) lookups and this stays testable.
 

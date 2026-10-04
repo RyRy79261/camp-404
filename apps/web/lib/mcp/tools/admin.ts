@@ -25,26 +25,17 @@ import {
 import { auditTarget } from "@/lib/audit-format";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { resolveTeamKey } from "@/lib/team-keys";
-import { canAdmin } from "../scope";
-import {
-  deny,
-  notFound,
-  runTool,
-  ToolError,
-  type ToolCtx,
-} from "../tool-utils";
+import { deny, notFound, runTool, ToolError } from "../tool-utils";
 
 // Captain-tier admin tools (docs/mcp-tooling-proposal.md phases 7-8): team
 // membership writes, invite codes, and the audit log. Each write calls the
 // same @camp404/db helper the web app calls, so the rules and the audit_log
-// row are the app's own; runTool adds the mcp_audit_log row. Scope is read
-// fresh on every call, so a captain who loses the rank loses these at once.
+// row are the app's own; runTool adds the mcp_audit_log row. Who may call each
+// is its entry in ../capabilities (captain-only ones refused there, before the
+// handler runs). Scope is read fresh on every call, so a captain who loses the
+// rank loses these at once.
 
 const UserId = z.string().uuid();
-
-function requireCaptain(ctx: ToolCtx): void {
-  if (!canAdmin(ctx.scope)) deny("Only a captain can do this.");
-}
 
 /** A real, active member row, or a controlled "not found". */
 async function requireMember(userId: string): Promise<void> {
@@ -74,7 +65,7 @@ export function registerAdminTools(server: McpServer): void {
     {
       title: "Put a member on a team",
       description:
-        "Captain only. Puts a member on an active team for the camp's current year, not leading. Doing it twice changes nothing.",
+        "Puts a member on an active team for the camp's current year, not leading. Doing it twice changes nothing.",
       inputSchema: { userId: UserId, team: z.string() },
     },
     async (args, extra) =>
@@ -83,7 +74,6 @@ export function registerAdminTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async (ctx) => {
-          requireCaptain(ctx);
           const team = await teamKey(args.team, true);
           await requireMember(args.userId);
           const { created } = await assignTeam({
@@ -104,7 +94,7 @@ export function registerAdminTools(server: McpServer): void {
     {
       title: "Take a member off a team",
       description:
-        "Captain only. Takes a member off a team for the camp's current year. Works for an archived team too. Removing a team's last lead is allowed.",
+        "Takes a member off a team for the camp's current year. Works for an archived team too. Removing a team's last lead is allowed.",
       inputSchema: { userId: UserId, team: z.string() },
     },
     async (args, extra) =>
@@ -113,7 +103,6 @@ export function registerAdminTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async (ctx) => {
-          requireCaptain(ctx);
           const team = await teamKey(args.team, false);
           await requireMember(args.userId);
           const { removed } = await removeTeam({
@@ -134,7 +123,7 @@ export function registerAdminTools(server: McpServer): void {
     {
       title: "Make a member lead a team, or stop leading it",
       description:
-        "Captain only. Sets or clears the lead flag on a member's membership of an active team this year. The member must already be on the team.",
+        "Sets or clears the lead flag on a member's membership of an active team this year. The member must already be on the team.",
       inputSchema: { userId: UserId, team: z.string(), isLead: z.boolean() },
     },
     async (args, extra) =>
@@ -143,7 +132,6 @@ export function registerAdminTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async (ctx) => {
-          requireCaptain(ctx);
           const team = await teamKey(args.team, true);
           await requireMember(args.userId);
           const result = await setLead({
@@ -176,7 +164,7 @@ export function registerAdminTools(server: McpServer): void {
         argsForAudit: null,
         handler: async (ctx) => {
           const codes = await listInviteCodes(
-            canAdmin(ctx.scope)
+            ctx.scope.isCaptain
               ? {}
               : { createdByUserId: ctx.scope.campUserId },
           );
@@ -215,7 +203,7 @@ export function registerAdminTools(server: McpServer): void {
           if (!isSyntacticallyValidCode(code)) {
             throw new ToolError("That isn't an invite code.");
           }
-          const isCaptain = canAdmin(ctx.scope);
+          const isCaptain = ctx.scope.isCaptain;
           const revoked = await revokeInviteCode({
             code,
             actorUserId: ctx.scope.campUserId,
@@ -240,7 +228,7 @@ export function registerAdminTools(server: McpServer): void {
     {
       title: "Read the audit log",
       description:
-        "Captain only. Who changed or read whose data, newest first, 50 entries a page. Pass the returned nextCursor as `before` for older entries.",
+        "Who changed or read whose data, newest first, 50 entries a page. Pass the returned nextCursor as `before` for older entries.",
       inputSchema: {
         before: z.string().optional(),
         limit: z.number().int().min(1).max(200).optional(),
@@ -251,8 +239,7 @@ export function registerAdminTools(server: McpServer): void {
         toolName: "list_audit_log",
         extra,
         argsForAudit: args,
-        handler: async (ctx) => {
-          requireCaptain(ctx);
+        handler: async () => {
           if (args.before !== undefined && !isAuditCursor(args.before)) {
             throw new ToolError("That cursor isn't one this tool returned.");
           }

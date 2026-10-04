@@ -42,18 +42,12 @@ import {
 const BUILDER_PATH = (key: string) => `/captains/questionnaires/${key}`;
 const Title = z.string().trim().min(1).max(120);
 
-function authorRank(scope: McpScope): ViewerRank {
-  if (scope.isCaptain) return "captain";
-  if (scope.leadTeams.length > 0) return "team_lead";
-  return "camp_member";
-}
-
+/**
+ * The author's rung, from the website's ladder. Who may author at all (team
+ * lead and up) is the tools' gate in ../capabilities, checked before this runs.
+ */
 function requireAuthor(scope: McpScope): ViewerRank {
-  const rank = authorRank(scope);
-  if (rank === "camp_member") {
-    deny("Only a captain or a team lead can draft questionnaires.");
-  }
-  return rank;
+  return scope.viewerRank;
 }
 
 /** A definition as a tool accepts it: the unified questionnaire model. */

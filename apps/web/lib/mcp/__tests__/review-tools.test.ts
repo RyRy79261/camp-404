@@ -2,9 +2,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Claims and team budgets over MCP (#242): who may list which claims, whose
-// bank details come back, and that every move and budget write goes to the
-// database as the caller, which checks the rule again in its transaction.
+// Claims and team budgets over MCP (#242): who may list which claims, that a
+// list never carries bank details, that one claim's bank details come back
+// only on the Finance tools' rule with the website's audit row, that every
+// decision goes to the database as the caller (which checks the rule again in
+// its transaction), and that moving money is not a tool at all.
 
 process.env.PGCRYPTO_KEY = "test-pgcrypto-key-at-least-16-chars";
 
@@ -34,27 +36,29 @@ vi.mock("@camp404/db/reimbursements", () => ({
   listReimbursementsForReview: vi.fn(async () => []),
   listMyClaims: vi.fn(async () => []),
   decideClaim: vi.fn(async () => ({ ok: true })),
-  payClaim: vi.fn(async () => ({ ok: true })),
-  reconcileClaim: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock("@camp404/db/team-budgets", () => ({
-  getTeamBudget: vi.fn(async () => ({ amountCents: 400000 })),
   listBudgetTotals: vi.fn(async () => ({})),
-  setTeamBudget: vi.fn(async () => ({ ok: true })),
 }));
+vi.mock("@/lib/claims", () => ({ readClaimAccount: vi.fn(async () => null) }));
+const afterTasks = vi.hoisted(() => [] as (() => Promise<void>)[]);
+vi.mock("next/server", () => ({
+  after: (task: () => Promise<void>) => afterTasks.push(task),
+}));
+vi.mock("@camp404/db/audit", () => ({ appendAuditEvent: vi.fn() }));
 vi.mock("@camp404/db/cycles", () => ({
   currentCycleNumber: vi.fn(async () => 2027),
 }));
 
+import { appendAuditEvent } from "@camp404/db/audit";
 import { encrypt } from "@camp404/db/crypto";
 import {
   decideClaim,
   listMyClaims,
   listReimbursementsForReview,
-  payClaim,
   type ReimbursementReviewRow,
 } from "@camp404/db/reimbursements";
-import { setTeamBudget } from "@camp404/db/team-budgets";
+import { readClaimAccount } from "@/lib/claims";
 import { registerReimbursementTools } from "../tools/reimbursements";
 import { registerTeamTools } from "../tools/teams";
 
@@ -105,13 +109,20 @@ function claim(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  afterTasks.length = 0;
   vi.mocked(listReimbursementsForReview).mockResolvedValue([]);
 });
+
+/** Run what the tool left for after the response, as next/server would. */
+async function flushAfter() {
+  for (const task of afterTasks.splice(0)) await task();
+}
 
 describe("list_reimbursements", () => {
   it("refuses a member who leads nothing", async () => {
     expect(await call("list_reimbursements", {}, MEMBER)).toEqual({
-      error: "Only a captain or a team lead can review claims.",
+      error:
+        "Only a team lead or a captain can do this. Leading any team this year counts.",
     });
   });
 
@@ -139,29 +150,73 @@ describe("list_reimbursements", () => {
     });
   });
 
-  it("shows bank details to the Finance team only, and only with consent", async () => {
-    vi.mocked(listReimbursementsForReview).mockResolvedValue([
-      claim(),
-      claim({ id: "no-consent", submitterAiDataConsent: false }),
-    ]);
-    for (const who of [CAPTAIN, FINANCE]) {
-      const rows = (await call("list_reimbursements", {}, who)).data.rows;
-      expect(rows[0]).toMatchObject({
-        accountDetails: "FNB 123456",
-        accountDetailsWithheld: false,
-      });
-      expect(rows[1]).toMatchObject({
-        accountDetails: null,
-        accountDetailsWithheld: true,
-      });
-      expect(rows[0].accountDetailsEncrypted).toBeUndefined();
+  it("never puts bank details in a list, for anyone", async () => {
+    vi.mocked(listReimbursementsForReview).mockResolvedValue([claim()]);
+    for (const who of [CAPTAIN, FINANCE, LEAD]) {
+      const [row] = (await call("list_reimbursements", {}, who)).data.rows;
+      expect(row).not.toHaveProperty("accountDetails");
+      expect(row).not.toHaveProperty("accountDetailsEncrypted");
+      expect(JSON.stringify(row)).not.toContain("FNB");
     }
-    // The lead who approves it never gets them.
-    const lead = (await call("list_reimbursements", {}, LEAD)).data;
-    expect(lead.rows[0]).toMatchObject({
-      accountDetails: null,
-      accountDetailsWithheld: true,
+    expect(appendAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("get_claim_bank_details", () => {
+  const account = {
+    submitterId: MEMBER,
+    team: "kitchen" as const,
+    accountType: "sa" as const,
+    details: { state: "ok" as const, value: "FNB 123456" },
+  };
+
+  it("gives the Finance team one claim's details, with the website's audit row after the response", async () => {
+    vi.mocked(readClaimAccount).mockResolvedValue(account);
+    vi.mocked(listReimbursementsForReview).mockResolvedValue([claim()]);
+    const { data } = await call(
+      "get_claim_bank_details",
+      { claimId: CLAIM },
+      FINANCE,
+    );
+    expect(data).toEqual({
+      claimId: CLAIM,
+      accountType: "sa",
+      details: "FNB 123456",
     });
+    expect(appendAuditEvent).not.toHaveBeenCalled();
+    await flushAfter();
+    expect(appendAuditEvent).toHaveBeenCalledTimes(1);
+    expect(appendAuditEvent).toHaveBeenCalledWith({
+      actorId: FINANCE,
+      action: "reimbursement.account_viewed",
+      target: MEMBER,
+      metadata: { reimbursementId: CLAIM, team: "kitchen", via: "mcp" },
+    });
+  });
+
+  it("refuses anyone but captains and Finance leads, reading nothing", async () => {
+    for (const who of [LEAD, MEMBER]) {
+      expect(
+        await call("get_claim_bank_details", { claimId: CLAIM }, who),
+      ).toEqual({ error: "Only a captain or a Finance lead can do this." });
+    }
+    expect(readClaimAccount).not.toHaveBeenCalled();
+  });
+
+  it("sends the Finance team to the website when the member has not allowed it, and records nothing", async () => {
+    vi.mocked(readClaimAccount).mockResolvedValue(account);
+    vi.mocked(listReimbursementsForReview).mockResolvedValue([
+      claim({ submitterAiDataConsent: false }),
+    ]);
+    const result = await call(
+      "get_claim_bank_details",
+      { claimId: CLAIM },
+      CAPTAIN,
+    );
+    expect(result.error).toMatch(/hasn't allowed/);
+    expect(result.error).toMatch(/\/captains\/payments\/claims$/);
+    await flushAfter();
+    expect(appendAuditEvent).not.toHaveBeenCalled();
   });
 });
 
@@ -174,12 +229,6 @@ describe("moving a claim", () => {
       claimId: CLAIM,
       decision: "approved",
       actorId: LEAD,
-    });
-    await call("mark_reimbursement_paid", { id: CLAIM }, FINANCE);
-    expect(payClaim).toHaveBeenCalledWith({
-      claimId: CLAIM,
-      decision: "paid",
-      actorId: FINANCE,
     });
   });
 
@@ -223,34 +272,14 @@ describe("list_my_reimbursements", () => {
   });
 });
 
-describe("set_team_budget", () => {
-  it("passes a budget in cents to the database, with the amount it saw", async () => {
-    const result = await call(
+describe("moving money is website-only", () => {
+  it("has no tool to pay, reconcile or budget", () => {
+    for (const name of [
+      "mark_reimbursement_paid",
+      "mark_reimbursement_reconciled",
       "set_team_budget",
-      { team: "kitchen", amount: "5000.50" },
-      FINANCE,
-    );
-    expect(result.data).toEqual({
-      team: "kitchen",
-      cycle: 2027,
-      amountCents: 500050,
-    });
-    expect(setTeamBudget).toHaveBeenCalledWith({
-      team: "kitchen",
-      cycle: 2027,
-      amountCents: 500050,
-      expectedCents: 400000,
-      actorId: FINANCE,
-    });
-  });
-
-  it("words the database's refusal for anyone but captains and Finance leads", async () => {
-    vi.mocked(setTeamBudget).mockResolvedValueOnce({
-      ok: false,
-      error: "Only captains and Finance leads can set budgets.",
-    });
-    expect(
-      await call("set_team_budget", { team: "kitchen", amount: "1" }, LEAD),
-    ).toEqual({ error: "Only captains and Finance leads can set budgets." });
+    ]) {
+      expect(tools.has(name)).toBe(false);
+    }
   });
 });

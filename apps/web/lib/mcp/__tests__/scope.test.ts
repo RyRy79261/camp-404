@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { McpScopeRows } from "@camp404/db/mcp";
-import {
-  canAdmin,
-  canApproveCrossTeam,
-  canReadTeamOps,
-  canWriteTeam,
-  resolveMcpScope,
-} from "@/lib/mcp/scope";
+import { resolveMcpScope } from "@/lib/mcp/scope";
 
 function buildRows(
   overrides: Partial<McpScopeRows> & {
@@ -58,66 +52,32 @@ describe("resolveMcpScope", () => {
   });
 });
 
-describe("canReadTeamOps", () => {
-  it("captain can read any team", () => {
-    const scope = resolveMcpScope(buildRows({ rank: "captain" }));
-    expect(canReadTeamOps(scope, "kitchen")).toBe(true);
-    expect(canReadTeamOps(scope, "structures")).toBe(true);
-  });
-
-  it("member can read their own team but not others", () => {
-    const scope = resolveMcpScope(
-      buildRows({ teamMemberships: [{ team: "kitchen", isLead: false }] }),
-    );
-    expect(canReadTeamOps(scope, "kitchen")).toBe(true);
-    expect(canReadTeamOps(scope, "structures")).toBe(false);
-  });
-});
-
-describe("canWriteTeam", () => {
-  it("captain can write any team", () => {
-    const scope = resolveMcpScope(buildRows({ rank: "captain" }));
-    expect(canWriteTeam(scope, "kitchen")).toBe(true);
-  });
-
-  it("lead can write their own team", () => {
-    const scope = resolveMcpScope(
+describe("the rung on the website's ladder", () => {
+  it("makes a lead of ANY team a team lead, the global-lead ruling", () => {
+    const lead = resolveMcpScope(
       buildRows({ teamMemberships: [{ team: "kitchen", isLead: true }] }),
     );
-    expect(canWriteTeam(scope, "kitchen")).toBe(true);
-    expect(canWriteTeam(scope, "structures")).toBe(false);
-  });
-
-  it("non-lead member cannot write their team", () => {
-    const scope = resolveMcpScope(
-      buildRows({ teamMemberships: [{ team: "kitchen", isLead: false }] }),
+    expect(lead.viewerRank).toBe("team_lead");
+    // Team clearance is global: the same rung whatever team they lead.
+    const otherLead = resolveMcpScope(
+      buildRows({ teamMemberships: [{ team: "structures", isLead: true }] }),
     );
-    expect(canWriteTeam(scope, "kitchen")).toBe(false);
-  });
-});
-
-describe("canApproveCrossTeam", () => {
-  it("any lead of any team can approve", () => {
-    const scope = resolveMcpScope(
-      buildRows({ teamMemberships: [{ team: "kitchen", isLead: true }] }),
-    );
-    expect(canApproveCrossTeam(scope)).toBe(true);
+    expect(otherLead.viewerRank).toBe(lead.viewerRank);
   });
 
-  it("captain can approve", () => {
-    const scope = resolveMcpScope(buildRows({ rank: "captain" }));
-    expect(canApproveCrossTeam(scope)).toBe(true);
-  });
-
-  it("plain member cannot approve", () => {
-    const scope = resolveMcpScope(buildRows());
-    expect(canApproveCrossTeam(scope)).toBe(false);
-  });
-});
-
-describe("canAdmin", () => {
-  it("only captains pass", () => {
-    expect(canAdmin(resolveMcpScope(buildRows({ rank: "captain" })))).toBe(true);
-    expect(canAdmin(resolveMcpScope(buildRows()))).toBe(false);
+  it("keeps a plain team member a member, and a captain a captain", () => {
+    expect(
+      resolveMcpScope(
+        buildRows({ teamMemberships: [{ team: "kitchen", isLead: false }] }),
+      ).viewerRank,
+    ).toBe("camp_member");
+    expect(
+      resolveMcpScope(
+        buildRows({
+          rank: "captain",
+          teamMemberships: [{ team: "kitchen", isLead: true }],
+        }),
+      ).viewerRank,
+    ).toBe("captain");
   });
 });

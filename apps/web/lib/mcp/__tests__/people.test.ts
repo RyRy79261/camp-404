@@ -4,7 +4,9 @@ import { encrypt } from "@camp404/db/crypto";
 import { sensitiveReadEvents, shapeUser } from "@/lib/mcp/tools/people";
 
 // The people tools take their columns from the app's one field-access list
-// (canReadMemberField). These pin what each caller gets back.
+// (canReadMemberField) at the caller's real rung. These pin what each caller
+// gets back: a lead gets emergency contacts on a one-person read, nobody gets
+// an ID or bank number from these tools.
 
 process.env.PGCRYPTO_KEY = "test-pgcrypto-key-at-least-16-chars";
 
@@ -60,15 +62,17 @@ function row(
 
 const memberships = [{ team: "kitchen", isLead: true }];
 
+const member = { campUserId: CALLER, viewerRank: "camp_member" as const };
+const lead = { campUserId: CALLER, viewerRank: "team_lead" as const };
+const captain = { campUserId: CALLER, viewerRank: "captain" as const };
+
 describe("shapeUser", () => {
   it("gives another member only what the member roster shows", () => {
-    const shaped = shapeUser(row(), memberships, {
-      campUserId: CALLER,
-      isCaptain: false,
-    });
+    const shaped = shapeUser(row(), memberships, member, { safety: true });
 
     expect(Object.keys(shaped).sort()).toEqual(
       [
+        "approvalStatus",
         "displayName",
         "id",
         "isLead",
@@ -81,93 +85,100 @@ describe("shapeUser", () => {
     );
   });
 
-  it("gives a captain the captain fields and, with consent, the ID documents", () => {
-    const shaped = shapeUser(row(), memberships, {
-      campUserId: CALLER,
-      isCaptain: true,
-    });
+  it("gives a team lead the safety data the website gives leads, on a one-person read", () => {
+    const shaped = shapeUser(row(), memberships, lead, { safety: true });
+    expect(shaped.emergencyContacts).toEqual([
+      expect.objectContaining({ name: "Ada" }),
+    ]);
+    // Still not the captain columns.
+    expect(shaped).not.toHaveProperty("duesPaid");
+    expect(shaped).not.toHaveProperty("skills");
+  });
+
+  it("leaves safety data out of a list, for every rank", () => {
+    for (const viewer of [lead, captain]) {
+      expect(
+        shapeUser(row(), memberships, viewer, { safety: false }),
+      ).not.toHaveProperty("emergencyContacts");
+    }
+  });
+
+  it("gives a captain the captain columns and never an ID or bank number", () => {
+    const shaped = shapeUser(row(), memberships, captain, { safety: true });
 
     expect(shaped).toMatchObject({
       duesPaid: true,
       skills: ["welding"],
       emergencyContacts: [expect.objectContaining({ name: "Ada" })],
-      passport: "P1234567",
     });
-    // Never a raw ciphertext or an identity link, whatever the rank.
-    expect(shaped).not.toHaveProperty("passportEncrypted");
-    expect(shaped).not.toHaveProperty("authUserId");
+    for (const key of [
+      "passport",
+      "saId",
+      "eft",
+      "passportEncrypted",
+      "saIdEncrypted",
+      "eftDetailsEncrypted",
+      "authUserId",
+    ]) {
+      expect(shaped).not.toHaveProperty(key);
+    }
   });
 
-  it("withholds a captain's view of ID documents without consent", () => {
-    const shaped = shapeUser(row({ aiDataConsent: false }), memberships, {
-      campUserId: CALLER,
-      isCaptain: true,
-    });
-
-    expect(shaped).not.toHaveProperty("passport");
-    expect(shaped.duesPaid).toBe(true);
-  });
-
-  it("gives a member all of their own fields", () => {
-    const shaped = shapeUser(row({ aiDataConsent: false }), memberships, {
-      campUserId: SUBJECT,
-      isCaptain: false,
-    });
-
+  it("gives a member their own columns, still without the ID numbers", () => {
+    const shaped = shapeUser(
+      row({ aiDataConsent: false }),
+      memberships,
+      { campUserId: SUBJECT, viewerRank: "camp_member" },
+      { safety: true },
+    );
     expect(shaped).toMatchObject({
       emergencyContacts: [expect.objectContaining({ name: "Ada" })],
       duesPaid: true,
-      passport: "P1234567",
     });
+    expect(shaped).not.toHaveProperty("passport");
   });
 });
 
 describe("sensitiveReadEvents", () => {
-  it("records a captain's read of contacts and a shown ID, marked as Claude", () => {
-    const shaped = shapeUser(row(), memberships, {
-      campUserId: CALLER,
-      isCaptain: true,
-    });
-
-    expect(sensitiveReadEvents(shaped, { campUserId: CALLER })).toEqual([
+  it("records a lead's read of contacts with the lead basis, marked as Claude", () => {
+    const shaped = shapeUser(row(), memberships, lead, { safety: true });
+    expect(sensitiveReadEvents(shaped, lead)).toEqual([
       {
         actorId: CALLER,
         action: "safety.emergency_contacts.view",
         target: SUBJECT,
-        metadata: { basis: "captain", via: "mcp" },
-      },
-      {
-        actorId: CALLER,
-        action: "member.id_document.viewed",
-        target: SUBJECT,
-        metadata: { basis: "captain", via: "mcp", idType: "passport" },
+        metadata: { basis: "team_lead", via: "mcp" },
       },
     ]);
   });
 
-  it("records bank details only when they were returned", () => {
-    const withEft = shapeUser(
-      row({ passportEncrypted: null, eftDetailsEncrypted: encrypt("FNB 123") }),
-      memberships,
-      { campUserId: CALLER, isCaptain: true },
-    );
-    expect(
-      sensitiveReadEvents(withEft, { campUserId: CALLER }).map((e) => e.action),
-    ).toEqual(["safety.emergency_contacts.view", "member.bank_details.viewed"]);
+  it("records a captain's read with the captain basis", () => {
+    const shaped = shapeUser(row(), memberships, captain, { safety: true });
+    expect(sensitiveReadEvents(shaped, captain)).toEqual([
+      expect.objectContaining({ metadata: { basis: "captain", via: "mcp" } }),
+    ]);
   });
 
-  it("owes nothing for no private data, or for the caller's own record", () => {
-    const noConsent = shapeUser(
-      row({ aiDataConsent: false, emergencyContacts: null }),
+  it("owes nothing for no contacts, for a member, or for the caller's own record", () => {
+    const none = shapeUser(
+      row({ emergencyContacts: null }),
       memberships,
-      { campUserId: CALLER, isCaptain: true },
+      captain,
+      { safety: true },
     );
-    expect(sensitiveReadEvents(noConsent, { campUserId: CALLER })).toEqual([]);
-
-    const own = shapeUser(row(), memberships, {
-      campUserId: SUBJECT,
-      isCaptain: false,
-    });
-    expect(sensitiveReadEvents(own, { campUserId: SUBJECT })).toEqual([]);
+    expect(sensitiveReadEvents(none, captain)).toEqual([]);
+    expect(
+      sensitiveReadEvents(
+        shapeUser(row(), memberships, member, { safety: true }),
+        member,
+      ),
+    ).toEqual([]);
+    const self = { campUserId: SUBJECT, viewerRank: "camp_member" as const };
+    expect(
+      sensitiveReadEvents(
+        shapeUser(row(), memberships, self, { safety: true }),
+        self,
+      ),
+    ).toEqual([]);
   });
 });

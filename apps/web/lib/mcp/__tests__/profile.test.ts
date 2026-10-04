@@ -21,7 +21,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // patch carries the value the caller passed. Runs under the suite's default
 // jsdom environment; node:crypto is available there.
 
-vi.mock("@camp404/db", () => ({ createHttpDb: vi.fn() }));
+vi.mock("@camp404/db", () => ({
+  createHttpDb: vi.fn(),
+  // The driver profile's save runs in one transaction on the same fake.
+  withTransaction: vi.fn(),
+}));
 vi.mock("@camp404/db/activations", () => ({
   satisfyRequiredAction: vi.fn(),
 }));
@@ -270,7 +274,10 @@ describe("update_my_id_documents holds the one-document invariant", () => {
     // The both-documents guard reads as arity but branches on the classifier,
     // so `{ passport: "", saId: "X" }` is one set and one clear — a legal call,
     // not a refusal.
-    await call("update_my_id_documents", { passport: "", saId: "8001015009087" });
+    await call("update_my_id_documents", {
+      passport: "",
+      saId: "8001015009087",
+    });
 
     const patch = onlyPatch();
     expect(patch.saIdEncrypted).not.toBeNull();
@@ -424,27 +431,13 @@ describe("a form marked complete through MCP clears its gate", () => {
     );
   });
 
-  it("satisfies the dietary requirements action", async () => {
-    await call("update_my_dietary_requirements", {
-      version: "2",
-      markComplete: true,
-    });
-
-    expect(satisfyRequiredAction).toHaveBeenCalledWith(
-      USER_ID,
-      "dietary_requirements",
-      "2",
-    );
-  });
-
   it("leaves the gate alone for a progress save", async () => {
     await call("update_my_burner_profile", {
       version: "3",
       responses: { birthday: "1990-01-15" },
     });
-    await call("update_my_dietary_requirements", { version: "2" });
 
-    expect(inserts).toHaveLength(2);
+    expect(inserts).toHaveLength(1);
     expect(satisfyRequiredAction).not.toHaveBeenCalled();
   });
 });

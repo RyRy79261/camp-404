@@ -1,14 +1,18 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { NextResponse } from "next/server";
 import { verifyMcpToken } from "@/lib/mcp/auth";
-import { registerCampMcpTools } from "@/lib/mcp/server";
+import { registerCampMcpTools, SERVER_INSTRUCTIONS } from "@/lib/mcp/server";
 
 // IMPORTANT: with basePath: "/api/mcp" + file at
 // /api/mcp/[transport]/route.ts, the connector URL is /api/mcp/mcp
 // (transport segment value = "mcp"). Looks wrong, is correct.
 const baseHandler = createMcpHandler(
   (server) => registerCampMcpTools(server),
-  { serverInfo: { name: "camp-404", version: "0.1.0" } },
+  {
+    serverInfo: { name: "camp-404", version: "0.1.0" },
+    // Returned at initialize: what the camp is and how to use the tools.
+    instructions: SERVER_INSTRUCTIONS,
+  },
   { basePath: "/api/mcp", disableSse: true },
 );
 

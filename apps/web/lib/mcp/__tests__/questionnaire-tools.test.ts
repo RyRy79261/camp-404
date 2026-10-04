@@ -98,7 +98,8 @@ describe("questionnaire drafting tools", () => {
     expect(
       await call("create_questionnaire_draft", { title: "Gear" }, MEMBER),
     ).toEqual({
-      error: "Only a captain or a team lead can draft questionnaires.",
+      error:
+        "Only a team lead or a captain can do this. Leading any team this year counts.",
     });
     expect(createDraft).not.toHaveBeenCalled();
   });

@@ -1,22 +1,26 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
-import { createHttpDb } from "@camp404/db";
+import { and, count, eq } from "drizzle-orm";
+import { createHttpDb, withTransaction } from "@camp404/db";
 import { satisfyRequiredAction } from "@camp404/db/activations";
 import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
 import { decryptField, encrypt } from "@camp404/db/crypto";
 import { splitIdNumber, idColumnsFor } from "@camp404/db/id-documents";
+import { SEATS_BELOW_RIDERS } from "@camp404/db/transport";
 import {
+  DIETS,
+  KITCHEN_ALLERGENS,
+  SaveDietaryInput,
   incompleteContactErrors,
   questionsWithRole,
   splitEmergencyContacts,
 } from "@camp404/types";
+import { getMyDietary, saveMyDietary } from "../../dietary";
 import { identityAnswerErrors, validateIdNumber } from "../../id-validation";
 import { BURNER_PROFILE_TEMPLATE } from "../../questionnaire";
 import { runTool, ToolError } from "../tool-utils";
 
-const TeamEnum = z.enum(schema.teamEnum.enumValues);
 const MembershipTierEnum = z.enum(schema.membershipTierEnum.enumValues);
 
 /**
@@ -188,7 +192,7 @@ export function registerProfileTools(server: McpServer): void {
     {
       title: "Get my dietary requirements",
       description:
-        "Returns the current user's dietary_requirements row — tags, allergies, anaphylactic flag, intolerances, free-text notes.",
+        "Your dietary pick-list, as My forms → Dietary needs shows it: `foods` (each food you react to and how: allergy, intolerance or anaphylaxis), `diets`, when you last saved it, and `old`: the words from the old free-text form, if any, which the Kitchen's allergy check does not read (pick those foods again to count them).",
       inputSchema: {},
     },
     async (_args, extra) =>
@@ -196,15 +200,7 @@ export function registerProfileTools(server: McpServer): void {
         toolName: "get_my_dietary_requirements",
         extra,
         argsForAudit: null,
-        handler: async ({ scope }) => {
-          const db = createHttpDb();
-          const [row] = await db
-            .select()
-            .from(schema.dietaryRequirements)
-            .where(eq(schema.dietaryRequirements.userId, scope.campUserId))
-            .limit(1);
-          return row ?? null;
-        },
+        handler: async ({ scope }) => await getMyDietary(scope.campUserId),
       }),
   );
 
@@ -212,64 +208,34 @@ export function registerProfileTools(server: McpServer): void {
     "update_my_dietary_requirements",
     {
       title: "Update my dietary requirements",
-      description:
-        "Upsert the current user's dietary_requirements row. `isAnaphylactic` is the hard-stop allergy flag the kitchen team relies on — be careful with it.",
+      description: `Saves your dietary pick-list, the same save as My forms → Dietary needs: the whole list of foods you react to (each once, with how it affects you; anaphylaxis is the hard stop the Kitchen plans around) and your diets. It replaces what was saved. The meal plan's allergy check and the daily site sheet read it. Foods: ${KITCHEN_ALLERGENS.join(", ")}. Diets: ${DIETS.join(", ")}. Only you, captains and team leads can see it.`,
       inputSchema: {
-        version: z.string().min(1),
-        tags: z.array(z.string()).default([]),
-        allergies: z.string().nullable().optional(),
-        intolerances: z.string().nullable().optional(),
-        isAnaphylactic: z.boolean().default(false),
-        notes: z.string().nullable().optional(),
-        markComplete: z.boolean().optional().default(false),
+        foods: SaveDietaryInput.shape.foods,
+        diets: SaveDietaryInput.shape.diets,
       },
     },
     async (args, extra) =>
       runTool({
         toolName: "update_my_dietary_requirements",
         extra,
+        // Health data stays out of the connector's log: counts only.
         argsForAudit: {
-          version: args.version,
-          isAnaphylactic: args.isAnaphylactic,
-          tagCount: args.tags.length,
+          foods: args.foods.length,
+          diets: args.diets.length,
         },
         handler: async ({ scope }) => {
-          const db = createHttpDb();
-          const now = new Date();
-          const [row] = await db
-            .insert(schema.dietaryRequirements)
-            .values({
-              userId: scope.campUserId,
-              version: args.version,
-              tags: args.tags,
-              allergies: args.allergies ?? null,
-              intolerances: args.intolerances ?? null,
-              isAnaphylactic: args.isAnaphylactic,
-              notes: args.notes ?? null,
-              completedAt: args.markComplete ? now : null,
-            })
-            .onConflictDoUpdate({
-              target: schema.dietaryRequirements.userId,
-              set: {
-                version: args.version,
-                tags: args.tags,
-                allergies: args.allergies ?? null,
-                intolerances: args.intolerances ?? null,
-                isAnaphylactic: args.isAnaphylactic,
-                notes: args.notes ?? null,
-                updatedAt: now,
-                ...(args.markComplete ? { completedAt: now } : {}),
-              },
-            })
-            .returning();
-          if (args.markComplete) {
-            await satisfyRequiredAction(
-              scope.campUserId,
-              "dietary_requirements",
-              args.version,
+          const parsed = SaveDietaryInput.safeParse(args);
+          if (!parsed.success) {
+            throw new ToolError(
+              parsed.error.issues[0]?.message ?? "Check the foods and diets.",
             );
           }
-          return row;
+          const result = await saveMyDietary({
+            userId: scope.campUserId,
+            ...parsed.data,
+          });
+          if (!result.ok) throw new ToolError(result.error);
+          return await getMyDietary(scope.campUserId);
         },
       }),
   );
@@ -316,7 +282,7 @@ export function registerProfileTools(server: McpServer): void {
     {
       title: "Update my driver profile",
       description:
-        "Upserts the current user's driver_profiles row. Setting `intendsToDrive: true` for the first time triggers the bespoke driver-detail questionnaire gate in the web app on next sign-in.",
+        "Upserts the current user's driver profile for this year. Setting `intendsToDrive: true` for the first time triggers the driver-detail questionnaire gate in the web app on next sign-in. Refused when `seatsOffered` is below the riders already in your car: take someone out first (remove_car_rider).",
       inputSchema: {
         version: z.string().min(1),
         intendsToDrive: z.boolean(),
@@ -346,7 +312,6 @@ export function registerProfileTools(server: McpServer): void {
           canOfferLifts: args.canOfferLifts,
         },
         handler: async ({ scope }) => {
-          const db = createHttpDb();
           const now = new Date();
           // The year this profile belongs to. Driving is a year-scoped fact —
           // "who's driving in whose car ... [has] to be fresh" — so the upsert
@@ -356,55 +321,47 @@ export function registerProfileTools(server: McpServer): void {
           const departureAt = args.departureAt
             ? new Date(args.departureAt)
             : null;
-          const [existing] = await db
-            .select({
-              intentRegisteredAt: schema.driverProfiles.intentRegisteredAt,
-            })
-            .from(schema.driverProfiles)
-            .where(
-              and(
-                eq(schema.driverProfiles.userId, scope.campUserId),
-                eq(schema.driverProfiles.cycle, cycle),
-              ),
-            )
-            .limit(1);
-          const intentRegisteredAt =
-            args.intendsToDrive && !existing?.intentRegisteredAt
-              ? now
-              : (existing?.intentRegisteredAt ?? null);
+          // One transaction, the Transport page's lock: this year's profile
+          // row FOR UPDATE (every seat write takes it first), so the riders
+          // counted below are the car as this save lands. Never fewer seats
+          // than riders already in (SEATS_BELOW_RIDERS, as setSeatsOffered).
+          const row = await withTransaction(async (tx) => {
+            const [existing] = await tx
+              .select({
+                intentRegisteredAt: schema.driverProfiles.intentRegisteredAt,
+              })
+              .from(schema.driverProfiles)
+              .where(
+                and(
+                  eq(schema.driverProfiles.userId, scope.campUserId),
+                  eq(schema.driverProfiles.cycle, cycle),
+                ),
+              )
+              .for("update");
+            if (args.seatsOffered !== undefined && args.seatsOffered !== null) {
+              const [seated] = await tx
+                .select({ riders: count() })
+                .from(schema.carMembers)
+                .where(
+                  and(
+                    eq(schema.carMembers.driverUserId, scope.campUserId),
+                    eq(schema.carMembers.cycle, cycle),
+                  ),
+                );
+              if ((seated?.riders ?? 0) > args.seatsOffered) {
+                throw new ToolError(SEATS_BELOW_RIDERS);
+              }
+            }
+            const intentRegisteredAt =
+              args.intendsToDrive && !existing?.intentRegisteredAt
+                ? now
+                : (existing?.intentRegisteredAt ?? null);
 
-          const [row] = await db
-            .insert(schema.driverProfiles)
-            .values({
-              userId: scope.campUserId,
-              cycle,
-              version: args.version,
-              intendsToDrive: args.intendsToDrive,
-              intentRegisteredAt,
-              vehicleMake: args.vehicleMake ?? null,
-              vehicleModel: args.vehicleModel ?? null,
-              vehicleRegistration: args.vehicleRegistration ?? null,
-              seatsTotal: args.seatsTotal ?? null,
-              seatsOffered: args.seatsOffered ?? null,
-              canOfferLifts: args.canOfferLifts,
-              offroadExperienced: args.offroadExperienced,
-              canTow: args.canTow,
-              proficiencyNotes: args.proficiencyNotes ?? null,
-              departureCity: args.departureCity ?? null,
-              arrivalAt,
-              departureAt,
-              notes: args.notes ?? null,
-              completedAt: args.markComplete ? now : null,
-            })
-            .onConflictDoUpdate({
-              // Must name the WHOLE primary key: it is (user_id, cycle) now,
-              // and `user_id` alone no longer has a unique constraint for
-              // Postgres to match this ON CONFLICT against.
-              target: [
-                schema.driverProfiles.userId,
-                schema.driverProfiles.cycle,
-              ],
-              set: {
+            const [saved] = await tx
+              .insert(schema.driverProfiles)
+              .values({
+                userId: scope.campUserId,
+                cycle,
                 version: args.version,
                 intendsToDrive: args.intendsToDrive,
                 intentRegisteredAt,
@@ -421,11 +378,40 @@ export function registerProfileTools(server: McpServer): void {
                 arrivalAt,
                 departureAt,
                 notes: args.notes ?? null,
-                updatedAt: now,
-                ...(args.markComplete ? { completedAt: now } : {}),
-              },
-            })
-            .returning();
+                completedAt: args.markComplete ? now : null,
+              })
+              .onConflictDoUpdate({
+                // Must name the WHOLE primary key: it is (user_id, cycle) now,
+                // and `user_id` alone no longer has a unique constraint for
+                // Postgres to match this ON CONFLICT against.
+                target: [
+                  schema.driverProfiles.userId,
+                  schema.driverProfiles.cycle,
+                ],
+                set: {
+                  version: args.version,
+                  intendsToDrive: args.intendsToDrive,
+                  intentRegisteredAt,
+                  vehicleMake: args.vehicleMake ?? null,
+                  vehicleModel: args.vehicleModel ?? null,
+                  vehicleRegistration: args.vehicleRegistration ?? null,
+                  seatsTotal: args.seatsTotal ?? null,
+                  seatsOffered: args.seatsOffered ?? null,
+                  canOfferLifts: args.canOfferLifts,
+                  offroadExperienced: args.offroadExperienced,
+                  canTow: args.canTow,
+                  proficiencyNotes: args.proficiencyNotes ?? null,
+                  departureCity: args.departureCity ?? null,
+                  arrivalAt,
+                  departureAt,
+                  notes: args.notes ?? null,
+                  updatedAt: now,
+                  ...(args.markComplete ? { completedAt: now } : {}),
+                },
+              })
+              .returning();
+            return saved;
+          });
           if (args.markComplete) {
             await satisfyRequiredAction(
               scope.campUserId,
@@ -674,7 +660,12 @@ export function registerProfileTools(server: McpServer): void {
       runTool({
         toolName: "update_my_history",
         extra,
-        argsForAudit: args,
+        // Which fields changed, never the values: this log outlives an erasure.
+        argsForAudit: {
+          fields: Object.keys(args).filter(
+            (key) => args[key as keyof typeof args] !== undefined,
+          ),
+        },
         handler: async ({ scope }) => {
           const db = createHttpDb();
           const patch: Partial<typeof schema.users.$inferInsert> = {
@@ -700,7 +691,4 @@ export function registerProfileTools(server: McpServer): void {
         },
       }),
   );
-
-  // Suppress unused-import warning when Team enum gets used in later phases.
-  void TeamEnum;
 }
