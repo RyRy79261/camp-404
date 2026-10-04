@@ -250,7 +250,7 @@ export function PhoneBar({
           type="button"
           onClick={onSearch}
           aria-expanded={searchOpen}
-          aria-label="Search programs"
+          aria-label="Search"
           className={`${cell} ${searchOpen ? on : idle}`}
         >
           <LineIcon name="search" className="size-4" />

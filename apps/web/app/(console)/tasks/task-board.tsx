@@ -42,6 +42,8 @@ import { Spinner } from "@camp404/ui/components/spinner";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
+import { SearchFocus } from "@/components/search/search-focus";
+import { SEARCH_FOCUS_CLASS, searchFocusProps } from "@/lib/search-focus";
 import { TASK_COLUMNS, type TaskCard } from "@/lib/task-board";
 import {
   addTaskAction,
@@ -83,9 +85,16 @@ export function TaskBoard({
   canAddWithoutTeam,
   initialTeam,
   openAdd,
+  focusTask,
 }: {
   /** The team the filter starts on (`?team=`). */
   initialTeam?: string;
+  /**
+   * One card a search result named (`?task=`, checked by the page): the
+   * board opens on it with no filter, marked and scrolled to. No form opens
+   * by itself: Edit is on the card for whoever may use it.
+   */
+  focusTask?: string;
   /** Open Add task on this team at once (a team page's "Add task"). */
   openAdd?: string;
   cards: TaskCard[];
@@ -96,11 +105,16 @@ export function TaskBoard({
   canAddWithoutTeam: boolean;
 }) {
   const router = useRouter();
-  const [team, setTeam] = React.useState(initialTeam ?? ALL);
+  const focused = focusTask
+    ? (cards.find((c) => c.id === focusTask) ?? null)
+    : null;
+  const [team, setTeam] = React.useState(focused ? ALL : (initialTeam ?? ALL));
   const [person, setPerson] = React.useState(ALL);
   const [adding, setAdding] = React.useState(openAdd !== undefined);
   // On a phone (a narrow window) one column shows at a time.
-  const [shown, setShown] = React.useState<TaskBoardStatus>("open");
+  const [shown, setShown] = React.useState<TaskBoardStatus>(
+    focused?.status ?? "open",
+  );
   // The card being edited. It stays set after the dialog closes, so the dialog
   // can animate out; opening Edit on a card replaces it.
   const [editing, setEditing] = React.useState<TaskCard | null>(null);
@@ -256,6 +270,7 @@ export function TaskBoard({
         />
       </div>
 
+      {focused ? <SearchFocus /> : null}
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 page-md:grid-cols-3">
           {TASK_COLUMNS.map((column) => {
@@ -273,6 +288,7 @@ export function TaskBoard({
                   <TaskCardView
                     key={card.id}
                     card={card}
+                    focused={card.id === focused?.id}
                     pending={pendingId === card.id}
                     busy={pendingId !== null}
                     onMove={(to) => move(card, to)}
@@ -384,6 +400,7 @@ function BoardColumn({
 
 function TaskCardView({
   card,
+  focused = false,
   pending,
   busy,
   onMove,
@@ -391,6 +408,7 @@ function TaskCardView({
   onEdit,
 }: {
   card: TaskCard;
+  focused?: boolean;
   pending: boolean;
   busy: boolean;
   onMove: (to: TaskBoardStatus) => void;
@@ -409,8 +427,11 @@ function TaskCardView({
       style={{ transform: CSS.Translate.toString(transform) }}
       role="article"
       aria-label={card.title}
+      aria-current={focused ? "true" : undefined}
+      {...searchFocusProps(focused)}
       className={cn(
         "relative",
+        focused && SEARCH_FOCUS_CLASS,
         card.canMove && "cursor-grab touch-none active:cursor-grabbing",
         isDragging && "z-10 shadow-lg ring-2 ring-primary",
       )}

@@ -4,17 +4,25 @@ import { Team, ViewerRank } from "@camp404/types";
 import type { ProgramId } from "../program-routes";
 import { buildProgramManifest, type ProgramFacts } from "../programs";
 import {
+  GROUP_CAP,
   RECENT_MAX,
+  RECENT_PREFIX_V1,
   filterPrograms,
+  groupEntries,
+  guideTextHref,
   isSearchShortcut,
   parseRecent,
   pushRecent,
+  rankTitle,
   readRecent,
-  recentPrograms,
+  recentRows,
   recentStorageKey,
+  refKey,
   searchablePrograms,
-  splitMatch,
+  splitMarks,
   writeRecent,
+  type RecentRef,
+  type SearchEntry,
 } from "../program-search";
 
 // Ctrl+K program search (issue #326, step 1). Ranks and team keys come from
@@ -113,7 +121,7 @@ describe("filterPrograms", () => {
     // "lay" starts a word in Camp layout; it is inside no other name first.
     const hits = filterPrograms(memberList(), "lay");
     expect(names(hits)[0]).toBe("Camp layout");
-    expect(hits[0]!.match).toEqual({ start: 5, length: 3 });
+    expect(hits[0]!.marks).toEqual([{ start: 5, length: 3 }]);
   });
 
   it("finds nothing for empty text or a name nobody has", () => {
@@ -125,62 +133,218 @@ describe("filterPrograms", () => {
     ]);
   });
 
-  it("splits a name around its match for the highlight", () => {
+  it("needs every typed word", () => {
+    expect(names(filterPrograms(memberList(), "meal plan"))).toEqual([
+      "Meal plan",
+    ]);
+    expect(filterPrograms(memberList(), "meal zzz")).toEqual([]);
+  });
+
+  it("splits a name around its matches for the highlight", () => {
     const [hit] = filterPrograms(memberList(), "ower");
-    expect(splitMatch(hit!.program.label, hit!.match)).toEqual({
-      before: "P",
-      matched: "ower",
-      after: "",
-    });
-    expect(splitMatch("Inbox", null)).toEqual({
-      before: "Inbox",
-      matched: "",
-      after: "",
-    });
+    expect(splitMarks(hit!.program.label, hit!.marks)).toEqual([
+      { text: "P", hit: false },
+      { text: "ower", hit: true },
+    ]);
+    expect(splitMarks("Inbox", [])).toEqual([{ text: "Inbox", hit: false }]);
+  });
+});
+
+describe("rankTitle", () => {
+  const rank = (title: string, q: string) => rankTitle(title, q)?.rank;
+
+  it("orders the whole title, its start, a word's start, then anywhere", () => {
+    expect(rank("Pot bread", "pot bread")).toBe(0);
+    expect(rank("Pot bread", "pot")).toBe(1);
+    expect(rank("Bring your own pot", "pot")).toBe(2);
+    expect(rank("Spotty van Wyk", "pot")).toBe(3);
+    expect(rank("Chakalaka", "pot")).toBeUndefined();
+  });
+
+  it("needs every word, in any order, and lights each", () => {
+    const hit = rankTitle("Fuel cable reel, 50 m", "cab fuel");
+    expect(hit?.rank).toBe(2);
+    expect(hit?.marks).toEqual([
+      { start: 0, length: 4 },
+      { start: 5, length: 3 },
+    ]);
+    expect(rankTitle("Fuel can", "fuel cab")).toBeNull();
+  });
+
+  it("lights a word's start over an earlier match inside a word", () => {
+    // "pot" is inside "Spotted" first, but starts the word "pots".
+    expect(rankTitle("Spotted pots", "pot")?.marks).toEqual([
+      { start: 8, length: 3 },
+    ]);
+  });
+});
+
+describe("groupEntries", () => {
+  const entry = (
+    kind: SearchEntry["kind"],
+    title: string,
+    id = title,
+  ): SearchEntry => ({ kind, id, title, detail: "", href: `/${id}` });
+
+  it("groups by kind, best row first, groups by their best row", () => {
+    const groups = groupEntries(
+      [
+        entry("meeting", "Kitchen planning: pots"),
+        entry("recipe", "Potato salad with mustard"),
+        entry("recipe", "Pot bread"),
+        entry("person", "Spotty van Wyk"),
+        entry("recipe", "Potjiekos for 40"),
+      ],
+      "pot",
+    );
+    expect(groups.map((g) => g.label)).toEqual([
+      "Recipes",
+      "Meetings",
+      "People",
+    ]);
+    expect(groups[0]!.hits.map((h) => h.entry.title)).toEqual([
+      "Pot bread",
+      "Potjiekos for 40",
+      "Potato salad with mustard",
+    ]);
+  });
+
+  it("breaks a tie between groups by the kinds' fixed order", () => {
+    const groups = groupEntries(
+      [entry("person", "Pot person"), entry("chapter", "Pot chapter")],
+      "pot",
+    );
+    expect(groups.map((g) => g.kind)).toEqual(["chapter", "person"]);
+  });
+
+  it("drops an earlier answer's rows the longer text no longer matches", () => {
+    const groups = groupEntries(
+      [entry("recipe", "Pot bread"), entry("recipe", "Potjiekos")],
+      "potj",
+    );
+    expect(groups[0]!.hits.map((h) => h.entry.title)).toEqual(["Potjiekos"]);
+  });
+
+  it("shows a few a group before Show more", () => {
+    expect(GROUP_CAP).toBe(3);
+  });
+
+  it("hands the words to the guide's own text search", () => {
+    expect(guideTextHref(" pot & pan ")).toBe("/guide?q=pot%20%26%20pan");
   });
 });
 
 describe("Recent", () => {
+  const program = (id: string): RecentRef => ({ kind: "program", id });
+
   it("moves the newest to the front and keeps a few", () => {
-    let recent: string[] = [];
-    for (const id of ["a", "b", "c", "a", "d", "e", "f", "g"]) {
-      recent = pushRecent(recent, id);
+    let recent: RecentRef[] = [];
+    for (const id of ["a", "b", "c", "a", "d", "e", "f", "g", "h", "i"]) {
+      recent = pushRecent(recent, program(id));
     }
-    expect(recent).toEqual(["g", "f", "e", "d", "a"]);
+    expect(recent.map((r) => r.id)).toEqual([
+      "i",
+      "h",
+      "g",
+      "f",
+      "e",
+      "d",
+      "a",
+      "c",
+    ]);
     expect(recent).toHaveLength(RECENT_MAX);
+    // A program and an entry with the same id are two things.
+    const mixed = pushRecent([program("x")], { kind: "recipe", id: "x" });
+    expect(mixed.map(refKey)).toEqual(["recipe:x", "program:x"]);
   });
 
-  it("reads anything malformed as none", () => {
+  it("reads anything malformed as none, and keeps no title", () => {
     expect(parseRecent(null)).toEqual([]);
     expect(parseRecent("not json")).toEqual([]);
     expect(parseRecent('{"a":1}')).toEqual([]);
-    expect(parseRecent('["power", 3, "", "power", "inbox"]')).toEqual([
-      "power",
-      "inbox",
+    expect(
+      parseRecent(
+        JSON.stringify([
+          { kind: "program", id: "power" },
+          { kind: "recipe", id: "r1", title: "Pot bread" },
+          { kind: "spaceship", id: "x" },
+          { kind: "program", id: "" },
+          "inbox",
+          { kind: "program", id: "power" },
+        ]),
+      ),
+    ).toEqual([
+      { kind: "program", id: "power" },
+      { kind: "recipe", id: "r1" },
     ]);
   });
 
-  it("shows only programs the member may still open", () => {
+  it("shows only programs the member may still open, and entries the server returned", () => {
     const list = memberList();
-    const rows = recentPrograms(list, [
-      pid("camp-settings"),
-      pid("power"),
-      "gone",
-    ]);
-    expect(rows.map((e) => e.program.id)).toEqual([pid("power")]);
+    const found: SearchEntry = {
+      kind: "recipe",
+      id: "r1",
+      title: "Pot bread",
+      detail: "20 plates",
+      href: "/kitchen/recipes/r1",
+    };
+    const rows = recentRows(
+      list,
+      [
+        { kind: "recipe", id: "r1" },
+        program(pid("camp-settings")),
+        program(pid("power")),
+        { kind: "recipe", id: "refused" },
+        program("gone"),
+      ],
+      new Map([[refKey(found), found]]),
+    );
+    expect(
+      rows.map((r) =>
+        r.type === "program" ? r.program.program.id : r.entry.id,
+      ),
+    ).toEqual(["r1", pid("power")]);
   });
 
-  it("is kept per member in this browser", () => {
+  it("is kept per member in this browser, ids only", () => {
     const store = new Map<string, string>();
     const storage = {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
     } as unknown as Storage;
-    writeRecent(storage, "u1", ["power"]);
-    expect(readRecent(storage, "u1")).toEqual(["power"]);
+    writeRecent(storage, "u1", [
+      program("power"),
+      { kind: "recipe", id: "r1", title: "leak" } as RecentRef,
+    ]);
+    expect(readRecent(storage, "u1")).toEqual([
+      program("power"),
+      { kind: "recipe", id: "r1" },
+    ]);
+    expect(store.get(recentStorageKey("u1"))).not.toContain("leak");
     expect(readRecent(storage, "u2")).toEqual([]);
     expect([...store.keys()]).toEqual([recentStorageKey("u1")]);
     expect(readRecent(null, "u1")).toEqual([]);
+  });
+
+  it("moves step 1's program list over once", () => {
+    const store = new Map<string, string>([
+      [`${RECENT_PREFIX_V1}u1`, JSON.stringify(["power", "inbox"])],
+    ]);
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    } as unknown as Storage;
+    expect(readRecent(storage, "u1")).toEqual([
+      program("power"),
+      program("inbox"),
+    ]);
+    expect(store.has(`${RECENT_PREFIX_V1}u1`)).toBe(false);
+    expect(JSON.parse(store.get(recentStorageKey("u1"))!)).toEqual([
+      program("power"),
+      program("inbox"),
+    ]);
   });
 });
 
@@ -216,6 +380,23 @@ describe("isSearchShortcut", () => {
     const off = document.createElement("div");
     off.setAttribute("contenteditable", "false");
     expect(isSearchShortcut(key({ target: off }))).toBe(true);
+  });
+
+  it("waits while another dialog holds focus, but still shuts its own box", () => {
+    const form = document.createElement("div");
+    form.setAttribute("role", "dialog");
+    const title = document.createElement("input");
+    form.appendChild(title);
+    expect(isSearchShortcut(key({ target: title }))).toBe(false);
+
+    const search = document.createElement("div");
+    search.setAttribute("data-os-search", "");
+    const inner = document.createElement("div");
+    inner.setAttribute("role", "dialog");
+    const field = document.createElement("input");
+    inner.appendChild(field);
+    search.appendChild(inner);
+    expect(isSearchShortcut(key({ target: field }))).toBe(true);
   });
 
   it("leaves a key something else already took", () => {

@@ -45,6 +45,7 @@
     "./broadcasts": "./src/broadcasts.ts",
     "./report-screenshots": "./src/report-screenshots.ts",
     "./tasks": "./src/tasks.ts",
+    "./search": "./src/search.ts",
     "./meeting-notes": "./src/meeting-notes.ts",
     "./power-site": "./src/power-site.ts",
     "./power-grid": "./src/power-grid.ts",

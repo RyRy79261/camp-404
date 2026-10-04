@@ -11,6 +11,7 @@ import {
 } from "@/components/lounge/lounge-controls";
 import { LoungeCard, LoungeCardHeader } from "@/components/lounge/lounge-parts";
 import { LoungeTabs, type LoungeTab } from "@/components/lounge/lounge-tabs";
+import { SearchFocus } from "@/components/search/search-focus";
 import { MyOffers } from "@/components/lounge/my-offers";
 import {
   OffersTable,
@@ -57,7 +58,7 @@ type TabValue = "programme" | "mine" | "offers" | "guide";
 export default async function LoungePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; offer?: string }>;
 }) {
   // Every approved member reads the programme.
   const { campUser, rank } = await captainPageGate("camp_member");
@@ -140,6 +141,29 @@ export default async function LoungePage({
   }));
   const toChange = mine.filter((o) => o.status === "needs_changes").length;
 
+  // `?offer=` (a Ctrl+K result, #326): the tab and day that show that offer
+  // to this viewer, checked against what the page already read for them.
+  // Someone who runs the lounge sees it in Offers; a host in My offers;
+  // anyone else on the programme, on its first day.
+  const asked = params.offer;
+  const focus: { tab: TabValue; day?: number } | null = !asked
+    ? null
+    : canRun && rows.some((r) => r.id === asked)
+      ? { tab: "offers" }
+      : mine.some((o) => o.id === asked)
+        ? { tab: "mine" }
+        : view.items.some((i) => i.offerId === asked)
+          ? {
+              tab: "programme",
+              day: Math.min(
+                ...view.items
+                  .filter((i) => i.offerId === asked)
+                  .map((i) => i.day),
+              ),
+            }
+          : null;
+  const focusOffer = focus ? asked : undefined;
+
   const music =
     settings.musicPolicy || canRun ? (
       <LoungeCard labelledBy="lounge-music-title" testId="music-note">
@@ -180,8 +204,9 @@ export default async function LoungePage({
             days={dayHeadings(days)}
             items={view.items}
             canRun={canRun}
-            initialDay={openingDay(view.items, days, today)}
+            initialDay={focus?.day ?? openingDay(view.items, days, today)}
             today={today}
+            focusOffer={focusOffer}
           />
           {canRun && view.offGrid.length > 0 && (
             <p className="text-xs text-muted-foreground">
@@ -203,6 +228,7 @@ export default async function LoungePage({
           slots={programme.slots}
           days={dayOptions}
           musicPolicy={settings.musicPolicy}
+          focusOffer={focusOffer}
         />
       ),
     },
@@ -218,7 +244,8 @@ export default async function LoungePage({
             rows={rows}
             days={days.map((d) => ({ day: d.day, label: d.label }))}
             placed={placed}
-            initialFilter={counts.act > 0 ? "act" : "all"}
+            initialFilter={focusOffer ? "all" : counts.act > 0 ? "act" : "all"}
+            focusOffer={focusOffer}
           />
         ),
       },
@@ -229,9 +256,11 @@ export default async function LoungePage({
       },
     );
   }
-  const asked = tabs.find((t) => t.value === params.tab)?.value;
+  const askedTab = tabs.find((t) => t.value === params.tab)?.value;
   const initial: TabValue =
-    asked ?? (canRun && counts.act > 0 ? "offers" : "programme");
+    focus?.tab ??
+    askedTab ??
+    (canRun && counts.act > 0 ? "offers" : "programme");
 
   return (
     <div className="flex flex-col">
@@ -264,7 +293,13 @@ export default async function LoungePage({
           </div>
         }
       />
-      <LoungeTabs tabs={tabs} initial={initial} />
+      {/* A new search result opens the tabs afresh on its offer. */}
+      <LoungeTabs
+        key={`tabs:${focusOffer ?? ""}`}
+        tabs={tabs}
+        initial={initial}
+      />
+      {focusOffer && <SearchFocus key={`focus:${focusOffer}`} />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { SEARCH_FOCUS_CLASS, searchFocusProps } from "@/lib/search-focus";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookOpen, ChevronRight } from "lucide-react";
@@ -467,8 +468,11 @@ export function ShiftDay({
   day,
   members,
   arrows,
+  focusType,
 }: {
   day: ShiftDayView;
+  /** The shift a search result named (`?shift=`): its row is marked. */
+  focusType?: string;
   /** Every approved member, for the picker; null for a member. */
   members: { userId: string; name: string }[] | null;
   /** The viewer may open some rows: a lead or a captain. */
@@ -543,8 +547,10 @@ export function ShiftDay({
                   <React.Fragment key={slot.id}>
                     <tr
                       aria-label={slotLabel(slot, day)}
+                      {...searchFocusProps(slot.typeId === focusType)}
                       className={cn(
                         !(last && !isOpen) && "border-b border-border",
+                        slot.typeId === focusType && SEARCH_FOCUS_CLASS,
                       )}
                     >
                       {arrows && (
@@ -641,7 +647,11 @@ export function ShiftDay({
                 <li
                   key={slot.id}
                   aria-label={slotLabel(slot, day)}
-                  className="border border-border bg-card"
+                  {...searchFocusProps(slot.typeId === focusType)}
+                  className={cn(
+                    "border border-border bg-card",
+                    slot.typeId === focusType && SEARCH_FOCUS_CLASS,
+                  )}
                 >
                   <div className="flex flex-col gap-3 p-4">
                     <div className="flex items-start justify-between gap-3">

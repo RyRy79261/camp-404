@@ -30,6 +30,7 @@ import {
   changeMyGearAction,
   saveMyGearAction,
 } from "@/app/(console)/gear/actions";
+import { SEARCH_FOCUS_CLASS, searchFocusProps } from "@/lib/search-focus";
 import { TentLabelValue } from "./tent-label-value";
 import {
   itemPriceText,
@@ -103,7 +104,13 @@ export function GearOrderForm({
   hostedBy,
   hostedLabel = null,
   forMember,
+  focusItem,
 }: {
+  /**
+   * The item a search result named (`/gear?item=`): its row is marked, or
+   * the tent question for a tent (a member answers by need, not by tent).
+   */
+  focusItem?: string;
   /** The year's live catalogue, tents included (for the price range only). */
   items: ItemView[];
   members: { id: string; name: string }[];
@@ -260,9 +267,14 @@ export function GearOrderForm({
     },
   ];
 
+  const focusTent = items.some((i) => i.id === focusItem && i.isTent);
+
   return (
     <div className="flex flex-col gap-6">
-      <Card>
+      <Card
+        {...searchFocusProps(focusTent)}
+        className={focusTent ? SEARCH_FOCUS_CLASS : undefined}
+      >
         <CardHeader className="p-5 pb-3">
           <CardTitle className="text-base">Tent</CardTitle>
           <CardDescription>
@@ -466,7 +478,8 @@ export function GearOrderForm({
                   <li
                     key={item.id}
                     aria-label={item.name}
-                    className="flex flex-col gap-2 py-3 page-sm:flex-row page-sm:items-center page-sm:justify-between page-sm:gap-4"
+                    {...searchFocusProps(item.id === focusItem)}
+                    className={`flex flex-col gap-2 py-3 page-sm:flex-row page-sm:items-center page-sm:justify-between page-sm:gap-4 ${item.id === focusItem ? `${SEARCH_FOCUS_CLASS} px-2` : ""}`}
                   >
                     <span className="flex min-w-0 flex-col gap-0.5">
                       <span className="text-sm font-medium">{item.name}</span>

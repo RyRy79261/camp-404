@@ -60,6 +60,9 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   "push/tokens": "camp-access",
   // A bug report's screenshot (#313): captains only; every read is audited.
   "report-screenshot/[id]": "captain-gate",
+  // Ctrl+K's camp entries (#326): any approved member (the camp_member
+  // rung); each kind's page rule is applied in the query.
+  search: "captain-gate",
   "telegram/webhook": "webhook-secret",
   "test/complete-onboarding": "test-only",
   "test/inspect": "test-only",

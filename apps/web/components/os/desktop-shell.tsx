@@ -13,6 +13,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -880,6 +881,23 @@ function DesktopInner({
   const openProgram = useCallback(
     (program: ClientProgram) => openHref(program.href),
     [openHref],
+  );
+  /**
+   * Open one entry (a search result): always its exact address, in its
+   * program's window. openHref would send a plain address back to where an
+   * open window was left, so a hit on /inventory/<id> would land on another
+   * item while Inventory is already open.
+   */
+  const openSearchEntry = useCallback(
+    (href: string) => {
+      const m = matchProgram(href);
+      if (!m) {
+        startNav(() => router.push(href as Route));
+        return;
+      }
+      navigateTo(href, m.instanceKey, false);
+    },
+    [navigateTo, router],
   );
 
   const openFolder = useCallback(
@@ -2232,7 +2250,16 @@ function DesktopInner({
               onSearch={() => {
                 setTodayOpen(false);
                 setSwitcherOpen(false);
-                setSearchOpen((open) => !open);
+                if (searchOpen) {
+                  setSearchOpen(false);
+                  return;
+                }
+                // Drawn now, inside the tap, and its field focused here too:
+                // iOS opens the keyboard only for a focus the tap itself made.
+                flushSync(() => setSearchOpen(true));
+                document
+                  .querySelector<HTMLInputElement>("[data-os-search] input")
+                  ?.focus({ preventScroll: true });
               }}
               bell={
                 manifest.tray.inbox ? (
@@ -2308,6 +2335,7 @@ function DesktopInner({
               open={searchOpen}
               onOpenChange={setSearchOpen}
               onOpenProgram={openProgram}
+              onOpenEntry={openSearchEntry}
               phone={phoneNow}
             />
           </>

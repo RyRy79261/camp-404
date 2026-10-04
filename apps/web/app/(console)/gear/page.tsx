@@ -33,6 +33,8 @@ import {
   tentNeedText,
 } from "@/lib/rental-view";
 import { TentLabelValue } from "@/components/rental/tent-label-value";
+import { SearchFocus } from "@/components/search/search-focus";
+import { SEARCH_FOCUS_CLASS, searchFocusProps } from "@/lib/search-focus";
 import {
   ChangeMyOrder,
   GearOrderForm,
@@ -66,13 +68,19 @@ const WRITE_IT_DOWN =
 function LineRow({
   line,
   confirmed,
+  focused = false,
 }: {
   line: RentalLine;
   confirmed: boolean;
+  /** A search result named this item (`?item=`). */
+  focused?: boolean;
 }) {
   const needs = line.choice === "need";
   return (
-    <li className="flex items-start justify-between gap-4 py-3 text-sm">
+    <li
+      {...searchFocusProps(focused)}
+      className={`flex items-start justify-between gap-4 py-3 text-sm ${focused ? `${SEARCH_FOCUS_CLASS} px-2` : ""}`}
+    >
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="font-medium">
           {needs ? quantityText(line.quantity, line.itemName) : line.itemName}
@@ -103,10 +111,13 @@ function TentRow({
   tent,
   confirmed,
   shared,
+  focused = false,
 }: {
   tent: RentalTentAnswer;
   confirmed: boolean;
   shared: SharedTent[];
+  /** A search result named a tent (`?item=`): the tent answer is marked. */
+  focused?: boolean;
 }) {
   const picked = confirmed ? tent.assigned : null;
   const sharing =
@@ -116,7 +127,11 @@ function TentRow({
   // The tent someone else put them in, when that is their answer.
   const host = tent.choice === "shared" ? (shared[0] ?? null) : null;
   return (
-    <li data-testid="tent-answer" className="flex flex-col gap-3 py-3 text-sm">
+    <li
+      data-testid="tent-answer"
+      {...searchFocusProps(focused)}
+      className={`flex flex-col gap-3 py-3 text-sm ${focused ? `${SEARCH_FOCUS_CLASS} px-2` : ""}`}
+    >
       <span className="flex items-start justify-between gap-4">
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="font-medium">
@@ -171,9 +186,13 @@ function TentRow({
 function OrderAsSent({
   order,
   shared,
+  focusItem,
+  focusTent,
 }: {
   order: RentalOrder;
   shared: SharedTent[];
+  focusItem?: string;
+  focusTent: boolean;
 }) {
   const confirmed = order.status === "confirmed";
   return (
@@ -189,10 +208,20 @@ function OrderAsSent({
       <CardContent className="flex flex-col gap-4 p-5 pt-0">
         <ul aria-label="Your order" className="divide-y divide-border">
           {order.tent && (
-            <TentRow tent={order.tent} confirmed={confirmed} shared={shared} />
+            <TentRow
+              tent={order.tent}
+              confirmed={confirmed}
+              shared={shared}
+              focused={focusTent}
+            />
           )}
           {order.lines.map((line) => (
-            <LineRow key={line.id} line={line} confirmed={confirmed} />
+            <LineRow
+              key={line.id}
+              line={line}
+              confirmed={confirmed}
+              focused={line.itemId === focusItem}
+            />
           ))}
         </ul>
         {confirmed && order.totalCents !== null && (
@@ -211,14 +240,23 @@ function OrderAsSent({
   );
 }
 
-export default async function MyGearPage() {
+export default async function MyGearPage({
+  searchParams,
+}: {
+  // `?item=` (a Ctrl+K result, #326): the catalogue item to mark, checked
+  // against this year's items below.
+  searchParams: Promise<{ item?: string }>;
+}) {
   const { campUser } = await requireMemberPage();
   const cycle = await ledgerCycle();
-  const [rental, members] = await Promise.all([
+  const [rental, members, params] = await Promise.all([
     getMyRental(campUser.id, cycle),
     listRentalSharerChoices(campUser.id),
+    searchParams,
   ]);
   const { items, order, sharedWithMe, asked } = rental;
+  const focused = items.find((i) => i.id === params.item) ?? null;
+  const focusItem = focused?.id;
   const editable = !order || order.status === "draft";
   const state = order ? rentalOrderState(order) : null;
 
@@ -288,7 +326,14 @@ export default async function MyGearPage() {
           )}
 
         {!editable ? (
-          order && <OrderAsSent order={order} shared={sharedWithMe} />
+          order && (
+            <OrderAsSent
+              order={order}
+              shared={sharedWithMe}
+              focusItem={focusItem}
+              focusTent={!!focused?.isTent}
+            />
+          )
         ) : items.length === 0 ? (
           <EmptyState
             icon={<Tent aria-hidden />}
@@ -316,8 +361,10 @@ export default async function MyGearPage() {
               choice: l.choice,
               quantity: l.quantity,
             }))}
+            focusItem={focusItem}
           />
         )}
+        {focusItem && <SearchFocus key={`focus:${focusItem}`} />}
       </div>
     </div>
   );
