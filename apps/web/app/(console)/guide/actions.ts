@@ -5,7 +5,8 @@ import {
   GuideChapterRef,
   NewGuideChapterInput,
   SaveGuideChapterInput,
-  SetGuideChapterPublicInput,
+  SetGuideChapterMembersOnlyInput,
+  SetGuideSectionPublicInput,
 } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { captainActionGate } from "@/lib/captain-gate";
@@ -14,15 +15,17 @@ import {
   markGuideChapterReviewed,
   publishGuideChapter,
   saveGuideChapter,
-  setGuideChapterPublic,
+  setGuideChapterMembersOnly,
+  setGuideSectionPublic,
   unpublishGuideChapter,
 } from "@/lib/guide";
 import { GUIDE_PATH, guideChapterPath, guideSlugFor } from "@/lib/guide-copy";
 
 // The Survival Guide's writes (#250). The rank gate lets captains and team
 // leads ask; whether THIS writer may write THIS chapter (a captain, or a lead
-// of the chapter's team) and whether a captain is marking it Public is decided
-// inside each write's transaction, in @camp404/db/documents.
+// of the chapter's team), and whether a captain is the one flipping a section
+// onto the public site or keeping a chapter members only, is decided inside
+// each write's transaction, in @camp404/db/documents.
 
 const NOT_A_WRITER = "Only captains and team leads write the Survival Guide.";
 
@@ -144,24 +147,49 @@ export async function markGuideChapterReviewedAction(
   });
 }
 
-/** Mark a chapter Public or members only: a captain's call. */
-export async function setGuideChapterPublicAction(
+/** Keep a whole chapter members only, or let it go out: a captain's call. */
+export async function setGuideChapterMembersOnlyAction(
   input: unknown,
 ): Promise<ActionResult> {
-  return runAction("setGuideChapterPublicAction", async () => {
+  return runAction("setGuideChapterMembersOnlyAction", async () => {
     const gate = await captainActionGate(
       "captain",
-      "Only captains can mark a chapter public.",
+      "Only captains can keep a chapter members only.",
     );
     if (!gate.ok) return gate;
-    const parsed = SetGuideChapterPublicInput.safeParse(input);
+    const parsed = SetGuideChapterMembersOnlyInput.safeParse(input);
     if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
-    const result = await setGuideChapterPublic({
+    const result = await setGuideChapterMembersOnly({
       actorId: gate.campUser.id,
       ...parsed.data,
     });
     if (!result.ok) return result;
     revalidateChapter(parsed.data.slug);
     return { ok: true };
+  });
+}
+
+/**
+ * Put a section on survival-guide.camp-404.com, or take it off: a captain's
+ * call. Answers with the chapters that went on or off.
+ */
+export async function setGuideSectionPublicAction(
+  input: unknown,
+): Promise<ActionResult<{ chapters: { slug: string; title: string }[] }>> {
+  return runAction("setGuideSectionPublicAction", async () => {
+    const gate = await captainActionGate(
+      "captain",
+      "Only captains can put a section on the public site.",
+    );
+    if (!gate.ok) return gate;
+    const parsed = SetGuideSectionPublicInput.safeParse(input);
+    if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
+    const result = await setGuideSectionPublic({
+      actorId: gate.campUser.id,
+      ...parsed.data,
+    });
+    if (!result.ok) return result;
+    revalidatePath(GUIDE_PATH);
+    return { ok: true, data: { chapters: result.chapters } };
   });
 }

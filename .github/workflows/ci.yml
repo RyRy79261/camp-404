@@ -23,6 +23,7 @@ jobs:
     outputs:
       src: ${{ steps.filter.outputs.src }}
       db: ${{ steps.filter.outputs.db }}
+      guide: ${{ steps.filter.outputs.guide }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v4
@@ -50,6 +51,16 @@ jobs:
               - 'packages/db/drizzle.config.ts'
               - 'packages/db/package.json'
               - 'pnpm-lock.yaml'
+            # survival-guide.camp-404.com (apps/guide) and what it is built
+            # from: its e2e runs only when one of these changes.
+            guide:
+              - 'apps/guide/**'
+              - 'packages/db/**'
+              - 'packages/core/**'
+              - 'packages/types/**'
+              - 'packages/ui/**'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/ci.yml'
 
   lint:
     runs-on: ubuntu-latest
@@ -301,6 +312,38 @@ jobs:
       - name: Run join smoke tests
         run: pnpm --filter @camp404/join test:e2e
 
+  # survival-guide.camp-404.com's e2e (apps/guide): the public contents, a
+  # chapter with a members-only part cut out (the canary must be in no
+  # response), a duty card, the 404 for every non-public slug, noindex and
+  # print. It runs on the fixture chapters (E2E_TEST_MODE=1, set by its
+  # playwright.config.ts), so it needs no database and no secrets.
+  e2e-guide:
+    needs: [changes]
+    if: needs.changes.outputs.guide == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright browser + system deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @camp404/guide exec playwright install --with-deps chromium
+      - name: Install Playwright system deps (cached browser)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @camp404/guide exec playwright install-deps chromium
+      - name: Run guide e2e tests
+        run: pnpm --filter @camp404/guide test:e2e
+
   e2e-db:
     needs: [changes]
     if: needs.changes.outputs.src == 'true'
@@ -407,6 +450,7 @@ jobs:
         build,
         e2e,
         e2e-join,
+        e2e-guide,
         e2e-db,
         schema-migration,
         supply-chain,
@@ -437,6 +481,7 @@ jobs:
           echo "test: ${{ needs.test.result }}"
           echo "e2e: ${{ needs.e2e.result }}"
           echo "e2e-join: ${{ needs.e2e-join.result }}"
+          echo "e2e-guide: ${{ needs.e2e-guide.result }}"
           echo "e2e-db: ${{ needs.e2e-db.result }}"
           echo "schema-migration: ${{ needs.schema-migration.result }}"
           echo "commitlint: ${{ needs.commitlint.result }}"
@@ -446,6 +491,7 @@ jobs:
             "${{ needs.test.result }}" \
             "${{ needs.e2e.result }}" \
             "${{ needs.e2e-join.result }}" \
+            "${{ needs.e2e-guide.result }}" \
             "${{ needs.e2e-db.result }}" \
             "${{ needs.schema-migration.result }}" \
             "${{ needs.commitlint.result }}"; do

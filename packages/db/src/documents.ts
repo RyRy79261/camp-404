@@ -2,10 +2,21 @@ import { and, asc, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   canEditGuideChapter,
-  canSetGuideChapterPublic,
+  canSetGuideChapterMembersOnly,
+  canSetGuideSectionPublic,
+  chapterTextProblem,
   dutyCardProblem,
+  guideChapterIsPublic,
+  membersOnlyPartCount,
+  toPublicChapter,
+  type PublicGuideChapter,
 } from "@camp404/core";
-import { DutyCard, type DutyCardDraft } from "@camp404/types";
+import {
+  DutyCard,
+  GUIDE_CATEGORIES,
+  GuideCategory,
+  type DutyCardDraft,
+} from "@camp404/types";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
@@ -24,12 +35,18 @@ import * as schema from "./schema";
 //    rank and led teams INSIDE its own transaction and locks them
 //    (lockSenderReach), so a lead removed a moment ago cannot still write. A
 //    caller passes only who is acting.
-//  - Only a captain marks a chapter Public (canSetGuideChapterPublic). Nothing
-//    serves a public chapter to anyone signed out yet.
+//  - The public site (survival-guide.camp-404.com) shows a chapter only when it
+//    is published, its section is public (`guide_sections`) and it is not
+//    marked members only. Only a captain flips a section or the mark
+//    (canSetGuideSectionPublic, canSetGuideChapterMembersOnly). The public
+//    reads (listPublicChapters, getPublicChapter) cut every members-only part
+//    BEFORE they return (toPublicChapter in @camp404/core), so the raw text
+//    never leaves this layer on the public path.
 //  - An edit is a compare-and-set on `version`: a lost race says so in a
 //    sentence, never overwrites.
 //  - A duty card is published only when its card passes DutyCard in full.
-//  - Audit: publishing, taking off, the Public mark and "keep for this year"
+//  - Audit: publishing, taking off, a section's switch, the members-only mark
+//    and "keep for this year"
 //    always write an audit row in the same transaction; a saved draft does
 //    when the writer is not the chapter's author (the issue's rule).
 //
@@ -56,7 +73,11 @@ export const CHAPTER_SLUG_TAKEN =
 export const NOTHING_TO_PUBLISH =
   "Write something in the chapter before you publish it.";
 export const CHAPTER_NOT_PUBLISHED = "Publish the chapter first.";
-export const NOT_A_PUBLIC_MARKER = "Only captains can mark a chapter public.";
+export const NOT_A_MEMBERS_ONLY_MARKER =
+  "Only captains can keep a chapter members only, or let it go public.";
+export const NOT_A_SECTION_SWITCHER =
+  "Only captains can put a section on the public site.";
+export const NOT_A_SECTION = "That isn't one of the guide's sections.";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -154,6 +175,10 @@ export interface GuideChapterSummary {
   version: number;
   publishedAt: Date;
   cycleReviewed: number | null;
+  /** "Keep this whole chapter members only" (a captain's mark). */
+  membersOnly: boolean;
+  /** Its published text has a Members only part (a chip, not a rule). */
+  hasMembersOnlyPart: boolean;
 }
 
 export interface GuideVersionEntry {
@@ -165,13 +190,15 @@ export interface GuideVersionEntry {
 export interface GuideChapter extends GuideChapterSummary {
   markdown: string;
   card: DutyCard | null;
-  public: boolean;
+  /** Its section is on the public site (the published version's topic). */
+  sectionPublic: boolean;
   /** Every published version, newest first. */
   versions: GuideVersionEntry[];
 }
 
 const v = schema.documentVersions;
 const d = schema.documents;
+const sec = schema.guideSections;
 
 function summaryColumns() {
   return {
@@ -184,8 +211,16 @@ function summaryColumns() {
     version: v.version,
     publishedAt: v.publishedAt,
     cycleReviewed: d.cycleReviewed,
+    membersOnly: d.membersOnly,
+    hasMembersOnlyPart: sql<boolean>`${v.markdown} ~* ${MEMBERS_OPENER_SQL}`,
   };
 }
+
+/**
+ * Roughly looksLikeMembersOpener, in SQL, for the "has a members-only part"
+ * chip. Only a label: the public cut never relies on it.
+ */
+const MEMBERS_OPENER_SQL = "(^|\n)[[:space:]>*+0-9.)-]*:::[[:space:]]*members";
 
 const liveVersion = and(
   eq(v.documentId, d.id),
@@ -296,10 +331,11 @@ export async function getPublishedChapter(
       ...summaryColumns(),
       markdown: v.markdown,
       card: v.card,
-      public: d.public,
+      sectionPublic: sql<boolean>`coalesce(${sec.public}, false)`,
     })
     .from(d)
     .innerJoin(v, liveVersion)
+    .leftJoin(sec, eq(sec.category, v.category))
     .where(and(eq(d.slug, slug), eq(d.published, true)));
   if (!row) return null;
   return { ...row, versions: await versionsOf(row.id) };
@@ -380,7 +416,14 @@ export interface GuideDraft {
   authorName: string | null;
   published: boolean;
   publishedVersion: number | null;
-  public: boolean;
+  /** "Keep this whole chapter members only" (a captain's mark). */
+  membersOnly: boolean;
+  /** The working copy's topic is a section on the public site. */
+  sectionPublic: boolean;
+  /** The published version's topic is on the public site (null: none published). */
+  liveSectionPublic: boolean | null;
+  /** The published version has Members only parts (how many). */
+  liveMembersOnlyParts: number;
   cycleReviewed: number | null;
   updatedAt: Date;
   /** The working copy differs from the newest published version (or none). */
@@ -390,11 +433,20 @@ export interface GuideDraft {
 const author = alias(schema.users, "author");
 const latest = alias(schema.documentVersions, "latest");
 
+const draftSection = alias(schema.guideSections, "draft_section");
+const liveSection = alias(schema.guideSections, "live_section");
+const live = alias(schema.documentVersions, "live");
+
 async function readDrafts(where: SQL | undefined): Promise<GuideDraft[]> {
   const rows = await createHttpDb()
     .select({
       doc: d,
       authorName: author.displayName,
+      sectionPublic: sql<boolean>`coalesce(${draftSection.public}, false)`,
+      liveSectionPublic: sql<
+        boolean | null
+      >`case when ${live.version} is null then null else coalesce(${liveSection.public}, false) end`,
+      liveMarkdown: live.markdown,
       latest: {
         title: latest.title,
         category: latest.category,
@@ -406,6 +458,16 @@ async function readDrafts(where: SQL | undefined): Promise<GuideDraft[]> {
     })
     .from(d)
     .leftJoin(author, eq(author.id, d.authorId))
+    .leftJoin(draftSection, eq(draftSection.category, d.category))
+    .leftJoin(
+      live,
+      and(
+        eq(live.documentId, d.id),
+        eq(live.version, d.publishedVersion),
+        eq(d.published, true),
+      ),
+    )
+    .leftJoin(liveSection, eq(liveSection.category, live.category))
     .leftJoin(
       latest,
       and(
@@ -415,31 +477,45 @@ async function readDrafts(where: SQL | undefined): Promise<GuideDraft[]> {
     )
     .where(where)
     .orderBy(asc(d.title), asc(d.slug));
-  return rows.map(({ doc, authorName, latest: last }) => ({
-    id: doc.id,
-    slug: doc.slug,
-    title: doc.title,
-    category: doc.category,
-    team: doc.team,
-    kind: doc.kind,
-    markdown: doc.markdown,
-    card: doc.card,
-    version: doc.version,
-    authorId: doc.authorId,
-    authorName: displayName(authorName),
-    published: doc.published,
-    publishedVersion: doc.publishedVersion,
-    public: doc.public,
-    cycleReviewed: doc.cycleReviewed,
-    updatedAt: doc.updatedAt,
-    changedSincePublish:
-      !last?.version ||
-      last.title !== doc.title ||
-      last.category !== doc.category ||
-      last.team !== doc.team ||
-      last.markdown !== doc.markdown ||
-      canonical(last.card ?? null) !== canonical(doc.card ?? null),
-  }));
+  return rows.map(
+    ({
+      doc,
+      authorName,
+      latest: last,
+      sectionPublic,
+      liveSectionPublic,
+      liveMarkdown,
+    }) => ({
+      id: doc.id,
+      slug: doc.slug,
+      title: doc.title,
+      category: doc.category,
+      team: doc.team,
+      kind: doc.kind,
+      markdown: doc.markdown,
+      card: doc.card,
+      version: doc.version,
+      authorId: doc.authorId,
+      authorName: displayName(authorName),
+      published: doc.published,
+      publishedVersion: doc.publishedVersion,
+      membersOnly: doc.membersOnly,
+      sectionPublic,
+      liveSectionPublic,
+      liveMembersOnlyParts: liveMarkdown
+        ? membersOnlyPartCount(liveMarkdown)
+        : 0,
+      cycleReviewed: doc.cycleReviewed,
+      updatedAt: doc.updatedAt,
+      changedSincePublish:
+        !last?.version ||
+        last.title !== doc.title ||
+        last.category !== doc.category ||
+        last.team !== doc.team ||
+        last.markdown !== doc.markdown ||
+        canonical(last.card ?? null) !== canonical(doc.card ?? null),
+    }),
+  );
 }
 
 /**
@@ -645,6 +721,8 @@ export async function publishGuideChapter(input: {
     } else if (doc.markdown.trim() === "") {
       refuse(NOTHING_TO_PUBLISH);
     }
+    const textProblem = chapterTextProblem(doc.markdown);
+    if (textProblem) refuse(textProblem);
 
     const [last] = await tx
       .select()
@@ -683,11 +761,27 @@ export async function publishGuideChapter(input: {
         updatedAt: new Date(),
       })
       .where(eq(schema.documents.id, doc.id));
+    // What went out: whether the version is on the public site now, and how
+    // many members-only parts it keeps back.
+    const [section] = await tx
+      .select({ public: schema.guideSections.public })
+      .from(schema.guideSections)
+      .where(eq(schema.guideSections.category, doc.category));
     await writeAuditEvent(tx, {
       actorId: input.actorId,
       action: "document.published",
       target: doc.slug,
-      metadata: { title: doc.title, version, newVersion: !same },
+      metadata: {
+        title: doc.title,
+        version,
+        newVersion: !same,
+        public: guideChapterIsPublic({
+          published: true,
+          sectionPublic: section?.public ?? false,
+          membersOnly: doc.membersOnly,
+        }),
+        membersOnlyParts: membersOnlyPartCount(doc.markdown),
+      },
     });
     return { version, created: !same };
   });
@@ -748,31 +842,172 @@ export async function markGuideChapterReviewed(input: {
 }
 
 /**
- * Mark a chapter Public or members only. A captain's call. Stored and shown
- * in the editor; nothing serves a public chapter signed out yet.
+ * Keep a whole chapter members only, or let it go out with its section. A
+ * captain's call. The mark can only keep a chapter off the public site: a
+ * chapter in a private section stays private whatever the mark says.
  */
-export async function setGuideChapterPublic(input: {
+export async function setGuideChapterMembersOnly(input: {
   actorId: string;
   slug: string;
-  public: boolean;
+  membersOnly: boolean;
 }): Promise<GuideWriteResult> {
   return write(async (tx) => {
     const writer = await lockWriter(tx, input.actorId);
-    if (!canSetGuideChapterPublic(writer.rank)) refuse(NOT_A_PUBLIC_MARKER);
+    if (!canSetGuideChapterMembersOnly(writer.rank)) {
+      refuse(NOT_A_MEMBERS_ONLY_MARKER);
+    }
     const doc = await lockChapter(tx, input.slug);
-    if (doc.public === input.public) return {};
+    if (doc.membersOnly === input.membersOnly) return {};
     await tx
       .update(schema.documents)
-      .set({ public: input.public })
+      .set({ membersOnly: input.membersOnly })
       .where(eq(schema.documents.id, doc.id));
     await writeAuditEvent(tx, {
       actorId: input.actorId,
-      action: "document.public_set",
+      action: "document.members_only_set",
       target: doc.slug,
-      metadata: { title: doc.title, public: input.public },
+      metadata: { title: doc.title, membersOnly: input.membersOnly },
     });
     return {};
   });
+}
+
+// --- Sections and the public site ---------------------------------------------
+
+export interface GuideSectionState {
+  category: GuideCategory;
+  public: boolean;
+}
+
+/** Every section of the guide, in reading order, and whether it is public. */
+export async function listGuideSections(): Promise<GuideSectionState[]> {
+  const rows = await createHttpDb()
+    .select({ category: sec.category, public: sec.public })
+    .from(sec);
+  const on = new Set(rows.filter((r) => r.public).map((r) => r.category));
+  return GUIDE_CATEGORIES.map((category) => ({
+    category,
+    public: on.has(category),
+  }));
+}
+
+/** A chapter that went on or off the public site with its section. */
+export interface SectionChapterChange {
+  slug: string;
+  title: string;
+}
+
+/**
+ * Put a whole section on the public site, or take it off (owner, 2026-10-04).
+ * A captain's call. Turning it on puts out every chapter published in it that
+ * is not kept members only; turning it off takes them all off at once. The
+ * audit row names those chapters, in the same transaction.
+ */
+export async function setGuideSectionPublic(input: {
+  actorId: string;
+  category: string;
+  public: boolean;
+}): Promise<GuideWriteResult<{ chapters: SectionChapterChange[] }>> {
+  return write(async (tx) => {
+    const writer = await lockWriter(tx, input.actorId);
+    if (!canSetGuideSectionPublic(writer.rank)) refuse(NOT_A_SECTION_SWITCHER);
+    const category = GuideCategory.safeParse(input.category);
+    if (!category.success) refuse(NOT_A_SECTION);
+
+    // The row is seeded private; make sure it is there, then lock it, so two
+    // captains flipping it at once take turns.
+    await tx
+      .insert(sec)
+      .values({ category: category.data, public: false })
+      .onConflictDoNothing({ target: sec.category });
+    const [row] = await tx
+      .select()
+      .from(sec)
+      .where(eq(sec.category, category.data))
+      .for("update");
+    if (row!.public === input.public) return { chapters: [] };
+
+    const chapters = await tx
+      .select({ slug: d.slug, title: v.title })
+      .from(d)
+      .innerJoin(v, liveVersion)
+      .where(
+        and(
+          eq(d.published, true),
+          eq(d.membersOnly, false),
+          eq(v.category, category.data),
+        ),
+      )
+      .orderBy(asc(v.title), asc(d.slug));
+    await tx
+      .update(sec)
+      .set({
+        public: input.public,
+        updatedAt: new Date(),
+        updatedBy: UUID.test(input.actorId) ? input.actorId : null,
+      })
+      .where(eq(sec.category, category.data));
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "guide.section_public_set",
+      target: category.data,
+      metadata: { category: category.data, public: input.public, chapters },
+    });
+    return { chapters };
+  });
+}
+
+function publicChapterColumns() {
+  return {
+    slug: d.slug,
+    title: v.title,
+    category: v.category,
+    team: v.team,
+    kind: v.kind,
+    markdown: v.markdown,
+    card: v.card,
+    version: v.version,
+    publishedAt: v.publishedAt,
+    cycleReviewed: d.cycleReviewed,
+  };
+}
+
+/** Published, in a public section, and not kept members only. */
+const isPublic = and(eq(d.published, true), eq(d.membersOnly, false));
+
+/**
+ * Every chapter on the public site, by title, each with its members-only parts
+ * already cut out (toPublicChapter). Never a draft, never an author's name.
+ */
+export async function listPublicChapters(): Promise<PublicGuideChapter[]> {
+  const rows = await createHttpDb()
+    .select(publicChapterColumns())
+    .from(d)
+    .innerJoin(v, liveVersion)
+    .innerJoin(sec, and(eq(sec.category, v.category), eq(sec.public, true)))
+    .where(isPublic)
+    .orderBy(asc(v.title), asc(d.slug));
+  return rows
+    .map(toPublicChapter)
+    .filter((c): c is PublicGuideChapter => c !== null);
+}
+
+/**
+ * One chapter on the public site, its members-only parts already cut out, or
+ * null: a draft, a private section's chapter, one kept members only and a slug
+ * never used all answer the same.
+ */
+export async function getPublicChapter(
+  slug: string,
+): Promise<PublicGuideChapter | null> {
+  const [row] = await createHttpDb()
+    .select(publicChapterColumns())
+    .from(d)
+    .innerJoin(v, liveVersion)
+    .innerJoin(sec, and(eq(sec.category, v.category), eq(sec.public, true)))
+    .where(and(eq(d.slug, slug), isPublic))
+    .limit(1);
+  return row ? toPublicChapter(row) : null;
 }
 
 // --- The Claude connector's reads (apps/web/lib/mcp/tools/documents.ts) -----------

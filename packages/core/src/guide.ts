@@ -1,9 +1,12 @@
 import {
+  DUTY_CARD_NO_MEMBERS_ONLY,
   DUTY_CARD_NO_PHONE,
   DutyCard,
   Team,
   ViewerRank,
   containsPhoneNumber,
+  hasMembersOnlyPart,
+  membersOnlyProblem,
   type DutyCardDraft,
 } from "@camp404/types";
 
@@ -52,13 +55,31 @@ export function canEditAnyGuideChapter(
 }
 
 /**
- * Whether someone may mark a chapter Public (owner, 2026-09-30: public
- * chapters are marked one by one, by captains). Only a captain. Nothing serves
- * a public chapter to anyone signed out yet; that is the guide's own app, a
- * later slice.
+ * Whether someone may put a whole section (topic) on the public site, or take
+ * it off (owner, 2026-10-04). Only a captain.
  */
-export function canSetGuideChapterPublic(rank: string): boolean {
+export function canSetGuideSectionPublic(rank: string): boolean {
   return isViewerRank(rank) && rank === "captain";
+}
+
+/**
+ * Whether someone may mark a chapter "Keep this whole chapter members only",
+ * or clear the mark. Only a captain; a lead sees the mark, read-only.
+ */
+export function canSetGuideChapterMembersOnly(rank: string): boolean {
+  return isViewerRank(rank) && rank === "captain";
+}
+
+/**
+ * Whether a chapter is on the public site: published, in a public section, and
+ * not kept members only. A chapter's own mark can only take something away.
+ */
+export function guideChapterIsPublic(chapter: {
+  published: boolean;
+  sectionPublic: boolean;
+  membersOnly: boolean;
+}): boolean {
+  return chapter.published && chapter.sectionPublic && !chapter.membersOnly;
 }
 
 /**
@@ -103,7 +124,18 @@ export function dutyCardProblem(
   if (!parsed.success) {
     return parsed.error.issues[0]?.message ?? "Check the card.";
   }
-  return containsPhoneNumber(markdown) ? DUTY_CARD_NO_PHONE : null;
+  if (containsPhoneNumber(markdown)) return DUTY_CARD_NO_PHONE;
+  // A card is whole-card only: it goes out in full or not at all.
+  return hasMembersOnlyPart(markdown) ? DUTY_CARD_NO_MEMBERS_ONLY : null;
+}
+
+/**
+ * Why a chapter's text cannot be published, or null: its Members only parts
+ * must follow the writer's rules (membersOnlyProblem). The Claude connector
+ * writes text without the editor, so publishing checks again.
+ */
+export function chapterTextProblem(markdown: string): string | null {
+  return membersOnlyProblem(markdown);
 }
 
 /** A sub-role's headcount as the card prints it: "2" or "2–3". */

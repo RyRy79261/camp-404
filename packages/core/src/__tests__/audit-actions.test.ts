@@ -311,6 +311,48 @@ describe("auditDetail", () => {
       auditDetail("document.public_set", { title: "Drive in", public: false }),
     ).toBe("Drive in: members only");
     expect(auditDetail("document.reviewed", { title: "MOOP" })).toBe("MOOP");
+    expect(
+      auditDetail("document.published", {
+        title: "Kitchen safety",
+        version: 3,
+        public: true,
+      }),
+    ).toBe("Kitchen safety, version 3, on the public site");
+    expect(
+      auditDetail("document.members_only_set", {
+        title: "Medical plan",
+        membersOnly: true,
+      }),
+    ).toBe("Medical plan: members only");
+    expect(
+      auditDetail("document.members_only_set", {
+        title: "Medical plan",
+        membersOnly: false,
+      }),
+    ).toBe("Medical plan: may go on the public site");
+  });
+
+  it("names a guide section and how many chapters went with it", () => {
+    expect(
+      auditDetail("guide.section_public_set", {
+        category: "safety",
+        public: true,
+        chapters: [
+          { slug: "burn-barrel", title: "Burn barrel" },
+          { slug: "heat", title: "Heat, dust and water" },
+        ],
+      }),
+    ).toBe("Safety: public, 2 chapters");
+    expect(
+      auditDetail("guide.section_public_set", {
+        category: "kitchen",
+        public: false,
+        chapters: [{ slug: "washing-up", title: "Washing up" }],
+      }),
+    ).toBe("Kitchen: members only, 1 chapter");
+    expect(
+      auditDetail("guide.section_public_set", { category: "manual" }),
+    ).toBeNull();
   });
 
   it("marks a private read made through Claude", () => {

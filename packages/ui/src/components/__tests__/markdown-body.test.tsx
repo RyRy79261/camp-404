@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { MarkdownBody } from "./markdown-body";
+import { MarkdownBody } from "../markdown-body";
 
 // An announcement body is written by one member and read by every other, so
 // the renderer is the security boundary. These tests are the claim in

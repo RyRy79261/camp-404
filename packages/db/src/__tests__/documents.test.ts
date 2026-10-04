@@ -11,7 +11,7 @@ import {
   NOTHING_TO_PUBLISH,
   NOT_A_CAMP_CHAPTER_WRITER,
   NOT_A_CHAPTER_WRITER,
-  NOT_A_PUBLIC_MARKER,
+  NOT_A_MEMBERS_ONLY_MARKER,
   createGuideChapter,
   getChapterVersion,
   getGuideDraft,
@@ -25,7 +25,7 @@ import {
   publishGuideChapter,
   recordChapterRead,
   saveGuideChapter,
-  setGuideChapterPublic,
+  setGuideChapterMembersOnly,
   unpublishGuideChapter,
 } from "../documents";
 import * as schema from "../schema";
@@ -391,26 +391,50 @@ describe("survival guide chapters", () => {
     });
   });
 
-  it("lets only a captain mark a chapter public", async () => {
+  it("lets only a captain keep a chapter members only, audited with the change", async () => {
     const boss = await captain();
     const cook = await leadOf("kitchen");
     await chapter(cook.id);
     expect(
-      await setGuideChapterPublic({
+      await setGuideChapterMembersOnly({
         actorId: cook.id,
         slug: "dishwashing",
-        public: true,
+        membersOnly: true,
       }),
-    ).toEqual({ ok: false, error: NOT_A_PUBLIC_MARKER });
-    expect((await getGuideDraft("dishwashing"))?.public).toBe(false);
+    ).toEqual({ ok: false, error: NOT_A_MEMBERS_ONLY_MARKER });
+    expect((await getGuideDraft("dishwashing"))?.membersOnly).toBe(false);
     expect(
-      await setGuideChapterPublic({
+      await setGuideChapterMembersOnly({
         actorId: boss.id,
         slug: "dishwashing",
-        public: true,
+        membersOnly: true,
       }),
     ).toEqual({ ok: true });
-    expect((await getGuideDraft("dishwashing"))?.public).toBe(true);
+    expect((await getGuideDraft("dishwashing"))?.membersOnly).toBe(true);
+    const audit = await h
+      .db()
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "document.members_only_set"));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      actorId: boss.id,
+      target: "dishwashing",
+      metadata: { title: "Dishwashing", membersOnly: true },
+    });
+    // The same mark again changes nothing and writes no second row.
+    await setGuideChapterMembersOnly({
+      actorId: boss.id,
+      slug: "dishwashing",
+      membersOnly: true,
+    });
+    expect(
+      await h
+        .db()
+        .select()
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.action, "document.members_only_set")),
+    ).toHaveLength(1);
   });
 
   it("keeps a chapter for a new year without a new version", async () => {

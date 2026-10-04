@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { Team, type DutyCardDraft } from "@camp404/types";
+import {
+  DUTY_CARD_NO_MEMBERS_ONLY,
+  Team,
+  type DutyCardDraft,
+} from "@camp404/types";
 import {
   canEditAnyGuideChapter,
   canEditGuideChapter,
-  canSetGuideChapterPublic,
+  canSetGuideChapterMembersOnly,
+  canSetGuideSectionPublic,
   dutyCardProblem,
+  guideChapterIsPublic,
   guideReadMark,
   guideReviewDue,
   askRoleParts,
@@ -45,12 +51,27 @@ describe("canEditGuideChapter", () => {
   });
 });
 
-describe("canSetGuideChapterPublic", () => {
-  it("is a captain's alone", () => {
-    expect(canSetGuideChapterPublic("captain")).toBe(true);
-    expect(canSetGuideChapterPublic("team_lead")).toBe(false);
-    expect(canSetGuideChapterPublic("camp_member")).toBe(false);
-    expect(canSetGuideChapterPublic("root")).toBe(false);
+describe("the public site's switches", () => {
+  it("are a captain's alone, failing closed on an unknown rank", () => {
+    for (const can of [
+      canSetGuideSectionPublic,
+      canSetGuideChapterMembersOnly,
+    ]) {
+      expect(can("captain")).toBe(true);
+      expect(can("team_lead")).toBe(false);
+      expect(can("camp_member")).toBe(false);
+      expect(can("root")).toBe(false);
+    }
+  });
+});
+
+describe("guideChapterIsPublic", () => {
+  it("needs all three: published, a public section, and no members-only mark", () => {
+    const yes = { published: true, sectionPublic: true, membersOnly: false };
+    expect(guideChapterIsPublic(yes)).toBe(true);
+    expect(guideChapterIsPublic({ ...yes, published: false })).toBe(false);
+    expect(guideChapterIsPublic({ ...yes, sectionPublic: false })).toBe(false);
+    expect(guideChapterIsPublic({ ...yes, membersOnly: true })).toBe(false);
   });
 });
 
@@ -83,6 +104,16 @@ describe("dutyCardProblem", () => {
 
   it("passes a whole card", () => {
     expect(dutyCardProblem(card, "")).toBeNull();
+  });
+
+  it("refuses a Members only part: a card goes out whole or not at all", () => {
+    expect(dutyCardProblem(card, "Gloves.\n\n:::members\nCode 12.\n:::")).toBe(
+      DUTY_CARD_NO_MEMBERS_ONLY,
+    );
+    // Even one the writer's rules would refuse.
+    expect(dutyCardProblem(card, "> ::: Members")).toBe(
+      DUTY_CARD_NO_MEMBERS_ONLY,
+    );
   });
 
   it("names the first thing missing", () => {

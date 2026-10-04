@@ -3,8 +3,11 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import {
   canEditGuideChapter,
-  canSetGuideChapterPublic,
+  canSetGuideChapterMembersOnly,
+  canSetGuideSectionPublic,
+  chapterTextProblem,
   dutyCardProblem,
+  membersOnlyPartCount,
 } from "@camp404/core";
 import {
   CHAPTER_EDITED,
@@ -14,7 +17,9 @@ import {
   NOTHING_TO_PUBLISH,
   NOT_A_CAMP_CHAPTER_WRITER,
   NOT_A_CHAPTER_WRITER,
-  NOT_A_PUBLIC_MARKER,
+  NOT_A_MEMBERS_ONLY_MARKER,
+  NOT_A_SECTION,
+  NOT_A_SECTION_SWITCHER,
   type DocumentKind,
   type DocumentTeam,
   type DutyCardChoice,
@@ -23,19 +28,28 @@ import {
   type GuideChapterSummary,
   type GuideChapterVersion,
   type GuideDraft,
+  type GuideSectionState,
   type GuideWriteResult,
+  type SectionChapterChange,
   type PublishedDutyCard,
 } from "@camp404/db/documents";
 import { reachRank } from "@camp404/db/power";
-import { DutyCard, type DutyCardDraft } from "@camp404/types";
+import {
+  DutyCard,
+  GUIDE_CATEGORIES,
+  GuideCategory,
+  hasMembersOnlyPart,
+  type DutyCardDraft,
+} from "@camp404/types";
 import { testStore } from "./test-store";
 
 // The in-memory twin of the Survival Guide's data (@camp404/db/documents), for
 // E2E_TEST_MODE. The same rules, sentences and results over the store's own
 // rows: a captain writes any chapter, a lead only their own team's, a
 // whole-camp chapter is a captain's; each publish that changes something is a
-// new version; a duty card is published only when its card is whole; the
-// Public mark is a captain's; an edit is a compare-and-set on `version`. The
+// new version; a duty card is published only when its card is whole; a
+// section's public switch and the members-only mark are a captain's; an edit
+// is a compare-and-set on `version`. The
 // store keeps no audit log and is one synchronous process, so there is nothing
 // to lock. Kept apart from test-store.ts, which calls in here only to reset.
 
@@ -52,7 +66,7 @@ interface StoredChapter {
   authorId: string | null;
   published: boolean;
   publishedVersion: number | null;
-  public: boolean;
+  membersOnly: boolean;
   cycleReviewed: number | null;
   updatedAt: Date;
 }
@@ -75,6 +89,8 @@ interface GuideState {
   versions: StoredVersion[];
   /** `${userId}:${documentId}` -> the newest version read. */
   reads: Map<string, number>;
+  /** The sections on the public site; every other one is private. */
+  publicSections: Set<string>;
 }
 
 const KEY = "__camp404GuideTestStore__";
@@ -85,6 +101,7 @@ function state(): GuideState {
     chapters: [],
     versions: [],
     reads: new Map(),
+    publicSections: new Set(),
   } satisfies GuideState;
   return g[KEY] as GuideState;
 }
@@ -95,6 +112,7 @@ export function resetGuideStore(): void {
   s.chapters.length = 0;
   s.versions.length = 0;
   s.reads.clear();
+  s.publicSections.clear();
 }
 
 const nameOf = (userId: string | null) =>
@@ -154,8 +172,13 @@ function summary(c: StoredChapter, v: StoredVersion): GuideChapterSummary {
     version: v.version,
     publishedAt: v.publishedAt,
     cycleReviewed: c.cycleReviewed,
+    membersOnly: c.membersOnly,
+    hasMembersOnlyPart: hasMembersOnlyPart(v.markdown),
   };
 }
+
+const sectionPublic = (category: string) =>
+  state().publicSections.has(category);
 
 const byTitle = (a: { title: string }, b: { title: string }) =>
   a.title.localeCompare(b.title);
@@ -233,7 +256,7 @@ export const guideTestStore = {
       ...summary(c, v),
       markdown: v.markdown,
       card: v.card ? structuredClone(v.card) : null,
-      public: c.public,
+      sectionPublic: sectionPublic(v.category),
       versions: versionsOf(c.id).map((x) => ({
         version: x.version,
         publishedAt: x.publishedAt,
@@ -278,9 +301,15 @@ export const guideTestStore = {
     return state()
       .chapters.map((c) => {
         const last = versionsOf(c.id)[0];
+        const current = live(c);
         return {
           ...documentRow(c),
           authorName: nameOf(c.authorId),
+          sectionPublic: sectionPublic(c.category),
+          liveSectionPublic: current ? sectionPublic(current.category) : null,
+          liveMembersOnlyParts: current
+            ? membersOnlyPartCount(current.markdown)
+            : 0,
           changedSincePublish:
             !last ||
             last.title !== c.title ||
@@ -354,7 +383,7 @@ export const guideTestStore = {
         authorId: input.actorId,
         published: false,
         publishedVersion: null,
-        public: false,
+        membersOnly: false,
         cycleReviewed: null,
         updatedAt: new Date(),
       };
@@ -414,6 +443,8 @@ export const guideTestStore = {
       } else if (c.markdown.trim() === "") {
         return NOTHING_TO_PUBLISH;
       }
+      const textProblem = chapterTextProblem(c.markdown);
+      if (textProblem) return textProblem;
       const last = versionsOf(c.id)[0];
       const same =
         !!last &&
@@ -468,19 +499,56 @@ export const guideTestStore = {
     });
   },
 
-  setGuideChapterPublic(input: {
+  setGuideChapterMembersOnly(input: {
     actorId: string;
     slug: string;
-    public: boolean;
+    membersOnly: boolean;
   }) {
     return run(() => {
-      if (!canSetGuideChapterPublic(writer(input.actorId).rank)) {
-        return NOT_A_PUBLIC_MARKER;
+      if (!canSetGuideChapterMembersOnly(writer(input.actorId).rank)) {
+        return NOT_A_MEMBERS_ONLY_MARKER;
       }
       const c = state().chapters.find((x) => x.slug === input.slug);
       if (!c) return CHAPTER_GONE;
-      c.public = input.public;
+      c.membersOnly = input.membersOnly;
       return {};
+    });
+  },
+
+  listGuideSections(): GuideSectionState[] {
+    return GUIDE_CATEGORIES.map((category) => ({
+      category,
+      public: sectionPublic(category),
+    }));
+  },
+
+  setGuideSectionPublic(input: {
+    actorId: string;
+    category: string;
+    public: boolean;
+  }) {
+    return run<{ chapters: SectionChapterChange[] }>(() => {
+      if (!canSetGuideSectionPublic(writer(input.actorId).rank)) {
+        return NOT_A_SECTION_SWITCHER;
+      }
+      const category = GuideCategory.safeParse(input.category);
+      if (!category.success) return NOT_A_SECTION;
+      if (sectionPublic(category.data) === input.public) {
+        return { chapters: [] };
+      }
+      const chapters = state()
+        .chapters.map((c) => [c, live(c)] as const)
+        .filter(
+          (pair): pair is [StoredChapter, StoredVersion] =>
+            !!pair[1] &&
+            !pair[0].membersOnly &&
+            pair[1].category === category.data,
+        )
+        .map(([c, v]) => ({ slug: c.slug, title: v.title }))
+        .sort(byTitle);
+      if (input.public) state().publicSections.add(category.data);
+      else state().publicSections.delete(category.data);
+      return { chapters };
     });
   },
 };

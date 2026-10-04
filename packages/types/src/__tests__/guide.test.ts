@@ -3,10 +3,16 @@ import {
   DutyCard,
   DutyCardDraft,
   EMPTY_DUTY_CARD,
+  GuideMarkdown,
   GuideSlug,
+  MEMBERS_ONLY_MISPLACED,
+  MEMBERS_ONLY_NESTED,
+  MEMBERS_ONLY_STRAY,
+  MEMBERS_ONLY_UNCLOSED,
   NewGuideChapterInput,
   SaveGuideChapterInput,
   containsPhoneNumber,
+  membersOnlyProblem,
 } from "../guide";
 
 describe("the Survival Guide's shapes", () => {
@@ -118,5 +124,52 @@ describe("the Survival Guide's shapes", () => {
       DutyCard.safeParse({ ...card, shiftTypeKey: "Morning Clean!" }).success,
     ).toBe(false);
     expect(EMPTY_DUTY_CARD).not.toHaveProperty("shiftTypeKey");
+  });
+});
+
+describe("the writer's rules for a Members only part", () => {
+  it("accepts a well-formed part, and text with none", () => {
+    for (const text of [
+      "Plain words.",
+      ":::members\n## Plan\n\n- a\n- b\n\n> quote\n:::",
+      "Intro.\n\n:::members\nOne.\n:::\n\nMiddle.\n\n:::members\nTwo.\n:::",
+      "```\n:::\n```",
+    ]) {
+      expect(membersOnlyProblem(text)).toBeNull();
+      expect(GuideMarkdown.safeParse(text).success).toBe(true);
+    }
+  });
+
+  it.each([
+    ["unclosed", ":::members\nSecret.", MEMBERS_ONLY_UNCLOSED],
+    ["nested", ":::members\n:::members\nX\n:::\n:::", MEMBERS_ONLY_NESTED],
+    ["indented", "  :::members\nX\n:::", MEMBERS_ONLY_MISPLACED],
+    ["quoted", "> :::members\nX\n:::", MEMBERS_ONLY_MISPLACED],
+    ["in a list", "- :::members\nX\n:::", MEMBERS_ONLY_MISPLACED],
+    ["in a code block", "```\n:::members\n```", MEMBERS_ONLY_MISPLACED],
+    ["an indented closer", ":::members\nX\n  :::", MEMBERS_ONLY_MISPLACED],
+    ["a stray closer", "Words.\n:::", MEMBERS_ONLY_STRAY],
+    [
+      "an unclosed code block inside",
+      ":::members\n```\n:::",
+      MEMBERS_ONLY_UNCLOSED,
+    ],
+  ])("refuses a part %s, in a sentence", (_what, text, sentence) => {
+    expect(membersOnlyProblem(text)).toBe(sentence);
+    const parsed = GuideMarkdown.safeParse(text);
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues[0]?.message).toBe(sentence);
+  });
+
+  it("checks the chapter's text on save", () => {
+    const parsed = SaveGuideChapterInput.safeParse({
+      slug: "tankwa",
+      expectedVersion: 1,
+      title: "Tankwa",
+      team: null,
+      markdown: ":::members\nSecret.",
+      card: null,
+    });
+    expect(parsed.success).toBe(false);
   });
 });

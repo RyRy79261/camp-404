@@ -1,8 +1,16 @@
 import Link from "next/link";
-import { BookOpen, FilePen, Plus, Printer, Search } from "lucide-react";
+import {
+  BookOpen,
+  ExternalLink,
+  FilePen,
+  Plus,
+  Printer,
+  Search,
+} from "lucide-react";
 import {
   canEditAnyGuideChapter,
   canEditGuideChapter,
+  canSetGuideSectionPublic,
   guideReadMark,
   guideReviewDue,
 } from "@camp404/core";
@@ -20,17 +28,21 @@ import { Input } from "@camp404/ui/components/input";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ChapterRow } from "@/components/guide/chapter-row";
 import { GuideTabs, type GuideGrouping } from "@/components/guide/guide-tabs";
+import { SectionSwitch } from "@/components/guide/section-switch";
 import { getCurrentCycle, getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
 import {
   listChapterReads,
   listGuideDrafts,
+  listGuideSections,
   listPublishedChapters,
   listPublishedDutyCards,
 } from "@/lib/guide";
 import {
   DUTY_CARDS_PRINT_PATH,
   GUIDE_PATH,
+  GUIDE_SITE_HOST,
+  GUIDE_SITE_URL,
   guideCategoryLabel,
   guideEditPath,
   groupByTeam,
@@ -67,15 +79,23 @@ export default async function GuidePage({
 
   const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
   const writer = canEditAnyGuideChapter(rank, leadTeams);
-  const [chapters, reads, config, cycle, drafts, dutyCards] = await Promise.all(
-    [
+  const [chapters, reads, config, cycle, drafts, dutyCards, sections, all] =
+    await Promise.all([
       listPublishedChapters({ query }),
       listChapterReads(campUser.id),
       getTeamsConfig(),
       getCurrentCycle(),
       writer ? listGuideDrafts() : Promise.resolve([]),
       listPublishedDutyCards(),
-    ],
+      listGuideSections(),
+      query ? listPublishedChapters() : Promise.resolve(null),
+    ]);
+  const allChapters = all ?? chapters;
+  // The public site's switches (#250): a captain flips a whole section; every
+  // other member sees which sections are public, read-only.
+  const canSwitch = canSetGuideSectionPublic(rank);
+  const sectionPublic = new Map<string, boolean>(
+    sections.map((x) => [x.category, x.public]),
   );
   const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
   const teamLabel = (team: string | null) =>
@@ -84,7 +104,12 @@ export default async function GuidePage({
       : (teams.find((t) => t.key === team)?.label ?? team);
 
   const groups =
-    by === "team" ? groupByTeam(chapters, teams) : groupByTopic(chapters);
+    by === "team"
+      ? groupByTeam(chapters, teams)
+      : groupByTopic(chapters, {
+          // A captain sees every section, so an empty one can be switched.
+          all: canSwitch && !query,
+        });
   const mine = drafts.filter((d) =>
     canEditGuideChapter(rank, leadTeams, d.team),
   );
@@ -116,6 +141,14 @@ export default async function GuidePage({
                   <Printer aria-hidden />
                   Print all duty cards
                 </Link>
+              </Button>
+            ) : null}
+            {sections.some((x) => x.public) ? (
+              <Button asChild variant="outline">
+                <a href={GUIDE_SITE_URL} target="_blank" rel="noopener">
+                  Survival Guide site
+                  <ExternalLink aria-hidden />
+                </a>
               </Button>
             ) : null}
             {writer ? (
@@ -178,35 +211,96 @@ export default async function GuidePage({
               }
             />
           ) : (
-            groups.map((group) => (
-              <Card key={group.key}>
-                <CardHeader className="pb-1">
-                  <CardTitle className="text-base">{group.label}</CardTitle>
-                </CardHeader>
-                <CardContent className="pb-3">
-                  <ul
-                    aria-label={group.label}
-                    className="divide-y divide-border"
-                  >
-                    {group.chapters.map((c) => (
-                      <li key={c.id}>
-                        <ChapterRow
-                          slug={c.slug}
-                          title={c.title}
-                          kind={c.kind}
-                          mark={guideReadMark(c.version, reads[c.id])}
-                          aside={
-                            by === "team"
-                              ? guideCategoryLabel(c.category)
-                              : teamLabel(c.team)
-                          }
+            groups.map((group) => {
+              const isSection = by === "topic" && sectionPublic.has(group.key);
+              const on = sectionPublic.get(group.key) === true;
+              const inSection = allChapters.filter(
+                (c) => c.category === group.key,
+              );
+              const out = inSection.filter((c) => !c.membersOnly);
+              return (
+                <Card
+                  key={group.key}
+                  role="region"
+                  aria-label={group.label}
+                  data-section-public={isSection ? String(on) : undefined}
+                >
+                  <CardHeader className="pb-1">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <CardTitle className="text-base">{group.label}</CardTitle>
+                      {isSection ? (
+                        <span className="text-xs text-muted-foreground">
+                          {on ? (
+                            <>
+                              <b className="font-semibold text-info">
+                                On the public site
+                              </b>{" "}
+                              · {out.length} of {inSection.length}{" "}
+                              {inSection.length === 1 ? "chapter" : "chapters"}
+                            </>
+                          ) : (
+                            `Members only · ${inSection.length} ${inSection.length === 1 ? "chapter" : "chapters"}`
+                          )}
+                        </span>
+                      ) : null}
+                      <span className="flex-1" />
+                      {isSection && canSwitch ? (
+                        <SectionSwitch
+                          category={group.key}
+                          label={group.label}
+                          isPublic={on}
+                          goingOut={out.map((c) =>
+                            c.kind === "duty_card"
+                              ? `${c.title} (duty card)`
+                              : c.title,
+                          )}
+                          staying={inSection
+                            .filter((c) => c.membersOnly)
+                            .map((c) => c.title)}
                         />
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            ))
+                      ) : isSection && on ? (
+                        <span
+                          className="text-xs font-semibold"
+                          title={`On ${GUIDE_SITE_HOST}`}
+                        >
+                          Public
+                        </span>
+                      ) : null}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pb-3">
+                    {group.chapters.length === 0 ? (
+                      <p className="py-2 text-sm text-muted-foreground">
+                        No chapters in {group.label} yet.
+                      </p>
+                    ) : (
+                      <ul
+                        aria-label={group.label}
+                        className="divide-y divide-border"
+                      >
+                        {group.chapters.map((c) => (
+                          <li key={c.id}>
+                            <ChapterRow
+                              slug={c.slug}
+                              title={c.title}
+                              kind={c.kind}
+                              mark={guideReadMark(c.version, reads[c.id])}
+                              aside={
+                                by === "team"
+                                  ? guideCategoryLabel(c.category)
+                                  : teamLabel(c.team)
+                              }
+                              membersOnly={c.membersOnly}
+                              hasMembersOnlyPart={c.hasMembersOnlyPart}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })
           )}
         </div>
 

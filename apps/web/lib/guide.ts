@@ -7,6 +7,7 @@ import type {
   GuideChapterSummary,
   GuideChapterVersion,
   GuideDraft,
+  GuideSectionState,
   GuideWriteResult,
   PublishedDutyCard,
 } from "@camp404/db/documents";
@@ -21,6 +22,7 @@ export type {
   GuideChapterSummary,
   GuideChapterVersion,
   GuideDraft,
+  GuideSectionState,
   GuideWriteResult,
   PublishedDutyCard,
 };
@@ -159,10 +161,25 @@ export async function markGuideChapterReviewed(
     : db.markGuideChapterReviewed(input);
 }
 
-export async function setGuideChapterPublic(
-  input: Parameters<typeof db.setGuideChapterPublic>[0],
-): ReturnType<typeof db.setGuideChapterPublic> {
+export async function setGuideChapterMembersOnly(
+  input: Parameters<typeof db.setGuideChapterMembersOnly>[0],
+): ReturnType<typeof db.setGuideChapterMembersOnly> {
   return usesTestStore()
-    ? guideTestStore.setGuideChapterPublic(input)
-    : db.setGuideChapterPublic(input);
+    ? guideTestStore.setGuideChapterMembersOnly(input)
+    : db.setGuideChapterMembersOnly(input);
+}
+
+/** Every section of the guide and whether it is on the public site. */
+export async function listGuideSections(): Promise<GuideSectionState[]> {
+  return usesTestStore()
+    ? guideTestStore.listGuideSections()
+    : db.listGuideSections();
+}
+
+export async function setGuideSectionPublic(
+  input: Parameters<typeof db.setGuideSectionPublic>[0],
+): ReturnType<typeof db.setGuideSectionPublic> {
+  return usesTestStore()
+    ? guideTestStore.setGuideSectionPublic(input)
+    : db.setGuideSectionPublic(input);
 }

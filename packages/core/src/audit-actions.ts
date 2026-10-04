@@ -3,7 +3,12 @@
 // `AuditEvent.action` in @camp404/db is typed from this list, so a writer with
 // a new action does not compile until the action has a label here.
 
-import { LOGISTICS_PHASE_LABELS, LogisticsPhase } from "@camp404/types";
+import {
+  GUIDE_CATEGORY_LABELS,
+  GuideCategory,
+  LOGISTICS_PHASE_LABELS,
+  LogisticsPhase,
+} from "@camp404/types";
 import { MEMBERSHIP_TIER_LABEL } from "./membership-tier";
 import { decimalToMinor, formatMoney, isCurrency } from "./money";
 
@@ -53,7 +58,13 @@ export const AUDIT_ACTION_LABELS = {
   "dues.tier_archived": "Removed a fee tier",
   "dues.tier_changed": "Changed a fee tier",
   "dues.year_saved": "Set the year's dues dates",
+  "guide.section_public_set":
+    "Changed whether a Survival Guide section is on the public site",
+  // No longer written (2026-10-04: sharing is per section now, and a chapter
+  // is marked members only instead); kept so a row written before still reads.
   "document.public_set": "Changed whether a Survival Guide chapter is public",
+  "document.members_only_set":
+    "Changed whether a Survival Guide chapter is kept for members",
   "document.published": "Published a Survival Guide chapter",
   "document.reviewed": "Kept a Survival Guide chapter for this year",
   "document.unpublished": "Took a Survival Guide chapter off the guide",
@@ -521,7 +532,30 @@ export function auditDetail(
       const title = text(metadata, "title");
       const version = count(metadata, "version");
       if (!title) return null;
-      return version === null ? title : `${title}, version ${version}`;
+      const named = version === null ? title : `${title}, version ${version}`;
+      if (!metadata || typeof metadata.public !== "boolean") return named;
+      return `${named}${metadata.public ? ", on the public site" : ""}`;
+    }
+    case "document.members_only_set": {
+      const title = text(metadata, "title");
+      if (!title || !metadata || typeof metadata.membersOnly !== "boolean") {
+        return title;
+      }
+      return `${title}: ${metadata.membersOnly ? "members only" : "may go on the public site"}`;
+    }
+    case "guide.section_public_set": {
+      const key = GuideCategory.safeParse(text(metadata, "category"));
+      if (!key.success || !metadata || typeof metadata.public !== "boolean") {
+        return null;
+      }
+      const chapters = Array.isArray(metadata.chapters)
+        ? metadata.chapters.length
+        : null;
+      const label = GUIDE_CATEGORY_LABELS[key.data];
+      const state = metadata.public ? "public" : "members only";
+      return chapters === null
+        ? `${label}: ${state}`
+        : `${label}: ${state}, ${chapters} ${chapters === 1 ? "chapter" : "chapters"}`;
     }
     case "document.public_set": {
       const title = text(metadata, "title");

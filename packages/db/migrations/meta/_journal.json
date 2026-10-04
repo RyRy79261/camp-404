@@ -680,6 +680,27 @@
       "when": 1791013533192,
       "tag": "0096_meal_plan_dates_from_logistics",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1791118300060,
+      "tag": "0097_guide_sections_and_members_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1791118305995,
+      "tag": "0098_drop_document_public_mark",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1791118307831,
+      "tag": "0099_seed_private_guide_sections",
+      "breakpoints": true
     }
   ]
 }

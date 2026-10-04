@@ -29,7 +29,7 @@ import { getGuideDraft, getPublishedChapter } from "@/lib/guide";
 import { PRINT_SHEET_ATTR } from "@/lib/print";
 import { getDutyCardShifts } from "@/lib/shifts";
 import { getLeadTeams } from "@/lib/users";
-import { TEAM_SHEET_STYLES } from "@/components/print/team-style";
+import { TEAM_SHEET_STYLES } from "@camp404/ui/lib/team-style";
 import DutyCardPrintPage from "./page";
 
 const CARD: DutyCard = {

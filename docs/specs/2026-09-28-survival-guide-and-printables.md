@@ -1,6 +1,11 @@
 # Survival Guide (#250) and printable pages (#249): scope and order
 
-Status: proposal, waiting for the owner. Nothing is built.
+Status: built. The writing, the duty cards and their prints are in the app
+(#250, #348); the public site is `apps/guide` at
+`survival-guide.camp-404.com` (plan: `camp404-night/guide-site/plan.md`,
+owner-approved 2026-10-04). [CORRECTION 2026-10-04] The answers of
+2026-09-30 below on the domain, the readers and the PDF were replaced on
+2026-10-04; see "Owner's answers (2026-10-04)".
 
 ## Survival Guide (#250)
 
@@ -92,6 +97,19 @@ anaphylaxis: see the kitchen lead").
 3. Survival Guide writing (main app), then the reading app.
 4. Duty cards (guide + prints together).
 5. Shift prints once #248 exists; calendar prints once #247 exists.
+
+## Owner's answers (2026-10-04)
+
+1. **Domain:** `survival-guide.camp-404.com`, with a hyphen. The owner sets
+   up its Vercel project (root `apps/guide`, that domain, `DATABASE_URL`).
+2. **Readers:** no shared sign-in; the site is public only. A captain makes a
+   whole section public (every section starts private); a chapter can be kept
+   members only, and a part of a chapter can be marked "Members only", cut out
+   on the server before anything public is built.
+3. **New chapters in a public section** go public when they are published,
+   with a warning beside Publish (Q1: yes).
+4. **PDF:** Print only on the public site, done carefully (A4, running head,
+   page numbers, nothing split); no Download PDF there.
 
 ## Owner's answers (2026-09-30)
 

@@ -141,6 +141,18 @@ export default async function GuideChapterPage({
           <Badge variant="outline">Duty card</Badge>
         ) : null}
         {checked ? <Badge variant="outline">Checked for {year}</Badge> : null}
+        {/* Where it is read (#250's public site): PUBLIC when anyone can read
+            it on survival-guide.camp-404.com, MEMBERS ONLY when a captain
+            keeps it in the app. */}
+        {chapter.membersOnly ? (
+          <Badge variant="outline" className="border-accent text-accent">
+            Members only
+          </Badge>
+        ) : chapter.sectionPublic ? (
+          <Badge variant="outline" className="border-info text-info">
+            Public
+          </Badge>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 page-lg:grid-cols-3">

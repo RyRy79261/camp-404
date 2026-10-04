@@ -5,7 +5,7 @@ import {
   FALLBACK_SHEET_STYLE,
   TEAM_SHEET_STYLES,
   teamSheetStyle,
-} from "./team-style";
+} from "../team-style";
 
 // Each team's quiet colour and line icon on the daily site sheet (#249): one
 // map covering every team in the enum, a fallback for a team it does not

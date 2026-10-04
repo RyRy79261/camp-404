@@ -77,6 +77,21 @@ export function guideDay(at: Date): string {
   return DAY.format(at);
 }
 
+const LONG_DAY = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "Africa/Johannesburg",
+});
+
+/** "4 October 2026", in camp time. */
+export function guideLongDay(at: Date): string {
+  return LONG_DAY.format(at);
+}
+
+/** The public Survival Guide site, and a chapter's page on it (#250). */
+export { GUIDE_SITE_HOST, GUIDE_SITE_URL } from "@camp404/types";
+
 export interface GuideGroup<T> {
   key: string;
   label: string;
@@ -89,6 +104,7 @@ export interface GuideGroup<T> {
  */
 export function groupByTopic<T extends { category: string }>(
   chapters: readonly T[],
+  { all = false }: { all?: boolean } = {},
 ): GuideGroup<T>[] {
   const known: string[] = [...GUIDE_CATEGORIES];
   const extra = [
@@ -102,7 +118,7 @@ export function groupByTopic<T extends { category: string }>(
       label: guideCategoryLabel(key),
       chapters: chapters.filter((c) => c.category === key),
     }))
-    .filter((g) => g.chapters.length > 0);
+    .filter((g) => g.chapters.length > 0 || (all && known.includes(g.key)));
 }
 
 /**
