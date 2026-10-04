@@ -4,7 +4,7 @@ import { Printer } from "lucide-react";
 import {
   canEditAnyGuideChapter,
   canEditGuideChapter,
-  canSetGuideChapterPublic,
+  canSetGuideChapterMembersOnly,
 } from "@camp404/core";
 import { Team } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
@@ -14,8 +14,12 @@ import { ChapterEditor, WHOLE_CAMP } from "@/components/guide/chapter-editor";
 import { VersionsCard } from "@/components/guide/versions-card";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
-import { getGuideDraft, listChapterVersions } from "@/lib/guide";
-import { dutyCardPrintPath, KIND_LABEL } from "@/lib/guide-copy";
+import {
+  getGuideDraft,
+  listChapterVersions,
+  listGuideSections,
+} from "@/lib/guide";
+import { dutyCardPrintPath, guideLongDay, KIND_LABEL } from "@/lib/guide-copy";
 import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
@@ -61,10 +65,14 @@ export default async function EditGuideChapterPage({
     );
   }
 
-  const [config, versions] = await Promise.all([
+  const [config, versions, sections] = await Promise.all([
     getTeamsConfig(),
     listChapterVersions(draft.id),
+    listGuideSections(),
   ]);
+  const liveVersion = draft.published
+    ? versions.find((v) => v.version === draft.publishedVersion)
+    : undefined;
   const teams = activeTeams(config)
     .filter((t) => Team.safeParse(t.key).success)
     .filter((t) => canEditGuideChapter(rank, leadTeams, t.key))
@@ -120,7 +128,15 @@ export default async function EditGuideChapterPage({
               published: draft.published,
               everPublished: draft.publishedVersion !== null,
               changedSincePublish: draft.changedSincePublish,
-              public: draft.public,
+              membersOnly: draft.membersOnly,
+              liveSectionPublic: draft.liveSectionPublic,
+              liveMembersOnlyParts: draft.liveMembersOnlyParts,
+              live: liveVersion
+                ? {
+                    version: liveVersion.version,
+                    day: guideLongDay(liveVersion.publishedAt),
+                  }
+                : null,
             }}
             initial={{
               kind: draft.kind,
@@ -132,7 +148,10 @@ export default async function EditGuideChapterPage({
             }}
             teams={teams}
             canPickWholeCamp={isCaptain}
-            canSetPublic={canSetGuideChapterPublic(rank)}
+            canSetMembersOnly={canSetGuideChapterMembersOnly(rank)}
+            publicSections={sections
+              .filter((x) => x.public)
+              .map((x) => x.category)}
           />
         </div>
         <div className="flex flex-col gap-6 page-md:max-w-md">

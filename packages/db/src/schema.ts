@@ -2527,7 +2527,11 @@ export const documents = pgTable(
     published: boolean("published").notNull().default(false),
     publishedVersion: integer("published_version"),
     cycleReviewed: integer("cycle_reviewed"),
-    public: boolean("public").notNull().default(false),
+    // "Keep this whole chapter members only" (#250's public site, a
+    // captain's mark): such a chapter never goes on survival-guide.camp-404.com,
+    // whatever its section's switch says. The mark can only take a chapter
+    // off the public site, never put one on.
+    membersOnly: boolean("members_only").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
@@ -2538,6 +2542,31 @@ export const documents = pgTable(
     cardCheck: check(
       "documents_card_check",
       sql`(${d.kind} = 'duty_card') = (${d.card} is not null)`,
+    ),
+  }),
+);
+
+// The Survival Guide's sections (its topics, GUIDE_CATEGORIES) and whether
+// each is on the public site, survival-guide.camp-404.com (owner, 2026-10-04).
+// A chapter is public only when it is published, its section is public here,
+// and it is not marked members only. Every section starts private (the rows
+// are seeded by migration with `public = false`); only a captain flips one,
+// audited in the same transaction (setGuideSectionPublic). A topic the Claude
+// connector typed as free text has no row, so it is never public.
+export const guideSections = pgTable(
+  "guide_sections",
+  {
+    category: text("category").primaryKey(),
+    public: boolean("public").notNull().default(false),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+    updatedBy: uuid("updated_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => ({
+    categoryCheck: check(
+      "guide_sections_category_check",
+      sql`${t.category} in ('before_you_come', 'on_site', 'kitchen', 'safety', 'teams')`,
     ),
   }),
 );

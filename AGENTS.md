@@ -18,6 +18,7 @@ Turborepo + pnpm workspaces. Node >= 22, pnpm 10.x.
 apps/
   web/        Next.js 16 app (App Router, React 19, Tailwind v4): the 404 OS console
   join/       join.camp-404.com: the "404 OS" recruiting site; reads the db, no sign-in
+  guide/      survival-guide.camp-404.com: the Survival Guide's public sections; reads the db, no sign-in
   mobile/     Capacitor host wrapping the web static export
   admin-cli/  Node CLI for data ops
 packages/
@@ -683,11 +684,33 @@ Decisions baked into the schema — keep new code consistent with them:
   (`CampLayout`, `@camp404/types`) saved as numbered versions in
   `camp_layout_versions`, a compare-and-set on `camp_layouts.latest_version`.
   A captain or a Structures lead saves (`canEditLayout`); every member reads.
-  The neighbour page (`/neighbours/<token>`) is the one PUBLIC data page: off
+  The neighbour page (`/neighbours/<token>`) is a PUBLIC data page: off
   until a captain turns it on (`canShareLayout`, audited), and it reads only
   through `getSharedLayout`, which returns `neighbourView`'s allowlist (kinds
   and places, never a label or a side note) and arrival COUNTS per day. Add a
   field to it only by naming it in `neighbourView`.
+- **Survival Guide's public site (#250, owner 2026-10-04).**
+  `apps/guide` serves survival-guide.camp-404.com, with no sign-in. A chapter
+  is on it only when it is published, its section (topic) is public
+  (`guide_sections`, every section starts private) and it is not marked
+  "Keep this whole chapter members only" (`documents.members_only`). Only a
+  captain flips either switch (`canSetGuideSectionPublic`,
+  `canSetGuideChapterMembersOnly`), audited in the same transaction. A chapter
+  published into a public section goes public at once; the editor says so
+  beside Publish. A writer keeps part of a chapter for members with a
+  `:::members … :::` block (the editor's "Members only" button; the writer's
+  rules are `membersOnlyProblem` in `@camp404/types`). The public reads
+  (`listPublicChapters`, `getPublicChapter`) cut those parts in the db layer
+  before they return, through `toPublicChapter` / `publicMarkdown` in
+  `@camp404/core`, which FAIL CLOSED (anything that looks like an opener
+  starts a cut; an unclosed cut runs to the end). Never render a chapter's raw
+  `markdown` on the public site, never search the raw text there, and build
+  every public word (excerpt, headings, description) from the cut text. A
+  duty card is whole-card only: publishing refuses a members-only part in it.
+  Pages render on request with no cache and say noindex; a slug that is not
+  public answers the same 404 as one never used. The guide's e2e
+  (`apps/guide/tests/e2e`) runs on fixtures through the same cut, with a
+  canary that must be in no response.
 - **Logistics calendar (#247).** The year's pack, travel, build, burn, strike
   and unpack days are one row per (year, phase) in `logistics_phases`. A
   captain or a Transport and Logistics lead sets them (`canEditLogistics`), a

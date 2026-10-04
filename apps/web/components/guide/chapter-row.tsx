@@ -11,6 +11,8 @@ export function ChapterRow({
   kind,
   mark,
   aside,
+  membersOnly,
+  hasMembersOnlyPart,
 }: {
   slug: string;
   title: string;
@@ -18,6 +20,10 @@ export function ChapterRow({
   mark: "new" | "updated" | null;
   /** The other grouping's label: the team when grouped by topic, and so on. */
   aside: string;
+  /** Kept members only by a captain: never on the public site. */
+  membersOnly?: boolean;
+  /** Its text has a Members only part, which the public site leaves out. */
+  hasMembersOnlyPart?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5">
@@ -30,6 +36,15 @@ export function ChapterRow({
       <span className="flex flex-wrap items-center gap-1.5">
         {kind === "duty_card" ? (
           <Badge variant="outline">Duty card</Badge>
+        ) : null}
+        {membersOnly ? (
+          <Badge variant="outline" className="border-accent text-accent">
+            Members only
+          </Badge>
+        ) : hasMembersOnlyPart ? (
+          <Badge variant="outline" className="border-accent text-accent">
+            Has a members-only part
+          </Badge>
         ) : null}
         {mark ? (
           <Badge variant={mark === "new" ? "default" : "warning"}>

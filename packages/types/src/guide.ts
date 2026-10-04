@@ -56,9 +56,105 @@ const Title = z
   .min(1, "Give the chapter a title.")
   .max(GUIDE_TITLE_MAX, `Keep the title under ${GUIDE_TITLE_MAX} characters.`);
 
-const Markdown = z
+// --- "Members only" parts (#250's public site) ---------------------------------
+//
+// A part of a chapter kept for camp members is a fenced block at the top level
+// of the Markdown:
+//
+//     :::members
+//     ## The convoy plan
+//     We leave together on the Tuesday …
+//     :::
+//
+// The opener line is exactly `:::members`, the closer exactly `:::`, neither
+// indented nor inside a list, a quote or a code block, and blocks do not nest.
+// These are the WRITER's rules, checked on save and on publish. The public
+// site does not trust them: @camp404/core's publicMarkdown cuts anything that
+// even looks like an opener, so a text that slipped past these rules loses
+// too much on the public page, never too little.
+
+export const MEMBERS_ONLY_OPEN = ":::members";
+export const MEMBERS_ONLY_CLOSE = ":::";
+
+/** A code fence's opening run (``` or ~~~, up to three spaces in). */
+export const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})/;
+
+/**
+ * A line that looks like a members-only opener, wherever it sits: indented,
+ * after quote or list markers, any case, with spaces. The strict rules accept
+ * only the bare `:::members`; the public stripper cuts at any of these.
+ */
+export function looksLikeMembersOpener(line: string): boolean {
+  const body = line.replace(/^(?:\s|>|[-*+](?=\s)|\d{1,9}[.)](?=\s))*/, "");
+  return /^:{3,}\s*members\b/i.test(body);
+}
+
+export const MEMBERS_ONLY_UNCLOSED =
+  "A Members only part is not closed: end it with a line that holds only :::.";
+export const MEMBERS_ONLY_NESTED =
+  "A Members only part can't hold another one.";
+export const MEMBERS_ONLY_MISPLACED =
+  "A Members only part starts on its own line at the left edge, not inside a list, a quote or a code block.";
+export const MEMBERS_ONLY_STRAY =
+  "A line that holds only ::: ends a Members only part, and none is open there.";
+export const DUTY_CARD_NO_MEMBERS_ONLY =
+  'A duty card is pinned up for anyone to read: it can\'t have a Members only part. Tick "Keep this whole chapter members only" instead.';
+
+/**
+ * Why `markdown`'s Members only parts break the writer's rules, in a sentence
+ * the writer can act on, or null when they hold.
+ */
+export function membersOnlyProblem(markdown: string): string | null {
+  let open = false;
+  let fence: string | null = null;
+  for (const line of markdown.split(/\r?\n/)) {
+    if (fence !== null) {
+      // Inside a code block: only its own closing run ends it.
+      if (new RegExp(`^ {0,3}${fence[0]}{${fence.length},}\\s*$`).test(line)) {
+        fence = null;
+      } else if (looksLikeMembersOpener(line)) {
+        return MEMBERS_ONLY_MISPLACED;
+      }
+      continue;
+    }
+    const code = CODE_FENCE.exec(line);
+    if (code) {
+      fence = code[1]!;
+      continue;
+    }
+    if (line === MEMBERS_ONLY_OPEN) {
+      if (open) return MEMBERS_ONLY_NESTED;
+      open = true;
+      continue;
+    }
+    if (looksLikeMembersOpener(line)) {
+      return open ? MEMBERS_ONLY_NESTED : MEMBERS_ONLY_MISPLACED;
+    }
+    if (line === MEMBERS_ONLY_CLOSE) {
+      if (!open) return MEMBERS_ONLY_STRAY;
+      open = false;
+      continue;
+    }
+    if (line.trim() === MEMBERS_ONLY_CLOSE) return MEMBERS_ONLY_MISPLACED;
+  }
+  return open ? MEMBERS_ONLY_UNCLOSED : null;
+}
+
+/** Whether `markdown` has anything that looks like a Members only part. */
+export function hasMembersOnlyPart(markdown: string): boolean {
+  return markdown.split(/\r?\n/).some(looksLikeMembersOpener);
+}
+
+/** A chapter's Markdown: in bounds, and its Members only parts well formed. */
+export const GuideMarkdown = z
   .string()
-  .max(GUIDE_MARKDOWN_MAX, "The chapter is too long. Split it in two.");
+  .max(GUIDE_MARKDOWN_MAX, "The chapter is too long. Split it in two.")
+  .superRefine((text, ctx) => {
+    const problem = membersOnlyProblem(text);
+    if (problem) ctx.addIssue({ code: "custom", message: problem });
+  });
+
+const Markdown = GuideMarkdown;
 
 // --- Duty cards ---------------------------------------------------------------
 
@@ -242,10 +338,24 @@ export const GuideChapterRef = z.object({
 });
 export type GuideChapterRef = z.infer<typeof GuideChapterRef>;
 
-export const SetGuideChapterPublicInput = z.object({
+/** A captain keeps a whole chapter off the public site, or lets it go out. */
+export const SetGuideChapterMembersOnlyInput = z.object({
   slug: GuideSlug,
+  membersOnly: z.boolean(),
+});
+export type SetGuideChapterMembersOnlyInput = z.infer<
+  typeof SetGuideChapterMembersOnlyInput
+>;
+
+/** A captain puts a whole section (topic) on the public site, or takes it off. */
+export const SetGuideSectionPublicInput = z.object({
+  category: GuideCategory,
   public: z.boolean(),
 });
-export type SetGuideChapterPublicInput = z.infer<
-  typeof SetGuideChapterPublicInput
+export type SetGuideSectionPublicInput = z.infer<
+  typeof SetGuideSectionPublicInput
 >;
+
+/** The public site's address (owner, 2026-10-04: with the hyphen). */
+export const GUIDE_SITE_HOST = "survival-guide.camp-404.com";
+export const GUIDE_SITE_URL = `https://${GUIDE_SITE_HOST}`;

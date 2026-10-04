@@ -60,6 +60,7 @@ A Turborepo with pnpm workspaces (Node 22 or newer, pnpm 10).
 | ------------------------------------------------------ | --------------------------------------------------------- |
 | [`apps/web`](apps/web/README.md)                       | The console: Next.js 16, React 19, Tailwind v4            |
 | [`apps/join`](apps/join/README.md)                     | join.camp-404.com, the recruiting site                    |
+| [`apps/guide`](apps/guide/README.md)                   | survival-guide.camp-404.com, the guide's public sections  |
 | [`apps/admin-cli`](apps/admin-cli/README.md)           | A Node CLI for seeding and invite codes on a dev database |
 | [`apps/mobile`](apps/mobile/README.md)                 | The Capacitor shell for iOS and Android (deferred)        |
 | [`packages/core`](packages/core/README.md)             | Domain rules with no I/O: access, privacy, money, …       |

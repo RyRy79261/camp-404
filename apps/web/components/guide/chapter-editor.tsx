@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   CircleAlert,
   CircleCheck,
+  ExternalLink,
   Eye,
   Globe,
   PenLine,
@@ -14,13 +15,17 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import { dutyCardProblem } from "@camp404/core";
+import { dutyCardProblem, membersOnlyPartCount } from "@camp404/core";
 import {
   DUTY_CARD_MAX,
+  GUIDE_SITE_HOST,
+  GUIDE_SITE_URL,
   GUIDE_TITLE_MAX,
+  membersOnlyProblem,
   type DutyCard,
   type DutyCardDraft,
 } from "@camp404/types";
+import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import {
   Card,
@@ -39,7 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@camp404/ui/components/select";
-import { Switch } from "@camp404/ui/components/switch";
+import { Checkbox } from "@camp404/ui/components/checkbox";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
@@ -49,10 +54,11 @@ import {
   createGuideChapterAction,
   publishGuideChapterAction,
   saveGuideChapterAction,
-  setGuideChapterPublicAction,
+  setGuideChapterMembersOnlyAction,
   unpublishGuideChapterAction,
 } from "@/app/(console)/guide/actions";
 import {
+  guideCategoryLabel,
   guideChapterPath,
   guideEditPath,
   guideTopicOptions,
@@ -98,7 +104,14 @@ export type ChapterEditorMode =
       /** Has ever been published (so it has versions). */
       everPublished: boolean;
       changedSincePublish: boolean;
-      public: boolean;
+      /** "Keep this whole chapter members only" (a captain's mark). */
+      membersOnly: boolean;
+      /** The live version is in a public section (null: none is live). */
+      liveSectionPublic: boolean | null;
+      /** The live version's members-only parts. */
+      liveMembersOnlyParts: number;
+      /** The live version: its number and day ("28 September 2026"). */
+      live: { version: number; day: string } | null;
     };
 
 interface SubRoleRow {
@@ -150,15 +163,18 @@ export function ChapterEditor({
   initial,
   teams,
   canPickWholeCamp,
-  canSetPublic,
+  canSetMembersOnly,
+  publicSections,
 }: {
   mode: ChapterEditorMode;
   initial: ChapterEditorValues;
   /** The teams this writer may write for. */
   teams: ChapterEditorTeam[];
   canPickWholeCamp: boolean;
-  /** A captain: may mark the chapter Public. */
-  canSetPublic: boolean;
+  /** A captain: may keep the whole chapter members only. */
+  canSetMembersOnly: boolean;
+  /** The sections (topics) on the public site. */
+  publicSections: readonly string[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
@@ -194,10 +210,14 @@ export function ChapterEditor({
     (card?.checklist ?? []).join("\n"),
   );
   const [askRole, setAskRole] = React.useState(card?.askRole ?? "");
-  const [isPublic, setIsPublic] = React.useState(
-    mode.kind === "edit" && mode.public,
+  const [membersOnly, setMembersOnly] = React.useState(
+    mode.kind === "edit" && mode.membersOnly,
   );
-  const [publicPending, setPublicPending] = React.useState(false);
+  const [markPending, setMarkPending] = React.useState(false);
+  const [previewAs, setPreviewAs] = React.useState<"members" | "public">(
+    "members",
+  );
+  const previewRef = React.useRef<HTMLDivElement>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [titleError, setTitleError] = React.useState<string | null>(null);
 
@@ -236,7 +256,19 @@ export function ChapterEditor({
       ? dutyCardProblem(cardDraft, markdown)
       : markdown.trim() === ""
         ? "Write something in the chapter before you publish it."
-        : null;
+        : membersOnlyProblem(markdown);
+  // Where a publish puts it: on the public site straight away when its topic
+  // is a public section and it is not kept members only (owner's Q1,
+  // 2026-10-04: it goes public, with this warning beside Publish).
+  const topicPublic = publicSections.includes(category);
+  const publishGoesPublic = topicPublic && !membersOnly;
+  const draftParts = membersOnlyPartCount(markdown);
+  const liveOnSite =
+    mode.kind === "edit" &&
+    mode.published &&
+    mode.live !== null &&
+    mode.liveSectionPublic === true &&
+    !membersOnly;
   const [view, setView] = React.useState<"write" | "preview">("write");
   // The preview is the reader's own rendering (ChapterView), fed the card as
   // it stands: a half-written card shows what it has so far.
@@ -338,20 +370,35 @@ export function ChapterEditor({
     });
   }
 
-  async function changePublic(next: boolean) {
+  async function changeMembersOnly(next: boolean) {
     if (mode.kind !== "edit") return;
-    setPublicPending(true);
-    const result = await setGuideChapterPublicAction({
-      slug: mode.slug,
-      public: next,
-    });
-    setPublicPending(false);
+    setMarkPending(true);
+    let result: Awaited<ReturnType<typeof setGuideChapterMembersOnlyAction>>;
+    try {
+      result = await setGuideChapterMembersOnlyAction({
+        slug: mode.slug,
+        membersOnly: next,
+      });
+    } catch {
+      result = {
+        ok: false,
+        error: "That didn't go through. Check your connection and try again.",
+      };
+    } finally {
+      setMarkPending(false);
+    }
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    setIsPublic(next);
-    toast.success(next ? "Marked public" : "Members only");
+    setMembersOnly(next);
+    toast.success(next ? "Kept for members only" : "Goes out with its section");
+  }
+
+  function previewAsPublic() {
+    setPreviewAs("public");
+    setView("preview");
+    previewRef.current?.scrollIntoView?.({ block: "nearest" });
   }
 
   return (
@@ -694,6 +741,7 @@ export function ChapterEditor({
               <div className="min-h-0 flex-1">
                 <MarkdownEditor
                   fill
+                  membersOnly
                   value={markdown}
                   onChange={setMarkdown}
                   ariaLabel="The chapter"
@@ -703,15 +751,33 @@ export function ChapterEditor({
             )}
           </div>
           <div
+            ref={previewRef}
             data-testid="preview-panel"
             className={cn(
               PANE,
               view === "preview" ? "flex" : "hidden page-md:flex",
             )}
           >
-            <PaneLabel icon={<Eye className="h-3 w-3" aria-hidden />}>
-              Preview: as members read it
-            </PaneLabel>
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border pr-2">
+              <PaneLabel icon={<Eye className="h-3 w-3" aria-hidden />}>
+                {previewAs === "public"
+                  ? "Preview: as the public will see it"
+                  : "Preview: as members read it"}
+              </PaneLabel>
+              {kind === "chapter" ? (
+                <SegmentedControl
+                  aria-label="Preview as"
+                  value={previewAs}
+                  onValueChange={(v) =>
+                    setPreviewAs(v === "public" ? "public" : "members")
+                  }
+                  options={[
+                    { value: "members", label: "Members" },
+                    { value: "public", label: "Public" },
+                  ]}
+                />
+              ) : null}
+            </div>
             <div className="min-h-0 flex-1 overflow-y-auto bg-background p-4">
               {previewEmpty ? (
                 <p className="text-sm text-muted-foreground">
@@ -723,6 +789,7 @@ export function ChapterEditor({
                   card={previewCard}
                   markdown={markdown}
                   bare
+                  asPublic={kind === "chapter" && previewAs === "public"}
                 />
               )}
             </div>
@@ -731,34 +798,100 @@ export function ChapterEditor({
       </section>
 
       {mode.kind === "edit" ? (
-        <Card>
+        <Card role="region" aria-labelledby="who-can-read-it">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
+            <CardTitle
+              id="who-can-read-it"
+              className="flex items-center gap-2 text-base"
+            >
               <Globe className="h-4 w-4 text-accent" aria-hidden />
               Who can read it
             </CardTitle>
             <CardDescription>
-              Every approved member reads a published chapter. Captains can mark
-              one public for the guide&apos;s own site, which is not built yet:
-              nothing is shown outside the camp today.
+              {!topicPublic ? (
+                <>
+                  Every approved member reads it in the app. Its section,{" "}
+                  <b>{guideCategoryLabel(category)}</b>, is members only, so it
+                  is not on {GUIDE_SITE_HOST}. A captain puts a section on the
+                  public site from the guide&apos;s contents.
+                </>
+              ) : membersOnly ? (
+                <>
+                  Every approved member reads it in the app. Its section,{" "}
+                  <b>{guideCategoryLabel(category)}</b>, is public, but this
+                  chapter is kept members only, so it is not on{" "}
+                  {GUIDE_SITE_HOST}.
+                </>
+              ) : (
+                <>
+                  Every approved member reads it in the app. Its section,{" "}
+                  <b>{guideCategoryLabel(category)}</b>, is public, so anyone
+                  can read the published version on {GUIDE_SITE_HOST}
+                  {kind === "duty_card"
+                    ? ", the whole card."
+                    : ", except the parts marked Members only."}
+                </>
+              )}
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            {canSetPublic ? (
-              <label className="flex items-center gap-3 text-sm">
-                <Switch
-                  checked={isPublic}
-                  onCheckedChange={changePublic}
-                  disabled={publicPending}
-                  aria-label="Public"
-                />
-                {isPublic ? "Public" : "Members only"}
+          <CardContent className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <Checkbox
+                id="chapter-members-only"
+                checked={membersOnly}
+                onCheckedChange={(next) => changeMembersOnly(next === true)}
+                disabled={!canSetMembersOnly || markPending}
+              />
+              <label htmlFor="chapter-members-only">
+                Keep this whole chapter members only
               </label>
-            ) : (
-              <p className="text-sm">
-                {isPublic ? "Public (a captain's mark)" : "Members only"}
-              </p>
-            )}
+              <Badge variant="outline">Captain</Badge>
+            </div>
+            <div className="flex flex-col gap-1 border-t border-dashed border-border pt-3 text-sm">
+              {liveOnSite && mode.live ? (
+                <>
+                  <p className="font-semibold text-info">
+                    Live there now: version {mode.live.version}, published{" "}
+                    {mode.live.day}
+                    {mode.liveMembersOnlyParts > 0
+                      ? `, with ${mode.liveMembersOnlyParts} members-only ${mode.liveMembersOnlyParts === 1 ? "part" : "parts"} left out.`
+                      : "."}
+                  </p>
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <a
+                      href={`${GUIDE_SITE_URL}/${mode.slug}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="inline-flex items-center gap-1 text-accent underline underline-offset-2"
+                    >
+                      Open the public page
+                      <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                    </a>
+                    <span aria-hidden>·</span>
+                    <button
+                      type="button"
+                      onClick={previewAsPublic}
+                      className="text-accent underline underline-offset-2"
+                    >
+                      Preview this draft as the public will see it
+                    </button>
+                  </p>
+                </>
+              ) : (
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+                  Not on the public site now.
+                  {kind === "chapter" ? (
+                    <button
+                      type="button"
+                      onClick={previewAsPublic}
+                      className="text-accent underline underline-offset-2"
+                    >
+                      Preview this draft as the public would see it
+                    </button>
+                  ) : null}
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       ) : null}
@@ -770,30 +903,48 @@ export function ChapterEditor({
       ) : null}
 
       <div className="flex flex-col gap-3 border-t border-border pt-4 page-sm:flex-row page-sm:items-center page-sm:justify-between">
-        <p
-          className="flex items-center gap-1.5 text-xs text-muted-foreground"
-          aria-live="polite"
-        >
-          {problem ? (
-            <>
-              <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              Not ready to publish: {problem}
-            </>
-          ) : (
-            <>
-              <CircleCheck
-                className="h-3.5 w-3.5 shrink-0 text-success"
-                aria-hidden
-              />
-              {mode.kind === "edit" &&
-              mode.published &&
-              !dirty &&
-              !mode.changedSincePublish
-                ? "Members read this version."
-                : "Ready to publish. Members read it once you do."}
-            </>
-          )}
-        </p>
+        <div className="flex flex-col gap-2">
+          {publishGoesPublic ? (
+            <p
+              data-testid="publish-goes-public"
+              className="flex max-w-xl items-start gap-2 text-sm"
+            >
+              <Badge className="mt-0.5 shrink-0 bg-info text-info-foreground">
+                Public
+              </Badge>
+              <span>
+                Publishing puts this draft on {GUIDE_SITE_HOST} straight away.
+                {draftParts > 0
+                  ? ` The Members only ${draftParts === 1 ? "part stays" : "parts stay"} in the app.`
+                  : ""}
+              </span>
+            </p>
+          ) : null}
+          <p
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            aria-live="polite"
+          >
+            {problem ? (
+              <>
+                <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                Not ready to publish: {problem}
+              </>
+            ) : (
+              <>
+                <CircleCheck
+                  className="h-3.5 w-3.5 shrink-0 text-success"
+                  aria-hidden
+                />
+                {mode.kind === "edit" &&
+                mode.published &&
+                !dirty &&
+                !mode.changedSincePublish
+                  ? "Members read this version."
+                  : "Ready to publish. Members read it once you do."}
+              </>
+            )}
+          </p>
+        </div>
         <div className="flex flex-wrap gap-2">
           {mode.kind === "edit" && mode.published ? (
             <Button

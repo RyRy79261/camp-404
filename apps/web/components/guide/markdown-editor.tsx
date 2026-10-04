@@ -10,13 +10,18 @@ import {
   Link2,
   List,
   ListOrdered,
+  Lock,
   Quote,
   Unlink,
 } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { Input } from "@camp404/ui/components/input";
 import { cn } from "@camp404/ui/lib/utils";
-import { editorMarkdown, GUIDE_EDITOR_EXTENSIONS } from "./markdown-extensions";
+import {
+  CHAPTER_EDITOR_EXTENSIONS,
+  editorMarkdown,
+  NOTES_EDITOR_EXTENSIONS,
+} from "./markdown-extensions";
 import {
   docFromValue,
   PARAGRAPH_EDITOR_EXTENSIONS,
@@ -48,6 +53,16 @@ const PROSE_CLASS =
   "[&_strong]:font-semibold [&_em]:italic " +
   "[&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 " +
   "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:text-muted-foreground";
+
+/**
+ * A chapter's "Members only" part (#250): a dashed box in the accent colour,
+ * tagged with what it is and where it does not go (its data-tag and
+ * data-why, set by the node).
+ */
+const MEMBERS_ONLY_CLASS =
+  "[&_[data-members-only]]:relative [&_[data-members-only]]:my-5 [&_[data-members-only]]:border [&_[data-members-only]]:border-dashed [&_[data-members-only]]:border-accent [&_[data-members-only]]:bg-accent/5 [&_[data-members-only]]:px-3 [&_[data-members-only]]:pb-1 [&_[data-members-only]]:pt-4 " +
+  "[&_[data-members-only]]:before:absolute [&_[data-members-only]]:before:-top-2.5 [&_[data-members-only]]:before:left-2 [&_[data-members-only]]:before:bg-accent [&_[data-members-only]]:before:px-1.5 [&_[data-members-only]]:before:py-0.5 [&_[data-members-only]]:before:font-mono [&_[data-members-only]]:before:text-[10px] [&_[data-members-only]]:before:uppercase [&_[data-members-only]]:before:tracking-[0.15em] [&_[data-members-only]]:before:text-accent-foreground [&_[data-members-only]]:before:content-[attr(data-tag)] " +
+  "[&_[data-members-only]]:after:absolute [&_[data-members-only]]:after:-top-2 [&_[data-members-only]]:after:right-2 [&_[data-members-only]]:after:bg-background [&_[data-members-only]]:after:px-1.5 [&_[data-members-only]]:after:text-[11px] [&_[data-members-only]]:after:text-accent [&_[data-members-only]]:after:content-[attr(data-why)]";
 
 function ToolbarButton({
   onClick,
@@ -163,7 +178,7 @@ function MarksToolbar({ editor }: { editor: Editor }) {
     <div
       role="toolbar"
       aria-label="Text style"
-      className="flex shrink-0 flex-nowrap items-center gap-1 overflow-x-auto border-b border-input px-2 py-1"
+      className="flex shrink-0 flex-wrap items-center gap-1 border-b border-input px-2 py-1"
     >
       <ToolbarButton
         label="Bold"
@@ -183,7 +198,13 @@ function MarksToolbar({ editor }: { editor: Editor }) {
   );
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({
+  editor,
+  membersOnly,
+}: {
+  editor: Editor;
+  membersOnly?: boolean;
+}) {
   const [linking, setLinking] = React.useState(false);
   const chain = () => editor.chain().focus();
   return (
@@ -191,7 +212,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       <div
         role="toolbar"
         aria-label="Text style"
-        className="flex shrink-0 flex-nowrap items-center gap-1 overflow-x-auto border-b border-input px-2 py-1"
+        className="flex shrink-0 flex-wrap items-center gap-1 border-b border-input px-2 py-1"
       >
         <ToolbarButton
           label="Heading"
@@ -260,6 +281,28 @@ function Toolbar({ editor }: { editor: Editor }) {
             <Unlink className="h-4 w-4" aria-hidden />
           </ToolbarButton>
         ) : null}
+        {membersOnly ? (
+          <>
+            <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
+            {/* Wraps the selected paragraphs, headings and lists in a part
+                the public site never gets; inside one, unwraps it. */}
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => chain().toggleMembersOnly().run()}
+              aria-pressed={editor.isActive("membersOnly")}
+              title="Keep the selected part for camp members: it is not shown on the public site"
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-accent/60 px-2 font-mono text-[10px] uppercase tracking-[0.15em] text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                editor.isActive("membersOnly") &&
+                  "border-accent bg-accent text-accent-foreground hover:bg-accent",
+              )}
+            >
+              <Lock className="h-3.5 w-3.5" aria-hidden />
+              Members only
+            </button>
+          </>
+        ) : null}
       </div>
       {linking ? (
         <LinkRow editor={editor} onDone={() => setLinking(false)} />
@@ -291,6 +334,11 @@ export interface MarkdownEditorProps {
    * (@/components/markdown/paragraph-text).
    */
   mode?: "markdown" | "paragraphs";
+  /**
+   * A Survival Guide chapter: "Members only" parts, with their toolbar
+   * button, for the parts the public site never gets (#250).
+   */
+  membersOnly?: boolean;
   className?: string;
 }
 
@@ -302,13 +350,16 @@ export function MarkdownEditor({
   disabled,
   fill,
   mode = "markdown",
+  membersOnly,
   className,
 }: MarkdownEditorProps) {
   const paragraphs = mode === "paragraphs";
   const editor = useEditor({
     extensions: paragraphs
       ? PARAGRAPH_EDITOR_EXTENSIONS
-      : GUIDE_EDITOR_EXTENSIONS,
+      : membersOnly
+        ? CHAPTER_EDITOR_EXTENSIONS
+        : NOTES_EDITOR_EXTENSIONS,
     ...(paragraphs
       ? { content: docFromValue(value) }
       : { content: value, contentType: "markdown" as const }),
@@ -317,7 +368,9 @@ export function MarkdownEditor({
     shouldRerenderOnTransaction: true,
     editorProps: {
       attributes: {
-        class: PROSE_CLASS,
+        class: membersOnly
+          ? `${PROSE_CLASS} ${MEMBERS_ONLY_CLASS}`
+          : PROSE_CLASS,
         "aria-label": ariaLabel,
         role: "textbox",
         "aria-multiline": "true",
@@ -346,7 +399,7 @@ export function MarkdownEditor({
         paragraphs ? (
           <MarksToolbar editor={editor} />
         ) : (
-          <Toolbar editor={editor} />
+          <Toolbar editor={editor} membersOnly={membersOnly} />
         )
       ) : null}
       <EditorContent

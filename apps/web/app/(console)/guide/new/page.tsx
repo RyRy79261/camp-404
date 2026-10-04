@@ -4,6 +4,7 @@ import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ChapterEditor, WHOLE_CAMP } from "@/components/guide/chapter-editor";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
+import { listGuideSections } from "@/lib/guide";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getLeadTeams } from "@/lib/users";
 
@@ -32,7 +33,10 @@ export default async function NewGuideChapterPage() {
       </div>
     );
   }
-  const config = await getTeamsConfig();
+  const [config, sections] = await Promise.all([
+    getTeamsConfig(),
+    listGuideSections(),
+  ]);
   const teams = activeTeams(config)
     .filter((t) => Team.safeParse(t.key).success)
     .filter((t) => canEditGuideChapter(rank, leadTeams, t.key))
@@ -64,7 +68,8 @@ export default async function NewGuideChapterPage() {
         }}
         teams={teams}
         canPickWholeCamp={isCaptain}
-        canSetPublic={false}
+        canSetMembersOnly={false}
+        publicSections={sections.filter((x) => x.public).map((x) => x.category)}
       />
     </div>
   );

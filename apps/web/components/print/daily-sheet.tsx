@@ -6,7 +6,7 @@ import {
   EVENTS_SHEET_STYLE,
   teamSheetStyle,
   type TeamSheetStyle,
-} from "./team-style";
+} from "@camp404/ui/lib/team-style";
 
 // The daily site sheet's two pages for one day (#249), as the owner approved
 // them (design/daily-sheet.html, 2026-10-02, A4 landscape). Page 1: the day,
