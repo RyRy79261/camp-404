@@ -33,8 +33,6 @@ describe("MCP tool listing", () => {
       "what_can_i_do",
       "assign_team_membership",
       "list_reimbursements",
-      "get_claim_bank_details",
-      "get_member_id_number",
       "create_document",
       "create_questionnaire_draft",
       "update_questionnaire_draft",
@@ -49,6 +47,13 @@ describe("MCP tool listing", () => {
       "mark_reimbursement_paid",
       "mark_reimbursement_reconciled",
       "complete_acknowledgement",
+      // No ID numbers or bank details, for anyone (owner, 2026-10-05).
+      "get_member_id_number",
+      "get_claim_bank_details",
+      "get_my_id_documents",
+      "update_my_id_documents",
+      "get_my_ai_consent",
+      "set_my_ai_consent",
     ]) {
       expect(names).not.toContain(name);
     }

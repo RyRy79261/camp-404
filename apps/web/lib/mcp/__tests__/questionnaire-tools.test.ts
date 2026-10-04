@@ -20,7 +20,7 @@ const callers: Record<string, { rank: "captain" | "member"; leads: string[] }> =
 
 vi.mock("@camp404/db/mcp", () => ({
   getMcpScopeRows: vi.fn(async (id: string) => ({
-    user: { id, rank: callers[id]!.rank, aiDataConsent: false },
+    user: { id, rank: callers[id]!.rank },
     teamMemberships: callers[id]!.leads.map((team) => ({ team, isLead: true })),
     driverIntent: false,
   })),

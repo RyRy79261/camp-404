@@ -38,8 +38,6 @@ export interface McpScope {
   isDriver: boolean;
   /** `rank === "captain"`. */
   isCaptain: boolean;
-  /** The subject's own AI data consent. Stored here for convenience. */
-  aiDataConsent: boolean;
 }
 
 /**
@@ -63,7 +61,6 @@ export function resolveMcpScope(rows: McpScopeRows): McpScope {
     memberTeams,
     isDriver: rows.driverIntent,
     isCaptain: rows.user.rank === "captain",
-    aiDataConsent: rows.user.aiDataConsent,
   };
 }
 

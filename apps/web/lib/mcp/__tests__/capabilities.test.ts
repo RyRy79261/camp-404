@@ -33,7 +33,6 @@ function scopeOf(
     user: {
       id: "00000000-0000-4000-8000-000000000001",
       rank,
-      aiDataConsent: false,
     },
     teamMemberships: memberships,
     driverIntent,
@@ -74,25 +73,18 @@ describe("capabilitiesFor", () => {
     expect(tools).toContain("add_car_rider");
     expect(tools).not.toContain("list_reimbursements");
     expect(tools).not.toContain("create_document");
-    expect(tools).not.toContain("get_member_id_number");
     const pages = caps.areas.flatMap((a) => a.websiteOnly.map((w) => w.what));
     expect(pages).toContain("Make an invite code");
     expect(pages).not.toContain("Set a team's budget");
   });
 
-  it("gives a lead of any team the team-lead tools, and a Finance lead the money reads", () => {
+  it("gives a lead of any team the team-lead tools", () => {
     const kitchen = toolsFor(
       scopeOf("member", [{ team: "kitchen", isLead: true }]),
     );
     expect(kitchen).toContain("create_document");
     expect(kitchen).toContain("approve_reimbursement");
-    expect(kitchen).not.toContain("get_claim_bank_details");
     expect(kitchen).not.toContain("list_audit_log");
-
-    const finance = toolsFor(
-      scopeOf("member", [{ team: "finance", isLead: true }]),
-    );
-    expect(finance).toContain("get_claim_bank_details");
   });
 
   it("gives a captain every tool", () => {

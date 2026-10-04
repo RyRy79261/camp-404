@@ -4,15 +4,12 @@ import { and, eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
 import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
-import { appendAuditEvent, type AuditEvent } from "@camp404/db/audit";
-import { decryptField } from "@camp404/db/crypto";
+import type { AuditEvent } from "@camp404/db/audit";
 import { canReadMemberField, safetyReadBasis } from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
 import { auditReadsAfterResponse } from "../../audit";
 import { membersVisibleTo } from "../../camp-roster";
-import { siteUrl } from "../capabilities";
-import { canSeeIdDocuments } from "../consent";
-import { notFound, runTool, ToolError, truncateList } from "../tool-utils";
+import { notFound, runTool, truncateList } from "../tool-utils";
 
 const RankEnum = z.enum(schema.rankEnum.enumValues);
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
@@ -27,14 +24,10 @@ const TeamEnum = z.enum(schema.teamEnum.enumValues);
 //  - One person (get_user) is the member panel: a team lead or a captain also
 //    reads their emergency contacts, and each such read of someone else is
 //    recorded, as resolveSafetyDataForViewer records it.
-//  - An ID number is one member at a time, captains only, through
-//    get_member_id_number: the read is recorded BEFORE the number is returned
-//    and the call fails if the record cannot be written (the member export's
-//    rule, stricter than the panel's after-the-response record). It also needs
-//    the member's own AI data consent. Nobody else's bank details are offered
-//    here at all: the website shows them to no one.
-
-const ID_PANEL = "/captains/camp-management";
+//  - ID numbers and bank details never pass through the connector, for
+//    anyone, the member's own included (owner, 2026-10-05: "The agents won't
+//    need any access to that kind of information"). They are on the website's
+//    audited pages for those who may see them.
 
 export function registerPeopleTools(server: McpServer): void {
   server.registerTool(
@@ -42,7 +35,7 @@ export function registerPeopleTools(server: McpServer): void {
     {
       title: "List camp users",
       description:
-        "The camp roster, as the roster page shows it to you: names, rank, this year's teams and leads, and whether someone is still waiting for approval. Captains also get the captain columns. Declined sign-ups are listed for captains only. No emergency contacts, ID numbers or bank details: read one person with get_user.",
+        "The camp roster, as the roster page shows it to you: names, rank, this year's teams and leads, and whether someone is still waiting for approval. Captains also get the captain columns. Declined sign-ups are listed for captains only. No emergency contacts (read one person with get_user), and never ID numbers or bank details.",
       inputSchema: {
         team: TeamEnum.optional(),
         rank: RankEnum.optional(),
@@ -150,91 +143,13 @@ export function registerPeopleTools(server: McpServer): void {
         },
       }),
   );
-
-  server.registerTool(
-    "get_member_id_number",
-    {
-      title: "Read one member's ID number",
-      description:
-        "One member's ID number (passport or SA ID), as the member panel shows it, for matching tickets to ID. Recorded in the audit log BEFORE it is shown; if the record can't be written, nothing is shown. Only for a member who has allowed it through Claude (their AI data consent); otherwise use the member panel on the website. Never read IDs in bulk.",
-      inputSchema: { userId: z.string().uuid() },
-    },
-    async (args, extra) =>
-      runTool({
-        toolName: "get_member_id_number",
-        extra,
-        argsForAudit: args,
-        handler: async ({ scope }) => {
-          const [row] = await createHttpDb()
-            .select({
-              id: schema.users.id,
-              passportEncrypted: schema.users.passportEncrypted,
-              saIdEncrypted: schema.users.saIdEncrypted,
-              aiDataConsent: schema.users.aiDataConsent,
-              isSystem: schema.users.isSystem,
-            })
-            .from(schema.users)
-            .where(eq(schema.users.id, args.userId))
-            .limit(1);
-          if (!row || row.isSystem) notFound("No member with that id.");
-          if (!canSeeIdDocuments(scope, row)) {
-            throw new ToolError(
-              `This member hasn't allowed their ID number to be read through Claude. Open their panel on the website instead: ${siteUrl(ID_PANEL)}`,
-            );
-          }
-          // The panel's read: one document, passport first.
-          const passport = decryptField(row.passportEncrypted);
-          const saId = decryptField(row.saIdEncrypted);
-          const readable =
-            passport.state === "ok"
-              ? { idType: "passport" as const, idNumber: passport.value }
-              : saId.state === "ok"
-                ? { idType: "sa_id" as const, idNumber: saId.value }
-                : null;
-          if (!readable) {
-            const unreadable =
-              passport.state === "unreadable" || saId.state === "unreadable";
-            return {
-              idType: null,
-              idNumber: null,
-              note: unreadable
-                ? "An ID number is on file but can't be read with this site's key. Ask the member for it again."
-                : "No ID number is on file for this member.",
-            };
-          }
-          if (row.id !== scope.campUserId) {
-            try {
-              await appendAuditEvent({
-                actorId: scope.campUserId,
-                action: "member.id_document.viewed",
-                target: row.id,
-                metadata: {
-                  basis: "captain",
-                  via: "mcp",
-                  idType: readable.idType,
-                },
-              });
-            } catch (error) {
-              console.error(
-                "audit write failed: member.id_document.viewed",
-                error,
-              );
-              throw new ToolError(
-                "The read couldn't be recorded, so the ID number isn't shown. Try again in a moment.",
-              );
-            }
-          }
-          return readable;
-        },
-      }),
-  );
 }
 
 /**
  * The `users` columns these tools offer, in output order. Whether a caller gets
  * each one is `canReadMemberField` (the app's one field-access list), never a
- * rule written here. The ID and bank columns are not in this list: no list or
- * profile read returns them (get_member_id_number is the one path).
+ * rule written here. The ID and bank columns (ALWAYS_PRIVATE) are not in this
+ * list and never will be: the connector has no path to them.
  */
 const USER_FIELDS = [
   "id",
@@ -251,8 +166,6 @@ const USER_FIELDS = [
   "previousAfrikaburns",
   "previousBurningMans",
   "firstTime",
-  "aiDataConsent",
-  "aiDataConsentAt",
   "createdAt",
 ] as const satisfies readonly (keyof typeof schema.users.$inferSelect)[];
 

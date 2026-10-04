@@ -125,16 +125,6 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     gate: GATES.member,
     does: "Forms and steps waiting for you, and optional questionnaires you may answer.",
   },
-  get_my_ai_consent: {
-    area: "You",
-    gate: GATES.member,
-    does: "Whether captains may read your ID number, and captains and Finance leads your claims' bank details, through Claude.",
-  },
-  set_my_ai_consent: {
-    area: "You",
-    gate: GATES.member,
-    does: "Turn on or off captains reading your ID number, and captains and Finance leads reading your claims' bank details, through Claude.",
-  },
   get_my_burner_profile: {
     area: "You",
     gate: GATES.member,
@@ -175,16 +165,6 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     gate: GATES.member,
     does: "Replace your emergency contacts.",
   },
-  get_my_id_documents: {
-    area: "You",
-    gate: GATES.member,
-    does: "Read your own ID number and bank details.",
-  },
-  update_my_id_documents: {
-    area: "You",
-    gate: GATES.member,
-    does: "Change your own ID number or bank details (stored encrypted).",
-  },
   set_my_membership_tier: {
     area: "You",
     gate: GATES.member,
@@ -204,12 +184,7 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   get_user: {
     area: "People",
     gate: GATES.member,
-    does: "One person, with the columns your rank may read (team leads and captains also get emergency contacts; each read is recorded).",
-  },
-  get_member_id_number: {
-    area: "People",
-    gate: GATES.captain,
-    does: "One member's ID number, recorded before it is shown, and only if they allowed it through Claude.",
+    does: "One person, with the columns your rank may read (team leads and captains also get emergency contacts; each read is recorded). Never ID numbers or bank details.",
   },
   // Claims and budgets
   get_team_budget: {
@@ -230,7 +205,7 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   list_reimbursements: {
     area: "Claims and budgets",
     gate: GATES.teamLead,
-    does: "Claims to review: your led teams' claims, or every claim for captains and Finance leads. No bank details.",
+    does: "Claims to review: your led teams' claims, or every claim for captains and Finance leads. Never bank details.",
   },
   approve_reimbursement: {
     area: "Claims and budgets",
@@ -241,11 +216,6 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     area: "Claims and budgets",
     gate: GATES.teamLead,
     does: "Say no to a waiting claim of a team you lead (captains: any). Never your own.",
-  },
-  get_claim_bank_details: {
-    area: "Claims and budgets",
-    gate: GATES.money,
-    does: "One claim's bank details for paying it back, recorded as a read.",
   },
   // Survival Guide
   list_documents: {
@@ -382,6 +352,8 @@ const WIDE =
   "It reaches many people at once, so a person sends it from the page.";
 const MONEY = "It moves money, so a person does it on the page.";
 const UPLOAD = "It needs a file upload, which a chat can't carry.";
+const ID_NUMBERS =
+  "ID numbers and bank details are never available through this connector, for anyone; they are on the website's audited pages.";
 
 export interface WebsiteOnly {
   area: Area;
@@ -393,6 +365,13 @@ export interface WebsiteOnly {
 
 /** What the website does and the connector never will (owner, 2026-10-04). */
 export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
+  {
+    area: "You",
+    what: "Give or change your ID number (on your burner profile)",
+    why: ID_NUMBERS,
+    path: "/tools/forms/burner_profile",
+    gate: GATES.member,
+  },
   {
     area: "You",
     what: "Upload or change your profile photo",
@@ -430,8 +409,8 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
   },
   {
     area: "People",
-    what: "Read a member's ID number when they have not allowed it through Claude",
-    why: "The member panel records each read; the member's Claude setting is off.",
+    what: "Read a member's ID number (for matching tickets), in their member panel",
+    why: ID_NUMBERS,
     path: "/captains/camp-management",
     gate: GATES.captain,
   },
@@ -476,6 +455,13 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
     why: "These live on the Transport page; the connector has no tool for them yet.",
     path: "/transport",
     gate: GATES.transportEditor,
+  },
+  {
+    area: "Claims and budgets",
+    what: "Read a claim's bank details to pay it back",
+    why: ID_NUMBERS,
+    path: "/captains/payments/claims",
+    gate: GATES.money,
   },
   {
     area: "Claims and budgets",

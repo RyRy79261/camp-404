@@ -6,19 +6,10 @@ import {
   listMyClaims,
   listReimbursementsForReview,
   type ClaimResult,
-  type ReimbursementReviewRow,
   type ReimbursementTeam,
 } from "@camp404/db/reimbursements";
-import { auditReadAfterResponse } from "../../audit";
-import { readClaimAccount } from "../../claims";
-import { GATES, siteUrl } from "../capabilities";
-import {
-  deny,
-  notFound,
-  runTool,
-  ToolError,
-  truncateList,
-} from "../tool-utils";
+import { GATES } from "../capabilities";
+import { deny, runTool, ToolError, truncateList } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
 const StatusEnum = z.enum(schema.reimbursementStatusEnum.enumValues);
@@ -32,12 +23,9 @@ const StatusEnum = z.enum(schema.reimbursementStatusEnum.enumValues);
 // checked again inside the database's own transaction (decideClaim): the
 // tool's checks here only word a refusal early. Nobody decides their own claim.
 //
-// Bank details are never in a list. The Finance team reads one claim's at a
-// time (get_claim_bank_details), the website's readClaimAccountAction: the
-// same gate (captains and Finance leads) and the same
-// `reimbursement.account_viewed` row after the response.
-
-const CLAIMS_PAGE = "/captains/payments/claims";
+// Bank details never pass through the connector, not even for the member's
+// own claim (owner, 2026-10-05: "The agents won't need any access to that kind
+// of information"). The Finance team reads them on the Finance page.
 
 export function registerReimbursementTools(server: McpServer): void {
   server.registerTool(
@@ -72,16 +60,6 @@ export function registerReimbursementTools(server: McpServer): void {
 
 // --- Review (team leads, captains, the Finance team) ---------------------------
 
-/** A claim as a reviewer reads it in a list: never its bank details. */
-function presentForReview(row: ReimbursementReviewRow) {
-  const {
-    accountDetailsEncrypted: _account,
-    submitterAiDataConsent: _consent,
-    ...rest
-  } = row;
-  return rest;
-}
-
 type Move = {
   title: string;
   description: string;
@@ -114,7 +92,7 @@ function registerReviewTools(server: McpServer): void {
     {
       title: "List claims to review",
       description:
-        'A captain or a Finance lead gets every claim; a team lead gets the claims of teams they lead this year. Filter by status, or by team ("general" for old claims under no team). Amounts are whole rand cents. No bank details: the Finance team reads one claim\'s with get_claim_bank_details.',
+        'A captain or a Finance lead gets every claim; a team lead gets the claims of teams they lead this year. Filter by status, or by team ("general" for old claims under no team). Amounts are whole rand cents. Never bank details: those are on the website\'s Finance page only.',
       inputSchema: {
         status: StatusEnum.optional(),
         team: z.union([TeamEnum, z.literal("general")]).optional(),
@@ -146,7 +124,7 @@ function registerReviewTools(server: McpServer): void {
             teams,
             generalOnly: args.team === "general",
           });
-          return truncateList(rows.map(presentForReview));
+          return truncateList(rows);
         },
       }),
   );
@@ -172,64 +150,4 @@ function registerReviewTools(server: McpServer): void {
         }),
     );
   }
-
-  server.registerTool(
-    "get_claim_bank_details",
-    {
-      title: "Read one claim's bank details",
-      description:
-        "The bank details on one claim, to pay it back, as the Finance tools' \"Show bank details\" button gives them. Each read of someone else's is recorded with your name. Only for a member who has allowed it through Claude (their AI data consent); otherwise open the claim on the website. Marking it paid is done on the website.",
-      inputSchema: { claimId: z.string().uuid() },
-    },
-    async (args, extra) =>
-      runTool({
-        toolName: "get_claim_bank_details",
-        extra,
-        argsForAudit: args,
-        handler: async ({ scope }) => {
-          const account = await readClaimAccount(args.claimId);
-          if (!account) notFound("That claim isn't there any more.");
-          const own = account.submitterId === scope.campUserId;
-          if (!own) {
-            const [row] = await listReimbursementsForReview({
-              id: args.claimId,
-            });
-            if (!row?.submitterAiDataConsent) {
-              throw new ToolError(
-                `This member hasn't allowed their bank details to be read through Claude. Open the claim on the website instead: ${siteUrl(CLAIMS_PAGE)}`,
-              );
-            }
-          }
-          if (account.details.state === "unreadable") {
-            throw new ToolError(
-              "These bank details can't be read with this site's key. Ask the member for them again.",
-            );
-          }
-          if (account.details.state === "absent") {
-            throw new ToolError(
-              "No bank details are on file: the member's account was erased.",
-            );
-          }
-          // Recorded only when details are actually shown: an unreadable or
-          // erased value discloses nothing (the member panel's rule).
-          if (!own) {
-            auditReadAfterResponse({
-              actorId: scope.campUserId,
-              action: "reimbursement.account_viewed",
-              target: account.submitterId,
-              metadata: {
-                reimbursementId: args.claimId,
-                team: account.team,
-                via: "mcp",
-              },
-            });
-          }
-          return {
-            claimId: args.claimId,
-            accountType: account.accountType,
-            details: account.details.value,
-          };
-        },
-      }),
-  );
 }

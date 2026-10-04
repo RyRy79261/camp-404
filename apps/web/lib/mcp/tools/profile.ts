@@ -5,8 +5,7 @@ import { createHttpDb, withTransaction } from "@camp404/db";
 import { satisfyRequiredAction } from "@camp404/db/activations";
 import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
-import { decryptField, encrypt } from "@camp404/db/crypto";
-import { splitIdNumber, idColumnsFor } from "@camp404/db/id-documents";
+import { ID_NUMBER_KEY, splitIdNumber } from "@camp404/db/id-documents";
 import { SEATS_BELOW_RIDERS } from "@camp404/db/transport";
 import {
   DIETS,
@@ -17,37 +16,15 @@ import {
   splitEmergencyContacts,
 } from "@camp404/types";
 import { getMyDietary, saveMyDietary } from "../../dietary";
-import { identityAnswerErrors, validateIdNumber } from "../../id-validation";
+import { identityAnswerErrors } from "../../id-validation";
 import { BURNER_PROFILE_TEMPLATE } from "../../questionnaire";
+import { siteUrl } from "../capabilities";
 import { runTool, ToolError } from "../tool-utils";
 
 const MembershipTierEnum = z.enum(schema.membershipTierEnum.enumValues);
 
-/**
- * How one optional encrypted-ID argument should be applied.
- *
- * The three states are what the tool's contract promises: omit a field to leave
- * it alone, pass `null` to clear it, pass a value to set it. An empty string is
- * a CLEAR, not a set — zod's `z.string().nullable().optional()` admits `""`, so
- * a model can produce it, and the write path has always treated it as falsy.
- * Both the audit label and the write derive from this one function so they
- * cannot drift apart.
- */
-function classifyIdArg(
-  value: string | null | undefined,
-): "unchanged" | "cleared" | "set" {
-  if (value === undefined) return "unchanged";
-  return value ? "set" : "cleared";
-}
-
-/**
- * Refuse an ID number the web questionnaire would refuse, so a model cannot
- * store one the member could not type.
- */
-function assertValidIdNumber(type: "passport" | "sa_id", value: string): void {
-  const result = validateIdNumber(type, value);
-  if (!result.ok) throw new ToolError(result.error);
-}
+/** Where a member gives their ID number: the burner profile form, on the website. */
+const BURNER_PROFILE_FORM = "/tools/forms/burner_profile";
 
 export function registerProfileTools(server: McpServer): void {
   // -------------------------------------------------------------------------
@@ -75,8 +52,8 @@ export function registerProfileTools(server: McpServer): void {
             .where(eq(schema.burnerProfiles.userId, scope.campUserId))
             .limit(1);
           if (!row) return null;
-          // Never surface the plaintext id.number here — get_my_id_documents
-          // is the dedicated (decrypting) channel for that field.
+          // Never an ID number, should an old row still hold one in its
+          // answers: the connector has no path to ID numbers (owner, 2026-10-05).
           return {
             ...row,
             responses: splitIdNumber(row.responses as Record<string, unknown>)
@@ -91,7 +68,7 @@ export function registerProfileTools(server: McpServer): void {
     {
       title: "Update my burner profile",
       description:
-        "Patches the current user's burner_profiles responses JSONB. Pass the version string and the (possibly partial) responses object. Set `markComplete` to flip the completion timestamp.",
+        "Patches the current user's burner_profiles responses JSONB. Pass the version string and the (possibly partial) responses object. Set `markComplete` to flip the completion timestamp. Never an ID number (`id.number` is refused): that is entered on the website's burner profile form.",
       inputSchema: {
         version: z.string().min(1),
         responses: z.record(z.string(), z.unknown()),
@@ -107,8 +84,15 @@ export function registerProfileTools(server: McpServer): void {
           markComplete: args.markComplete,
         },
         handler: async ({ scope }) => {
-          // The web form's identity checks: the ID number against its type
-          // and a possible date of birth. Nothing is written if one fails.
+          // An ID number never passes through the connector (owner,
+          // 2026-10-05): refused before anything is written, never stored.
+          if (ID_NUMBER_KEY in args.responses) {
+            throw new ToolError(
+              `ID numbers aren't taken through Claude. Enter yours on the website: ${siteUrl(BURNER_PROFILE_FORM)}`,
+            );
+          }
+          // The web form's other identity check, a possible date of birth,
+          // and complete emergency contacts. Nothing is written if one fails.
           const identity = {
             ...identityAnswerErrors(args.responses, new Date()),
             ...incompleteContactErrors(BURNER_PROFILE_TEMPLATE, args.responses),
@@ -118,16 +102,12 @@ export function registerProfileTools(server: McpServer): void {
           }
           const db = createHttpDb();
           const now = new Date();
-          // Route any government ID number to the encrypted users column
-          // instead of persisting it plaintext in responses, and the emergency
-          // contacts to users.emergency_contacts, as the web form does. The
-          // burner profile is a reserved code questionnaire, so its question
-          // roles are the template's.
-          const split = splitIdNumber(args.responses);
-          const { idType, idNumber } = split;
+          // The emergency contacts go to users.emergency_contacts, as the web
+          // form does. The burner profile is a reserved code questionnaire, so
+          // its question roles are the template's.
           const { cleaned, contacts } = splitEmergencyContacts(
             BURNER_PROFILE_TEMPLATE,
-            split.cleaned,
+            args.responses,
           );
           const carriesContacts = questionsWithRole(
             BURNER_PROFILE_TEMPLATE,
@@ -151,15 +131,6 @@ export function registerProfileTools(server: McpServer): void {
               },
             })
             .returning();
-          if (idNumber) {
-            await db
-              .update(schema.users)
-              .set({
-                ...idColumnsFor(idType, encrypt(idNumber)),
-                updatedAt: new Date(),
-              })
-              .where(eq(schema.users.id, scope.campUserId));
-          }
           if (carriesContacts) {
             await db
               .update(schema.users)
@@ -484,126 +455,6 @@ export function registerProfileTools(server: McpServer): void {
             .where(eq(schema.users.id, scope.campUserId))
             .returning({ contacts: schema.users.emergencyContacts });
           return row?.contacts ?? [];
-        },
-      }),
-  );
-
-  // -------------------------------------------------------------------------
-  // ID documents (encrypted columns — only ever readable by self here)
-  // -------------------------------------------------------------------------
-
-  server.registerTool(
-    "get_my_id_documents",
-    {
-      title: "Get my ID documents",
-      description:
-        "Returns the current user's identification document fields, decrypted. Always available to self regardless of the AI-data consent flag.",
-      inputSchema: {},
-    },
-    async (_args, extra) =>
-      runTool({
-        toolName: "get_my_id_documents",
-        extra,
-        argsForAudit: null,
-        handler: async ({ scope }) => {
-          const db = createHttpDb();
-          const [row] = await db
-            .select({
-              passport: schema.users.passportEncrypted,
-              saId: schema.users.saIdEncrypted,
-              eft: schema.users.eftDetailsEncrypted,
-            })
-            .from(schema.users)
-            .where(eq(schema.users.id, scope.campUserId))
-            .limit(1);
-          if (!row) throw new ToolError("User row not found.");
-          const passport = decryptField(row.passport);
-          const saId = decryptField(row.saId);
-          const eft = decryptField(row.eft);
-          return {
-            passport: passport.value,
-            saId: saId.value,
-            eft: eft.value,
-            // A field listed here IS on file — this server just cannot decrypt
-            // it. Do not tell the user they have no value stored, and do not
-            // offer to "clear" it.
-            unreadableFields: [
-              ...(passport.state === "unreadable" ? ["passport"] : []),
-              ...(saId.state === "unreadable" ? ["saId"] : []),
-              ...(eft.state === "unreadable" ? ["eft"] : []),
-            ],
-          };
-        },
-      }),
-  );
-
-  server.registerTool(
-    "update_my_id_documents",
-    {
-      title: "Update my ID documents",
-      description:
-        "Encrypts and stores the supplied fields. Pass `null` for a field to clear it; omit a field to leave it unchanged. A member holds one government ID document, so setting `passport` clears `saId` and vice versa.",
-      inputSchema: {
-        passport: z.string().nullable().optional(),
-        saId: z.string().nullable().optional(),
-        eft: z.string().nullable().optional(),
-      },
-    },
-    async (args, extra) =>
-      runTool({
-        toolName: "update_my_id_documents",
-        extra,
-        // Never audit-log the plaintext values themselves; only flags. The
-        // label comes from the SAME classifier the write below branches on, so
-        // the audit row can never disagree with what actually happened —
-        // `{ passport: "" }` is a clear in both, not a "set" in the log and a
-        // clear in the column.
-        argsForAudit: {
-          passport: classifyIdArg(args.passport),
-          saId: classifyIdArg(args.saId),
-          eft: classifyIdArg(args.eft),
-        },
-        handler: async ({ scope }) => {
-          const db = createHttpDb();
-          const patch: Partial<typeof schema.users.$inferInsert> = {
-            updatedAt: new Date(),
-          };
-          const passportOp = classifyIdArg(args.passport);
-          const saIdOp = classifyIdArg(args.saId);
-          // passport_encrypted and sa_id_encrypted are two columns for ONE
-          // document: idColumnsFor (packages/db/src/id-documents.ts) writes the
-          // column that id.type names and NULLs the other. Setting one here
-          // without clearing its sibling leaves both populated, and the
-          // member's next burner-profile save then silently deletes whichever
-          // column idColumnsFor did not pick. Hold the invariant on write.
-          if (passportOp === "set" && saIdOp === "set") {
-            throw new ToolError(
-              "A member holds one ID document — pass either passport or saId, not both.",
-            );
-          }
-          if (passportOp === "set") {
-            assertValidIdNumber("passport", args.passport as string);
-          }
-          if (saIdOp === "set")
-            assertValidIdNumber("sa_id", args.saId as string);
-          if (passportOp !== "unchanged") {
-            patch.passportEncrypted =
-              passportOp === "set" ? encrypt(args.passport as string) : null;
-            if (passportOp === "set") patch.saIdEncrypted = null;
-          }
-          if (saIdOp !== "unchanged") {
-            patch.saIdEncrypted =
-              saIdOp === "set" ? encrypt(args.saId as string) : null;
-            if (saIdOp === "set") patch.passportEncrypted = null;
-          }
-          if (classifyIdArg(args.eft) !== "unchanged") {
-            patch.eftDetailsEncrypted = args.eft ? encrypt(args.eft) : null;
-          }
-          await db
-            .update(schema.users)
-            .set(patch)
-            .where(eq(schema.users.id, scope.campUserId));
-          return { ok: true };
         },
       }),
   );

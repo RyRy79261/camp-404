@@ -60,12 +60,16 @@ website, never more, and takes data out the way the website does.
   sign-up for a non-captain) with no safety data and no ID or bank numbers for
   anyone. `get_user` is the member panel: a team lead or captain also gets
   emergency contacts, each read of someone else's recorded after the
-  response. A captain reads one ID number at a time with
-  `get_member_id_number`, recorded BEFORE it is returned and refused if the
-  record fails (the member export's rule; the panel records after the
-  response). Bank details are never in a list: the Finance team reads one
-  claim's with `get_claim_bank_details` (the website's
-  `reimbursement.account_viewed` row).
+  response.
+- **No ID numbers or bank details, for anyone** (owner, 2026-10-05: "The
+  agents won't need any access to that kind of information."). No tool reads
+  or writes an ALWAYS_PRIVATE value (`packages/core/src/privacy.ts`): ID /
+  passport numbers and bank or account details, the person's own included.
+  `update_my_burner_profile` refuses an `id.number` answer, and the claim read
+  behind `list_reimbursements` does not select the account at all. They are on
+  the website's audited pages for those who may see them; `what_can_i_do`
+  links there. `no-private-fields.test.ts` calls every tool, as a captain and
+  as the data's owner, and fails if any answer carries one.
 
 ## Auth foundation
 
@@ -143,6 +147,13 @@ Three tiers (original proposal):
 
 ## Consent gate (ID documents only)
 
+[CORRECTION 2026-10-05] Superseded: the connector returns no ID numbers or
+bank details to anyone (see "Same access as the website"), so the consent flag
+gates nothing and its tools (`get_my_ai_consent`, `set_my_ai_consent`) and
+`lib/mcp/consent.ts` are gone. The `users.ai_data_consent` columns are dead
+(only erasure still clears them); dropping them is left for a later PR. The
+section below is the original design.
+
 `users.aiDataConsent` is opt-out by default. It gates **only** these fields
 when the subject is not the caller:
 
@@ -181,8 +192,8 @@ the appropriate tier with no consent gate.
 | `whoami` | R | M | returns scope + display name + required actions count |
 | `list_my_required_actions` | R | M | own pending/blocking rows, and [2026-10-04] the open optional questionnaires (#347), marked optional |
 | `what_can_i_do` | R | M | [2026-10-04] rank, led teams, tools by area, website-only actions with links |
-| `get_my_ai_consent` | R | M | `{ enabled, since }` |
-| `set_my_ai_consent(enabled)` | W | M | writes flag + timestamp + audit |
+| `get_my_ai_consent` | R | M | `{ enabled, since }` [CORRECTION 2026-10-05: removed] |
+| `set_my_ai_consent(enabled)` | W | M | writes flag + timestamp + audit [CORRECTION 2026-10-05: removed] |
 
 ### Profile (self only)
 
@@ -192,7 +203,7 @@ the appropriate tier with no consent gate.
 | `get_my_dietary_requirements` / `update_my_dietary_requirements` | R/W | M — [CORRECTION 2026-10-04] the #245 pick-list (`saveMyDietary`), which the meal plan's allergy check reads |
 | `get_my_driver_profile` / `update_my_driver_profile` | R/W | M |
 | `get_my_emergency_contacts` / `update_my_emergency_contacts` | R/W | M |
-| `get_my_id_documents` / `update_my_id_documents` | R/W | M | passport / SA ID, decrypted for self |
+| `get_my_id_documents` / `update_my_id_documents` | R/W | M | passport / SA ID, decrypted for self [CORRECTION 2026-10-05: removed; no ID numbers through the connector] |
 
 ### People
 
@@ -200,7 +211,7 @@ the appropriate tier with no consent gate.
 |---|---|---|---|
 | `list_users(filter)` | R | M | directory fields for all + ID docs only for consenting subjects + captain |
 | `get_user(id)` | R | M / L / C | scope determines field set; ID docs require consent + captain |
-| `get_member_id_number(id)` | R | C | [2026-10-04] one ID number, audited before it is returned; consent required |
+| `get_member_id_number(id)` | R | C | [2026-10-04] one ID number, audited first [CORRECTION 2026-10-05: removed] |
 | `set_user_rank` / `assign_team_membership` | W | C | |
 
 ### Teams
@@ -266,7 +277,7 @@ survival-guide.camp-404.com, with members-only parts kept in the app.
 | `list_reimbursements(filter)` | R | L (own team, redacted) / C (all, decrypted) | |
 | `approve_reimbursement` / `reject_reimbursement` | W | team L of claim's team OR C | per existing routing |
 | `mark_paid` / `mark_reconciled` | W | C | [CORRECTION 2026-10-04] removed: website-only |
-| `get_claim_bank_details(claimId)` | R | captain or Finance lead | [2026-10-04] one claim's bank details, `reimbursement.account_viewed` after the response; consent required |
+| `get_claim_bank_details(claimId)` | R | captain or Finance lead | [2026-10-04] one claim's bank details [CORRECTION 2026-10-05: removed] |
 
 [CORRECTION 2026-09-30] The claim tools as built (#242):
 `submit_reimbursement` was removed, because a claim needs private receipt

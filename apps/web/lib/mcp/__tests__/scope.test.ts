@@ -5,15 +5,13 @@ import { resolveMcpScope } from "@/lib/mcp/scope";
 function buildRows(
   overrides: Partial<McpScopeRows> & {
     rank?: "captain" | "member";
-    aiDataConsent?: boolean;
   } = {},
 ): McpScopeRows {
-  const { rank = "member", aiDataConsent = false, ...rest } = overrides;
+  const { rank = "member", ...rest } = overrides;
   return {
     user: {
       id: "00000000-0000-0000-0000-000000000001",
       rank,
-      aiDataConsent,
       ...(rest.user ?? {}),
     },
     teamMemberships: rest.teamMemberships ?? [],
@@ -44,11 +42,6 @@ describe("resolveMcpScope", () => {
   it("propagates driver intent", () => {
     const scope = resolveMcpScope(buildRows({ driverIntent: true }));
     expect(scope.isDriver).toBe(true);
-  });
-
-  it("carries the subject's own ai-data consent", () => {
-    const scope = resolveMcpScope(buildRows({ aiDataConsent: true }));
-    expect(scope.aiDataConsent).toBe(true);
   });
 });
 

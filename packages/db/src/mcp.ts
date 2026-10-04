@@ -48,7 +48,6 @@ export interface McpScopeRows {
   user: {
     id: string;
     rank: "captain" | "member";
-    aiDataConsent: boolean;
   };
   teamMemberships: Array<{ team: Team; isLead: boolean }>;
   driverIntent: boolean;
@@ -75,7 +74,6 @@ export async function getMcpScopeRows(
     .select({
       id: schema.users.id,
       rank: schema.users.rank,
-      aiDataConsent: schema.users.aiDataConsent,
     })
     .from(schema.users)
     .where(activeMember(campUserId))

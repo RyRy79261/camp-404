@@ -14,7 +14,7 @@ export function registerIdentityTools(server: McpServer): void {
     {
       title: "Who am I",
       description:
-        "Returns your id, stored rank (captain or member), your rung on the ladder (member, team lead or captain), this year's teams and the ones you lead, whether you drive this year, and your AI data consent. For what you may do, call what_can_i_do.",
+        "Returns your id, stored rank (captain or member), your rung on the ladder (member, team lead or captain), this year's teams and the ones you lead, and whether you drive this year. For what you may do, call what_can_i_do.",
       inputSchema: {},
     },
     async (_args, extra) =>
@@ -30,7 +30,6 @@ export function registerIdentityTools(server: McpServer): void {
           isDriver: scope.isDriver,
           memberTeams: scope.memberTeams,
           leadTeams: scope.leadTeams,
-          aiDataConsent: scope.aiDataConsent,
         }),
       }),
   );
@@ -113,67 +112,6 @@ export function registerIdentityTools(server: McpServer): void {
               url: siteUrl(`/questionnaires/${form.activationId}`),
             })),
           };
-        },
-      }),
-  );
-
-  server.registerTool(
-    "get_my_ai_consent",
-    {
-      title: "Get my AI-data consent flag",
-      description:
-        "Returns whether the current user has opted into having their ID documents (passport, SA ID, EFT bank details) surfaced to *other* users' AI/MCP sessions. Doesn't affect what the user sees about themselves.",
-      inputSchema: {},
-    },
-    async (_args, extra) =>
-      runTool({
-        toolName: "get_my_ai_consent",
-        extra,
-        argsForAudit: null,
-        handler: async ({ scope }) => {
-          const db = createHttpDb();
-          const [row] = await db
-            .select({
-              enabled: schema.users.aiDataConsent,
-              since: schema.users.aiDataConsentAt,
-            })
-            .from(schema.users)
-            .where(eq(schema.users.id, scope.campUserId))
-            .limit(1);
-          return row ?? { enabled: false, since: null };
-        },
-      }),
-  );
-
-  server.registerTool(
-    "set_my_ai_consent",
-    {
-      title: "Set my AI-data consent flag",
-      description:
-        "Toggle the user's opt-in for surfacing their ID documents to other users' AI/MCP sessions. Setting `true` records a `since` timestamp; setting `false` clears it. Default is opt-out.",
-      inputSchema: {
-        enabled: z.boolean(),
-      },
-    },
-    async (args, extra) =>
-      runTool({
-        toolName: "set_my_ai_consent",
-        extra,
-        argsForAudit: args,
-        handler: async ({ scope }) => {
-          const db = createHttpDb();
-          const [row] = await db
-            .update(schema.users)
-            .set({
-              aiDataConsent: args.enabled,
-              aiDataConsentAt: args.enabled ? new Date() : null,
-            })
-            .where(eq(schema.users.id, scope.campUserId))
-            .returning({
-              enabled: schema.users.aiDataConsent,
-              since: schema.users.aiDataConsentAt,
-            });
-          return row;
         },
       }),
   );

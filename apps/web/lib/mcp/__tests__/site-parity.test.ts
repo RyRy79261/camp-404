@@ -4,7 +4,6 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "@camp404/db/schema";
-import type * as Audit from "@camp404/db/audit";
 import type * as Forms from "@/lib/forms";
 import { encrypt } from "@camp404/db/crypto";
 import { getMenuDietaryFor } from "@camp404/db/dietary";
@@ -28,26 +27,13 @@ import {
 
 process.env.PGCRYPTO_KEY = "test-pgcrypto-key-at-least-16-chars";
 
-// Reads of someone else's private data are recorded after the response
-// (lib/audit.ts, through next/server's `after`). Collected here, so a test can
-// tell a row written BEFORE the answer from one written after it.
+// Reads of someone else's safety data are recorded after the response
+// (lib/audit.ts, through next/server's `after`). Collected here and run on
+// demand.
 const afterTasks = vi.hoisted(() => [] as (() => Promise<void>)[]);
 vi.mock("next/server", () => ({
   after: (task: () => Promise<void>) => afterTasks.push(task),
 }));
-// The audit write is real, with a switch to make it fail.
-const auditFails = vi.hoisted(() => ({ on: false }));
-vi.mock("@camp404/db/audit", async (importOriginal) => {
-  const actual = await importOriginal<typeof Audit>();
-  return {
-    ...actual,
-    appendAuditEvent: async (event: Audit.AuditEvent) => {
-      if (auditFails.on) throw new Error("audit store down");
-      return actual.appendAuditEvent(event);
-    },
-  };
-});
-
 // My forms' Optional section reads builder questionnaires the test camp does
 // not have; the list is stubbed so the tool's handling of it can be checked.
 vi.mock("@/lib/forms", async (importOriginal) => ({
@@ -88,7 +74,6 @@ const h = useTestDb();
 
 beforeEach(() => {
   afterTasks.length = 0;
-  auditFails.on = false;
 });
 
 const approved = (overrides: Partial<typeof schema.users.$inferInsert> = {}) =>
@@ -189,68 +174,6 @@ describe("people: the roster's rows and columns", () => {
 
     const asMember = await call("get_user", { userId: subject.id }, member.id);
     expect(asMember.data).not.toHaveProperty("emergencyContacts");
-  });
-});
-
-describe("people: one member's ID number", () => {
-  async function setUp(consent = true) {
-    const captain = await approved({ rank: "captain" });
-    const subject = await approved({
-      aiDataConsent: consent,
-      saIdEncrypted: encrypt("9001015009087"),
-    });
-    return { captain, subject };
-  }
-
-  it("records the read BEFORE it answers, then gives the number", async () => {
-    const { captain, subject } = await setUp();
-    const result = await call(
-      "get_member_id_number",
-      { userId: subject.id },
-      captain.id,
-    );
-    expect(result.data).toEqual({ idType: "sa_id", idNumber: "9001015009087" });
-    // Nothing flushed: the row is already there.
-    expect(await auditRows("member.id_document.viewed")).toEqual([
-      expect.objectContaining({
-        actorId: captain.id,
-        target: subject.id,
-        metadata: { basis: "captain", via: "mcp", idType: "sa_id" },
-      }),
-    ]);
-  });
-
-  it("shows nothing when the read can't be recorded", async () => {
-    const { captain, subject } = await setUp();
-    auditFails.on = true;
-    const result = await call(
-      "get_member_id_number",
-      { userId: subject.id },
-      captain.id,
-    );
-    expect(result.error).toMatch(/couldn't be recorded/);
-    expect(JSON.stringify(result)).not.toContain("9001015009087");
-  });
-
-  it("is a captain's only, and only with the member's consent", async () => {
-    const { captain, subject } = await setUp(false);
-    const lead = await approved();
-    await makeMembership(h.db(), {
-      userId: lead.id,
-      team: "kitchen",
-      isLead: true,
-    });
-    expect(
-      await call("get_member_id_number", { userId: subject.id }, lead.id),
-    ).toEqual({ error: "Only a captain can do this." });
-    const refused = await call(
-      "get_member_id_number",
-      { userId: subject.id },
-      captain.id,
-    );
-    expect(refused.error).toMatch(/hasn't allowed/);
-    expect(refused.error).toMatch(/\/captains\/camp-management$/);
-    expect(await auditRows("member.id_document.viewed")).toEqual([]);
   });
 });
 
