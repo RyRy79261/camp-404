@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 
@@ -25,6 +26,8 @@ vi.mock("@/app/(console)/guide/actions", () => ({
   unpublishGuideChapterAction: vi.fn(),
 }));
 
+import { toast } from "@camp404/ui/components/toast";
+import { setGuideChapterMembersOnlyAction } from "@/app/(console)/guide/actions";
 import { ChapterEditor } from "../chapter-editor";
 
 afterEach(cleanup);
@@ -35,6 +38,7 @@ function editor(
     publicSections = [] as string[],
     membersOnly = false,
     live = null as { version: number; day: string } | null,
+    canSetMembersOnly = false,
   } = {},
 ) {
   return render(
@@ -61,7 +65,7 @@ function editor(
       }}
       teams={[{ value: "kitchen", label: "Kitchen" }]}
       canPickWholeCamp={false}
-      canSetMembersOnly={false}
+      canSetMembersOnly={canSetMembersOnly}
       publicSections={publicSections}
     />,
   );
@@ -179,5 +183,19 @@ describe("the guide editor and the public site", () => {
         .getByRole("checkbox", { name: "Keep this whole chapter members only" })
         .hasAttribute("disabled"),
     ).toBe(true);
+  });
+
+  it("frees the mark again and says so when the request fails", async () => {
+    vi.mocked(setGuideChapterMembersOnlyAction).mockRejectedValueOnce(
+      new Error("offline"),
+    );
+    editor(undefined, { canSetMembersOnly: true });
+    const box = screen.getByRole("checkbox", {
+      name: "Keep this whole chapter members only",
+    });
+    fireEvent.click(box);
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(box.hasAttribute("disabled")).toBe(false);
+    expect(box.getAttribute("aria-checked")).toBe("false");
   });
 });

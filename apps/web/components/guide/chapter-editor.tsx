@@ -373,11 +373,20 @@ export function ChapterEditor({
   async function changeMembersOnly(next: boolean) {
     if (mode.kind !== "edit") return;
     setMarkPending(true);
-    const result = await setGuideChapterMembersOnlyAction({
-      slug: mode.slug,
-      membersOnly: next,
-    });
-    setMarkPending(false);
+    let result: Awaited<ReturnType<typeof setGuideChapterMembersOnlyAction>>;
+    try {
+      result = await setGuideChapterMembersOnlyAction({
+        slug: mode.slug,
+        membersOnly: next,
+      });
+    } catch {
+      result = {
+        ok: false,
+        error: "That didn't go through. Check your connection and try again.",
+      };
+    } finally {
+      setMarkPending(false);
+    }
     if (!result.ok) {
       toast.error(result.error);
       return;

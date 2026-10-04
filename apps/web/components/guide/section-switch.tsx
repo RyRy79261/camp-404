@@ -40,11 +40,17 @@ export function SectionSwitch({
   async function flip(next: boolean): Promise<boolean> {
     setPending(true);
     setError(null);
-    const result = await setGuideSectionPublicAction({
-      category,
-      public: next,
-    });
-    setPending(false);
+    let result: Awaited<ReturnType<typeof setGuideSectionPublicAction>>;
+    try {
+      result = await setGuideSectionPublicAction({ category, public: next });
+    } catch {
+      result = {
+        ok: false,
+        error: "That didn't go through. Check your connection and try again.",
+      };
+    } finally {
+      setPending(false);
+    }
     if (!result.ok) {
       if (next) setError(result.error);
       else toast.error(result.error);
