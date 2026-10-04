@@ -203,7 +203,7 @@ the appropriate tier with no consent gate.
 | `get_my_dietary_requirements` / `update_my_dietary_requirements` | R/W | M — [CORRECTION 2026-10-04] the #245 pick-list (`saveMyDietary`), which the meal plan's allergy check reads |
 | `get_my_driver_profile` / `update_my_driver_profile` | R/W | M |
 | `get_my_emergency_contacts` / `update_my_emergency_contacts` | R/W | M |
-| `get_my_id_documents` / `update_my_id_documents` | R/W | M | passport / SA ID, decrypted for self [CORRECTION 2026-10-05: removed; no ID numbers through the connector] |
+| `get_my_id_documents` / `update_my_id_documents` | R/W | M — passport / SA ID, decrypted for self [CORRECTION 2026-10-05: removed; no ID numbers through the connector] |
 
 ### People
 
