@@ -187,5 +187,19 @@ export function presentEntry(
     ...(row.kind === "chapter" && row.label === "duty_card"
       ? { card: true }
       : {}),
+    // A text hit's line, as the server cut it: never the text it came from.
+    ...(row.match
+      ? {
+          match: {
+            where: row.match.where,
+            membersOnly: row.match.membersOnly,
+            text: row.match.text,
+            marks: row.match.marks.map(({ start, length }) => ({
+              start,
+              length,
+            })),
+          },
+        }
+      : {}),
   };
 }

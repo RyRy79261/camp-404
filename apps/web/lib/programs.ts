@@ -96,6 +96,12 @@ export interface RegistryEntry {
   id: Exclude<ProgramId, "desktop">;
   /** The plain name on icons, the Start menu and the window title. */
   label: string;
+  /**
+   * A few words for what is inside it, so Ctrl+K finds Power for "fuel"
+   * (#350). Matched in the browser after the name; a name match ranks first.
+   * Each is something the program's own pages show.
+   */
+  keywords?: readonly string[];
   /** The old 404 OS name, for the Terminal and a quiet title suffix. */
   fileName: string;
   /** Where its icon opens. Children have none: another program opens them. */
@@ -148,6 +154,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "inbox",
     label: "Inbox",
+    keywords: ["Notifications", "Unread", "Announcements"],
     fileName: "INBOX.EXE",
     href: "/notifications",
     icon: "inbox",
@@ -158,6 +165,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "tasks",
     label: "Tasks",
+    keywords: ["To do", "Doing", "Deadline"],
     fileName: "TASKS.EXE",
     href: "/tasks",
     icon: "tasks",
@@ -167,6 +175,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "calendar",
     label: "Calendar",
+    keywords: ["Events", "Coming up"],
     fileName: "CALENDAR.EXE",
     href: "/calendar",
     icon: "calendar",
@@ -176,6 +185,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "my-forms",
     label: "My forms",
+    keywords: ["Dietary needs", "Questionnaire"],
     fileName: "MYFORMS.EXE",
     href: "/tools/forms",
     icon: "my-forms",
@@ -185,6 +195,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "invites",
     label: "Invites",
+    keywords: ["Invite code", "Invite a member"],
     fileName: "KEYGEN.EXE",
     href: "/tools/invite",
     icon: "invites",
@@ -194,6 +205,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "account",
     label: "My account",
+    keywords: ["Profile", "Ticket", "Payment reference", "Password"],
     fileName: "MY_ACCOUNT.CPL",
     href: "/profile",
     icon: "account",
@@ -205,6 +217,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "my-dues",
     label: "My dues",
+    keywords: ["Payment plan", "Charges", "Refund"],
     fileName: "MY_DUES.TXT",
     href: "/dues",
     icon: "my-dues",
@@ -216,6 +229,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "my-gear",
     label: "My gear",
+    keywords: ["Tent", "Bedding", "Sharing a tent"],
     fileName: "MY_GEAR.TXT",
     href: "/gear",
     icon: "my-gear",
@@ -227,6 +241,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "my-shifts",
     label: "My shifts",
+    keywords: ["Volunteer shifts", "AfrikaBurn shift"],
     fileName: "MY_SHIFTS.TXT",
     href: "/shifts/mine",
     icon: "my-shifts",
@@ -238,6 +253,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "my-claims",
     label: "My claims",
+    keywords: ["Receipts", "Bank details"],
     fileName: "CLAIMS.TXT",
     href: "/claims",
     icon: "my-claims",
@@ -249,6 +265,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "my-lift",
     label: "My lift",
+    keywords: ["Driver", "Riders", "Ride", "Your car"],
     fileName: "MY_LIFT.EXE",
     href: "/lift",
     icon: "my-lift",
@@ -263,6 +280,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "roster",
     label: "Roster",
+    keywords: ["Members", "Waiting list"],
     fileName: "ROSTER.DB",
     href: "/captains/camp-management",
     icon: "roster",
@@ -272,6 +290,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "meetings",
     label: "Meetings",
+    keywords: ["Agenda", "Decisions", "Action items", "Attendees"],
     fileName: "MINUTES.EXE",
     href: "/meetings",
     icon: "meetings",
@@ -283,6 +302,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "power",
     label: "Power",
+    keywords: ["Fuel cans", "Generator", "Loads", "Grid", "Refuelling"],
     fileName: "POWER.EXE",
     href: "/power",
     icon: "power",
@@ -293,6 +313,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "logistics",
     label: "Logistics",
+    keywords: ["AfrikaBurn dates", "Deadlines", "Who can help"],
     fileName: "LOGISTICS.EXE",
     href: "/logistics",
     icon: "logistics",
@@ -304,6 +325,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "shifts",
     label: "Shifts",
+    keywords: ["Burn days", "Duty card"],
     fileName: "ROSTER.EXE",
     href: "/shifts",
     icon: "shifts",
@@ -314,6 +336,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "camp-layout",
     label: "Camp layout",
+    keywords: ["Site plan", "Our plot", "Neighbours", "Arrivals"],
     fileName: "SITEPLAN.DWG",
     href: "/camp-layout",
     icon: "camp-layout",
@@ -325,6 +348,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "lounge",
     label: "Lounge",
+    keywords: ["Programme", "Offers", "Event guide", "Music"],
     fileName: "LOUNGE.EXE",
     href: "/lounge",
     icon: "lounge",
@@ -336,6 +360,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "inventory",
     label: "Inventory",
+    keywords: ["Gear", "Bookings", "Lent out", "Maintenance"],
     fileName: "INVENTRY.DB",
     href: "/inventory",
     icon: "inventory",
@@ -347,6 +372,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "transport",
     label: "Transport",
+    keywords: ["Lifts", "Fuel cans", "Cars", "Trailers", "Seats"],
     fileName: "CARPOOL.EXE",
     href: "/transport",
     icon: "transport",
@@ -356,6 +382,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "family-tree",
     label: "Family tree",
+    keywords: ["Invited by"],
     fileName: "LINEAGE.EXE",
     href: "/family-tree",
     icon: "family-tree",
@@ -367,6 +394,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "about",
     label: "About Camp 404",
+    keywords: ["Camp fee", "Getting there", "Where we are"],
     fileName: "README.TXT",
     href: "/about",
     icon: "about",
@@ -378,6 +406,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "guide",
     label: "Survival Guide",
+    keywords: ["Chapters", "Duty cards"],
     fileName: "GUIDE.HLP",
     href: "/guide",
     icon: "guide",
@@ -403,6 +432,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "budgets",
     label: "Budgets",
+    keywords: ["Team budgets", "Spent", "Over budget"],
     fileName: "BUDGETS.XLS",
     href: "/teams/budgets",
     icon: "budgets",
@@ -412,6 +442,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "recipes",
     label: "Recipes",
+    keywords: ["Recipe book", "Import a recipe", "Dictate"],
     fileName: "COOKBOOK.EXE",
     href: "/kitchen/recipes",
     icon: "recipes",
@@ -421,6 +452,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "meal-plan",
     label: "Meal plan",
+    keywords: ["Menu", "Snacks", "Allergies", "Prep plan"],
     fileName: "MEALPLAN.XLS",
     href: "/kitchen/meal-plan",
     icon: "meal-plan",
@@ -430,6 +462,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "shopping-list",
     label: "Shopping list",
+    keywords: ["Food cost", "To buy"],
     fileName: "SHOPPING.LST",
     href: "/kitchen/shopping",
     icon: "shopping-list",
@@ -439,6 +472,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "recipe-review",
     label: "Recipe review",
+    keywords: ["Proofread", "Suggestions"],
     fileName: "REVIEW.EXE",
     href: "/kitchen/recipes/review",
     icon: "recipe-review",
@@ -451,6 +485,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "overview",
     label: "Camp overview",
+    keywords: ["Camp ready", "Team coverage", "Tickets"],
     fileName: "CAMPSTAT.EXE",
     href: "/captains/overview",
     icon: "overview",
@@ -462,6 +497,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "applications",
     label: "Applications",
+    keywords: ["Accept", "Tickets", "WAP", "DDT"],
     fileName: "INTAKE.DB",
     href: "/captains/applications",
     icon: "applications",
@@ -471,6 +507,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "questionnaires",
     label: "Questionnaires",
+    keywords: ["Results", "Responses", "Publish"],
     fileName: "FORMS.EXE",
     href: "/captains/questionnaires",
     icon: "questionnaires",
@@ -480,6 +517,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "announcements",
     label: "Announcements",
+    keywords: ["Pop-up", "Drafts"],
     fileName: "BROADCAST.EXE",
     href: "/captains/announcements",
     icon: "announcements",
@@ -489,6 +527,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "new-event",
     label: "New event",
+    keywords: ["Add an event", "All day"],
     fileName: "NEWEVENT.EXE",
     href: "/captains/calendar",
     icon: "new-event",
@@ -500,6 +539,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "claim-approvals",
     label: "Claims to approve",
+    keywords: ["Approve claims", "Turn down"],
     fileName: "APPROVE.EXE",
     href: "/captains/claims",
     icon: "claim-approvals",
@@ -513,6 +553,13 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "payments",
     label: "Payments",
+    keywords: [
+      "Who owes what",
+      "Bank statement",
+      "Settle-up",
+      "Fee tiers",
+      "Proofs",
+    ],
     fileName: "LEDGER.DB",
     href: "/captains/payments",
     icon: "payments",
@@ -525,6 +572,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "gear-rental",
     label: "Gear rental",
+    keywords: ["Tents", "Catalogue", "Orders", "Supplier price"],
     fileName: "RENTAL.DB",
     href: "/captains/gear-rental",
     icon: "gear-rental",
@@ -535,6 +583,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "camp-settings",
     label: "Camp settings",
+    keywords: ["Teams", "New year", "Rollover"],
     fileName: "SETTINGS.CPL",
     href: "/captains/camp-settings",
     icon: "camp-settings",
@@ -544,6 +593,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "join-site",
     label: "Join site",
+    keywords: ["Fee levels", "How to join"],
     fileName: "JOINSITE.EXE",
     href: "/captains/join-site",
     icon: "join-site",
@@ -555,6 +605,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "report-screenshots",
     label: "Report screenshots",
+    keywords: ["Bug reports", "Feedback"],
     fileName: "SCREENSHOTS.EXE",
     href: "/captains/report-screenshots",
     icon: "report-screenshots",
@@ -564,6 +615,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "audit",
     label: "Audit log",
+    keywords: ["History", "Changes"],
     fileName: "AUDIT.LOG",
     href: "/captains/audit",
     icon: "audit",
@@ -573,6 +625,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "system",
     label: "System status",
+    keywords: ["Core services", "Background work"],
     fileName: "SYSMON.EXE",
     href: "/captains/system",
     icon: "system",
@@ -586,6 +639,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "terminal",
     label: "Terminal",
+    keywords: ["Commands", "Inkblot"],
     fileName: "TERMINAL.EXE",
     href: "/terminal",
     icon: "terminal",
@@ -988,6 +1042,8 @@ export interface ProgramManifest {
 export interface SearchPlace {
   id: string;
   where: string;
+  /** Words for what is inside it ("Fuel cans"), when it has any. */
+  keywords?: string[];
 }
 
 // --- Building it -----------------------------------------------------------------
@@ -1312,7 +1368,14 @@ export function buildProgramManifest(
       item.kind === "program"
         ? [byId.get(item.id)].filter((p) => p !== undefined)
         : (folders.find((f) => f.id === item.id)?.programs ?? []);
-    for (const p of listed) search.push({ id: p.id, where: whereOf(p) });
+    for (const p of listed) {
+      const keywords = registry.find((e) => e.id === p.id)?.keywords;
+      search.push({
+        id: p.id,
+        where: whereOf(p),
+        ...(keywords?.length ? { keywords: [...keywords] } : {}),
+      });
+    }
   }
 
   const body = {

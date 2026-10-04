@@ -19,7 +19,8 @@ import {
 // Ctrl+K program search (issue #326, step 1). The box lists what the
 // member's manifest holds, which the server filters by rank, so a plain
 // member never finds a captain's program; Enter opens the program's window
-// the way the Start menu does.
+// the way the Start menu does. It opens in Programs (#350), which asks the
+// server nothing; Everything finds camp entries too.
 
 async function asRank(
   page: Page,
@@ -51,6 +52,21 @@ async function pressCtrlK(page: Page) {
     await page.keyboard.press("Control+k");
     await expect(searchBox(page)).toBeVisible({ timeout: 1_000 });
   }).toPass();
+}
+
+function scopeRadio(page: Page, name: "Programs" | "Everything") {
+  return searchBox(page)
+    .getByRole("radiogroup", { name: "Search in" })
+    .getByRole("radio", { name });
+}
+
+/** Every /api/search request the page makes from now on. */
+function searchRequests(page: Page): string[] {
+  const seen: string[] = [];
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname === "/api/search") seen.push(r.url());
+  });
+  return seen;
 }
 
 test.describe("Ctrl+K program search (test-mode)", () => {
@@ -120,9 +136,13 @@ test.describe("Ctrl+K program search (test-mode)", () => {
     await expect(result(page, /^Camp settings,/)).toHaveCount(0);
     await expect(result(page, /^Camp overview,/)).toHaveCount(0);
     await input.fill("audit log");
+    // Programs finds nothing: one row offers Everything instead.
     await expect(
-      searchBox(page).getByText("Nothing you can open is called “audit log”."),
+      result(page, /^Search everything for “audit log”/),
     ).toBeVisible();
+    await expect(
+      searchBox(page).getByTestId("search-footer-status"),
+    ).toHaveText("No program found");
 
     await page.keyboard.press("Escape");
     await asRank(page, request, "search-captain", "captain");
@@ -204,8 +224,14 @@ async function invitedMember(
   await completeOnboarding(request, id);
 }
 
+/** Ctrl+K in Everything (a click on the toggle when it is on Programs). */
 async function typeSearch(page: Page, text: string) {
   await pressCtrlK(page);
+  const everything = scopeRadio(page, "Everything");
+  if ((await everything.getAttribute("aria-checked")) !== "true") {
+    await everything.click();
+    await expect(everything).toHaveAttribute("aria-checked", "true");
+  }
   await searchBox(page).getByRole("combobox").fill(text);
 }
 
@@ -251,8 +277,13 @@ test.describe("Ctrl+K search everything (test-mode)", () => {
       }),
     ).toBeVisible();
 
-    // Opened from search, the entry is Recent: the server looks it up again.
+    // Opened from search, the entry is Recent: the server looks it up again
+    // (Everything is remembered).
     await pressCtrlK(page);
+    await expect(scopeRadio(page, "Everything")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
     await expect(searchBox(page).getByText("Recent")).toBeVisible();
     await expect(result(page, /^Potjiekos for 40, Recipe/)).toBeVisible();
     await page.keyboard.press("Escape");
@@ -510,6 +541,14 @@ test.describe("Ctrl+K search everything (test-mode)", () => {
     }).toPass();
     // The tap focused the field itself (so iOS shows the keyboard).
     await expect(searchBox(page).getByRole("combobox")).toBeFocused();
+    // The toggle is a full-width row under the field: two big targets.
+    const toggle = searchBox(page).getByRole("radiogroup", {
+      name: "Search in",
+    });
+    const t = (await toggle.boundingBox())!;
+    expect(t.width).toBeGreaterThanOrEqual(360);
+    await scopeRadio(page, "Everything").click();
+    await expect(searchBox(page).getByRole("combobox")).toBeFocused();
     await searchBox(page).getByRole("combobox").fill("potjie");
     const row = result(page, /^Potjiekos for 40, Recipe/);
     await expect(row).toBeVisible();
@@ -518,5 +557,162 @@ test.describe("Ctrl+K search everything (test-mode)", () => {
     const title = (await row.getByText("Potjiekos for 40").boundingBox())!;
     const detail = (await row.getByText("40 plates").boundingBox())!;
     expect(detail.y).toBeGreaterThan(title.y + title.height - 1);
+  });
+});
+
+// Search inside text (#350), behind the Programs | Everything toggle.
+
+const LAMB_BOOK = {
+  title: "Lamb potjie for 40",
+  plates: [40],
+  ingredients: [
+    {
+      name: "Lamb shoulder",
+      category: "protein",
+      quantity: 8,
+      unit: "kg",
+      allergens: [],
+    },
+  ],
+  steps: [
+    {
+      instruction:
+        "Brown the lamb in the big pot on the second gas burner, in small batches so it sears and never stews.",
+    },
+  ],
+};
+
+test.describe("Ctrl+K: Programs | Everything, and search inside text (test-mode)", () => {
+  test.beforeEach(async ({ request }) => {
+    await resetTestState(request);
+  });
+
+  test("Programs asks the server nothing; Ctrl+K switches to Everything, which is remembered after a reload", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "the shortcut is a keyboard's; the phone taps");
+    await invitedMember(page, request, "tx-cook", "Tx Cook");
+    const seeded = await request.post("/api/test/seed-kitchen-book", {
+      data: { authUserId: "tx-cook", recipes: [POT_BOOK] },
+    });
+    expect(seeded.ok()).toBe(true);
+    await asRank(page, request, "tx-member", "member");
+    const asked = searchRequests(page);
+
+    await pressCtrlK(page);
+    await expect(scopeRadio(page, "Programs")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    const input = searchBox(page).getByRole("combobox");
+    await input.fill("pow");
+    await expect(result(page, /^Power, Program/)).toBeVisible();
+    // A search word finds Power too, and says which.
+    await input.fill("fuel");
+    await expect(
+      result(page, /^Power, Program, Fuel cans, Power and Lighting/),
+    ).toBeVisible();
+    await input.fill("pot");
+    await expect(result(page, /^Search everything for “pot”/)).toBeVisible();
+    // Past the debounce, and still nothing asked.
+    await page.waitForTimeout(600);
+    expect(asked).toEqual([]);
+
+    // Ctrl+K inside the box switches; the recipe comes from the server.
+    await page.keyboard.press("Control+k");
+    await expect(searchBox(page)).toBeVisible();
+    await expect(scopeRadio(page, "Everything")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(searchBox(page).getByRole("status")).toContainText(
+      "Everything: programs, recipes, chapters, meetings and more.",
+    );
+    await expect(result(page, /^Potjiekos for 40, Recipe/)).toBeVisible();
+    expect(asked.some((u) => u.includes("q=pot"))).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(searchBox(page)).toHaveCount(0);
+
+    // Remembered in this browser.
+    await page.reload();
+    await expectDesktop(page);
+    await pressCtrlK(page);
+    await expect(scopeRadio(page, "Everything")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
+  test('the "Search everything" row hands the words over', async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "the same row on a phone");
+    await invitedMember(page, request, "tx-row-cook", "Row Cook");
+    const seeded = await request.post("/api/test/seed-kitchen-book", {
+      data: { authUserId: "tx-row-cook", recipes: [POT_BOOK] },
+    });
+    expect(seeded.ok()).toBe(true);
+    await asRank(page, request, "tx-row", "member");
+    await pressCtrlK(page);
+    await searchBox(page).getByRole("combobox").fill("potjie");
+    const row = result(page, /^Search everything for “potjie”/);
+    await expect(row).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Enter");
+    await expect(scopeRadio(page, "Everything")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(result(page, /^Potjiekos for 40, Recipe/)).toBeVisible();
+  });
+
+  test("a word only in a recipe's method finds it, says where, and opens it; a suggestion's text is not searched", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "the phone's line is the same row, below");
+    // A recipe proofread but not yet in the book, whose version holds the
+    // word, and a recipe in the book whose method holds it too.
+    await invitedMember(page, request, "tx-suggester", "Tx Suggester");
+    const seeded = await request.post("/api/test/seed-kitchen-book", {
+      data: {
+        authUserId: "tx-suggester",
+        recipes: [
+          LAMB_BOOK,
+          {
+            ...LAMB_BOOK,
+            title: "Skottel bread",
+            inBook: false,
+            steps: [
+              { instruction: "Bake on the skottel; it sears the crust." },
+            ],
+          },
+        ],
+      },
+    });
+    expect(seeded.ok()).toBe(true);
+
+    await asRank(page, request, "tx-reader", "member");
+    await typeSearch(page, "sears");
+    const hit = result(
+      page,
+      /^Lamb potjie for 40, Recipe, 40 plates, found in the method: /,
+    );
+    // Present first, then the absence.
+    await expect(hit).toBeVisible();
+    await expect(hit).toContainText("in the method");
+    await expect(hit.locator("mark")).toHaveText(["sears"]);
+    await expect(result(page, /^Skottel bread,/)).toHaveCount(0);
+    await expect(hit).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Enter");
+    await expect(searchBox(page)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/kitchen\/recipes\/[0-9a-f-]{36}$/);
+    await expect(
+      liveWindow(page).getByRole("heading", {
+        level: 1,
+        name: "Lamb potjie for 40",
+      }),
+    ).toBeVisible();
   });
 });

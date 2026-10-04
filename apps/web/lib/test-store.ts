@@ -44,6 +44,10 @@ import {
   sourceText,
   teamEventTitle,
   type AuditAction,
+  announcementTextParts,
+  meetingTextParts,
+  recipeTextParts,
+  type SearchTextPart,
 } from "@camp404/core";
 import {
   DRAFT_MISSING,
@@ -6009,6 +6013,11 @@ export const testStore = {
       activeMinutes?: number | null;
       plates: number[];
       open?: number[];
+      /**
+       * False: the version is written but not accepted (proofread, waiting
+       * for a reviewer), so the recipe is not in the book. Default true.
+       */
+      inBook?: boolean;
       /** The method; one "Cook it." step using every line when left out. */
       steps?: {
         instruction: string;
@@ -6075,6 +6084,11 @@ export const testStore = {
         body,
         report: null,
       });
+      if (seed.inBook === false) {
+        const recipe = findRecipe(id)!;
+        recipe.status = "proofread";
+        recipe.acceptedVersionId = null;
+      }
       for (const plates of more) {
         const k = plates / first;
         recipePlateCounts.push({
@@ -7365,8 +7379,14 @@ export const testStore = {
     runsLounge: boolean;
     reviewsRecipes: boolean;
     now: Date;
-  }): { cycle: number; rows: SearchEntryRow[] } {
+  }): {
+    cycle: number;
+    rows: SearchEntryRow[];
+    /** The text each kind's text branch reads, by `kind:id` (#350). */
+    texts: Map<string, SearchTextPart[]>;
+  } {
     const cycle = currentCycleNumber();
+    const texts = new Map<string, SearchTextPart[]>();
     const me = viewer.userId;
     const blank = {
       team: null,
@@ -7377,12 +7397,17 @@ export const testStore = {
       extra: null,
       ref: null,
       flag: false,
+      match: null,
     };
     const rows: SearchEntryRow[] = [];
     for (const r of recipes) {
       const own = r.submitterId === me;
       if (!(r.acceptedVersionId || own || viewer.reviewsRecipes)) continue;
       const version = recipeVersions.find((v) => v.id === r.acceptedVersionId);
+      // The accepted version's text only, as the database's text branch.
+      if (r.acceptedVersionId && version) {
+        texts.set(`recipe:${r.id}`, recipeTextParts(version.body));
+      }
       rows.push({
         ...blank,
         kind: "recipe",
@@ -7394,6 +7419,15 @@ export const testStore = {
       });
     }
     for (const n of meetingNotes) {
+      texts.set(
+        `meeting:${n.id}`,
+        meetingTextParts({
+          agenda: n.agenda,
+          notes: n.notes,
+          decisions: n.decisions.map((d) => d.text),
+          actions: n.actionItems.map((a) => a.text),
+        }),
+      );
       rows.push({
         ...blank,
         kind: "meeting",
@@ -7470,6 +7504,7 @@ export const testStore = {
       }
       const b = broadcasts.find((x) => x.id === d.broadcastId);
       if (!b?.publishedAt) continue;
+      texts.set(`announcement:${b.id}`, announcementTextParts(d.body));
       rows.push({
         ...blank,
         kind: "announcement",
@@ -7480,7 +7515,7 @@ export const testStore = {
         label: b.audience.scope,
       });
     }
-    return { cycle, rows };
+    return { cycle, rows, texts };
   },
 
   /** Captains who chose to be shown, by name (getJoinCaptains' twin). */

@@ -139,4 +139,29 @@ describe("GET /api/search", () => {
     expect((await get("recent=payment:p1")).status).toBe(400);
     expect((await get("recent=recipe:r1;drop")).status).toBe(400);
   });
+
+  it("answers a text hit with its line and no body field", async () => {
+    const hit = {
+      kind: "recipe" as const,
+      id: "r2",
+      title: "Lamb potjie",
+      detail: "40 plates",
+      href: "/kitchen/recipes/r2",
+      match: {
+        where: "in the method",
+        membersOnly: false,
+        text: "Brown the lamb on the second gas burner.",
+        marks: [{ start: 31, length: 6 }],
+      },
+    };
+    vi.mocked(searchCamp).mockResolvedValue([hit]);
+    const res = await get("q=burner");
+    const body = (await res.json()) as { entries: Record<string, unknown>[] };
+    expect(body.entries).toEqual([hit]);
+    for (const e of body.entries) {
+      for (const key of ["body", "markdown", "notes", "agenda", "source"]) {
+        expect(e).not.toHaveProperty(key);
+      }
+    }
+  });
 });

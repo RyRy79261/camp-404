@@ -22,6 +22,7 @@ import { matchProgram } from "@/lib/program-routes";
 import {
   RECENT_PREFIX_V1,
   recentStorageKey,
+  scopeStorageKey,
   type SearchEntry,
 } from "@/lib/program-search";
 import {
@@ -34,9 +35,10 @@ import { ProgramSearch } from "../program-search";
 // The Ctrl+K box (issue #326), alone: the shortcut, the keyboard, Esc giving
 // focus back, Enter opening a program the Start menu's way (step 1); camp
 // entries from /api/search, debounced and cancelled, grouped with "Show N
-// more", nothing found, no connection, and Recent with entries (step 2). The
-// rank filter is the manifest's (program-search.test.ts); the entries' rules
-// are the server's (packages/db search.test.ts).
+// more", nothing found, no connection, and Recent with entries (step 2); the
+// Programs | Everything toggle, search words and text hits (#350). The rank
+// filter is the manifest's (program-search.test.ts); the entries' rules are
+// the server's (packages/db search.test.ts).
 
 beforeAll(() => {
   // cmdk scrolls the picked row into view; JSDOM has no layout.
@@ -123,6 +125,13 @@ async function settle() {
 
 const type = (value: string) =>
   fireEvent.change(field(), { target: { value } });
+
+/** The member chose Everything before (the box opens in Programs otherwise). */
+const everything = () =>
+  window.localStorage.setItem(scopeStorageKey(USER), "everything");
+const radio = (name: "Programs" | "Everything") =>
+  within(dialog()!).getByRole("radio", { name });
+const status = () => screen.getByRole("status").textContent;
 const option = (name: string | RegExp) =>
   within(dialog()!).queryByRole("option", { name });
 
@@ -146,8 +155,11 @@ describe("ProgramSearch", () => {
     ctrlK();
     expect(dialog()).not.toBeNull();
     expect(document.activeElement).toBe(field());
-    // Ctrl+K again shuts it.
+    // Ctrl+K again switches the toggle (#350); Esc shuts it.
     ctrlK(field());
+    expect(dialog()).not.toBeNull();
+    expect(radio("Everything").getAttribute("aria-checked")).toBe("true");
+    fireEvent.keyDown(field(), { key: "Escape" });
     expect(dialog()).toBeNull();
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     expect(dialog()).not.toBeNull();
@@ -161,6 +173,7 @@ describe("ProgramSearch", () => {
   });
 
   it("filters programs as you type, before the server answers; arrows move; Enter opens the picked program", async () => {
+    everything();
     const open = vi.fn();
     render(<Harness m={manifest()} onOpenProgram={open} />);
     ctrlK();
@@ -187,6 +200,7 @@ describe("ProgramSearch", () => {
   });
 
   it("asks the server once the typing stops, cancelling the request before", async () => {
+    everything();
     render(<Harness m={manifest()} onOpenProgram={vi.fn()} />);
     ctrlK();
     type("p");
@@ -210,6 +224,7 @@ describe("ProgramSearch", () => {
   });
 
   it("groups entries under the programs, and the selection stays on the first program", async () => {
+    everything();
     const openEntry = vi.fn();
     answers = () => [
       entry("recipe", "Potjiekos for 40", "40 plates"),
@@ -242,6 +257,7 @@ describe("ProgramSearch", () => {
   });
 
   it("keeps the selection on a program when entries arrive under it", async () => {
+    everything();
     answers = () => [entry("inventory", "Power cable reel, 50 m")];
     render(<Harness m={manifest()} onOpenProgram={vi.fn()} />);
     ctrlK();
@@ -253,6 +269,7 @@ describe("ProgramSearch", () => {
   });
 
   it("shows three a group, and Show N more opens the rest in place", async () => {
+    everything();
     answers = () =>
       ["Pot bread", "Potjiekos", "Potato salad", "Pot pie", "Potage"].map((t) =>
         entry("recipe", t),
@@ -272,31 +289,24 @@ describe("ProgramSearch", () => {
     expect(option("Show 2 more recipes")).toBeNull();
   });
 
-  it("says so when nothing matches, and offers the guide's own text search", async () => {
-    const openEntry = vi.fn();
-    render(
-      <Harness
-        m={manifest()}
-        onOpenProgram={vi.fn()}
-        onOpenEntry={openEntry}
-      />,
-    );
+  it("says so when nothing in Everything mentions the words", async () => {
+    everything();
+    render(<Harness m={manifest()} onOpenProgram={vi.fn()} />);
     ctrlK();
     type("xylophone");
     await settle();
     expect(dialog()?.textContent).toMatch(
-      /Nothing you can open is called “xylophone”/,
+      /Nothing you can open mentions “xylophone”/,
     );
     expect(screen.getByTestId("search-footer-status").textContent).toBe(
       "Nothing found",
     );
-    const guide = option(/Search the Survival Guide's text for “xylophone”/)!;
-    expect(guide.getAttribute("aria-selected")).toBe("true");
-    fireEvent.keyDown(field(), { key: "Enter" });
-    expect(openEntry).toHaveBeenCalledWith("/guide?q=xylophone");
+    // The guide's text is in the box now: no separate row for it.
+    expect(option(/Survival Guide's text/)).toBeNull();
   });
 
   it("with no connection, programs still filter and the box says why entries are missing", async () => {
+    everything();
     answers = () => "offline";
     render(<Harness m={manifest()} onOpenProgram={vi.fn()} />);
     ctrlK();
@@ -309,8 +319,6 @@ describe("ProgramSearch", () => {
     expect(screen.getByTestId("search-footer-status").textContent).toBe(
       "Programs only: no connection",
     );
-    // The guide's text search needs the server too: not offered.
-    expect(option(/Search the Survival Guide's text/)).toBeNull();
     // Nothing retries on its own.
     await act(async () => {
       vi.advanceTimersByTime(10_000);
@@ -360,6 +368,7 @@ describe("ProgramSearch", () => {
   });
 
   it("looks recent entries up again, and forgets the ones the server drops", async () => {
+    everything();
     window.localStorage.setItem(
       recentStorageKey(USER),
       JSON.stringify([
@@ -402,5 +411,198 @@ describe("ProgramSearch", () => {
     expect(
       window.localStorage.getItem(`${RECENT_PREFIX_V1}${USER}`),
     ).toBeNull();
+  });
+
+  // --- Programs | Everything (#350) -------------------------------------------------
+
+  it("opens in Programs and asks the server nothing: not as you type, not for Recent", async () => {
+    window.localStorage.setItem(
+      recentStorageKey(USER),
+      JSON.stringify([
+        { kind: "recipe", id: "potjiekos-for-40" },
+        { kind: "program", id: "power" },
+      ]),
+    );
+    render(<Harness m={manifest()} onOpenProgram={vi.fn()} />);
+    ctrlK();
+    expect(radio("Programs").getAttribute("aria-checked")).toBe("true");
+    expect(field().getAttribute("placeholder")).toBe("Search programs…");
+    // Recent is programs only, and the entry is not forgotten.
+    const rows = within(dialog()!).getAllByRole("option");
+    expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual([
+      expect.stringMatching(/^Power, Program/),
+    ]);
+    type("pow");
+    await settle();
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(option(/^Power, Program/)).toBeTruthy();
+    expect(screen.getByTestId("search-footer-status").textContent).toMatch(
+      /^\d+ programs?$/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      JSON.parse(window.localStorage.getItem(recentStorageKey(USER))!),
+    ).toHaveLength(2);
+  });
+
+  it("finds a program by a search word, and shows the word", () => {
+    render(<Harness m={manifest()} onOpenProgram={vi.fn()} />);
+    ctrlK();
+    type("fuel");
+    const power = option(/^Power, Program, Fuel cans, Power and Lighting$/)!;
+    expect(power).toBeTruthy();
+    expect(power.getAttribute("aria-selected")).toBe("true");
+    expect(power.textContent).toContain("Fuel cans · Power and Lighting");
+    expect(power.querySelector("mark")?.textContent).toBe("Fuel");
+    expect(option(/^Transport, Program, Fuel cans/)).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("Ctrl+K inside the box switches, says so, remembers it, and Everything asks the server", async () => {
+    answers = () => [entry("recipe", "Potjiekos for 40", "40 plates")];
+    render(<Harness m={manifest()} onOpenProgram={vi.fn()} />);
+    ctrlK();
+    type("pot");
+    await settle();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId("search-footer-status").textContent).toBe(
+      "No program found",
+    );
+    ctrlK(field());
+    expect(radio("Everything").getAttribute("aria-checked")).toBe("true");
+    expect(window.localStorage.getItem(scopeStorageKey(USER))).toBe(
+      "everything",
+    );
+    expect(field().getAttribute("placeholder")).toMatch(/recipes/);
+    await settle();
+    expect(fetchMock.mock.calls[0]![0]).toBe("/api/search?q=pot");
+    expect(option(/^Potjiekos for 40, Recipe/)).toBeTruthy();
+    expect(status()).toBe(
+      "Everything: programs, recipes, chapters, meetings and more. 0 programs and 1 entry found.",
+    );
+    // And back.
+    ctrlK(field());
+    expect(radio("Programs").getAttribute("aria-checked")).toBe("true");
+    expect(window.localStorage.getItem(scopeStorageKey(USER))).toBe("programs");
+    expect(option(/^Potjiekos/)).toBeNull();
+    expect(status()).toBe("Programs only. No program found.");
+    // Focus never left the field.
+    expect(document.activeElement).toBe(field());
+  });
+
+  it("when Programs finds nothing, one row hands the words to Everything", async () => {
+    answers = () => [entry("recipe", "Lamb potjie", "40 plates")];
+    render(<Harness m={manifest()} onOpenProgram={vi.fn()} />);
+    ctrlK();
+    type("potjie");
+    const row = option(/^Search everything for “potjie”/)!;
+    expect(row.getAttribute("aria-selected")).toBe("true");
+    expect(row.textContent).toContain("Recipes, chapters, meetings and more");
+    fireEvent.keyDown(field(), { key: "Enter" });
+    expect(dialog()).not.toBeNull();
+    expect(radio("Everything").getAttribute("aria-checked")).toBe("true");
+    expect(window.localStorage.getItem(scopeStorageKey(USER))).toBe(
+      "everything",
+    );
+    await settle();
+    expect(fetchMock.mock.calls[0]![0]).toBe("/api/search?q=potjie");
+    expect(option(/^Lamb potjie, Recipe/)).toBeTruthy();
+  });
+
+  it("the toggle is a radio group: one tab stop, the arrows switch, Enter opens nothing", () => {
+    const open = vi.fn();
+    render(<Harness m={manifest()} onOpenProgram={open} />);
+    ctrlK();
+    type("pow");
+    const group = within(dialog()!).getByRole("radiogroup", {
+      name: "Search in",
+    });
+    expect(group).toBeTruthy();
+    expect(radio("Programs").tabIndex).toBe(0);
+    expect(radio("Everything").tabIndex).toBe(-1);
+    radio("Programs").focus();
+    fireEvent.keyDown(radio("Programs"), { key: "ArrowRight" });
+    expect(radio("Everything").getAttribute("aria-checked")).toBe("true");
+    expect(document.activeElement).toBe(radio("Everything"));
+    expect(radio("Everything").tabIndex).toBe(0);
+    fireEvent.keyDown(radio("Everything"), { key: "Enter" });
+    expect(open).not.toHaveBeenCalled();
+    expect(dialog()).not.toBeNull();
+    fireEvent.keyDown(radio("Everything"), { key: "ArrowLeft" });
+    expect(radio("Programs").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("a text hit shows where and the line, marked, and is heard that way", async () => {
+    everything();
+    answers = () => [
+      {
+        ...entry("meeting", "Power plan review", "30 Sep · Power and Lighting"),
+        match: {
+          where: "in the notes",
+          membersOnly: false,
+          text: "…We need 40 L of fuel a day",
+          marks: [{ start: 17, length: 4 }],
+        },
+      },
+      {
+        ...entry("chapter", "Arrival day", "Chapter · Arrival"),
+        match: {
+          where: "In a Members only part",
+          membersOnly: true,
+          text: "The key to the fuel cage",
+          marks: [{ start: 15, length: 4 }],
+        },
+      },
+    ];
+    render(<Harness m={manifest()} onOpenProgram={vi.fn()} />);
+    ctrlK();
+    type("fuel");
+    await settle();
+    const row = option(
+      "Power plan review, Meeting, 30 Sep · Power and Lighting, found in the notes: …We need 40 L of fuel a day",
+    )!;
+    expect(row).toBeTruthy();
+    const line = row.querySelector("[data-search-line]")!;
+    expect(line.textContent).toBe("in the notes…We need 40 L of fuel a day");
+    expect(line.querySelector("mark")?.textContent).toBe("fuel");
+    expect(
+      option(
+        /^Arrival day, Chapter, Chapter · Arrival, found in a Members only part: /,
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says 5+ when a kind's text hits reach the limit, and offers every chapter that mentions it", async () => {
+    everything();
+    const openEntry = vi.fn();
+    answers = () =>
+      Array.from({ length: 5 }, (_, i) => ({
+        ...entry("chapter", `Chapter ${i}`),
+        match: {
+          where: "in the chapter",
+          membersOnly: false,
+          text: "fuel",
+          marks: [],
+        },
+      }));
+    render(
+      <Harness
+        m={manifest()}
+        onOpenProgram={vi.fn()}
+        onOpenEntry={openEntry}
+      />,
+    );
+    ctrlK();
+    type("fuel");
+    await settle();
+    const heading = [
+      ...dialog()!.querySelectorAll("[cmdk-group-heading]"),
+    ].find((h) => h.textContent?.startsWith("Survival Guide"))!;
+    expect(heading.textContent).toBe("Survival Guide5+ found");
+    const every = option(/^Every chapter that mentions “fuel”/)!;
+    fireEvent.click(every);
+    expect(openEntry).toHaveBeenCalledWith("/guide?q=fuel");
   });
 });

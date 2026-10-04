@@ -22,7 +22,10 @@ async function teamLabels(): Promise<Record<string, string>> {
   return Object.fromEntries(config.teams.map((t) => [t.key, t.label]));
 }
 
-/** The entries whose title holds every word of `query`. */
+/**
+ * The entries whose title holds every word of `query`, then (#350) those
+ * whose text does, each with only its short line (never the text).
+ */
 export async function searchCamp(
   viewer: SearchViewer,
   query: string,

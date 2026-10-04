@@ -166,6 +166,9 @@
 //     headcountText, askRoleParts, printableDutyCard (./guide); the public
 //     site's cut: splitMembersOnly, publicMarkdown (fails closed),
 //     toPublicChapter (./guide-public)
+//   - Ctrl+K search inside text (#350): the parts of a recipe, chapter,
+//     meeting or announcement search reads, and the snippet a text hit shows
+//     (cutSnippet, findTextMatch) (./search-text)
 //   - team programs: canEditTeamProgram (a captain, or a lead of that team;
 //     fails closed on an unknown rank or team) (./team-programs)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
@@ -236,6 +239,7 @@ export * from "./calendar-titles";
 export * from "./meeting-notes";
 export * from "./guide";
 export * from "./guide-public";
+export * from "./search-text";
 export * from "./lounge";
 export * from "./transport";
 export * from "./team-programs";

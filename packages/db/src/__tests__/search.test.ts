@@ -1,5 +1,6 @@
 import { eq as sqlEq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { TEXT_WHERE, underHeading } from "@camp404/core";
 import * as schema from "../schema";
 import { DONE_VISIBLE_DAYS } from "../tasks";
 import { RESERVED_DEFINITION_KEYS } from "../questionnaire-definitions";
@@ -531,5 +532,427 @@ describe("search everything", () => {
       now: NOW,
     });
     expect(rows.map((r) => r.title)).toEqual(["Chakalaka"]);
+  });
+
+  // --- Inside text (#350) ---------------------------------------------------------
+
+  /** A KitchenRecipe body with `method` as its one step. */
+  function body(method: string, extra: Record<string, unknown> = {}) {
+    return {
+      title: "x",
+      summary: null,
+      plates: 40,
+      totalTimeMinutes: null,
+      activeTimeMinutes: null,
+      ingredients: [
+        {
+          component: null,
+          name: "Lamb shoulder",
+          category: "protein",
+          quantity: 8,
+          quantityMax: null,
+          unit: "kg",
+          preparation: null,
+          note: null,
+          optional: false,
+        },
+      ],
+      steps: [
+        {
+          phase: null,
+          instruction: method,
+          uses: [],
+          durationMinutes: null,
+          durationMaxMinutes: null,
+          temperatureC: null,
+          equipment: [],
+          note: null,
+        },
+      ],
+      notes: [],
+      ...extra,
+    } as never;
+  }
+
+  async function recipeWithText(input: {
+    title: string;
+    submitterId: string | null;
+    accepted: boolean;
+    method: string;
+  }) {
+    const db = h.db();
+    const [r] = await db
+      .insert(schema.recipes)
+      .values({
+        title: input.title,
+        submitterId: input.submitterId,
+        source: "text",
+        status: input.accepted ? "accepted" : "suggested",
+      })
+      .returning();
+    const [v] = await db
+      .insert(schema.recipeVersions)
+      .values({
+        recipeId: r!.id,
+        version: 1,
+        servingsBasis: 40,
+        body: body(input.method),
+      })
+      .returning();
+    if (input.accepted) {
+      await db
+        .update(schema.recipes)
+        .set({ acceptedVersionId: v!.id })
+        .where(sqlEq(schema.recipes.id, r!.id));
+    }
+    return r!;
+  }
+
+  const textHits = (rows: SearchEntryRow[], kind: SearchKind) =>
+    rows.filter((r) => r.kind === kind && r.match !== null);
+
+  it("recipes: a word only in an accepted version's method is found, with its line", async () => {
+    const member = await makeUser(h.db());
+    const r = await recipeWithText({
+      title: "Lamb potjie",
+      submitterId: null,
+      accepted: true,
+      method:
+        "Brown the lamb in the big pot on the second gas burner, in batches.",
+    });
+    const rows = await find(viewer(member.id), "burner");
+    const [hit] = textHits(rows, "recipe");
+    expect(hit?.id).toBe(r.id);
+    expect(hit?.match?.where).toBe(TEXT_WHERE.method);
+    expect(hit?.match?.text).toContain("second gas burner");
+    const m = hit!.match!.marks[0]!;
+    expect(hit!.match!.text.slice(m.start, m.start + m.length)).toBe("burner");
+    // A key or an enum of the body is not text.
+    expect(
+      textHits(await find(viewer(member.id), "protein"), "recipe"),
+    ).toEqual([]);
+    expect(
+      textHits(await find(viewer(member.id), "instruction"), "recipe"),
+    ).toEqual([]);
+  });
+
+  it("recipes: a suggestion's text is never searched, not for its submitter or a reviewer", async () => {
+    const member = await makeUser(h.db());
+    const submitter = await makeUser(h.db());
+    await recipeWithText({
+      title: "Pot bread",
+      submitterId: submitter.id,
+      accepted: false,
+      method: "Bake on the coals with a skottel lid.",
+    });
+    for (const v of [
+      viewer(member.id),
+      viewer(submitter.id),
+      viewer(member.id, { reviewsRecipes: true, rank: "team_lead" }),
+    ]) {
+      expect(textHits(await find(v, "skottel"), "recipe")).toEqual([]);
+    }
+    // The title still finds it for its submitter (step 2).
+    expect(
+      titles(await find(viewer(submitter.id), "pot bread"), "recipe"),
+    ).toEqual(["Pot bread"]);
+  });
+
+  async function chapter(input: {
+    title: string;
+    published: boolean;
+    versions: { markdown: string; card?: unknown }[];
+    publishedVersion?: number;
+    kind?: "chapter" | "duty_card";
+  }) {
+    const db = h.db();
+    const kind = input.kind ?? "chapter";
+    const [d] = await db
+      .insert(schema.documents)
+      .values({
+        title: input.title,
+        slug: input.title.toLowerCase().replace(/\W+/g, "-"),
+        category: "on_site",
+        kind,
+        published: input.published,
+        publishedVersion: input.publishedVersion ?? 1,
+        ...(kind === "duty_card"
+          ? { card: input.versions[0]!.card as never }
+          : {}),
+      })
+      .returning();
+    for (const [i, v] of input.versions.entries()) {
+      await db.insert(schema.documentVersions).values({
+        documentId: d!.id,
+        version: i + 1,
+        title: input.title,
+        category: "on_site",
+        kind,
+        markdown: v.markdown,
+        card: (v.card ?? null) as never,
+      });
+    }
+    return d!;
+  }
+
+  it("chapters: the published version's text, never a newer draft's, and never one taken off the guide", async () => {
+    const member = await makeUser(h.db());
+    await chapter({
+      title: "Arrival day",
+      published: true,
+      publishedVersion: 1,
+      versions: [
+        { markdown: "## Gate\n\nShow your ticket at the gate." },
+        { markdown: "## Gate\n\nShow your wristband at the gate." },
+      ],
+    });
+    await chapter({
+      title: "Old rules",
+      published: false,
+      versions: [{ markdown: "The wristband rule." }],
+    });
+    const v = viewer(member.id);
+    const [hit] = textHits(await find(v, "ticket"), "chapter");
+    expect(hit?.title).toBe("Arrival day");
+    expect(hit?.match?.where).toBe(underHeading("Gate"));
+    expect(textHits(await find(v, "wristband"), "chapter")).toEqual([]);
+  });
+
+  it("chapters: a members-only part is found and says so; a duty card's steps are read", async () => {
+    const member = await makeUser(h.db());
+    await chapter({
+      title: "Arrival",
+      published: true,
+      versions: [
+        {
+          markdown:
+            "Welcome.\n\n:::members\nThe key to the fuel cage is in the red box.\n:::",
+        },
+      ],
+    });
+    await chapter({
+      title: "Generator start-up",
+      published: true,
+      kind: "duty_card",
+      versions: [
+        {
+          markdown: "",
+          card: {
+            subRoles: [{ name: "Runner", min: 1, max: 1 }],
+            steps: ["Check the oil", "Open the choke"],
+            hardRules: [],
+            checklist: [],
+            askRole: "Power lead",
+          },
+        },
+      ],
+    });
+    const v = viewer(member.id);
+    const [cage] = textHits(await find(v, "cage"), "chapter");
+    expect(cage?.match).toMatchObject({
+      where: TEXT_WHERE.membersOnly,
+      membersOnly: true,
+    });
+    const [card] = textHits(await find(v, "choke"), "chapter");
+    expect(card?.title).toBe("Generator start-up");
+    expect(card?.match?.where).toBe(TEXT_WHERE.steps);
+    // A card's keys are not text.
+    expect(textHits(await find(v, "askrole"), "chapter")).toEqual([]);
+  });
+
+  it("chapters: a word only in markup (a link's address) is no hit", async () => {
+    const member = await makeUser(h.db());
+    await chapter({
+      title: "Packing",
+      published: true,
+      versions: [{ markdown: "See [the list](https://example.com/zebra)." }],
+    });
+    expect(textHits(await find(viewer(member.id), "zebra"), "chapter")).toEqual(
+      [],
+    );
+  });
+
+  async function meeting(
+    title: string,
+    over: Partial<{
+      agenda: string;
+      notes: string;
+      decisions: string[];
+      actions: string[];
+      heldAt: Date;
+    }> = {},
+  ) {
+    const db = h.db();
+    const [m] = await db
+      .insert(schema.meetingNotes)
+      .values({
+        cycle: 1,
+        team: "power_and_lighting",
+        title,
+        heldAt: over.heldAt ?? new Date("2026-09-30T16:00:00Z"),
+        agenda: over.agenda ?? "",
+        notes: over.notes ?? "",
+      })
+      .returning();
+    for (const [position, text] of (over.decisions ?? []).entries()) {
+      await db
+        .insert(schema.meetingNoteDecisions)
+        .values({ noteId: m!.id, position, text });
+    }
+    for (const [position, text] of (over.actions ?? []).entries()) {
+      await db
+        .insert(schema.meetingNoteActionItems)
+        .values({ noteId: m!.id, position, text });
+    }
+    return m!;
+  }
+
+  it("meetings: words in the decisions, the action items, the agenda and the notes", async () => {
+    const member = await makeUser(h.db());
+    await meeting("Build week kick-off", {
+      agenda: "- Gas order",
+      notes: "We need **40 L** of diesel a day.",
+      decisions: ["Power pays for the fuel and the generator service."],
+      actions: ["Book the welder"],
+    });
+    const v = viewer(member.id);
+    expect(textHits(await find(v, "fuel"), "meeting")[0]?.match?.where).toBe(
+      TEXT_WHERE.decisions,
+    );
+    expect(textHits(await find(v, "welder"), "meeting")[0]?.match?.where).toBe(
+      TEXT_WHERE.actions,
+    );
+    expect(textHits(await find(v, "gas"), "meeting")[0]?.match?.where).toBe(
+      TEXT_WHERE.agenda,
+    );
+    const notes = textHits(await find(v, "diesel"), "meeting")[0]?.match;
+    expect(notes?.where).toBe(TEXT_WHERE.notes);
+    // The Markdown is stripped from the line.
+    expect(notes?.text).toBe("We need 40 L of diesel a day.");
+  });
+
+  it("announcements: the text of your own copy only", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const other = await makeUser(db);
+    const [b] = await db
+      .insert(schema.broadcasts)
+      .values({
+        kind: "announcement",
+        scope: "everyone",
+        title: "Gate times",
+        body: "b",
+        publishedAt: new Date("2026-09-28T08:00:00Z"),
+      })
+      .returning();
+    await db.insert(schema.notificationDeliveries).values({
+      broadcastId: b!.id,
+      userId: member.id,
+      title: "Gate times",
+      body: "The gate opens at 9. Bring your wristband.",
+      channel: "both",
+    });
+    const [hit] = textHits(
+      await find(viewer(member.id), "wristband"),
+      "announcement",
+    );
+    expect(hit?.id).toBe(b!.id);
+    expect(hit?.match?.where).toBe(TEXT_WHERE.message);
+    expect(
+      textHits(await find(viewer(other.id), "wristband"), "announcement"),
+    ).toEqual([]);
+  });
+
+  it("text hits: never a title hit twice, the words may fall across title and text, and % is a letter", async () => {
+    const member = await makeUser(h.db());
+    await meeting("Fuel order", { notes: "Order fuel cans." });
+    await meeting("Power plan review", {
+      notes: "We need 40 L of fuel a day.",
+    });
+    await meeting("Budget", { notes: "Spend 100% of it." });
+    await meeting("Budget two", { notes: "Spend 100 of it." });
+    const v = viewer(member.id);
+    const rows = await find(v, "fuel");
+    const meetings = rows.filter((r) => r.kind === "meeting");
+    // The title hit once, with no line; the text hit with one.
+    expect(meetings.map((r) => [r.title, r.match === null])).toEqual([
+      ["Fuel order", true],
+      ["Power plan review", false],
+    ]);
+    // "power" in the title, "day" in the text.
+    expect(
+      textHits(await find(v, "power day"), "meeting").map((r) => r.title),
+    ).toEqual(["Power plan review"]);
+    expect(
+      textHits(await find(v, "100%"), "meeting").map((r) => r.title),
+    ).toEqual(["Budget"]);
+  });
+
+  it("text hits have their own limit, newest first, so they never crowd out titles", async () => {
+    const member = await makeUser(h.db());
+    for (let i = 0; i < 7; i++) {
+      await meeting(`Meeting ${i}`, {
+        notes: "About the potjie.",
+        heldAt: new Date(Date.UTC(2026, 8, 1 + i)),
+      });
+    }
+    for (let i = 0; i < 9; i++) await meeting(`Potjie night ${i}`);
+    const rows = await find(viewer(member.id), "potjie");
+    const meetings = rows.filter((r) => r.kind === "meeting");
+    expect(meetings.filter((r) => r.match === null)).toHaveLength(8);
+    expect(textHits(rows, "meeting").map((r) => r.title)).toEqual([
+      "Meeting 6",
+      "Meeting 5",
+      "Meeting 4",
+      "Meeting 3",
+      "Meeting 2",
+    ]);
+  });
+
+  it("text hits the line cannot show never use up the limit", async () => {
+    const member = await makeUser(h.db());
+    // Five newer notes with the word only in a link's address...
+    for (let i = 0; i < 5; i++) {
+      await meeting(`Newer ${i}`, {
+        notes: "See [the list](https://example.com/zebra).",
+        heldAt: new Date(Date.UTC(2026, 8, 20 + i)),
+      });
+    }
+    // ...and an older one that really says it.
+    await meeting("Older", {
+      notes: "The zebra crossing at the gate.",
+      heldAt: new Date(Date.UTC(2026, 8, 1)),
+    });
+    expect(
+      textHits(await find(viewer(member.id), "zebra"), "meeting").map(
+        (r) => r.title,
+      ),
+    ).toEqual(["Older"]);
+  });
+
+  it("a text hit holds exactly the agreed columns, and its line, never the text", async () => {
+    const member = await makeUser(h.db());
+    const long = `${"Stir slowly and keep tasting as you go. ".repeat(20)}Add the chakalaka last.`;
+    await recipeWithText({
+      title: "Lamb potjie",
+      submitterId: null,
+      accepted: true,
+      method: long,
+    });
+    const [hit] = textHits(
+      await find(viewer(member.id), "chakalaka"),
+      "recipe",
+    );
+    expect(Object.keys(hit!).sort()).toEqual([...SEARCH_ROW_KEYS].sort());
+    expect(Object.keys(hit!.match!).sort()).toEqual(
+      ["marks", "membersOnly", "text", "where"].sort(),
+    );
+    expect(hit!.match!.text.length).toBeLessThan(130);
+    const json = JSON.stringify(hit);
+    expect(json).not.toContain(long.slice(0, 200));
+    expect(json).not.toContain("Lamb shoulder");
+    for (const key of ["body", "markdown", "source", "notes", "agenda"]) {
+      expect(hit).not.toHaveProperty(key);
+    }
   });
 });
