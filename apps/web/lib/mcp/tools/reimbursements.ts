@@ -199,16 +199,6 @@ function registerReviewTools(server: McpServer): void {
                 `This member hasn't allowed their bank details to be read through Claude. Open the claim on the website instead: ${siteUrl(CLAIMS_PAGE)}`,
               );
             }
-            auditReadAfterResponse({
-              actorId: scope.campUserId,
-              action: "reimbursement.account_viewed",
-              target: account.submitterId,
-              metadata: {
-                reimbursementId: args.claimId,
-                team: account.team,
-                via: "mcp",
-              },
-            });
           }
           if (account.details.state === "unreadable") {
             throw new ToolError(
@@ -219,6 +209,20 @@ function registerReviewTools(server: McpServer): void {
             throw new ToolError(
               "No bank details are on file: the member's account was erased.",
             );
+          }
+          // Recorded only when details are actually shown: an unreadable or
+          // erased value discloses nothing (the member panel's rule).
+          if (!own) {
+            auditReadAfterResponse({
+              actorId: scope.campUserId,
+              action: "reimbursement.account_viewed",
+              target: account.submitterId,
+              metadata: {
+                reimbursementId: args.claimId,
+                team: account.team,
+                via: "mcp",
+              },
+            });
           }
           return {
             claimId: args.claimId,

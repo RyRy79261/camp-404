@@ -189,7 +189,7 @@ the appropriate tier with no consent gate.
 | Tool | R/W | Tier |
 |---|---|---|
 | `get_my_burner_profile` / `update_my_burner_profile` | R/W | M |
-| `get_my_dietary_requirements` / `update_my_dietary_requirements` | R/W | M | [CORRECTION 2026-10-04] the #245 pick-list (`saveMyDietary`), which the meal plan's allergy check reads |
+| `get_my_dietary_requirements` / `update_my_dietary_requirements` | R/W | M — [CORRECTION 2026-10-04] the #245 pick-list (`saveMyDietary`), which the meal plan's allergy check reads |
 | `get_my_driver_profile` / `update_my_driver_profile` | R/W | M |
 | `get_my_emergency_contacts` / `update_my_emergency_contacts` | R/W | M |
 | `get_my_id_documents` / `update_my_id_documents` | R/W | M | passport / SA ID, decrypted for self |
@@ -208,7 +208,7 @@ the appropriate tier with no consent gate.
 | Tool | R/W | Tier |
 |---|---|---|
 | `get_team_budget(team)` | R | M (any) |
-| `set_team_budget(team, ...)` | W | lead of team + C | [CORRECTION 2026-10-04] removed: website-only |
+| `set_team_budget(team, ...)` | W | [CORRECTION 2026-10-04] removed: website-only (was lead of team + C) |
 
 [CORRECTION 2026-09-30] `set_team_budget` is for captains and Finance leads
 only (#242, owner: one budget per team, set by Finance); a team's own lead

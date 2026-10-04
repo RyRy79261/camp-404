@@ -128,12 +128,12 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   get_my_ai_consent: {
     area: "You",
     gate: GATES.member,
-    does: "Whether captains may read your ID number through Claude.",
+    does: "Whether captains may read your ID number, and captains and Finance leads your claims' bank details, through Claude.",
   },
   set_my_ai_consent: {
     area: "You",
     gate: GATES.member,
-    does: "Turn on or off captains reading your ID number through Claude.",
+    does: "Turn on or off captains reading your ID number, and captains and Finance leads reading your claims' bank details, through Claude.",
   },
   get_my_burner_profile: {
     area: "You",

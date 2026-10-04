@@ -23,7 +23,7 @@ export const SERVER_INSTRUCTIONS = [
   "Ranks: member < team lead < captain. Leading any team this year makes someone a team lead everywhere in the app; which team they lead only decides who they can address, never what they can see.",
   "Privacy: never ask for, or repeat to anyone else, another person's ID number, bank details, emergency contacts or medical and dietary details. Read safety data (emergency contacts, allergies) only when it is needed, because every read of someone else's private data is recorded with the reader's name.",
   "Money is in South African rands (ZAR) only. Amounts come back in whole cents: 123450 is R1,234.50.",
-  "Some things are website-only on purpose, because they cannot be undone or they reach many people at once: approving people and ranks, announcements and questionnaire sends, moving money (payments, marking claims paid, budgets), sending recipes to Claude, putting the guide on the public site, deleting or archiving, camp settings and a new year, invite codes, and uploads. Do not try to work around this: send the person to the page what_can_i_do links to.",
+  "Some things are website-only on purpose, because they cannot be undone or they reach many people at once: approving people and ranks, announcements and questionnaire sends, moving money (payments, marking claims paid, budgets), sending recipes to Claude, putting the guide on the public site, deleting or archiving, camp settings and a new year, making invite codes, and uploads. Do not try to work around this: send the person to the page what_can_i_do links to.",
   "When a tool refuses, it says why in one sentence. Repeat it plainly; do not retry with other arguments to get round it.",
 ].join("\n\n");
 

@@ -194,6 +194,22 @@ describe("get_claim_bank_details", () => {
     });
   });
 
+  it("records nothing when the details can't be shown", async () => {
+    vi.mocked(readClaimAccount).mockResolvedValue({
+      ...account,
+      details: { state: "unreadable" as const },
+    } as never);
+    vi.mocked(listReimbursementsForReview).mockResolvedValue([claim()]);
+    const result = await call(
+      "get_claim_bank_details",
+      { claimId: CLAIM },
+      FINANCE,
+    );
+    expect(result.error).toMatch(/can't be read/);
+    await flushAfter();
+    expect(appendAuditEvent).not.toHaveBeenCalled();
+  });
+
   it("refuses anyone but captains and Finance leads, reading nothing", async () => {
     for (const who of [LEAD, MEMBER]) {
       expect(
