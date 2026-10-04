@@ -1,6 +1,12 @@
 import "server-only";
 
 import {
+  SEARCH_TEXT_LIMIT,
+  chapterTextParts,
+  findTextMatch,
+  type SearchTextPart,
+} from "@camp404/core";
+import {
   SEARCH_LIMIT_PER_KIND,
   searchWords,
   type SearchEntryRow,
@@ -16,7 +22,9 @@ import { shiftsTestStore } from "./test-store-shifts";
 // Twin of @camp404/db/search for E2E (#326, step 2): the same kinds and the
 // same page rules over the in-memory stores, so Playwright can drive Ctrl+K.
 // The questionnaire builder has no twin (its definitions are not kept under
-// E2E), so questionnaires are never found here.
+// E2E), so questionnaires are never found here. Text hits (#350) read the same
+// parts as the database's text branches: an accepted recipe version, a
+// published chapter, a meeting, the viewer's own announcement.
 
 const blank = {
   team: null,
@@ -27,11 +35,25 @@ const blank = {
   extra: null,
   ref: null,
   flag: false,
+  match: null,
 };
 
-function candidates(viewer: SearchViewer, now: Date): SearchEntryRow[] {
-  const { cycle, rows } = testStore.searchCandidates({ ...viewer, now });
+function candidates(
+  viewer: SearchViewer,
+  now: Date,
+): { rows: SearchEntryRow[]; texts: Map<string, SearchTextPart[]> } {
+  const { cycle, rows, texts } = testStore.searchCandidates({
+    ...viewer,
+    now,
+  });
   for (const c of guideTestStore.listPublishedChapters()) {
+    const published = guideTestStore.getPublishedChapter(c.slug);
+    if (published) {
+      texts.set(
+        `chapter:${c.id}`,
+        chapterTextParts(published.markdown, published.card),
+      );
+    }
     rows.push({
       ...blank,
       kind: "chapter",
@@ -77,7 +99,7 @@ function candidates(viewer: SearchViewer, now: Date): SearchEntryRow[] {
       flag: g.isTent,
     });
   }
-  return rows;
+  return { rows, texts };
 }
 
 export function testSearchEntries(input: {
@@ -88,11 +110,13 @@ export function testSearchEntries(input: {
   const words = searchWords(input.query);
   if (words.length === 0) return [];
   const first = words[0]!;
-  const matched = candidates(input.viewer, input.now ?? new Date())
-    .filter((r) => {
-      const title = r.title.toLowerCase();
-      return words.every((w) => title.includes(w));
-    })
+  const { rows, texts } = candidates(input.viewer, input.now ?? new Date());
+  const inTitle = (r: SearchEntryRow) => {
+    const title = r.title.toLowerCase();
+    return words.every((w) => title.includes(w));
+  };
+  const matched = rows
+    .filter(inTitle)
     .sort(
       (a, b) =>
         a.title.toLowerCase().indexOf(first) -
@@ -101,11 +125,33 @@ export function testSearchEntries(input: {
         (b.at ?? 0) - (a.at ?? 0),
     );
   const perKind = new Map<string, number>();
-  return matched.filter((r) => {
+  const titleHits = matched.filter((r) => {
     const n = (perKind.get(r.kind) ?? 0) + 1;
     perKind.set(r.kind, n);
     return n <= SEARCH_LIMIT_PER_KIND;
   });
+  // Text hits: newest first where a kind has a date, else by title.
+  const perKindText = new Map<string, number>();
+  const textHits = rows
+    .filter((r) => !inTitle(r) && texts.has(`${r.kind}:${r.id}`))
+    .sort(
+      (a, b) =>
+        (b.at ?? 0) - (a.at ?? 0) ||
+        a.title.localeCompare(b.title) ||
+        a.id.localeCompare(b.id),
+    )
+    .flatMap((r): SearchEntryRow[] => {
+      const match = findTextMatch(
+        r.title,
+        texts.get(`${r.kind}:${r.id}`)!,
+        words,
+      );
+      if (!match) return [];
+      const n = (perKindText.get(r.kind) ?? 0) + 1;
+      perKindText.set(r.kind, n);
+      return n <= SEARCH_TEXT_LIMIT ? [{ ...r, match }] : [];
+    });
+  return [...titleHits, ...textHits];
 }
 
 export function testResolveEntries(input: {
@@ -114,7 +160,7 @@ export function testResolveEntries(input: {
   now?: Date;
 }): SearchEntryRow[] {
   const wanted = new Set(input.refs.map((r) => `${r.kind}:${r.id}`));
-  return candidates(input.viewer, input.now ?? new Date()).filter((r) =>
+  return candidates(input.viewer, input.now ?? new Date()).rows.filter((r) =>
     wanted.has(`${r.kind}:${r.id}`),
   );
 }

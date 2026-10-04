@@ -1,4 +1,14 @@
 import { sql, type SQL } from "drizzle-orm";
+import {
+  SEARCH_TEXT_LIMIT,
+  announcementTextParts,
+  chapterTextParts,
+  findTextMatch,
+  meetingTextParts,
+  recipeTextParts,
+  type SearchTextMatch,
+  type SearchTextPart,
+} from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb } from "./index";
@@ -9,9 +19,19 @@ import { DONE_VISIBLE_DAYS } from "./tasks";
 // Ctrl+K "search everything" (#326, step 2): the entries a member may open,
 // found by title or name. One statement, one branch per kind, each branch's
 // WHERE a copy of the rule on the page the result opens, so search can never
-// offer something its page would refuse. Titles and names only (owner,
-// 2026-10-04): no body text. Read on demand while the box is open; nothing is
-// indexed or stored.
+// offer something its page would refuse. Read on demand while the box is
+// open; nothing is indexed or stored.
+//
+// Inside text (#350): four kinds also have a text branch, for entries whose
+// title does not hold every word but whose text (with the title) does: an
+// accepted recipe version, a published chapter or duty card (members-only
+// parts included: every member reads them in the app), a meeting's agenda,
+// notes, decisions and action items, and an announcement as delivered to the
+// viewer. Each with the SAME page rule as its title branch, plain ILIKE (no
+// index, no migration: measured at 5–27 ms at the camp's size), at most
+// SEARCH_TEXT_LIMIT a kind. The text reaches this module only to cut the
+// short line a hit shows (findTextMatch, @camp404/core); a row never carries
+// it out.
 //
 // A row carries only what the page it opens already shows this viewer: a
 // title, and a few plain columns the web app turns into the detail line. No
@@ -66,6 +86,11 @@ export interface SearchEntryRow {
   /** The address key when it is not the id (a chapter's slug). */
   ref: string | null;
   flag: boolean;
+  /**
+   * A text hit: where the words were found and about 110 characters around
+   * them. Null for a title hit. Never the text itself.
+   */
+  match: SearchTextMatch | null;
 }
 
 /** The columns every row has, in order: the test pins this list. */
@@ -81,6 +106,7 @@ export const SEARCH_ROW_KEYS = [
   "extra",
   "ref",
   "flag",
+  "match",
 ] as const;
 
 /** At most this many words are matched; more are ignored. */
@@ -111,6 +137,78 @@ interface Branch {
   cols: Cols;
   /** Newer first within the same match, where a kind has a date. */
   newest?: SQL;
+  /** Search inside its text too (#350). */
+  text?: TextBranch;
+}
+
+interface TextBranch {
+  /** Where the text is read from; may narrow `from` (an accepted version). */
+  from: SQL;
+  /** The page's rule for the text (never wider than the branch's own). */
+  rule: SQL;
+  /** Every word of what is searched, as one string, values only. */
+  haystack: SQL;
+  /** The same text as jsonb, for findTextMatch (see textParts). */
+  source: SQL;
+}
+
+/** A recipe body's searched values: jsonpath, so never a key or an enum. */
+const RECIPE_TEXT_PATHS = [
+  "$.summary ? (@ != null)",
+  "$.ingredients[*].component ? (@ != null)",
+  "$.ingredients[*].name",
+  "$.ingredients[*].preparation ? (@ != null)",
+  "$.ingredients[*].note ? (@ != null)",
+  "$.steps[*].instruction",
+  "$.steps[*].note ? (@ != null)",
+  "$.notes[*].title ? (@ != null)",
+  "$.notes[*].body",
+];
+
+/** A duty card's searched values. */
+const CARD_TEXT_PATHS = [
+  "$.steps[*]",
+  "$.hardRules[*]",
+  "$.checklist[*]",
+  "$.subRoles[*].name",
+  "$.askRole",
+];
+
+function jsonValues(column: SQL, paths: readonly string[]): SQL {
+  return sql.join(
+    paths.map(
+      (path) =>
+        sql`jsonb_path_query_array(${column}, ${sql.raw(`'${path}'`)}::jsonpath)::text`,
+    ),
+    sql`, `,
+  );
+}
+
+/** The parts of a text hit's source, as the row says where it was found. */
+function textParts(kind: SearchKind, source: unknown): SearchTextPart[] {
+  const s = (source ?? {}) as Record<string, unknown>;
+  const strings = (v: unknown) =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  switch (kind) {
+    case "recipe":
+      return recipeTextParts(s.body);
+    case "chapter":
+      return chapterTextParts(
+        typeof s.markdown === "string" ? s.markdown : "",
+        s.card,
+      );
+    case "meeting":
+      return meetingTextParts({
+        agenda: typeof s.agenda === "string" ? s.agenda : "",
+        notes: typeof s.notes === "string" ? s.notes : "",
+        decisions: strings(s.decisions),
+        actions: strings(s.actions),
+      });
+    case "announcement":
+      return announcementTextParts(typeof s.body === "string" ? s.body : "");
+    default:
+      return [];
+  }
 }
 
 /** `%`, `_` and `\` typed into the box are letters, not wildcards. */
@@ -146,6 +244,15 @@ function branches(viewer: SearchViewer, cycle: number, now: Date): Branch[] {
         label: sql`case when r.accepted_version_id is null then r.status::text end`,
         flag: sql`coalesce(r.submitter_id = ${me}, false)`,
       },
+      // The accepted version only, for everyone: what the Recipe tab shows.
+      // A suggestion's working text is never searched, not even for its
+      // submitter or a reviewer (they still find it by title).
+      text: {
+        from: sql`recipes r join recipe_versions rv on rv.id = r.accepted_version_id`,
+        rule: sql`r.accepted_version_id is not null`,
+        haystack: sql`concat_ws(' ', ${jsonValues(sql`rv.body`, RECIPE_TEXT_PATHS)})`,
+        source: sql`jsonb_build_object('body', rv.body)`,
+      },
     },
     {
       // guide/[slug]: the published version only; drafts are a writer's.
@@ -160,6 +267,15 @@ function branches(viewer: SearchViewer, cycle: number, now: Date): Branch[] {
         extra: sql`dv.category`,
         ref: sql`d.slug`,
       },
+      // The published version's text and card. Members-only parts too: the
+      // in-app reader shows them to every member (the public site is another
+      // app and never reaches this module).
+      text: {
+        from: sql`documents d join document_versions dv on dv.document_id = d.id and dv.version = d.published_version`,
+        rule: sql`d.published = true`,
+        haystack: sql`concat_ws(' ', dv.markdown, ${jsonValues(sql`dv.card`, CARD_TEXT_PATHS)})`,
+        source: sql`jsonb_build_object('markdown', dv.markdown, 'card', dv.card)`,
+      },
     },
     {
       // meetings/[id]: any member opens any meeting.
@@ -173,6 +289,18 @@ function branches(viewer: SearchViewer, cycle: number, now: Date): Branch[] {
         at: sql`(extract(epoch from m.held_at) * 1000)::float8`,
       },
       newest: sql`m.held_at desc`,
+      // Its agenda, notes, decisions and action items: the page shows all
+      // four to any member (owner, 2026-10-04: yes).
+      text: {
+        from: sql`meeting_notes m`,
+        rule: sql`true`,
+        haystack: sql`concat_ws(' ', m.agenda, m.notes,
+          (select string_agg(x.text, ' ') from meeting_note_decisions x where x.note_id = m.id),
+          (select string_agg(x.text, ' ') from meeting_note_action_items x where x.note_id = m.id))`,
+        source: sql`jsonb_build_object('agenda', m.agenda, 'notes', m.notes,
+          'decisions', coalesce((select jsonb_agg(x.text order by x.position) from meeting_note_decisions x where x.note_id = m.id), '[]'::jsonb),
+          'actions', coalesce((select jsonb_agg(x.text order by x.position) from meeting_note_action_items x where x.note_id = m.id), '[]'::jsonb))`,
+      },
     },
     {
       // tasks: every member sees the board, which holds the open tasks and
@@ -276,6 +404,13 @@ function branches(viewer: SearchViewer, cycle: number, now: Date): Branch[] {
         label: sql`b.scope::text`,
       },
       newest: sql`b.published_at desc`,
+      // The body of the viewer's own copy (owner, 2026-10-04: yes).
+      text: {
+        from: sql`notification_deliveries nd join broadcasts b on b.id = nd.broadcast_id`,
+        rule: sql`nd.user_id = ${me} and b.kind = 'announcement' and b.published_at is not null`,
+        haystack: sql`nd.body`,
+        source: sql`jsonb_build_object('body', nd.body)`,
+      },
     },
   ];
   // captains/questionnaires/[key]: team lead and up, and a lead edits only
@@ -297,7 +432,13 @@ function branches(viewer: SearchViewer, cycle: number, now: Date): Branch[] {
   return list;
 }
 
-function select(b: Branch, match: SQL, order: SQL, limit: number | null): SQL {
+function select(
+  b: Branch,
+  match: SQL,
+  order: SQL,
+  limit: number | null,
+  text?: TextBranch,
+): SQL {
   const c = b.cols;
   return sql`(select ${b.kind}::text as kind, ${b.id} as id, ${b.title} as title,
     ${c.team ?? sql`null::text`} as team,
@@ -307,13 +448,17 @@ function select(b: Branch, match: SQL, order: SQL, limit: number | null): SQL {
     ${c.label ?? sql`null::text`} as label,
     ${c.extra ?? sql`null::text`} as extra,
     ${c.ref ?? sql`null::text`} as ref,
-    ${c.flag ?? sql`false`} as flag
-    from ${b.from}
-    where ${b.rule} and ${match}
+    ${c.flag ?? sql`false`} as flag,
+    ${text ? text.source : sql`null::jsonb`} as source
+    from ${text ? sql`${text.from} cross join lateral (select ${text.haystack} as haystack) st` : b.from}
+    where ${text ? text.rule : b.rule} and ${match}
     order by ${order}${limit === null ? sql`` : sql` limit ${limit}`})`;
 }
 
-async function run(parts: SQL[]): Promise<SearchEntryRow[]> {
+async function run(
+  parts: SQL[],
+  words: readonly string[] = [],
+): Promise<SearchEntryRow[]> {
   if (parts.length === 0) return [];
   // Neon's HTTP driver and PGlite answer { rows }; another driver answers
   // the array itself. Both are read, as rate-limit.ts does.
@@ -323,54 +468,91 @@ async function run(parts: SQL[]): Promise<SearchEntryRow[]> {
     | { rows?: Record<string, unknown>[] }
     | Record<string, unknown>[];
   const rows = Array.isArray(result) ? result : (result.rows ?? []);
-  return rows.map((r) => ({
-    kind: r.kind as SearchKind,
-    id: String(r.id),
-    title: String(r.title),
-    team: (r.team as string | null) ?? null,
-    at: r.at === null || r.at === undefined ? null : Number(r.at),
-    num: r.num === null || r.num === undefined ? null : Number(r.num),
-    num2: r.num2 === null || r.num2 === undefined ? null : Number(r.num2),
-    label: (r.label as string | null) ?? null,
-    extra: (r.extra as string | null) ?? null,
-    ref: (r.ref as string | null) ?? null,
-    flag: r.flag === true,
-  }));
+  return rows.flatMap((r): SearchEntryRow[] => {
+    const kind = r.kind as SearchKind;
+    const title = String(r.title);
+    let match: SearchTextMatch | null = null;
+    if (r.source !== null && r.source !== undefined) {
+      const source =
+        typeof r.source === "string"
+          ? (JSON.parse(r.source) as unknown)
+          : r.source;
+      match = findTextMatch(title, textParts(kind, source), words);
+      // The words were only in markup (a link's address): no line to show,
+      // so no hit.
+      if (!match) return [];
+    }
+    return [
+      {
+        kind,
+        id: String(r.id),
+        title,
+        team: (r.team as string | null) ?? null,
+        at: r.at === null || r.at === undefined ? null : Number(r.at),
+        num: r.num === null || r.num === undefined ? null : Number(r.num),
+        num2: r.num2 === null || r.num2 === undefined ? null : Number(r.num2),
+        label: (r.label as string | null) ?? null,
+        extra: (r.extra as string | null) ?? null,
+        ref: (r.ref as string | null) ?? null,
+        flag: r.flag === true,
+        match,
+      },
+    ];
+  });
 }
 
 /**
  * The entries whose title holds every typed word (any case, anywhere), at
  * most `limitPerKind` of each kind, in a rough order (where the first word
- * falls, then the shorter title); the browser ranks them finally.
+ * falls, then the shorter title); the browser ranks them finally. Then, for
+ * the kinds with text, those whose title does not hold every word but whose
+ * title and text together do, at most `textLimitPerKind` of each (newest
+ * first where a kind has a date), each with its `match` line.
  */
 export async function searchEntries(input: {
   viewer: SearchViewer;
   query: string;
   limitPerKind?: number;
+  textLimitPerKind?: number;
   now?: Date;
 }): Promise<SearchEntryRow[]> {
   const words = searchWords(input.query);
   if (words.length === 0 || !UUID.test(input.viewer.userId)) return [];
   const cycle = await currentCycleNumber();
   const limit = input.limitPerKind ?? SEARCH_LIMIT_PER_KIND;
-  return run(
-    branches(input.viewer, cycle, input.now ?? new Date()).map((b) => {
-      const match = sql.join(
-        words.map((w) => sql`${b.title} ilike ${likePattern(w)}`),
+  const textLimit = input.textLimitPerKind ?? SEARCH_TEXT_LIMIT;
+  const parts: SQL[] = [];
+  for (const b of branches(input.viewer, cycle, input.now ?? new Date())) {
+    const inTitle = sql.join(
+      words.map((w) => sql`${b.title} ilike ${likePattern(w)}`),
+      sql` and `,
+    );
+    const order = sql.join(
+      [
+        sql`position(${words[0]!} in lower(${b.title}))`,
+        sql`length(${b.title})`,
+        ...(b.newest ? [b.newest] : []),
+        sql`${b.id}`,
+      ],
+      sql`, `,
+    );
+    parts.push(select(b, inTitle, order, limit));
+    if (b.text && textLimit > 0) {
+      const inText = sql`not (${inTitle}) and ${sql.join(
+        words.map(
+          (w) =>
+            sql`(${b.title} ilike ${likePattern(w)} or st.haystack ilike ${likePattern(w)})`,
+        ),
         sql` and `,
-      );
-      const order = sql.join(
-        [
-          sql`position(${words[0]!} in lower(${b.title}))`,
-          sql`length(${b.title})`,
-          ...(b.newest ? [b.newest] : []),
-          sql`${b.id}`,
-        ],
+      )}`;
+      const textOrder = sql.join(
+        [b.newest ?? sql`${b.title}`, sql`${b.id}`],
         sql`, `,
       );
-      return select(b, match, order, limit);
-    }),
-  );
+      parts.push(select(b, inText, textOrder, textLimit, b.text));
+    }
+  }
+  return run(parts, words);
 }
 
 /** A remembered entry: what Recent keeps in the browser. */

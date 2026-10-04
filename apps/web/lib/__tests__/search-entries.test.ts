@@ -26,6 +26,7 @@ function row(over: Partial<SearchEntryRow>): SearchEntryRow {
     extra: null,
     ref: null,
     flag: false,
+    match: null,
     ...over,
   };
 }
@@ -144,5 +145,36 @@ describe("entryHref", () => {
     expect(entryHref(...args)).toBe(href);
     // A real route, so it opens in a window rather than nowhere.
     expect(matchProgram(href)).not.toBeNull();
+  });
+});
+
+describe("a text hit (#350)", () => {
+  it("carries its line and nothing of the text it came from", () => {
+    const entry = presentEntry(
+      row({
+        kind: "meeting",
+        title: "Power plan review",
+        at: Date.UTC(2026, 8, 30, 16),
+        team: "power_and_lighting",
+        match: {
+          where: "in the notes",
+          membersOnly: false,
+          text: "…We need 40 L of fuel a day",
+          marks: [{ start: 17, length: 4 }],
+        },
+      }),
+      LABELS,
+    );
+    expect(Object.keys(entry).sort()).toEqual(
+      ["detail", "href", "id", "kind", "match", "title"].sort(),
+    );
+    expect(Object.keys(entry.match!).sort()).toEqual(
+      ["marks", "membersOnly", "text", "where"].sort(),
+    );
+    expect(entry.match!.text).toBe("…We need 40 L of fuel a day");
+  });
+
+  it("a title hit has no match at all", () => {
+    expect("match" in presentEntry(row({}), LABELS)).toBe(false);
   });
 });

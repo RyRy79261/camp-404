@@ -620,8 +620,9 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
 // The registry fields that must never leave the server. A Record over the
 // type's own keys, so a field added to RegistryEntry and not to ClientProgram
 // (or one renamed) fails to compile here until this list names it.
+// `keywords` is the one exception: it leaves on purpose, in `search` (#350).
 const SERVER_ONLY: Record<
-  Exclude<keyof RegistryEntry, keyof ClientProgram>,
+  Exclude<keyof RegistryEntry, keyof ClientProgram | "keywords">,
   true
 > = {
   place: true,
@@ -709,6 +710,23 @@ describe("buildProgramManifest: what reaches the browser", () => {
     expect(m.tray.health).not.toBeNull();
     only(m.tray.health!, HEALTH, "tray.health");
     only(m.tray.inbox!, { count: true }, "tray.inbox");
+  });
+
+  it("gives search each program's words for what is inside it (#350)", () => {
+    const m = buildProgramManifest(facts({}));
+    const power = m.search.find((p) => p.id === "power");
+    expect(power?.keywords).toContain("Fuel cans");
+    expect(power?.keywords).toContain("Generator");
+    const transport = m.search.find((p) => p.id === "transport");
+    expect(transport?.keywords).toEqual(
+      expect.arrayContaining(["Lifts", "Fuel money"]),
+    );
+    // Only the place's own keys.
+    for (const place of m.search) {
+      for (const key of Object.keys(place)) {
+        expect(["id", "where", "keywords"]).toContain(key);
+      }
+    }
   });
 
   it("puts the inbox count on the Inbox icon, and nothing when it is empty", () => {

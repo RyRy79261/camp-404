@@ -5,7 +5,14 @@ import type { ProgramId } from "../program-routes";
 import { buildProgramManifest, type ProgramFacts } from "../programs";
 import {
   GROUP_CAP,
+  KEYWORD_RANK,
   RECENT_MAX,
+  TEXT_RANK,
+  parseScope,
+  readScope,
+  scopeStorageKey,
+  textLine,
+  writeScope,
   RECENT_PREFIX_V1,
   filterPrograms,
   groupEntries,
@@ -150,6 +157,37 @@ describe("filterPrograms", () => {
   });
 });
 
+describe("filterPrograms: search words (#350)", () => {
+  it('finds Power and Transport for "fuel", by their search words, with the word that matched', () => {
+    const hits = filterPrograms(memberList(), "fuel");
+    expect(names(hits)).toEqual(["Power", "Transport"]);
+    expect(hits[0]!.rank).toBe(KEYWORD_RANK);
+    expect(hits[0]!.keyword).toEqual({
+      text: "Fuel cans",
+      marks: [{ start: 0, length: 4 }],
+    });
+    expect(hits[1]!.keyword?.text).toBe("Fuel money");
+  });
+
+  it("ranks a name match above a search-word match", () => {
+    // "Generator" is a search word of Power; "gen" also starts no name, but
+    // "lo" starts Logistics' name and is inside Power's "Loads".
+    const hits = filterPrograms(memberList(), "lo");
+    const logistics = hits.findIndex((h) => h.program.id === pid("logistics"));
+    const power = hits.findIndex((h) => h.program.id === pid("power"));
+    expect(logistics).toBeGreaterThanOrEqual(0);
+    expect(power).toBeGreaterThan(logistics);
+    expect(hits[logistics]!.keyword).toBeUndefined();
+    expect(hits[power]!.keyword?.text).toBe("Loads");
+  });
+
+  it("keeps the best-matching search word", () => {
+    const [hit] = filterPrograms(memberList(), "generator");
+    expect(hit!.program.id).toBe(pid("power"));
+    expect(hit!.keyword?.text).toBe("Generator");
+  });
+});
+
 describe("rankTitle", () => {
   const rank = (title: string, q: string) => rankTitle(title, q)?.rank;
 
@@ -227,6 +265,54 @@ describe("groupEntries", () => {
 
   it("shows a few a group before Show more", () => {
     expect(GROUP_CAP).toBe(3);
+  });
+
+  const textHit = (
+    kind: SearchEntry["kind"],
+    title: string,
+    text: string,
+  ): SearchEntry => ({
+    ...entry(kind, title),
+    match: {
+      where: "in the notes",
+      membersOnly: false,
+      text,
+      marks: [{ start: text.toLowerCase().indexOf("fuel"), length: 4 }],
+    },
+  });
+
+  it("puts text hits after title hits in a group, and a group with titles first", () => {
+    const groups = groupEntries(
+      [
+        textHit("meeting", "Power plan review", "We need fuel a day"),
+        entry("meeting", "Gas and fuel order"),
+        textHit("recipe", "Lamb potjie", "fuel the fire"),
+      ],
+      "fuel",
+    );
+    expect(groups.map((g) => g.kind)).toEqual(["meeting", "recipe"]);
+    expect(groups[0]!.hits.map((h) => [h.entry.title, h.rank])).toEqual([
+      ["Gas and fuel order", 2],
+      ["Power plan review", TEXT_RANK],
+    ]);
+    expect(groups[0]!.textHits).toBe(1);
+    expect(groups[0]!.hits[1]!.line?.text).toBe("We need fuel a day");
+  });
+
+  it("keeps a text hit only for its own text, or text that goes on from it with the words still there", () => {
+    const hit = textHit("meeting", "Power plan review", "We need fuel a day");
+    expect(textLine(hit, "fuel", "fuel")).toBe(hit.match);
+    // Typed on, and "day" is in the line: kept, marks worked out again.
+    const on = textLine(hit, "fuel day", "fuel")!;
+    expect(
+      on.marks.map((m) => on.text.slice(m.start, m.start + m.length)),
+    ).toEqual(["fuel", "day"]);
+    // Typed on, and the new word is nowhere: waits for the next answer.
+    expect(textLine(hit, "fuel zzz", "fuel")).toBeNull();
+    // Shorter or different text: stale.
+    expect(textLine(hit, "fue", "fuel")).toBeNull();
+    expect(textLine(hit, "gas", "fuel")).toBeNull();
+    expect(groupEntries([hit], "fuel zzz", "fuel")).toEqual([]);
   });
 
   it("hands the words to the guide's own text search", () => {
@@ -325,6 +411,34 @@ describe("Recent", () => {
     expect(readRecent(storage, "u2")).toEqual([]);
     expect([...store.keys()]).toEqual([recentStorageKey("u1")]);
     expect(readRecent(null, "u1")).toEqual([]);
+  });
+
+  it("keeps the scope per member: Programs unless Everything was chosen", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    } as unknown as Storage;
+    expect(readScope(storage, "u1")).toBe("programs");
+    writeScope(storage, "u1", "everything");
+    expect(store.get(scopeStorageKey("u1"))).toBe("everything");
+    expect(readScope(storage, "u1")).toBe("everything");
+    expect(readScope(storage, "u2")).toBe("programs");
+    for (const bad of [null, "", "Everything", "all", '"everything"']) {
+      expect(parseScope(bad)).toBe("programs");
+    }
+    expect(readScope(null, "u1")).toBe("programs");
+    const refusing = {
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
+    } as unknown as Storage;
+    expect(readScope(refusing, "u1")).toBe("programs");
+    expect(() => writeScope(refusing, "u1", "everything")).not.toThrow();
   });
 
   it("moves step 1's program list over once", () => {

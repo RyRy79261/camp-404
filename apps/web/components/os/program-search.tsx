@@ -15,6 +15,7 @@ import {
   Clock,
   CookingPot,
   FileText,
+  Lock,
   MessageSquare,
   Music,
   Package,
@@ -24,6 +25,7 @@ import {
   User,
   Volume1,
 } from "lucide-react";
+import { SEARCH_TEXT_LIMIT, type SearchTextMatch } from "@camp404/core";
 import type { SearchKind } from "@camp404/db/search";
 import { trapTab } from "@camp404/os";
 import {
@@ -43,15 +45,19 @@ import {
   isSearchShortcut,
   pushRecent,
   readRecent,
+  readScope,
   recentRows,
   refKey,
   searchablePrograms,
   splitMarks,
   writeRecent,
+  writeScope,
   type Mark,
   type RecentRef,
   type SearchEntry,
+  type SearchHit,
   type SearchProgram,
+  type SearchScope,
 } from "@/lib/program-search";
 import type { ClientProgram, ProgramManifest } from "@/lib/programs";
 import { programIcon } from "./program-icons";
@@ -67,10 +73,18 @@ import { programIcon } from "./program-icons";
 // Programs filter here at once, from the manifest the server filtered by rank.
 // Camp entries come from /api/search as the member types (150 ms after the
 // last key, the request before cancelled), each kind filtered on the server
-// by the rule of the page it opens. Titles and names only. With no
+// by the rule of the page it opens (titles, and since #350 text). With no
 // connection, programs still work and the box says why entries are missing.
 // The empty box lists Recent: programs and entries, kept in this browser as
 // ids only and looked up again each time it opens.
+//
+// Search inside text (#350; owner, 2026-10-04: "If I type in fuel I might
+// want the fuel app"): a two-choice toggle, Programs | Everything. Programs,
+// the default, filters programs (by name, then by a few search words) in the
+// browser and asks the server NOTHING, not even for Recent. Everything adds
+// camp entries by title and, below them, text hits with the line they were
+// found in. The choice is remembered in this browser, per member. Ctrl+K
+// inside the open box switches it; Esc closes the box.
 //
 // The OS's own modal, like the folder-name dialog: drawn inside the desktop
 // (so a phone's sheet stops at the bottom bar), focus held inside, Esc closes
@@ -136,6 +150,7 @@ export function ProgramSearch({
 }: ProgramSearchProps) {
   const list = useMemo(() => searchablePrograms(manifest), [manifest]);
   const [recent, setRecent] = useState<RecentRef[]>([]);
+  const [scope, setScope] = useState<SearchScope>("programs");
   // The window an entry was opened into: when it comes to the front, the
   // entry is what was opened, not the program that shares its window.
   const entryWindow = useRef<string | null>(null);
@@ -143,7 +158,17 @@ export function ProgramSearch({
   // Read Recent once the page is in the browser (the server has no storage).
   useEffect(() => {
     setRecent(readRecent(storage(), userId));
+    setScope(readScope(storage(), userId));
   }, [userId]);
+
+  // Every switch is remembered (never sent anywhere).
+  const changeScope = useCallback(
+    (next: SearchScope) => {
+      setScope(next);
+      writeScope(storage(), userId, next);
+    },
+    [userId],
+  );
 
   const remember = useCallback(
     (ref: RecentRef) => {
@@ -184,26 +209,37 @@ export function ProgramSearch({
     [userId],
   );
 
-  // Ctrl+K / Cmd+K opens it, and shuts it again.
+  // Ctrl+K / Cmd+K opens it; pressed again inside the open box, it switches
+  // between Programs and Everything (Esc closes).
   const openRef = useRef(open);
+  const scopeRef = useRef(scope);
   useEffect(() => {
     openRef.current = open;
+    scopeRef.current = scope;
   });
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!isSearchShortcut(e)) return;
       e.preventDefault();
-      onOpenChange(!openRef.current);
+      if (openRef.current) {
+        changeScope(
+          scopeRef.current === "programs" ? "everything" : "programs",
+        );
+      } else {
+        onOpenChange(true);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onOpenChange]);
+  }, [onOpenChange, changeScope]);
 
   if (!open) return null;
   return (
     <SearchBox
       list={list}
       recent={recent}
+      scope={scope}
+      onScope={changeScope}
       phone={phone}
       onClose={() => onOpenChange(false)}
       onForget={forget}
@@ -242,6 +278,11 @@ function useModKey(): string {
   return mod;
 }
 
+/** The shortcut's own name: "Ctrl K", or "⌘ K" on a Mac. */
+function shortcutName(mod: string): string {
+  return `${mod} K`;
+}
+
 /** The taskbar's quiet hint, a button too: "Ctrl K · Search". */
 export function SearchHint({ onOpen }: { onOpen: () => void }) {
   const mod = useModKey();
@@ -254,7 +295,7 @@ export function SearchHint({ onOpen }: { onOpen: () => void }) {
       data-os-search-hint
       className="flex h-8 shrink-0 items-center whitespace-nowrap px-2 font-pixel text-[10px] uppercase tracking-[0.12em] text-os-fg/85 outline-none hover:text-os-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-os-fg max-lg:hidden"
     >
-      {mod} K · Search
+      {shortcutName(mod)} · Search
     </button>
   );
 }
@@ -337,12 +378,15 @@ function useEntrySearch(query: string): EntryState & { slow: boolean } {
 }
 
 /**
- * Recent entries, looked up again on the server when the box opens. Those it
- * does not return (gone, or no longer the member's to open) are forgotten.
+ * Recent entries, looked up again on the server when the box opens in
+ * Everything (or first switches to it). Those it does not return (gone, or no
+ * longer the member's to open) are forgotten. In Programs nothing is asked,
+ * and nothing is forgotten.
  */
 function useRecentEntries(
   recent: readonly RecentRef[],
   onForget: (gone: ReadonlySet<string>) => void,
+  enabled: boolean,
 ): ReadonlyMap<string, SearchEntry> {
   const refs = recent.filter((r) => r.kind !== "program");
   const key = refs.map(refKey).join(",");
@@ -355,13 +399,15 @@ function useRecentEntries(
   });
   // Asked once per box: the list it asks about is the one it opened with.
   const asked = useRef(key);
+  const answered = useRef(false);
   useEffect(() => {
     const wanted = asked.current;
-    if (!wanted) return;
+    if (!enabled || !wanted || answered.current) return;
     const ctrl = new AbortController();
     fetchEntries(`recent=${encodeURIComponent(wanted)}`, ctrl.signal).then(
       (answer) => {
         if (typeof answer === "string") return;
+        answered.current = true;
         const map = new Map(answer.map((e) => [refKey(e), e]));
         setFound(map);
         forget.current(new Set(wanted.split(",").filter((k) => !map.has(k))));
@@ -369,7 +415,7 @@ function useRecentEntries(
       () => {},
     );
     return () => ctrl.abort();
-  }, []);
+  }, [enabled]);
   return found;
 }
 
@@ -381,6 +427,10 @@ interface RowModel {
   title: string;
   marks: Mark[];
   detail: string;
+  /** Letters of the detail to light: a program's matched search word. */
+  detailMarks?: Mark[];
+  /** A text hit's line: where, and the words around the match. */
+  line?: SearchTextMatch;
   icon: (cls: string) => ReactNode;
   /** What a screen reader hears: "title, kind, detail". */
   label: string;
@@ -401,16 +451,27 @@ function programRow(
   p: SearchProgram,
   marks: Mark[],
   onPick: (program: ClientProgram) => void,
+  keyword?: SearchHit["keyword"],
 ): RowModel {
   return {
     value: `program:${p.program.id}`,
     title: p.program.label,
     marks,
-    detail: p.where,
+    // Found by a search word: the word first, lit ("Fuel cans · Power and
+    // Lighting"), so the member sees why Power answers "fuel".
+    detail: keyword ? `${keyword.text} · ${p.where}` : p.where,
+    detailMarks: keyword?.marks,
     icon: programIcon(p.program),
-    label: `${p.program.label}, Program, ${p.where}`,
+    label: keyword
+      ? `${p.program.label}, Program, ${keyword.text}, ${p.where}`
+      : `${p.program.label}, Program, ${p.where}`,
     onSelect: () => onPick(p.program),
   };
+}
+
+/** "in the method" as it is heard after "found": "found in the method". */
+function foundWhere(line: SearchTextMatch): string {
+  return line.where.charAt(0).toLowerCase() + line.where.slice(1);
 }
 
 function entryRow(
@@ -418,6 +479,7 @@ function entryRow(
   marks: Mark[],
   detail: string,
   onPick: (entry: SearchEntry) => void,
+  line?: SearchTextMatch,
 ): RowModel {
   const kind = entry.card ? "Duty card" : ENTRY_KIND_LABEL[entry.kind];
   return {
@@ -425,8 +487,14 @@ function entryRow(
     title: entry.title,
     marks,
     detail,
+    line,
     icon: entryIcon(entry),
-    label: [entry.title, kind, detail === kind ? "" : detail]
+    label: [
+      entry.title,
+      kind,
+      detail === kind ? "" : detail,
+      line ? `found ${foundWhere(line)}: ${line.text}` : "",
+    ]
       .filter(Boolean)
       .join(", "),
     onSelect: () => onPick(entry),
@@ -444,9 +512,100 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+/** What the status line says when the toggle moves. */
+const SCOPE_SAID: Record<SearchScope, string> = {
+  programs: "Programs only.",
+  everything: "Everything: programs, recipes, chapters, meetings and more.",
+};
+
+const SCOPE_LABEL: Record<SearchScope, string> = {
+  programs: "Programs",
+  everything: "Everything",
+};
+
+const SCOPES: readonly SearchScope[] = ["programs", "everything"];
+
+/**
+ * Programs | Everything: a radio group of two, one tab stop (the checked
+ * one), the arrow keys move between them. Its keys stay its own, so Enter on
+ * it never opens the picked row.
+ */
+function ScopeToggle({
+  scope,
+  onScope,
+  phone,
+  onPointerPick,
+}: {
+  scope: SearchScope;
+  onScope: (scope: SearchScope) => void;
+  phone: boolean;
+  /** A click (not a key): the field takes focus back, for typing on. */
+  onPointerPick: () => void;
+}) {
+  const refs = useRef<Record<SearchScope, HTMLButtonElement | null>>({
+    programs: null,
+    everything: null,
+  });
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Search in"
+      data-search-scope
+      className={`flex shrink-0 border border-border ${phone ? "w-full" : ""}`}
+      onKeyDown={(e) => {
+        const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+        if (keys.includes(e.key)) {
+          e.preventDefault();
+          e.stopPropagation();
+          const next = scope === "programs" ? "everything" : "programs";
+          onScope(next);
+          refs.current[next]?.focus();
+        } else if (e.key === "Enter" || e.key === " ") {
+          // A radio is chosen by moving to it; Enter must not open a row.
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
+    >
+      {SCOPES.map((value) => {
+        const on = scope === value;
+        return (
+          <button
+            key={value}
+            ref={(el) => {
+              refs.current[value] = el;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabIndex={on ? 0 : -1}
+            onClick={(e) => {
+              onScope(value);
+              if (e.detail > 0) onPointerPick();
+            }}
+            className={`font-semibold leading-tight outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary ${
+              phone
+                ? "flex-1 py-2.5 text-center text-[13px]"
+                : "px-2.5 py-[5px] text-xs"
+            } ${
+              on
+                ? "bg-[var(--color-pick)] text-foreground shadow-[inset_0_-2px_0_0_var(--color-primary)]"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {SCOPE_LABEL[value]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function SearchBox({
   list,
   recent,
+  scope,
+  onScope,
   phone,
   onClose,
   onForget,
@@ -456,6 +615,8 @@ function SearchBox({
 }: {
   list: readonly SearchProgram[];
   recent: readonly RecentRef[];
+  scope: SearchScope;
+  onScope: (scope: SearchScope) => void;
   phone: boolean;
   onClose: () => void;
   onForget: (gone: ReadonlySet<string>) => void;
@@ -465,6 +626,7 @@ function SearchBox({
   onOpenEntry: (href: string) => void;
 }) {
   const id = useId();
+  const mod = useModKey();
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -474,8 +636,24 @@ function SearchBox({
   const moved = useRef(false);
   const picked = useRef(false);
   const typed = query.trim();
-  const answer = useEntrySearch(typed);
-  const recentEntries = useRecentEntries(recent, onForget);
+  const everything = scope === "everything";
+  // Programs asks the server nothing: no text, no Recent.
+  const answer = useEntrySearch(everything ? typed : "");
+  const recentEntries = useRecentEntries(recent, onForget, everything);
+
+  // The toggle moved (a click, the arrows, Ctrl+K, the "Search everything"
+  // row): the status line says so, until the text changes.
+  const [switched, setSwitched] = useState(false);
+  const firstScope = useRef(scope);
+  useEffect(() => {
+    if (scope !== firstScope.current) {
+      firstScope.current = scope;
+      setSwitched(true);
+    }
+  }, [scope]);
+  useEffect(() => {
+    setSwitched(false);
+  }, [typed]);
 
   // Focus the field; on the way out (Esc, Cancel, a click outside), focus
   // goes back to where it was. Not after a pick: the window takes it.
@@ -509,18 +687,27 @@ function SearchBox({
     onPickEntry(null);
     onOpenEntry(guideTextHref(typed));
   };
+  const focusField = () => input.current?.focus({ preventScroll: true });
 
   // --- What the list holds ---
-  const offline = answer.status === "offline" || answer.status === "failed";
+  const offline =
+    everything && (answer.status === "offline" || answer.status === "failed");
   const programHits = typed ? filterPrograms(list, typed) : [];
   const entryGroups =
-    typed && !offline ? groupEntries(answer.entries, typed) : [];
+    everything && typed && !offline
+      ? groupEntries(answer.entries, typed, answer.query)
+      : [];
   const entryCount = entryGroups.reduce((n, g) => n + g.hits.length, 0);
   const settled = answer.status === "done" && answer.query === typed;
   const groups: GroupModel[] = [];
 
   if (!typed) {
-    const rows = recentRows(list, recent, recentEntries);
+    // In Programs, Recent is programs only: an entry would need the server.
+    const rows = recentRows(
+      list,
+      everything ? recent : recent.filter((r) => r.kind === "program"),
+      recentEntries,
+    );
     if (rows.length > 0) {
       groups.push({
         key: "recent",
@@ -544,6 +731,7 @@ function SearchBox({
       heading: string,
       rows: RowModel[],
       moreLabel: string,
+      over: { full?: boolean; tail?: RowModel[] } = {},
     ) => {
       const open = expanded.has(key) || rows.length <= GROUP_CAP;
       const shown = open ? rows : rows.slice(0, GROUP_CAP);
@@ -551,17 +739,20 @@ function SearchBox({
       groups.push({
         key,
         heading,
-        count: rows.length > GROUP_CAP ? `${rows.length} found` : undefined,
-        rows:
-          hidden > 0
+        count:
+          rows.length > GROUP_CAP || over.full
+            ? `${rows.length}${over.full ? "+" : ""} found`
+            : undefined,
+        rows: [
+          ...shown,
+          ...(hidden > 0
             ? [
-                ...shown,
                 {
                   value: `more:${key}`,
                   title: `Show ${hidden} more ${moreLabel}`,
                   marks: [],
                   detail: "",
-                  icon: (c) => <Search className={c} />,
+                  icon: (c: string) => <Search className={c} />,
                   label: `Show ${hidden} more ${moreLabel}`,
                   more: true,
                   onSelect: () => {
@@ -571,48 +762,78 @@ function SearchBox({
                   },
                 },
               ]
-            : shown,
+            : []),
+          ...(over.tail ?? []),
+        ],
       });
     };
     if (programHits.length > 0) {
       capped(
         "programs",
         "Programs",
-        programHits.map((h) => programRow(h, h.marks, pickProgram)),
+        programHits.map((h) => programRow(h, h.marks, pickProgram, h.keyword)),
         "programs",
       );
-    }
-    for (const g of entryGroups) {
-      capped(
-        g.kind,
-        g.label,
-        g.hits.map((h) =>
-          entryRow(h.entry, h.marks, h.entry.detail, pickEntry),
-        ),
-        g.label.toLowerCase(),
-      );
-    }
-    if (!offline) {
+    } else if (!everything) {
+      // Programs found nothing: hand the words to Everything.
       groups.push({
-        key: "more",
-        heading: "More",
+        key: "programs",
+        heading: "",
         rows: [
           {
-            value: "guide-text",
-            title: `Search the Survival Guide's text for “${typed}”`,
+            value: "scope:everything",
+            title: `Search everything for “${typed}”`,
             marks: [],
-            detail: "Survival Guide",
-            icon: (c) => <BookOpen className={c} />,
-            label: `Search the Survival Guide's text for “${typed}”`,
-            onSelect: pickGuideText,
+            detail: phone ? "" : "Recipes, chapters, meetings and more",
+            icon: (c) => <Search className={c} />,
+            label: `Search everything for “${typed}”, Recipes, chapters, meetings and more`,
+            onSelect: () => {
+              onScope("everything");
+              focusField();
+            },
           },
         ],
       });
     }
+    for (const g of entryGroups) {
+      const full = g.textHits >= SEARCH_TEXT_LIMIT;
+      capped(
+        g.kind,
+        g.label,
+        g.hits.map((h) =>
+          entryRow(h.entry, h.marks, h.entry.detail, pickEntry, h.line),
+        ),
+        g.label.toLowerCase(),
+        {
+          full,
+          // More chapters mention it than search shows: the guide's own
+          // full-text page lists them all.
+          tail:
+            g.kind === "chapter" && full
+              ? [
+                  {
+                    value: "guide-text",
+                    title: `Every chapter that mentions “${typed}”`,
+                    marks: [],
+                    detail: "Survival Guide",
+                    icon: (c) => <BookOpen className={c} />,
+                    label: `Every chapter that mentions “${typed}”, Survival Guide`,
+                    more: true,
+                    onSelect: pickGuideText,
+                  },
+                ]
+              : [],
+        },
+      );
+    }
   }
 
   const nothing =
-    typed && settled && programHits.length === 0 && entryCount === 0;
+    everything &&
+    typed &&
+    settled &&
+    programHits.length === 0 &&
+    entryCount === 0;
   const total = programHits.length + entryCount;
 
   // --- The selection ---
@@ -628,31 +849,51 @@ function SearchBox({
   useEffect(() => {
     moved.current = false;
     setExpanded(new Set());
-  }, [typed]);
+  }, [typed, scope]);
 
   // --- What is said ---
+  const programsFound = plural(programHits.length, "program", "programs");
   const footer = !typed
     ? ""
-    : offline
-      ? "Programs only: no connection"
-      : answer.slow && !settled
-        ? "Searching camp…"
-        : nothing
-          ? "Nothing found"
-          : settled || total > 0
-            ? `${total} found`
-            : "";
-  const said = !typed
+    : !everything
+      ? programHits.length > 0
+        ? programsFound
+        : "No program found"
+      : offline
+        ? "Programs only: no connection"
+        : answer.slow && !settled
+          ? "Searching camp…"
+          : nothing
+            ? "Nothing found"
+            : settled || total > 0
+              ? `${total} found`
+              : "";
+  const counted = !typed
     ? ""
-    : offline
-      ? `${plural(programHits.length, "program", "programs")} found. Camp entries need a connection.`
-      : answer.slow && !settled
-        ? "Searching camp…"
-        : settled
-          ? nothing
-            ? "Nothing found."
-            : `${plural(programHits.length, "program", "programs")} and ${plural(entryCount, "entry", "entries")} found.`
-          : "";
+    : !everything
+      ? programHits.length > 0
+        ? `${programsFound} found.`
+        : "No program found."
+      : offline
+        ? `${programsFound} found. Camp entries need a connection.`
+        : answer.slow && !settled
+          ? "Searching camp…"
+          : settled
+            ? nothing
+              ? "Nothing found."
+              : `${programsFound} and ${plural(entryCount, "entry", "entries")} found.`
+            : "";
+  const said = [switched ? SCOPE_SAID[scope] : "", counted]
+    .filter(Boolean)
+    .join(" ");
+  const toggle = (
+    <ScopeToggle
+      scope={scope}
+      onScope={onScope}
+      phone={phone}
+      onPointerPick={focusField}
+    />
+  );
 
   return (
     <div
@@ -694,7 +935,7 @@ function SearchBox({
         <Command
           shouldFilter={false}
           // cmdk's Ctrl+J/K/N/P would take Ctrl+K inside the box; here it
-          // shuts the box, as it opened it.
+          // switches between Programs and Everything.
           vimBindings={false}
           loop
           label="Search"
@@ -705,8 +946,8 @@ function SearchBox({
           <div
             className={
               phone
-                ? "flex items-center gap-3 border-b border-border p-3 [&_[cmdk-input-wrapper]]:flex-1 [&_[cmdk-input-wrapper]]:border [&_[cmdk-input-wrapper]]:border-os-primary [&_[cmdk-input-wrapper]]:bg-background [&_[cmdk-input-wrapper]]:px-3"
-                : "relative"
+                ? "flex items-center gap-3 p-3 [&_[cmdk-input-wrapper]]:flex-1 [&_[cmdk-input-wrapper]]:border [&_[cmdk-input-wrapper]]:border-os-primary [&_[cmdk-input-wrapper]]:bg-background [&_[cmdk-input-wrapper]]:px-3"
+                : "flex items-center gap-2.5 border-b border-border pr-4 [&_[cmdk-input-wrapper]]:min-w-0 [&_[cmdk-input-wrapper]]:flex-1 [&_[cmdk-input-wrapper]]:border-b-0"
             }
           >
             <CommandInput
@@ -715,15 +956,15 @@ function SearchBox({
               onValueChange={setQuery}
               enterKeyHint="go"
               placeholder={
-                phone
-                  ? "Search everything…"
-                  : "Search programs, recipes, chapters, people…"
+                !everything
+                  ? "Search programs…"
+                  : phone
+                    ? "Search everything…"
+                    : "Search programs, recipes, chapters, people…"
               }
               aria-label="Search"
               className={`[&::-webkit-search-cancel-button]:hidden ${
-                phone
-                  ? "h-10 py-0 text-base"
-                  : "h-14 pr-14 text-[17px] font-medium"
+                phone ? "h-10 py-0 text-base" : "h-14 text-[17px] font-medium"
               }`}
             />
             {phone ? (
@@ -735,14 +976,17 @@ function SearchBox({
                 Cancel
               </button>
             ) : (
-              <span
-                aria-hidden
-                className={`${KBD} absolute right-4 top-1/2 -translate-y-1/2`}
-              >
-                Esc
-              </span>
+              <>
+                {toggle}
+                <span aria-hidden className={KBD}>
+                  Esc
+                </span>
+              </>
             )}
           </div>
+          {phone && (
+            <div className="border-b border-border px-3 pb-2.5">{toggle}</div>
+          )}
           <CommandList
             aria-busy={answer.status === "loading" ? true : undefined}
             onPointerMove={() => {
@@ -755,18 +999,10 @@ function SearchBox({
             }
           >
             {groups.map((g, gi) => (
-              <div key={g.key} className="contents">
-                {g.key === "more" && nothing && (
-                  <div className="px-4 pt-5 pb-2 text-sm text-foreground">
-                    <p>Nothing you can open is called “{typed}”.</p>
-                    <p className="mt-1.5 text-[13px] text-muted-foreground">
-                      Search looks at titles and names. Check the spelling, or
-                      look inside the Survival Guide&apos;s text.
-                    </p>
-                  </div>
-                )}
-                <CommandGroup
-                  heading={
+              <CommandGroup
+                key={g.key}
+                heading={
+                  g.heading ? (
                     <span className="flex items-baseline">
                       <span>{g.heading}</span>
                       {g.count && (
@@ -775,15 +1011,25 @@ function SearchBox({
                         </span>
                       )}
                     </span>
-                  }
-                  className={`${GROUP_CLASS} ${phone && gi > 0 ? "border-t border-border" : ""}`}
-                >
-                  {g.rows.map((row) => (
-                    <Row key={row.value} row={row} phone={phone} />
-                  ))}
-                </CommandGroup>
-              </div>
+                  ) : undefined
+                }
+                className={`${GROUP_CLASS} ${phone && gi > 0 ? "border-t border-border" : ""}`}
+              >
+                {g.rows.map((row) => (
+                  <Row key={row.value} row={row} phone={phone} />
+                ))}
+              </CommandGroup>
             ))}
+            {nothing && (
+              <div className="px-4 pt-5 pb-4 text-sm text-foreground">
+                <p>Nothing you can open mentions “{typed}”.</p>
+                <p className="mt-1.5 text-[13px] text-muted-foreground">
+                  Search looks at names and titles, recipes in the book,
+                  Survival Guide chapters, meeting notes and the announcements
+                  you were sent. Check the spelling, or try one word.
+                </p>
+              </div>
+            )}
             {typed && offline && (
               <p
                 data-testid="search-offline"
@@ -815,8 +1061,9 @@ function SearchBox({
               <span className="flex items-center gap-1">
                 <kbd className={KBD}>Enter</kbd> open
               </span>
-              <span className="flex items-center gap-1">
-                <kbd className={KBD}>Esc</kbd> close
+              <span className="flex items-center gap-1" data-search-switch-hint>
+                <kbd className={KBD}>{shortcutName(mod)}</kbd>{" "}
+                {everything ? "programs only" : "everything"}
               </span>
               <span className="ml-auto" data-testid="search-footer-status">
                 {footer}
@@ -832,20 +1079,40 @@ function SearchBox({
   );
 }
 
-function Row({ row, phone }: { row: RowModel; phone: boolean }) {
-  const title = (
-    <span
-      className={`min-w-0 truncate ${phone ? "text-[15px]" : ""} ${row.more ? "text-[13px] text-muted-foreground" : ""}`}
-    >
-      {splitMarks(row.title, row.marks).map((part, i) =>
+function Marked({
+  text,
+  marks,
+  className,
+}: {
+  text: string;
+  marks: readonly Mark[];
+  className: string;
+}) {
+  return (
+    <>
+      {splitMarks(text, marks).map((part, i) =>
         part.hit ? (
-          <mark key={i} className="bg-transparent font-bold text-primary">
+          <mark key={i} className={className}>
             {part.text}
           </mark>
         ) : (
           <span key={i}>{part.text}</span>
         ),
       )}
+    </>
+  );
+}
+
+function Row({ row, phone }: { row: RowModel; phone: boolean }) {
+  const title = (
+    <span
+      className={`min-w-0 truncate ${phone ? "text-[15px]" : ""} ${row.more ? "text-[13px] text-muted-foreground" : ""}`}
+    >
+      <Marked
+        text={row.title}
+        marks={row.marks}
+        className="bg-transparent font-bold text-primary"
+      />
     </span>
   );
   const detail = row.detail ? (
@@ -856,7 +1123,40 @@ function Row({ row, phone }: { row: RowModel; phone: boolean }) {
           : "ml-auto max-w-[48%] shrink-0 truncate pl-3 text-xs text-muted-foreground"
       }
     >
-      {row.detail}
+      <Marked
+        text={row.detail}
+        marks={row.detailMarks ?? []}
+        className="bg-transparent font-bold text-foreground"
+      />
+    </span>
+  ) : null;
+  const line = row.line ? (
+    <span
+      data-search-line
+      className={`overflow-hidden text-muted-foreground [-webkit-box-orient:vertical] [display:-webkit-box] ${
+        phone
+          ? "text-[13px] leading-[1.45] [-webkit-line-clamp:3]"
+          : "text-[12.5px] leading-[1.45] [-webkit-line-clamp:2]"
+      }`}
+    >
+      <span
+        className={`mr-1.5 whitespace-nowrap text-[11px] font-semibold ${
+          row.line.membersOnly ? "text-primary" : "text-os-accent"
+        }`}
+      >
+        {row.line.membersOnly && (
+          <Lock
+            aria-hidden
+            className="mr-[3px] inline !size-[11px] align-[-1px]"
+          />
+        )}
+        {row.line.where}
+      </span>
+      <Marked
+        text={row.line.text}
+        marks={row.line.marks}
+        className="bg-[color-mix(in_oklab,var(--color-primary)_30%,transparent)] px-px font-bold text-foreground"
+      />
     </span>
   ) : null;
   return (
@@ -867,15 +1167,29 @@ function Row({ row, phone }: { row: RowModel; phone: boolean }) {
       data-search-row={row.value}
       className={`gap-3 rounded-none px-4 text-sm data-[selected='true']:bg-[var(--color-pick)] data-[selected=true]:text-foreground data-[selected=true]:shadow-[inset_3px_0_0_0_var(--color-primary)] ${
         phone ? "min-h-12 border-b border-border py-2" : "min-h-10 py-1.5"
-      }`}
+      } ${line ? "items-start !py-2" : ""}`}
     >
       <span
         aria-hidden
-        className={`grid size-[26px] shrink-0 place-items-center border border-[color-mix(in_oklab,var(--os-accent)_60%,transparent)] text-os-accent ${row.more ? "border-dashed" : ""}`}
+        className={`grid size-[26px] shrink-0 place-items-center border border-[color-mix(in_oklab,var(--os-accent)_60%,transparent)] text-os-accent ${row.more ? "border-dashed" : ""} ${line ? "mt-px" : ""}`}
       >
         {row.icon("size-4")}
       </span>
-      {phone ? (
+      {line ? (
+        <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+          <span
+            className={
+              phone
+                ? "flex min-w-0 flex-col gap-0.5"
+                : "flex min-w-0 items-baseline"
+            }
+          >
+            {title}
+            {detail}
+          </span>
+          {line}
+        </span>
+      ) : phone ? (
         <span className="flex min-w-0 flex-col gap-0.5">
           {title}
           {detail}

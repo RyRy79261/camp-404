@@ -1,3 +1,4 @@
+import { markWords, type SearchTextMatch } from "@camp404/core";
 import type { SearchKind } from "@camp404/db/search";
 import type { ClientProgram, ProgramManifest } from "./programs";
 
@@ -5,14 +6,18 @@ import type { ClientProgram, ProgramManifest } from "./programs";
 // member's manifest, which the server already filtered by rank, so search can
 // never offer a program the Start menu would not; they filter here, at once.
 // Camp entries (recipes, chapters, people…) come from /api/search, which
-// applies each page's own rule on the server (step 2); this module ranks,
-// groups and highlights them, and keeps Recent.
+// applies each page's own rule on the server (step 2), by title and, since
+// #350, inside the text, with a short line around the match; this module
+// ranks, groups and highlights them, and keeps Recent and the box's scope
+// (Programs or Everything).
 
 /** A program as search lists it: the program, and where it lives. */
 export interface SearchProgram {
   program: ClientProgram;
   /** The group named on the row's right: "Me", "Kitchen", "Power and Lighting". */
   where: string;
+  /** Words for what is inside it ("Fuel cans"), matched after the name. */
+  keywords: readonly string[];
 }
 
 /**
@@ -27,11 +32,11 @@ export function searchablePrograms(manifest: ProgramManifest): SearchProgram[] {
   }
   const seen = new Set<string>();
   const list: SearchProgram[] = [];
-  for (const { id, where } of manifest.search) {
+  for (const { id, where, keywords } of manifest.search) {
     const program = byId.get(id);
     if (!program || seen.has(id)) continue;
     seen.add(id);
-    list.push({ program, where });
+    list.push({ program, where, keywords: keywords ?? [] });
   }
   return list;
 }
@@ -44,10 +49,18 @@ export interface Mark {
 
 /** A matched program, with the parts of its name that matched. */
 export interface SearchHit extends SearchProgram {
-  /** 0 the whole name, 1 its start, 2 a word's start, 3 anywhere. */
+  /**
+   * 0 the whole name, 1 its start, 2 a word's start, 3 anywhere; 4 not the
+   * name but one of its search words.
+   */
   rank: number;
   marks: Mark[];
+  /** The search word that matched, when the name did not. */
+  keyword?: { text: string; marks: Mark[] };
 }
+
+/** A program found by one of its search words ranks below every name match. */
+export const KEYWORD_RANK = 4;
 
 /** The typed text as lower-case words. */
 export function queryWords(query: string): string[] {
@@ -109,9 +122,11 @@ export function rankTitle(
 }
 
 /**
- * The programs whose name holds every typed word, best first (rankTitle);
- * within a rank, shorter names first, then the desktop's order. Empty text
- * matches nothing (the empty box shows Recent instead).
+ * The programs whose name holds every typed word, best first (rankTitle),
+ * then those with a search word that does (KEYWORD_RANK, the best-matching
+ * word kept for the row); within a rank, shorter names first, then the
+ * desktop's order. Empty text matches nothing (the empty box shows Recent
+ * instead). All in the browser: no request.
  */
 export function filterPrograms(
   list: readonly SearchProgram[],
@@ -120,7 +135,26 @@ export function filterPrograms(
   const hits: { hit: SearchHit; order: number }[] = [];
   list.forEach((entry, order) => {
     const ranked = rankTitle(entry.program.label, query);
-    if (ranked) hits.push({ hit: { ...entry, ...ranked }, order });
+    if (ranked) {
+      hits.push({ hit: { ...entry, ...ranked }, order });
+      return;
+    }
+    let best: { text: string; rank: number; marks: Mark[] } | null = null;
+    for (const text of entry.keywords) {
+      const k = rankTitle(text, query);
+      if (k && (!best || k.rank < best.rank)) best = { text, ...k };
+    }
+    if (best) {
+      hits.push({
+        hit: {
+          ...entry,
+          rank: KEYWORD_RANK,
+          marks: [],
+          keyword: { text: best.text, marks: best.marks },
+        },
+        order,
+      });
+    }
   });
   // Within a rank, the shorter name first: more of it is what was typed, so
   // "pow" puts Power before the Power and Lighting team's page.
@@ -163,6 +197,11 @@ export interface SearchEntry {
   href: string;
   /** A Survival Guide duty card (its own icon), not a chapter. */
   card?: boolean;
+  /**
+   * A text hit (#350): the words were found inside, not in the title. Where,
+   * and about 110 characters around them, built on the server. Never a body.
+   */
+  match?: SearchTextMatch;
 }
 
 /** Each kind's group heading, in the order groups tie-break. */
@@ -204,37 +243,79 @@ export function isEntryKind(value: unknown): value is SearchKind {
 /** A matched entry, ranked as programs are. */
 export interface EntryHit {
   entry: SearchEntry;
+  /** 0–3 a title hit (rankTitle); TEXT_RANK a text hit. */
   rank: number;
   marks: Mark[];
+  /** A text hit's line, its marks for the typed text. */
+  line?: SearchTextMatch;
 }
+
+/** A text hit ranks below every title hit. */
+export const TEXT_RANK = 4;
 
 export interface EntryGroup {
   kind: SearchKind;
   label: string;
   hits: EntryHit[];
+  /** How many of `hits` are text hits. */
+  textHits: number;
+}
+
+/**
+ * A text hit's line for the typed text, or null when it may be stale. Kept
+ * when the answer was for this very text; or when the typing only went on
+ * from it and every word is still in the title or the line (the marks are
+ * then worked out again here). Otherwise it waits for the next answer.
+ */
+export function textLine(
+  entry: SearchEntry,
+  query: string,
+  answeredFor: string,
+): SearchTextMatch | null {
+  const match = entry.match;
+  if (!match) return null;
+  const now = queryWords(query).join(" ");
+  const then = queryWords(answeredFor).join(" ");
+  if (now === then) return match;
+  if (!then || !now.startsWith(then)) return null;
+  const words = queryWords(query);
+  const hay = `${entry.title}\n${match.text}`.toLowerCase();
+  if (!words.every((w) => hay.includes(w))) return null;
+  return { ...match, marks: markWords(match.text, words) };
 }
 
 /** How many rows a group shows before "Show N more". */
 export const GROUP_CAP = 3;
 
 /**
- * Entries grouped by kind. Rows rank as programs do (rankTitle), shorter
- * titles first, then the server's order (newest first where a kind has a
- * date). Groups follow their best row, and the kinds' fixed order breaks a
- * tie. An entry whose title no longer holds the typed words (an answer to
- * an earlier, shorter text) is left out, so the list narrows at once while
- * the next answer is on its way.
+ * Entries grouped by kind. Title hits rank as programs do (rankTitle),
+ * shorter titles first, then the server's order (newest first where a kind
+ * has a date); text hits come after them (TEXT_RANK), in the server's order.
+ * Groups follow their best row, and the kinds' fixed order breaks a tie, so a
+ * group with a title hit comes before one with text hits only. An entry whose
+ * title no longer holds the typed words (an answer to an earlier, shorter
+ * text) is left out, so the list narrows at once while the next answer is on
+ * its way; a text hit follows `textLine`. `answeredFor` is the text the
+ * entries answer.
  */
 export function groupEntries(
   entries: readonly SearchEntry[],
   query: string,
+  answeredFor: string = query,
 ): EntryGroup[] {
   const byKind = new Map<SearchKind, { hit: EntryHit; order: number }[]>();
   entries.forEach((entry, order) => {
-    const ranked = rankTitle(entry.title, query);
-    if (!ranked) return;
+    let hit: EntryHit | null = null;
+    if (entry.match) {
+      const line = textLine(entry, query, answeredFor);
+      if (line) hit = { entry, rank: TEXT_RANK, marks: [], line };
+    } else {
+      const ranked = rankTitle(entry.title, query);
+      if (ranked) hit = { entry, ...ranked };
+    }
+    if (!hit) return;
     const list = byKind.get(entry.kind) ?? [];
-    list.push({ hit: { entry, ...ranked }, order });
+    list.push({ hit, order });
     byKind.set(entry.kind, list);
   });
   return [...byKind.entries()]
@@ -245,10 +326,13 @@ export function groupEntries(
         .sort(
           (a, b) =>
             a.hit.rank - b.hit.rank ||
-            a.hit.entry.title.length - b.hit.entry.title.length ||
+            (a.hit.rank === TEXT_RANK
+              ? 0
+              : a.hit.entry.title.length - b.hit.entry.title.length) ||
             a.order - b.order,
         )
         .map((x) => x.hit),
+      textHits: list.filter((x) => x.hit.rank === TEXT_RANK).length,
     }))
     .sort(
       (a, b) =>
@@ -257,7 +341,7 @@ export function groupEntries(
     );
 }
 
-/** The guide's own full-text page, for the box's last row. */
+/** The guide's own full-text page: "Every chapter that mentions …". */
 export function guideTextHref(query: string): string {
   return `/guide?q=${encodeURIComponent(query.trim())}`;
 }
@@ -414,6 +498,47 @@ export function writeRecent(
   }
 }
 
+// --- Scope: Programs or Everything ------------------------------------------------
+// (owner, 2026-10-04) The box searches programs only, in the browser with no
+// request, or everything, on the server. The choice is this browser's, per
+// member (`camp404.search.scope.v1:<campUserId>`), and is never sent anywhere.
+
+export type SearchScope = "programs" | "everything";
+
+export const SCOPE_PREFIX = "camp404.search.scope.v1:";
+
+export function scopeStorageKey(userId: string): string {
+  return `${SCOPE_PREFIX}${userId}`;
+}
+
+/** Anything but "everything" reads as Programs, the default. */
+export function parseScope(raw: string | null): SearchScope {
+  return raw === "everything" ? "everything" : "programs";
+}
+
+export function readScope(
+  storage: Storage | null,
+  userId: string,
+): SearchScope {
+  try {
+    return parseScope(storage?.getItem(scopeStorageKey(userId)) ?? null);
+  } catch {
+    return "programs";
+  }
+}
+
+export function writeScope(
+  storage: Storage | null,
+  userId: string,
+  scope: SearchScope,
+): void {
+  try {
+    storage?.setItem(scopeStorageKey(userId), scope);
+  } catch {
+    // Storage refused: the choice lasts until the page is left.
+  }
+}
+
 // --- The shortcut ------------------------------------------------------------------
 
 /**
@@ -443,7 +568,8 @@ export function isSearchShortcut(e: {
       return false;
     // Another dialog holds focus (a page's form, a confirm): the box would
     // open under it and the typing would land in the dialog's field. Search
-    // waits until it closes. The search box's own Ctrl+K still shuts it.
+    // waits until it closes. The search box's own Ctrl+K still reaches it
+    // (it switches between Programs and Everything there).
     if (
       !el.closest("[data-os-search]") &&
       el.closest('[role="dialog"], [role="alertdialog"]')
