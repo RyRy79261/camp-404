@@ -909,6 +909,27 @@ describe("search everything", () => {
     ]);
   });
 
+  it("text hits the line cannot show never use up the limit", async () => {
+    const member = await makeUser(h.db());
+    // Five newer notes with the word only in a link's address...
+    for (let i = 0; i < 5; i++) {
+      await meeting(`Newer ${i}`, {
+        notes: "See [the list](https://example.com/zebra).",
+        heldAt: new Date(Date.UTC(2026, 8, 20 + i)),
+      });
+    }
+    // ...and an older one that really says it.
+    await meeting("Older", {
+      notes: "The zebra crossing at the gate.",
+      heldAt: new Date(Date.UTC(2026, 8, 1)),
+    });
+    expect(
+      textHits(await find(viewer(member.id), "zebra"), "meeting").map(
+        (r) => r.title,
+      ),
+    ).toEqual(["Older"]);
+  });
+
   it("a text hit holds exactly the agreed columns, and its line, never the text", async () => {
     const member = await makeUser(h.db());
     const long = `${"Stir slowly and keep tasting as you go. ".repeat(20)}Add the chakalaka last.`;

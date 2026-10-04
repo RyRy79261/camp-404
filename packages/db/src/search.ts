@@ -152,6 +152,13 @@ interface TextBranch {
   source: SQL;
 }
 
+/**
+ * How many candidates a text branch reads for each hit it may show: a row
+ * whose words are only in markup (a link's address) is dropped after the
+ * query, so the cap is applied after that, never in SQL alone.
+ */
+const TEXT_OVERFETCH = 4;
+
 /** A recipe body's searched values: jsonpath, so never a key or an enum. */
 const RECIPE_TEXT_PATHS = [
   "$.summary ? (@ != null)",
@@ -458,6 +465,7 @@ function select(
 async function run(
   parts: SQL[],
   words: readonly string[] = [],
+  textLimit = Infinity,
 ): Promise<SearchEntryRow[]> {
   if (parts.length === 0) return [];
   // Neon's HTTP driver and PGlite answer { rows }; another driver answers
@@ -468,6 +476,7 @@ async function run(
     | { rows?: Record<string, unknown>[] }
     | Record<string, unknown>[];
   const rows = Array.isArray(result) ? result : (result.rows ?? []);
+  const textCount = new Map<SearchKind, number>();
   return rows.flatMap((r): SearchEntryRow[] => {
     const kind = r.kind as SearchKind;
     const title = String(r.title);
@@ -481,6 +490,10 @@ async function run(
       // The words were only in markup (a link's address): no line to show,
       // so no hit.
       if (!match) return [];
+      // The cap, counted over hits that have a line to show.
+      const n = (textCount.get(kind) ?? 0) + 1;
+      if (n > textLimit) return [];
+      textCount.set(kind, n);
     }
     return [
       {
@@ -549,10 +562,12 @@ export async function searchEntries(input: {
         [b.newest ?? sql`${b.title}`, sql`${b.id}`],
         sql`, `,
       );
-      parts.push(select(b, inText, textOrder, textLimit, b.text));
+      parts.push(
+        select(b, inText, textOrder, textLimit * TEXT_OVERFETCH, b.text),
+      );
     }
   }
-  return run(parts, words);
+  return run(parts, words, textLimit);
 }
 
 /** A remembered entry: what Recent keeps in the browser. */
