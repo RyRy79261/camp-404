@@ -7,12 +7,13 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type * as ImageLib from "@/lib/image";
 
 // The receipt picker shrinks each photo as it is picked, so five phone photos
 // fit the 4 MB one request may carry (lib/image.ts does the shrinking).
 
 vi.mock("@/lib/image", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/image")>()),
+  ...(await importOriginal<typeof ImageLib>()),
   downscaleForUpload: vi.fn(async (file: File) =>
     file.type === "application/pdf"
       ? file
