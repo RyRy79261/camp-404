@@ -118,6 +118,22 @@ describe("submitFeedbackAction", () => {
     expect(structureWithAi).not.toHaveBeenCalled();
   });
 
+  it("rejects when the address's daily cap trips, and files nothing", async () => {
+    // Fresh accounts from one address each get a new per-account day; the
+    // address's own day is what stops them.
+    refuseBucket("feedback-ip-day:");
+    const fetchFn = mockFetch({ status: 201 });
+    const res = await submitFeedbackAction({ ...VALID, useAi: true });
+    expect(res).toMatchObject({ ok: false });
+    if (!res.ok) expect(res.error).toMatch(/lot of reports today/i);
+    expect(rateLimiter.limit).toHaveBeenCalledWith("feedback-ip-day:1.2.3.4", {
+      limit: 30,
+      windowMs: 86_400_000,
+    });
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(structureWithAi).not.toHaveBeenCalled();
+  });
+
   it("rejects when the daily cap trips", async () => {
     refuseBucket("feedback-day:");
     const res = await submitFeedbackAction(VALID);
