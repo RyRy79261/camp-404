@@ -8,7 +8,8 @@ import { makeUser } from "./_factories";
 // reimbursement_status. The harness has run both on an empty database, so
 // each test puts back the type 0101 saw (with "reconciled"), stores rows, and
 // runs the SQL. DDL outlives the truncate between tests, so the put-back
-// works from either type.
+// works from either type. 0103 has since dropped "reconciled_at", which 0101
+// reads, so the put-back adds that column back too.
 
 const sql = (file: string) =>
   readFileSync(new URL(`../../migrations/${file}`, import.meta.url), "utf8");
@@ -26,6 +27,7 @@ describe("0101_claims_paid_is_the_end and 0102_claims_drop_reconciled_status", (
 
   async function stateBefore0101() {
     await h.client().exec(`
+      ALTER TABLE "reimbursements" ADD COLUMN IF NOT EXISTS "reconciled_at" timestamp;
       ALTER TABLE "reimbursements" ALTER COLUMN "status" SET DATA TYPE text;
       ALTER TABLE "reimbursements" ALTER COLUMN "status" SET DEFAULT 'submitted'::text;
       DROP TYPE "public"."reimbursement_status";

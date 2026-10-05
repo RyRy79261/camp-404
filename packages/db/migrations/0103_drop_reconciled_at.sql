@@ -1,0 +1,1 @@
+ALTER TABLE "reimbursements" DROP COLUMN "reconciled_at";
