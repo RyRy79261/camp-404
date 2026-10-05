@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { McpScopeRows } from "@camp404/db/mcp";
 import {
   capabilitiesFor,
+  refusalFor,
   TOOL_CAPABILITIES,
   WEBSITE_ONLY,
 } from "../capabilities";
@@ -118,6 +119,55 @@ describe("capabilitiesFor", () => {
         "get_meal_plan",
         "get_shopping_list",
       ]),
+    );
+  });
+
+  it("gives every member the everyday tools, and adding a task to leads", () => {
+    const member = toolsFor(scopeOf("member"));
+    const lead = toolsFor(
+      scopeOf("member", [{ team: "kitchen", isLead: true }]),
+    );
+    expect(member).toEqual(
+      expect.arrayContaining([
+        "list_my_notifications",
+        "mark_all_notifications_read",
+        "search_camp",
+        "list_tasks",
+        "move_task",
+        "list_calendar_events",
+        "update_meeting_notes",
+        "sign_up_for_shift",
+        "leave_shift",
+        "get_my_dues",
+        "get_my_gear_rental",
+        "list_my_forms",
+        "set_my_logistics_attendance",
+        "request_lift",
+        "cancel_lift_request",
+      ]),
+    );
+    expect(member).not.toContain("add_task");
+    expect(lead).toContain("add_task");
+  });
+
+  it("names a page for every everyday tool, and a refused call points to it", () => {
+    for (const name of [
+      "list_my_notifications",
+      "search_camp",
+      "add_task",
+      "list_calendar_events",
+      "get_meeting",
+      "list_shifts",
+      "get_my_dues",
+      "get_my_gear_rental",
+      "list_my_forms",
+      "get_logistics_attendance",
+      "request_lift",
+    ]) {
+      expect(TOOL_CAPABILITIES[name]!.page, name).toMatch(/^\//);
+    }
+    expect(refusalFor(TOOL_CAPABILITIES.add_task!)).toMatch(
+      /On the website: https?:\/\/[^/]+\/tasks$/,
     );
   });
 
