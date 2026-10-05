@@ -18,7 +18,9 @@ database when `DATABASE_URL` is set, and serves `DEFAULT_JOIN_DATA`
 (`lib/load-join-data.ts`). [CORRECTION 2026-10-05] A failed read falls back
 to `DEFAULT_JOIN_DATA` only during `next build`; at runtime it throws, so the
 background refresh keeps the last good page instead of caching the built-in
-copy.
+copy. With no cached page at all and the database down, a visitor gets an
+error page; on Vercel the build always leaves a cached page, so in practice
+only `next dev` shows it.
 
 ## The reference: dimensional.org/prototype
 

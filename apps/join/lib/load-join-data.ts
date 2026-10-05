@@ -18,6 +18,14 @@ const BUILD_PHASE = "phase-production-build";
  *   background (`revalidate`), and a refresh that throws keeps the last good
  *   page. Answering with the built-in copy instead would cache it, and every
  *   visitor would read last year's dates and fees until the next refresh.
+ *
+ * The cost: with NO cached page and the database down, a visitor gets the
+ * error page, not the built-in copy. On Vercel that does not happen in
+ * practice, because `next build` renders the page (falling back above if it
+ * must), so every deployment starts with one cached. It can on a server that
+ * never built the page (`next dev`). Chosen over "built-in copy with a short
+ * revalidate": a route's revalidate is fixed per route, not per answer, so
+ * that copy would be cached for the usual minute anyway.
  */
 export async function loadJoinData(): Promise<JoinData> {
   if (!process.env.DATABASE_URL) return DEFAULT_JOIN_DATA;
