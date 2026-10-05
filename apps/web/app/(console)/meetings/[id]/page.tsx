@@ -22,7 +22,7 @@ import {
   CardTitle,
 } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { MarkdownBody } from "@/components/announcements/markdown-body";
+import { MarkdownBody } from "@camp404/ui/components/markdown-body";
 import { getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getMeetingNote } from "@/lib/meeting-notes";

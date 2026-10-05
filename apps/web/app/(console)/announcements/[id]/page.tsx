@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
-import { MarkdownBody } from "@/components/announcements/markdown-body";
+import { MarkdownBody } from "@camp404/ui/components/markdown-body";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { getAnnouncementForMember, markRead } from "@/lib/notifications";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";

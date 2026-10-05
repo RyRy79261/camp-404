@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@camp404/ui/components/card";
-import { MarkdownBody } from "@/components/announcements/markdown-body";
+import { MarkdownBody } from "@camp404/ui/components/markdown-body";
 import { DutyCardView } from "./duty-card-view";
 
 // A published chapter's words (#250), on the reader and on an old version's

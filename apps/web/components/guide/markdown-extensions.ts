@@ -214,3 +214,23 @@ export const CHAPTER_EDITOR_EXTENSIONS = [
 export function editorMarkdown(editor: Editor): string {
   return editor.getMarkdown().replace(/\s+$/, "");
 }
+
+/** The editor's "paragraphs" mode (components/markdown/paragraph-text.ts):
+ * paragraphs with bold and italic, and nothing the join site cannot show. */
+export const PARAGRAPH_EDITOR_EXTENSIONS = [
+  StarterKit.configure({
+    heading: false,
+    bulletList: false,
+    orderedList: false,
+    listItem: false,
+    listKeymap: false,
+    blockquote: false,
+    code: false,
+    codeBlock: false,
+    horizontalRule: false,
+    hardBreak: false,
+    strike: false,
+    underline: false,
+    link: false,
+  }),
+];

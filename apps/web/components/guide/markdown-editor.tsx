@@ -21,10 +21,10 @@ import {
   CHAPTER_EDITOR_EXTENSIONS,
   editorMarkdown,
   NOTES_EDITOR_EXTENSIONS,
+  PARAGRAPH_EDITOR_EXTENSIONS,
 } from "./markdown-extensions";
 import {
   docFromValue,
-  PARAGRAPH_EDITOR_EXTENSIONS,
   valueFromDoc,
 } from "@/components/markdown/paragraph-text";
 

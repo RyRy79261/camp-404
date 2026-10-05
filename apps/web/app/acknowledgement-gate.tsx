@@ -25,7 +25,7 @@ import { plainPreview } from "@camp404/core";
 // takeover to draw, and the Suspense fallback below means the member reads the
 // words either way.
 const MarkdownBody = lazy(() =>
-  import("@/components/announcements/markdown-body").then((m) => ({
+  import("@camp404/ui/components/markdown-body").then((m) => ({
     default: m.MarkdownBody,
   })),
 );

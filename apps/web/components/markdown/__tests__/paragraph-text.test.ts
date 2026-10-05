@@ -1,9 +1,9 @@
 import { Editor } from "@tiptap/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_JOIN_CONTENT, inlinePlainText } from "@camp404/types";
+import { PARAGRAPH_EDITOR_EXTENSIONS } from "@/components/guide/markdown-extensions";
 import {
   docFromValue,
-  PARAGRAPH_EDITOR_EXTENSIONS,
   paragraphsFromValue,
   paragraphsToValue,
   valueFromDoc,

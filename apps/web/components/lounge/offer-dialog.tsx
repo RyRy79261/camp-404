@@ -42,7 +42,7 @@ import {
   NEED_LABELS,
   bandLabel,
 } from "@/lib/lounge-copy";
-import { MarkdownBody } from "@/components/announcements/markdown-body";
+import { MarkdownBody } from "@camp404/ui/components/markdown-body";
 import { NoteBox } from "./lounge-parts";
 
 // Offer an activity or a DJ set for the lounge, or, given `editing`, change
