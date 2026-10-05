@@ -20,6 +20,15 @@ permissions:
 jobs:
   mobile-360:
     runs-on: ubuntu-latest
+    # The PR e2e job's set-up (ci.yml), at 360 px: a production build served
+    # by `next start` (E2E_SERVE_BUILD=1), in two shards. Under `next dev`
+    # Turbopack's memory grew until the runner was killed ("The runner has
+    # received a shutdown signal"), which is how this run failed every night
+    # from 2026-09-29.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1/2, 2/2]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v5
@@ -40,14 +49,29 @@ jobs:
       - name: Install Playwright system deps (cached browser)
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm --filter @camp404/web exec playwright install-deps chromium
+      - name: Build the app for e2e
+        # The test env the server gets from playwright.config.ts's
+        # webServer.env, as in ci.yml's e2e job. CI=true (set by Actions) is
+        # what lets lib/env.ts start a production server with E2E_TEST_MODE.
+        env:
+          E2E_TEST_MODE: "1"
+          INVITE_CODES: test-invite-e2e-only-code
+          GOD_EMAILS: god@example.com
+          PRINCE_KEEPER_EMAILS: prince-keeper@example.com
+        run: pnpm --filter @camp404/web build
       - name: Run e2e tests at 360 px
         env:
-          CI: "true"
-        run: pnpm --filter @camp404/web test:e2e:mobile
+          E2E_SERVE_BUILD: "1"
+        # A memory line every 20 s leaves evidence if a runner dies mid-run.
+        run: |
+          ( while sleep 20; do
+              echo "[mem $(date -u +%T)] $(free -m | awk '/Mem:/{print "used="$3"MB avail="$7"MB"} /Swap:/{print "swap="$3"MB"}' | tr '\n' ' ')top: $(ps -eo rss=,comm= --sort=-rss | head -3 | awk '{printf "%s=%dMB ", $2, $1/1024}')"
+            done ) &
+          pnpm --filter @camp404/web test:e2e:mobile --shard=${{ matrix.shard }}
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report-mobile-360
+          name: playwright-report-mobile-360-${{ strategy.job-index }}
           path: apps/web/playwright-report/
           retention-days: 7
