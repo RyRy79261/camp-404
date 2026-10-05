@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach, beforeAll, inject } from "vitest";
+import type {} from "./_global-setup";
 import * as schema from "../schema";
 import { __setDbOverride, type Database, type PooledDatabase } from "../index";
 
@@ -12,6 +14,11 @@ import { __setDbOverride, type Database, type PooledDatabase } from "../index";
 // seam — so the tests exercise the REAL queries in activations.ts /
 // questionnaire-definitions.ts against real Postgres (jsonb, enums, ON CONFLICT,
 // transactions, FK cascades), with no Docker, no Neon, and no secrets.
+//
+// In this package's own run the migrations are replayed once
+// (_global-setup.ts) and each file starts from a copy of that database; a
+// caller with no copy (apps/web's tests) or one that asks to (`replay`)
+// replays them itself.
 
 const MIGRATIONS_DIR = fileURLToPath(
   new URL("../../migrations", import.meta.url),
@@ -20,10 +27,22 @@ const MIGRATIONS_DIR = fileURLToPath(
 let client: PGlite | null = null;
 let db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
-async function setup(): Promise<void> {
-  client = new PGlite();
+/** The migrated copy _global-setup.ts saved, or null outside that run. */
+function snapshot(): Blob | null {
+  let file: string | undefined;
+  try {
+    file = inject("pgliteSnapshot");
+  } catch {
+    return null;
+  }
+  return file ? new Blob([readFileSync(file)]) : null;
+}
+
+async function setup(replay: boolean): Promise<void> {
+  const copy = replay ? null : snapshot();
+  client = copy ? new PGlite({ loadDataDir: copy }) : new PGlite();
   db = drizzle(client, { schema });
-  await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
+  if (!copy) await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
   // PGlite supports transactions, so one handle backs both the stateless HTTP
   // path (createHttpDb) and the pooled/transactional path (createPooledDb). The
   // pool's only consumed method is end(), which is a no-op for the shared handle.
@@ -60,12 +79,13 @@ async function reset(): Promise<void> {
 
 /**
  * Register PGlite lifecycle hooks for one integration test file: a fresh
- * migrated database for the file, truncated between tests. Returns accessors to
+ * migrated database for the file, truncated between tests. `replay` migrates
+ * from empty instead of starting from the run's migrated copy. Returns accessors to
  * the raw drizzle handle / client for arrange + assert; the code under test
  * reaches the same handle through the injected createHttpDb / createPooledDb.
  */
-export function useTestDb() {
-  beforeAll(setup);
+export function useTestDb(options: { replay?: boolean } = {}) {
+  beforeAll(() => setup(options.replay ?? false));
   afterEach(reset);
   afterAll(teardown);
   return {

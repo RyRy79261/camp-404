@@ -18,7 +18,8 @@ const DEF: Questionnaire = {
 // through the injected handle. If this is green, the heavier invariant suites
 // can rely on the harness.
 describe("pglite harness", () => {
-  useTestDb();
+  // Replays every migration from empty, as the run's copy was made.
+  useTestDb({ replay: true });
 
   it("boots, migrates, and round-trips a definition through the prod writer", async () => {
     await insertDefinitionDraft({
