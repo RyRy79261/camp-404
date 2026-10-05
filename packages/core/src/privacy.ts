@@ -402,7 +402,6 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "reimbursements.decisionNote": "captain",
   "reimbursements.paidById": "captain",
   "reimbursements.paidAt": "captain",
-  "reimbursements.reconciledAt": "captain",
   "reimbursements.createdAt": "captain",
   "reimbursements.updatedAt": "captain",
   "reimbursementFiles.id": "captain",
