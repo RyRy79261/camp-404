@@ -17,7 +17,6 @@ export * from "./dietary";
 export * from "./money";
 export * from "./dues";
 export * from "./rental";
-export * from "./voice-intent";
 export * from "./task";
 export * from "./calendar";
 export * from "./participation";

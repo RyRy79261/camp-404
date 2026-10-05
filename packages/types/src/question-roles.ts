@@ -10,7 +10,7 @@ import {
 // Reading answers by what they are FOR (a question's `role`), not by question
 // id. See QUESTION_ROLES in ./questionnaire.
 
-/** The most emergency contacts a member lists (matches SignupInput). */
+/** The most emergency contacts a member lists (the burner profile asks for two). */
 export const MAX_EMERGENCY_CONTACTS = 2;
 
 /** The questions carrying a role, in questionnaire order. */

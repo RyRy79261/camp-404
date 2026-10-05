@@ -1,7 +1,4 @@
-export { recipeNormalisationPrompt } from "./recipe-normalisation";
 export { manualGenerationPrompt } from "./manual-generation";
-export { voiceIntentPrompt } from "./voice-intent";
-export { recipeImportPrompt, type RecipeImportInput } from "./recipe-import";
 export { recipePlatesPrompt, type RecipePlatesInput } from "./recipe-plates";
 export { recipeSourcePrompt, type RecipeSourceInput } from "./recipe-source";
 export {
@@ -16,10 +13,7 @@ export { recipeAdjustPrompt, type RecipeAdjustInput } from "./recipe-adjust";
  * column and in audit logs.
  */
 export const PROMPT_VERSIONS = {
-  recipeNormalisation: "2026-05-19.1",
   manualGeneration: "2026-05-19.1",
-  voiceIntent: "2026-05-19.1",
-  recipeImport: "2026-09-25.2",
   recipePlates: "2026-09-25.2",
   recipeSource: "2026-10-02.1",
   recipeSourceRevision: "2026-10-02.1",
