@@ -11,6 +11,15 @@ export type TaskBoardStatus = z.infer<typeof TaskBoardStatus>;
 /** A deadline is a camp day, typed as YYYY-MM-DD. */
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * A real calendar day. `Date.parse` rolls 2027-02-30 over to 2 March rather
+ * than refusing it, so the day is read back in UTC and must come out as typed.
+ */
+function isCalendarDay(v: string): boolean {
+  const date = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === v;
+}
+
 // What a captain or team lead types to add a task. Who may pick which team is
 // the server's rule, not this shape's.
 export const AddTaskInput = z.object({
@@ -26,10 +35,7 @@ export const AddTaskInput = z.object({
   due: z
     .string()
     .regex(DAY, "Pick a date for the deadline.")
-    .refine(
-      (v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)),
-      "Pick a date for the deadline.",
-    )
+    .refine(isCalendarDay, "Pick a date for the deadline.")
     .nullable(),
 });
 export type AddTaskInput = z.infer<typeof AddTaskInput>;

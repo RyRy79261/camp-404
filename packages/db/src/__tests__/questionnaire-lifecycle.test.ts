@@ -7,7 +7,11 @@ import {
 } from "@camp404/types";
 import { useTestDb } from "./_harness";
 import { makeActivation, makeUser, requiredActionsFor } from "./_factories";
-import { insertDefinitionDraft } from "../questionnaire-definitions";
+import type { AuditAction } from "@camp404/core";
+import {
+  insertDefinitionDraft,
+  setDefinitionCarryOver,
+} from "../questionnaire-definitions";
 import {
   closeActivation,
   getOpenActivationForKey,
@@ -327,9 +331,10 @@ describe("publishDefinition", () => {
 
   it("re-publishing an unpublished definition brings it back online", async () => {
     const db = h.db();
+    const actor = await makeUser(db, { isSystem: true });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
-    await unpublishDefinition("feedback");
+    await unpublishDefinition("feedback", actor.id);
 
     const res = await publishDefinition("feedback", null);
     expect(res.ok).toBe(true);
@@ -363,10 +368,11 @@ describe("closeActivation", () => {
 
   it("closes the activation and expires its still-pending gates", async () => {
     const db = h.db();
+    const actor = await makeUser(db, { isSystem: true });
     const { u, activationId } = await publishedWithOpenSend(db);
     expect((await requiredActionsFor(db, u.id))[0]!.status).toBe("pending");
 
-    expect(await closeActivation(activationId)).toEqual({ ok: true });
+    expect(await closeActivation(activationId, actor.id)).toEqual({ ok: true });
 
     const [act] = await db
       .select()
@@ -379,6 +385,7 @@ describe("closeActivation", () => {
 
   it("leaves completed gates untouched", async () => {
     const db = h.db();
+    const actor = await makeUser(db, { isSystem: true });
     const { u, activationId } = await publishedWithOpenSend(db);
     await completeBuilderResponse({
       userId: u.id,
@@ -390,17 +397,18 @@ describe("closeActivation", () => {
     });
     expect((await requiredActionsFor(db, u.id))[0]!.status).toBe("completed");
 
-    await closeActivation(activationId);
+    await closeActivation(activationId, actor.id);
     expect((await requiredActionsFor(db, u.id))[0]!.status).toBe("completed");
   });
 
   it("is idempotent on an already-closed activation and rejects a missing one", async () => {
     const db = h.db();
+    const actor = await makeUser(db, { isSystem: true });
     const { activationId } = await publishedWithOpenSend(db);
-    expect(await closeActivation(activationId)).toEqual({ ok: true });
-    expect(await closeActivation(activationId)).toEqual({ ok: true });
+    expect(await closeActivation(activationId, actor.id)).toEqual({ ok: true });
+    expect(await closeActivation(activationId, actor.id)).toEqual({ ok: true });
     expect(
-      await closeActivation("00000000-0000-0000-0000-000000000000"),
+      await closeActivation("00000000-0000-0000-0000-000000000000", actor.id),
     ).toEqual({ ok: false, error: "Activation not found." });
   });
 });
@@ -410,6 +418,7 @@ describe("unpublishDefinition — cascade", () => {
 
   it("sets status unpublished, closes open activations, expires pending gates, preserves responses", async () => {
     const db = h.db();
+    const actor = await makeUser(db, { isSystem: true });
     const u = await makeUser(db);
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
@@ -430,7 +439,7 @@ describe("unpublishDefinition — cascade", () => {
       completedAt: null,
     });
 
-    const res = await unpublishDefinition("feedback");
+    const res = await unpublishDefinition("feedback", actor.id);
     expect(res).toEqual({ ok: true, closedActivations: 1 });
 
     const [meta] = await db
@@ -455,10 +464,110 @@ describe("unpublishDefinition — cascade", () => {
   });
 
   it("rejects a missing definition", async () => {
-    expect(await unpublishDefinition("nope")).toEqual({
+    expect(
+      await unpublishDefinition("nope", "00000000-0000-0000-0000-000000000000"),
+    ).toEqual({
       ok: false,
       error: "Questionnaire not found.",
     });
+  });
+});
+
+// Who unpublished, who closed a send and who changed the year policy were
+// recorded nowhere: the domain tables keep only who sent and who published.
+describe("questionnaire lifecycle — audit rows", () => {
+  const h = useTestDb();
+
+  // The actions as the writers spell them, checked against core's list.
+  const UNPUBLISHED = "questionnaire.unpublished" satisfies AuditAction;
+  const SEND_CLOSED = "questionnaire.send_closed" satisfies AuditAction;
+  const CARRY_OVER_SET = "questionnaire.carry_over_set" satisfies AuditAction;
+
+  async function auditRows(db: ReturnType<typeof h.db>) {
+    return db
+      .select({
+        action: schema.auditLog.action,
+        actorId: schema.auditLog.actorId,
+        target: schema.auditLog.target,
+        metadata: schema.auditLog.metadata,
+      })
+      .from(schema.auditLog);
+  }
+
+  it("unpublishing records who did it, and the send it closed", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await publishDefinition("feedback", captain.id);
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: false,
+      activatedByUserId: captain.id,
+    });
+    if (!sent.ok) throw new Error(sent.error);
+
+    await unpublishDefinition("feedback", captain.id);
+    // A second unpublish (a captain who clicked on a stale page) changes
+    // nothing, says so, and records nothing.
+    expect(await unpublishDefinition("feedback", captain.id)).toMatchObject({
+      ok: false,
+    });
+
+    expect(await auditRows(db)).toEqual([
+      {
+        action: UNPUBLISHED,
+        actorId: captain.id,
+        target: "feedback",
+        metadata: { title: "Camp feedback", closedSends: 1 },
+      },
+    ]);
+  });
+
+  it("closing a send records who closed it, once", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await publishDefinition("feedback", captain.id);
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: false,
+      activatedByUserId: captain.id,
+    });
+    if (!sent.ok) throw new Error(sent.error);
+
+    await closeActivation(sent.activationId, captain.id);
+    // Already closed: nothing changes, so nothing is recorded.
+    await closeActivation(sent.activationId, captain.id);
+
+    const rows = await auditRows(db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      action: SEND_CLOSED,
+      actorId: captain.id,
+      target: sent.activationId,
+      metadata: { key: "feedback" },
+    });
+  });
+
+  it("changing the year policy records who changed it and which way", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+
+    await setDefinitionCarryOver("feedback", false, captain.id);
+    // A key with no questionnaire changes nothing and records nothing.
+    await setDefinitionCarryOver("nope", true, captain.id);
+
+    expect(await auditRows(db)).toEqual([
+      {
+        action: CARRY_OVER_SET,
+        actorId: captain.id,
+        target: "feedback",
+        metadata: { title: "Camp feedback", carryOver: false },
+      },
+    ]);
   });
 });
 
@@ -560,6 +669,7 @@ describe("sendActivation — one-open invariant", () => {
 
   it("rejects a second open send for the same key, and allows it after close", async () => {
     const db = h.db();
+    const actor = await makeUser(db, { isSystem: true });
     const u = await makeUser(db);
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
@@ -582,7 +692,7 @@ describe("sendActivation — one-open invariant", () => {
     expect(second.ok).toBe(false);
 
     // close the open one, then a re-send is allowed
-    await closeActivation(first.activationId);
+    await closeActivation(first.activationId, actor.id);
     expect(await getOpenActivationForKey("feedback")).toBeNull();
     const third = await sendActivation({
       questionnaireKey: "feedback",
@@ -714,6 +824,7 @@ describe("data survival across the full lifecycle", () => {
 
   it("preserves a completed response (and the completed gate) through unpublish → re-publish", async () => {
     const db = h.db();
+    const actor = await makeUser(db, { isSystem: true });
     const u = await makeUser(db);
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
@@ -736,7 +847,7 @@ describe("data survival across the full lifecycle", () => {
     expect((await requiredActionsFor(db, u.id))[0]!.status).toBe("completed");
 
     // unpublish closes the activation but leaves a COMPLETED gate + the response
-    await unpublishDefinition("feedback");
+    await unpublishDefinition("feedback", actor.id);
     expect((await requiredActionsFor(db, u.id))[0]!.status).toBe("completed");
     const afterUnpublish = await db
       .select()

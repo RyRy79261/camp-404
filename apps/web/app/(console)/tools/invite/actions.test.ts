@@ -304,3 +304,33 @@ describe("revokeInviteAction", () => {
     expect(revokeInviteCode).not.toHaveBeenCalled();
   });
 });
+
+describe("a database error", () => {
+  it("keeps the collision sentence for the insert, and a sentence for the rest", async () => {
+    signIn("member");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const dbError = new Error("Failed query", {
+      cause: new Error("Connection terminated unexpectedly"),
+    });
+    const generic = {
+      ok: false,
+      error: "Something went wrong. Please try again.",
+    };
+
+    // The insert keeps its own sentence, as before.
+    vi.mocked(createInviteCode).mockRejectedValueOnce(dbError);
+    expect(await createInviteAction(null, form({ code: "dusty-cat" }))).toEqual(
+      { ok: false, error: "Couldn't save invite. Try a different code." },
+    );
+
+    // A read before it (the availability check) used to throw past the form.
+    vi.mocked(findInviteCodeByCode).mockRejectedValue(dbError);
+    expect(await createInviteAction(null, form({ code: "dusty-cat" }))).toEqual(
+      generic,
+    );
+
+    vi.mocked(revokeInviteCode).mockRejectedValue(dbError);
+    expect(await revokeInviteAction("dusty-cat")).toEqual(generic);
+    log.mockRestore();
+  });
+});

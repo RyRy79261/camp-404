@@ -605,3 +605,31 @@ describe("setCycleNameAction", () => {
     });
   });
 });
+
+describe("a database error", () => {
+  it("comes back as a sentence, never as a thrown error", async () => {
+    asCaptain();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const dbError = new Error("Failed query", {
+      cause: new Error('relation "camp_config" does not exist'),
+    });
+    vi.mocked(mutateTeamsConfig).mockRejectedValue(dbError);
+    vi.mocked(advanceCycle).mockRejectedValue(dbError);
+
+    const generic = {
+      ok: false,
+      error: "Something went wrong. Please try again.",
+    };
+    expect(await renameTeamAction("kitchen", "Galley")).toEqual(generic);
+    expect(await setTeamArchivedAction("kitchen", true)).toEqual(generic);
+    expect(
+      await advanceCycleAction({
+        year: 2027,
+        confirm: 2027,
+        expectedFromYear: 2026,
+      }),
+    ).toEqual(generic);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+});

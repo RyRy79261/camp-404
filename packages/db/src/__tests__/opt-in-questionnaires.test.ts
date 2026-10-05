@@ -343,6 +343,8 @@ describe("My forms — the Optional section", () => {
 
   it("closing the send takes it out of Optional and keeps the answers", async () => {
     const db = h.db();
+    // Closes the send; a system user, so no audience counts it.
+    const actor = await makeUser(db, { isSystem: true });
     const captain = await makeUser(db, { rank: "captain" });
     const answered = await makeUser(db);
     const other = await makeUser(db);
@@ -351,7 +353,9 @@ describe("My forms — the Optional section", () => {
     if (!res.ok) throw new Error(res.error);
     await answer(answered.id, res.activationId, "Carpentry");
 
-    expect(await closeActivation(res.activationId)).toEqual({ ok: true });
+    expect(await closeActivation(res.activationId, actor.id)).toEqual({
+      ok: true,
+    });
     expect(await listOptionalQuestionnaires(other.id)).toEqual([]);
     const act = (await getActivationById(res.activationId))!;
     expect(await getOptInAccess(other.id, act)).toBe("closed");

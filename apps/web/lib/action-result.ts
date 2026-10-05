@@ -50,12 +50,29 @@ const GENERIC_ERROR = "Something went wrong. Please try again.";
 export async function runAction<T extends { ok: boolean }>(
   label: string,
   body: () => Promise<T>,
-): Promise<T | ActionFailure> {
+): Promise<T | ActionFailure>;
+/**
+ * The same, for an action whose failure arm is not `{ ok: false, error }`
+ * (publishAction's list of `errors`): `toFailure` builds that arm from the
+ * generic sentence.
+ */
+export async function runAction<T extends { ok: boolean }, F>(
+  label: string,
+  body: () => Promise<T>,
+  toFailure: (message: string) => F,
+): Promise<T | F>;
+export async function runAction<T extends { ok: boolean }, F>(
+  label: string,
+  body: () => Promise<T>,
+  toFailure?: (message: string) => F,
+): Promise<T | F | ActionFailure> {
   try {
     return await body();
   } catch (err) {
     unstable_rethrow(err);
     console.error(`[action:${label}]`, err);
-    return { ok: false, error: GENERIC_ERROR };
+    return toFailure
+      ? toFailure(GENERIC_ERROR)
+      : { ok: false, error: GENERIC_ERROR };
   }
 }

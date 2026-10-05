@@ -13,7 +13,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  render: () => {
+  // A named component, so the Rules of Hooks see useState inside one.
+  render: function Render() {
     const [value, setValue] = React.useState("2026-09-01");
     return (
       <div className="w-56">

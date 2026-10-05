@@ -1,4 +1,5 @@
 import { CheckCircle2, ClipboardX } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@camp404/ui/components/button";
 import {
   Card,
@@ -68,7 +69,7 @@ export function RunnerEdgeCard({ kind }: { kind: EdgeKind }) {
         </CardHeader>
         <CardContent>
           <Button asChild variant="secondary">
-            <a href="/">Back to camp</a>
+            <Link href="/">Back to camp</Link>
           </Button>
         </CardContent>
       </Card>

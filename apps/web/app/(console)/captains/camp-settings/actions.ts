@@ -24,6 +24,7 @@ import { mutateTeamsConfig } from "@/lib/camp-config";
 import { deliverAfterResponse } from "@/lib/background-work";
 import { usesTestStore } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
+import { runAction } from "@/lib/action-result";
 
 // Captain-only team-settings mutations (Phase 2). Each does a captain-gate, a
 // Zod boundary parse, then a locked read-modify-write via mutateTeamsConfig.
@@ -77,118 +78,124 @@ export async function renameTeamAction(
   key: string,
   label: string,
 ): Promise<TeamSettingsResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
-  const parsedKey = TeamKey.safeParse(key);
-  if (!parsedKey.success) return { ok: false, error: "Unknown team." };
-  const parsedLabel = TeamLabel.safeParse(label);
-  if (!parsedLabel.success) {
-    return {
-      ok: false,
-      error: parsedLabel.error.issues[0]?.message ?? "Invalid team name.",
-    };
-  }
-  // renameTeam refuses a name another team already answers to (case- and
-  // accent-insensitively) by throwing from INSIDE the locked transform, so the
-  // comparison runs against the freshly-locked config — two captains renaming
-  // two teams to the same thing at once cannot both win, and the loser's
-  // transaction rolls back rather than leaving the roster filter ambiguous.
-  try {
-    await mutateTeamsConfig(
-      (config) => renameTeam(config, parsedKey.data, parsedLabel.data),
-      {
-        actorId: gate.captainId,
-        action: "camp.teams.renamed",
-        target: parsedKey.data,
-        metadata: { label: parsedLabel.data },
-      },
-    );
-  } catch (error) {
-    if (error instanceof TeamNameConflictError) {
+  return runAction("renameTeamAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+    const parsedKey = TeamKey.safeParse(key);
+    if (!parsedKey.success) return { ok: false, error: "Unknown team." };
+    const parsedLabel = TeamLabel.safeParse(label);
+    if (!parsedLabel.success) {
       return {
         ok: false,
-        error: `Another team is already called “${parsedLabel.data}”. Pick a different name.`,
+        error: parsedLabel.error.issues[0]?.message ?? "Invalid team name.",
       };
     }
-    throw error;
-  }
-  revalidateTeamSurfaces();
-  revalidateManifest();
-  return { ok: true };
+    // renameTeam refuses a name another team already answers to (case- and
+    // accent-insensitively) by throwing from INSIDE the locked transform, so the
+    // comparison runs against the freshly-locked config — two captains renaming
+    // two teams to the same thing at once cannot both win, and the loser's
+    // transaction rolls back rather than leaving the roster filter ambiguous.
+    try {
+      await mutateTeamsConfig(
+        (config) => renameTeam(config, parsedKey.data, parsedLabel.data),
+        {
+          actorId: gate.captainId,
+          action: "camp.teams.renamed",
+          target: parsedKey.data,
+          metadata: { label: parsedLabel.data },
+        },
+      );
+    } catch (error) {
+      if (error instanceof TeamNameConflictError) {
+        return {
+          ok: false,
+          error: `Another team is already called “${parsedLabel.data}”. Pick a different name.`,
+        };
+      }
+      throw error;
+    }
+    revalidateTeamSurfaces();
+    revalidateManifest();
+    return { ok: true };
+  });
 }
 
 export async function moveTeamAction(
   key: string,
   direction: "up" | "down",
 ): Promise<TeamSettingsResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
-  const parsedKey = TeamKey.safeParse(key);
-  const parsedDirection = Direction.safeParse(direction);
-  if (!parsedKey.success || !parsedDirection.success) {
-    return { ok: false, error: "Invalid move." };
-  }
-  await mutateTeamsConfig(
-    (config) => moveTeam(config, parsedKey.data, parsedDirection.data),
-    {
-      actorId: gate.captainId,
-      action: "camp.teams.moved",
-      target: parsedKey.data,
-      metadata: { direction: parsedDirection.data },
-    },
-  );
-  revalidateTeamSurfaces();
-  revalidateManifest();
-  return { ok: true };
+  return runAction("moveTeamAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+    const parsedKey = TeamKey.safeParse(key);
+    const parsedDirection = Direction.safeParse(direction);
+    if (!parsedKey.success || !parsedDirection.success) {
+      return { ok: false, error: "Invalid move." };
+    }
+    await mutateTeamsConfig(
+      (config) => moveTeam(config, parsedKey.data, parsedDirection.data),
+      {
+        actorId: gate.captainId,
+        action: "camp.teams.moved",
+        target: parsedKey.data,
+        metadata: { direction: parsedDirection.data },
+      },
+    );
+    revalidateTeamSurfaces();
+    revalidateManifest();
+    return { ok: true };
+  });
 }
 
 export async function setTeamArchivedAction(
   key: string,
   archived: boolean,
 ): Promise<TeamSettingsResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
-  const parsedKey = TeamKey.safeParse(key);
-  const parsedArchived = z.boolean().safeParse(archived);
-  if (!parsedKey.success || !parsedArchived.success) {
-    return { ok: false, error: "Invalid request." };
-  }
-
-  // Refuse to archive below MIN_ACTIVE_TEAMS. Checked INSIDE the locked
-  // transform against the freshly-locked config, so concurrent archives can't
-  // both slip through (the one that would breach throws and rolls back).
-  // Recoverable by unarchiving regardless.
-  try {
-    await mutateTeamsConfig(
-      (config) => {
-        const next = setTeamArchived(
-          config,
-          parsedKey.data,
-          parsedArchived.data,
-        );
-        const active = next.teams.filter((team) => !team.archived).length;
-        if (active < MIN_ACTIVE_TEAMS) {
-          throw new TooFewActiveTeamsError();
-        }
-        return next;
-      },
-      {
-        actorId: gate.captainId,
-        action: parsedArchived.data
-          ? "camp.teams.archived"
-          : "camp.teams.unarchived",
-        target: parsedKey.data,
-      },
-    );
-  } catch (error) {
-    if (error instanceof TooFewActiveTeamsError) {
-      return { ok: false, error: "At least two teams must stay active." };
+  return runAction("setTeamArchivedAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+    const parsedKey = TeamKey.safeParse(key);
+    const parsedArchived = z.boolean().safeParse(archived);
+    if (!parsedKey.success || !parsedArchived.success) {
+      return { ok: false, error: "Invalid request." };
     }
-    throw error;
-  }
-  revalidateTeamSurfaces();
-  revalidateManifest();
-  return { ok: true };
+
+    // Refuse to archive below MIN_ACTIVE_TEAMS. Checked INSIDE the locked
+    // transform against the freshly-locked config, so concurrent archives can't
+    // both slip through (the one that would breach throws and rolls back).
+    // Recoverable by unarchiving regardless.
+    try {
+      await mutateTeamsConfig(
+        (config) => {
+          const next = setTeamArchived(
+            config,
+            parsedKey.data,
+            parsedArchived.data,
+          );
+          const active = next.teams.filter((team) => !team.archived).length;
+          if (active < MIN_ACTIVE_TEAMS) {
+            throw new TooFewActiveTeamsError();
+          }
+          return next;
+        },
+        {
+          actorId: gate.captainId,
+          action: parsedArchived.data
+            ? "camp.teams.archived"
+            : "camp.teams.unarchived",
+          target: parsedKey.data,
+        },
+      );
+    } catch (error) {
+      if (error instanceof TooFewActiveTeamsError) {
+        return { ok: false, error: "At least two teams must stay active." };
+      }
+      throw error;
+    }
+    revalidateTeamSurfaces();
+    revalidateManifest();
+    return { ok: true };
+  });
 }
 
 // --- The year (the founding year + the rollover, spec §8) -------------------
@@ -278,34 +285,36 @@ function revalidateRolloverSurfaces(): void {
 export async function setFoundingYearAction(
   rawInput: unknown,
 ): Promise<SetFoundingYearActionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
-  const parsed = SetFoundingYearForm.safeParse(rawInput);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "That isn't a year.",
-    };
-  }
+  return runAction("setFoundingYearAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+    const parsed = SetFoundingYearForm.safeParse(rawInput);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "That isn't a year.",
+      };
+    }
 
-  const founding = { year: parsed.data.year, actorUserId: gate.captainId };
-  // Under E2E the store stands in for the database (its twin says what it
-  // does not adopt).
-  const result = usesTestStore()
-    ? testStore.setFoundingYear(founding)
-    : await setFoundingYear(founding);
-  if (!result.ok) {
-    return {
-      ok: false,
-      error:
-        result.reason === "already-founded"
-          ? "The camp already has a year. Reload the page to see which one."
-          : "That isn't a year.",
-    };
-  }
-  revalidateRolloverSurfaces();
-  revalidateManifest();
-  return { ok: true, report: result.report };
+    const founding = { year: parsed.data.year, actorUserId: gate.captainId };
+    // Under E2E the store stands in for the database (its twin says what it
+    // does not adopt).
+    const result = usesTestStore()
+      ? testStore.setFoundingYear(founding)
+      : await setFoundingYear(founding);
+    if (!result.ok) {
+      return {
+        ok: false,
+        error:
+          result.reason === "already-founded"
+            ? "The camp already has a year. Reload the page to see which one."
+            : "That isn't a year.",
+      };
+    }
+    revalidateRolloverSurfaces();
+    revalidateManifest();
+    return { ok: true, report: result.report };
+  });
 }
 
 /**
@@ -316,41 +325,43 @@ export async function setFoundingYearAction(
 export async function advanceCycleAction(
   rawInput: unknown,
 ): Promise<AdvanceCycleActionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
-  const parsed = AdvanceCycleForm.safeParse(rawInput);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid request.",
-    };
-  }
+  return runAction("advanceCycleAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+    const parsed = AdvanceCycleForm.safeParse(rawInput);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid request.",
+      };
+    }
 
-  const result = await advanceCycle({
-    year: parsed.data.year,
-    expectedFromYear: parsed.data.expectedFromYear,
-    actorUserId: gate.captainId,
-    resetDues: parsed.data.resetDues ?? false,
-    announcement: parsed.data.announcement ?? null,
+    const result = await advanceCycle({
+      year: parsed.data.year,
+      expectedFromYear: parsed.data.expectedFromYear,
+      actorUserId: gate.captainId,
+      resetDues: parsed.data.resetDues ?? false,
+      announcement: parsed.data.announcement ?? null,
+    });
+    if (!result.ok) {
+      return {
+        ok: false,
+        error:
+          result.reason === "already-advanced"
+            ? "The camp has already started that year. Reload the page to see where it is now."
+            : result.reason === "stale-plan"
+              ? "Another captain has already moved the camp to a new year. Reload the page to see the new plan."
+              : result.reason === "no-founding-year"
+                ? "The camp hasn't said what year it is yet. Reload the page and start there."
+                : `A new year has to be later than the one you're in, and between ${MIN_CYCLE_YEAR} and ${MAX_CYCLE_YEAR}.`,
+      };
+    }
+    // The rollover can write a camp-wide notice and new questionnaire sends.
+    deliverAfterResponse();
+    revalidateRolloverSurfaces();
+    revalidateManifest();
+    return { ok: true, report: result.report };
   });
-  if (!result.ok) {
-    return {
-      ok: false,
-      error:
-        result.reason === "already-advanced"
-          ? "The camp has already started that year. Reload the page to see where it is now."
-          : result.reason === "stale-plan"
-            ? "Another captain has already moved the camp to a new year. Reload the page to see the new plan."
-            : result.reason === "no-founding-year"
-              ? "The camp hasn't said what year it is yet. Reload the page and start there."
-              : `A new year has to be later than the one you're in, and between ${MIN_CYCLE_YEAR} and ${MAX_CYCLE_YEAR}.`,
-    };
-  }
-  // The rollover can write a camp-wide notice and new questionnaire sends.
-  deliverAfterResponse();
-  revalidateRolloverSurfaces();
-  revalidateManifest();
-  return { ok: true, report: result.report };
 }
 
 /**
@@ -361,32 +372,34 @@ export async function advanceCycleAction(
 export async function setCycleNameAction(
   rawInput: unknown,
 ): Promise<SetCycleNameActionResult> {
-  const gate = await requireCaptain();
-  if (!gate.ok) return gate;
-  const parsed = SetCycleNameForm.safeParse(rawInput);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid request.",
-    };
-  }
+  return runAction("setCycleNameAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+    const parsed = SetCycleNameForm.safeParse(rawInput);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid request.",
+      };
+    }
 
-  const result = await setCycleName({
-    year: parsed.data.year,
-    name: parsed.data.name,
-    actorUserId: gate.captainId,
+    const result = await setCycleName({
+      year: parsed.data.year,
+      name: parsed.data.name,
+      actorUserId: gate.captainId,
+    });
+    if (!result.ok) {
+      return {
+        ok: false,
+        error:
+          result.reason === "unknown-year"
+            ? "The camp has never had that year. Reload the page."
+            : CYCLE_NAME_TOO_LONG,
+      };
+    }
+    // The name shows beside the year on the cycle page and on every results page.
+    revalidatePath("/captains/camp-settings/cycle");
+    revalidatePath("/captains/questionnaires", "layout");
+    return { ok: true, name: result.cycle.name ?? null };
   });
-  if (!result.ok) {
-    return {
-      ok: false,
-      error:
-        result.reason === "unknown-year"
-          ? "The camp has never had that year. Reload the page."
-          : CYCLE_NAME_TOO_LONG,
-    };
-  }
-  // The name shows beside the year on the cycle page and on every results page.
-  revalidatePath("/captains/camp-settings/cycle");
-  revalidatePath("/captains/questionnaires", "layout");
-  return { ok: true, name: result.cycle.name ?? null };
 }

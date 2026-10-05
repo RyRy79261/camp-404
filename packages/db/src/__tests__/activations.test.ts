@@ -155,6 +155,8 @@ describe("openActivation — fan-out", () => {
 
   it("re-open upserts in place: re-points version/activation and re-opens a completed gate", async () => {
     const db = h.db();
+    // Closes the send; a system user, so no audience counts it.
+    const actor = await makeUser(db, { isSystem: true });
     const u = await makeUser(db);
     const act1 = await makeActivation(db, {
       questionnaireKey: "feedback",
@@ -167,7 +169,7 @@ describe("openActivation — fan-out", () => {
     // The one-open-per-key invariant (partial unique index) forbids a second
     // overlapping open, so re-sending closes the current activation first; the
     // user's completed gate is left intact by the close (only pending → expired).
-    await closeActivation(act1.id);
+    await closeActivation(act1.id, actor.id);
     const act2 = await makeActivation(db, {
       questionnaireKey: "feedback",
       version: "1-v2",
@@ -242,6 +244,8 @@ describe("openActivation — the carry-over fan-out filter", () => {
     db: ReturnType<typeof h.db>,
     opts: { firstVersion: string; replayVersion: string; carryOver: boolean },
   ) {
+    // Closes the first send; a system user, so no audience counts it.
+    const actor = await makeUser(db, { isSystem: true });
     const answered = await makeUser(db);
     const silent = await makeUser(db);
     const act1 = await makeActivation(db, {
@@ -252,7 +256,7 @@ describe("openActivation — the carry-over fan-out filter", () => {
     expect(
       await satisfyRequiredAction(answered.id, "feedback", opts.firstVersion),
     ).toBe(true);
-    await closeActivation(act1.id);
+    await closeActivation(act1.id, actor.id);
 
     const act2 = await makeActivation(db, {
       questionnaireKey: "feedback",
@@ -431,6 +435,8 @@ describe("reconcileOpenActivations — members who arrive after a send", () => {
 
   it("under carry-over, skips a member who already answered a satisfying version", async () => {
     const db = h.db();
+    // Closes the send; a system user, so no audience counts it.
+    const actor = await makeUser(db, { isSystem: true });
     const earlier = await makeActivation(db, {
       questionnaireKey: "skills",
       version: "skills-v1",
@@ -443,7 +449,7 @@ describe("reconcileOpenActivations — members who arrive after a send", () => {
       .where(eq(schema.questionnaireActivations.id, earlier.id));
     await openActivation(earlier.id);
     await satisfyRequiredAction(late.id, "skills", "skills-v1");
-    await closeActivation(earlier.id);
+    await closeActivation(earlier.id, actor.id);
 
     const resend = await makeActivation(db, {
       questionnaireKey: "skills",
@@ -465,9 +471,11 @@ describe("reconcileOpenActivations — members who arrive after a send", () => {
 
   it("does nothing for a closed send, or for an erased account", async () => {
     const db = h.db();
+    // Closes the send; a system user, so no audience counts it.
+    const actor = await makeUser(db, { isSystem: true });
     const act = await makeActivation(db, { scope: "everyone" });
     await openActivation(act.id);
-    await closeActivation(act.id);
+    await closeActivation(act.id, actor.id);
     const late = await makeUser(db);
     expect(await reconcileOpenActivations(late.id)).toBe(0);
 
@@ -523,6 +531,8 @@ describe("listPendingQuestionnaires — what the inbox shouts about", () => {
 
   it("drops a questionnaire once it is answered, or once its send closes", async () => {
     const db = h.db();
+    // Closes the send; a system user, so no audience counts it.
+    const actor = await makeUser(db, { isSystem: true });
     const u = await makeUser(db);
     const answered = await makeActivation(db, {
       questionnaireKey: "skills",
@@ -537,7 +547,7 @@ describe("listPendingQuestionnaires — what the inbox shouts about", () => {
     expect(await listPendingQuestionnaires(u.id)).toHaveLength(2);
 
     await satisfyRequiredAction(u.id, "skills", answered.version);
-    await closeActivation(closed.id);
+    await closeActivation(closed.id, actor.id);
     expect(await listPendingQuestionnaires(u.id)).toEqual([]);
   });
 
@@ -701,5 +711,23 @@ describe("required-action getters", () => {
 
     expect(await satisfyRequiredAction(u.id, "feedback", "1")).toBe(true);
     expect(await satisfyRequiredAction(u.id, "feedback", "1")).toBe(false); // already completed
+  });
+});
+
+describe("getActivationById", () => {
+  const h = useTestDb();
+
+  it("is null for an id that is not a uuid, rather than a Postgres error", async () => {
+    const db = h.db();
+    const act = await makeActivation(db, { questionnaireKey: "feedback" });
+    expect((await getActivationById(act.id))?.id).toBe(act.id);
+    expect(await getActivationById("not-a-uuid")).toBeNull();
+    expect(await getActivationById(`${act.id}x`)).toBeNull();
+    // The other spellings Postgres reads as the same uuid still find it.
+    const bare = act.id.replaceAll("-", "");
+    expect((await getActivationById(bare))?.id).toBe(act.id);
+    expect((await getActivationById(`{${act.id.toUpperCase()}}`))?.id).toBe(
+      act.id,
+    );
   });
 });

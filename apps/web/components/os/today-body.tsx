@@ -416,6 +416,7 @@ export function TodayBody({
       live = false;
     };
     // Once per opening, with the copy it opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening, with the copy it opened with
   }, []);
 
   // Drawn for this member only: should the body be handed another member

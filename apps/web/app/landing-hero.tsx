@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { interFont } from "@/lib/fonts/inter";
+import Link from "next/link";
 import { Button } from "@camp404/ui/components/button";
 
 // The landing page keeps Camp 404's own look (owner's call, 2026-09-23): the
@@ -62,7 +63,7 @@ export function LandingHero() {
 
         <div className="flex w-full max-w-xs flex-col items-center gap-2">
           <Button asChild size="lg" className="w-full">
-            <a href="/auth/sign-in">Are you lost?</a>
+            <Link href="/auth/sign-in">Are you lost?</Link>
           </Button>
           <p
             aria-hidden

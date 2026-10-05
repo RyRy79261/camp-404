@@ -928,6 +928,16 @@ LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
 - TypeScript throughout; shared types and Zod schemas live in
   `@camp404/types`. Validate external input at the boundary with Zod.
 - Lint via `@camp404/eslint-config`; format via Prettier (`.prettierrc.json`).
+  Web, join and guide use its `next` config (the Rules of Hooks and Next's
+  core-web-vitals), ui, os and games its `react` config, and core and types
+  its `framework-free` config, which refuses React, Next, the database and
+  `server-only`. The React Compiler rules run at warn until the code they flag
+  is cleaned up. A deliberate exhaustive-deps exception is one
+  `eslint-disable-next-line <rule> -- <reason>` line.
+- A server action that returns `{ ok, error }` runs its body in `runAction`
+  (`apps/web/lib/action-result.ts`), so a database error comes back as a
+  sentence instead of reaching the error boundary. Keep the domain
+  `instanceof` checks inside it.
 - Prefer editing existing files; do not add files or abstractions a task
   doesn't need.
 - Add or update tests with behavioural changes. Vitest covers units, and

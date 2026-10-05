@@ -43,6 +43,7 @@ import { canSendToAudience } from "@camp404/core";
 import { computeAudience, type AudienceData } from "@camp404/db/audience";
 import {
   closeActivationAction,
+  setCarryOverAction,
   createAttendanceCheckAction,
   createDraftAction,
   createFromTemplateAction,
@@ -59,7 +60,10 @@ import {
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getLeadTeams, isTeamLead } from "@/lib/users";
 import { getCampManagementRoster } from "@/lib/roster";
-import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
+import {
+  getDefinitionMetaRow,
+  setDefinitionCarryOver,
+} from "@camp404/db/questionnaire-definitions";
 import { getMealPlan } from "@/lib/meal-plan";
 import {
   createAttendanceCheck,
@@ -71,6 +75,7 @@ import {
   updateDefinition,
 } from "@/lib/questionnaire-definitions";
 import {
+  closeActivation,
   publishDefinition,
   sendActivation,
   sendReminder,
@@ -522,6 +527,8 @@ describe("unpublishAction", () => {
       closedActivations: 1,
     });
     expect(await unpublishAction("feedback")).toEqual({ ok: true });
+    // The audit row names who unpublished it.
+    expect(unpublishDefinition).toHaveBeenCalledWith("feedback", "u1");
   });
 });
 
@@ -1196,5 +1203,50 @@ describe("mealPlanRowsAction (#251)", () => {
     const result = await mealPlanRowsAction();
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/no meals yet/);
+  });
+});
+
+// --- The error contract -----------------------------------------------------
+// A database error inside any of these actions is a sentence on the screen,
+// never a throw to the error boundary (which would lose a captain's work).
+describe("a database error", () => {
+  const dbError = new Error("Failed query", {
+    cause: new Error('duplicate key value violates unique constraint "x"'),
+  });
+  const generic = {
+    ok: false,
+    error: "Something went wrong. Please try again.",
+  };
+
+  it("comes back as a sentence from every lifecycle step", async () => {
+    asViewer("captain");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getDefinitionMetaRow).mockRejectedValue(dbError);
+    vi.mocked(createDraft).mockRejectedValue(dbError);
+    vi.mocked(closeActivation).mockRejectedValue(dbError);
+
+    expect(await createDraftAction("Tent check")).toEqual(generic);
+    expect(await unpublishAction("feedback")).toEqual(generic);
+    expect(await deleteDraftAction("feedback")).toEqual(generic);
+    expect(await setCarryOverAction("feedback", true)).toEqual(generic);
+    expect(
+      await closeActivationAction("00000000-0000-0000-0000-000000000000"),
+    ).toEqual(generic);
+    // publishAction keeps its own failure shape.
+    expect(await publishAction("feedback")).toEqual({
+      ok: false,
+      errors: [generic.error],
+      issues: [],
+    });
+    expect(setDefinitionCarryOver).not.toHaveBeenCalled();
+    log.mockRestore();
+  });
+
+  it("closing a send names the captain who closed it", async () => {
+    asViewer("captain");
+    vi.mocked(closeActivation).mockResolvedValue({ ok: true });
+    const id = "00000000-0000-0000-0000-000000000000";
+    expect(await closeActivationAction(id)).toEqual({ ok: true });
+    expect(closeActivation).toHaveBeenCalledWith(id, "u1");
   });
 });

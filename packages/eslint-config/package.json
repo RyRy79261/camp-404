@@ -6,15 +6,25 @@
   "main": "index.js",
   "files": [
     "index.js",
-    "next.js"
+    "react.js",
+    "next.js",
+    "framework-free.js"
   ],
   "dependencies": {
     "@eslint/js": "^10.0.1",
+    "@next/eslint-plugin-next": "^16.3.8",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.6.0",
     "typescript-eslint": "^8.59.4"
   },
   "peerDependencies": {
     "eslint": "^10"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./react": "./react.js",
+    "./next": "./next.js",
+    "./framework-free": "./framework-free.js"
   }
 }

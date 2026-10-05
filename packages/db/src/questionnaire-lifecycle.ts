@@ -25,6 +25,7 @@ import {
 } from "./activations";
 import { carryOverFor, currentCycleNumber } from "./cycles";
 import { lockSenderReach } from "./broadcasts";
+import { writeAuditEvent } from "./audit";
 
 // Builder-questionnaire lifecycle: publish (snapshot + cosmetic-vs-version-bump),
 // unpublish (status + cascade close), send (open an activation with the one-open
@@ -207,14 +208,19 @@ export type UnpublishResult =
  * Take a published definition offline: status → unpublished and close every
  * open activation for the key (clearing its still-pending gates to expired,
  * preserving responses + completed rows for metrics). Re-publish is allowed.
- * One transaction.
+ * One transaction, with the `questionnaire.unpublished` audit row naming
+ * `actorId`.
  */
 export async function unpublishDefinition(
   key: string,
+  actorId: string,
 ): Promise<UnpublishResult> {
   const db = createHttpDb();
   const [meta] = await db
-    .select({ status: schema.questionnaireDefinitions.status })
+    .select({
+      status: schema.questionnaireDefinitions.status,
+      title: schema.questionnaireDefinitions.title,
+    })
     .from(schema.questionnaireDefinitions)
     .where(eq(schema.questionnaireDefinitions.key, key))
     .limit(1);
@@ -222,11 +228,20 @@ export async function unpublishDefinition(
 
   const now = new Date();
   let closedActivations = 0;
-  await withTransaction(async (tx) => {
-    await tx
+  const unpublished = await withTransaction(async (tx) => {
+    // A compare-and-set on `published`: of two captains unpublishing at once,
+    // only the one whose write changed the status goes on and is recorded.
+    const changed = await tx
       .update(schema.questionnaireDefinitions)
       .set({ status: "unpublished", updatedAt: now })
-      .where(eq(schema.questionnaireDefinitions.key, key));
+      .where(
+        and(
+          eq(schema.questionnaireDefinitions.key, key),
+          eq(schema.questionnaireDefinitions.status, "published"),
+        ),
+      )
+      .returning({ key: schema.questionnaireDefinitions.key });
+    if (changed.length === 0) return false;
     // Re-select the open activations INSIDE the transaction so a send that
     // races in just before this commit is still caught and closed (a read
     // outside the tx would miss it and leave a gate open under an unpublished
@@ -256,7 +271,21 @@ export async function unpublishDefinition(
           ),
         );
     }
+    await writeAuditEvent(tx, {
+      actorId,
+      action: "questionnaire.unpublished",
+      target: key,
+      metadata: { title: meta.title, closedSends: closedActivations },
+    });
+    return true;
   });
+  if (!unpublished) {
+    return {
+      ok: false,
+      error:
+        "This questionnaire is not published any more. Reload the page to see where it is now.",
+    };
+  }
   return { ok: true, closedActivations };
 }
 
@@ -266,23 +295,42 @@ export type CloseResult = { ok: true } | { ok: false; error: string };
  * The body of {@link closeActivation}, inside a caller-supplied transaction.
  * Extracted so the cycle rollover can close an activation and open its
  * replacement in ONE transaction rather than a pool per step (spec §8.3).
+ *
+ * With `actorId`, a send this call closes writes a `questionnaire.send_closed`
+ * audit row in the same transaction. The rollover passes none: its own
+ * `camp.cycle.advanced` row records the closes it makes.
  */
 export async function closeActivationTx(
   tx: PooledTx,
   activationId: string,
+  actorId?: string,
 ): Promise<CloseResult> {
   const now = new Date();
   const [act] = await tx
-    .select({ status: schema.questionnaireActivations.status })
+    .select({
+      status: schema.questionnaireActivations.status,
+      questionnaireKey: schema.questionnaireActivations.questionnaireKey,
+      title: schema.questionnaireActivations.title,
+    })
     .from(schema.questionnaireActivations)
     .where(eq(schema.questionnaireActivations.id, activationId))
     .limit(1);
   if (!act) return { ok: false, error: "Activation not found." };
   if (act.status === "closed") return { ok: true };
-  await tx
+  // A compare-and-set: a close racing this one may have read the same open
+  // row. Only the write that changed the status expires gates and is recorded;
+  // the other is the already-closed no-op.
+  const changed = await tx
     .update(schema.questionnaireActivations)
     .set({ status: "closed", closedAt: now, updatedAt: now })
-    .where(eq(schema.questionnaireActivations.id, activationId));
+    .where(
+      and(
+        eq(schema.questionnaireActivations.id, activationId),
+        ne(schema.questionnaireActivations.status, "closed"),
+      ),
+    )
+    .returning({ id: schema.questionnaireActivations.id });
+  if (changed.length === 0) return { ok: true };
   await tx
     .update(schema.requiredActions)
     .set({ status: "expired" })
@@ -292,6 +340,14 @@ export async function closeActivationTx(
         eq(schema.requiredActions.status, "pending"),
       ),
     );
+  if (actorId) {
+    await writeAuditEvent(tx, {
+      actorId,
+      action: "questionnaire.send_closed",
+      target: activationId,
+      metadata: { key: act.questionnaireKey, title: act.title },
+    });
+  }
   return { ok: true };
 }
 
@@ -299,11 +355,16 @@ export async function closeActivationTx(
  * Close one activation: status → closed and expire its still-linked pending
  * required_actions (non-gating terminal state, NOT deleted — preserves metrics).
  * Responses + completed rows are untouched. Idempotent on an already-closed row.
+ * The `questionnaire.send_closed` audit row names `actorId`; an already-closed
+ * send writes none.
  */
 export async function closeActivation(
   activationId: string,
+  actorId: string,
 ): Promise<CloseResult> {
-  return await withTransaction((tx) => closeActivationTx(tx, activationId));
+  return await withTransaction((tx) =>
+    closeActivationTx(tx, activationId, actorId),
+  );
 }
 
 /**

@@ -16,6 +16,7 @@ import {
   isSyntacticallyValidCode,
   normalizeInviteCode,
 } from "@/lib/invite-words";
+import { runAction } from "@/lib/action-result";
 
 export type CreateInviteResult =
   | {
@@ -67,104 +68,113 @@ export async function createInviteAction(
   _prev: CreateInviteResult | null,
   formData: FormData,
 ): Promise<CreateInviteResult> {
-  const authUser = await getAuthenticatedUser();
-  if (!authUser) return { ok: false, error: "Not signed in." };
+  return runAction("createInviteAction", async () => {
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) return { ok: false, error: "Not signed in." };
 
-  const campUser = await ensureCampUser(authUser);
-  // Mirror the page's gate (the shared member ladder). The action is a
-  // directly-reachable POST: without this a pending captain could mint
-  // pre-approved multi-use codes, and a member could skip a blocking
-  // questionnaire to hand out ways into the camp.
-  const block = await memberBlock(campUser, authUser.primaryEmail);
-  if (block) return { ok: false, error: MINT_REFUSAL[block.reason] };
-  // Each code is a way into the camp, so minting is throttled per member like
-  // the availability check beside it. Ten in ten minutes is far more than a
-  // person inviting friends needs.
-  const limited = await rateLimiter.limit(`invite-create:${campUser.id}`, {
-    limit: 10,
-    windowMs: 10 * 60_000,
-  });
-  if (!limited.ok) {
-    return {
-      ok: false,
-      error: `You've made a lot of invites just now. Try again in ${humanDuration(limited.retryAfterSeconds)}.`,
-    };
-  }
-  const isCaptain = campUser.rank === "captain";
-
-  const noteRaw =
-    typeof formData.get("note") === "string"
-      ? (formData.get("note") as string)
-      : "";
-  const codeRaw =
-    typeof formData.get("code") === "string"
-      ? (formData.get("code") as string)
-      : "";
-
-  // Captain-only knobs. A non-captain can't pre-approve anyone or mint a
-  // multi-use code — the form never shows the controls, and we re-enforce
-  // here so a crafted POST can't bypass it.
-  const preApprove = isCaptain && formData.get("preApprove") === "on";
-  const requiresApproval = !preApprove;
-
-  let maxUses = 1;
-  if (isCaptain) {
-    const raw = formData.get("maxUses");
-    if (typeof raw === "string" && raw.trim()) {
-      const parsed = Number(raw.trim());
-      if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_USES_LIMIT) {
-        return {
-          ok: false,
-          error: `Max uses must be a whole number between 1 and ${MAX_USES_LIMIT}.`,
-        };
-      }
-      maxUses = parsed;
-    }
-  }
-
-  // The only optional metadata is a name/label for who the code is for, stored
-  // as the invite note (and surfaced to captains on the member's detail). No
-  // email is collected — the code is what gets shared.
-  const note = noteRaw.trim() || null;
-
-  // Code: either user-supplied or auto-generated. Either way we re-check
-  // availability before insert; the unique-PK on `code` is the final
-  // backstop if two redeemers race for the same name.
-  let code = normalizeInviteCode(codeRaw);
-  if (code) {
-    if (!isSyntacticallyValidCode(code)) {
+    const campUser = await ensureCampUser(authUser);
+    // Mirror the page's gate (the shared member ladder). The action is a
+    // directly-reachable POST: without this a pending captain could mint
+    // pre-approved multi-use codes, and a member could skip a blocking
+    // questionnaire to hand out ways into the camp.
+    const block = await memberBlock(campUser, authUser.primaryEmail);
+    if (block) return { ok: false, error: MINT_REFUSAL[block.reason] };
+    // Each code is a way into the camp, so minting is throttled per member like
+    // the availability check beside it. Ten in ten minutes is far more than a
+    // person inviting friends needs.
+    const limited = await rateLimiter.limit(`invite-create:${campUser.id}`, {
+      limit: 10,
+      windowMs: 10 * 60_000,
+    });
+    if (!limited.ok) {
       return {
         ok: false,
-        error:
-          "Invite code must be 3–48 chars, lowercase letters/digits/hyphens.",
+        error: `You've made a lot of invites just now. Try again in ${humanDuration(limited.retryAfterSeconds)}.`,
       };
     }
-    const existing = await findInviteCodeByCode(code);
-    if (existing) {
-      return { ok: false, error: `'${code}' is already taken.`, taken: code };
+    const isCaptain = campUser.rank === "captain";
+
+    const noteRaw =
+      typeof formData.get("note") === "string"
+        ? (formData.get("note") as string)
+        : "";
+    const codeRaw =
+      typeof formData.get("code") === "string"
+        ? (formData.get("code") as string)
+        : "";
+
+    // Captain-only knobs. A non-captain can't pre-approve anyone or mint a
+    // multi-use code — the form never shows the controls, and we re-enforce
+    // here so a crafted POST can't bypass it.
+    const preApprove = isCaptain && formData.get("preApprove") === "on";
+    const requiresApproval = !preApprove;
+
+    let maxUses = 1;
+    if (isCaptain) {
+      const raw = formData.get("maxUses");
+      if (typeof raw === "string" && raw.trim()) {
+        const parsed = Number(raw.trim());
+        if (
+          !Number.isInteger(parsed) ||
+          parsed < 1 ||
+          parsed > MAX_USES_LIMIT
+        ) {
+          return {
+            ok: false,
+            error: `Max uses must be a whole number between 1 and ${MAX_USES_LIMIT}.`,
+          };
+        }
+        maxUses = parsed;
+      }
     }
-  } else {
-    code = await generateUnusedCode();
-  }
 
-  try {
-    await createInviteCode({
-      code,
-      createdByUserId: campUser.id,
-      note,
-      maxUses,
-      assignedRank: null,
-      requiresApproval,
-    });
-  } catch {
-    // Unique-PK collision (race with another redeemer) or any other DB
-    // error. Don't leak details; tell the user to try again.
-    return { ok: false, error: "Couldn't save invite. Try a different code." };
-  }
+    // The only optional metadata is a name/label for who the code is for, stored
+    // as the invite note (and surfaced to captains on the member's detail). No
+    // email is collected — the code is what gets shared.
+    const note = noteRaw.trim() || null;
 
-  // The page lists the member's codes under the form; show the new one there.
-  revalidatePath("/tools/invite");
-  return { ok: true, code, recipientName: note, maxUses, requiresApproval };
+    // Code: either user-supplied or auto-generated. Either way we re-check
+    // availability before insert; the unique-PK on `code` is the final
+    // backstop if two redeemers race for the same name.
+    let code = normalizeInviteCode(codeRaw);
+    if (code) {
+      if (!isSyntacticallyValidCode(code)) {
+        return {
+          ok: false,
+          error:
+            "Invite code must be 3–48 chars, lowercase letters/digits/hyphens.",
+        };
+      }
+      const existing = await findInviteCodeByCode(code);
+      if (existing) {
+        return { ok: false, error: `'${code}' is already taken.`, taken: code };
+      }
+    } else {
+      code = await generateUnusedCode();
+    }
+
+    try {
+      await createInviteCode({
+        code,
+        createdByUserId: campUser.id,
+        note,
+        maxUses,
+        assignedRank: null,
+        requiresApproval,
+      });
+    } catch {
+      // Unique-PK collision (race with another redeemer) or any other DB
+      // error. Don't leak details; tell the user to try again.
+      return {
+        ok: false,
+        error: "Couldn't save invite. Try a different code.",
+      };
+    }
+
+    // The page lists the member's codes under the form; show the new one there.
+    revalidatePath("/tools/invite");
+    return { ok: true, code, recipientName: note, maxUses, requiresApproval };
+  });
 }
 
 export type RevokeInviteResult = { ok: true } | { ok: false; error: string };
@@ -178,40 +188,44 @@ export type RevokeInviteResult = { ok: true } | { ok: false; error: string };
 export async function revokeInviteAction(
   rawCode: string,
 ): Promise<RevokeInviteResult> {
-  const authUser = await getAuthenticatedUser();
-  if (!authUser) return { ok: false, error: "Not signed in." };
-  const campUser = await ensureCampUser(authUser);
-  if (!hasCampAccess(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account isn't camp-active yet." };
-  }
-  if (!isApproved(campUser, authUser.primaryEmail)) {
-    return { ok: false, error: "Your account is still awaiting approval." };
-  }
-  const code = typeof rawCode === "string" ? normalizeInviteCode(rawCode) : "";
-  if (!isSyntacticallyValidCode(code)) {
-    return { ok: false, error: "That isn't an invite code." };
-  }
-  const isCaptain = campUser.rank === "captain";
-
-  const revoked = await revokeInviteCode({
-    code,
-    actorUserId: campUser.id,
-    createdByUserId: isCaptain ? undefined : campUser.id,
-  });
-  if (!revoked) {
-    // Say which of the three it was: the write refuses all of them alike.
-    const existing = await findInviteCodeByCode(code);
-    if (!existing) return { ok: false, error: "That code doesn't exist." };
-    if (existing.revokedAt) {
-      return { ok: false, error: "That code is already revoked." };
+  return runAction("revokeInviteAction", async () => {
+    const authUser = await getAuthenticatedUser();
+    if (!authUser) return { ok: false, error: "Not signed in." };
+    const campUser = await ensureCampUser(authUser);
+    if (!hasCampAccess(campUser, authUser.primaryEmail)) {
+      return { ok: false, error: "Your account isn't camp-active yet." };
     }
-    return {
-      ok: false,
-      error: "Only the person who made this code, or a captain, can revoke it.",
-    };
-  }
-  revalidatePath("/tools/invite");
-  return { ok: true };
+    if (!isApproved(campUser, authUser.primaryEmail)) {
+      return { ok: false, error: "Your account is still awaiting approval." };
+    }
+    const code =
+      typeof rawCode === "string" ? normalizeInviteCode(rawCode) : "";
+    if (!isSyntacticallyValidCode(code)) {
+      return { ok: false, error: "That isn't an invite code." };
+    }
+    const isCaptain = campUser.rank === "captain";
+
+    const revoked = await revokeInviteCode({
+      code,
+      actorUserId: campUser.id,
+      createdByUserId: isCaptain ? undefined : campUser.id,
+    });
+    if (!revoked) {
+      // Say which of the three it was: the write refuses all of them alike.
+      const existing = await findInviteCodeByCode(code);
+      if (!existing) return { ok: false, error: "That code doesn't exist." };
+      if (existing.revokedAt) {
+        return { ok: false, error: "That code is already revoked." };
+      }
+      return {
+        ok: false,
+        error:
+          "Only the person who made this code, or a captain, can revoke it.",
+      };
+    }
+    revalidatePath("/tools/invite");
+    return { ok: true };
+  });
 }
 
 async function generateUnusedCode(): Promise<string> {
