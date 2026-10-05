@@ -20,7 +20,6 @@ apps/
   join/       join.camp-404.com: the "404 OS" recruiting site; reads the db, no sign-in
   guide/      survival-guide.camp-404.com: the Survival Guide's public sections; reads the db, no sign-in
   mobile/     Capacitor host wrapping the web static export
-  admin-cli/  Node CLI for data ops
 packages/
   core/       Framework-free domain logic: access, privacy, redaction, … (@camp404/core)
   ui/         Shared shadcn/ui components (@camp404/ui)

@@ -86,8 +86,8 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     // cannot be separated: a caller that counted two captains and then took
     // a request's worth of time to get here would otherwise erase the
     // second-to-last one against a stale count, and a camp with no captain
-    // is unrecoverable (/setup is latched shut and the admin CLI cannot mint
-    // a captain invite with no captain to attribute it to).
+    // is unrecoverable (/setup is latched shut and only a captain can mint a
+    // captain invite).
     //
     // `for("update")` is what makes it atomic rather than merely fresh: it
     // locks every real-captain row for the rest of the transaction, so a

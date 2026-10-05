@@ -1,5 +1,5 @@
 // Word-based invite-code generation + slug validation. Pure (framework-agnostic)
-// so apps/web and apps/admin-cli can share one implementation. Codes are
+// so the app and the Claude connector share one implementation. Codes are
 // memorable "silly word" slugs like "neon-toaster-mongoose" — readable aloud
 // over voice.
 //

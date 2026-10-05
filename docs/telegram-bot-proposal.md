@@ -16,7 +16,7 @@ their camp profile. Separately, the bot posts announcements (phase
 unlocks, dust days, last-call reminders) to a broadcast channel — fanned
 out from the same app that already composes in-app + push broadcasts.
 
-Camp size is ~30–80 people. The volume is low, but the *moments* matter:
+Camp size is ~30–80 people. The volume is low, but the _moments_ matter:
 "you're in" and "the gates just opened" are exactly the messages people
 want a real notification for, not a buried in-app banner.
 
@@ -36,7 +36,7 @@ required"; Telegram is "the camp is doing a thing".
 ## The Telegram API constraint to design around
 
 **Bots cannot silently add a user to a group by `@handle`.** Telegram
-only lets a bot add a user it has the numeric `user_id` for, *and* only
+only lets a bot add a user it has the numeric `user_id` for, _and_ only
 after the user has interacted with the bot first. Inviting by username
 has been deprecated for years.
 
@@ -49,8 +49,8 @@ The reliable, supported pattern is:
    re-using the existing notification system.
 3. User taps it → joins. Bot receives a `chat_member` update on its
    webhook carrying the link that was used to join, which we use as the
-   correlation id between *which member joined* and *which camp user
-   owns that link*.
+   correlation id between _which member joined_ and _which camp user
+   owns that link_.
 4. We mark the invite `used`, store the user's `telegram_user_id`, and
    the link is now spent.
 
@@ -126,7 +126,7 @@ are per-chat (one post, N readers). Modelling them as a fan-out into
 `notification_deliveries` would create N rows for one post. So they live
 in their own table with a chat-level shape.
 
-Per-user Telegram DMs (e.g. "we approved you — here's your link") *do*
+Per-user Telegram DMs (e.g. "we approved you — here's your link") _do_
 fit `notification_deliveries`, and that's how the invite link will be
 delivered — through the existing pipeline once the in-app banner work
 lands.
@@ -162,7 +162,7 @@ the existing `burner-profile.ts` / `invite-codes.ts` / `mcp.ts`.
   returns 200 on a valid secret (a single bad update should not stall
   Telegram's retry queue).
 - `GET /api/cron/telegram/dispatch` — gated by `Authorization: Bearer
-  ${CRON_SECRET}`; calls `dispatchPendingAnnouncements`. **Currently
+${CRON_SECRET}`; calls `dispatchPendingAnnouncements`. **Currently
   not scheduled** — see "Outstanding" below.
 
 ## Status
@@ -188,8 +188,8 @@ In rough order of when each blocks the next:
    admin of both the main group and the announcement channel, call
    `setWebhook` once with `allowed_updates: ["chat_member"]` pointing
    at the deployed `/api/telegram/webhook`, and seed the
-   `telegram_chats` rows for each. Needs a small CLI command on
-   `@camp404/admin-cli` (`camp404 telegram register-chat …`).
+   `telegram_chats` rows for each. [CORRECTION 2026-10-05] The admin CLI
+   is deleted; this needs a captain action or a custom migration instead.
 
 2. **Approval trigger.** `issueGroupInviteForUser(userId)` is a helper
    that nobody calls yet. There is no single `users.approved` flag —
@@ -202,7 +202,7 @@ In rough order of when each blocks the next:
    probably wants to exist anyway.
 
 3. **Surface the invite link to the user.** Once the invite row is
-   minted, the user needs to *see* the link. Easiest path: re-use
+   minted, the user needs to _see_ the link. Easiest path: re-use
    the existing broadcast pipeline — fan out a per-user
    `notification_delivery` with `refType: 'telegram_invite'` and
    `refId: telegram_invites.id`, render an in-app banner ("Join the
@@ -215,11 +215,11 @@ In rough order of when each blocks the next:
    for an announcement is too long. Two paths once we're ready:
    - Upgrade the project plan to one that allows sub-daily crons,
      re-add `{ "path": "/api/cron/telegram/dispatch", "schedule":
-     "*/5 * * * *" }`. Cleanest.
+"*/5 * * * *" }`. Cleanest.
    - Stay on the current plan and call `dispatchPendingAnnouncements`
      directly from whichever route enqueued the announcement. The
      cron stops being needed for the immediate-send case; future-
-     scheduled rows still need *something* to drain them (a daily
+     scheduled rows still need _something_ to drain them (a daily
      cron is fine for that, with the understanding that a future-
      dated post lands within 24h of its `sendAfter`).
 
@@ -255,19 +255,26 @@ In rough order of when each blocks the next:
 
 1. `@BotFather` → `/newbot` → name + username → grab the token.
 2. `openssl rand -hex 32` → `TELEGRAM_WEBHOOK_SECRET`.
-3. Add both env vars to Vercel project settings *and* `.env.local`.
+3. Add both env vars to Vercel project settings _and_ `.env.local`.
 4. Promote the bot to admin in the camp's Telegram group:
    - Group → Manage → Administrators → Add → search bot username.
    - Permissions: "Invite Users via Link" (required for
      `createChatInviteLink`); "Delete Messages" optional.
 5. Same for the announcement channel — needs "Post Messages".
-6. From the admin-cli or a one-shot script:
+6. From a one-shot script:
    ```ts
    import { TelegramClient } from "@camp404/telegram/client";
    import { upsertChat } from "@camp404/db/telegram";
-   const client = new TelegramClient({ botToken: process.env.TELEGRAM_BOT_TOKEN! });
-   await upsertChat({ kind: "main_group", chatId: "-100123…",
-     title: "Camp 404", username: null, addedByUserId: null });
+   const client = new TelegramClient({
+     botToken: process.env.TELEGRAM_BOT_TOKEN!,
+   });
+   await upsertChat({
+     kind: "main_group",
+     chatId: "-100123…",
+     title: "Camp 404",
+     username: null,
+     addedByUserId: null,
+   });
    await client.setWebhook({
      url: "https://www.camp-404.com/api/telegram/webhook",
      secretToken: process.env.TELEGRAM_WEBHOOK_SECRET!,
@@ -282,15 +289,15 @@ In rough order of when each blocks the next:
 
 ## File map
 
-| Concern | Path |
-| --- | --- |
-| Schema | `packages/db/src/schema.ts` (telegram_* tables + user columns) |
-| Migration | `packages/db/migrations/0004_kind_the_hand.sql` |
-| Drizzle queries | `packages/db/src/telegram.ts` |
-| Bot HTTP client | `packages/telegram/src/client.ts` |
-| Webhook parser + secret check | `packages/telegram/src/webhook.ts` |
-| Business handlers | `packages/telegram/src/handlers.ts` |
-| Web — webhook receiver | `apps/web/app/api/telegram/webhook/route.ts` |
-| Web — queue dispatcher | `apps/web/app/api/cron/telegram/dispatch/route.ts` |
-| Env scaffolding | `.env.example`, `turbo.json` |
-| Tests | `packages/telegram/src/__tests__/*.test.ts` (23 tests) |
+| Concern                       | Path                                                             |
+| ----------------------------- | ---------------------------------------------------------------- |
+| Schema                        | `packages/db/src/schema.ts` (telegram\_\* tables + user columns) |
+| Migration                     | `packages/db/migrations/0004_kind_the_hand.sql`                  |
+| Drizzle queries               | `packages/db/src/telegram.ts`                                    |
+| Bot HTTP client               | `packages/telegram/src/client.ts`                                |
+| Webhook parser + secret check | `packages/telegram/src/webhook.ts`                               |
+| Business handlers             | `packages/telegram/src/handlers.ts`                              |
+| Web — webhook receiver        | `apps/web/app/api/telegram/webhook/route.ts`                     |
+| Web — queue dispatcher        | `apps/web/app/api/cron/telegram/dispatch/route.ts`               |
+| Env scaffolding               | `.env.example`, `turbo.json`                                     |
+| Tests                         | `packages/telegram/src/__tests__/*.test.ts` (23 tests)           |

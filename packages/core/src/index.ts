@@ -5,7 +5,7 @@
 // This package depends ONLY on @camp404/types. It MUST NOT import
 // @camp404/db, next/*, server-only, React, read process.env, or perform any
 // I/O. That is what keeps it testable without a DB or route harness and
-// reusable by apps/web, apps/admin-cli, apps/mobile, packages/ui, and tests.
+// reusable by every app, packages/ui, and tests.
 //
 // Phase-3 extractions land here progressively (see architecture.md
 // §hybrid-extraction). Landed so far:

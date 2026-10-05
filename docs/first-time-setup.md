@@ -37,8 +37,7 @@ The founding captain then hands out the root code to bring everyone else in.
 
 ## The root invite code
 
-The root code is fixed: **`meowzit`** (`FOUNDER_CODE` in `packages/core/src/invites.ts`, re-exported by `apps/web/lib/bootstrap.ts`,
-matching the `admin-cli bootstrap-founder` slug). The repo is public, so anyone
+The root code is fixed: **`meowzit`** (`FOUNDER_CODE` in `packages/core/src/invites.ts`, re-exported by `apps/web/lib/bootstrap.ts`). The repo is public, so anyone
 can read the word. It is therefore minted so that it cannot wave anyone in:
 
 - **Every redeemer waits for a captain** (`requiresApproval = true`). They land
@@ -58,12 +57,9 @@ Migration `0022_founder_code_policy` applies the same policy to a root code
 minted before the change.
 
 To close the code early, for example if it leaks beyond the camp, revoke it. A
-captain can do it in the app: **Tools → Invite**, under "All invite codes". Or
-from the admin CLI:
-
-```bash
-DATABASE_URL=... pnpm --filter @camp404/admin-cli dev revoke-invite --code meowzit
-```
+captain can do it in the app: **Tools → Invite**, under "All invite codes".
+(The admin CLI that could also do it was deleted on 2026-10-05; nothing is run
+against production by hand.)
 
 Members who already joined keep their place. The revoke writes an
 `invite.revoked` audit row.
