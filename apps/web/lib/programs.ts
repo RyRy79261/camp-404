@@ -1036,6 +1036,12 @@ export interface ProgramManifest {
   search: SearchPlace[];
   /** Changes when what the member may open changes; never with live counts. */
   version: string;
+  /**
+   * Voice to instruction (#356): captains only, on the full desktop. Null or
+   * absent for everyone else, so nobody else has a mic in the page at all.
+   * `consented`: they have read the one-time notice and turned it on.
+   */
+  voice?: { consented: boolean } | null;
 }
 
 /** One program in Ctrl+K search: its id and where it lives ("Kitchen"). */

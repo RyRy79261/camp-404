@@ -32,3 +32,26 @@ const PROMPTS: Readonly<Record<string, string>> = {
 export function voicePromptFor(key: string): string | undefined {
   return Object.hasOwn(PROMPTS, key) ? PROMPTS[key] : undefined;
 }
+
+/**
+ * The Whisper prompt for a captain's voice command (#356): the camp's own
+ * words, so names and shifts come back spelled as the camp spells them:
+ * the teams, this year's shift names and members' display names. About 600
+ * characters; Whisper reads no more than some 224 tokens of it.
+ */
+export function commandPrompt(input: {
+  teams: readonly string[];
+  shifts: readonly string[];
+  names: readonly string[];
+}): string {
+  const head =
+    "Camp 404 captain. Shifts, tasks, build week, strike, pack, unpack, claims, approve, team lead, Afrikaburn.";
+  const parts = [
+    head,
+    input.teams.length ? `Teams: ${input.teams.join(", ")}.` : "",
+    input.shifts.length ? `Shifts: ${[...new Set(input.shifts)].join(", ")}.` : "",
+    input.names.length ? `People: ${input.names.join(", ")}.` : "",
+  ].filter(Boolean);
+  const text = parts.join(" ");
+  return text.length > 800 ? `${text.slice(0, 797)}...` : text;
+}

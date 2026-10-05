@@ -20,6 +20,7 @@ import { deriveSystemStatus, type DatabaseProbe } from "./system-status";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 import { getMyMemberships, isApproved } from "./users";
+import { getVoiceConsent } from "./voice/consent";
 
 // The server half of lib/programs.ts: gather one member's facts for this
 // request and build their manifest. Built on `resolveMemberState()`, which
@@ -97,7 +98,13 @@ export const getProgramManifest = cache(
       mode === "full" ? healthWarnings() : Promise.resolve(null),
     ]);
 
-    return buildProgramManifest({
+    // Voice (#356): a captain's, on the full desktop only.
+    const voice =
+      mode === "full" && campUser.rank === "captain"
+        ? { consented: (await getVoiceConsent(campUser.id)) !== null }
+        : null;
+
+    const manifest = buildProgramManifest({
       mode,
       approved,
       rank: deriveViewerRank(
@@ -110,5 +117,6 @@ export const getProgramManifest = cache(
       inbox: inbox?.total ?? 0,
       healthWarnings: warnings,
     });
+    return { ...manifest, voice };
   },
 );

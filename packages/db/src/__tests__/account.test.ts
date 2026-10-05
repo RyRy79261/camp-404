@@ -362,6 +362,7 @@ describe("sanitiseAccount", () => {
       skills: ["cobol-whisperer"],
       previousAfrikaburns: 4,
       aiDataConsent: true,
+      voiceConsentAt: new Date(),
       emergencyContacts: [
         { name: "Ada Byron", phone: "+27 82 555 0199", relationship: "friend" },
       ],
@@ -382,6 +383,7 @@ describe("sanitiseAccount", () => {
     ).toBe(false);
     expect(row.previousAfrikaburns).toBeNull();
     expect(row.aiDataConsent).toBe(false);
+    expect(row.voiceConsentAt).toBeNull();
 
     const proofs = await db
       .select()

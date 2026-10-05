@@ -1,9 +1,31 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { appendMcpAuditLog } from "@camp404/db/mcp";
+import { appendMcpAuditLog as dbAppendMcpAuditLog } from "@camp404/db/mcp";
 import { getCampUserIdFromAuth } from "./auth";
 import { refusalFor, TOOL_CAPABILITIES } from "./capabilities";
 import { getMcpScope, type McpScope } from "./scope";
+
+/**
+ * The connector's audit row. In the E2E test store (voice drives these tools
+ * in Playwright, #356) it is kept in memory; everywhere else, mcp_audit_log.
+ */
+async function appendMcpAuditLog(
+  row: Parameters<typeof dbAppendMcpAuditLog>[0],
+): Promise<void> {
+  if (process.env.E2E_TEST_MODE === "1" && process.env.E2E_DATABASE !== "real") {
+    const { voiceTestStore } = await import("../test-store-voice");
+    voiceTestStore.appendAudit({
+      campUserId: row.campUserId,
+      clientId: row.clientId,
+      tool: row.tool,
+      argsJson: (row.argsJson ?? null) as Record<string, unknown> | null,
+      outcome: row.outcome,
+      errorMessage: row.errorMessage ?? null,
+    });
+    return;
+  }
+  await dbAppendMcpAuditLog(row);
+}
 
 /**
  * The context every tool handler receives after the scope + auth gate.

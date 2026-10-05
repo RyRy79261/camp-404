@@ -6,6 +6,11 @@ export {
   type RecipeSourceRevisionInput,
 } from "./recipe-source-revision";
 export { recipeAdjustPrompt, type RecipeAdjustInput } from "./recipe-adjust";
+export {
+  voiceCommandPrompt,
+  VOICE_REPLY_TOOLS,
+  type VoiceCommandContext,
+} from "./voice-command";
 
 /**
  * Versioned prompt templates. Bump the `version` whenever the template
@@ -18,4 +23,5 @@ export const PROMPT_VERSIONS = {
   recipeSource: "2026-10-02.1",
   recipeSourceRevision: "2026-10-02.1",
   recipeAdjust: "2026-10-02.1",
+  voiceCommand: "2026-10-06.1",
 } as const;

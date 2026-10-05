@@ -127,6 +127,14 @@ export const AREAS = [
 export type Area = (typeof AREAS)[number];
 
 export interface ToolCapability {
+  /**
+   * Whether the tool only reads or also changes something. Voice (#356) runs
+   * a read at once, while working out what the captain meant, and turns a
+   * write into a row on the list the captain confirms: it never runs a write
+   * before Do. Each write has a preview in lib/voice/previews.ts (a test
+   * fails when one has none).
+   */
+  kind: "read" | "write";
   area: Area;
   gate: Gate;
   /** One plain line: what it does. */
@@ -142,83 +150,99 @@ export interface ToolCapability {
 export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   // You
   whoami: {
+    kind: "read",
     area: "You",
     gate: GATES.member,
     does: "Your id, rank, teams this year, the teams you lead, and whether you drive.",
   },
   what_can_i_do: {
+    kind: "read",
     area: "You",
     gate: GATES.member,
     does: "What you may do here and what only the website does, with links. Call it first.",
   },
   list_my_required_actions: {
+    kind: "read",
     area: "You",
     gate: GATES.member,
     does: "Forms and steps waiting for you, and optional questionnaires you may answer.",
   },
   get_my_burner_profile: {
+    kind: "read",
     area: "You",
     gate: GATES.member,
     does: "Read your burner profile answers.",
   },
   update_my_burner_profile: {
+    kind: "write",
     area: "You",
     gate: GATES.member,
     does: "Change your burner profile answers.",
   },
   get_my_dietary_requirements: {
+    kind: "read",
     area: "You",
     gate: GATES.member,
     does: "Read your dietary pick-list: foods you react to, how, and your diets.",
   },
   update_my_dietary_requirements: {
+    kind: "write",
     area: "You",
     gate: GATES.member,
     does: "Save your dietary pick-list. The Kitchen's allergy check reads it.",
   },
   get_my_driver_profile: {
+    kind: "read",
     area: "You",
     gate: GATES.member,
     does: "Read this year's driver profile: car, seats, travel.",
   },
   update_my_driver_profile: {
+    kind: "write",
     area: "You",
     gate: GATES.member,
     does: "Change this year's driver profile. Seats never go below the riders already in.",
   },
   get_my_emergency_contacts: {
+    kind: "read",
     area: "You",
     gate: GATES.member,
     does: "Read your emergency contacts.",
   },
   update_my_emergency_contacts: {
+    kind: "write",
     area: "You",
     gate: GATES.member,
     does: "Replace your emergency contacts.",
   },
   set_my_membership_tier: {
+    kind: "write",
     area: "You",
     gate: GATES.member,
     does: "Say whether you stay the whole event or build week only.",
   },
   update_my_history: {
+    kind: "write",
     area: "You",
     gate: GATES.member,
     does: "Change your skills and how many burns you have been to.",
   },
   get_my_dues: {
+    kind: "read",
     area: "You",
     gate: GATES.member,
     does: "What My dues shows you: what you owe and paid, your next instalment, your pledge, charges and payments (rand cents). Read-only.",
     page: "/dues",
   },
   get_my_gear_rental: {
+    kind: "read",
     area: "You",
     gate: GATES.member,
     does: "What My gear shows you: your gear order, your tent, who shares it and the catalogue. Read-only.",
     page: "/gear",
   },
   list_my_forms: {
+    kind: "read",
     area: "You",
     gate: GATES.member,
     does: "Your questionnaires: waiting, optional, update any time, and submitted, each with its page.",
@@ -226,18 +250,21 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // Inbox
   list_my_notifications: {
+    kind: "read",
     area: "Inbox",
     gate: GATES.member,
     does: "Your inbox, newest first, 30 a page, by the page's tabs.",
     page: "/notifications",
   },
   mark_notifications_read: {
+    kind: "write",
     area: "Inbox",
     gate: GATES.member,
     does: "Mark some of your notifications read (never a pop-up the app has not shown).",
     page: "/notifications",
   },
   mark_all_notifications_read: {
+    kind: "write",
     area: "Inbox",
     gate: GATES.member,
     does: "Mark all your notifications read, as the inbox's Mark all read.",
@@ -245,6 +272,7 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // Search
   search_camp: {
+    kind: "read",
     area: "Search",
     gate: GATES.member,
     does: "Search everything you may open, as Ctrl+K's Everything: titles, and a short line around words found inside.",
@@ -252,18 +280,21 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // Tasks
   list_tasks: {
+    kind: "read",
     area: "Tasks",
     gate: GATES.member,
     does: "The camp's task board, with what you may do to each task.",
     page: "/tasks",
   },
   add_task: {
+    kind: "write",
     area: "Tasks",
     gate: GATES.teamLead,
     does: "Add a task: team leads for a team they lead, captains for any team.",
     page: "/tasks",
   },
   move_task: {
+    kind: "write",
     area: "Tasks",
     gate: GATES.member,
     does: "Move a task between open, in progress and done, from the column you read (its person, whoever added it, a lead of its team, a captain).",
@@ -271,6 +302,7 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // Calendar
   list_calendar_events: {
+    kind: "read",
     area: "Calendar",
     gate: GATES.member,
     does: "The camp calendar from today to a year ahead, by day, by team.",
@@ -278,18 +310,21 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // Meetings
   list_meetings: {
+    kind: "read",
     area: "Meetings",
     gate: GATES.member,
     does: "Meeting notes, newest first, by team or whole camp.",
     page: "/meetings",
   },
   get_meeting: {
+    kind: "read",
     area: "Meetings",
     gate: GATES.member,
     does: "One meeting's agenda, notes, decisions and action items.",
     page: "/meetings",
   },
   update_meeting_notes: {
+    kind: "write",
     area: "Meetings",
     gate: GATES.member,
     does: "Change a meeting's title, agenda, notes or decisions, on the version you read (its team's members this year, and captains).",
@@ -297,24 +332,28 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // Shifts
   list_shifts: {
+    kind: "read",
     area: "Shifts",
     gate: GATES.member,
     does: "This year's shift roster: each day's slots, places taken and who is on them.",
     page: "/shifts",
   },
   list_my_shifts: {
+    kind: "read",
     area: "Shifts",
     gate: GATES.member,
     does: "The shifts you are on, and your AfrikaBurn volunteer shifts.",
     page: "/shifts/mine",
   },
   sign_up_for_shift: {
+    kind: "write",
     area: "Shifts",
     gate: GATES.member,
     does: "Take a place on a shift slot for yourself, while it has one.",
     page: "/shifts",
   },
   leave_shift: {
+    kind: "write",
     area: "Shifts",
     gate: GATES.member,
     does: "Give up your place on a shift slot before its day.",
@@ -322,139 +361,165 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // People
   list_users: {
+    kind: "read",
     area: "People",
     gate: GATES.member,
     does: "The camp roster, with the columns your rank may read.",
   },
   get_user: {
+    kind: "read",
     area: "People",
     gate: GATES.member,
     does: "One person, with the columns your rank may read (team leads and captains also get emergency contacts; each read is recorded). Never ID numbers or bank details.",
   },
   // Claims and budgets
   get_team_budget: {
+    kind: "read",
     area: "Claims and budgets",
     gate: GATES.member,
     does: "One team's budget this year: budget, spent, waiting, left (rand cents).",
   },
   list_team_budgets: {
+    kind: "read",
     area: "Claims and budgets",
     gate: GATES.member,
     does: "Every team's budget this year (rand cents).",
   },
   list_my_reimbursements: {
+    kind: "read",
     area: "Claims and budgets",
     gate: GATES.member,
     does: "Your own claims and where each stands.",
   },
   list_reimbursements: {
+    kind: "read",
     area: "Claims and budgets",
     gate: GATES.teamLead,
     does: "Claims to review: your led teams' claims, or every claim for captains and Finance leads. Never bank details.",
   },
   approve_reimbursement: {
+    kind: "write",
     area: "Claims and budgets",
     gate: GATES.teamLead,
     does: "Say yes to a waiting claim of a team you lead (captains: any). Never your own.",
   },
   reject_reimbursement: {
+    kind: "write",
     area: "Claims and budgets",
     gate: GATES.teamLead,
     does: "Say no to a waiting claim of a team you lead (captains: any). Never your own.",
   },
   // Survival Guide
   list_documents: {
+    kind: "read",
     area: "Survival Guide",
     gate: GATES.member,
     does: "The guide's published chapters and duty cards.",
   },
   get_document: {
+    kind: "read",
     area: "Survival Guide",
     gate: GATES.member,
     does: "Read one published chapter.",
   },
   list_document_drafts: {
+    kind: "read",
     area: "Survival Guide",
     gate: GATES.teamLead,
     does: "Unpublished chapters you may write.",
   },
   get_document_draft: {
+    kind: "read",
     area: "Survival Guide",
     gate: GATES.teamLead,
     does: "Read a chapter's working copy and its version, to edit or publish it.",
   },
   create_document: {
+    kind: "write",
     area: "Survival Guide",
     gate: GATES.teamLead,
     does: "Start a chapter or a duty card as a draft, in one of the guide's topics.",
   },
   update_document: {
+    kind: "write",
     area: "Survival Guide",
     gate: GATES.teamLead,
     does: "Change a draft, on the version you read.",
   },
   publish_document: {
+    kind: "write",
     area: "Survival Guide",
     gate: GATES.teamLead,
     does: "Publish the version you read, or take a chapter off the guide.",
   },
   // Questionnaires
   list_questionnaire_drafts: {
+    kind: "read",
     area: "Questionnaires",
     gate: GATES.teamLead,
     does: "The builder's questionnaires you may see.",
   },
   get_questionnaire_draft: {
+    kind: "read",
     area: "Questionnaires",
     gate: GATES.teamLead,
     does: "Read a questionnaire's working definition and what blocks publishing.",
   },
   create_questionnaire_draft: {
+    kind: "write",
     area: "Questionnaires",
     gate: GATES.teamLead,
     does: "Draft a questionnaire.",
   },
   update_questionnaire_draft: {
+    kind: "write",
     area: "Questionnaires",
     gate: GATES.teamLead,
     does: "Replace a draft's definition (captains: any; team leads: their own).",
   },
   // Kitchen
   submit_recipe: {
+    kind: "write",
     area: "Kitchen",
     gate: GATES.member,
     does: "Suggest a recipe for the Kitchen to review.",
   },
   list_recipes: {
+    kind: "read",
     area: "Kitchen",
     gate: GATES.member,
     does: "The recipe book.",
   },
   get_recipe: {
+    kind: "read",
     area: "Kitchen",
     gate: GATES.member,
     does: "Read one recipe as its page shows it to you: the book's version at a plate count, how it was scaled and the cooks' notes.",
     page: "/kitchen/recipes",
   },
   add_recipe_lesson: {
+    kind: "write",
     area: "Kitchen",
     gate: GATES.member,
     does: "Add a note on what the kitchen learned cooking a recipe in the book.",
     page: "/kitchen/recipes",
   },
   get_meal_plan: {
+    kind: "read",
     area: "Kitchen",
     gate: GATES.member,
     does: "This year's meal plan: the days on site, the plates at each meal, the recipes on the menu and the snacks.",
     page: "/kitchen/meal-plan",
   },
   get_shopping_list: {
+    kind: "read",
     area: "Kitchen",
     gate: GATES.member,
     does: "The shopping list worked out from the menu, with what is already ticked (captains and Kitchen leads also get prices).",
     page: "/kitchen/shopping",
   },
   list_recipe_review_queue: {
+    kind: "read",
     area: "Kitchen",
     gate: GATES.kitchenReview,
     does: "Suggestions waiting for a decision, recipes ready to send to Claude, and older drafts waiting to be accepted. Deciding and sending stay on the page.",
@@ -462,18 +527,21 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // Inventory
   list_inventory_items: {
+    kind: "read",
     area: "Inventory",
     gate: GATES.member,
     does: "The camp's gear as the Inventory page shows it, with the suggested changes you may review.",
     page: "/inventory",
   },
   add_inventory_item: {
+    kind: "write",
     area: "Inventory",
     gate: GATES.inventoryEditor,
     does: "Add an item of gear to a team you may edit (captains: any team). Logged in the item's history.",
     page: "/inventory",
   },
   propose_inventory_change: {
+    kind: "write",
     area: "Inventory",
     gate: GATES.member,
     does: "Suggest a new count, condition or place for an item, for its team's lead or a captain to approve on the page.",
@@ -481,24 +549,28 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // Logistics
   list_logistics_days: {
+    kind: "read",
     area: "Logistics",
     gate: GATES.member,
     does: "This year's pack, travel, build, burn, strike and unpack days, and AfrikaBurn's dates.",
     page: "/logistics",
   },
   set_logistics_days: {
+    kind: "write",
     area: "Logistics",
     gate: GATES.logisticsEditor,
     does: "Set one phase's days, place and note, on the version you read. It goes on the camp calendar and moves the meal plan's prep with Day 1.",
     page: "/logistics",
   },
   get_logistics_attendance: {
+    kind: "read",
     area: "Logistics",
     gate: GATES.member,
     does: "Who can help on pack, build, strike and unpack, and your own answers.",
     page: "/logistics",
   },
   set_my_logistics_attendance: {
+    kind: "write",
     area: "Logistics",
     gate: GATES.member,
     does: "Say whether you can help on a phase, from the answer you read.",
@@ -506,43 +578,51 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // Transport
   list_drivers: {
+    kind: "read",
     area: "Transport",
     gate: GATES.member,
     does: "This year's cars as the Transport page shows them: driver, car, seats, riders.",
   },
   list_car_riders: {
+    kind: "read",
     area: "Transport",
     gate: GATES.member,
     does: "Who rides in one car this year.",
   },
   get_my_lift: {
+    kind: "read",
     area: "Transport",
     gate: GATES.member,
     does: "The car you drive or ride in this year.",
   },
   add_car_rider: {
+    kind: "write",
     area: "Transport",
     gate: GATES.member,
     does: "Put someone in a car: your own car, or any car for captains and Transport & Logistics leads.",
   },
   remove_car_rider: {
+    kind: "write",
     area: "Transport",
     gate: GATES.member,
     does: "Take someone out of a car (your own car, or leave a car you ride in).",
   },
   get_my_lift_request: {
+    kind: "read",
     area: "Transport",
     gate: GATES.member,
     does: "Your lift request this year, if you made one.",
     page: "/transport",
   },
   request_lift: {
+    kind: "write",
     area: "Transport",
     gate: GATES.member,
     does: "Ask for a seat in one car, or any car, this year.",
     page: "/transport",
   },
   cancel_lift_request: {
+    kind: "write",
     area: "Transport",
     gate: GATES.member,
     does: "Withdraw your lift request.",
@@ -550,32 +630,38 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
   },
   // Invites and audit
   list_invite_codes: {
+    kind: "read",
     area: "Invites and audit",
     gate: GATES.member,
     does: "Invite codes you made (captains: every code).",
   },
   revoke_invite_code: {
+    kind: "write",
     area: "Invites and audit",
     gate: GATES.member,
     does: "Stop a code you made letting anyone else join (captains: any code).",
   },
   list_audit_log: {
+    kind: "read",
     area: "Invites and audit",
     gate: GATES.captain,
     does: "Who changed or read whose data.",
   },
   // People (captain writes)
   assign_team_membership: {
+    kind: "write",
     area: "People",
     gate: GATES.captain,
     does: "Put a member on a team this year.",
   },
   remove_team_membership: {
+    kind: "write",
     area: "People",
     gate: GATES.captain,
     does: "Take a member off a team this year.",
   },
   set_team_lead: {
+    kind: "write",
     area: "People",
     gate: GATES.captain,
     does: "Make a team member lead the team, or stop.",

@@ -877,10 +877,14 @@ that actually has something to ship.
 
 ## AI providers
 
-Model IDs (Claude Opus 4.8, Haiku 4.5, Groq Whisper Large v3 Turbo) and the
-prompt templates in `@camp404/ai-prompts` are pinned and versioned
-deliberately. Do not swap models or edit a prompt in place — bump the
-version instead.
+Model IDs (Claude Opus 4.8, Haiku 4.5, Sonnet 5.5, Groq Whisper Large v3
+Turbo) and the prompt templates in `@camp404/ai-prompts` are pinned and
+versioned deliberately. Do not swap models or edit a prompt in place — bump the
+version instead. Sonnet 5.5 (`claude-sonnet-5-5`, owner 2026-10-06) is voice's
+model only (#356): it turns a captain's words into connector tool calls
+(`voiceCommandPrompt`). A change to that prompt or model needs a new version
+and three passing real-model runs of `pnpm --filter @camp404/web eval:voice`
+(zero wrong actions); there is no fallback to another model.
 
 ## No cron jobs
 
