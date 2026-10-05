@@ -1342,25 +1342,6 @@ async function proposalFor(
   return { ...proposeRefund(payment.amountCents, onDay, year), onDay };
 }
 
-/** The schedule's proposal for one payment, for the refund form. */
-export async function proposeRefundFor(
-  paymentId: string,
-  today: string,
-): Promise<RefundProposal | null> {
-  if (!UUID.test(paymentId)) return null;
-  const db = createHttpDb();
-  const [payment] = await db
-    .select({
-      userId: schema.payments.userId,
-      cycle: schema.payments.cycle,
-      amountCents: schema.payments.amountCents,
-    })
-    .from(schema.payments)
-    .where(eq(schema.payments.id, paymentId))
-    .limit(1);
-  return payment ? proposalFor(db, payment, today) : null;
-}
-
 /**
  * Ask for a refund of a received payment. The Finance team names the amount
  * (the schedule's proposal, or their own); a member asking for their own gets

@@ -79,16 +79,6 @@ export async function settleUpCandidates(
   return store()?.settleUpCandidates(cycle) ?? db.settleUpCandidates(cycle);
 }
 
-export async function proposeRefundFor(
-  paymentId: string,
-  today: string,
-): Promise<RefundProposal | null> {
-  const s = store();
-  return s
-    ? s.proposeRefundFor(paymentId, today)
-    : db.proposeRefundFor(paymentId, today);
-}
-
 export async function getPaymentProof(
   paymentId: string,
 ): Promise<Awaited<ReturnType<typeof db.getPaymentProof>>> {

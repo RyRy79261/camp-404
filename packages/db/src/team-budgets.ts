@@ -31,24 +31,6 @@ export async function listTeamBudgets(cycle: number): Promise<TeamBudgetRow[]> {
     .orderBy(asc(schema.teamBudgets.team));
 }
 
-/** One team's budget row for a year, or null when none is set. */
-export async function getTeamBudget(
-  team: Team,
-  cycle: number,
-): Promise<TeamBudgetRow | null> {
-  const [row] = await createHttpDb()
-    .select()
-    .from(schema.teamBudgets)
-    .where(
-      and(
-        eq(schema.teamBudgets.team, team),
-        eq(schema.teamBudgets.cycle, cycle),
-      ),
-    )
-    .limit(1);
-  return row ?? null;
-}
-
 /**
  * Every team's totals for a year: its budget, what it spent, what is waiting.
  * A team with neither a budget nor a claim reads as no budget and nothing

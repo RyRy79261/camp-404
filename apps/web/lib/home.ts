@@ -2,12 +2,6 @@ import { CAMP_TIME_ZONE, campDayKey, readTeamEvent } from "@camp404/core";
 import type { MyLift } from "@camp404/db/cars";
 import type { MyOpenTask } from "@camp404/db/tasks";
 import type { CalendarResult } from "./google-calendar";
-import type { InboxBadge } from "./inbox-badge";
-import {
-  buildProgramManifest,
-  manifestProgramIds,
-  type ProgramManifest,
-} from "./programs";
 
 // What a member's home page shows, decided from their own profile and status
 // and nothing else (owner, 2026-09-23: "The dashboard should be built off of
@@ -20,27 +14,14 @@ import {
 export interface HomeInput {
   now: Date;
   approval: "pending" | "approved";
-  firstName: string | null;
-  isCaptain: boolean;
-  /** Every team they are on this year — there may be several, led or not. */
-  teams: readonly {
-    key: string;
-    label: string;
-    isLead: boolean;
-    /** Unread announcements sent to this team. */
-    unread: number;
-  }[];
+  /** The keys of every team they are on this year. */
+  teamKeys: readonly string[];
   pending: readonly {
     activationId: string;
     title: string;
     blocking: boolean;
     dueAt: Date | null;
   }[];
-  /**
-   * The inbox count from `getInboxBadge`: the Notifications tile shows its
-   * total, the same number as the bell.
-   */
-  inbox: InboxBadge;
   /**
    * The tasks this person is responsible for and has not finished: the first
    * few (listMyOpenTasks) and how many there are in all.
@@ -97,47 +78,12 @@ export interface HomeUpcoming {
   team: { label: string; mine: boolean } | null;
 }
 
-/** The module tiles. `icon` is a key the view maps to a picture. */
-export type HomeModuleIcon =
-  | "announcements"
-  | "forms"
-  | "message"
-  | "send-form"
-  | "overview"
-  | "tasks"
-  | "add-event";
-
-export interface HomeModule {
-  id: string;
-  href: string;
-  label: string;
-  icon: HomeModuleIcon;
-  /** A count of new things, or null for none. */
-  badge: number | null;
-  /**
-   * What the count is, after the number in the tile's accessible name
-   * ("Notifications, 2 waiting"). Absent means "new".
-   */
-  badgeSays?: string;
-}
-
-/** One of the member's teams, as an icon with a "new" dot. */
-export interface HomeTeam {
-  key: string;
-  label: string;
-  isLead: boolean;
-  unread: number;
-  href: string;
-}
-
 export interface HomeLift {
   heading: string;
   lines: string[];
 }
 
 export interface HomeModel {
-  greeting: string;
-  chips: string[];
   waitingForApproval: boolean;
   todos: HomeTodo[];
   /** At most HOME_TASK_LIMIT of the member's open tasks, soonest first. */
@@ -148,8 +94,6 @@ export interface HomeModel {
   /** Why "coming up" may be short: the calendar is off or unreachable. */
   calendarState: CalendarResult["status"] | null;
   lift: HomeLift | null;
-  modules: HomeModule[];
-  teams: HomeTeam[];
   checklist: { label: string; done: boolean }[];
   allDone: boolean;
 }
@@ -310,52 +254,10 @@ export function liftCard(lift: MyLift | null): HomeLift | null {
   };
 }
 
-/**
- * The manifest Home's own facts give, for a caller with no manifest of its
- * own (the unit tests): an applicant is `restricted`, anyone else `full`, at
- * the rank their captaincy and lead flag make them. The page passes the real
- * one (lib/program-manifest.ts).
- */
-export function manifestForHome(input: HomeInput): ProgramManifest {
-  const lead = input.teams.some((t) => t.isLead);
-  const approved = input.approval === "approved";
-  return buildProgramManifest({
-    mode: approved ? "full" : "restricted",
-    approved,
-    rank: input.isCaptain ? "captain" : lead ? "team_lead" : "camp_member",
-    memberships: input.teams.map((t) => ({ team: t.key, isLead: t.isLead })),
-    teams: Object.entries(input.teamLabels).map(([key, label], order) => ({
-      key,
-      label,
-      archived: false,
-      order,
-    })),
-    hasLift: input.lift !== null,
-    inbox: input.inbox.total,
-    healthWarnings: null,
-  });
-}
-
-/**
- * Home's model. The module tiles are a VIEW of the member's program manifest
- * (404 OS, PR B): a tile shows when the manifest holds its program, so Home
- * and the header can no longer disagree about what a member may open. Pass the
- * manifest the console built; without one, Home's own facts build it.
- */
-export function buildHome(
-  input: HomeInput,
-  manifest: ProgramManifest = manifestForHome(input),
-): HomeModel {
+/** The Today gadget's model, built from the member's own facts. */
+export function buildHome(input: HomeInput): HomeModel {
   const today = campDayKey(input.now);
   const approved = input.approval === "approved";
-
-  const chips: string[] = [];
-  if (!approved) chips.push("Waiting for approval");
-  else if (input.isCaptain) chips.push("Captain");
-  else chips.push("Member");
-  // Teams are not chips: they have their own icons below.
-  if (approved && input.teams.some((t) => t.isLead)) chips.push("Team lead");
-  if (input.lift?.role === "driver") chips.push("Driver");
 
   // To do: only what this person must act on. Soonest deadline first; a form
   // with no deadline goes after every dated one.
@@ -415,110 +317,12 @@ export function buildHome(
           input.calendar,
           today,
           input.teamLabels,
-          new Set(input.teams.map((t) => t.key)),
+          new Set(input.teamKeys),
         ),
         ...upcomingFromLift(input.lift, today),
       ]
         .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
         .slice(0, 6)
-    : [];
-
-  const has = manifestProgramIds(manifest);
-  const modules: HomeModule[] = [];
-  // The inbox, named as the page it opens and the bell it mirrors: its count
-  // (getInboxBadge) holds unread notices of every kind and forms still
-  // waiting for an answer, so "Announcements, 1 new" would name the wrong
-  // thing when the 1 is a form.
-  if (has.has("inbox")) {
-    modules.push({
-      id: "announcements",
-      href: "/notifications",
-      label: "Notifications",
-      icon: "announcements",
-      badge: input.inbox.total > 0 ? input.inbox.total : null,
-      badgeSays: "waiting",
-    });
-  }
-  if (has.has("my-forms")) {
-    modules.push({
-      id: "forms",
-      href: "/tools/forms",
-      label: "My forms",
-      icon: "forms",
-      badge: input.pending.length > 0 ? input.pending.length : null,
-    });
-  }
-  // The shared task board, for everyone; the count is the tasks that are
-  // theirs and not finished.
-  if (has.has("tasks")) {
-    modules.push({
-      id: "tasks",
-      href: "/tasks",
-      label: "Tasks",
-      icon: "tasks",
-      badge: input.myTasks.total > 0 ? input.myTasks.total : null,
-      badgeSays: "yours",
-    });
-  }
-  // A lead may post and send forms, but only to a team they lead; a captain
-  // to anyone (canSendToAudience in @camp404/core). The pages enforce the
-  // scope; these tiles only say where to start.
-  if (has.has("announcements")) {
-    modules.push({
-      id: "message",
-      href: "/captains/announcements",
-      label: input.isCaptain ? "Announce" : "Message team",
-      icon: "message",
-      badge: null,
-    });
-  }
-  if (has.has("questionnaires")) {
-    modules.push({
-      id: "form",
-      href: "/captains/questionnaires",
-      label: "Send form",
-      icon: "send-form",
-      badge: null,
-    });
-  }
-  // The camp calendar: a lead adds events for a team they lead, a captain for
-  // any team or the whole camp.
-  if (has.has("new-event")) {
-    modules.push({
-      id: "event",
-      href: "/captains/calendar",
-      label: "Add event",
-      icon: "add-event",
-      badge: null,
-    });
-  }
-  if (has.has("overview")) {
-    modules.push({
-      id: "overview",
-      href: "/captains/overview",
-      label: "Camp overview",
-      icon: "overview",
-      badge: null,
-    });
-  }
-
-  // Led teams first, then by name, so the teams someone is responsible for
-  // are where the eye lands.
-  const teams: HomeTeam[] = approved
-    ? [...input.teams]
-        .sort(
-          (a, b) =>
-            Number(b.isLead) - Number(a.isLead) ||
-            a.label.localeCompare(b.label),
-        )
-        .map((t) => ({
-          key: t.key,
-          label: t.label,
-          isLead: t.isLead,
-          unread: t.unread,
-          // The team's own page: its people, events and open tasks.
-          href: `/teams/${encodeURIComponent(t.key)}`,
-        }))
     : [];
 
   const checklist = [
@@ -533,8 +337,6 @@ export function buildHome(
   ];
 
   return {
-    greeting: input.firstName ? `Hi ${input.firstName}` : "Hi there",
-    chips,
     waitingForApproval: !approved,
     todos,
     tasks,
@@ -542,8 +344,6 @@ export function buildHome(
     upcoming,
     calendarState: approved ? (input.calendar?.status ?? null) : null,
     lift: approved ? liftCard(input.lift) : null,
-    modules,
-    teams,
     checklist,
     allDone: checklist.every((c) => c.done),
   };

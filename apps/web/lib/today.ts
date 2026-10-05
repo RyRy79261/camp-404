@@ -1,14 +1,11 @@
 import "server-only";
 
-import { CAMP_TIME_ZONE, campDayKey, deriveViewerRank } from "@camp404/core";
+import { CAMP_TIME_ZONE, campDayKey } from "@camp404/core";
 import { getCampSettings, teamLabelMap } from "./camp-config";
 import { getUpcomingEvents } from "./camp-calendar";
 import { buildHome, daysBetween, type HomeModel } from "./home";
-import { getInboxBadge } from "./inbox-badge";
 import { getMyLift } from "./lifts";
 import { isAwaitingApproval, type MemberState } from "./member-gate";
-import { countUnreadByTeam } from "./notifications";
-import { getProgramManifest } from "./program-manifest";
 import { isSignInSecured } from "./sign-in-security";
 import { listMyOpenTasks } from "./tasks";
 import { getMyTeams, getPendingQuestionnaires } from "./users";
@@ -63,9 +60,8 @@ const DATE = new Intl.DateTimeFormat("en-GB", {
 
 /**
  * Today for a member the desktop draws (a cleared member, or an applicant
- * waiting for approval), or null for anyone else. Every read is the same the
- * Home page made before the gadget moved; the request-cached ones (the
- * manifest, the settings, the lift, the inbox count) cost nothing more.
+ * waiting for approval), or null for anyone else. The request-cached reads (the
+ * settings, the lift) cost nothing more on a page that made them already.
  */
 export async function getTodayModel(
   state: MemberState,
@@ -76,62 +72,31 @@ export async function getTodayModel(
   const waiting = isAwaitingApproval(campUser, block);
   if (block && !waiting) return null;
 
-  const [
-    memberships,
-    pending,
-    inbox,
-    unreadByTeam,
-    lift,
-    secured,
-    settings,
-    calendar,
-    myTasks,
-    manifest,
-  ] = await Promise.all([
-    waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
-    waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
-    getInboxBadge(campUser.id),
-    waiting
-      ? Promise.resolve({} as Partial<Record<string, number>>)
-      : countUnreadByTeam(campUser.id),
-    waiting ? Promise.resolve(null) : getMyLift(campUser.id),
-    isSignInSecured(),
-    getCampSettings(),
-    waiting ? Promise.resolve(null) : getUpcomingEvents(),
-    waiting
-      ? Promise.resolve({ items: [], total: 0 })
-      : listMyOpenTasks(campUser.id),
-    getProgramManifest(),
-  ]);
+  const [memberships, pending, lift, secured, settings, calendar, myTasks] =
+    await Promise.all([
+      waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
+      waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
+      waiting ? Promise.resolve(null) : getMyLift(campUser.id),
+      isSignInSecured(),
+      getCampSettings(),
+      waiting ? Promise.resolve(null) : getUpcomingEvents(),
+      waiting
+        ? Promise.resolve({ items: [], total: 0 })
+        : listMyOpenTasks(campUser.id),
+    ]);
   const labels = teamLabelMap(settings.teams);
-  const isCaptain =
-    deriveViewerRank(
-      campUser.rank,
-      memberships.some((m) => m.isLead),
-    ) === "captain";
 
-  const home = buildHome(
-    {
-      now,
-      approval: waiting ? "pending" : "approved",
-      firstName: campUser.displayName?.trim().split(/\s+/)[0] ?? null,
-      isCaptain,
-      teams: memberships.map((m) => ({
-        key: m.team,
-        label: labels[m.team] ?? m.team,
-        isLead: m.isLead,
-        unread: unreadByTeam[m.team] ?? 0,
-      })),
-      pending,
-      inbox,
-      myTasks,
-      lift,
-      calendar,
-      teamLabels: labels,
-      secured,
-    },
-    manifest ?? undefined,
-  );
+  const home = buildHome({
+    now,
+    approval: waiting ? "pending" : "approved",
+    teamKeys: memberships.map((m) => m.team),
+    pending,
+    myTasks,
+    lift,
+    calendar,
+    teamLabels: labels,
+    secured,
+  });
 
   // Last year's Burn, where the run-up to this one starts.
   const current = settings.current;

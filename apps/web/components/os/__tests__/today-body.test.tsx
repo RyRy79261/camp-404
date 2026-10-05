@@ -19,8 +19,6 @@ import { TodayBody } from "../today-body";
 
 function home(over: Partial<HomeModel> = {}): HomeModel {
   return {
-    greeting: "Hi Nova",
-    chips: ["Member"],
     waitingForApproval: false,
     todos: [],
     tasks: [],
@@ -28,8 +26,6 @@ function home(over: Partial<HomeModel> = {}): HomeModel {
     upcoming: [],
     calendarState: "ok",
     lift: null,
-    modules: [],
-    teams: [],
     checklist: [{ label: "Burner bio", done: true }],
     allDone: true,
     ...over,
