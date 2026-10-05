@@ -7,7 +7,11 @@ import {
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
 import { deliveryValues } from "../deliveries";
-import { drainQueuedEmail, type EmailSend } from "../email";
+import {
+  drainQueuedEmail,
+  emailIdempotencyKey,
+  type EmailSend,
+} from "../email";
 import * as schema from "../schema";
 
 // The email drain against real rows: each member's address is read from the
@@ -105,9 +109,15 @@ describe("drainQueuedEmail", () => {
       sent: 1,
       failed: 0,
       skipped: 3,
+      deferred: 0,
     });
     expect(send).toHaveBeenCalledOnce();
-    const [to, email] = send.mock.calls[0]!;
+    const [to, email, sendOptions] = send.mock.calls[0]!;
+    const [delivery] = await db
+      .select({ id: schema.notificationDeliveries.id })
+      .from(schema.notificationDeliveries)
+      .where(eq(schema.notificationDeliveries.userId, verified.id));
+    expect(sendOptions.idempotencyKey).toBe(emailIdempotencyKey(delivery!.id));
     expect(to).toBe("ada@example.com");
     expect(email.subject).toBe("Camp 404: Camp feedback");
     expect(email.text).toContain(`${SITE}/questionnaires/${ID}`);
@@ -123,11 +133,12 @@ describe("drainQueuedEmail", () => {
       sent: 0,
       failed: 0,
       skipped: 0,
+      deferred: 0,
     });
     expect(send).toHaveBeenCalledOnce();
   });
 
-  it("records a refused or throwing send as failed and leaves quiet notices alone", async () => {
+  it("records a send refused for good as failed and leaves quiet notices alone", async () => {
     const db = h.db();
     const a = await makeUser(db, { authUserId: "auth-a" });
     const b = await makeUser(db, { authUserId: "auth-b" });
@@ -159,19 +170,90 @@ describe("drainQueuedEmail", () => {
       }),
     ]);
 
-    const send: EmailSend = async (to) => {
-      if (to === "a@example.com") return { ok: false, error: "bounced" };
-      throw new Error("network down");
-    };
+    const send: EmailSend = async () => ({ ok: false, error: "bounced" });
     expect(await drainQueuedEmail(send, { siteUrl: SITE })).toEqual({
       sent: 0,
       failed: 2,
       skipped: 0,
+      deferred: 0,
     });
     const rows = await db
       .select({ emailStatus: schema.notificationDeliveries.emailStatus })
       .from(schema.notificationDeliveries)
       .where(eq(schema.notificationDeliveries.presentation, "feed"));
     expect(rows).toEqual([{ emailStatus: "skipped" }]);
+  });
+
+  it("leaves a rate-limited or throwing send queued, stops the run, and sends it next time", async () => {
+    const db = h.db();
+    const users = [];
+    for (const name of ["a", "b", "c"]) {
+      const user = await makeUser(db, { authUserId: `auth-${name}` });
+      await authIdentity(db, `auth-${name}`, `${name}@example.com`, true);
+      users.push(user);
+    }
+    const loud = announcementNotification({
+      broadcastId: ID,
+      title: "Burn night",
+      body: "Meet at 8.",
+    });
+    // Oldest first: a, then b, then c.
+    for (const [i, user] of users.entries()) {
+      await db.insert(schema.notificationDeliveries).values({
+        ...deliveryValues(loud, {
+          userId: user.id,
+          broadcastId: null,
+          channel: "both",
+          presentation: "acknowledge",
+        }),
+        createdAt: new Date(Date.UTC(2026, 9, 1, 10, i)),
+      });
+    }
+    const [a, b, c] = users;
+
+    // a goes out; b is rate limited, so the run stops before c.
+    const first = vi.fn<EmailSend>(async (to) =>
+      to === "b@example.com"
+        ? { ok: false, error: "Resend 429: slow down", retryable: true }
+        : { ok: true },
+    );
+    expect(await drainQueuedEmail(first, { siteUrl: SITE })).toEqual({
+      sent: 1,
+      failed: 0,
+      skipped: 0,
+      deferred: 1,
+    });
+    expect(first.mock.calls.map(([to]) => to)).toEqual([
+      "a@example.com",
+      "b@example.com",
+    ]);
+    let after = await statuses(db);
+    expect(after.get(a!.id)).toBe("sent");
+    expect(after.get(b!.id)).toBe("queued");
+    expect(after.get(c!.id)).toBe("queued");
+
+    // A throw (the adapter's own bug, or a dropped connection) is no answer
+    // about the email either: still queued.
+    const throwing: EmailSend = async () => {
+      throw new Error("network down");
+    };
+    expect(await drainQueuedEmail(throwing, { siteUrl: SITE })).toEqual({
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      deferred: 1,
+    });
+
+    // The next run sends both.
+    const next = vi.fn<EmailSend>(async () => ({ ok: true }) as const);
+    expect(await drainQueuedEmail(next, { siteUrl: SITE })).toEqual({
+      sent: 2,
+      failed: 0,
+      skipped: 0,
+      deferred: 0,
+    });
+    after = await statuses(db);
+    expect(after.get(b!.id)).toBe("sent");
+    expect(after.get(c!.id)).toBe("sent");
   });
 });
