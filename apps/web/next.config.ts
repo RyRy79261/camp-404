@@ -13,6 +13,9 @@ const config: NextConfig = {
     "@camp404/games",
   ],
   typedRoutes: true,
+  // next dev would write its own AGENTS.md and CLAUDE.md here; the repo's
+  // AGENTS.md is the one guide.
+  agentRules: false,
   // Download PDF (#249, app/print/pdf/route.ts) starts @sparticuz/chromium on
   // Vercel. Its Chromium is a set of compressed files the package reads at
   // run time, so they are named here for the route's function to carry them.

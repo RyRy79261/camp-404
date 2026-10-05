@@ -1,4 +1,4 @@
-import base from "@camp404/eslint-config";
+import base from "@camp404/eslint-config/next";
 
 export default [
   ...base,

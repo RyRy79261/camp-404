@@ -11,6 +11,9 @@ const config: NextConfig = {
     "@camp404/games",
   ],
   typedRoutes: true,
+  // next dev would write its own AGENTS.md and CLAUDE.md here; the repo's
+  // AGENTS.md is the one guide.
+  agentRules: false,
 };
 
 export default config;

@@ -80,6 +80,8 @@ export function BlockingLayer({
   // The page's heading, read after every render (the page inside changes
   // with the address); state only when it moved, so this never loops.
   const [headingId, setHeadingId] = useState<string | null>(null);
+  // No dependency list on purpose: the heading is read after every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     if (!nameFromHeading || labelledBy) return;
     const heading = frame.current?.querySelector<HTMLElement>("h1") ?? null;

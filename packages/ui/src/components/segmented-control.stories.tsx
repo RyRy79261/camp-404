@@ -14,7 +14,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
   args: { options: [{ value: "a", label: "A" }], onValueChange: () => {} },
-  render: () => {
+  // A named component, so the Rules of Hooks see useState inside one.
+  render: function Render() {
     const [v, setV] = React.useState("maybe");
     return (
       <div className="w-72">

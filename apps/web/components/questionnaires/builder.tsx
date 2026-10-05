@@ -145,6 +145,9 @@ function sectionLabel(page: QuestionnairePage, index: number): string {
   return `${index + 1}. ${title?.trim() || "Untitled section"}`;
 }
 
+/** One empty list, so `issues` below is not worked out again every render. */
+const NO_ISSUES: DefinitionIssue[] = [];
+
 /**
  * What leaving with unsaved changes asks. The desktop asks it (useWindowDirty)
  * before this window closes, minimises, gives way to another, or the page
@@ -227,7 +230,7 @@ export function QuestionnaireBuilderV2({
       ? saveBlockers
       : showIssues === "publish"
         ? liveIssues
-        : []);
+        : NO_ISSUES);
   const issues = React.useMemo(
     () => locateIssues(shown, draft),
     [shown, draft],

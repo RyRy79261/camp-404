@@ -105,6 +105,9 @@ export function ReportBugDialog({
     setScreenshotId(null);
     setError(null);
     setResult(null);
+    // Reset only when the dialog opens: `dictation` is a fresh object every
+    // render, and listing it would wipe the form while the member types.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultKind, defaultDescription]);
 
   function appendTranscript(text: string) {

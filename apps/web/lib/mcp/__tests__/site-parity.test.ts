@@ -103,6 +103,8 @@ async function flushAfter() {
   for (const task of afterTasks.splice(0)) await task();
 }
 
+// useTestDb is the PGlite harness (vitest hooks), not a React Hook.
+// eslint-disable-next-line react-hooks/rules-of-hooks
 const h = useTestDb();
 
 beforeEach(() => {

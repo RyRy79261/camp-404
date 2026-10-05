@@ -16,8 +16,9 @@ import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 // that session belongs to, and refuses if one exists. It checks the length
 // again with the same numbers.
 
-/** Better Auth nests its error code in `body`; two copies of the package are
- *  installed, so `instanceof APIError` cannot be trusted across them. */
+/** Better Auth nests its error code in `body`. Read by shape, not
+ *  `instanceof APIError`: the class is only the same one while the lockfile
+ *  holds a single copy of better-auth, and a second copy has crept in before. */
 function authErrorCode(err: unknown): string | undefined {
   if (typeof err !== "object" || err === null || !("body" in err)) {
     return undefined;

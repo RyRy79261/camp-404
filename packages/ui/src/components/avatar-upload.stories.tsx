@@ -31,7 +31,8 @@ export const Populated: Story = {
 // stub uploadUrl + preprocess to let you drive a real pick → upload cycle.
 export const InteractivePlayground: Story = {
   args: { value: null, onChange: () => {} },
-  render: () => {
+  // A named component, so the Rules of Hooks see useState inside one.
+  render: function Render() {
     const [value, setValue] = React.useState<string | null>(null);
     return (
       <AvatarUpload
