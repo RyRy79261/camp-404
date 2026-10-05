@@ -75,7 +75,7 @@ jobs:
       - name: Lint
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
         run: pnpm turbo run lint
 
   typecheck:
@@ -91,7 +91,7 @@ jobs:
       - name: Typecheck
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
         run: pnpm turbo run typecheck
       - name: Verify drizzle migrations are up-to-date with packages/db/src/schema.ts
         run: |
@@ -119,7 +119,7 @@ jobs:
       - name: Test
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
         # Coverage floors live in each package's vitest.config.ts; a package
         # that drops below its floor fails this job.
         run: pnpm turbo run test:coverage
@@ -144,7 +144,7 @@ jobs:
       - name: Build
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
         run: pnpm turbo run build
 
   schema-migration:
@@ -261,7 +261,7 @@ jobs:
       - name: Run e2e tests
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           E2E_SERVE_BUILD: "1"
         # Desktop only; the 360 px project runs nightly (mobile.yml).
         # A memory line every 20 s leaves evidence if a runner dies mid-run.

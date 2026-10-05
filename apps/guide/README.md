@@ -20,7 +20,8 @@ book to read and print, with no sign-in. Writing stays in the app
   them); a duty card prints as the app's card (`@camp404/ui`'s
   `duty-card-print`), without "Used by".
 - **Hosting:** its own Vercel project, root `apps/guide`, `fra1`, built only
-  when it changed (`turbo-ignore` in `vercel.json`). One env var:
+  when it or a package it imports changed (`scripts/vercel-ignore-build.sh`,
+  the `ignoreCommand` in `vercel.json`). One env var:
   `DATABASE_URL`.
 
 ```bash

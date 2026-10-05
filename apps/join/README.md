@@ -13,7 +13,10 @@ has no sign-in of its own.
   `@camp404/db`, `@camp404/types`, and from `@camp404/games` only
   `inkblot` and `inkblot/art` (`lib/games-boundary.test.ts`).
 - **Look:** Join's palette is the 404 OS palette. It is never themed.
-- **Hosting:** its own Vercel project, in `fra1` (`vercel.json`).
+- **Hosting:** its own Vercel project, root `apps/join`, in `fra1`
+  (`vercel.json`). It builds only when join or a package it imports changed
+  (`scripts/vercel-ignore-build.sh`, the `ignoreCommand` in `vercel.json`), so
+  a web-only or docs-only push does not deploy it.
 
 ```bash
 pnpm --filter @camp404/join dev        # http://localhost:3404
