@@ -203,10 +203,15 @@ export function AcknowledgementGate({
       if (visible()) void load();
     }, POLL_INTERVAL_MS);
     // Coming back to a tab fires both `visibilitychange` and `focus`: one ask
-    // answers both.
+    // answers both. Hiding the tab ends that return, so the next one always
+    // asks, however soon it comes.
     let lastReturn = 0;
     const onVisible = () => {
-      if (!visible() || Date.now() - lastReturn < RETURN_DEDUPE_MS) return;
+      if (!visible()) {
+        lastReturn = 0;
+        return;
+      }
+      if (Date.now() - lastReturn < RETURN_DEDUPE_MS) return;
       lastReturn = Date.now();
       void load();
     };

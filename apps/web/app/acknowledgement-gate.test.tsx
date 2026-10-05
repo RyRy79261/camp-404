@@ -302,6 +302,31 @@ describe("AcknowledgementGate: when it asks", () => {
     expect(pendingCalls()).toHaveLength(3);
   });
 
+  it("asks on every return to the tab, even one soon after the last", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValue(ok({ pending: [] }));
+    render(<AcknowledgementGate />);
+    expect(pendingCalls()).toHaveLength(1);
+
+    const leave = () => {
+      visibility = "hidden";
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+    const come = () => {
+      visibility = "visible";
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+    };
+    leave();
+    come();
+    expect(pendingCalls()).toHaveLength(2);
+    // Away and back again within a second: a notice may have come meanwhile.
+    await vi.advanceTimersByTimeAsync(500);
+    leave();
+    come();
+    expect(pendingCalls()).toHaveLength(3);
+  });
+
   it("does not ask on a tab that opens hidden", async () => {
     visibility = "hidden";
     fetchMock.mockResolvedValue(ok({ pending: [] }));
