@@ -25,7 +25,7 @@ import * as schema from "./schema";
 //    any amount (owner, 2026-09-30: no limit that needs a second yes).
 //  - The Finance team (captains and Finance leads, canManageMoney) marks an
 //    approved claim paid, or turns it down after all (a receipt that does not
-//    match). Paid claims may later be marked reconciled against the bank.
+//    match). Paid is the end (owner, 2026-10-05).
 //
 // Every move re-reads the actor's rank and led teams INSIDE its own
 // transaction (lockSenderReach, lockMoneyKeeper), so a demotion that
@@ -423,9 +423,7 @@ async function move(
         }
       : input.to === "paid"
         ? { paidById: input.actorId, paidAt: now }
-        : input.to === "rejected"
-          ? { decisionNote: input.note ?? null }
-          : { reconciledAt: now };
+        : { decisionNote: input.note ?? null };
   const rows = await tx
     .update(schema.reimbursements)
     .set({ status: input.to, updatedAt: now, ...stamp })
@@ -510,25 +508,6 @@ export async function payClaim(input: {
   });
 }
 
-/** The Finance team matches a paid claim to the bank statement. */
-export async function reconcileClaim(input: {
-  claimId: string;
-  actorId: string;
-}): Promise<ClaimResult> {
-  return write(async (tx) => {
-    if (!(await lockMoneyKeeper(tx, input.actorId))) refuse(CLAIM_NOT_FINANCE);
-    const claim = await lockClaim(tx, input.claimId);
-    if (claim.submitterId === input.actorId) refuse(OWN_CLAIM_PAYMENT);
-    await move(tx, {
-      claim,
-      from: "paid",
-      to: "reconciled",
-      actorId: input.actorId,
-    });
-    return {};
-  });
-}
-
 // --- The Claude connector's review list ------------------------------------------
 
 /**
@@ -544,7 +523,6 @@ export interface ReimbursementReviewRow extends ClaimForApproval {
   approverId: string | null;
   approvedAt: Date | null;
   paidAt: Date | null;
-  reconciledAt: Date | null;
   receiptCount: number;
 }
 
@@ -592,7 +570,6 @@ export async function listReimbursementsForReview(
       approverId: r.approverId,
       approvedAt: r.approvedAt,
       paidAt: r.paidAt,
-      reconciledAt: r.reconciledAt,
     })
     .from(r)
     .leftJoin(submitter, eq(submitter.id, r.submitterId))
@@ -603,12 +580,4 @@ export async function listReimbursementsForReview(
     ...row,
     receiptCount: files.get(row.id)?.length ?? 0,
   }));
-}
-
-/** One claim for the connector's review tools, or null. */
-export async function getReimbursementForReview(
-  id: string,
-): Promise<ReimbursementReviewRow | null> {
-  const [row] = await listReimbursementsForReview({ id });
-  return row ?? null;
 }

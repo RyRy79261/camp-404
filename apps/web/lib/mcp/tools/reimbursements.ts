@@ -18,7 +18,7 @@ const StatusEnum = z.enum(schema.reimbursementStatusEnum.enumValues);
 // (My claims): it needs one or more receipt files, stored privately, which a
 // tool call cannot carry, so there is no submit tool. A member lists their
 // own; a lead of a team or a captain lists and decides the claims of that
-// team. Paying a claim back, marking it reconciled and setting budgets are
+// team. Paying a claim back and setting budgets are
 // website-only (owner, 2026-10-04: money moves on the page). Every decision is
 // checked again inside the database's own transaction (decideClaim): the
 // tool's checks here only word a refusal early. Nobody decides their own claim.

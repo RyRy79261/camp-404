@@ -48,7 +48,6 @@ function isTeam(key: string): boolean {
 export const SPENT_STATUSES: ReadonlySet<ClaimStatus> = new Set([
   "approved",
   "paid",
-  "reconciled",
 ]);
 
 /** A team's money for the year, as every member reads it. */
@@ -103,17 +102,15 @@ export const CLAIM_STATUS_LABELS: Readonly<Record<ClaimStatus, string>> = {
   submitted: "Waiting for the team",
   approved: "Approved, not paid yet",
   paid: "Paid",
-  reconciled: "Paid",
   rejected: "Not approved",
 };
 
-/** The only moves a claim can make. Rejected and reconciled are final. */
+/** The only moves a claim can make. Paid and rejected are final. */
 export const CLAIM_MOVES: Readonly<
   Record<ClaimStatus, readonly ClaimStatus[]>
 > = {
   submitted: ["approved", "rejected"],
   approved: ["paid", "rejected"],
-  paid: ["reconciled"],
-  reconciled: [],
+  paid: [],
   rejected: [],
 };

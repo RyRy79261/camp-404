@@ -131,8 +131,8 @@ export type LeaveCampResult =
 /**
  * May this member erase their account? The camp must never lose its last
  * captain: /setup latches shut once bootstrap stamps `camp_settings`, no
- * demotion path exists, and the admin CLI refuses to mint a captain invite
- * without a captain to attribute it to — so an erased sole captain strands the
+ * demotion path exists, and only a captain can mint a captain invite — so an
+ * erased sole captain strands the
  * camp with nobody who can promote a successor. `captainCount` is the number of
  * REAL captains INCLUDING the caller (tombstones and system actors excluded —
  * see getBootstrapState).

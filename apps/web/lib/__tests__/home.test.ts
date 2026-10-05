@@ -7,11 +7,6 @@ import { buildHome, type HomeInput } from "../home";
 // 10:00 on Wed 23 Sep 2026 in Johannesburg.
 const NOW = new Date("2026-09-23T08:00:00Z");
 
-/** An inbox badge as getInboxBadge builds it. */
-function inbox(notices: number, waiting: number): HomeInput["inbox"] {
-  return { notices, waiting, total: notices + waiting };
-}
-
 /** The camp's teams by key, an archived one included. */
 const TEAM_LABELS = {
   kitchen: "Kitchen",
@@ -24,11 +19,8 @@ function member(over: Partial<HomeInput> = {}): HomeInput {
   return {
     now: NOW,
     approval: "approved",
-    firstName: "Nova",
-    isCaptain: false,
-    teams: [],
+    teamKeys: [],
     pending: [],
-    inbox: inbox(0, 0),
     myTasks: { items: [], total: 0 },
     lift: null,
     calendar: { status: "ok", events: [] },
@@ -88,11 +80,8 @@ describe("buildHome", () => {
       }),
     );
     expect(home.waitingForApproval).toBe(true);
-    expect(home.chips).toEqual(["Waiting for approval"]);
     expect(home.todos).toEqual([]);
     expect(home.upcoming).toEqual([]);
-    expect(ids(home.modules)).toEqual(["announcements"]);
-    expect(home.teams).toEqual([]);
     expect(home.checklist).toContainEqual({
       label: "Approved by a captain",
       done: false,
@@ -105,7 +94,6 @@ describe("buildHome", () => {
     expect(home.waitingForApproval).toBe(false);
     expect(home.todos).toEqual([]);
     expect(home.allDone).toBe(true);
-    expect(ids(home.modules)).toEqual(["announcements", "forms", "tasks"]);
   });
 
   it("lists forms to answer, soonest deadline first, and says how long is left", () => {
@@ -227,9 +215,7 @@ describe("buildHome", () => {
       const home = buildHome(
         member({
           calendar,
-          teams: [
-            { key: "kitchen", label: "Kitchen", isLead: false, unread: 0 },
-          ],
+          teamKeys: ["kitchen"],
         }),
       );
       expect(teamsOf(home)).toEqual({
@@ -255,7 +241,7 @@ describe("buildHome", () => {
               event("e", "[Kitchen]", "Kitchen"),
             ],
           },
-          teams: [],
+          teamKeys: [],
         }),
       );
       expect(home.upcoming.map((u) => u.title)).toEqual([
@@ -284,9 +270,7 @@ describe("buildHome", () => {
               event("e", "Early Team - Gate", null),
             ],
           },
-          teams: [
-            { key: "kitchen", label: "Kitchen", isLead: false, unread: 0 },
-          ],
+          teamKeys: ["kitchen"],
         }),
       );
       expect(teamsOf(home)).toEqual({
@@ -300,10 +284,7 @@ describe("buildHome", () => {
       const home = buildHome(
         member({
           calendar,
-          teams: [
-            { key: "finance", label: "Finance", isLead: true, unread: 0 },
-            { key: "art", label: "Art Car", isLead: false, unread: 0 },
-          ],
+          teamKeys: ["finance", "art"],
         }),
       );
       expect(teamsOf(home)).toMatchObject({
@@ -340,58 +321,6 @@ describe("buildHome", () => {
     ).toBe("unavailable");
   });
 
-  it("gives a team lead the tiles to message, send a form and add an event; a member none", () => {
-    const lead = buildHome(
-      member({
-        teams: [{ key: "kitchen", label: "Cuisine", isLead: true, unread: 0 }],
-      }),
-    );
-    expect(lead.chips).toEqual(["Member", "Team lead"]);
-    expect(ids(lead.modules)).toEqual([
-      "announcements",
-      "forms",
-      "tasks",
-      "message",
-      "form",
-      "event",
-    ]);
-
-    const crew = buildHome(
-      member({
-        teams: [{ key: "kitchen", label: "Cuisine", isLead: false, unread: 0 }],
-      }),
-    );
-    expect(crew.chips).toEqual(["Member"]);
-    expect(ids(crew.modules)).toEqual(["announcements", "forms", "tasks"]);
-  });
-
-  it("shows every team someone is on, the ones they lead first, each with its own count", () => {
-    const home = buildHome(
-      member({
-        teams: [
-          { key: "structures", label: "Structures", isLead: false, unread: 0 },
-          {
-            key: "sanitation_and_water",
-            label: "Water",
-            isLead: true,
-            unread: 3,
-          },
-          { key: "kitchen", label: "Cuisine", isLead: true, unread: 1 },
-        ],
-      }),
-    );
-    expect(
-      home.teams.map((t) => [t.label, t.isLead, t.unread, t.href]),
-    ).toEqual([
-      // Each opens its team's own page.
-      ["Cuisine", true, 1, "/teams/kitchen"],
-      ["Water", true, 3, "/teams/sanitation_and_water"],
-      ["Structures", false, 0, "/teams/structures"],
-    ]);
-    // Leading two teams is still one set of tiles, not one per team.
-    expect(ids(home.modules).filter((id) => id === "message")).toHaveLength(1);
-  });
-
   it("shows a driver their car, riders and seats", () => {
     const home = buildHome(
       member({
@@ -406,7 +335,6 @@ describe("buildHome", () => {
         },
       }),
     );
-    expect(home.chips).toContain("Driver");
     expect(home.lift).toEqual({
       heading: "You're driving",
       lines: ["Land Rover Defender", "2 of 3 seats taken", "With Ren, Kai"],
@@ -415,67 +343,6 @@ describe("buildHome", () => {
 
   it("leaves the car card out entirely for someone in no car", () => {
     expect(buildHome(member()).lift).toBeNull();
-  });
-
-  it("gives a captain the camp overview as one shortcut, not the whole board", () => {
-    const home = buildHome(member({ isCaptain: true }));
-    expect(home.chips[0]).toBe("Captain");
-    expect(ids(home.modules)).toEqual([
-      "announcements",
-      "forms",
-      "tasks",
-      "message",
-      "form",
-      "event",
-      "overview",
-    ]);
-  });
-
-  it("puts new announcements and waiting forms on their tiles, and nothing when there are none", () => {
-    const busy = buildHome(
-      member({
-        inbox: inbox(3, 2),
-        pending: [
-          { activationId: "a", title: "A", blocking: false, dueAt: null },
-          { activationId: "b", title: "B", blocking: false, dueAt: null },
-        ],
-      }),
-    );
-    expect(busy.modules.map((m) => [m.id, m.badge])).toEqual([
-      ["announcements", 5],
-      ["forms", 2],
-      ["tasks", null],
-    ]);
-    expect(buildHome(member()).modules.map((m) => m.badge)).toEqual([
-      null,
-      null,
-      null,
-    ]);
-  });
-
-  it("shows the inbox total on the Notifications tile, the bell's number, not the notices alone", () => {
-    const home = buildHome(
-      member({
-        inbox: inbox(5, 1),
-        pending: [
-          { activationId: "a", title: "A", blocking: false, dueAt: null },
-        ],
-      }),
-    );
-    // Named as the inbox it opens, and the count is said to be "waiting", not
-    // "new": part of it may be forms, not announcements.
-    expect(home.modules.find((m) => m.id === "announcements")).toMatchObject({
-      label: "Notifications",
-      badge: 6,
-      badgeSays: "waiting",
-    });
-    // Waiting for approval, the tile still counts the waiting form.
-    const waiting = buildHome(
-      member({ approval: "pending", inbox: inbox(2, 1) }),
-    );
-    expect(waiting.modules).toEqual([
-      expect.objectContaining({ id: "announcements", badge: 3 }),
-    ]);
   });
 
   it("only lists sign-in security when it could be read", () => {
@@ -534,7 +401,7 @@ describe("buildHome", () => {
       expect(home.tasksMore).toBe(0);
     });
 
-    it("gives a member waiting for approval no tasks and no Tasks tile", () => {
+    it("gives a member waiting for approval no tasks", () => {
       const home = buildHome(
         member({
           approval: "pending",
@@ -543,21 +410,6 @@ describe("buildHome", () => {
       );
       expect(home.tasks).toEqual([]);
       expect(home.tasksMore).toBe(0);
-      expect(ids(home.modules)).not.toContain("tasks");
-    });
-
-    it("counts every open task of theirs on the Tasks tile, not just the ones shown", () => {
-      const home = buildHome(
-        member({ myTasks: myTasks([task("a", null), task("b", null)], 8) }),
-      );
-      expect(home.modules.find((m) => m.id === "tasks")).toEqual({
-        id: "tasks",
-        href: "/tasks",
-        label: "Tasks",
-        icon: "tasks",
-        badge: 8,
-        badgeSays: "yours",
-      });
     });
 
     it("reads the deadline's day in camp time, not UTC, at midnight", () => {

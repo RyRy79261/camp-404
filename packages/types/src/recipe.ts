@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { KitchenAllergen } from "./dietary";
-import { DietaryTag } from "./member";
 
 // Recipes (#243, Kitchen 1). Anyone suggests a recipe; a Kitchen lead or a
 // captain approves it; only a captain sends it to Claude to be proofread,
@@ -37,7 +36,9 @@ export type RecipeSource = z.infer<typeof RecipeSource>;
 // steps with a phase and the lines each step uses, notes), so sending a recipe
 // there later is mostly a copy. Every write checks it with this schema, and it
 // is also the tool schema Claude answers through, so each field says what it
-// is for. Change the shape and PROMPT_VERSIONS.recipeImport must be bumped.
+// is for. Change the shape and PROMPT_VERSIONS.recipeSource and
+// PROMPT_VERSIONS.recipePlates must be bumped (recipe-proofread-tool.test.ts
+// holds each tool schema to its version).
 
 /**
  * Where an ingredient sits on the shopping list, in shop order: Noble
@@ -883,26 +884,3 @@ export const MealPlanInput = z.object({
   expectedVersion: z.number().int().min(0),
 });
 export type MealPlanInput = z.infer<typeof MealPlanInput>;
-
-// --- Legacy ----------------------------------------------------------------
-// The first recipe design (the normalisation prompt and recipes.normalised).
-// Kept because recipeNormalisationPrompt still names NormalisedRecipe.
-
-export const Ingredient = z.object({
-  name: z.string(),
-  quantity: z.number().nonnegative(),
-  unit: z.string(),
-  aisle: z.string().optional(),
-});
-
-export const NormalisedRecipe = z.object({
-  title: z.string(),
-  servings: z.number().int().positive(),
-  prepMinutes: z.number().int().nonnegative(),
-  cookMinutes: z.number().int().nonnegative(),
-  dietaryTags: z.array(DietaryTag),
-  ingredients: z.array(Ingredient),
-  steps: z.array(z.string()),
-  complementaryDishes: z.array(z.string()).default([]),
-});
-export type NormalisedRecipe = z.infer<typeof NormalisedRecipe>;

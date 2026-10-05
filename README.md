@@ -56,23 +56,22 @@ is not built yet is in GitHub issues and open pull requests, not here.
 
 A Turborepo with pnpm workspaces (Node 22 or newer, pnpm 10).
 
-| Path                                                   | What it is                                                |
-| ------------------------------------------------------ | --------------------------------------------------------- |
-| [`apps/web`](apps/web/README.md)                       | The console: Next.js 16, React 19, Tailwind v4            |
-| [`apps/join`](apps/join/README.md)                     | join.camp-404.com, the recruiting site                    |
-| [`apps/guide`](apps/guide/README.md)                   | survival-guide.camp-404.com, the guide's public sections  |
-| [`apps/admin-cli`](apps/admin-cli/README.md)           | A Node CLI for seeding and invite codes on a dev database |
-| [`apps/mobile`](apps/mobile/README.md)                 | The Capacitor shell for iOS and Android (deferred)        |
-| [`packages/core`](packages/core/README.md)             | Domain rules with no I/O: access, privacy, money, …       |
-| [`packages/db`](packages/db/README.md)                 | Drizzle schema, migrations and every query                |
-| [`packages/auth`](packages/auth/README.md)             | Self-hosted Better Auth: passwords, passkeys, two-factor  |
-| [`packages/os`](packages/os/README.md)                 | The 404 OS window engine                                  |
-| [`packages/games`](packages/games/README.md)           | The desktop's games and cats                              |
-| [`packages/ui`](packages/ui/README.md)                 | Shared components (shadcn/ui) and the design tokens       |
-| [`packages/types`](packages/types/README.md)           | Zod schemas and shared types                              |
-| [`packages/ai-prompts`](packages/ai-prompts/README.md) | Versioned prompt templates                                |
-| [`packages/telegram`](packages/telegram/README.md)     | The Telegram bot client; outbound is built but off        |
-| `packages/eslint-config`, `packages/typescript-config` | Shared lint and TypeScript settings                       |
+| Path                                                   | What it is                                               |
+| ------------------------------------------------------ | -------------------------------------------------------- |
+| [`apps/web`](apps/web/README.md)                       | The console: Next.js 16, React 19, Tailwind v4           |
+| [`apps/join`](apps/join/README.md)                     | join.camp-404.com, the recruiting site                   |
+| [`apps/guide`](apps/guide/README.md)                   | survival-guide.camp-404.com, the guide's public sections |
+| [`apps/mobile`](apps/mobile/README.md)                 | The Capacitor shell for iOS and Android (deferred)       |
+| [`packages/core`](packages/core/README.md)             | Domain rules with no I/O: access, privacy, money, …      |
+| [`packages/db`](packages/db/README.md)                 | Drizzle schema, migrations and every query               |
+| [`packages/auth`](packages/auth/README.md)             | Self-hosted Better Auth: passwords, passkeys, two-factor |
+| [`packages/os`](packages/os/README.md)                 | The 404 OS window engine                                 |
+| [`packages/games`](packages/games/README.md)           | The desktop's games and cats                             |
+| [`packages/ui`](packages/ui/README.md)                 | Shared components (shadcn/ui) and the design tokens      |
+| [`packages/types`](packages/types/README.md)           | Zod schemas and shared types                             |
+| [`packages/ai-prompts`](packages/ai-prompts/README.md) | Versioned prompt templates                               |
+| [`packages/telegram`](packages/telegram/README.md)     | The Telegram bot client; outbound is built but off       |
+| `packages/eslint-config`, `packages/typescript-config` | Shared lint and TypeScript settings                      |
 
 ```mermaid
 flowchart TB
@@ -81,7 +80,6 @@ flowchart TB
     mobile["apps/mobile<br/>Capacitor shell"]
     web["apps/web<br/>the console, camp-404.com"]
     join["apps/join<br/>join.camp-404.com"]
-    cli["apps/admin-cli"]
   end
   subgraph packages["packages (apps/web imports all of them)"]
     direction TB
@@ -93,7 +91,6 @@ flowchart TB
   web --> packages
   mobile -. wraps the web export .-> web
   join --> os & games & db & types
-  cli --> db & types
   games -. CSS order only .-> os
   ui --> core
   auth --> db

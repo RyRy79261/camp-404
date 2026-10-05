@@ -46,7 +46,7 @@ describe("budgetTotals", () => {
     { status: "submitted" as const, amountCents: 100_00 },
     { status: "approved" as const, amountCents: 200_00 },
     { status: "paid" as const, amountCents: 300_00 },
-    { status: "reconciled" as const, amountCents: 50_00 },
+    { status: "paid" as const, amountCents: 50_00 },
     { status: "rejected" as const, amountCents: 999_00 },
   ];
 
@@ -90,11 +90,17 @@ describe("claim words and moves", () => {
     }
   });
 
+  it("ends at paid: no move after it (owner, 2026-10-05)", () => {
+    expect(CLAIM_STATUSES).not.toContain("reconciled");
+    expect(CLAIM_MOVES.paid).toEqual([]);
+    expect(CLAIM_MOVES.approved).toContain("paid");
+  });
+
   it("never moves a claim back to waiting, or out of a final state", () => {
     for (const status of CLAIM_STATUSES) {
       expect(CLAIM_MOVES[status]).not.toContain("submitted");
     }
     expect(CLAIM_MOVES.rejected).toEqual([]);
-    expect(CLAIM_MOVES.reconciled).toEqual([]);
+    expect(CLAIM_MOVES.paid).toEqual([]);
   });
 });

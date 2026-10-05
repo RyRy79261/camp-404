@@ -36,11 +36,11 @@ export const config = {
     // Everything except: /api and /auth (and below), Next's own /_next files,
     // /.well-known, the generated icons and images, and the app's own files
     // at the root, each by its exact name (favicon.ico, icon.svg,
-    // manifest.webmanifest, the service worker). A negative list, so a new
-    // console folder is covered without an edit (lib/__tests__/proxy.test.ts
-    // checks every (console) folder is, a dotted page segment included). A
-    // new root file left off this list only costs a proxy run; it is served
-    // the same.
-    "/((?!api/|api$|auth/|auth$|_next/|\\.well-known/|apple-icon|opengraph-image|twitter-image|favicon\\.ico$|icon\\.svg$|manifest\\.webmanifest$|firebase-messaging-sw\\.js$).*)",
+    // manifest.webmanifest, robots.txt, the service worker). A negative
+    // list, so a new console folder is covered without an edit
+    // (lib/__tests__/proxy.test.ts checks every (console) folder is, a dotted
+    // page segment included). A new root file left off this list only costs a
+    // proxy run; it is served the same.
+    "/((?!api/|api$|auth/|auth$|_next/|\\.well-known/|apple-icon|opengraph-image|twitter-image|favicon\\.ico$|icon\\.svg$|manifest\\.webmanifest$|robots\\.txt$|firebase-messaging-sw\\.js$).*)",
   ],
 };

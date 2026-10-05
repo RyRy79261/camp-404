@@ -1,5 +1,5 @@
 import type { JoinScheduleEntry as ScheduleEntry } from "@camp404/types";
-import { burnDatesLabel } from "@/lib/countdown";
+import { burnDatesLabel } from "@camp404/core";
 import { useJoinData } from "../join-data";
 import { AllHands, Eyebrow, WinBody } from "./ui";
 
@@ -41,7 +41,9 @@ export function ScheduleWindow() {
   return (
     <WinBody>
       <p className="border border-os-accent/60 px-3 py-1.5 font-mono text-[11px] uppercase text-os-accent">
-        {burn ? `AfrikaBurn ${year}: ${burnDatesLabel(burn)}. ` : ""}
+        {burn && burnDatesLabel(burn)
+          ? `AfrikaBurn ${year}: ${burnDatesLabel(burn)}. `
+          : ""}
         {schedule.datesNote}
       </p>
       <Block id="sched-before" title="Before" entries={schedule.before} />

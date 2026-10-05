@@ -30,6 +30,8 @@ payment, captain-read only, every read audited.
   amount, description, encrypted bank details, and the moves
   `submitted → approved | rejected`, `approved → paid → reconciled`, each a
   compare-and-set with an audit row. MCP only. No screen.
+  [CORRECTION 2026-10-05] `reconciled` is gone: paid is the end of a claim
+  (owner, 2026-10-05; migrations 0101 and 0102).
 - Gaps in that table:
   - `amount` is a decimal, not integer cents (AGENTS.md: the ledger keeps
     integer cents);
@@ -91,9 +93,10 @@ once #299 is on main, so both routes use one copy.
   1. **The team says yes:** a lead of that team, or a captain, confirms it was
      a team purchase. Above a set amount (say R2 000) a captain must also say
      yes.
-  2. **Finance pays:** a captain or Finance lead marks it paid, then
-     reconciled against the bank statement (the statement import in #299 can
-     match it later).
+  2. **Finance pays:** a captain or Finance lead marks it paid. Paid is the
+     end of a claim. [CORRECTION 2026-10-05] There is no later "reconciled"
+     step against the bank statement: the owner removed it (migrations 0101
+     and 0102).
 - A member sees their own claims and where each one is.
 - Bank details are ALWAYS_PRIVATE: read only by Finance, audited, never shown
   to the team lead who approves, never in an export.

@@ -818,7 +818,7 @@ article h1 {
   color: var(--mag-lift);
   font-size: 16px;
 }
-.nf a.slab {
+.nf .slab {
   margin-top: 0;
 }
 

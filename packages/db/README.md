@@ -13,7 +13,7 @@ against Neon Postgres.
   `package.json`.
 - **Depends on:** `@camp404/core`, `@camp404/types`.
 - **Imported by:** server code only: `apps/web`, `apps/join` (the join site
-  reads `@camp404/db/join-site`), `apps/admin-cli`, `@camp404/auth`,
+  reads `@camp404/db/join-site`), `apps/guide`, `@camp404/auth`,
   `@camp404/telegram`. Never from a client component.
 
 `src/schema.ts` is the one hand-written source. Everything in `migrations/` is

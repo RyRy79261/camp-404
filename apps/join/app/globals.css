@@ -325,59 +325,6 @@
   }
 }
 
-/* TEAMS/ pixel icons: the colour copies sit a fraction of a pixel apart, and
-   jump on hover or when chosen, like the landing's glitched 404. */
-.pixel-glitch-m {
-  transform: translate(-0.35px, 0);
-}
-.pixel-glitch-c {
-  transform: translate(0.35px, 0);
-}
-.pixel-glitch-live .pixel-glitch-m,
-button:hover .pixel-glitch .pixel-glitch-m {
-  animation: pixel-glitch-m 1.6s steps(1) infinite;
-}
-.pixel-glitch-live .pixel-glitch-c,
-button:hover .pixel-glitch .pixel-glitch-c {
-  animation: pixel-glitch-c 1.6s steps(1) infinite;
-}
-@keyframes pixel-glitch-m {
-  0%,
-  100% {
-    transform: translate(-0.35px, 0);
-  }
-  20% {
-    transform: translate(-1px, 0.3px);
-  }
-  22% {
-    transform: translate(-0.35px, 0);
-  }
-  60% {
-    transform: translate(-0.8px, -0.3px);
-  }
-  62% {
-    transform: translate(-0.35px, 0);
-  }
-}
-@keyframes pixel-glitch-c {
-  0%,
-  100% {
-    transform: translate(0.35px, 0);
-  }
-  20% {
-    transform: translate(1px, -0.3px);
-  }
-  22% {
-    transform: translate(0.35px, 0);
-  }
-  60% {
-    transform: translate(0.8px, 0.3px);
-  }
-  62% {
-    transform: translate(0.35px, 0);
-  }
-}
-
 /* GIFTS.EXE: each ring fills once, then a bright segment keeps orbiting. */
 .gift-ring-fill {
   stroke-dasharray: 100 100;
@@ -435,10 +382,6 @@ button:hover .pixel-glitch .pixel-glitch-c {
     display: none;
   }
   .camp404-glitch-shake,
-  .pixel-glitch-live .pixel-glitch-m,
-  .pixel-glitch-live .pixel-glitch-c,
-  button:hover .pixel-glitch .pixel-glitch-m,
-  button:hover .pixel-glitch .pixel-glitch-c,
   .gift-ring-orbit,
   .gift-flame {
     animation: none;

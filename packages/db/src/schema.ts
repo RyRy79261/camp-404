@@ -2680,6 +2680,10 @@ export const reimbursements = pgTable(
       onDelete: "set null",
     }),
     paidAt: timestamp("paid_at", { mode: "date" }),
+    // No longer written: paid is the end of a claim (owner, 2026-10-05; 0102
+    // took "reconciled" out of the status). Kept so a deploy's old build,
+    // still serving while the migration runs, can read the row; drop it in a
+    // later migration.
     reconciledAt: timestamp("reconciled_at", { mode: "date" }),
 
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),

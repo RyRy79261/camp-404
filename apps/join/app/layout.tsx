@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { interFont } from "@/lib/fonts/inter";
 import { silkscreenFont } from "@/lib/fonts/silkscreen";
+import { JOIN_URL } from "@/lib/seo";
 import "./globals.css";
 
 // Self-hosted (lib/fonts/*) rather than `next/font/google`, so
@@ -14,10 +15,11 @@ const TITLE = "Join 404";
 const DESCRIPTION = "Are you lost? Join 404.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://join.camp-404.com"),
+  metadataBase: new URL(JOIN_URL),
   title: TITLE,
   description: DESCRIPTION,
   applicationName: TITLE,
+  alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     siteName: "Camp 404",

@@ -13,6 +13,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@camp404/core": "workspace:*",
     "@camp404/db": "workspace:*",
     "@camp404/games": "workspace:*",
     "@camp404/os": "workspace:*",

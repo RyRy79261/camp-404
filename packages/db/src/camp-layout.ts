@@ -270,17 +270,6 @@ export async function getCampLayout(
   };
 }
 
-/** The latest version number of a year's plan (this year by default). */
-export async function latestLayoutVersion(cycle?: number): Promise<number> {
-  const db = createHttpDb();
-  const year = cycle ?? (await currentCycleNumber(db));
-  const [row] = await db
-    .select({ latest: schema.campLayouts.latestVersion })
-    .from(schema.campLayouts)
-    .where(eq(schema.campLayouts.cycle, year));
-  return row?.latest ?? 0;
-}
-
 /** A year's saved versions, newest first (the last `limit`). */
 export async function listLayoutVersions(
   cycle?: number,

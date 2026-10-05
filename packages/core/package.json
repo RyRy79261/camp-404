@@ -17,8 +17,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@camp404/types": "workspace:*",
-    "zod": "^4.4.3"
+    "@camp404/types": "workspace:*"
   },
   "devDependencies": {
     "@camp404/eslint-config": "workspace:*",

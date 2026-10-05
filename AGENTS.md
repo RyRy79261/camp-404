@@ -20,7 +20,6 @@ apps/
   join/       join.camp-404.com: the "404 OS" recruiting site; reads the db, no sign-in
   guide/      survival-guide.camp-404.com: the Survival Guide's public sections; reads the db, no sign-in
   mobile/     Capacitor host wrapping the web static export
-  admin-cli/  Node CLI for data ops
 packages/
   core/       Framework-free domain logic: access, privacy, redaction, … (@camp404/core)
   ui/         Shared shadcn/ui components (@camp404/ui)
@@ -941,9 +940,14 @@ LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
 - Prefer editing existing files; do not add files or abstractions a task
   doesn't need.
 - Add or update tests with behavioural changes. Vitest covers units, and
-  PGlite (`packages/db/src/__tests__/_harness.ts`) covers real queries.
+  PGlite (`packages/db/src/__tests__/_harness.ts`) covers real queries; in
+  packages/db's own run each file starts from one migrated copy
+  (`_global-setup.ts`). apps/web's vitest runs a `.test.ts` in Node and a
+  `.test.tsx` in jsdom; a `.test.ts` that needs the DOM goes on
+  `DOM_TS_TESTS` in `apps/web/vitest.config.ts`.
   Playwright e2e in `apps/web/tests/e2e` is live: the `e2e` job in
-  `.github/workflows/ci.yml` runs it on every source PR against a
+  `.github/workflows/ci.yml` runs it on every PR that can change the console
+  (the `web` path filter) against a
   production build (`E2E_SERVE_BUILD=1`, `next start`; locally the default is
   `next dev`) with `E2E_TEST_MODE=1`, and `ci-pass` needs it, so a failure
   blocks merge. The `e2e-db` job serves the same kind of build.

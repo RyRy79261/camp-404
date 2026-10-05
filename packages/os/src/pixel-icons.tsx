@@ -1,9 +1,8 @@
-// Pixel-art team icons, copied from Join (apps/join/components/os/pixel-icons.tsx,
-// the approved prototype's Teams folder), one "#" per pixel. Each renders
-// three times: a magenta and a cyan copy knocked sideways under the white
-// one, the landing page's chromatic glitch in pixels (.pixel-glitch-* in
-// app/globals.css). Which team wears which drawing is Join's table
-// (apps/join/lib/teams.ts); a team added later gets the generic one.
+// Pixel-art team icons, one "#" per pixel, drawn for Camp 404 (the approved
+// prototype's Teams folder), shared by Join's TEAMS/ folder and the console's
+// program icons. Each renders three times: a magenta and a cyan copy knocked
+// sideways under the white one, the landing page's chromatic glitch in pixels
+// (.pixel-glitch-* in ./styles.css). A team added later gets the generic one.
 
 export type TeamIcon =
   | "comms"

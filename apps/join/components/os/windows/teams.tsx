@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { teamFile, teamIcon } from "@/lib/teams";
+import { teamFile } from "@/lib/teams";
 import { useJoinData } from "../join-data";
-import { PixelIcon } from "../pixel-icons";
+import { PixelIcon, teamPixelIcon } from "@camp404/os/pixel-icons";
 import { WinBody } from "./ui";
 import { InlineText } from "../inline-text";
 
@@ -37,7 +37,7 @@ export function TeamsWindow() {
                 }`}
               >
                 <PixelIcon
-                  icon={teamIcon(t)}
+                  icon={teamPixelIcon(t.key)}
                   className={`size-11 ${
                     chosen ? "pixel-glitch-live text-os-fg" : "text-os-fg/90"
                   }`}
@@ -61,7 +61,7 @@ export function TeamsWindow() {
         className="flex gap-4 border border-os-line bg-os-bg/60 p-4"
       >
         <PixelIcon
-          icon={teamIcon(team)}
+          icon={teamPixelIcon(team.key)}
           className="pixel-glitch-live size-14 shrink-0 text-os-fg"
         />
         <div className="min-w-0">

@@ -11,15 +11,14 @@ import { Team } from "./roles";
 // this shape's.
 
 /**
- * Where a claim is. `reconciled` is the Finance team matching a paid claim to
- * the bank statement (kept from the first version; only the Claude connector
- * sets it today). Mirrored by reimbursement_status in the database.
+ * Where a claim is. Paid is the end: there is no "matched to the bank" step
+ * after it (owner, 2026-10-05). Mirrored by reimbursement_status in the
+ * database.
  */
 export const CLAIM_STATUSES = [
   "submitted",
   "approved",
   "paid",
-  "reconciled",
   "rejected",
 ] as const;
 export const ClaimStatus = z.enum(CLAIM_STATUSES);

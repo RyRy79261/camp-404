@@ -61,37 +61,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  apps/admin-cli:
-    dependencies:
-      '@camp404/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@camp404/types':
-        specifier: workspace:*
-        version: link:../../packages/types
-    devDependencies:
-      '@camp404/eslint-config':
-        specifier: workspace:*
-        version: link:../../packages/eslint-config
-      '@camp404/typescript-config':
-        specifier: workspace:*
-        version: link:../../packages/typescript-config
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.5
-      eslint:
-        specifier: ^10.4.0
-        version: 10.4.0(jiti@2.7.0)
-      tsx:
-        specifier: ^4.22.3
-        version: 4.22.3
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: ^4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@25.9.5)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.3))
-
   apps/guide:
     dependencies:
       '@camp404/core':
@@ -106,9 +75,6 @@ importers:
       '@camp404/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      lucide-react:
-        specifier: ^1.16.0
-        version: 1.16.0(react@19.2.6)
       next:
         specifier: ^16.3.8
         version: 16.3.8(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(@types/node@25.9.5)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -161,6 +127,9 @@ importers:
 
   apps/join:
     dependencies:
+      '@camp404/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@camp404/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -379,12 +348,6 @@ importers:
       react-dom:
         specifier: ^19.2.6
         version: 19.2.6(react@19.2.6)
-      react-markdown:
-        specifier: ^10.1.0
-        version: 10.1.0(@types/react@19.2.15)(react@19.2.6)
-      rehype-sanitize:
-        specifier: ^6.0.0
-        version: 6.0.0
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
@@ -502,9 +465,6 @@ importers:
       '@camp404/types':
         specifier: workspace:*
         version: link:../types
-      zod:
-        specifier: ^4.4.3
-        version: 4.5.4
     devDependencies:
       '@camp404/eslint-config':
         specifier: workspace:*

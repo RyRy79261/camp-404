@@ -65,7 +65,7 @@ variants. The groups:
 - **Data:** `table`, `responsive-data-table` (a table on a wide window, cards
   on a narrow one).
 - **Page parts:** `page-heading` (every console page starts with it),
-  `captain-lock`, `pinned-announcement-banner`, `notification-bell`.
+  `captain-lock`, `notification-bell`.
 - **Account:** `avatar`, `avatar-upload`, and the `account-*` sign-in and
   security panels (password, passkeys, sessions, two-factor).
 

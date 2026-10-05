@@ -258,8 +258,8 @@ describe("promotionStepState", () => {
 });
 
 // The camp must never lose its last captain: /setup latches shut after
-// bootstrap, there is no demotion path, and the admin CLI refuses to mint a
-// captain-assigning invite without a captain to attribute it to. An erased sole
+// bootstrap, there is no demotion path, and only a captain can mint a
+// captain-assigning invite. An erased sole
 // captain is therefore unrecoverable without hand SQL.
 describe("canLeaveCamp", () => {
   it("refuses the sole captain", () => {
