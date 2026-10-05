@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
-import { NOTIFICATION_FALLBACK_LINK, plainPreview } from "@camp404/core";
+import {
+  CAMP_TIME_ZONE,
+  NOTIFICATION_FALLBACK_LINK,
+  plainPreview,
+} from "@camp404/core";
 import { cn } from "@camp404/ui/lib/utils";
 import type { InboxItem } from "@/lib/notifications";
 import {
@@ -22,13 +26,22 @@ import type { PanelQuestionnaire } from "@/app/(console)/notifications/actions";
 const ROW =
   "flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
+// On the camp's clock, like every date a person reads (CAMP_TIME_ZONE), so
+// the server's render and the browser's agree.
+const TIME = new Intl.DateTimeFormat("en-GB", {
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: CAMP_TIME_ZONE,
+});
+const DUE = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  timeZone: CAMP_TIME_ZONE,
+});
+
 /** Day + time, so "yesterday 18:40" is distinguishable from "18:40". */
 function dayAndTime(at: Date, now: Date): string {
-  const time = new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(at);
-  return `${formatRelativeTime(at, now)} · ${time}`;
+  return `${formatRelativeTime(at, now)} · ${TIME.format(at)}`;
 }
 
 /**
@@ -145,9 +158,7 @@ export function PanelQuestionnaireRow({
   item: PanelQuestionnaire;
   onNavigate?: () => void;
 }) {
-  const due = item.dueAt
-    ? `Due ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(item.dueAt)}`
-    : null;
+  const due = item.dueAt ? `Due ${DUE.format(item.dueAt)}` : null;
   return (
     <Shell
       href={`/questionnaires/${item.activationId}`}

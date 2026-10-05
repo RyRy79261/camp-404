@@ -119,6 +119,7 @@ export function InboxFeed({
                     acknowledgedAt={item.acknowledgedAt}
                     createdAt={item.createdAt}
                     href={linkFor(item)}
+                    now={now}
                   />
                 ))}
               </ul>

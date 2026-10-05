@@ -20,6 +20,8 @@ interface NotificationRowProps {
    * about nothing but itself: a link back to this inbox would do nothing.
    */
   href?: string;
+  /** The server's clock at render, so "5m ago" reads the same once hydrated. */
+  now?: Date;
 }
 
 // One inbox row, drawn like the AfrikaBurn NotificationItem: a muted icon
@@ -36,6 +38,7 @@ export function NotificationRow({
   acknowledgedAt,
   createdAt,
   href,
+  now,
 }: NotificationRowProps) {
   const Icon = presentationIcon(presentation);
 
@@ -80,7 +83,7 @@ export function NotificationRow({
             {isNew ? <Badge className="shrink-0">New</Badge> : null}
           </div>
           <time className="shrink-0 text-xs tabular-nums text-muted-foreground">
-            {formatRelativeTime(createdAt)}
+            {formatRelativeTime(createdAt, now)}
           </time>
         </div>
         {/* A row is a glimpse, never the message: an announcement body is
