@@ -11,6 +11,7 @@ import {
   AFRIKABURN_DATE_GROUPS,
   LOGISTICS_TEAM,
   afrikaburnDate,
+  afrikaburnDateGroups,
   afrikaburnDateMayBeSkipped,
   afrikaburnEventTitle,
   attendanceAnswered,
@@ -349,5 +350,44 @@ describe("AfrikaBurn's standard dates", () => {
     expect(afrikaburnEventTitle({ kind: "gone", title: "Old date" })).toBe(
       "AfrikaBurn: Old date",
     );
+  });
+});
+
+describe("afrikaburnDateGroups", () => {
+  const row = (
+    kind: string | null,
+    title: string,
+    dueDate: string | null,
+    skipped = false,
+  ) => ({ kind, title, dueDate, skipped });
+
+  it("shows set standard dates under their group by their standard name, and every one of the camp's own", () => {
+    const groups = afrikaburnDateGroups([
+      row("registration_closes", "stored", "2026-02-01"),
+      row("form_2", "Form 2", null),
+      row(null, "Pay the storage unit", null),
+    ]);
+    expect(groups.map((g) => g.key)).toEqual(["registration", "other"]);
+    expect(groups[0]!.rows).toEqual([
+      expect.objectContaining({
+        kind: "registration_closes",
+        title: afrikaburnDate("registration_closes")!.name,
+      }),
+    ]);
+    expect(groups[1]!.rows.map((r) => r.title)).toEqual([
+      "Pay the storage unit",
+    ]);
+  });
+
+  it("shows a skipped standard date and leaves out empty groups", () => {
+    const skippable = AFRIKABURN_DATES.find((d) => d.mayBeSkipped)!;
+    const groups = afrikaburnDateGroups([row(skippable.kind, "x", null, true)]);
+    expect(groups).toEqual([
+      expect.objectContaining({
+        key: skippable.group,
+        rows: [expect.objectContaining({ skipped: true })],
+      }),
+    ]);
+    expect(afrikaburnDateGroups([])).toEqual([]);
   });
 });

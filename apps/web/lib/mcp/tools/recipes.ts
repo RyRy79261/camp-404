@@ -9,7 +9,13 @@ import {
   suggestionTitle,
 } from "@camp404/db/recipes";
 import { canApproveRecipe } from "@camp404/core";
-import { AddLessonInput, MAX_PLATES, SuggestRecipeInput } from "@camp404/types";
+import {
+  AddLessonInput,
+  LINK_ONLY_REFUSAL,
+  LINK_ONLY_TEXT,
+  MAX_PLATES,
+  SuggestRecipeInput,
+} from "@camp404/types";
 import { recipePath, recipeVersionPath } from "../../recipe-copy";
 import { addLesson, getPlateCount, getRecipeDetail } from "../../recipes";
 import { siteUrl } from "../capabilities";
@@ -50,6 +56,49 @@ type Sections = Partial<
   Record<(typeof SECTION_HEADINGS)[number][0], string | null>
 >;
 
+/** A name is needed with sections: the text's first line would be a heading. */
+export const SECTIONS_NEED_TITLE =
+  "Give the recipe a name when you send it as sections.";
+
+/**
+ * The form refuses a recipe that is only a link. Joined under headings,
+ * sections never look like one, so each section, and all of them together,
+ * is checked before they are joined.
+ */
+function sectionsAreOnlyLinks(sections: Sections): boolean {
+  const bodies = SECTION_HEADINGS.map(([key]) => sections[key]?.trim()).filter(
+    (b): b is string => Boolean(b),
+  );
+  return (
+    bodies.some((b) => LINK_ONLY_TEXT.test(b)) ||
+    (bodies.length > 0 && LINK_ONLY_TEXT.test(bodies.join("\n")))
+  );
+}
+
+/**
+ * Who may read a recipe, as its page decides: anyone once it is in the book;
+ * before that, its submitter and the Kitchen's reviewers. Anyone else is told
+ * it does not exist.
+ */
+async function readableRecipe(
+  recipeId: string,
+  scope: {
+    campUserId: string;
+    viewerRank: string;
+    leadTeams: readonly string[];
+  },
+) {
+  const detail = await getRecipeDetail(recipeId);
+  const privileged =
+    detail !== null &&
+    (detail.submitterId === scope.campUserId ||
+      canApproveRecipe(scope.viewerRank, scope.leadTeams));
+  if (!detail || (!privileged && detail.acceptedVersionId === null)) {
+    notFound("No recipe with that id.");
+  }
+  return detail;
+}
+
 /** Sections as the one text the form takes, each under its heading. */
 export function sectionsAsText(sections: Sections): string {
   return SECTION_HEADINGS.flatMap(([key, heading]) => {
@@ -66,7 +115,7 @@ export function registerRecipeTools(server: McpServer): void {
     {
       title: "Suggest a recipe",
       description:
-        "Any camp member can suggest a recipe for the kitchen by giving its text (ingredients and method), or its `sections` (ingredients, equipment, steps, notes; give one or the other). The server never opens links, so a link alone is refused; a link may be added for reference. The name is optional and defaults to the text's first line. There is no serves field on the form: say how many it serves in the notes. It lands as 'suggested' until a Kitchen lead or a captain approves it in the app. Nothing is sent to an AI model unless a captain or a Kitchen lead later chooses to, and only if aiConsent is true.",
+        "Any camp member can suggest a recipe for the kitchen by giving its text (ingredients and method), or its `sections` (ingredients, equipment, steps, notes; give one or the other, and a `title` with sections). The server never opens links, so a link alone is refused; a link may be added for reference. The name is optional and defaults to the text's first line. There is no serves field on the form: say how many it serves in the notes. It lands as 'suggested' until a Kitchen lead or a captain approves it in the app. Nothing is sent to an AI model unless a captain or a Kitchen lead later chooses to, and only if aiConsent is true.",
       inputSchema: {
         text: z.string().min(1).optional(),
         sections: z
@@ -96,6 +145,12 @@ export function registerRecipeTools(server: McpServer): void {
             throw new ToolError(
               "Give the recipe as text or as sections, not both.",
             );
+          }
+          if (args.sections) {
+            if (!args.title?.trim()) throw new ToolError(SECTIONS_NEED_TITLE);
+            if (sectionsAreOnlyLinks(args.sections)) {
+              throw new ToolError(LINK_ONLY_REFUSAL);
+            }
           }
           const text = args.sections
             ? sectionsAsText(args.sections)
@@ -192,14 +247,7 @@ export function registerRecipeTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async ({ scope }) => {
-          const detail = await getRecipeDetail(args.recipeId);
-          const privileged =
-            detail !== null &&
-            (detail.submitterId === scope.campUserId ||
-              canApproveRecipe(scope.viewerRank, scope.leadTeams));
-          if (!detail || (!privileged && detail.acceptedVersionId === null)) {
-            notFound("No recipe with that id.");
-          }
+          const detail = await readableRecipe(args.recipeId, scope);
           const url = siteUrl(recipePath(detail.id));
           const current = detail.currentVersion;
           if (!current) {
@@ -273,23 +321,15 @@ export function registerRecipeTools(server: McpServer): void {
         extra,
         argsForAudit: { recipeId: args.recipeId, versionId: args.versionId },
         handler: async ({ scope }) => {
-          let versionId = args.versionId;
-          if (!versionId) {
-            const detail = await getRecipeDetail(args.recipeId);
-            const privileged =
-              detail !== null &&
-              (detail.submitterId === scope.campUserId ||
-                canApproveRecipe(scope.viewerRank, scope.leadTeams));
-            if (!detail || (!privileged && !detail.acceptedVersionId)) {
-              notFound("No recipe with that id.");
-            }
-            if (!detail.acceptedVersionId) {
-              throw new ToolError(
-                "This recipe is not in the book yet, so it has no version to note.",
-              );
-            }
-            versionId = detail.acceptedVersionId;
+          // The recipe page's rule, whatever the arguments: a recipe the
+          // caller may not read does not exist for them.
+          const detail = await readableRecipe(args.recipeId, scope);
+          if (!detail.acceptedVersionId) {
+            throw new ToolError(
+              "This recipe is not in the book yet, so it has no version to note.",
+            );
           }
+          const versionId = args.versionId ?? detail.acceptedVersionId;
           const parsed = AddLessonInput.safeParse({
             recipeId: args.recipeId,
             versionId,
@@ -305,8 +345,7 @@ export function registerRecipeTools(server: McpServer): void {
             authorId: scope.campUserId,
           });
           if (!result.ok) throw new ToolError(result.error);
-          const detail = await getRecipeDetail(parsed.data.recipeId);
-          const version = detail?.versions.find(
+          const version = detail.versions.find(
             (v) => v.id === parsed.data.versionId,
           )?.version;
           return {

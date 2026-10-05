@@ -7,10 +7,12 @@ import { ALWAYS_PRIVATE } from "@camp404/core";
 import { encrypt } from "@camp404/db/crypto";
 import * as schema from "@camp404/db/schema";
 import { useTestDb } from "../../../../../packages/db/src/__tests__/_harness";
+import { KitchenRecipe } from "@camp404/types";
 import {
   makeDriverProfile,
   makeMembership,
   makeUser,
+  seedAcceptedVersion,
 } from "../../../../../packages/db/src/__tests__/_factories";
 
 // The owner's ruling on the connector (2026-10-05): "The agents won't need any
@@ -114,6 +116,28 @@ describe("no tool returns ID numbers or bank details", () => {
         description: "Gas",
       })
       .returning();
+    // A recipe in the book and an item of gear, so the tools that take their
+    // ids read and write real rows rather than only refusing.
+    const [recipe] = await db
+      .insert(schema.recipes)
+      .values({ source: "text", title: "Oats", submitterId: member.id })
+      .returning({ id: schema.recipes.id });
+    await seedAcceptedVersion(db, {
+      recipeId: recipe!.id,
+      authorId: member.id,
+      recipe: KitchenRecipe.parse({
+        title: "Oats",
+        plates: 20,
+        ingredients: [
+          { name: "Oats", category: "grain", quantity: 2, unit: "kg" },
+        ],
+        steps: [{ instruction: "Soak overnight.", uses: ["Oats"] }],
+      }),
+    });
+    const [item] = await db
+      .insert(schema.inventoryItems)
+      .values({ name: "Cooler box", team: "kitchen", quantity: 3 })
+      .returning({ id: schema.inventoryItems.id });
     const ciphertexts = (
       await db
         .select({
@@ -188,8 +212,8 @@ describe("no tool returns ID numbers or bank details", () => {
       },
       submit_recipe: { text: "Oats\nSoak overnight." },
       list_recipes: {},
-      get_recipe: { recipeId: claim!.id },
-      add_recipe_lesson: { recipeId: claim!.id, body: "More salt." },
+      get_recipe: { recipeId: recipe!.id },
+      add_recipe_lesson: { recipeId: recipe!.id, body: "More salt." },
       get_meal_plan: {},
       get_shopping_list: {},
       list_recipe_review_queue: {},
@@ -203,7 +227,7 @@ describe("no tool returns ID numbers or bank details", () => {
         custodianUserId: member.id,
       },
       propose_inventory_change: {
-        itemId: claim!.id,
+        itemId: item!.id,
         quantity: 1,
         condition: "good",
         location: "storage_unit",
@@ -230,6 +254,7 @@ describe("no tool returns ID numbers or bank details", () => {
     expect(Object.keys(SAMPLE_ARGS).sort()).toEqual([...tools.keys()].sort());
 
     let answers = 0;
+    const answered = new Set<string>();
     for (const [name, { shape, handler }] of tools) {
       const args = z.object(shape).parse(SAMPLE_ARGS[name]);
       for (const as of [captain.id, member.id]) {
@@ -247,10 +272,19 @@ describe("no tool returns ID numbers or bank details", () => {
           );
           expect(found, where).toEqual([]);
           answers += 1;
+          answered.add(name);
         }
       }
     }
     // The walk read real answers, not only refusals.
     expect(answers).toBeGreaterThan(40);
+    // Each tool that takes a seeded id answered at least once.
+    for (const name of [
+      "get_recipe",
+      "add_recipe_lesson",
+      "propose_inventory_change",
+    ]) {
+      expect(answered, name).toContain(name);
+    }
   });
 });

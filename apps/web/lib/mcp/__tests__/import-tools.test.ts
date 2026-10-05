@@ -3,9 +3,12 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { KitchenRecipe, type Team } from "@camp404/types";
+import { AFRIKABURN_DATES, buildShoppingList } from "@camp404/core";
+import { KitchenRecipe, LINK_ONLY_REFUSAL, type Team } from "@camp404/types";
 import type { CampConfig } from "@camp404/db/camp-config";
 import { NOT_AN_INVENTORY_EDITOR } from "@camp404/db/inventory";
+import { getShoppingFacts } from "@camp404/db/kitchen-menu";
+import { setShoppingPrice } from "@camp404/db/kitchen-prices";
 import { PHASE_CHANGED } from "@camp404/db/logistics";
 import { setMealPlan } from "@camp404/db/meal-plan";
 import * as schema from "@camp404/db/schema";
@@ -46,6 +49,7 @@ vi.mock("@/lib/google-calendar", async (importOriginal) => ({
 }));
 
 import { registerCampMcpTools } from "../server";
+import { SECTIONS_NEED_TITLE } from "../tools/recipes";
 
 type Handler = (args: unknown, extra: unknown) => Promise<CallToolResult>;
 const tools = new Map<string, Handler>();
@@ -354,6 +358,83 @@ describe("logistics days", () => {
     expect(calendar.put).toEqual([]);
   });
 
+  it("keeps the place and note when a call leaves them out, and clears them on null", async () => {
+    await campYear();
+    const tl = await leadOf("transport_and_logistics");
+    await call(
+      "set_logistics_days",
+      { ...BUILD, note: "Bring shade cloth" },
+      tl.id,
+    );
+    expect(
+      (
+        await call(
+          "set_logistics_days",
+          {
+            phase: "build",
+            startDate: "2026-04-21",
+            endDate: "2026-04-23",
+            expectedVersion: 1,
+          },
+          tl.id,
+        )
+      ).error,
+    ).toBeUndefined();
+    const [kept] = await h.db().select().from(schema.logisticsPhases);
+    expect(kept).toMatchObject({
+      startDate: "2026-04-21",
+      place: "Tankwa",
+      note: "Bring shade cloth",
+      version: 2,
+    });
+    await call(
+      "set_logistics_days",
+      { ...BUILD, place: null, note: "", expectedVersion: 2 },
+      tl.id,
+    );
+    const [cleared] = await h.db().select().from(schema.logisticsPhases);
+    expect(cleared).toMatchObject({ place: null, note: null, version: 3 });
+  });
+
+  it("lists AfrikaBurn's dates as the Logistics page does: set standard dates by their name, and every date of the camp's own", async () => {
+    await campYear();
+    const plain = await member();
+    await h
+      .db()
+      .insert(schema.afrikaburnDeadlines)
+      .values([
+        {
+          cycle: 2026,
+          kind: "registration_closes",
+          title: "an old stored title",
+          dueDate: "2026-02-01",
+        },
+        // A standard date not set yet: not shown.
+        { cycle: 2026, kind: "form_2", title: "Form 2" },
+        // The camp's own, with no day yet: still shown, as on the page.
+        { cycle: 2026, kind: null, title: "Pay the storage unit" },
+      ]);
+    const { data } = await call("list_logistics_days", {}, plain.id);
+    const name = AFRIKABURN_DATES.find(
+      (d) => d.kind === "registration_closes",
+    )!.name;
+    expect(data!.afrikaburnDates).toEqual([
+      {
+        group: "Theme camp registration",
+        dates: [expect.objectContaining({ title: name, date: "2026-02-01" })],
+      },
+      {
+        group: "Other",
+        dates: [
+          expect.objectContaining({
+            title: "Pay the storage unit",
+            date: null,
+          }),
+        ],
+      },
+    ]);
+  });
+
   it("lets a captain set days too", async () => {
     await campYear();
     const boss = await captain();
@@ -415,7 +496,13 @@ async function bookRecipe(authorId: string) {
   const [row] = await h
     .db()
     .insert(schema.recipes)
-    .values({ source: "text", title: DAL.title, submitterId: authorId })
+    .values({
+      source: "text",
+      title: DAL.title,
+      submitterId: authorId,
+      rawText: "Grandma's dal, from memory",
+      suitabilityNote: "Cheap and filling",
+    })
     .returning({ id: schema.recipes.id });
   const { versionId } = await seedAcceptedVersion(h.db(), {
     recipeId: row!.id,
@@ -481,8 +568,40 @@ describe("recipes", () => {
       ),
     ).toEqual({ error: "Give the recipe as text or as sections, not both." });
     expect(
-      (await call("submit_recipe", { sections: {} }, plain.id)).error,
+      (await call("submit_recipe", { title: "Oats", sections: {} }, plain.id))
+        .error,
     ).toBe("Paste the recipe.");
+    expect(await h.db().select().from(schema.recipes)).toEqual([]);
+  });
+
+  it("needs a name with sections, so a suggestion is never named after a heading", async () => {
+    await campYear();
+    const plain = await member();
+    for (const title of [undefined, "  "]) {
+      expect(
+        await call(
+          "submit_recipe",
+          { title, sections: { ingredients: "- Oats", steps: "Soak." } },
+          plain.id,
+        ),
+      ).toEqual({ error: SECTIONS_NEED_TITLE });
+    }
+    expect(await h.db().select().from(schema.recipes)).toEqual([]);
+  });
+
+  it("refuses sections that are only a link, in the form's own words", async () => {
+    await campYear();
+    const plain = await member();
+    const link = "https://www.noble-notations.com/recipes/gai-yang";
+    for (const sections of [
+      { steps: link },
+      { steps: "Grill it.", notes: link },
+      { ingredients: `  ${link}  ` },
+    ]) {
+      expect(
+        await call("submit_recipe", { title: "Gai yang", sections }, plain.id),
+      ).toEqual({ error: LINK_ONLY_REFUSAL });
+    }
     expect(await h.db().select().from(schema.recipes)).toEqual([]);
   });
 
@@ -505,6 +624,13 @@ describe("recipes", () => {
       expect.objectContaining({ name: "Red lentils", quantity: 2.5 }),
       expect.objectContaining({ name: "Onions" }),
     ]);
+    // The book's parts only: the member's own words stay with the submitter
+    // and the Kitchen's reviewers, as on the page.
+    for (const key of ["text", "suitabilityNote", "suggestedBy", "sourceUrl"]) {
+      expect(data).not.toHaveProperty(key);
+    }
+    expect(JSON.stringify(data)).not.toContain("Grandma's dal");
+    expect(JSON.stringify(data)).not.toContain("Cheap and filling");
     const asked = await call("get_recipe", { recipeId, plates: 80 }, plain.id);
     expect(asked.data).toMatchObject({ plates: 50, askedPlatesNotReady: 80 });
   });
@@ -567,6 +693,27 @@ describe("recipes", () => {
         body: "Double the onions next time.",
       }),
     ]);
+  });
+
+  it("hides a recipe out of the book from a note with an explicit version, as from a read", async () => {
+    await campYear();
+    const author = await member();
+    const other = await member();
+    // A recipe with a version, taken out of the book again.
+    const { recipeId, versionId } = await bookRecipe(author.id);
+    await h
+      .db()
+      .update(schema.recipes)
+      .set({ status: "approved", acceptedVersionId: null })
+      .where(eq(schema.recipes.id, recipeId));
+    expect(
+      await call(
+        "add_recipe_lesson",
+        { recipeId, versionId, body: "x" },
+        other.id,
+      ),
+    ).toEqual({ error: "No recipe with that id." });
+    expect(await h.db().select().from(schema.recipeLessons)).toEqual([]);
   });
 
   it("refuses a note on a recipe not in the book", async () => {
@@ -643,7 +790,7 @@ describe("kitchen reads", () => {
   });
 
   it("works the shopping list out from the menu, with prices only for those who keep them", async () => {
-    await kitchenWithMenu();
+    const { boss } = await kitchenWithMenu();
     const plain = await member();
     const kitchen = await leadOf("kitchen");
 
@@ -662,9 +809,36 @@ describe("kitchen reads", () => {
       expect(line).not.toHaveProperty("priceCents");
       expect(line).not.toHaveProperty("shop");
     }
-    for (const line of await lines(kitchen.id)) {
-      expect(line).toHaveProperty("priceCents", null);
-    }
+    // A captain prices the lentils; the Kitchen lead reads that price.
+    const facts = await getShoppingFacts();
+    const lentils = buildShoppingList({
+      days: facts.plan.days,
+      menu: facts.menu.items,
+      recipes: facts.menu.recipes,
+    })
+      .groups.flatMap((g) => g.lines)
+      .find((l) => l.name === "Red lentils")!;
+    const priced = await setShoppingPrice({
+      actorId: boss.id,
+      key: lentils.key,
+      shop: "Makro",
+      amountCents: 189_00,
+      kind: "paid",
+      currency: "ZAR",
+      expectedVersion: 0,
+    });
+    expect(priced.ok).toBe(true);
+    const forLead = await lines(kitchen.id);
+    expect(forLead.find((l) => l.name === "Red lentils")).toMatchObject({
+      shop: "Makro",
+      priceCents: 189_00,
+      priceKind: "paid",
+    });
+    expect(forLead.find((l) => l.name === "Onions")).toMatchObject({
+      priceCents: null,
+    });
+    // The member's list still carries no price, the seeded one included.
+    expect(JSON.stringify(await lines(plain.id))).not.toContain("Makro");
   });
 
   it("gives the review queue to a captain and a Kitchen lead, and refuses anyone else", async () => {

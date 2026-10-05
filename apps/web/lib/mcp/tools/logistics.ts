@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { afrikaburnDateGroups } from "@camp404/core";
 import {
   LOGISTICS_PHASES,
   LOGISTICS_PHASE_HINTS,
@@ -76,15 +77,17 @@ export function registerLogisticsTools(server: McpServer): void {
                       : "not_yet",
               };
             }),
-            afrikaburnDates: deadlines
-              .filter((d) => d.dueDate || d.skipped)
-              .map((d) => ({
+            // Grouped and named as the page shows them (the same function).
+            afrikaburnDates: afrikaburnDateGroups(deadlines).map((g) => ({
+              group: g.label,
+              dates: g.rows.map((d) => ({
                 title: d.title,
                 date: d.dueDate,
                 noRoundThisYear: d.skipped,
                 done: d.done,
                 note: d.note,
               })),
+            })),
             url: siteUrl(LOGISTICS_PATH),
           };
         },
@@ -96,7 +99,7 @@ export function registerLogisticsTools(server: McpServer): void {
     {
       title: "Set a phase's days",
       description:
-        "Sets one phase's first and last day (YYYY-MM-DD, at most 31 days), and its place and note (a blank one clears it), as the Logistics page's Save does. Give `expectedVersion`: the phase's `version` from list_logistics_days (0 when it has no days yet). If someone saved first, it is refused: read again and retry. The phase goes on the camp's Google Calendar, and when Day 1 moves, the meal plan's prep steps move with it.",
+        "Sets one phase's first and last day (YYYY-MM-DD, at most 31 days), and its place and note, as the Logistics page's Save does. Leave `place` or `note` out to keep what is there; give null or \"\" to clear it. Give `expectedVersion`: the phase's `version` from list_logistics_days (0 when it has no days yet). If someone saved first, it is refused: read again and retry. The phase goes on the camp's Google Calendar, and when Day 1 moves, the meal plan's prep steps move with it.",
       inputSchema: {
         phase: z.enum(LOGISTICS_PHASES),
         startDate: z.string(),
@@ -117,7 +120,25 @@ export function registerLogisticsTools(server: McpServer): void {
           expectedVersion: args.expectedVersion,
         },
         handler: async ({ scope }) => {
-          const parsed = SetLogisticsPhaseInput.safeParse(args);
+          // The page's dialog always sends the place and note it shows, so a
+          // Save never loses them. A call that leaves one out means "keep it":
+          // it is filled from the row as read. That read is safe without a
+          // lock, because the write is a compare-and-set on expectedVersion:
+          // if the row moved past the version read here, the save is refused.
+          const kept =
+            args.place === undefined || args.note === undefined
+              ? (await listLogisticsPhases()).find(
+                  (r) =>
+                    r.phase === args.phase &&
+                    r.version === args.expectedVersion,
+                )
+              : undefined;
+          const parsed = SetLogisticsPhaseInput.safeParse({
+            ...args,
+            place:
+              args.place === undefined ? (kept?.place ?? null) : args.place,
+            note: args.note === undefined ? (kept?.note ?? null) : args.note,
+          });
           if (!parsed.success) {
             throw new ToolError(
               parsed.error.issues[0]?.message ??
