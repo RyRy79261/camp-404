@@ -898,7 +898,9 @@ or lazily on a page load, both in `after()` (`apps/web/lib/background-work.ts`):
   most once per five minutes across every server.
 - Every step is idempotent and claim-safe: broadcasts are claimed by
   `dispatched_at`, the push and email drains lock their rows `FOR UPDATE SKIP
-LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
+LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
+  delivery, and a "not now" answer from Resend (429, 5xx, a timeout) leaves
+  the row queued and ends the run, so the next page load retries it. A failing step is logged (`redactSecrets`) and does
   not stop the others. None of it runs under `E2E_TEST_MODE`.
 - Erasure deletes the member's avatar folder at the moment of erasure
   (`apps/web/lib/account.ts`); the daily upkeep only catches leftovers.
