@@ -90,4 +90,15 @@ describe("ReceiptPicker", () => {
     await waitFor(() => expect(onFiles).toHaveBeenCalledTimes(1));
     expect(screen.getByText("1 of 5 files · 0.3 MB of 4 MB")).toBeTruthy();
   });
+
+  it("adds a PDF at once, with nothing to shrink", () => {
+    const onFiles = vi.fn();
+    render(<Harness onFiles={onFiles} />);
+    const pdf = new File(["%PDF-1.7"], "slip.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText("Receipts"), {
+      target: { files: [pdf] },
+    });
+    expect(onFiles).toHaveBeenCalledWith([pdf]);
+    expect(screen.queryByText("Making the photos smaller…")).toBeNull();
+  });
 });

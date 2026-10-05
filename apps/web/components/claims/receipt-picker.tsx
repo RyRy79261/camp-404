@@ -5,6 +5,9 @@ import { FileText, ImageIcon, Loader2, Upload, X } from "lucide-react";
 import { cn } from "@camp404/ui/lib/utils";
 import { downscaleForUpload, RECEIPT_UPLOAD } from "@/lib/image";
 
+// The photo types lib/image.ts re-encodes (downscaleForUpload).
+const SHRINKABLE = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 // The receipts on a claim (#242), composed like AfrikaBurn's FileUpload in
 // its file variant: a chip per chosen file with its name and a remove (x),
 // then a dashed drop zone that adds more, and one line counting the files and
@@ -87,6 +90,11 @@ export function ReceiptPicker({
     const known = new Set(latest.current.map(key));
     const fresh = chosen.filter((f) => !known.has(`${f.name}:${f.size}`));
     if (fresh.length === 0) return;
+    // A PDF or a CSV has nothing to shrink: it goes in straight away.
+    if (!fresh.some((f) => SHRINKABLE.has(f.type))) {
+      onChange([...latest.current, ...fresh]);
+      return;
+    }
     setPreparing(true);
     try {
       const shrunk = await Promise.all(
