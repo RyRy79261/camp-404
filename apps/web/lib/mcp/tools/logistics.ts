@@ -22,7 +22,7 @@ import { runTool, ToolError } from "../tool-utils";
 //
 //  - Every approved member reads the phases (pack, travel, build, burn,
 //    strike, unpack) as the page lists them, and the AfrikaBurn dates a
-//    captain has set. Who can help on each day is the page's (a later PR).
+//    captain has set. Who can help on each day is ./attendance.ts.
 //  - Setting a phase's days is saveLogisticsPhase in lib/logistics.ts, the
 //    page's own: the write re-reads the actor (a captain or a Transport &
 //    Logistics lead, canEditLogistics) inside its transaction, is a

@@ -106,6 +106,12 @@ export const GATES = {
 /** The areas the website and the tools are grouped by. */
 export const AREAS = [
   "You",
+  "Inbox",
+  "Search",
+  "Tasks",
+  "Calendar",
+  "Meetings",
+  "Shifts",
   "People",
   "Claims and budgets",
   "Survival Guide",
@@ -199,6 +205,120 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     area: "You",
     gate: GATES.member,
     does: "Change your skills and how many burns you have been to.",
+  },
+  get_my_dues: {
+    area: "You",
+    gate: GATES.member,
+    does: "What My dues shows you: what you owe and paid, your next instalment, your pledge, charges and payments (rand cents). Read-only.",
+    page: "/dues",
+  },
+  get_my_gear_rental: {
+    area: "You",
+    gate: GATES.member,
+    does: "What My gear shows you: your gear order, your tent, who shares it and the catalogue. Read-only.",
+    page: "/gear",
+  },
+  list_my_forms: {
+    area: "You",
+    gate: GATES.member,
+    does: "Your questionnaires: waiting, optional, update any time, and submitted, each with its page.",
+    page: "/tools/forms",
+  },
+  // Inbox
+  list_my_notifications: {
+    area: "Inbox",
+    gate: GATES.member,
+    does: "Your inbox, newest first, 30 a page, by the page's tabs.",
+    page: "/notifications",
+  },
+  mark_notifications_read: {
+    area: "Inbox",
+    gate: GATES.member,
+    does: "Mark some of your notifications read (never a pop-up the app has not shown).",
+    page: "/notifications",
+  },
+  mark_all_notifications_read: {
+    area: "Inbox",
+    gate: GATES.member,
+    does: "Mark all your notifications read, as the inbox's Mark all read.",
+    page: "/notifications",
+  },
+  // Search
+  search_camp: {
+    area: "Search",
+    gate: GATES.member,
+    does: "Search everything you may open, as Ctrl+K's Everything: titles, and a short line around words found inside.",
+    page: "/",
+  },
+  // Tasks
+  list_tasks: {
+    area: "Tasks",
+    gate: GATES.member,
+    does: "The camp's task board, with what you may do to each task.",
+    page: "/tasks",
+  },
+  add_task: {
+    area: "Tasks",
+    gate: GATES.teamLead,
+    does: "Add a task: team leads for a team they lead, captains for any team.",
+    page: "/tasks",
+  },
+  move_task: {
+    area: "Tasks",
+    gate: GATES.member,
+    does: "Move a task between open, in progress and done, from the column you read (its person, whoever added it, a lead of its team, a captain).",
+    page: "/tasks",
+  },
+  // Calendar
+  list_calendar_events: {
+    area: "Calendar",
+    gate: GATES.member,
+    does: "The camp calendar from today to a year ahead, by day, by team.",
+    page: "/calendar",
+  },
+  // Meetings
+  list_meetings: {
+    area: "Meetings",
+    gate: GATES.member,
+    does: "Meeting notes, newest first, by team or whole camp.",
+    page: "/meetings",
+  },
+  get_meeting: {
+    area: "Meetings",
+    gate: GATES.member,
+    does: "One meeting's agenda, notes, decisions and action items.",
+    page: "/meetings",
+  },
+  update_meeting_notes: {
+    area: "Meetings",
+    gate: GATES.member,
+    does: "Change a meeting's title, agenda, notes or decisions, on the version you read (its team's members this year, and captains).",
+    page: "/meetings",
+  },
+  // Shifts
+  list_shifts: {
+    area: "Shifts",
+    gate: GATES.member,
+    does: "This year's shift roster: each day's slots, places taken and who is on them.",
+    page: "/shifts",
+  },
+  list_my_shifts: {
+    area: "Shifts",
+    gate: GATES.member,
+    does: "The shifts you are on, and your AfrikaBurn volunteer shifts.",
+    page: "/shifts/mine",
+  },
+  sign_up_for_shift: {
+    area: "Shifts",
+    gate: GATES.member,
+    does: "Take a place on a shift slot for yourself, while it has one.",
+    page: "/shifts",
+  },
+  leave_shift: {
+    area: "Shifts",
+    gate: GATES.member,
+    does: "Give up your place on a shift slot before its day.",
+    page: "/shifts",
   },
   // People
   list_users: {
@@ -372,6 +492,18 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     does: "Set one phase's days, place and note, on the version you read. It goes on the camp calendar and moves the meal plan's prep with Day 1.",
     page: "/logistics",
   },
+  get_logistics_attendance: {
+    area: "Logistics",
+    gate: GATES.member,
+    does: "Who can help on pack, build, strike and unpack, and your own answers.",
+    page: "/logistics",
+  },
+  set_my_logistics_attendance: {
+    area: "Logistics",
+    gate: GATES.member,
+    does: "Say whether you can help on a phase, from the answer you read.",
+    page: "/logistics",
+  },
   // Transport
   list_drivers: {
     area: "Transport",
@@ -397,6 +529,24 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     area: "Transport",
     gate: GATES.member,
     does: "Take someone out of a car (your own car, or leave a car you ride in).",
+  },
+  get_my_lift_request: {
+    area: "Transport",
+    gate: GATES.member,
+    does: "Your lift request this year, if you made one.",
+    page: "/transport",
+  },
+  request_lift: {
+    area: "Transport",
+    gate: GATES.member,
+    does: "Ask for a seat in one car, or any car, this year.",
+    page: "/transport",
+  },
+  cancel_lift_request: {
+    area: "Transport",
+    gate: GATES.member,
+    does: "Withdraw your lift request.",
+    page: "/transport",
   },
   // Invites and audit
   list_invite_codes: {
@@ -532,7 +682,7 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
   {
     area: "Transport",
     what: "Answer a lift request for your car",
-    why: "Lift requests live on the Transport page; the connector has no tool for them yet.",
+    why: "The connector can ask for a lift but not answer one: the driver decides on the page.",
     path: "/transport",
     gate: GATES.driver,
   },
@@ -612,6 +762,62 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
     why: "These live on the Kitchen's pages; the connector has no tool for them yet.",
     path: "/kitchen/meal-plan",
     gate: GATES.kitchenReview,
+  },
+  {
+    area: "You",
+    what: "Pick your fee tier, send proof of a payment, or ask for a refund",
+    why: MONEY,
+    path: "/dues",
+    gate: GATES.member,
+  },
+  {
+    area: "You",
+    what: "Fill in, send or withdraw your gear order",
+    why: "Your order becomes a charge on your dues, so you send it from the page.",
+    path: "/gear",
+    gate: GATES.member,
+  },
+  {
+    area: "You",
+    what: "Answer a questionnaire",
+    why: "The questionnaire page walks you through its questions and checks the answers; the connector lists them only.",
+    path: "/tools/forms",
+    gate: GATES.member,
+  },
+  {
+    area: "Tasks",
+    what: "Change a task's details or take it off the board",
+    why: "These live on the Tasks page; the connector has no tool for them yet.",
+    path: "/tasks",
+    gate: GATES.member,
+  },
+  {
+    area: "Calendar",
+    what: "Add an event to the camp calendar (team leads: for a team they lead)",
+    why: WIDE,
+    path: "/captains/calendar",
+    gate: GATES.teamLead,
+  },
+  {
+    area: "Meetings",
+    what: "Write a new meeting note, tick who was there, change action items or put one on the task board",
+    why: "These live on the Meetings pages; the connector has no tool for them yet.",
+    path: "/meetings",
+    gate: GATES.member,
+  },
+  {
+    area: "Shifts",
+    what: "Set up shifts, put someone on a shift or take them off, and ask everyone to sign up",
+    why: "These live on the Shifts page; the connector has no tool for them yet.",
+    path: "/shifts",
+    gate: GATES.teamLead,
+  },
+  {
+    area: "Shifts",
+    what: "Note your AfrikaBurn volunteer shifts",
+    why: "These live on My shifts; the connector has no tool for them yet.",
+    path: "/shifts/mine",
+    gate: GATES.member,
   },
   {
     area: "Survival Guide",
