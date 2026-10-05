@@ -123,6 +123,32 @@ export const rateLimiter: RateLimiter = {
 };
 
 /**
+ * The address a per-address limit counts against. One IPv6 user holds a whole
+ * /64 (often more), so counting single IPv6 addresses would give one person a
+ * fresh bucket on each of them: IPv6 counts by its first four groups. An
+ * IPv4-mapped IPv6 address counts as its IPv4 address; IPv4 counts as given.
+ * The other side: people behind one carrier NAT, or one IPv6 /64, share a
+ * bucket. Self-contained on purpose (no imports), so other limiters can share it.
+ */
+export function clientAddressKey(ip: string): string {
+  const address = ip.trim().split("%")[0]!; // drop an IPv6 zone id
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
+  if (mapped) return mapped[1]!;
+  if (!address.includes(":")) return address;
+  const [head = "", tail] = address.toLowerCase().split("::");
+  const front = head ? head.split(":") : [];
+  const back = tail ? tail.split(":") : [];
+  const groups =
+    tail === undefined
+      ? front
+      : [...front, ...Array(8 - front.length - back.length).fill("0"), ...back];
+  return `${groups
+    .slice(0, 4)
+    .map((g) => g.replace(/^0+/, "") || "0")
+    .join(":")}::/64`;
+}
+
+/**
  * Best-effort IP extraction from a Next.js request. Takes anything with
  * `get`, so a server action can pass `await headers()` (a read-only bag).
  */

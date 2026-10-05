@@ -8,7 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({ findCampUserByAuthId: vi.fn() }));
 vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));
-vi.mock("@/lib/rate-limit", () => ({
+vi.mock("@/lib/rate-limit", async (importOriginal) => ({
+  // The real address key, so the IPv6 /64 rule is what the test sees.
+  clientAddressKey: (await importOriginal<typeof import("@/lib/rate-limit")>())
+    .clientAddressKey,
   rateLimiter: { limit: vi.fn(() => ({ ok: true, retryAfterSeconds: 0 })) },
   getClientIp: vi.fn(() => "1.2.3.4"),
 }));
@@ -23,7 +26,7 @@ import { submitFeedbackAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
 import { isE2ETestMode } from "@/lib/test-mode";
-import { rateLimiter } from "@/lib/rate-limit";
+import { getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { structureWithAi } from "@/lib/feedback-ai";
 import {
   isUnfiledScreenshotOf,
@@ -132,6 +135,26 @@ describe("submitFeedbackAction", () => {
     });
     expect(fetchFn).not.toHaveBeenCalled();
     expect(structureWithAi).not.toHaveBeenCalled();
+  });
+
+  it("counts every address in one IPv6 /64 as one", async () => {
+    // One IPv6 user holds the whole /64: each address in it is not a fresh
+    // budget.
+    vi.mocked(getClientIp).mockReturnValue("2001:db8:abcd:12:aaaa::1");
+    await submitFeedbackAction(VALID);
+    vi.mocked(getClientIp).mockReturnValue("2001:0db8:abcd:0012:ffff:1:2:3");
+    await submitFeedbackAction(VALID);
+    const keys = vi
+      .mocked(rateLimiter.limit)
+      .mock.calls.map(([key]) => key)
+      .filter((key) => key.startsWith("feedback-ip"));
+    expect(new Set(keys)).toEqual(
+      new Set([
+        "feedback-ip:2001:db8:abcd:12::/64",
+        "feedback-ip-day:2001:db8:abcd:12::/64",
+      ]),
+    );
+    vi.mocked(getClientIp).mockReturnValue("1.2.3.4");
   });
 
   it("rejects when the daily cap trips", async () => {

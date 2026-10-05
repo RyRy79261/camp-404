@@ -5,7 +5,7 @@ import { z } from "zod";
 import { sanitizeReportText, screenReport } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
-import { getClientIp, rateLimiter } from "@/lib/rate-limit";
+import { clientAddressKey, getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
 import {
   DEFAULT_FEEDBACK_REPO,
@@ -142,7 +142,9 @@ export async function submitFeedbackAction(
   // Per address too: sign-up is open, so one person can mint accounts to get
   // fresh per-account budgets, and each report files a public GitHub issue
   // and may spend an AI call.
-  const ip = getClientIp(await headers());
+  // An IPv6 /64 counts as one address (clientAddressKey). People behind one
+  // carrier NAT share these buckets; the limits are set high enough for that.
+  const ip = clientAddressKey(getClientIp(await headers()));
   const byIp = await rateLimiter.limit(`feedback-ip:${ip}`, {
     limit: 10,
     windowMs: 60_000,
