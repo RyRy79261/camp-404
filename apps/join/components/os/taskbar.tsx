@@ -6,13 +6,12 @@ import { APPS, appById } from "@/lib/apps";
 import { DESKTOP } from "@/lib/content";
 import { useJoinData } from "./join-data";
 import {
-  burnCountdown,
   burnDatesLabel,
-  countdownLabel,
-  countdownShort,
-  tankwaToday,
-  type BurnCountdown,
-} from "@/lib/countdown";
+  burnPhase,
+  campDayKey,
+  type BurnPhase,
+} from "@camp404/core";
+import { countdownLabel, countdownShort } from "@/lib/countdown";
 import type { AppId, JoinWindow } from "@/lib/window-manager";
 import { AppIcon } from "./icons";
 
@@ -26,10 +25,10 @@ type Props = {
 };
 
 function useBurnCountdown(burn: { start: string; end: string } | null) {
-  const [c, setC] = useState<BurnCountdown | null>(null);
+  const [c, setC] = useState<BurnPhase | null>(null);
   useEffect(() => {
     if (!burn) return;
-    const tick = () => setC(burnCountdown(tankwaToday(new Date()), burn));
+    const tick = () => setC(burnPhase(campDayKey(new Date()), burn));
     tick();
     const t = window.setInterval(tick, 60_000);
     return () => window.clearInterval(t);
@@ -85,7 +84,7 @@ export function Taskbar({
         // No dates yet (a captain sets them in the app): no countdown.
         burn && (
           <div
-            title={`AfrikaBurn: ${burnDatesLabel(burn)}`}
+            title={`AfrikaBurn: ${burnDatesLabel(burn) ?? "dates to follow"}`}
             className="flex h-8 shrink-0 items-center border border-os-line bg-os-panel px-2 font-mono text-[11px] uppercase tracking-wider text-os-fg sm:px-3"
           >
             <span className="sm:hidden">

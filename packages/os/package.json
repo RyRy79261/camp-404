@@ -10,6 +10,7 @@
     ".": "./src/index.ts",
     "./terminal": "./src/terminal/index.ts",
     "./prefetch-guard": "./src/prefetch-guard.ts",
+    "./pixel-icons": "./src/pixel-icons.tsx",
     "./styles.css": "./src/styles.css"
   },
   "scripts": {

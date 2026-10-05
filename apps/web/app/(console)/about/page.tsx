@@ -12,7 +12,7 @@ import {
   Truck,
   Users,
 } from "lucide-react";
-import { formatMoney, hasClearance } from "@camp404/core";
+import { burnDatesLabel, formatMoney, hasClearance } from "@camp404/core";
 import type { JoinScheduleEntry } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { Card } from "@camp404/ui/components/card";
@@ -24,7 +24,6 @@ import {
   InlineText,
 } from "@/components/markdown/inline-text";
 import { getAboutCamp } from "@/lib/about";
-import { burnDatesLabel } from "@/lib/burn-countdown";
 import { captainPageGate } from "@/lib/captain-gate";
 import { GIFT_ICON } from "@/lib/join-gift-icons";
 import { AboutToc, type TocItem } from "./about-toc";

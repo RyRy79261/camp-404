@@ -130,6 +130,9 @@ importers:
 
   apps/join:
     dependencies:
+      '@camp404/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@camp404/db':
         specifier: workspace:*
         version: link:../../packages/db

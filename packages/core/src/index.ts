@@ -214,6 +214,7 @@ export * from "./audit-actions";
 export * from "./notification-days";
 export * from "./notification-email";
 export * from "./time-zone";
+export * from "./burn-dates";
 export * from "./questionnaire-status";
 export * from "./password";
 export * from "./participation";

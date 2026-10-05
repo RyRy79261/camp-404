@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { LineIcon, type IconKey } from "./line-icons";
-import { PixelIcon, teamPixelIcon } from "./pixel-icons";
+import { PixelIcon, teamPixelIcon } from "@camp404/os/pixel-icons";
 
 // A picture for each program, by the icon key the manifest sends (never by
 // anything that says who may open it): the approved prototype's line art for
