@@ -378,6 +378,29 @@ describe("the Finance team pays", () => {
     });
   });
 
+  it("ends at paid: no one can move a paid claim on, or turn it down", async () => {
+    const db = h.db();
+    const { id, financeLead, captain, kitchenLead } = await approved(db);
+    await payClaim({ claimId: id, decision: "paid", actorId: financeLead.id });
+    expect(
+      await payClaim({
+        claimId: id,
+        decision: "rejected",
+        note: "Changed my mind",
+        actorId: captain.id,
+      }),
+    ).toEqual({ ok: false, error: CLAIM_CHANGED });
+    expect(
+      await decideClaim({
+        claimId: id,
+        decision: "rejected",
+        actorId: kitchenLead.id,
+      }),
+    ).toEqual({ ok: false, error: CLAIM_CHANGED });
+    const [row] = await db.select().from(schema.reimbursements);
+    expect(row).toMatchObject({ status: "paid", paidById: financeLead.id });
+  });
+
   it("refuses a lead of the claim's own team and one of another team", async () => {
     const db = h.db();
     const { id, kitchenLead, powerLead } = await approved(db);

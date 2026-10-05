@@ -164,16 +164,6 @@ const PAID: ResponsiveColumn<FinanceClaim>[] = [
   whatFor(true),
   RECEIPTS,
   AMOUNT,
-  {
-    id: "status",
-    header: "Bank",
-    role: "badge",
-    hideHeader: true,
-    cell: (r) =>
-      r.status === "reconciled" ? (
-        <Badge variant="success">Matched to the bank</Badge>
-      ) : null,
-  },
 ];
 
 const TURNED_DOWN: ResponsiveColumn<FinanceClaim>[] = [
@@ -245,9 +235,7 @@ export function ClaimsPayManager({
 }) {
   const toPay = rows.filter((r) => r.status === "approved");
   const waiting = rows.filter((r) => r.status === "submitted");
-  const paid = rows.filter(
-    (r) => r.status === "paid" || r.status === "reconciled",
-  );
+  const paid = rows.filter((r) => r.status === "paid");
   const turnedDown = rows.filter((r) => r.status === "rejected");
   return (
     <div className="flex flex-col gap-6">

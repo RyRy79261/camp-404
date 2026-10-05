@@ -30,6 +30,8 @@ payment, captain-read only, every read audited.
   amount, description, encrypted bank details, and the moves
   `submitted → approved | rejected`, `approved → paid → reconciled`, each a
   compare-and-set with an audit row. MCP only. No screen.
+  [CORRECTION 2026-10-05] `reconciled` is gone: paid is the end of a claim
+  (owner, 2026-10-05; migrations 0101 and 0102).
 - Gaps in that table:
   - `amount` is a decimal, not integer cents (AGENTS.md: the ledger keeps
     integer cents);

@@ -18,7 +18,6 @@ export const CLAIM_BADGE: Readonly<
   submitted: { label: CLAIM_STATUS_LABELS.submitted, variant: "warning" },
   approved: { label: CLAIM_STATUS_LABELS.approved, variant: "secondary" },
   paid: { label: CLAIM_STATUS_LABELS.paid, variant: "success" },
-  reconciled: { label: CLAIM_STATUS_LABELS.reconciled, variant: "success" },
   rejected: { label: CLAIM_STATUS_LABELS.rejected, variant: "outline" },
 };
 
@@ -78,7 +77,6 @@ export function decisionLine(claim: {
     case "approved":
       return `approved by ${who}`;
     case "paid":
-    case "reconciled":
       return `approved by ${who}; paid`;
     case "rejected":
       return null;

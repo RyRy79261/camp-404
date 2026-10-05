@@ -17,9 +17,6 @@ describe("decisionLine", () => {
     expect(decisionLine({ ...claim, status: "paid" })).toBe(
       "approved by Kit Lead; paid",
     );
-    expect(decisionLine({ ...claim, status: "reconciled" })).toBe(
-      "approved by Kit Lead; paid",
-    );
   });
 
   it("names nobody on a turned-down claim", () => {
