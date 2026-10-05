@@ -92,7 +92,7 @@ export function PlateBar({
     return () => clearTimeout(timer);
     // Only a new typed count starts the wait: the address catching up (a new
     // `asked` or `shown`) or a new router must not restart or repeat it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new typed count restarts the wait
   }, [chosen]);
 
   function proofread(plates: number) {

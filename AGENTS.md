@@ -932,8 +932,8 @@ LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
   core-web-vitals), ui, os and games its `react` config, and core and types
   its `framework-free` config, which refuses React, Next, the database and
   `server-only`. The React Compiler rules run at warn until the code they flag
-  is cleaned up. A deliberate exhaustive-deps exception is a one-line disable
-  with its reason.
+  is cleaned up. A deliberate exhaustive-deps exception is one
+  `eslint-disable-next-line <rule> -- <reason>` line.
 - A server action that returns `{ ok, error }` runs its body in `runAction`
   (`apps/web/lib/action-result.ts`), so a database error comes back as a
   sentence instead of reaching the error boundary. Keep the domain

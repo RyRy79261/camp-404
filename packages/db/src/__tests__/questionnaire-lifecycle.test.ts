@@ -508,6 +508,11 @@ describe("questionnaire lifecycle — audit rows", () => {
     if (!sent.ok) throw new Error(sent.error);
 
     await unpublishDefinition("feedback", captain.id);
+    // A second unpublish (a captain who clicked on a stale page) changes
+    // nothing, says so, and records nothing.
+    expect(await unpublishDefinition("feedback", captain.id)).toMatchObject({
+      ok: false,
+    });
 
     expect(await auditRows(db)).toEqual([
       {

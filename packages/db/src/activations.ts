@@ -863,8 +863,13 @@ export interface ActivationRow {
   scope: (typeof schema.questionnaireScopeEnum.enumValues)[number];
 }
 
-/** An activation id is a uuid; Postgres throws on anything else. */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * Every spelling Postgres's uuid input accepts: 32 hex digits, a hyphen
+ * allowed after any group of four, optionally in braces. Postgres throws on
+ * anything else.
+ */
+const UUID =
+  /^(?:\{[0-9a-f]{4}(?:-?[0-9a-f]{4}){7}\}|[0-9a-f]{4}(?:-?[0-9a-f]{4}){7})$/i;
 
 /**
  * Read a single activation by id, or null; the generic runner loads by id. An id that is not a uuid (a mistyped or mangled

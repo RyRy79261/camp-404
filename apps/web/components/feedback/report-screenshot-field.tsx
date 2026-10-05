@@ -90,7 +90,7 @@ export function ReportScreenshotField({
     return () => document.removeEventListener("paste", onPaste);
     // take() reads only props and setters, so a new one each render changes
     // nothing the listener needs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- take() reads only props and setters
   }, [value, disabled]);
 
   return (

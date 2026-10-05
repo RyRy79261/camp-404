@@ -723,5 +723,11 @@ describe("getActivationById", () => {
     expect((await getActivationById(act.id))?.id).toBe(act.id);
     expect(await getActivationById("not-a-uuid")).toBeNull();
     expect(await getActivationById(`${act.id}x`)).toBeNull();
+    // The other spellings Postgres reads as the same uuid still find it.
+    const bare = act.id.replaceAll("-", "");
+    expect((await getActivationById(bare))?.id).toBe(act.id);
+    expect((await getActivationById(`{${act.id.toUpperCase()}}`))?.id).toBe(
+      act.id,
+    );
   });
 });

@@ -228,11 +228,20 @@ export async function unpublishDefinition(
 
   const now = new Date();
   let closedActivations = 0;
-  await withTransaction(async (tx) => {
-    await tx
+  const unpublished = await withTransaction(async (tx) => {
+    // A compare-and-set on `published`: of two captains unpublishing at once,
+    // only the one whose write changed the status goes on and is recorded.
+    const changed = await tx
       .update(schema.questionnaireDefinitions)
       .set({ status: "unpublished", updatedAt: now })
-      .where(eq(schema.questionnaireDefinitions.key, key));
+      .where(
+        and(
+          eq(schema.questionnaireDefinitions.key, key),
+          eq(schema.questionnaireDefinitions.status, "published"),
+        ),
+      )
+      .returning({ key: schema.questionnaireDefinitions.key });
+    if (changed.length === 0) return false;
     // Re-select the open activations INSIDE the transaction so a send that
     // races in just before this commit is still caught and closed (a read
     // outside the tx would miss it and leave a gate open under an unpublished
@@ -268,7 +277,15 @@ export async function unpublishDefinition(
       target: key,
       metadata: { title: meta.title, closedSends: closedActivations },
     });
+    return true;
   });
+  if (!unpublished) {
+    return {
+      ok: false,
+      error:
+        "This questionnaire is not published any more. Reload the page to see where it is now.",
+    };
+  }
   return { ok: true, closedActivations };
 }
 
@@ -300,10 +317,20 @@ export async function closeActivationTx(
     .limit(1);
   if (!act) return { ok: false, error: "Activation not found." };
   if (act.status === "closed") return { ok: true };
-  await tx
+  // A compare-and-set: a close racing this one may have read the same open
+  // row. Only the write that changed the status expires gates and is recorded;
+  // the other is the already-closed no-op.
+  const changed = await tx
     .update(schema.questionnaireActivations)
     .set({ status: "closed", closedAt: now, updatedAt: now })
-    .where(eq(schema.questionnaireActivations.id, activationId));
+    .where(
+      and(
+        eq(schema.questionnaireActivations.id, activationId),
+        ne(schema.questionnaireActivations.status, "closed"),
+      ),
+    )
+    .returning({ id: schema.questionnaireActivations.id });
+  if (changed.length === 0) return { ok: true };
   await tx
     .update(schema.requiredActions)
     .set({ status: "expired" })

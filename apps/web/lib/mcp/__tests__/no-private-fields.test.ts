@@ -76,7 +76,7 @@ function keysOf(value: unknown, out: string[] = []): string[] {
 }
 
 // useTestDb is the PGlite harness (vitest hooks), not a React Hook.
-// eslint-disable-next-line react-hooks/rules-of-hooks
+// eslint-disable-next-line react-hooks/rules-of-hooks -- useTestDb is the PGlite harness, not a React Hook
 const h = useTestDb();
 
 describe("no tool returns ID numbers or bank details", () => {
