@@ -13,6 +13,7 @@ import {
   seedTeam,
   setRank,
 } from "./_helpers";
+import { showPreview } from "./lib/guide";
 
 // The Survival Guide (#250, test-mode). A captain writes a duty card: Publish
 // is refused while the card has no steps, then the card goes up. A plain
@@ -165,10 +166,9 @@ test.describe("survival guide (test-mode)", () => {
     await page.keyboard.type("Labels");
     await page.keyboard.press("Enter");
     await page.keyboard.type("Name and date.");
+    const preview = await showPreview(page);
     await expect(
-      page
-        .getByTestId("preview-panel")
-        .getByRole("heading", { name: "Labels" }),
+      preview.getByRole("heading", { name: "Labels" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Save draft" }).click();
     await expect(page).toHaveURL(/\/guide\/fridge-rules\/edit$/);

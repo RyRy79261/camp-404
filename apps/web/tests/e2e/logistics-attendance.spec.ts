@@ -13,6 +13,7 @@ import {
   seedTeam,
   setRank,
 } from "./_helpers";
+import { usesPhoneLayout } from "./lib/console-nav";
 
 // Logistics attendance and the AfrikaBurn deadlines (#247 follow-up, owner
 // 2026-09-30; test-mode, where the store stands in for the database and the
@@ -276,12 +277,31 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText("Date saved")).toBeVisible();
     await expect(closes).toContainText(DUE_TEXT);
-    await closes
-      .getByRole("checkbox", { name: "Registration closes done" })
-      .click();
-    await expect(
-      closes.getByRole("checkbox", { name: "Registration closes done" }),
-    ).toBeChecked();
+    if (usesPhoneLayout(page)) {
+      // A phone has no Done column: the tick is in the Change dialog, and the
+      // row says "· done" under its date.
+      dialog = page.getByRole("dialog", {
+        name: "Change the date · Registration closes",
+      });
+      await pressUntil(
+        () =>
+          closes
+            .getByRole("button", { name: "Change Registration closes" })
+            .click(),
+        () => expect(dialog).toBeVisible({ timeout: 2_000 }),
+      );
+      await dialog.getByRole("checkbox", { name: "Done" }).click();
+      await dialog.getByRole("button", { name: "Save" }).click();
+      await expect(dialog).toBeHidden();
+      await expect(closes).toContainText(`${DUE_TEXT} · done`);
+    } else {
+      await closes
+        .getByRole("checkbox", { name: "Registration closes done" })
+        .click();
+      await expect(
+        closes.getByRole("checkbox", { name: "Registration closes done" }),
+      ).toBeChecked();
+    }
     await expect(
       closes.getByRole("button", { name: "Change Registration closes" }),
     ).toBeVisible();

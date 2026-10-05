@@ -11,6 +11,7 @@ import {
   resetTestState,
   seedTeam,
 } from "./_helpers";
+import { expectRailLine } from "./lib/power";
 
 // The Power program in the owner's approved redesign (option B, the answer
 // rail, 2026-10-01): a rail with every section's answer, the open section
@@ -103,11 +104,12 @@ test.describe("power load list (test-mode)", () => {
     await expect(loadRow(page, "Deep freeze")).toContainText("7.68");
     // No generator yet: the answer says so, and the rail too.
     await expect(answer(page)).toContainText("No generator chosen yet.");
-    await expect(
-      page.getByRole("navigation", { name: "Power" }).getByRole("link", {
-        name: /Load list/,
-      }),
-    ).toContainText("No generator chosen yet");
+    await expectRailLine(
+      page,
+      /Load list/,
+      "No generator chosen yet",
+      "Load list",
+    );
 
     // The strip, through the LED helper, on 6 h a day.
     await page.getByRole("button", { name: "Add a load", exact: true }).click();
@@ -266,11 +268,12 @@ test.describe("power fuel estimate (test-mode)", () => {
     await expect(
       page.getByText(/falls in hours the generator is off/),
     ).toHaveCount(0);
-    await expect(
-      page
-        .getByRole("navigation", { name: "Power" })
-        .getByRole("link", { name: /Fuel estimate/ }),
-    ).toContainText("12 jerry cans");
+    await expectRailLine(
+      page,
+      /Fuel estimate/,
+      "12 jerry cans",
+      "Fuel estimate",
+    );
 
     // Now run it 18:00–06:00 only: half the litres, and the night's energy
     // is unserved.

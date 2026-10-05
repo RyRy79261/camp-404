@@ -11,6 +11,7 @@ import {
   resetTestState,
   setRank,
 } from "./_helpers";
+import { showPreview } from "./lib/guide";
 
 // The Survival Guide's public site, from inside the app (#250, test-mode). A
 // captain writes a chapter with a "Members only" part (the toolbar button),
@@ -66,7 +67,7 @@ test.describe("survival guide: the public site's switches (test-mode)", () => {
     await expect(
       page.getByRole("button", { name: "Members only" }),
     ).toHaveAttribute("aria-pressed", "true");
-    const preview = page.getByTestId("preview-panel");
+    const preview = await showPreview(page);
     await expect(
       preview.getByRole("region", { name: "Members only" }),
     ).toContainText("The convoy meets at Ceres.");
