@@ -2,7 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { appendMcpAuditLog } from "@camp404/db/mcp";
 import { getCampUserIdFromAuth } from "./auth";
-import { TOOL_CAPABILITIES } from "./capabilities";
+import { refusalFor, TOOL_CAPABILITIES } from "./capabilities";
 import { getMcpScope, type McpScope } from "./scope";
 
 /**
@@ -76,7 +76,7 @@ export async function runTool<T>(opts: {
     if (!capability) {
       throw new Error(`MCP tool ${opts.toolName} has no capabilities entry`);
     }
-    if (!capability.gate.allows(scope)) deny(capability.gate.refusal);
+    if (!capability.gate.allows(scope)) deny(refusalFor(capability));
     const result = await opts.handler({ scope, clientId });
     await appendMcpAuditLog({
       campUserId,
