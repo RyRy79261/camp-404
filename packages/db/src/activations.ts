@@ -863,10 +863,18 @@ export interface ActivationRow {
   scope: (typeof schema.questionnaireScopeEnum.enumValues)[number];
 }
 
-/** Read a single activation by id, or null. The generic runner loads by id. */
+/** An activation id is a uuid; Postgres throws on anything else. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Read a single activation by id, or null; the generic runner loads by id. An id that is not a uuid (a mistyped or mangled
+ * `/questionnaires/<id>` address) is null too, so the page shows its "closed"
+ * card instead of a 500 from Postgres's uuid cast.
+ */
 export async function getActivationById(
   id: string,
 ): Promise<ActivationRow | null> {
+  if (!UUID.test(id)) return null;
   const db = createHttpDb();
   const [row] = await db
     .select({
