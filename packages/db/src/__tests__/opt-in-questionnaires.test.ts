@@ -353,7 +353,9 @@ describe("My forms — the Optional section", () => {
     if (!res.ok) throw new Error(res.error);
     await answer(answered.id, res.activationId, "Carpentry");
 
-    expect(await closeActivation(res.activationId, actor.id)).toEqual({ ok: true });
+    expect(await closeActivation(res.activationId, actor.id)).toEqual({
+      ok: true,
+    });
     expect(await listOptionalQuestionnaires(other.id)).toEqual([]);
     const act = (await getActivationById(res.activationId))!;
     expect(await getOptInAccess(other.id, act)).toBe("closed");

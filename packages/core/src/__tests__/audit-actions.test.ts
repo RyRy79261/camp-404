@@ -493,9 +493,9 @@ describe("recipe audit rows", () => {
     expect(
       auditDetail("questionnaire.unpublished", { title: "Coming this year?" }),
     ).toBe("Coming this year?");
-    expect(auditDetail("questionnaire.send_closed", { title: "Tent check" })).toBe(
-      "Tent check",
-    );
+    expect(
+      auditDetail("questionnaire.send_closed", { title: "Tent check" }),
+    ).toBe("Tent check");
     expect(
       auditDetail("questionnaire.carry_over_set", {
         title: "Dietary needs",

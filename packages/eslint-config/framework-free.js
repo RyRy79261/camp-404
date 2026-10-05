@@ -14,9 +14,13 @@ export default [
       "no-restricted-imports": [
         "error",
         {
-          paths: ["react", "react-dom", "next", "server-only", "client-only"].map(
-            (name) => ({ name, message }),
-          ),
+          paths: [
+            "react",
+            "react-dom",
+            "next",
+            "server-only",
+            "client-only",
+          ].map((name) => ({ name, message })),
           patterns: [
             {
               group: [

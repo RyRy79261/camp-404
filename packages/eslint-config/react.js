@@ -6,7 +6,10 @@ const recommended = reactHooks.configs.flat.recommended;
 // The two classic Rules of Hooks keep their weight: breaking rules-of-hooks
 // is a bug, so it is an error; exhaustive-deps warns, and a deliberate
 // exception carries an `eslint-disable-next-line` with its reason.
-const CLASSIC = new Set(["react-hooks/rules-of-hooks", "react-hooks/exhaustive-deps"]);
+const CLASSIC = new Set([
+  "react-hooks/rules-of-hooks",
+  "react-hooks/exhaustive-deps",
+]);
 
 // v7's `recommended` also carries the React Compiler rules (refs, purity,
 // set-state-in-effect, static-components, ...). The code predates them and

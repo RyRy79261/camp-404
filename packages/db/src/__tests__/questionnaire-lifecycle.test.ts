@@ -464,7 +464,9 @@ describe("unpublishDefinition — cascade", () => {
   });
 
   it("rejects a missing definition", async () => {
-    expect(await unpublishDefinition("nope", "00000000-0000-0000-0000-000000000000")).toEqual({
+    expect(
+      await unpublishDefinition("nope", "00000000-0000-0000-0000-000000000000"),
+    ).toEqual({
       ok: false,
       error: "Questionnaire not found.",
     });

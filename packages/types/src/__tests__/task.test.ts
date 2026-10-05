@@ -18,7 +18,12 @@ describe("AddTaskInput deadline", () => {
   });
 
   it("refuses a day the calendar does not have, rather than rolling it over", () => {
-    for (const due of ["2027-02-30", "2027-02-29", "2027-04-31", "2027-13-01"]) {
+    for (const due of [
+      "2027-02-30",
+      "2027-02-29",
+      "2027-04-31",
+      "2027-13-01",
+    ]) {
       const parsed = AddTaskInput.safeParse({ ...base, due });
       expect(parsed.success, due).toBe(false);
       expect(parsed.error?.issues[0]?.message).toBe(

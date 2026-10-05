@@ -207,8 +207,6 @@ describe("openActivation — fan-out", () => {
 
   it("the partial unique index forbids a second concurrent open for one key", async () => {
     const db = h.db();
-    // Closes the send; a system user, so no audience counts it.
-    const actor = await makeUser(db, { isSystem: true });
     // The Send pre-check normally catches this; here we drive openActivation
     // directly to prove the DB-level backstop ("...one_open_per_key_idx") fires
     // when two opens race past the application guard.
