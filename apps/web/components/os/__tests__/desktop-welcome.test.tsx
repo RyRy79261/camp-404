@@ -255,7 +255,7 @@ describe("the welcome wizard", () => {
     expect(phone.map((p) => p.title)).toEqual([
       "Welcome",
       "Opening things",
-      "Open programs",
+      "Moving around",
       "Your home screen",
       "Today",
       "How it looks",
@@ -269,9 +269,12 @@ describe("the welcome wizard", () => {
     }
     // And the phone's own controls, by the names the bottom bar gives them.
     const all = phone.map((p) => p.body).join(" ");
-    for (const word of ["Back", "Home", "Programs", "My teams", "Today"]) {
+    for (const word of ["Back", "Home", "glows", "My teams", "Today"]) {
       expect(all).toContain(word);
     }
+    // No Programs button on a phone (owner, 2026-10-06): the wizard never
+    // sends anyone looking for one.
+    expect(all).not.toMatch(/\bPrograms\b/);
   });
 
   it("turns on Open with one click from its second step, saved at once", async () => {

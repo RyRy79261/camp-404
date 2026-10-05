@@ -139,6 +139,15 @@ export function hasProvenance(
   return ids.every((id) => id === self.toLowerCase() || seen.has(id));
 }
 
+export interface WaitingClaim {
+  id: string;
+  submitterId: string | null;
+  submitterName: string | null;
+  description: string;
+  amountCents: number;
+  teamLabel: string | null;
+}
+
 export interface ResolveDeps {
   scope: McpScope;
   tools: readonly VoiceTool[];
@@ -148,9 +157,7 @@ export interface ResolveDeps {
   now: Date;
   readRoster: () => Promise<RosterPerson[]>;
   /** Claims waiting for a decision that this captain may see (none in the test store). */
-  readWaitingClaims: () => Promise<
-    { id: string; submitterId: string | null; submitterName: string | null; description: string; amountCents: number }[]
-  >;
+  readWaitingClaims: () => Promise<WaitingClaim[]>;
   preview?: (tool: string, args: Record<string, unknown>) => Promise<Preview>;
 }
 
@@ -191,7 +198,8 @@ async function secondChoice(
   action: Checked,
   deps: ResolveDeps,
   roster: RosterPerson[] | null,
-  claims: Awaited<ReturnType<ResolveDeps["readWaitingClaims"]>> | null,
+  claims: WaitingClaim[] | null,
+  targeted: ReadonlySet<string>,
 ): Promise<{ other: Checked; question: string } | "many" | null> {
   for (const key of PERSON_ARGS[action.tool] ?? []) {
     const id = action.args[key];
@@ -215,23 +223,28 @@ async function secondChoice(
     const claim = claims.find((c) => c.id === action.args.id);
     if (claim) {
       const name = claim.submitterName ?? "";
-      const others = claims.filter((c) => {
-        if (c.id === claim.id) return false;
-        if (c.submitterId === claim.submitterId) return true;
-        return roster
-          ? lookAlikes({ id: claim.submitterId ?? "", name }, [{ id: c.submitterId ?? "?", name: c.submitterName ?? "" }], deps.words).length > 0
-          : false;
+      // What a claim is "called": what it was for, and its team.
+      const said = (c: WaitingClaim) => ({
+        description: `${c.description} ${c.teamLabel ?? ""}`,
+        amountCents: c.amountCents,
       });
-      const same = others.filter((c) => c.submitterId === claim.submitterId);
-      const unclear = [
-        ...others.filter((c) => c.submitterId !== claim.submitterId),
-        ...(same.length > 0 && !wordsSingleOut(deps.words, claim, same) ? same : []),
-      ];
+      const unclear = claims.filter((c) => {
+        if (c.id === claim.id || targeted.has(c.id)) return false;
+        const samePerson = c.submitterId === claim.submitterId;
+        const alike =
+          samePerson ||
+          lookAlikes(
+            { id: claim.submitterId ?? "", name },
+            [{ id: c.submitterId ?? "?", name: c.submitterName ?? "" }],
+            deps.words,
+          ).length > 0;
+        return alike && !wordsSingleOut(deps.words, said(claim), [said(c)]);
+      });
       if (unclear.length > 1) return "many";
       if (unclear.length === 1) {
         return {
           other: { tool: action.tool, args: { ...action.args, id: unclear[0]!.id } },
-          question: `Which claim from ${name || "them"}?`,
+          question: `Which claim did you mean?`,
         };
       }
     }
@@ -356,8 +369,11 @@ export async function resolveOutcome(
   const roster = needsRoster ? await deps.readRoster() : null;
   const needsClaims = checked.some((c) => c.tool.endsWith("_reimbursement"));
   const claims = needsClaims && !usesTestStore() ? await deps.readWaitingClaims() : null;
+  const targeted = new Set(
+    checked.filter((c) => c.tool.endsWith("_reimbursement")).map((c) => String(c.args.id)),
+  );
   for (let i = 0; i < checked.length; i += 1) {
-    const second = await secondChoice(checked[i]!, deps, roster, claims);
+    const second = await secondChoice(checked[i]!, deps, roster, claims, targeted);
     if (!second) continue;
     if (second === "many" || ask) {
       return refused(

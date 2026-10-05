@@ -110,6 +110,13 @@ type Props = {
   clearTitleBar?: boolean;
   /** The body, drawn only while open. */
   children: ReactNode;
+  /**
+   * Drawn under the tab (shut) or under the panel (open), flush with the
+   * edge, so it moves with the gadget. The app puts a captain's voice mic here
+   * (#356); this package knows nothing of voice. Takes no pointer unless its
+   * own contents ask for it.
+   */
+  below?: ReactNode;
 };
 
 /** The handle's arrow: points the way the panel will move. */
@@ -144,6 +151,7 @@ export function TodayGadget({
   className = "absolute inset-y-0 right-0",
   clearTitleBar = false,
   children,
+  below,
 }: Props) {
   const panelId = `${useId()}-today`;
   const handle = useRef<HTMLButtonElement>(null);
@@ -170,8 +178,9 @@ export function TodayGadget({
       // The frame runs the height of the desktop's edge but takes no
       // pointer itself, so a full-screen window's buttons under it still
       // answer; only the handle and the open panel do.
-      className={`pointer-events-none flex select-none items-start ${open ? "os-slide-in" : ""} ${className}`}
+      className={`pointer-events-none flex select-none flex-col items-end ${open ? "os-slide-in" : ""} ${className}`}
     >
+      <div className="flex min-h-0 items-start">
       <button
         ref={handle}
         type="button"
@@ -220,6 +229,8 @@ export function TodayGadget({
           {children}
         </aside>
       )}
+      </div>
+      {below}
     </div>
   );
 }

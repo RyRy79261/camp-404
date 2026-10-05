@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
+    "eval:voice": "VOICE_EVAL_LIVE=1 vitest run --project node lib/voice/__eval__/eval.test.ts",
     "test:e2e": "playwright test --project=chromium",
     "test:e2e:mobile": "playwright test --project=mobile-360",
     "test:e2e:db": "playwright test --config playwright.db.config.ts"

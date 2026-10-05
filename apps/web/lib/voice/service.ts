@@ -136,8 +136,12 @@ export async function runVoiceCommand(input: {
     now,
     readRoster,
     readWaitingClaims: async () => {
-      const rows = await listReimbursementsForReview({ status: "submitted" });
+      const [rows, labels] = await Promise.all([
+        listReimbursementsForReview({ status: "submitted" }),
+        readTeamLabels(),
+      ]);
       return rows.map((r) => ({
+        teamLabel: r.team ? (labels[r.team] ?? r.team) : null,
         id: r.id,
         submitterId: r.submitterId,
         submitterName: r.submitterName,

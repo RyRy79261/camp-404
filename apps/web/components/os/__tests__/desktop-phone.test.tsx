@@ -16,8 +16,9 @@ import { buildProgramManifest, type ProgramFacts } from "@/lib/programs";
 // The phone's Classic desktop (below md). Its layout is CSS (jsdom draws
 // none), so these check the markup the CSS keys on (`md:hidden`,
 // `max-md:hidden`, the frame's responsive classes) and the phone's own
-// behaviour: Home, Open programs, Today, and a Back that closes the window
-// it left. Ranks and team keys come from the enums the code uses.
+// behaviour: Home, Search, Today, a captain's Voice, the clock last, and a
+// Back that closes the window it left. No Programs button (owner,
+// 2026-10-06: "Programs only show up on desktop"). Ranks and team keys come from the enums the code uses.
 
 const nav = vi.hoisted(() => ({
   pathname: "/tasks",
@@ -219,7 +220,7 @@ describe("the bottom bar", () => {
     expect(frame("tasks")!.hidden).toBe(false);
   });
 
-  it("lists open programs, goes to one, and closes one", () => {
+  it("an open program's home icon is marked open and brings its window to the front", () => {
     window.sessionStorage.setItem(
       windowStorageKey("u-1"),
       JSON.stringify({
@@ -228,23 +229,55 @@ describe("the bottom bar", () => {
       }),
     );
     render(<Desktop {...props()} />);
-    fireEvent.click(bar().getByRole("button", { name: "Open programs, 2" }));
-    const sheet = within(screen.getByRole("region", { name: "Open programs" }));
-    const rows = sheet
-      .getAllByRole("button")
-      .map((b) => b.getAttribute("aria-label") ?? b.textContent);
-    expect(rows).toContain("Close Calendar");
-    fireEvent.click(sheet.getByRole("button", { name: /^Calendar/ }));
+    const icon = document.querySelector<HTMLElement>('[data-phone-icon="calendar"]')!;
+    // Its label wears the open colour, as the glow on the home screen.
+    expect(icon.querySelector("[data-label]")!.className).toContain("bg-os-primary");
+    const shut = document.querySelector<HTMLElement>('[data-phone-icon="roster"]');
+    expect(shut?.querySelector("[data-label]")!.className).not.toContain("bg-os-primary");
+    fireEvent.click(icon);
     expect(nav.push).toHaveBeenCalledWith("/calendar");
+    // Its one window, not a second.
+    expect(document.querySelectorAll('[data-window="calendar"]')).toHaveLength(1);
+  });
 
-    fireEvent.click(bar().getByRole("button", { name: "Open programs, 2" }));
-    fireEvent.click(
-      within(screen.getByRole("region", { name: "Open programs" })).getByRole(
-        "button",
-        { name: "Close Calendar" },
-      ),
+  it("has no Programs button", () => {
+    render(<Desktop {...props()} />);
+    expect(bar().getByRole("button", { name: "Home" })).toBeTruthy();
+    expect(bar().queryByRole("button", { name: /Open programs|Programs/ })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Open programs" })).toBeNull();
+  });
+
+  it("puts the clock last for everyone, and gives only a captain the mic, just before it", () => {
+    const cells = () =>
+      [...screen.getByRole("toolbar", { name: "Bottom bar" }).children].map((el) =>
+        el.hasAttribute("data-phone-clock")
+          ? "clock"
+          : el.hasAttribute("data-phone-voice")
+            ? "voice"
+            : (el.getAttribute("aria-label") ?? "bell"),
+      );
+    const member = render(<Desktop {...props()} />);
+    expect(cells()).toEqual(["Home", "Search", "bell", "Today", "clock"]);
+    expect(document.querySelector("[data-phone-voice]")).toBeNull();
+    expect(document.querySelector("[data-voice-mic]")).toBeNull();
+    member.unmount();
+
+    render(
+      <Desktop
+        {...props({
+          manifest: {
+            ...buildProgramManifest(facts({ rank: ViewerRank.enum.captain })),
+            voice: { consented: true },
+          },
+          today: { count: 0, body: <p>Your day</p> },
+        })}
+      />,
     );
-    expect(frame("calendar")).toBeNull();
+    expect(cells()).toEqual(["Home", "Search", "bell", "Today", "voice", "clock"]);
+    const clock = document.querySelector<HTMLElement>("[data-phone-clock]")!;
+    expect(clock.className).toContain("min-w-[60px]");
+    // And on a desktop, the mic under the Today tab.
+    expect(document.querySelector("[data-os-today] [data-voice-mic]")).not.toBeNull();
   });
 
   it("Today opens a sheet on the home screen, and from a program goes home first", () => {
