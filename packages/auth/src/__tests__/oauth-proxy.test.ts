@@ -9,7 +9,11 @@ import {
   resolveOAuthProxy,
   type AuthEnv,
 } from "../env";
-import { OAUTH_PROXY_REFUSED, proxyDestination } from "../oauth-proxy";
+import {
+  OAUTH_PROXY_REFUSED,
+  proxyDestination,
+  proxyTargets,
+} from "../oauth-proxy";
 
 // Google sign-in on a preview, run end to end: a real Better Auth instance for
 // the preview and another for production, each on its OWN in-memory database,
@@ -332,6 +336,57 @@ describe("Google sign-in on a preview", () => {
     expect(res.headers.get("location")).toBe(
       `/auth/sign-in?error=${OAUTH_PROXY_REFUSED}`,
     );
+  });
+});
+
+describe("the preview's own error page", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  async function sealedErrorURL(errorCallbackURL: string) {
+    const preview = instance(PREVIEW_ENV, emptyDb());
+    const res = await preview.handler(
+      new Request(`${BRANCH}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: BRANCH },
+        body: JSON.stringify({
+          provider: "google",
+          callbackURL: "/",
+          errorCallbackURL,
+        }),
+      }),
+    );
+    if (res.status !== 200) return { status: res.status };
+    const { url } = (await res.json()) as { url: string };
+    const state = new URL(url).searchParams.get("state");
+    return { status: 200, targets: await proxyTargets(PROXY_SECRET, state) };
+  }
+
+  it("is this preview's address for a path on this site", async () => {
+    const sealed = await sealedErrorURL("/auth/sign-in");
+    expect(sealed.targets?.errorURL).toBe(`${BRANCH}/auth/sign-in`);
+  });
+
+  it("is never built from a protocol-relative address, which names another host", async () => {
+    const sealed = await sealedErrorURL("//evil.example/phish");
+    // Carried as given (production's guard then refuses it, being no
+    // preview), never glued onto the preview's host as if it were a path.
+    expect(sealed.status).toBe(200);
+    expect(sealed.targets?.errorURL).not.toBe(`${BRANCH}//evil.example/phish`);
+  });
+
+  it("is no destination when a sealed state's error page is not text", async () => {
+    const seal = (data: object) =>
+      symmetricEncrypt({ key: PROXY_SECRET, data: JSON.stringify(data) });
+    const forged = await seal({
+      isOAuthProxy: true,
+      state: "s",
+      stateCookie: await seal({ callbackURL: `${BRANCH}/x`, errorURL: 5 }),
+    });
+    expect(await proxyTargets(PROXY_SECRET, forged)).toBeNull();
   });
 });
 
