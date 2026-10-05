@@ -339,6 +339,9 @@ export async function moveTask(input: {
       task.assigneeId === input.actorId ||
       task.createdById === input.actorId;
     if (!allowed) return { ok: false, error: CANNOT_MOVE };
+    // The column the actor saw must still be the task's, even for a move to
+    // the same column: otherwise a stale read would be told it succeeded.
+    if (task.status !== input.from) return { ok: false, error: TASK_MOVED };
     if (input.from === input.to) return { ok: true };
 
     const moved = await tx

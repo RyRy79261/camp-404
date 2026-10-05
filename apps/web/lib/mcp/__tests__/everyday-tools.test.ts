@@ -276,6 +276,14 @@ describe("tasks", () => {
       .from(schema.tasks)
       .where(eq(schema.tasks.id, t.id));
     expect(row!.status).toBe("in_progress");
+    // A stale read is refused even for a move to the same column.
+    expect(
+      await call(
+        "move_task",
+        { taskId: t.id, from: "open", to: "open" },
+        cook.id,
+      ),
+    ).toEqual({ error: TASK_MOVED });
   });
 });
 

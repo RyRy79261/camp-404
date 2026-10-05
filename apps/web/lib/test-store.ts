@@ -4028,8 +4028,8 @@ export const testStore = {
     ) {
       return { ok: false, error: CANNOT_MOVE };
     }
-    if (input.from === input.to) return { ok: true };
     if (task.status !== input.from) return { ok: false, error: TASK_MOVED };
+    if (input.from === input.to) return { ok: true };
     task.status = input.to;
     task.completedAt = input.to === "done" ? new Date() : null;
     return { ok: true };

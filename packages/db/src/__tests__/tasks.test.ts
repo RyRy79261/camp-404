@@ -225,6 +225,27 @@ describe("tasks", () => {
       expect(late).toEqual({ ok: false, error: TASK_MOVED });
       expect((await statusOf(added.id))!.status).toBe("done");
     });
+
+    it("refuses a move to the same column the task is no longer in", async () => {
+      const { captain, lead } = await people();
+      const added = await addTask({ creatorId: captain.id, ...task() });
+      if (!added.ok) throw new Error(added.error);
+      await moveTask({
+        taskId: added.id,
+        actorId: lead.id,
+        from: "open",
+        to: "done",
+      });
+      // Read as "open" before the move: a stale "open to open" is no success.
+      expect(
+        await moveTask({
+          taskId: added.id,
+          actorId: captain.id,
+          from: "open",
+          to: "open",
+        }),
+      ).toEqual({ ok: false, error: TASK_MOVED });
+    });
   });
 
   describe("removeTask", () => {
