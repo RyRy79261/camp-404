@@ -137,6 +137,18 @@ describe("submitFeedbackAction", () => {
     expect(structureWithAi).not.toHaveBeenCalled();
   });
 
+  it("charges the address's daily budget only for a report that would be filed", async () => {
+    // Everyone on the address shares that budget: blank or HTML-only
+    // attempts must not use it up.
+    for (const description of ["", "<b></b>"]) {
+      await submitFeedbackAction({ kind: "bug", description });
+    }
+    const charged = vi
+      .mocked(rateLimiter.limit)
+      .mock.calls.filter(([key]) => key.startsWith("feedback-ip-day:"));
+    expect(charged).toHaveLength(0);
+  });
+
   it("counts every address in one IPv6 /64 as one", async () => {
     // One IPv6 user holds the whole /64: each address in it is not a fresh
     // budget.

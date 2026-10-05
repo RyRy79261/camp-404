@@ -159,15 +159,7 @@ export async function submitFeedbackAction(
     limit: 20,
     windowMs: 86_400_000,
   });
-  // A day's ceiling per address too, or fresh accounts from one address
-  // reset the per-account day as fast as they can be made.
-  const dailyByIp = daily.ok
-    ? await rateLimiter.limit(`feedback-ip-day:${ip}`, {
-        limit: 30,
-        windowMs: 86_400_000,
-      })
-    : daily;
-  if (!daily.ok || !dailyByIp.ok) {
+  if (!daily.ok) {
     return {
       ok: false,
       error: "You've filed a lot of reports today — please try again tomorrow.",
@@ -198,6 +190,21 @@ export async function submitFeedbackAction(
   const sanitized = cleaned.text;
   if (!sanitized) {
     return { ok: false, error: "Please describe the issue." };
+  }
+
+  // A day's ceiling per address too, or fresh accounts from one address
+  // reset the per-account day as fast as they can be made. Charged only for
+  // a report that would be filed: everyone on the address shares this
+  // budget, so invalid attempts must not use it up.
+  const dailyByIp = await rateLimiter.limit(`feedback-ip-day:${ip}`, {
+    limit: 30,
+    windowMs: 86_400_000,
+  });
+  if (!dailyByIp.ok) {
+    return {
+      ok: false,
+      error: "You've filed a lot of reports today — please try again tomorrow.",
+    };
   }
 
   // Opaque reporter reference: the camp user id maps internally and exposes no

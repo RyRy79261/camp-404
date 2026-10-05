@@ -131,20 +131,37 @@ export const rateLimiter: RateLimiter = {
  * bucket. Self-contained on purpose (no imports), so other limiters can share it.
  */
 export function clientAddressKey(ip: string): string {
-  const address = ip.trim().split("%")[0]!; // drop an IPv6 zone id
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address);
-  if (mapped) return mapped[1]!;
+  const address = ip.trim().toLowerCase().split("%")[0]!; // drop a zone id
   if (!address.includes(":")) return address;
-  const [head = "", tail] = address.toLowerCase().split("::");
+  // Expand to eight groups. A dotted IPv4 tail (::ffff:192.0.2.1) is two.
+  const parts = address.split(":");
+  const tail = parts.at(-1)!;
+  if (tail.includes(".")) {
+    const octets = tail.split(".").map(Number);
+    parts.splice(
+      -1,
+      1,
+      ((octets[0]! << 8) | octets[1]!).toString(16),
+      ((octets[2]! << 8) | octets[3]!).toString(16),
+    );
+  }
+  const joined = parts.join(":");
+  const [head = "", rest] = joined.split("::");
   const front = head ? head.split(":") : [];
-  const back = tail ? tail.split(":") : [];
-  const groups =
-    tail === undefined
+  const back = rest ? rest.split(":") : [];
+  const groups = (
+    rest === undefined
       ? front
-      : [...front, ...Array(8 - front.length - back.length).fill("0"), ...back];
+      : [...front, ...Array(8 - front.length - back.length).fill("0"), ...back]
+  ).map((g) => Number.parseInt(g || "0", 16) || 0);
+  // IPv4-mapped (::ffff:a.b.c.d, in any spelling): the IPv4 address.
+  if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
+    const [hi = 0, lo = 0] = groups.slice(6);
+    return [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff].join(".");
+  }
   return `${groups
     .slice(0, 4)
-    .map((g) => g.replace(/^0+/, "") || "0")
+    .map((g) => g.toString(16))
     .join(":")}::/64`;
 }
 
