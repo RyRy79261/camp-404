@@ -12,6 +12,7 @@ import {
   seedLift,
   seedTeam,
 } from "./_helpers";
+import { expectRailLine } from "./lib/power";
 
 // Power on site and before it (#255, #256, #257; test-mode), in the owner's
 // approved redesign (option B, the answer rail). A Power & Lighting lead keeps
@@ -149,11 +150,7 @@ test.describe("power on site (test-mode)", () => {
     await expect(can1).toContainText("Metal");
     await expect(can1).toContainText("Dana's Toyota");
     await expect(can1).toContainText("Dana Driver");
-    await expect(
-      page.getByRole("navigation", { name: "Power" }).getByRole("link", {
-        name: /Refuelling/,
-      }),
-    ).toContainText("1 can, 25 L");
+    await expectRailLine(page, /Refuelling/, "1 can, 25 L", "Refuelling");
 
     // The driver finds it on their own card in Transport, and in the Cars.
     await signInAs(page, "fuel-driver", "Dana Driver");
@@ -168,7 +165,16 @@ test.describe("power on site (test-mode)", () => {
       fill.getByRole("link", { name: "See all fuel cans in Power ›" }),
     ).toHaveAttribute("href", "/power/refuelling");
     await expect(
-      page.getByRole("row", { name: "Dana Driver" }).first(),
+      // A table row in a wide window, a card in the Cars list on a phone.
+      page
+        .getByRole("row", { name: "Dana Driver" })
+        .or(
+          page
+            .getByRole("list", { name: "Cars" })
+            .getByRole("listitem", { name: "Dana Driver" }),
+        )
+        .filter({ visible: true })
+        .first(),
     ).toContainText("1 can, 25 L");
 
     // A plain member and a lead of Kitchen read the list with nothing to press.

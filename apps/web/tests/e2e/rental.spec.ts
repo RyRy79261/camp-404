@@ -14,6 +14,7 @@ import {
   seedTeam,
   setRank,
 } from "./_helpers";
+import { usesPhoneLayout } from "./lib/console-nav";
 
 // Gear rental (#241, test-mode, on the store's twin). A captain lists two
 // tents and a mattress. A member is asked about a tent ONCE, by need, and
@@ -81,11 +82,29 @@ async function captainListsGear(page: Page, request: APIRequestContext) {
   await page.getByLabel("How many the camp has").fill("1");
   await page.getByRole("button", { name: "Add item" }).click();
   await expect(items.getByText("2-person tent")).toBeVisible();
-  // Its prices and count in their own columns: sleeps 2, the supplier's
-  // R250, camp stock R100, and the camp has 1.
-  await expect(
-    items.getByRole("row", { name: /2-person tent/ }).getByRole("cell"),
-  ).toHaveText(["2-person tent", "2", /R\s250,00/, /R\s100,00/, "1", "–", ""]);
+  // Its prices and count in their own columns (on a phone, its card's
+  // lines): sleeps 2, the supplier's R250, camp stock R100, and the camp
+  // has 1.
+  if (usesPhoneLayout(page)) {
+    await expect(
+      items
+        .getByRole("listitem")
+        .filter({ hasText: "2-person tent" })
+        .getByRole("definition"),
+    ).toHaveText(["2", /R\s250,00/, /R\s100,00/, "1", "–"]);
+  } else {
+    await expect(
+      items.getByRole("row", { name: /2-person tent/ }).getByRole("cell"),
+    ).toHaveText([
+      "2-person tent",
+      "2",
+      /R\s250,00/,
+      /R\s100,00/,
+      "1",
+      "–",
+      "",
+    ]);
+  }
 
   // A big tent: the supplier only.
   await page.getByLabel("Name").fill("4-person tent");
@@ -338,14 +357,23 @@ test.describe("gear rental (test-mode)", () => {
     // The camp owns no mattresses: a dash, not words, in a number column.
     await expect(byItem(page, /Mattress/, "Left")).toHaveText("–");
     await expect(byItem(page, /Mattress/, "To order")).toHaveText("2");
-    // The label has a column of its own.
-    await expect(
-      page
-        .getByRole("table", { name: "Tents" })
-        .getByRole("row", { name: /2-person tent/ })
-        .getByRole("cell")
-        .first(),
-    ).toHaveText("T3");
+    // The label has a column of its own (on a phone, a line on the card).
+    const tentLabel = page
+      .getByRole("table", { name: "Tents" })
+      .getByRole("row", { name: /2-person tent/ })
+      .getByRole("cell")
+      .first()
+      .or(
+        page
+          .getByRole("list", { name: "Tents" })
+          .getByRole("listitem")
+          .filter({ hasText: "2-person tent" })
+          .locator("div")
+          .filter({ has: page.locator("dt", { hasText: /^Label$/ }) })
+          .locator("dd"),
+      )
+      .filter({ visible: true });
+    await expect(tentLabel).toHaveText("T3");
     await expect(
       page.getByRole("list", { name: "Needs a tent, not assigned yet" }),
     ).toHaveCount(0);
