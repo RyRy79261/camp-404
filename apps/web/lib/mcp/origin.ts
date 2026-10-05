@@ -24,7 +24,8 @@ export function getPublicOrigin(req?: Request): string {
     if (fwdHost) return `${fwdProto ?? "https"}://${fwdHost}`;
     const host = req.headers.get("host");
     if (host) {
-      const proto = fwdProto ?? (host.startsWith("localhost") ? "http" : "https");
+      const proto =
+        fwdProto ?? (host.startsWith("localhost") ? "http" : "https");
       return `${proto}://${host}`;
     }
   }

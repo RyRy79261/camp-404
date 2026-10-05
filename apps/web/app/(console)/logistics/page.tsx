@@ -2,10 +2,8 @@ import Link from "next/link";
 import type * as React from "react";
 import { CalendarDays, CalendarX, MapPin, Pencil, Printer } from "lucide-react";
 import {
-  AFRIKABURN_DATE_GROUPS,
-  AFRIKABURN_DATES,
-  AFRIKABURN_OTHER_GROUP_LABEL,
   NO_ROUND_THIS_YEAR,
+  afrikaburnDateGroups,
   attendanceIsOpen,
   campDayKey,
   canAskForAttendance,
@@ -387,30 +385,6 @@ function WhoCanHelp({
   );
 }
 
-/** The dates to show members, grouped as the year page groups them. */
-function dateGroups(deadlines: DeadlineRow[]) {
-  const byKind = new Map(
-    deadlines.filter((d) => d.kind).map((d) => [d.kind as string, d]),
-  );
-  const groups = AFRIKABURN_DATE_GROUPS.map((group) => ({
-    key: group.key as string,
-    label: group.label,
-    rows: AFRIKABURN_DATES.filter((d) => d.group === group.key).flatMap((d) => {
-      const row = byKind.get(d.kind);
-      // Only what a captain has set: a date, or "No round this year".
-      return row && (row.dueDate || row.skipped)
-        ? [{ ...row, title: d.name }]
-        : [];
-    }),
-  }));
-  groups.push({
-    key: "other",
-    label: AFRIKABURN_OTHER_GROUP_LABEL,
-    rows: deadlines.filter((d) => d.kind === null),
-  });
-  return groups.filter((g) => g.rows.length > 0);
-}
-
 function DeadlineItem({ d }: { d: DeadlineRow }) {
   return (
     <li
@@ -444,7 +418,7 @@ function Deadlines({
   deadlines: DeadlineRow[];
   canManage: boolean;
 }) {
-  const groups = dateGroups(deadlines);
+  const groups = afrikaburnDateGroups(deadlines);
   return (
     <Card>
       <CardContent className="p-0">

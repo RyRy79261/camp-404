@@ -1,4 +1,6 @@
 import {
+  canEditAnyInventory,
+  canEditLogistics,
   canEditTransport,
   canManageMoney,
   canManageRental,
@@ -6,6 +8,7 @@ import {
   hasClearance,
 } from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
+import { LOGISTICS_REFUSAL } from "../logistics-copy";
 import { SITE_URL } from "../site";
 import type { McpScope } from "./scope";
 
@@ -83,6 +86,21 @@ export const GATES = {
     allows: (s) => canEditTransport(s.viewerRank, s.leadTeams),
     refusal: "Only a captain or a Transport & Logistics lead can do this.",
   },
+  // The Logistics page's editors (canEditLogistics): the same people as
+  // transportEditor today, kept apart so each follows its own page's rule.
+  logisticsEditor: {
+    who: "Captains and Transport & Logistics leads",
+    allows: (s) => canEditLogistics(s.viewerRank, s.leadTeams),
+    refusal: LOGISTICS_REFUSAL,
+  },
+  // The Inventory page's Add button (canEditAnyInventory). Which team's gear
+  // is the write's own check (canEditInventory on the item's team).
+  inventoryEditor: {
+    who: "Captains, and team leads for their own team's gear",
+    allows: (s) => canEditAnyInventory(s.viewerRank, s.leadTeams),
+    refusal:
+      "Only a captain or a lead of the item's team can add gear. Any member can suggest a change to an item instead.",
+  },
 } as const satisfies Record<string, Gate>;
 
 /** The areas the website and the tools are grouped by. */
@@ -93,6 +111,8 @@ export const AREAS = [
   "Survival Guide",
   "Questionnaires",
   "Kitchen",
+  "Inventory",
+  "Logistics",
   "Transport",
   "Invites and audit",
   "Announcements",
@@ -105,6 +125,11 @@ export interface ToolCapability {
   gate: Gate;
   /** One plain line: what it does. */
   does: string;
+  /**
+   * The website page that does the same thing. A refused call names it, so
+   * the person knows where to look (and what the page shows them instead).
+   */
+  page?: string;
 }
 
 /** Every tool the connector registers. A tool missing here cannot run. */
@@ -284,6 +309,68 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     area: "Kitchen",
     gate: GATES.member,
     does: "The recipe book.",
+  },
+  get_recipe: {
+    area: "Kitchen",
+    gate: GATES.member,
+    does: "Read one recipe as its page shows it to you: the book's version at a plate count, how it was scaled and the cooks' notes.",
+    page: "/kitchen/recipes",
+  },
+  add_recipe_lesson: {
+    area: "Kitchen",
+    gate: GATES.member,
+    does: "Add a note on what the kitchen learned cooking a recipe in the book.",
+    page: "/kitchen/recipes",
+  },
+  get_meal_plan: {
+    area: "Kitchen",
+    gate: GATES.member,
+    does: "This year's meal plan: the days on site, the plates at each meal, the recipes on the menu and the snacks.",
+    page: "/kitchen/meal-plan",
+  },
+  get_shopping_list: {
+    area: "Kitchen",
+    gate: GATES.member,
+    does: "The shopping list worked out from the menu, with what is already ticked (captains and Kitchen leads also get prices).",
+    page: "/kitchen/shopping",
+  },
+  list_recipe_review_queue: {
+    area: "Kitchen",
+    gate: GATES.kitchenReview,
+    does: "Suggestions waiting for a decision, recipes ready to send to Claude, and older drafts waiting to be accepted. Deciding and sending stay on the page.",
+    page: "/kitchen/recipes/review",
+  },
+  // Inventory
+  list_inventory_items: {
+    area: "Inventory",
+    gate: GATES.member,
+    does: "The camp's gear as the Inventory page shows it, with the suggested changes you may review.",
+    page: "/inventory",
+  },
+  add_inventory_item: {
+    area: "Inventory",
+    gate: GATES.inventoryEditor,
+    does: "Add an item of gear to a team you may edit (captains: any team). Logged in the item's history.",
+    page: "/inventory",
+  },
+  propose_inventory_change: {
+    area: "Inventory",
+    gate: GATES.member,
+    does: "Suggest a new count, condition or place for an item, for its team's lead or a captain to approve on the page.",
+    page: "/inventory",
+  },
+  // Logistics
+  list_logistics_days: {
+    area: "Logistics",
+    gate: GATES.member,
+    does: "This year's pack, travel, build, burn, strike and unpack days, and AfrikaBurn's dates.",
+    page: "/logistics",
+  },
+  set_logistics_days: {
+    area: "Logistics",
+    gate: GATES.logisticsEditor,
+    does: "Set one phase's days, place and note, on the version you read. It goes on the camp calendar and moves the meal plan's prep with Day 1.",
+    page: "/logistics",
   },
   // Transport
   list_drivers: {
@@ -499,6 +586,34 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
     gate: GATES.kitchenReview,
   },
   {
+    area: "Inventory",
+    what: "Approve or turn down a suggested change, change or archive an item, lend it out, and keep the team's needs",
+    why: "These live on the Inventory page; the connector has no tool for them yet.",
+    path: "/inventory",
+    gate: GATES.inventoryEditor,
+  },
+  {
+    area: "Logistics",
+    what: "Clear a phase's days (it comes off the camp calendar)",
+    why: "This lives on the Logistics page; the connector has no tool for it yet.",
+    path: "/logistics",
+    gate: GATES.logisticsEditor,
+  },
+  {
+    area: "Logistics",
+    what: "Keep AfrikaBurn's dates for the year",
+    why: "They are kept with the camp's year settings, so a captain does it on the page.",
+    path: "/captains/camp-settings/cycle",
+    gate: GATES.captain,
+  },
+  {
+    area: "Kitchen",
+    what: "Change the meal plan, the menu, the snacks or the prices",
+    why: "These live on the Kitchen's pages; the connector has no tool for them yet.",
+    path: "/kitchen/meal-plan",
+    gate: GATES.kitchenReview,
+  },
+  {
     area: "Survival Guide",
     what: "Put a guide section on the public site, or keep a chapter members only",
     why: "It decides what the whole internet reads, so a captain does it on the page.",
@@ -513,6 +628,16 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
     gate: GATES.captain,
   },
 ];
+
+/**
+ * The sentence a call refused at its gate returns: the gate's own words, then
+ * the page that does it on the website, when the tool names one.
+ */
+export function refusalFor(capability: ToolCapability): string {
+  return capability.page
+    ? `${capability.gate.refusal} On the website: ${siteUrl(capability.page)}`
+    : capability.gate.refusal;
+}
 
 /** The website's address for a path, for a person to open. */
 export function siteUrl(path: string): string {

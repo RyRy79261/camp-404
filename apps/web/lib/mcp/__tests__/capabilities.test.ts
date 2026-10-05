@@ -93,6 +93,34 @@ describe("capabilitiesFor", () => {
     );
   });
 
+  it("gives the Kitchen's tools by the Kitchen's rule, and the days by Logistics'", () => {
+    const kitchen = toolsFor(
+      scopeOf("member", [{ team: "kitchen", isLead: true }]),
+    );
+    const transport = toolsFor(
+      scopeOf("member", [{ team: "transport_and_logistics", isLead: true }]),
+    );
+    const member = toolsFor(scopeOf("member"));
+    expect(kitchen).toContain("list_recipe_review_queue");
+    expect(kitchen).not.toContain("set_logistics_days");
+    expect(transport).toContain("set_logistics_days");
+    expect(transport).not.toContain("list_recipe_review_queue");
+    // Any lead adds gear to their own team; a member suggests a change.
+    expect(kitchen).toContain("add_inventory_item");
+    expect(member).not.toContain("add_inventory_item");
+    expect(member).toEqual(
+      expect.arrayContaining([
+        "list_inventory_items",
+        "propose_inventory_change",
+        "list_logistics_days",
+        "get_recipe",
+        "add_recipe_lesson",
+        "get_meal_plan",
+        "get_shopping_list",
+      ]),
+    );
+  });
+
   it("links each website-only action to a full address on the site", () => {
     const caps = capabilitiesFor(scopeOf("captain"));
     const urls = caps.areas.flatMap((a) => a.websiteOnly.map((w) => w.url));

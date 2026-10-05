@@ -425,6 +425,45 @@ export function afrikaburnDate(kind: string): AfrikaburnDate | undefined {
   return isAfrikaburnDateKind(kind) ? BY_KIND.get(kind) : undefined;
 }
 
+/** A year's AfrikaBurn date, as afrikaburnDateGroups needs it. */
+interface DatedDeadline {
+  kind: string | null;
+  title: string;
+  dueDate: string | null;
+  skipped: boolean;
+}
+
+/**
+ * The year's AfrikaBurn dates as members see them (Logistics, and the
+ * connector's list_logistics_days), grouped as the year page groups them: each
+ * standard group with only the dates a captain has set (a date, or "No round
+ * this year"), named by its standard name; then "Other", the captain's own
+ * dates, all of them. Empty groups are left out.
+ */
+export function afrikaburnDateGroups<T extends DatedDeadline>(
+  deadlines: readonly T[],
+): { key: string; label: string; rows: T[] }[] {
+  const byKind = new Map(
+    deadlines.filter((d) => d.kind).map((d) => [d.kind as string, d]),
+  );
+  const groups = AFRIKABURN_DATE_GROUPS.map((group) => ({
+    key: group.key as string,
+    label: group.label,
+    rows: AFRIKABURN_DATES.filter((d) => d.group === group.key).flatMap((d) => {
+      const row = byKind.get(d.kind);
+      return row && (row.dueDate || row.skipped)
+        ? [{ ...row, title: d.name }]
+        : [];
+    }),
+  }));
+  groups.push({
+    key: "other",
+    label: AFRIKABURN_OTHER_GROUP_LABEL,
+    rows: deadlines.filter((d) => d.kind === null),
+  });
+  return groups.filter((g) => g.rows.length > 0);
+}
+
 /** Whether a year may say "No round this year" for this date. Fails closed. */
 export function afrikaburnDateMayBeSkipped(kind: string): boolean {
   return afrikaburnDate(kind)?.mayBeSkipped === true;

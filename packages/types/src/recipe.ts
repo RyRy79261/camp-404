@@ -660,6 +660,10 @@ export const RecipeUrl = z.url({
 /** Text that is only a link: the server never opens links, so it is no recipe. */
 export const LINK_ONLY_TEXT = /^\s*https?:\/\/\S+\s*$/i;
 
+/** What the form says to a recipe that is only a link. */
+export const LINK_ONLY_REFUSAL =
+  "Paste the recipe itself. Claude does not open links, so put the link in the link box.";
+
 export const SuggestRecipeInput = z.object({
   /** Optional: a blank name takes the text's first line. */
   title: optionalText(120, "Keep the name under 120 characters."),
@@ -672,10 +676,7 @@ export const SuggestRecipeInput = z.object({
       RECIPE_TEXT_MAX,
       `Keep the recipe under ${RECIPE_TEXT_MAX} characters.`,
     )
-    .refine(
-      (text) => !LINK_ONLY_TEXT.test(text),
-      "Paste the recipe itself. Claude does not open links, so put the link in the link box.",
-    ),
+    .refine((text) => !LINK_ONLY_TEXT.test(text), LINK_ONLY_REFUSAL),
   source: z.enum(["text", "voice"]),
   /** Where the recipe came from, kept for reference. Never opened. */
   url: z.preprocess(
