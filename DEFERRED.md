@@ -75,6 +75,11 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > profile actions; the duplicate `ActionResult<T>` that lived in
   > `announcements/actions.ts` was deleted in favour of the shared module.
 
+  > **[CORRECTION 2026-10-05]** It was not applied everywhere: about 24 more
+  > actions (questionnaires, camp settings, join site, captain promotion,
+  > invites) still threw. They run in `runAction` now, each with a test that a
+  > thrown database error comes back as `{ok:false}`.
+
 - **Shake-to-report bug/feature modal** — spec written at
   `docs/specs/2026-05-31-shake-to-report-design.md`; **not built**, pending
   maintainer review of the open decisions (storage target, Intake-Tracker relationship,
