@@ -66,12 +66,35 @@ describe("sendEmail", () => {
         ok: false,
         error: `Resend ${status}: busy`,
         retryable: true,
+        // Only a 429 asks the drain to stop for this run.
+        ...(status === 429 ? { rateLimited: true } : {}),
       });
     }
     fetchMock.mockResolvedValueOnce({
       ok: false,
       status: 422,
       text: async () => "bad address",
+    });
+    expect(await sendEmail("ada@example.com", EMAIL, KEY)).not.toHaveProperty(
+      "retryable",
+    );
+  });
+
+  it("waits out a 409 for the same email still in flight, but not a key reused for another email", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      text: async () =>
+        '{"name":"concurrent_idempotent_requests","message":"in progress"}',
+    });
+    expect(await sendEmail("ada@example.com", EMAIL, KEY)).toMatchObject({
+      ok: false,
+      retryable: true,
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      text: async () => '{"name":"invalid_idempotent_request"}',
     });
     expect(await sendEmail("ada@example.com", EMAIL, KEY)).not.toHaveProperty(
       "retryable",

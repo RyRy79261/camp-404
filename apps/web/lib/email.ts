@@ -21,11 +21,14 @@ const RESEND_URL = "https://api.resend.com/emails";
 export const EMAIL_SEND_TIMEOUT_MS = 10_000;
 
 /**
- * Whether a refusal means "not now" rather than "never": a rate limit (429)
- * or the provider's own failure (5xx). Anything else (a bad address, an
- * unverified domain) will fail the same way every time.
+ * Whether a refusal means "not now" rather than "never": a rate limit (429),
+ * the same idempotency key still in flight (409
+ * `concurrent_idempotent_requests`), or the provider's own failure (5xx).
+ * Anything else (a bad address, an unverified domain, or a 409 for a key
+ * reused with a different email) will fail the same way every time.
  */
-function isRetryableStatus(status: number): boolean {
+function isRetryable(status: number, body: string): boolean {
+  if (status === 409) return body.includes("concurrent_idempotent_requests");
   return status === 429 || status >= 500;
 }
 
@@ -85,6 +88,7 @@ export async function sendEmail(
   return {
     ok: false,
     error: `Resend ${res.status}: ${detail.slice(0, 200)}`,
-    ...(isRetryableStatus(res.status) ? { retryable: true } : {}),
+    ...(isRetryable(res.status, detail) ? { retryable: true } : {}),
+    ...(res.status === 429 ? { rateLimited: true } : {}),
   };
 }

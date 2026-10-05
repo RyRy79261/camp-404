@@ -9,6 +9,8 @@ import { makeUser } from "./_factories";
 import { deliveryValues } from "../deliveries";
 import {
   drainQueuedEmail,
+  EMAIL_MAX_DEFERRALS_IN_A_ROW,
+  EMAIL_MAX_QUEUED_HOURS,
   emailIdempotencyKey,
   type EmailSend,
 } from "../email";
@@ -110,6 +112,7 @@ describe("drainQueuedEmail", () => {
       failed: 0,
       skipped: 3,
       deferred: 0,
+      expired: 0,
     });
     expect(send).toHaveBeenCalledOnce();
     const [to, email, sendOptions] = send.mock.calls[0]!;
@@ -134,6 +137,7 @@ describe("drainQueuedEmail", () => {
       failed: 0,
       skipped: 0,
       deferred: 0,
+      expired: 0,
     });
     expect(send).toHaveBeenCalledOnce();
   });
@@ -176,6 +180,7 @@ describe("drainQueuedEmail", () => {
       failed: 2,
       skipped: 0,
       deferred: 0,
+      expired: 0,
     });
     const rows = await db
       .select({ emailStatus: schema.notificationDeliveries.emailStatus })
@@ -184,76 +189,118 @@ describe("drainQueuedEmail", () => {
     expect(rows).toEqual([{ emailStatus: "skipped" }]);
   });
 
-  it("leaves a rate-limited or throwing send queued, stops the run, and sends it next time", async () => {
-    const db = h.db();
+  /** Three verified members, each with one loud email queued, oldest first. */
+  async function queueThree(db: DB, minutesAgo: number[] = [30, 20, 10]) {
     const users = [];
-    for (const name of ["a", "b", "c"]) {
+    for (const [i, name] of ["a", "b", "c"].entries()) {
       const user = await makeUser(db, { authUserId: `auth-${name}` });
       await authIdentity(db, `auth-${name}`, `${name}@example.com`, true);
+      await db.insert(schema.notificationDeliveries).values({
+        ...deliveryValues(
+          announcementNotification({
+            broadcastId: ID,
+            title: "Burn night",
+            body: "Meet at 8.",
+          }),
+          {
+            userId: user.id,
+            broadcastId: null,
+            channel: "both",
+            presentation: "acknowledge",
+          },
+        ),
+        createdAt: new Date(Date.now() - minutesAgo[i]! * 60_000),
+      });
       users.push(user);
     }
-    const loud = announcementNotification({
-      broadcastId: ID,
-      title: "Burn night",
-      body: "Meet at 8.",
-    });
-    // Oldest first: a, then b, then c.
-    for (const [i, user] of users.entries()) {
-      await db.insert(schema.notificationDeliveries).values({
-        ...deliveryValues(loud, {
-          userId: user.id,
-          broadcastId: null,
-          channel: "both",
-          presentation: "acknowledge",
-        }),
-        createdAt: new Date(Date.UTC(2026, 9, 1, 10, i)),
-      });
-    }
-    const [a, b, c] = users;
+    return users as [(typeof users)[0], (typeof users)[0], (typeof users)[0]];
+  }
 
-    // a goes out; b is rate limited, so the run stops before c.
-    const first = vi.fn<EmailSend>(async (to) =>
-      to === "b@example.com"
-        ? { ok: false, error: "Resend 429: slow down", retryable: true }
-        : { ok: true },
-    );
-    expect(await drainQueuedEmail(first, { siteUrl: SITE })).toEqual({
+  it("leaves an email that will not go through queued, and still sends the ones behind it", async () => {
+    const db = h.db();
+    const [a, b, c] = await queueThree(db);
+
+    // a always fails "not now" (a 5xx, a timeout); b's send throws.
+    const send = vi.fn<EmailSend>(async (to) => {
+      if (to === "a@example.com")
+        return { ok: false, error: "Resend 503: down", retryable: true };
+      if (to === "b@example.com") throw new Error("network down");
+      return { ok: true };
+    });
+    expect(await drainQueuedEmail(send, { siteUrl: SITE })).toEqual({
       sent: 1,
       failed: 0,
       skipped: 0,
-      deferred: 1,
+      deferred: 2,
+      expired: 0,
     });
-    expect(first.mock.calls.map(([to]) => to)).toEqual([
-      "a@example.com",
-      "b@example.com",
-    ]);
-    let after = await statuses(db);
-    expect(after.get(a!.id)).toBe("sent");
-    expect(after.get(b!.id)).toBe("queued");
-    expect(after.get(c!.id)).toBe("queued");
+    const after = await statuses(db);
+    expect(after.get(a.id)).toBe("queued");
+    expect(after.get(b.id)).toBe("queued");
+    expect(after.get(c.id)).toBe("sent");
 
-    // A throw (the adapter's own bug, or a dropped connection) is no answer
-    // about the email either: still queued.
-    const throwing: EmailSend = async () => {
-      throw new Error("network down");
-    };
-    expect(await drainQueuedEmail(throwing, { siteUrl: SITE })).toEqual({
-      sent: 0,
-      failed: 0,
-      skipped: 0,
-      deferred: 1,
-    });
-
-    // The next run sends both.
+    // The next run tries a and b again.
     const next = vi.fn<EmailSend>(async () => ({ ok: true }) as const);
-    expect(await drainQueuedEmail(next, { siteUrl: SITE })).toEqual({
+    expect(await drainQueuedEmail(next, { siteUrl: SITE })).toMatchObject({
       sent: 2,
-      failed: 0,
-      skipped: 0,
       deferred: 0,
     });
-    after = await statuses(db);
-    expect(after.get(b!.id)).toBe("sent");
-    expect(after.get(c!.id)).toBe("sent");
+  });
+
+  it("stops the run at a rate limit, and after three 'not now' answers in a row", async () => {
+    const db = h.db();
+    const [a, b, c] = await queueThree(db);
+
+    const limited = vi.fn<EmailSend>(async () => ({
+      ok: false,
+      error: "Resend 429: slow down",
+      retryable: true,
+      rateLimited: true,
+    }));
+    expect(await drainQueuedEmail(limited, { siteUrl: SITE })).toMatchObject({
+      sent: 0,
+      deferred: 1,
+    });
+    expect(limited).toHaveBeenCalledOnce();
+
+    const down = vi.fn<EmailSend>(async () => ({
+      ok: false,
+      error: "Resend unreachable (TimeoutError)",
+      retryable: true,
+    }));
+    expect(await drainQueuedEmail(down, { siteUrl: SITE })).toMatchObject({
+      deferred: EMAIL_MAX_DEFERRALS_IN_A_ROW,
+    });
+    expect(down).toHaveBeenCalledTimes(EMAIL_MAX_DEFERRALS_IN_A_ROW);
+
+    const after = await statuses(db);
+    for (const user of [a, b, c]) expect(after.get(user.id)).toBe("queued");
+  });
+
+  it("marks an email queued too long failed, without sending it", async () => {
+    const db = h.db();
+    // a was queued past the cutoff (so a retry could fall outside Resend's
+    // 24-hour idempotency window); b and c are fresh.
+    const [a, b, c] = await queueThree(db, [
+      EMAIL_MAX_QUEUED_HOURS * 60 + 5,
+      20,
+      10,
+    ]);
+    const send = vi.fn<EmailSend>(async () => ({ ok: true }) as const);
+    expect(await drainQueuedEmail(send, { siteUrl: SITE })).toEqual({
+      sent: 2,
+      failed: 1,
+      skipped: 0,
+      deferred: 0,
+      expired: 1,
+    });
+    expect(send.mock.calls.map(([to]) => to)).toEqual([
+      "b@example.com",
+      "c@example.com",
+    ]);
+    const after = await statuses(db);
+    expect(after.get(a.id)).toBe("failed");
+    expect(after.get(b.id)).toBe("sent");
+    expect(after.get(c.id)).toBe("sent");
   });
 });
