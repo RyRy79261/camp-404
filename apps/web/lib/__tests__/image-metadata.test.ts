@@ -104,6 +104,9 @@ describe("stripImageMetadata", () => {
     ).toBeNull();
     expect(stripImageMetadata("image/webp", new Uint8Array(4))).toBeNull();
     expect(stripImageMetadata("application/pdf", new Uint8Array(4))).toBeNull();
+    // A JPEG cut off inside its picture: the scan starts but never ends.
+    const jpg = fixture("gps-photo.jpg");
+    expect(stripImageMetadata("image/jpeg", jpg.subarray(0, -2))).toBeNull();
     // A JPEG cut off before its picture starts.
     expect(
       stripImageMetadata(
@@ -111,5 +114,17 @@ describe("stripImageMetadata", () => {
         fixture("gps-photo.jpg").subarray(0, 40),
       ),
     ).toBeNull();
+  });
+
+  it("drops whatever a phone appended after the end of the picture", () => {
+    const jpg = fixture("gps-photo.jpg");
+    const clean = stripImageMetadata("image/jpeg", jpg)!;
+    const trailer = new TextEncoder().encode("MotionPhoto_Data FixtureCam");
+    const withTrailer = new Uint8Array(jpg.length + trailer.length);
+    withTrailer.set(jpg);
+    withTrailer.set(trailer, jpg.length);
+    const after = stripImageMetadata("image/jpeg", withTrailer)!;
+    expect(after).toEqual(clean);
+    expect([...after.subarray(-2)]).toEqual([0xff, 0xd9]);
   });
 });

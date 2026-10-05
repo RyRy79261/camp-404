@@ -72,12 +72,18 @@ function stripJpeg(bytes: Uint8Array): Uint8Array | null {
     while (bytes[at] === 0xff && bytes[at + 1] === 0xff) at++;
     if (at + 4 > bytes.length || bytes[at] !== 0xff) return null;
     const marker = bytes[at + 1]!;
-    // Start of scan: the compressed picture runs from here to the end.
+    // Start of scan: the compressed picture runs from here to the end of
+    // image (EOI, FF D9), which compressed data can never contain (an FF in
+    // it is always followed by 00 or a restart marker). No EOI means the file
+    // was cut short. Anything after it (a phone's trailer, a motion photo's
+    // video) is not the picture and is dropped with the rest.
     if (marker === 0xda) {
+      const end = endOfImage(bytes, at);
+      if (end < 0) return null;
       const header = kept.findIndex((s) => s[1] === 0xe0) + 1; // after JFIF
       if (orientation !== 1)
         kept.splice(header, 0, orientationApp1(orientation));
-      return concat([bytes.subarray(0, 2), ...kept, bytes.subarray(at)]);
+      return concat([bytes.subarray(0, 2), ...kept, bytes.subarray(at, end)]);
     }
     // A picture with no scan, or a marker that has no length here.
     if (
@@ -96,6 +102,14 @@ function stripJpeg(bytes: Uint8Array): Uint8Array | null {
     if (keepJpegSegment(marker, seg)) kept.push(seg);
     at += 2 + length;
   }
+}
+
+/** The offset just past the first EOI marker at or after `from`, or -1. */
+function endOfImage(bytes: Uint8Array, from: number): number {
+  for (let i = from; i + 1 < bytes.length; i++) {
+    if (bytes[i] === 0xff && bytes[i + 1] === 0xd9) return i + 2;
+  }
+  return -1;
 }
 
 /** The Orientation tag (0x0112) of IFD0 in a TIFF block, if it is 1–8. */
