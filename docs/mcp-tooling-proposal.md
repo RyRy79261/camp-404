@@ -324,6 +324,12 @@ returns no bank details to anyone.
 | `mark_notification_read(id)` | W   | M    | flips own delivery row's `readAt`  |
 | `list_broadcasts(filter)`    | R   | C    | read history of sent announcements |
 
+[2026-10-05] Built as `list_my_notifications` (the page's paging and tabs;
+listing marks nothing read), `mark_notifications_read(ids)` and
+`mark_all_notifications_read`, through `lib/notifications.ts`. A pop-up the
+app has not shown is never marked read (`feedIds`). `list_broadcasts` is not
+built.
+
 **No write tools for broadcasts.** Camp-wide notifications are an
 explicit human-in-loop action — every broadcast that reaches phones
 gets composed and sent from the captain's web UI, never by an MCP
@@ -335,6 +341,11 @@ agent. The `broadcasts` table is read-only via MCP.
 | ----------------------------------------------- | --- | ------------------------------- |
 | `list_tasks(filter)`                            | R   | M (own + team) / L / C          |
 | `create_task` / `update_task` / `complete_task` | W   | assignee / creator / team L / C |
+
+[2026-10-05] Built on the board's rules: `list_tasks` (every member sees
+every task, each with `canMove`), `add_task` (captains and team leads; a lead
+only for a team they lead, as the page) and `move_task(taskId, from, to)`, a
+compare-and-set on the column read. Editing and removing stay on the page.
 
 ### Workshops
 
@@ -372,6 +383,10 @@ may leave). `update_my_driver_profile` never sets seats below the riders
 already in. The old `@camp404/db/cars` seat functions are gone; that module
 only answers "my lift".
 
+[2026-10-05] A member's own lift request: `get_my_lift_request`,
+`request_lift(driverUserId | null)` and `cancel_lift_request`, through
+`lib/transport.ts`. Answering a request stays on the Transport page.
+
 ### Admin / audit
 
 | Tool                                                              | R/W | Tier |
@@ -384,6 +399,29 @@ only answers "my lift".
 | Tool                | R/W | Tier                                                             |
 | ------------------- | --- | ---------------------------------------------------------------- |
 | `search(q, types?)` | R   | scoped to caller's view across people / docs / tasks / inventory |
+
+[2026-10-05] Built as `search_camp(query)`: Ctrl+K's Everything through
+`searchCamp` (`lib/search.ts`, `@camp404/db/search`) with the search route's
+own viewer, so each kind keeps its page's rule. Titles, and a short line
+around words found inside; never a body.
+
+### Everyday member tools (2026-10-05)
+
+Each through the page's own function, as the signed-in person:
+
+| Tool                                                   | R/W | Tier                                      | Page                             |
+| ------------------------------------------------------ | --- | ----------------------------------------- | -------------------------------- |
+| `list_calendar_events(from?, to?, team?)`              | R   | M                                         | `/calendar`                      |
+| `list_meetings` / `get_meeting`                        | R   | M                                         | `/meetings`                      |
+| `update_meeting_notes(..., expectedVersion)`           | W   | the note's team's members, C (write rule) | `/meetings`                      |
+| `list_shifts` / `list_my_shifts`                       | R   | M                                         | `/shifts`                        |
+| `sign_up_for_shift` / `leave_shift`                    | W   | M, for themselves                         | `/shifts`                        |
+| `get_logistics_attendance`                             | R   | M (names of who has not answered: L, C)   | `/logistics`                     |
+| `set_my_logistics_attendance(phase, answer, expected)` | W   | M, for themselves                         | `/logistics`                     |
+| `get_my_dues` / `get_my_gear_rental` / `list_my_forms` | R   | M, their own; read-only                   | `/dues`, `/gear`, `/tools/forms` |
+
+Answering a questionnaire, pledging, paying, ordering gear, writing a new
+meeting note and setting up shifts stay on the website.
 
 ## Cross-cutting rules
 

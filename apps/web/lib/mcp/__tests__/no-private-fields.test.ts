@@ -138,6 +138,47 @@ describe("no tool returns ID numbers or bank details", () => {
       .insert(schema.inventoryItems)
       .values({ name: "Cooler box", team: "kitchen", quantity: 3 })
       .returning({ id: schema.inventoryItems.id });
+    // A task, a meeting, a shift slot and a notification of the member's, so
+    // the tools that take their ids read and write real rows rather than only
+    // refusing.
+    const [task] = await db
+      .insert(schema.tasks)
+      .values({ title: "Buy gas", team: "kitchen", assigneeId: member.id })
+      .returning({ id: schema.tasks.id });
+    const [meeting] = await db
+      .insert(schema.meetingNotes)
+      .values({
+        cycle: 1,
+        team: "kitchen",
+        title: "Menus",
+        heldAt: new Date("2027-03-01T16:00:00Z"),
+        notes: "Oats.",
+      })
+      .returning({ id: schema.meetingNotes.id });
+    const [shiftType] = await db
+      .insert(schema.shiftTypes)
+      .values({
+        cycle: 1,
+        team: "kitchen",
+        name: "Dishes",
+        startMinute: 18 * 60,
+        durationMinutes: 60,
+        places: 4,
+      })
+      .returning({ id: schema.shiftTypes.id });
+    const [slot] = await db
+      .insert(schema.shiftSlots)
+      .values({ typeId: shiftType!.id, day: "2099-04-29" })
+      .returning({ id: schema.shiftSlots.id });
+    const [notice] = await db
+      .insert(schema.notificationDeliveries)
+      .values({
+        userId: member.id,
+        title: "Welcome",
+        body: "Hello",
+        channel: "in_app",
+      })
+      .returning({ id: schema.notificationDeliveries.id });
     const ciphertexts = (
       await db
         .select({
@@ -160,7 +201,8 @@ describe("no tool returns ID numbers or bank details", () => {
       get_my_dietary_requirements: {},
       update_my_dietary_requirements: { foods: [], diets: [] },
       get_my_driver_profile: {},
-      update_my_driver_profile: { version: "1", intendsToDrive: true },
+      // Not driving, so the member may ask for a lift further down the walk.
+      update_my_driver_profile: { version: "1", intendsToDrive: false },
       get_my_emergency_contacts: {},
       update_my_emergency_contacts: {
         contacts: [
@@ -239,11 +281,43 @@ describe("no tool returns ID numbers or bank details", () => {
         endDate: "2026-04-23",
         expectedVersion: 0,
       },
+      get_my_dues: {},
+      get_my_gear_rental: {},
+      list_my_forms: {},
+      list_my_notifications: {},
+      mark_notifications_read: { ids: [notice!.id] },
+      mark_all_notifications_read: {},
+      search_camp: { query: "gas" },
+      list_tasks: {},
+      add_task: { title: "Sweep", team: "kitchen" },
+      move_task: { taskId: task!.id, from: "open", to: "in_progress" },
+      list_calendar_events: {},
+      list_meetings: {},
+      get_meeting: { meetingId: meeting!.id },
+      update_meeting_notes: {
+        meetingId: meeting!.id,
+        expectedVersion: 1,
+        notes: "Oats, then eggs.",
+      },
+      list_shifts: {},
+      list_my_shifts: {},
+      sign_up_for_shift: { slotId: slot!.id },
+      leave_shift: { slotId: slot!.id },
+      get_logistics_attendance: {},
+      // Strike: the walk sets build's days in the past above, which closes it.
+      set_my_logistics_attendance: {
+        phase: "strike",
+        answer: "going",
+        expected: null,
+      },
       list_drivers: {},
       list_car_riders: { driverUserId: captain.id },
       get_my_lift: {},
       add_car_rider: { memberUserId: member.id },
       remove_car_rider: { memberUserId: member.id },
+      get_my_lift_request: {},
+      request_lift: { driverUserId: null },
+      cancel_lift_request: {},
       list_invite_codes: {},
       revoke_invite_code: { code: "amber-fox-7" },
       list_audit_log: {},
@@ -283,6 +357,15 @@ describe("no tool returns ID numbers or bank details", () => {
       "get_recipe",
       "add_recipe_lesson",
       "propose_inventory_change",
+      "mark_notifications_read",
+      "move_task",
+      "get_meeting",
+      "update_meeting_notes",
+      "sign_up_for_shift",
+      "leave_shift",
+      "set_my_logistics_attendance",
+      "request_lift",
+      "cancel_lift_request",
     ]) {
       expect(answered, name).toContain(name);
     }
