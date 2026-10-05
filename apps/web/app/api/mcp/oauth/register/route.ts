@@ -4,7 +4,9 @@ import {
   DEFAULT_SCOPE,
   isAllowedRedirectUri,
   isAllowedScope,
+  makeRoomForClient,
   registerClient,
+  registrationAddressKey,
 } from "@/lib/mcp/oauth";
 import { rateLimiter, getClientIp } from "@/lib/rate-limit";
 
@@ -22,17 +24,16 @@ const MAX_SCOPE_LENGTH = 100;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /**
- * Registrations allowed, as attempts per address per minute and per day, and
- * as stored clients per day across every address. Registration is open to
- * anyone (RFC 7591); these, the size caps above and the daily sweep of
- * clients nobody authorized (background-work.ts) are what keep its storage
- * bounded. The camp has one connector per person, so a full day's allowance
- * is far more than it ever uses.
+ * Registration attempts allowed per address (an IPv6 /64), per minute and per
+ * day. Registration is open to anyone (RFC 7591); these, the size caps above,
+ * the cap on stored clients nobody authorized (makeRoomForClient) and the
+ * daily sweep of those (background-work.ts) keep its storage bounded. The
+ * camp has one connector per person, so a day's allowance is far more than a
+ * member ever uses.
  */
 const REGISTER_LIMITS = {
   perAddressPerMinute: 20,
   perAddressPerDay: 50,
-  allAddressesPerDay: 500,
 } as const;
 
 const RegisterRequest = z.object({
@@ -52,7 +53,7 @@ const RegisterRequest = z.object({
 // Hardening: redirect URIs must be on a known MCP-client domain (loopback,
 // claude.ai, anthropic.com) — see briefing gotcha — otherwise reject 400.
 export async function POST(req: Request) {
-  const ip = getClientIp(req.headers);
+  const ip = registrationAddressKey(getClientIp(req.headers));
   for (const [key, limit, windowMs] of [
     [`mcp-register:${ip}`, REGISTER_LIMITS.perAddressPerMinute, 60_000],
     [`mcp-register-day:${ip}`, REGISTER_LIMITS.perAddressPerDay, DAY_MS],
@@ -108,13 +109,9 @@ export async function POST(req: Request) {
     );
   }
 
-  // Counted last, so only a registration that would be stored uses the
-  // camp-wide allowance.
-  const camp = await rateLimiter.limit("mcp-register-day:all", {
-    limit: REGISTER_LIMITS.allAddressesPerDay,
-    windowMs: DAY_MS,
-  });
-  if (!camp.ok) return tooMany(camp.retryAfterSeconds);
+  // Storage stays bounded by pushing out the oldest client nobody
+  // authorized, rather than by turning newcomers away.
+  if (!(await makeRoomForClient())) return tooMany(600);
 
   const client = await registerClient({
     clientName: parsed.data.client_name,

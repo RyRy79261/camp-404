@@ -182,6 +182,43 @@ describe("saveBurnerProfileReplay", () => {
     ).toBe(false);
   });
 
+  it("refuses when the emergency contacts changed since they were read, under a row lock", async () => {
+    const member = await seed();
+    const read = await profileOf(member.id);
+    const base = {
+      userId: member.id,
+      version: "v10",
+      responses: { "bio.statement": "Patched" },
+      idColumns: null,
+      emergencyContacts: [ADA],
+      edit: null,
+      expectUpdatedAt: read.updatedAt,
+    };
+    // Read with none on file; someone adds one without touching the profile.
+    await h
+      .db()
+      .update(schema.users)
+      .set({ emergencyContacts: [{ ...ADA, name: "Their Pick" }] })
+      .where(eq(schema.users.id, member.id));
+    expect(
+      await saveBurnerProfileReplay({ ...base, expectEmergencyContacts: null }),
+    ).toBe(false);
+    expect((await userOf(member.id)).emergencyContacts).toEqual([
+      { ...ADA, name: "Their Pick" },
+    ]);
+    expect((await profileOf(member.id)).responses).toEqual({
+      "bio.statement": "Before",
+    });
+    // Built on what is there now: saved.
+    expect(
+      await saveBurnerProfileReplay({
+        ...base,
+        expectEmergencyContacts: [{ ...ADA, name: "Their Pick" }],
+      }),
+    ).toBe(true);
+    expect((await userOf(member.id)).emergencyContacts).toEqual([ADA]);
+  });
+
   it("writes nothing when a later write fails", async () => {
     const member = await seed();
 

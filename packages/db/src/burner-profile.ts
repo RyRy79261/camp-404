@@ -493,6 +493,22 @@ export interface BurnerProfileReplay {
    * connector merges a partial patch over the stored answers, so it passes it.
    */
   expectUpdatedAt?: Date;
+  /**
+   * With `expectUpdatedAt`: the emergency contacts the new answers were built
+   * on (null for none). They live on the member's row, which a contacts write
+   * changes without touching the profile, so they are compared too, under a
+   * row lock.
+   */
+  expectEmergencyContacts?: readonly EmergencyContact[] | null;
+}
+
+/** Contacts as comparable text; none and an empty list are the same. */
+function contactsKey(
+  contacts: readonly EmergencyContact[] | null | undefined,
+): string {
+  return JSON.stringify(
+    (contacts ?? []).map((c) => [c.name, c.phone, c.relationship]),
+  );
 }
 
 /**
@@ -509,6 +525,20 @@ export async function saveBurnerProfileReplay(
 ): Promise<boolean> {
   return withTransaction(async (tx) => {
     if (input.expectUpdatedAt) {
+      if (input.expectEmergencyContacts !== undefined) {
+        const [member] = await tx
+          .select({ contacts: schema.users.emergencyContacts })
+          .from(schema.users)
+          .where(eq(schema.users.id, input.userId))
+          .for("update");
+        if (
+          !member ||
+          contactsKey(member.contacts) !==
+            contactsKey(input.expectEmergencyContacts)
+        ) {
+          return false;
+        }
+      }
       // Milliseconds: the stored stamp may carry microseconds (defaultNow),
       // and the Date the caller read it into does not.
       const won = await tx

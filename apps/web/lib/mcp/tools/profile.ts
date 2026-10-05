@@ -6,9 +6,10 @@ import { satisfyRequiredAction } from "@camp404/db/activations";
 import {
   getBurnerProfileByUserId,
   getEmergencyContactsColumn,
+  getIdDocumentColumns,
   saveBurnerProfileReplay,
-  setEmergencyContactsColumn,
 } from "@camp404/db/burner-profile";
+import { encryptLeftoverIdNumber } from "@camp404/db/maintenance";
 import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
 import {
@@ -29,6 +30,7 @@ import {
   mergeEmergencyContacts,
   questionIdForRole,
   questionLabel,
+  questionsWithRole,
   splitEmergencyContacts,
   telegramHandleFromResponses,
   validateResponses,
@@ -372,10 +374,13 @@ export function registerProfileTools(server: McpServer): void {
     "update_my_emergency_contacts",
     {
       title: "Update my emergency contacts",
-      description: `Replaces your whole emergency contacts list (at most ${MAX_EMERGENCY_CONTACTS}), the list your burner profile's contact questions save. Each contact needs a name, a phone number with 7 to 15 digits (include the country code) and how you know them. Pass an empty array to clear.`,
+      description: `Replaces your whole emergency contacts list: at least one, at most ${MAX_EMERGENCY_CONTACTS}. They are your burner profile's contact answers, saved the same way (checked, and recorded in its change log). Each contact needs a name, a phone number with 7 to 15 digits (include the country code) and how you know them.`,
       inputSchema: {
         // The website's rules for a contact (@camp404/types).
-        contacts: z.array(EmergencyContact).max(MAX_EMERGENCY_CONTACTS),
+        contacts: z
+          .array(EmergencyContact)
+          .min(1, CONTACT_REQUIRED)
+          .max(MAX_EMERGENCY_CONTACTS),
       },
     },
     async (args, extra) =>
@@ -387,6 +392,7 @@ export function registerProfileTools(server: McpServer): void {
           // Checked again here: the shape above is advice to the caller.
           const parsed = z
             .array(EmergencyContact)
+            .min(1, CONTACT_REQUIRED)
             .max(MAX_EMERGENCY_CONTACTS)
             .safeParse(args.contacts);
           if (!parsed.success) {
@@ -394,8 +400,13 @@ export function registerProfileTools(server: McpServer): void {
               parsed.error.issues[0]?.message ?? "Check your contacts.",
             );
           }
-          // The burner profile's save: an empty list clears the column.
-          await setEmergencyContactsColumn(scope.campUserId, parsed.data);
+          // The contacts are the burner profile's contact questions, so they
+          // are saved as those answers: checked as the website checks them
+          // (the first contact is required), logged, and compare-and-set.
+          await saveBurnerProfilePatch(
+            scope.campUserId,
+            await contactAnswers(parsed.data),
+          );
           return parsed.data;
         },
       }),
@@ -486,10 +497,38 @@ export function registerProfileTools(server: McpServer): void {
   );
 }
 
+/** The website requires the first contact (the burner profile's question). */
+const CONTACT_REQUIRED =
+  "Keep at least one emergency contact: the burner profile requires one.";
+
 /** Where a member who has not finished their burner profile finishes it. */
 const ONBOARDING_FORM = "/onboarding/questionnaire";
 /** Where a member uploads their profile photo. */
 const PROFILE_PHOTO_PAGE = "/profile/edit";
+
+/**
+ * The burner profile's contact answers for a whole list of contacts: slot N
+ * from contact N, and an unused slot emptied.
+ */
+async function contactAnswers(
+  contacts: readonly EmergencyContact[],
+): Promise<Record<string, unknown>> {
+  const questionnaire = await getQuestionnaireForResponses();
+  const roles = [
+    ["emergency_contact_name", "name"],
+    ["emergency_contact_phone", "phone"],
+    ["emergency_contact_relationship", "relationship"],
+  ] as const;
+  const answers: Record<string, unknown> = {};
+  for (const [role, field] of roles) {
+    questionsWithRole(questionnaire, role)
+      .slice(0, MAX_EMERGENCY_CONTACTS)
+      .forEach((q, i) => {
+        answers[q.id] = contacts[i]?.[field] ?? "";
+      });
+  }
+  return answers;
+}
 
 /** The questionnaire without the ID number, which this path never handles. */
 function withoutIdNumber(questionnaire: Questionnaire): Questionnaire {
@@ -567,15 +606,35 @@ async function saveBurnerProfilePatch(
     );
   }
 
-  const [profile, contacts] = await Promise.all([
-    getBurnerProfileByUserId(userId),
-    getEmergencyContactsColumn(userId),
-  ]);
-  if (!profile?.completedAt) {
-    throw new ToolError(
+  const unfinished = () =>
+    new ToolError(
       `Finish your burner profile on the website first: ${siteUrl(ONBOARDING_FORM)}`,
     );
+  let profile = await getBurnerProfileByUserId(userId);
+  if (!profile?.completedAt) throw unfinished();
+  // An ID number left in the answers from before encryption goes to its
+  // encrypted column first (the daily upkeep's step, for this member), so the
+  // save below, which never carries it, cannot drop it.
+  if (ID_NUMBER_KEY in profile.responses) {
+    try {
+      await encryptLeftoverIdNumber(userId);
+    } catch {
+      throw new ToolError(
+        "Your burner profile can't be saved just now. Try again later.",
+      );
+    }
+    profile = await getBurnerProfileByUserId(userId);
+    if (!profile?.completedAt) throw unfinished();
   }
+  // The profile's ID question is required, and only the website takes it: a
+  // profile with no ID number on file is finished there, not cleared here.
+  const idColumns = await getIdDocumentColumns(userId);
+  if (!idColumns?.passportEncrypted && !idColumns?.saIdEncrypted) {
+    throw new ToolError(
+      `Your ID number isn't on file. Give it on the website's burner profile form first: ${siteUrl(BURNER_PROFILE_FORM)}`,
+    );
+  }
+  const contacts = await getEmergencyContactsColumn(userId);
   // What My forms would show, less the ID number: the stored answers and the
   // emergency contacts, which live on the member's row.
   const stored = mergeEmergencyContacts(
@@ -627,6 +686,7 @@ async function saveBurnerProfilePatch(
           }
         : null,
     expectUpdatedAt: profile.updatedAt,
+    expectEmergencyContacts: contacts,
   });
   if (!saved) {
     throw new ToolError(

@@ -6,6 +6,11 @@
 -- already there. Idempotent: a second run matches nothing.
 
 -- 1. Raw query failures: the values go, the fact that it failed stays.
+-- drizzle-orm 0.45 wraps a failed query on the drivers we use (neon-http,
+-- neon-serverless, pglite: PgPreparedSession.queryWithCache) in a
+-- DrizzleQueryError whose message starts "Failed query:" and ends with the
+-- params, so this matches every row that can hold query values. Other errors
+-- (our ToolError refusals, a missing camp row) are our own sentences.
 UPDATE "mcp_audit_log"
    SET "error_message" = 'DrizzleQueryError'
  WHERE "error_message" LIKE 'Failed query:%';

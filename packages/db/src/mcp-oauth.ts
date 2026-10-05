@@ -1,5 +1,16 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, eq, gt, isNull, lt, notExists, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  notExists,
+  sql,
+} from "drizzle-orm";
 import { createHttpDb, withTransaction } from "./index";
 import { isActiveMcpUser } from "./mcp";
 import * as schema from "./schema";
@@ -153,32 +164,75 @@ export async function sweepUnusedClients(
   const gone = await db
     .delete(schema.mcpOauthClients)
     .where(
-      and(
-        lt(schema.mcpOauthClients.createdAt, cutoff),
-        isNull(schema.mcpOauthClients.lastUsedAt),
-        notExists(
-          db
-            .select({ one: sql`1` })
-            .from(schema.mcpAuthCodes)
-            .where(
-              eq(schema.mcpAuthCodes.clientId, schema.mcpOauthClients.clientId),
-            ),
-        ),
-        notExists(
-          db
-            .select({ one: sql`1` })
-            .from(schema.mcpAccessTokens)
-            .where(
-              eq(
-                schema.mcpAccessTokens.clientId,
-                schema.mcpOauthClients.clientId,
-              ),
-            ),
-        ),
-      ),
+      and(lt(schema.mcpOauthClients.createdAt, cutoff), neverAuthorized(db)),
     )
     .returning({ clientId: schema.mcpOauthClients.clientId });
   return gone.length;
+}
+
+/** A client no authorization code or token was ever issued to, never used. */
+function neverAuthorized(db: ReturnType<typeof createHttpDb>) {
+  return and(
+    isNull(schema.mcpOauthClients.lastUsedAt),
+    notExists(
+      db
+        .select({ one: sql`1` })
+        .from(schema.mcpAuthCodes)
+        .where(
+          eq(schema.mcpAuthCodes.clientId, schema.mcpOauthClients.clientId),
+        ),
+    ),
+    notExists(
+      db
+        .select({ one: sql`1` })
+        .from(schema.mcpAccessTokens)
+        .where(
+          eq(schema.mcpAccessTokens.clientId, schema.mcpOauthClients.clientId),
+        ),
+    ),
+  );
+}
+
+/** At most this many never-authorized clients are kept at once. */
+export const MAX_UNUSED_CLIENTS = 500;
+/** A registration this young is mid-sign-in: it is never pushed out. */
+export const UNUSED_CLIENT_GRACE_MS = 10 * 60 * 1000;
+
+/**
+ * Make room for one more registration: while `cap` or more never-authorized
+ * clients are stored, delete the oldest one that is over
+ * UNUSED_CLIENT_GRACE_MS old. Storage stays bounded without refusing a
+ * newcomer. Returns false only when every stored one is younger than that
+ * (a flood inside ten minutes), so the caller refuses for now.
+ */
+export async function makeRoomForClient(
+  cap: number = MAX_UNUSED_CLIENTS,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const db = createHttpDb();
+  const [counted] = await db
+    .select({ n: count() })
+    .from(schema.mcpOauthClients)
+    .where(neverAuthorized(db));
+  const excess = (counted?.n ?? 0) - cap + 1;
+  if (excess <= 0) return true;
+  const graceCutoff = new Date(now.getTime() - UNUSED_CLIENT_GRACE_MS);
+  const oldest = db
+    .select({ clientId: schema.mcpOauthClients.clientId })
+    .from(schema.mcpOauthClients)
+    .where(
+      and(
+        lt(schema.mcpOauthClients.createdAt, graceCutoff),
+        neverAuthorized(db),
+      ),
+    )
+    .orderBy(asc(schema.mcpOauthClients.createdAt))
+    .limit(excess);
+  const gone = await db
+    .delete(schema.mcpOauthClients)
+    .where(inArray(schema.mcpOauthClients.clientId, oldest))
+    .returning({ clientId: schema.mcpOauthClients.clientId });
+  return gone.length >= excess;
 }
 
 export async function findClient(clientId: string) {

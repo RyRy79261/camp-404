@@ -60,10 +60,13 @@ website, never more, and takes data out the way the website does.
   My forms' save: the patch is laid over the stored answers, the whole
   profile is checked as the website checks a re-submit, and it saves at the
   questionnaire's own version with its change-log row, as a compare-and-set
-  on the profile it read. It changes only a finished profile (finishing it is
-  the website's onboarding), never the ID number or its type, and never the
-  photo. `update_my_emergency_contacts` takes the website's contact rules
-  (`EmergencyContact` in `@camp404/types`).
+  on the profile and the emergency contacts it read (the contacts under a row
+  lock). It changes only a finished profile with an ID number on file
+  (finishing it, and the ID, are the website's); an ID number still left in
+  the answers is encrypted first, as the daily upkeep would. Never the ID
+  number or its type, never the photo. `update_my_emergency_contacts` saves
+  the list as those same contact answers, so the first contact is required
+  and each change is logged.
 - **The connector's log** (`mcp_audit_log`) keeps which tool, when, whether
   it worked, and arguments reduced by each tool (counts or field names, not
   values). A failure keeps our own refusal's sentence, or only the error's
@@ -73,9 +76,10 @@ website, never more, and takes data out the way the website does.
 - **Registration** (`/api/mcp/oauth/register`, open to anyone by RFC 7591)
   is bounded: a 16 KB body, at most 10 redirect URIs of 512 characters
   (allow-listed hosts, no fragment, no user name or password), only our scope;
-  20 attempts a minute and 50 a day per address and 500 stored a day
-  camp-wide; and the daily upkeep deletes a client nobody authorized after a
-  day. The consent screen says the token acts as the person, writes included,
+  20 attempts a minute and 50 a day per address (an IPv6 /64 is one
+  address); at most 500 stored clients nobody authorized, kept by pushing out
+  the oldest one over ten minutes old rather than refusing a newcomer; and
+  the daily upkeep deletes a client nobody authorized after a day. The consent screen says the token acts as the person, writes included,
   and names the areas their rank reaches.
 - **Taking data out.** `list_users` lists whom the roster lists (no declined
   sign-up for a non-captain) with no safety data and no ID or bank numbers for

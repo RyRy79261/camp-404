@@ -11,6 +11,7 @@ import {
   registerClient,
   rotateRefreshToken,
   sha256,
+  makeRoomForClient,
   sweepUnusedClients,
   UNUSED_CLIENT_TTL_MS,
   verifyClientSecret,
@@ -139,6 +140,60 @@ describe("sweeping clients nobody authorized", () => {
     );
     // Run again: nothing left to sweep.
     expect(await sweepUnusedClients(now)).toBe(0);
+  });
+});
+
+describe("bounding stored clients nobody authorized", () => {
+  const h = useTestDb();
+
+  it("pushes out the oldest unauthorized client past the grace period, never an authorized or a new one", async () => {
+    const db = h.db();
+    const now = new Date();
+    const at = (msAgo: number) => new Date(now.getTime() - msAgo);
+    const register = async (name: string, createdAt: Date) => {
+      const client = await registerClient({
+        clientName: name,
+        redirectUris: [REDIRECT],
+        tokenEndpointAuthMethod: "none",
+      });
+      await db
+        .update(schema.mcpOauthClients)
+        .set({ createdAt })
+        .where(eq(schema.mcpOauthClients.clientId, client.clientId));
+      return client.clientId;
+    };
+    const user = await makeUser(db, { approvalStatus: "approved" });
+    const authorized = await register("Authorized long ago", at(3_600_000));
+    await issueAccessToken({
+      clientId: authorized,
+      userId: user.id,
+      scope: "mcp:user",
+    });
+    const oldest = await register("Oldest", at(1_800_000));
+    const older = await register("Older", at(1_200_000));
+    const fresh = await register("Mid sign-in", at(60_000));
+    const ids = async () =>
+      (
+        await db
+          .select({ clientId: schema.mcpOauthClients.clientId })
+          .from(schema.mcpOauthClients)
+      ).map((r) => r.clientId);
+
+    // Under the cap: nothing goes.
+    expect(await makeRoomForClient(4, now)).toBe(true);
+    expect(await ids()).toHaveLength(4);
+    // At the cap of 3 unauthorized: the oldest goes, nobody is refused.
+    expect(await makeRoomForClient(3, now)).toBe(true);
+    expect(await ids()).not.toContain(oldest);
+    expect(await ids()).toEqual(
+      expect.arrayContaining([authorized, older, fresh]),
+    );
+    // Two over a cap of 1, and only one past the grace period: it goes,
+    // and the one mid sign-in is never pushed out, so this one is refused.
+    expect(await makeRoomForClient(1, now)).toBe(false);
+    const left = await ids();
+    expect(left).not.toContain(older);
+    expect(left).toEqual(expect.arrayContaining([authorized, fresh]));
   });
 });
 

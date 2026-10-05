@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "@camp404/db/schema";
 import type * as Forms from "@/lib/forms";
+import type * as BurnerProfile from "@camp404/db/burner-profile";
+import type * as Maintenance from "@camp404/db/maintenance";
 import { encrypt } from "@camp404/db/crypto";
 import { getMenuDietaryFor } from "@camp404/db/dietary";
 import {
@@ -41,7 +43,37 @@ vi.mock("@/lib/forms", async (importOriginal) => ({
   listOptionalForms: vi.fn(async () => []),
 }));
 
+// A seam for "someone else saved meanwhile": run between the connector's read
+// of the emergency contacts and its save.
+const afterContactsRead = vi.hoisted(() => ({
+  hook: null as null | (() => Promise<void>),
+}));
+vi.mock("@camp404/db/burner-profile", async (importOriginal) => {
+  const real = await importOriginal<typeof BurnerProfile>();
+  return {
+    ...real,
+    getEmergencyContactsColumn: async (userId: string) => {
+      const contacts = await real.getEmergencyContactsColumn(userId);
+      const hook = afterContactsRead.hook;
+      afterContactsRead.hook = null;
+      if (hook) await hook();
+      return contacts;
+    },
+  };
+});
+
+// The leftover-ID encryption, real unless a test makes it fail (the key is
+// read once per process, so unsetting it would not).
+vi.mock("@camp404/db/maintenance", async (importOriginal) => {
+  const real = await importOriginal<typeof Maintenance>();
+  return {
+    ...real,
+    encryptLeftoverIdNumber: vi.fn(real.encryptLeftoverIdNumber),
+  };
+});
+
 import { listOptionalForms } from "@/lib/forms";
+import { encryptLeftoverIdNumber } from "@camp404/db/maintenance";
 import { QUESTIONNAIRE_VERSION } from "@/lib/questionnaire";
 import { registerCampMcpTools } from "../server";
 
@@ -453,8 +485,15 @@ describe("you: the burner profile, saved the way My forms saves it", () => {
   };
 
   /** An approved member with a finished profile, held by a newer version. */
-  async function finished() {
-    const member = await approved({ emergencyContacts: [ADA] });
+  async function finished(
+    overrides: Partial<typeof schema.users.$inferInsert> = {},
+  ) {
+    // An ID number on file (the ciphertext is never read here).
+    const member = await approved({
+      emergencyContacts: [ADA],
+      saIdEncrypted: "CIPHER",
+      ...overrides,
+    });
     await h.db().insert(schema.burnerProfiles).values({
       userId: member.id,
       version: "old",
@@ -604,42 +643,148 @@ describe("you: the burner profile, saved the way My forms saves it", () => {
       .where(eq(schema.mcpAuditLog.tool, "update_my_burner_profile"));
     expect(log!.argsJson).toEqual({ fields: ["bio.statement"] });
   });
-});
 
-describe("you: emergency contacts, by the burner profile's rules", () => {
-  it("refuses a phone number the website's form would refuse", async () => {
-    const member = await approved();
+  async function userOf(userId: string) {
+    const [row] = await h
+      .db()
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, userId));
+    return row!;
+  }
+
+  async function editsOf(userId: string) {
+    return h
+      .db()
+      .select()
+      .from(schema.questionnaireEdits)
+      .where(eq(schema.questionnaireEdits.userId, userId));
+  }
+
+  it("refuses to save a profile with no ID number on file, pointing to the website", async () => {
+    const member = await finished({ saIdEncrypted: null });
+    const before = await profileOf(member.id);
     const { error } = await call(
+      "update_my_burner_profile",
+      { responses: { "bio.statement": "Welder now" } },
+      member.id,
+    );
+    expect(error).toMatch(
+      /^Your ID number isn't on file\. .*\/tools\/forms\/burner_profile$/,
+    );
+    expect(await profileOf(member.id)).toEqual(before);
+    expect((await gateOf(member.id)).status).toBe("pending");
+  });
+
+  it("encrypts an ID number left in the answers before saving, never dropping it", async () => {
+    const member = await finished({ saIdEncrypted: null });
+    await h
+      .db()
+      .update(schema.burnerProfiles)
+      .set({ responses: { ...ANSWERS, "id.number": "8001015009087" } })
+      .where(eq(schema.burnerProfiles.userId, member.id));
+
+    const { error } = await call(
+      "update_my_burner_profile",
+      { responses: { "bio.statement": "Welder now" } },
+      member.id,
+    );
+    expect(error).toBeUndefined();
+    const user = await userOf(member.id);
+    expect(user.saIdEncrypted).toEqual(expect.any(String));
+    expect(user.saIdEncrypted).not.toContain("8001015009087");
+    expect((await profileOf(member.id)).responses).toEqual({
+      ...ANSWERS,
+      "bio.statement": "Welder now",
+    });
+  });
+
+  it("refuses, keeping the leftover ID number, when it cannot be encrypted now", async () => {
+    const member = await finished({ saIdEncrypted: null });
+    const leftover = { ...ANSWERS, "id.number": "8001015009087" };
+    await h
+      .db()
+      .update(schema.burnerProfiles)
+      .set({ responses: leftover })
+      .where(eq(schema.burnerProfiles.userId, member.id));
+    vi.mocked(encryptLeftoverIdNumber).mockRejectedValueOnce(
+      new Error("PGCRYPTO_KEY env var is required"),
+    );
+    const { error } = await call(
+      "update_my_burner_profile",
+      { responses: { "bio.statement": "Welder now" } },
+      member.id,
+    );
+    expect(error).toBe(
+      "Your burner profile can't be saved just now. Try again later.",
+    );
+    expect((await profileOf(member.id)).responses).toEqual(leftover);
+  });
+
+  it("saves emergency contacts as the profile's answers: checked, logged, the first required", async () => {
+    const member = await finished();
+    const GRACE = {
+      name: "Grace Hopper",
+      phone: "+27 82 555 0123",
+      relationship: "friend",
+    };
+
+    const badPhone = await call(
       "update_my_emergency_contacts",
       { contacts: [{ name: "Ada", phone: "12", relationship: "sister" }] },
       member.id,
     );
-    expect(error).toBe("Enter a valid phone number");
-    const [user] = await h
-      .db()
-      .select()
-      .from(schema.users)
-      .where(eq(schema.users.id, member.id));
-    expect(user!.emergencyContacts).toBeNull();
-  });
-
-  it("clears the list to nothing, as the burner profile's save does", async () => {
-    const member = await approved({
-      emergencyContacts: [
-        { name: "Ada", phone: "+27 82 555 0199", relationship: "sister" },
-      ],
-    });
-    const { error } = await call(
+    expect(badPhone.error).toBe("Enter a valid phone number");
+    const none = await call(
       "update_my_emergency_contacts",
       { contacts: [] },
       member.id,
     );
-    expect(error).toBeUndefined();
-    const [user] = await h
-      .db()
-      .select()
-      .from(schema.users)
-      .where(eq(schema.users.id, member.id));
-    expect(user!.emergencyContacts).toBeNull();
+    expect(none.error).toMatch(/^Keep at least one emergency contact/);
+    expect((await userOf(member.id)).emergencyContacts).toEqual([ADA]);
+    expect(await editsOf(member.id)).toHaveLength(0);
+
+    const saved = await call(
+      "update_my_emergency_contacts",
+      { contacts: [ADA, GRACE] },
+      member.id,
+    );
+    expect(saved.error).toBeUndefined();
+    expect((await userOf(member.id)).emergencyContacts).toEqual([ADA, GRACE]);
+    const edits = await editsOf(member.id);
+    expect(edits).toHaveLength(1);
+    expect(edits[0]!.changes.map((c) => c.fieldId)).toEqual([
+      "emergency.2.name",
+      "emergency.2.phone",
+      "emergency.2.relationship",
+    ]);
+    // Contacts stay on the member's row, never in the answers.
+    expect((await profileOf(member.id)).responses).toEqual(ANSWERS);
+  });
+
+  it("never overwrites contacts someone saved between its read and its save", async () => {
+    const member = await finished();
+    const THEIRS = {
+      name: "Their Pick",
+      phone: "+27 82 555 0777",
+      relationship: "partner",
+    };
+    // Saved meanwhile without touching the profile row, as a contacts-only
+    // write does.
+    afterContactsRead.hook = async () => {
+      await h
+        .db()
+        .update(schema.users)
+        .set({ emergencyContacts: [THEIRS] })
+        .where(eq(schema.users.id, member.id));
+    };
+    const { error } = await call(
+      "update_my_burner_profile",
+      { responses: { "bio.statement": "Welder now" } },
+      member.id,
+    );
+    expect(error).toMatch(/^Your burner profile changed while this was saving/);
+    expect((await userOf(member.id)).emergencyContacts).toEqual([THEIRS]);
+    expect((await profileOf(member.id)).responses).toEqual(ANSWERS);
   });
 });

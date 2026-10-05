@@ -13,6 +13,7 @@ export {
   findClient,
   issueAccessToken,
   issueAuthCode,
+  makeRoomForClient,
   REFRESH_TOKEN_TTL_SEC,
   registerClient,
   rotateRefreshToken,
@@ -58,4 +59,27 @@ export function isAllowedRedirectUri(uri: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * The address a registration is counted against. An IPv6 user holds a whole
+ * /64 (often far more), so counting single addresses would let one person
+ * through on every one of them: IPv6 counts by its first four groups. An
+ * IPv4-mapped IPv6 address counts as its IPv4 address.
+ */
+export function registrationAddressKey(ip: string): string {
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
+  if (mapped) return mapped[1]!;
+  if (!ip.includes(":")) return ip;
+  const [head = "", tail] = ip.toLowerCase().split("::");
+  const front = head ? head.split(":") : [];
+  const back = tail ? tail.split(":") : [];
+  const groups =
+    tail === undefined
+      ? front
+      : [...front, ...Array(8 - front.length - back.length).fill("0"), ...back];
+  return `${groups
+    .slice(0, 4)
+    .map((g) => g.replace(/^0+/, "") || "0")
+    .join(":")}::/64`;
 }
