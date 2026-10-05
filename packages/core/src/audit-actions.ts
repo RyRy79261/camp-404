@@ -110,6 +110,10 @@ export const AUDIT_ACTION_LABELS = {
   "payment.refund_declined": "Declined a refund",
   "payment.refund_requested": "Asked for a refund",
   "payment.refunded": "Refunded a payment",
+  "questionnaire.carry_over_set":
+    "Changed whether a questionnaire is asked again next year",
+  "questionnaire.send_closed": "Closed a questionnaire send",
+  "questionnaire.unpublished": "Unpublished a questionnaire",
   "recipe.accepted": "Accepted a recipe version",
   "recipe.adjust_queued": "Asked Claude to change a recipe version",
   "recipe.approved": "Approved a recipe",
@@ -563,6 +567,17 @@ export function auditDetail(
         return title;
       }
       return `${title}: ${metadata.public ? "public" : "members only"}`;
+    }
+    // The questionnaire's title; a year-policy change says which way it went.
+    case "questionnaire.unpublished":
+    case "questionnaire.send_closed":
+      return text(metadata, "title");
+    case "questionnaire.carry_over_set": {
+      const title = text(metadata, "title");
+      if (!title || !metadata || typeof metadata.carryOver !== "boolean") {
+        return title;
+      }
+      return `${title}: ${metadata.carryOver ? "answers kept next year" : "asked again next year"}`;
     }
     // A pin puts a message on every recipient's screen and leaves it there, so
     // the receipt names WHO it is on the screen of — the audience is the whole

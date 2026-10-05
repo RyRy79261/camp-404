@@ -25,6 +25,7 @@ import {
 } from "./activations";
 import { carryOverFor, currentCycleNumber } from "./cycles";
 import { lockSenderReach } from "./broadcasts";
+import { writeAuditEvent } from "./audit";
 
 // Builder-questionnaire lifecycle: publish (snapshot + cosmetic-vs-version-bump),
 // unpublish (status + cascade close), send (open an activation with the one-open
@@ -207,14 +208,19 @@ export type UnpublishResult =
  * Take a published definition offline: status → unpublished and close every
  * open activation for the key (clearing its still-pending gates to expired,
  * preserving responses + completed rows for metrics). Re-publish is allowed.
- * One transaction.
+ * One transaction, with the `questionnaire.unpublished` audit row naming
+ * `actorId`.
  */
 export async function unpublishDefinition(
   key: string,
+  actorId: string,
 ): Promise<UnpublishResult> {
   const db = createHttpDb();
   const [meta] = await db
-    .select({ status: schema.questionnaireDefinitions.status })
+    .select({
+      status: schema.questionnaireDefinitions.status,
+      title: schema.questionnaireDefinitions.title,
+    })
     .from(schema.questionnaireDefinitions)
     .where(eq(schema.questionnaireDefinitions.key, key))
     .limit(1);
@@ -256,6 +262,12 @@ export async function unpublishDefinition(
           ),
         );
     }
+    await writeAuditEvent(tx, {
+      actorId,
+      action: "questionnaire.unpublished",
+      target: key,
+      metadata: { title: meta.title, closedSends: closedActivations },
+    });
   });
   return { ok: true, closedActivations };
 }
@@ -266,14 +278,23 @@ export type CloseResult = { ok: true } | { ok: false; error: string };
  * The body of {@link closeActivation}, inside a caller-supplied transaction.
  * Extracted so the cycle rollover can close an activation and open its
  * replacement in ONE transaction rather than a pool per step (spec §8.3).
+ *
+ * With `actorId`, a send this call closes writes a `questionnaire.send_closed`
+ * audit row in the same transaction. The rollover passes none: its own
+ * `camp.cycle.advanced` row records the closes it makes.
  */
 export async function closeActivationTx(
   tx: PooledTx,
   activationId: string,
+  actorId?: string,
 ): Promise<CloseResult> {
   const now = new Date();
   const [act] = await tx
-    .select({ status: schema.questionnaireActivations.status })
+    .select({
+      status: schema.questionnaireActivations.status,
+      questionnaireKey: schema.questionnaireActivations.questionnaireKey,
+      title: schema.questionnaireActivations.title,
+    })
     .from(schema.questionnaireActivations)
     .where(eq(schema.questionnaireActivations.id, activationId))
     .limit(1);
@@ -292,6 +313,14 @@ export async function closeActivationTx(
         eq(schema.requiredActions.status, "pending"),
       ),
     );
+  if (actorId) {
+    await writeAuditEvent(tx, {
+      actorId,
+      action: "questionnaire.send_closed",
+      target: activationId,
+      metadata: { key: act.questionnaireKey, title: act.title },
+    });
+  }
   return { ok: true };
 }
 
@@ -299,11 +328,16 @@ export async function closeActivationTx(
  * Close one activation: status → closed and expire its still-linked pending
  * required_actions (non-gating terminal state, NOT deleted — preserves metrics).
  * Responses + completed rows are untouched. Idempotent on an already-closed row.
+ * The `questionnaire.send_closed` audit row names `actorId`; an already-closed
+ * send writes none.
  */
 export async function closeActivation(
   activationId: string,
+  actorId: string,
 ): Promise<CloseResult> {
-  return await withTransaction((tx) => closeActivationTx(tx, activationId));
+  return await withTransaction((tx) =>
+    closeActivationTx(tx, activationId, actorId),
+  );
 }
 
 /**

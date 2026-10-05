@@ -86,4 +86,19 @@ describe("runAction", () => {
       error: "Something went wrong. Please try again.",
     });
   });
+
+  it("builds an action's own failure arm when it has one", async () => {
+    const result = await runAction(
+      "publish",
+      async (): Promise<{ ok: true } | { ok: false; errors: string[] }> => {
+        throw new Error('relation "questionnaire_versions" does not exist');
+      },
+      (message) => ({ ok: false as const, errors: [message], issues: [] }),
+    );
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Something went wrong. Please try again."],
+      issues: [],
+    });
+  });
 });

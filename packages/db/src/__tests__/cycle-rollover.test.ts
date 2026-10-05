@@ -19,7 +19,8 @@ import {
 } from "../cycle-rollover";
 import { openActivation, completeBuilderResponse } from "../activations";
 import { isTeamLead } from "../roster";
-import { closeActivation } from "../questionnaire-lifecycle";
+import { withTransaction } from "../index";
+import { closeActivationTx } from "../questionnaire-lifecycle";
 import { loadQuestionnaireResponse } from "../questionnaire-responses";
 import { DEFAULT_TEAMS, UNSET_CYCLE, type CampConfig } from "../camp-config";
 import * as schema from "../schema";
@@ -184,7 +185,9 @@ async function seedCamp(db: DB) {
     carryOver: false,
   });
   await openActivation(alreadyClosed.id);
-  await closeActivation(alreadyClosed.id);
+  // Closed before the rollover, through the unaudited body: only the
+  // rollover's own receipt may land in audit_log for these tests to count.
+  await withTransaction((tx) => closeActivationTx(tx, alreadyClosed.id));
 
   // Left the camp AFTER being gated: computeAudience excludes them from the
   // replacement, so their expired gate is the one that survives the rollover.

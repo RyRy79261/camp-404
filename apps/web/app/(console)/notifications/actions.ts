@@ -90,65 +90,70 @@ async function loadActorAndRequest(requestId: string): Promise<LoadedActor> {
 export async function acceptCaptainPromotionAction(
   requestId: string,
 ): Promise<PromotionDecisionResult> {
-  const loaded = await loadActorAndRequest(requestId);
-  if (!loaded.ok) return loaded;
-  const { actorId, request } = loaded;
+  return runAction("acceptCaptainPromotionAction", async () => {
+    const loaded = await loadActorAndRequest(requestId);
+    if (!loaded.ok) return loaded;
+    const { actorId, request } = loaded;
 
-  const guard = canDecidePromotion({ actorId, request, action: "accept" });
-  if (!guard.ok) {
-    return {
-      ok: false,
-      error: DECIDE_PROMOTION_COPY[guard.reason] ?? "Couldn't accept.",
-    };
-  }
+    const guard = canDecidePromotion({ actorId, request, action: "accept" });
+    if (!guard.ok) {
+      return {
+        ok: false,
+        error: DECIDE_PROMOTION_COPY[guard.reason] ?? "Couldn't accept.",
+      };
+    }
 
-  const accepted = await acceptCaptainPromotion({
-    requestId,
-    actorUserId: actorId,
+    const accepted = await acceptCaptainPromotion({
+      requestId,
+      actorUserId: actorId,
+    });
+    if (!accepted) {
+      return { ok: false, error: "This request is no longer open." };
+    }
+
+    revalidatePath("/");
+    revalidatePath("/notifications");
+    revalidatePath("/captains/camp-management");
+    // The new captain's own nav and Home gain the captain programs.
+    revalidateManifest();
+    return { ok: true };
   });
-  if (!accepted) {
-    return { ok: false, error: "This request is no longer open." };
-  }
-
-  revalidatePath("/");
-  revalidatePath("/notifications");
-  revalidatePath("/captains/camp-management");
-  // The new captain's own nav and Home gain the captain programs.
-  revalidateManifest();
-  return { ok: true };
 }
 
 /** The recipient declines a request. Terminal; never changes rank. */
 export async function declineCaptainPromotionAction(
   requestId: string,
 ): Promise<PromotionDecisionResult> {
-  const loaded = await loadActorAndRequest(requestId);
-  if (!loaded.ok) return loaded;
+  return runAction("declineCaptainPromotionAction", async () => {
+    const loaded = await loadActorAndRequest(requestId);
+    if (!loaded.ok) return loaded;
 
-  const guard = canDecidePromotion({
-    actorId: loaded.actorId,
-    request: loaded.request,
-    action: "decline",
+    const guard = canDecidePromotion({
+      actorId: loaded.actorId,
+      request: loaded.request,
+      action: "decline",
+    });
+    if (!guard.ok) {
+      return {
+        ok: false,
+        error: DECIDE_PROMOTION_COPY[guard.reason] ?? "Couldn't decline.",
+      };
+    }
+
+    // The actor is bound in the write too, not only in the guard's read.
+    const decided = await decideCaptainPromotion({
+      requestId,
+      status: "declined",
+      actorUserId: loaded.actorId,
+    });
+    if (!decided)
+      return { ok: false, error: "This request is no longer open." };
+
+    revalidatePath("/");
+    revalidatePath("/notifications");
+    revalidatePath("/captains/camp-management");
+    return { ok: true };
   });
-  if (!guard.ok) {
-    return {
-      ok: false,
-      error: DECIDE_PROMOTION_COPY[guard.reason] ?? "Couldn't decline.",
-    };
-  }
-
-  // The actor is bound in the write too, not only in the guard's read.
-  const decided = await decideCaptainPromotion({
-    requestId,
-    status: "declined",
-    actorUserId: loaded.actorId,
-  });
-  if (!decided) return { ok: false, error: "This request is no longer open." };
-
-  revalidatePath("/");
-  revalidatePath("/notifications");
-  revalidatePath("/captains/camp-management");
-  return { ok: true };
 }
 
 const InboxCursor = z.string().min(1).max(100);

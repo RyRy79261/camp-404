@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { Questionnaire } from "@camp404/types";
-import { createHttpDb } from "./index";
+import { writeAuditEvent } from "./audit";
+import { createHttpDb, withTransaction } from "./index";
 import { questionnaireDefinitions, questionnaireVersions } from "./schema";
 
 type DefinitionStatus = "draft" | "published" | "unpublished";
@@ -212,16 +213,30 @@ export async function updateDefinitionRow(input: {
  * only whether they are asked again. `updated_at` is deliberately NOT bumped:
  * the builder hub sorts by it, and a year policy is not an edit to the
  * questionnaire's content.
+ *
+ * The change and its `questionnaire.carry_over_set` audit row (naming
+ * `actorId`) commit together. A key with no definition changes nothing and
+ * writes no row.
  */
 export async function setDefinitionCarryOver(
   key: string,
   carryOver: boolean,
+  actorId: string,
 ): Promise<void> {
-  const db = createHttpDb();
-  await db
-    .update(questionnaireDefinitions)
-    .set({ carryOver })
-    .where(eq(questionnaireDefinitions.key, key));
+  await withTransaction(async (tx) => {
+    const [row] = await tx
+      .update(questionnaireDefinitions)
+      .set({ carryOver })
+      .where(eq(questionnaireDefinitions.key, key))
+      .returning({ title: questionnaireDefinitions.title });
+    if (!row) return;
+    await writeAuditEvent(tx, {
+      actorId,
+      action: "questionnaire.carry_over_set",
+      target: key,
+      metadata: { title: row.title, carryOver },
+    });
+  });
 }
 
 /** A row's title + definition for cloning, or null. */

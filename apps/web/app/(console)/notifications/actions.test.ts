@@ -510,3 +510,24 @@ describe("fetchNotificationPanelAction", () => {
     expect(unreadClearableCount).not.toHaveBeenCalled();
   });
 });
+
+describe("a database error while deciding a request", () => {
+  it("comes back as a sentence, never as a thrown error", async () => {
+    signInAs(TARGET);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getPromotionRequestById).mockResolvedValue(sentRow() as never);
+    const dbError = new Error("Failed query", {
+      cause: new Error("could not serialize access"),
+    });
+    vi.mocked(acceptCaptainPromotion).mockRejectedValue(dbError);
+    vi.mocked(decideCaptainPromotion).mockRejectedValue(dbError);
+
+    const generic = {
+      ok: false,
+      error: "Something went wrong. Please try again.",
+    };
+    expect(await acceptCaptainPromotionAction(REQUEST_ID)).toEqual(generic);
+    expect(await declineCaptainPromotionAction(REQUEST_ID)).toEqual(generic);
+    log.mockRestore();
+  });
+});

@@ -153,21 +153,23 @@ async function assertCanEdit(
 export async function createDraftAction(
   title: string,
 ): Promise<QResultWithKey> {
-  const gate = await gateAuthor();
-  if (!gate.ok) return gate;
-  const parsed = Title.safeParse(title);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid name.",
-    };
-  }
-  const key = await createDraft({
-    title: parsed.data,
-    createdBy: gate.campUser.id,
+  return runAction("createDraftAction", async () => {
+    const gate = await gateAuthor();
+    if (!gate.ok) return gate;
+    const parsed = Title.safeParse(title);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid name.",
+      };
+    }
+    const key = await createDraft({
+      title: parsed.data,
+      createdBy: gate.campUser.id,
+    });
+    revalidateBuilder(key);
+    return { ok: true, key };
   });
-  revalidateBuilder(key);
-  return { ok: true, key };
 }
 
 /**
@@ -179,25 +181,27 @@ export async function createDraftAction(
 export async function createFromTemplateAction(
   template: unknown,
 ): Promise<QResultWithKey> {
-  const gate = await gateAuthor();
-  if (!gate.ok) return gate;
-  if (!isQuestionnaireTemplateKey(template)) {
-    return { ok: false, error: "That template doesn't exist." };
-  }
-  if (usesTestStore()) {
-    return {
-      ok: false,
-      error: "Templates need the questionnaire builder's database.",
-    };
-  }
-  const mealRows = mealPlanRatingRows(await getMealPlan());
-  const key = await createDraftFromTemplate({
-    template,
-    createdBy: gate.campUser.id,
-    mealRows,
+  return runAction("createFromTemplateAction", async () => {
+    const gate = await gateAuthor();
+    if (!gate.ok) return gate;
+    if (!isQuestionnaireTemplateKey(template)) {
+      return { ok: false, error: "That template doesn't exist." };
+    }
+    if (usesTestStore()) {
+      return {
+        ok: false,
+        error: "Templates need the questionnaire builder's database.",
+      };
+    }
+    const mealRows = mealPlanRatingRows(await getMealPlan());
+    const key = await createDraftFromTemplate({
+      template,
+      createdBy: gate.campUser.id,
+      mealRows,
+    });
+    revalidateBuilder(key);
+    return { ok: true, key };
   });
-  revalidateBuilder(key);
-  return { ok: true, key };
 }
 
 export type MealRowsResult =
@@ -210,17 +214,19 @@ export type MealRowsResult =
  * which saves like any other edit.
  */
 export async function mealPlanRowsAction(): Promise<MealRowsResult> {
-  const gate = await gateAuthor();
-  if (!gate.ok) return gate;
-  const rows = mealPlanRatingRows(await getMealPlan());
-  if (rows.length === 0) {
-    return {
-      ok: false,
-      error:
-        "This year's meal plan has no meals yet. Add plates on the Meal plan page first.",
-    };
-  }
-  return { ok: true, rows };
+  return runAction("mealPlanRowsAction", async () => {
+    const gate = await gateAuthor();
+    if (!gate.ok) return gate;
+    const rows = mealPlanRatingRows(await getMealPlan());
+    if (rows.length === 0) {
+      return {
+        ok: false,
+        error:
+          "This year's meal plan has no meals yet. Add plates on the Meal plan page first.",
+      };
+    }
+    return { ok: true, rows };
+  });
 }
 
 /**
@@ -233,77 +239,86 @@ export async function updateDefinitionAction(
   key: string,
   rawDefinition: unknown,
 ): Promise<QResult> {
-  const gate = await gateAuthor();
-  if (!gate.ok) return gate;
-  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
-  const can = await assertCanEdit(gate, key);
-  if (!can.ok) return can;
-  const parsed = Questionnaire.safeParse(rawDefinition);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: "The questionnaire is malformed and wasn't saved.",
-    };
-  }
-  const definition = parsed.data;
-  // The server's bounds: size, counts and image hosts. The editor cannot be
-  // trusted to enforce them, because this action takes any POST.
-  const tooBig = definitionLimitErrors(definition);
-  if (tooBig.length > 0) return { ok: false, error: tooBig[0]! };
-  await updateDefinition(key, definition);
-  revalidateBuilder(key);
-  return { ok: true };
+  return runAction("updateDefinitionAction", async () => {
+    const gate = await gateAuthor();
+    if (!gate.ok) return gate;
+    if (!Key.safeParse(key).success)
+      return { ok: false, error: "Invalid key." };
+    const can = await assertCanEdit(gate, key);
+    if (!can.ok) return can;
+    const parsed = Questionnaire.safeParse(rawDefinition);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: "The questionnaire is malformed and wasn't saved.",
+      };
+    }
+    const definition = parsed.data;
+    // The server's bounds: size, counts and image hosts. The editor cannot be
+    // trusted to enforce them, because this action takes any POST.
+    const tooBig = definitionLimitErrors(definition);
+    if (tooBig.length > 0) return { ok: false, error: tooBig[0]! };
+    await updateDefinition(key, definition);
+    revalidateBuilder(key);
+    return { ok: true };
+  });
 }
 
 export async function duplicateDraftAction(
   key: string,
 ): Promise<QResultWithKey> {
-  const gate = await gateAuthor();
-  if (!gate.ok) return gate;
-  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
-  // Visibility gate: cloning reads the whole definition, so a non-captain may
-  // only duplicate what the hub would show them (their own draft, or any
-  // published/unpublished) — never another author's private draft. "Not found"
-  // so foreign keys can't be probed.
-  const meta = await getDefinitionMetaRow(key);
-  if (!meta) return { ok: false, error: "Questionnaire not found." };
-  if (
-    !canViewBuilderDefinition(
-      { rank: gate.rank, userId: gate.campUser.id },
-      meta,
-    )
-  ) {
-    return { ok: false, error: "Questionnaire not found." };
-  }
-  const newKey = await duplicateDefinition({
-    key,
-    createdBy: gate.campUser.id,
+  return runAction("duplicateDraftAction", async () => {
+    const gate = await gateAuthor();
+    if (!gate.ok) return gate;
+    if (!Key.safeParse(key).success)
+      return { ok: false, error: "Invalid key." };
+    // Visibility gate: cloning reads the whole definition, so a non-captain may
+    // only duplicate what the hub would show them (their own draft, or any
+    // published/unpublished) — never another author's private draft. "Not found"
+    // so foreign keys can't be probed.
+    const meta = await getDefinitionMetaRow(key);
+    if (!meta) return { ok: false, error: "Questionnaire not found." };
+    if (
+      !canViewBuilderDefinition(
+        { rank: gate.rank, userId: gate.campUser.id },
+        meta,
+      )
+    ) {
+      return { ok: false, error: "Questionnaire not found." };
+    }
+    const newKey = await duplicateDefinition({
+      key,
+      createdBy: gate.campUser.id,
+    });
+    if (!newKey) {
+      return { ok: false, error: "Couldn't duplicate this questionnaire." };
+    }
+    revalidateBuilder(newKey);
+    return { ok: true, key: newKey };
   });
-  if (!newKey) {
-    return { ok: false, error: "Couldn't duplicate this questionnaire." };
-  }
-  revalidateBuilder(newKey);
-  return { ok: true, key: newKey };
 }
 
 export async function deleteDraftAction(key: string): Promise<QResult> {
-  const gate = await gateAuthor();
-  if (!gate.ok) return gate;
-  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
-  const meta = await getDefinitionMetaRow(key);
-  if (!meta) return { ok: false, error: "Questionnaire not found." };
-  if (gate.rank !== "captain" && meta.createdBy !== gate.campUser.id) {
-    return { ok: false, error: "You can only delete your own drafts." };
-  }
-  if (meta.status !== "draft") {
-    return {
-      ok: false,
-      error: "Only drafts can be deleted — unpublish it first.",
-    };
-  }
-  await deleteDraft(key);
-  revalidateBuilder();
-  return { ok: true };
+  return runAction("deleteDraftAction", async () => {
+    const gate = await gateAuthor();
+    if (!gate.ok) return gate;
+    if (!Key.safeParse(key).success)
+      return { ok: false, error: "Invalid key." };
+    const meta = await getDefinitionMetaRow(key);
+    if (!meta) return { ok: false, error: "Questionnaire not found." };
+    if (gate.rank !== "captain" && meta.createdBy !== gate.campUser.id) {
+      return { ok: false, error: "You can only delete your own drafts." };
+    }
+    if (meta.status !== "draft") {
+      return {
+        ok: false,
+        error: "Only drafts can be deleted — unpublish it first.",
+      };
+    }
+    await deleteDraft(key);
+    revalidateBuilder();
+    return { ok: true };
+  });
 }
 
 // --- Lifecycle: publish / unpublish / send / close (captain-only, Phase D) ---
@@ -315,18 +330,24 @@ export async function deleteDraftAction(key: string): Promise<QResult> {
  * @camp404/db/questionnaire-lifecycle).
  */
 export async function publishAction(key: string): Promise<PublishActionResult> {
-  const gate = await gateCaptain();
-  if (!gate.ok) return { ok: false, errors: [gate.error], issues: [] };
-  if (!Key.safeParse(key).success) {
-    return { ok: false, errors: ["Invalid key."], issues: [] };
-  }
-  const meta = await getDefinitionMetaRow(key);
-  if (!meta) {
-    return { ok: false, errors: ["Questionnaire not found."], issues: [] };
-  }
-  const result = await publishDefinition(key, gate.campUser.id);
-  if (result.ok) revalidateBuilder(key);
-  return result;
+  return runAction(
+    "publishAction",
+    async () => {
+      const gate = await gateCaptain();
+      if (!gate.ok) return { ok: false, errors: [gate.error], issues: [] };
+      if (!Key.safeParse(key).success) {
+        return { ok: false, errors: ["Invalid key."], issues: [] };
+      }
+      const meta = await getDefinitionMetaRow(key);
+      if (!meta) {
+        return { ok: false, errors: ["Questionnaire not found."], issues: [] };
+      }
+      const result = await publishDefinition(key, gate.campUser.id);
+      if (result.ok) revalidateBuilder(key);
+      return result;
+    },
+    (message) => ({ ok: false, errors: [message], issues: [] }),
+  );
 }
 
 /**
@@ -338,57 +359,64 @@ export async function publishAction(key: string): Promise<PublishActionResult> {
  * see who it will reach.
  */
 export async function createAttendanceCheckAction(): Promise<QResultWithKey> {
-  const gate = await gateCaptain();
-  if (!gate.ok) return gate;
-  if (usesTestStore()) {
-    return {
-      ok: false,
-      error: "The attendance check needs the questionnaire builder's database.",
-    };
-  }
-  const key = await createAttendanceCheck(gate.campUser.id);
-  const meta = await getDefinitionMetaRow(key);
-  if (!meta) return { ok: false, error: "Questionnaire not found." };
-  // A captain may have edited it in the builder. Without its Yes / Maybe / No
-  // question it would publish and send, and set nobody's place this year.
-  const definition = await getBuilderDefinition(key);
-  if (
-    !definition ||
-    questionsWithRole(definition, "participation_intent").length === 0
-  ) {
-    return { ok: false, error: ATTENDANCE_QUESTION_MISSING };
-  }
-  // A draft is published here; so is one a captain unpublished, since this
-  // button's purpose is to send it.
-  if (meta.status !== "published") {
-    const published = await publishDefinition(key, gate.campUser.id);
-    if (!published.ok) {
+  return runAction("createAttendanceCheckAction", async () => {
+    const gate = await gateCaptain();
+    if (!gate.ok) return gate;
+    if (usesTestStore()) {
       return {
         ok: false,
         error:
-          published.errors[0] ?? "The attendance check couldn't be published.",
+          "The attendance check needs the questionnaire builder's database.",
       };
     }
-  }
-  revalidateBuilder(key);
-  return { ok: true, key };
+    const key = await createAttendanceCheck(gate.campUser.id);
+    const meta = await getDefinitionMetaRow(key);
+    if (!meta) return { ok: false, error: "Questionnaire not found." };
+    // A captain may have edited it in the builder. Without its Yes / Maybe / No
+    // question it would publish and send, and set nobody's place this year.
+    const definition = await getBuilderDefinition(key);
+    if (
+      !definition ||
+      questionsWithRole(definition, "participation_intent").length === 0
+    ) {
+      return { ok: false, error: ATTENDANCE_QUESTION_MISSING };
+    }
+    // A draft is published here; so is one a captain unpublished, since this
+    // button's purpose is to send it.
+    if (meta.status !== "published") {
+      const published = await publishDefinition(key, gate.campUser.id);
+      if (!published.ok) {
+        return {
+          ok: false,
+          error:
+            published.errors[0] ??
+            "The attendance check couldn't be published.",
+        };
+      }
+    }
+    revalidateBuilder(key);
+    return { ok: true, key };
+  });
 }
 
 export async function unpublishAction(key: string): Promise<QResult> {
-  const gate = await gateCaptain();
-  if (!gate.ok) return gate;
-  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
-  const meta = await getDefinitionMetaRow(key);
-  if (!meta) return { ok: false, error: "Questionnaire not found." };
-  if (meta.status !== "published") {
-    return {
-      ok: false,
-      error: "Only a published questionnaire can be unpublished.",
-    };
-  }
-  const result = await unpublishDefinition(key);
-  if (result.ok) revalidateBuilder(key);
-  return result.ok ? { ok: true } : result;
+  return runAction("unpublishAction", async () => {
+    const gate = await gateCaptain();
+    if (!gate.ok) return gate;
+    if (!Key.safeParse(key).success)
+      return { ok: false, error: "Invalid key." };
+    const meta = await getDefinitionMetaRow(key);
+    if (!meta) return { ok: false, error: "Questionnaire not found." };
+    if (meta.status !== "published") {
+      return {
+        ok: false,
+        error: "Only a published questionnaire can be unpublished.",
+      };
+    }
+    const result = await unpublishDefinition(key, gate.campUser.id);
+    if (result.ok) revalidateBuilder(key);
+    return result.ok ? { ok: true } : result;
+  });
 }
 
 const SendForm = z
@@ -424,38 +452,41 @@ export async function sendAction(
   key: string,
   rawInput: unknown,
 ): Promise<QResultWithActivation> {
-  const gate = await gateAuthor();
-  if (!gate.ok) return gate;
-  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
-  const parsed = SendForm.safeParse(rawInput);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid send settings.",
-    };
-  }
-  const allowed = await allowSendTo(gate, {
-    scope: parsed.data.scope,
-    team: parsed.data.team ?? null,
+  return runAction("sendAction", async () => {
+    const gate = await gateAuthor();
+    if (!gate.ok) return gate;
+    if (!Key.safeParse(key).success)
+      return { ok: false, error: "Invalid key." };
+    const parsed = SendForm.safeParse(rawInput);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid send settings.",
+      };
+    }
+    const allowed = await allowSendTo(gate, {
+      scope: parsed.data.scope,
+      team: parsed.data.team ?? null,
+    });
+    if (!allowed.ok) return allowed;
+    // An optional questionnaire asks nobody: it is never blocking, has no
+    // deadline and names nobody, whatever the request says.
+    const optIn = parsed.data.scope === "opt_in";
+    const result = await sendActivation({
+      questionnaireKey: key,
+      scope: parsed.data.scope,
+      team: optIn ? null : (parsed.data.team ?? null),
+      blocking: optIn ? false : parsed.data.blocking,
+      dueAt: !optIn && parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
+      activatedByUserId: gate.campUser.id,
+      targetUserIds: optIn ? undefined : parsed.data.targetUserIds,
+      announce: optIn ? (parsed.data.announce ?? false) : undefined,
+    });
+    if (!result.ok) return result;
+    deliverAfterResponse();
+    revalidateBuilder(key);
+    return { ok: true, activationId: result.activationId };
   });
-  if (!allowed.ok) return allowed;
-  // An optional questionnaire asks nobody: it is never blocking, has no
-  // deadline and names nobody, whatever the request says.
-  const optIn = parsed.data.scope === "opt_in";
-  const result = await sendActivation({
-    questionnaireKey: key,
-    scope: parsed.data.scope,
-    team: optIn ? null : (parsed.data.team ?? null),
-    blocking: optIn ? false : parsed.data.blocking,
-    dueAt: !optIn && parsed.data.dueAt ? new Date(parsed.data.dueAt) : null,
-    activatedByUserId: gate.campUser.id,
-    targetUserIds: optIn ? undefined : parsed.data.targetUserIds,
-    announce: optIn ? (parsed.data.announce ?? false) : undefined,
-  });
-  if (!result.ok) return result;
-  deliverAfterResponse();
-  revalidateBuilder(key);
-  return { ok: true, activationId: result.activationId };
 }
 
 // --- The audience preview -------------------------------------------------
@@ -564,14 +595,16 @@ export async function closeActivationAction(
   activationId: string,
   key?: string,
 ): Promise<QResult> {
-  const gate = await gateCaptain();
-  if (!gate.ok) return gate;
-  if (!z.string().uuid().safeParse(activationId).success) {
-    return { ok: false, error: "Invalid activation." };
-  }
-  const result = await closeActivation(activationId);
-  if (result.ok) revalidateBuilder(key);
-  return result;
+  return runAction("closeActivationAction", async () => {
+    const gate = await gateCaptain();
+    if (!gate.ok) return gate;
+    if (!z.string().uuid().safeParse(activationId).success) {
+      return { ok: false, error: "Invalid activation." };
+    }
+    const result = await closeActivation(activationId, gate.campUser.id);
+    if (result.ok) revalidateBuilder(key);
+    return result;
+  });
 }
 
 // --- The year policy: does this questionnaire ask again next year? ----------
@@ -593,10 +626,13 @@ export type CarryOverResult =
 export async function getCarryOverAction(
   key: string,
 ): Promise<CarryOverResult> {
-  const gate = await gateCaptain();
-  if (!gate.ok) return gate;
-  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
-  return { ok: true, carryOver: (await carryOverFor(key)) === "carry" };
+  return runAction("getCarryOverAction", async () => {
+    const gate = await gateCaptain();
+    if (!gate.ok) return gate;
+    if (!Key.safeParse(key).success)
+      return { ok: false, error: "Invalid key." };
+    return { ok: true, carryOver: (await carryOverFor(key)) === "carry" };
+  });
 }
 
 /**
@@ -607,17 +643,20 @@ export async function setCarryOverAction(
   key: string,
   carryOver: boolean,
 ): Promise<QResult> {
-  const gate = await gateCaptain();
-  if (!gate.ok) return gate;
-  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
-  const parsedFlag = z.boolean().safeParse(carryOver);
-  if (!parsedFlag.success) return { ok: false, error: "Invalid request." };
-  const meta = await getDefinitionMetaRow(key);
-  if (!meta) return { ok: false, error: "Questionnaire not found." };
+  return runAction("setCarryOverAction", async () => {
+    const gate = await gateCaptain();
+    if (!gate.ok) return gate;
+    if (!Key.safeParse(key).success)
+      return { ok: false, error: "Invalid key." };
+    const parsedFlag = z.boolean().safeParse(carryOver);
+    if (!parsedFlag.success) return { ok: false, error: "Invalid request." };
+    const meta = await getDefinitionMetaRow(key);
+    if (!meta) return { ok: false, error: "Questionnaire not found." };
 
-  await setDefinitionCarryOver(key, parsedFlag.data);
-  revalidateBuilder(key);
-  return { ok: true };
+    await setDefinitionCarryOver(key, parsedFlag.data, gate.campUser.id);
+    revalidateBuilder(key);
+    return { ok: true };
+  });
 }
 
 // --- Reminders (§7.4) ------------------------------------------------------
@@ -653,12 +692,12 @@ export type ReminderActionResult =
 export async function remindPendingAction(
   activationId: string,
 ): Promise<ReminderActionResult> {
-  const gate = await gateCaptain();
-  if (!gate.ok) return gate;
-  if (!z.string().uuid().safeParse(activationId).success) {
-    return { ok: false, error: "Invalid activation." };
-  }
   return runAction("remindPendingAction", async () => {
+    const gate = await gateCaptain();
+    if (!gate.ok) return gate;
+    if (!z.string().uuid().safeParse(activationId).success) {
+      return { ok: false, error: "Invalid activation." };
+    }
     const result = await sendReminder({
       activationId,
       senderId: gate.campUser.id,

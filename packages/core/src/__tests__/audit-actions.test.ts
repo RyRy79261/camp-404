@@ -488,4 +488,28 @@ describe("recipe audit rows", () => {
     );
     expect(auditDetail("recipe.plates_queued", { title: "Dhal" })).toBe("Dhal");
   });
+
+  it("names the questionnaire, and which way its year policy went", () => {
+    expect(
+      auditDetail("questionnaire.unpublished", { title: "Coming this year?" }),
+    ).toBe("Coming this year?");
+    expect(auditDetail("questionnaire.send_closed", { title: "Tent check" })).toBe(
+      "Tent check",
+    );
+    expect(
+      auditDetail("questionnaire.carry_over_set", {
+        title: "Dietary needs",
+        carryOver: true,
+      }),
+    ).toBe("Dietary needs: answers kept next year");
+    expect(
+      auditDetail("questionnaire.carry_over_set", {
+        title: "Dietary needs",
+        carryOver: false,
+      }),
+    ).toBe("Dietary needs: asked again next year");
+    expect(
+      auditDetail("questionnaire.carry_over_set", { title: "Dietary needs" }),
+    ).toBe("Dietary needs");
+  });
 });
