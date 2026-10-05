@@ -1,7 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalDependencies": ["**/.env.*local", ".env"],
+  "globalDependencies": [
+    "**/.env.*local",
+    ".env",
+    ".npmrc",
+    "pnpm-workspace.yaml"
+  ],
   "globalEnv": [
     "NODE_ENV",
     "MOBILE_BUILD",

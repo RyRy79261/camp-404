@@ -139,10 +139,15 @@ pnpm turbo run lint typecheck test build
 
 ## How it runs
 
-- **Hosting.** Both apps deploy to Vercel in `fra1` (Frankfurt), beside the
-  Neon Postgres database. The web app's `vercel-build` runs the migrations
-  before `next build`, so every deploy applies pending migrations, and a data
-  fix ships as a migration too.
+- **Hosting.** The three sites (web, join, guide) are three Vercel projects in
+  `fra1` (Frankfurt), beside the Neon Postgres database. The web app's
+  `vercel-build` runs the migrations before `next build`, so every deploy
+  applies pending migrations, and a data fix ships as a migration too.
+- **Builds.** Each project builds only when its app, or a workspace package
+  it depends on, changed (`scripts/vercel-ignore-build.sh`, the
+  `ignoreCommand` in each app's `vercel.json`). The free plan allows 100
+  deploys a day. `[vercel skip]` in a commit message skips every project;
+  `[vercel deploy]` builds them all.
 - **Sign-in.** Self-hosted Better Auth with passwords, passkeys, two-factor and
   Google. A preview signs in with Google through production.
 - **No cron jobs.** The camp is on Vercel's free plan. Notices, reminders and

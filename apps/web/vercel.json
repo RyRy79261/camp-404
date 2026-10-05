@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["fra1"],
+  "ignoreCommand": "bash ../../scripts/vercel-ignore-build.sh @camp404/web",
   "headers": [
     {
       "source": "/(.*)",
