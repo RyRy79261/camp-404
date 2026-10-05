@@ -56,6 +56,31 @@ website, never more, and takes data out the way the website does.
   budgets); sending recipes to Claude; the guide's public sections and
   members-only marks; deletes, archives, year rollover, camp settings; making
   invite codes; uploads.
+- **The website's save paths** (2026-10-05). `update_my_burner_profile` is
+  My forms' save: the patch is laid over the stored answers, the whole
+  profile is checked as the website checks a re-submit, and it saves at the
+  questionnaire's own version with its change-log row, as a compare-and-set
+  on the profile and the emergency contacts it read (the contacts under a row
+  lock). It changes only a finished profile with an ID number on file
+  (finishing it, and the ID, are the website's); an ID number still left in
+  the answers is encrypted first, as the daily upkeep would. Never the ID
+  number or its type, never the photo. `update_my_emergency_contacts` saves
+  the list as those same contact answers, so the first contact is required
+  and each change is logged.
+- **The connector's log** (`mcp_audit_log`) keeps which tool, when, whether
+  it worked, and arguments reduced by each tool (counts or field names, not
+  values). A failure keeps our own refusal's sentence, or only the error's
+  class and Postgres code (`auditErrorText`), never a raw message, which for a
+  failed query holds the values being saved. Erasure clears a member's
+  arguments and error text and keeps the rest of the row.
+- **Registration** (`/api/mcp/oauth/register`, open to anyone by RFC 7591)
+  is bounded: a 16 KB body, at most 10 redirect URIs of 512 characters
+  (allow-listed hosts, no fragment, no user name or password), only our scope;
+  20 attempts a minute and 50 a day per address (an IPv6 /64 is one
+  address); at most 500 stored clients nobody authorized, kept by pushing out
+  the oldest one over ten minutes old rather than refusing a newcomer; and
+  the daily upkeep deletes a client nobody authorized after a day. The consent screen says the token acts as the person, writes included,
+  and names the areas their rank reaches.
 - **Taking data out.** `list_users` lists whom the roster lists (no declined
   sign-up for a non-captain) with no safety data and no ID or bank numbers for
   anyone. `get_user` is the member panel: a team lead or captain also gets
@@ -123,10 +148,10 @@ on the token:
 type McpScope = {
   campUserId: string;
   rank: "captain" | "member";
-  leadTeams: Team[];   // team_memberships where is_lead
+  leadTeams: Team[]; // team_memberships where is_lead
   memberTeams: Team[]; // team_memberships
-  isDriver: boolean;   // driver_profiles.intends_to_drive
-  isCaptain: boolean;  // rank === "captain"
+  isDriver: boolean; // driver_profiles.intends_to_drive
+  isCaptain: boolean; // rank === "captain"
 };
 ```
 
@@ -139,11 +164,11 @@ website's own predicate (`canManageMoney`, `canEditGuideChapter`,
 
 Three tiers (original proposal):
 
-| Tier | Scope |
-|---|---|
-| **member** | self + camp-directory + team data + camp-wide ops; no others' ID docs |
-| **team lead** | + write access scoped to teams in `leadTeams` + all dietary (safety) |
-| **captain** | full read + write across the schema |
+| Tier          | Scope                                                                 |
+| ------------- | --------------------------------------------------------------------- |
+| **member**    | self + camp-directory + team data + camp-wide ops; no others' ID docs |
+| **team lead** | + write access scoped to teams in `leadTeams` + all dietary (safety)  |
+| **captain**   | full read + write across the schema                                   |
 
 ## Consent gate (ID documents only)
 
@@ -187,39 +212,39 @@ the appropriate tier with no consent gate.
 
 ### Identity / self
 
-| Tool | R/W | Tier | Notes |
-|---|---|---|---|
-| `whoami` | R | M | returns scope + display name + required actions count |
-| `list_my_required_actions` | R | M | own pending/blocking rows, and [2026-10-04] the open optional questionnaires (#347), marked optional |
-| `what_can_i_do` | R | M | [2026-10-04] rank, led teams, tools by area, website-only actions with links |
-| `get_my_ai_consent` | R | M | `{ enabled, since }` [CORRECTION 2026-10-05: removed] |
-| `set_my_ai_consent(enabled)` | W | M | writes flag + timestamp + audit [CORRECTION 2026-10-05: removed] |
+| Tool                         | R/W | Tier | Notes                                                                                                |
+| ---------------------------- | --- | ---- | ---------------------------------------------------------------------------------------------------- |
+| `whoami`                     | R   | M    | returns scope + display name + required actions count                                                |
+| `list_my_required_actions`   | R   | M    | own pending/blocking rows, and [2026-10-04] the open optional questionnaires (#347), marked optional |
+| `what_can_i_do`              | R   | M    | [2026-10-04] rank, led teams, tools by area, website-only actions with links                         |
+| `get_my_ai_consent`          | R   | M    | `{ enabled, since }` [CORRECTION 2026-10-05: removed]                                                |
+| `set_my_ai_consent(enabled)` | W   | M    | writes flag + timestamp + audit [CORRECTION 2026-10-05: removed]                                     |
 
 ### Profile (self only)
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `get_my_burner_profile` / `update_my_burner_profile` | R/W | M |
-| `get_my_dietary_requirements` / `update_my_dietary_requirements` | R/W | M — [CORRECTION 2026-10-04] the #245 pick-list (`saveMyDietary`), which the meal plan's allergy check reads |
-| `get_my_driver_profile` / `update_my_driver_profile` | R/W | M |
-| `get_my_emergency_contacts` / `update_my_emergency_contacts` | R/W | M |
-| `get_my_id_documents` / `update_my_id_documents` | R/W | M — passport / SA ID, decrypted for self [CORRECTION 2026-10-05: removed; no ID numbers through the connector] |
+| Tool                                                             | R/W | Tier                                                                                                           |
+| ---------------------------------------------------------------- | --- | -------------------------------------------------------------------------------------------------------------- |
+| `get_my_burner_profile` / `update_my_burner_profile`             | R/W | M                                                                                                              |
+| `get_my_dietary_requirements` / `update_my_dietary_requirements` | R/W | M — [CORRECTION 2026-10-04] the #245 pick-list (`saveMyDietary`), which the meal plan's allergy check reads    |
+| `get_my_driver_profile` / `update_my_driver_profile`             | R/W | M                                                                                                              |
+| `get_my_emergency_contacts` / `update_my_emergency_contacts`     | R/W | M                                                                                                              |
+| `get_my_id_documents` / `update_my_id_documents`                 | R/W | M — passport / SA ID, decrypted for self [CORRECTION 2026-10-05: removed; no ID numbers through the connector] |
 
 ### People
 
-| Tool | R/W | Tier | Returns |
-|---|---|---|---|
-| `list_users(filter)` | R | M | directory fields for all + ID docs only for consenting subjects + captain |
-| `get_user(id)` | R | M / L / C | scope determines field set; ID docs require consent + captain |
-| `get_member_id_number(id)` | R | C | [2026-10-04] one ID number, audited first [CORRECTION 2026-10-05: removed] |
-| `set_user_rank` / `assign_team_membership` | W | C | |
+| Tool                                       | R/W | Tier      | Returns                                                                    |
+| ------------------------------------------ | --- | --------- | -------------------------------------------------------------------------- |
+| `list_users(filter)`                       | R   | M         | directory fields for all + ID docs only for consenting subjects + captain  |
+| `get_user(id)`                             | R   | M / L / C | scope determines field set; ID docs require consent + captain              |
+| `get_member_id_number(id)`                 | R   | C         | [2026-10-04] one ID number, audited first [CORRECTION 2026-10-05: removed] |
+| `set_user_rank` / `assign_team_membership` | W   | C         |                                                                            |
 
 ### Teams
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `get_team_budget(team)` | R | M (any) |
-| `set_team_budget(team, ...)` | W | [CORRECTION 2026-10-04] removed: website-only (was lead of team + C) |
+| Tool                         | R/W | Tier                                                                 |
+| ---------------------------- | --- | -------------------------------------------------------------------- |
+| `get_team_budget(team)`      | R   | M (any)                                                              |
+| `set_team_budget(team, ...)` | W   | [CORRECTION 2026-10-04] removed: website-only (was lead of team + C) |
 
 [CORRECTION 2026-09-30] `set_team_budget` is for captains and Finance leads
 only (#242, owner: one budget per team, set by Finance); a team's own lead
@@ -228,19 +253,19 @@ budget, spent, waiting and left, in cents.
 
 ### Required actions (admin)
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `list_required_actions(filter)` | R | L (own team) / C |
-| `create_required_action` | W | C |
-| `waive_required_action` | W | C |
+| Tool                            | R/W | Tier             |
+| ------------------------------- | --- | ---------------- |
+| `list_required_actions(filter)` | R   | L (own team) / C |
+| `create_required_action`        | W   | C                |
+| `waive_required_action`         | W   | C                |
 
 ### Questionnaires
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `list_questionnaire_activations(filter)` | R | C |
-| `create_questionnaire_activation` | W | C — drafts only, status='draft' |
-| `list_activation_targets(activationId)` | R | C |
+| Tool                                     | R/W | Tier                            |
+| ---------------------------------------- | --- | ------------------------------- |
+| `list_questionnaire_activations(filter)` | R   | C                               |
+| `create_questionnaire_activation`        | W   | C — drafts only, status='draft' |
+| `list_activation_targets(activationId)`  | R   | C                               |
 
 **Activation must happen from the app**, not via MCP. The MCP layer can
 draft the row; flipping it to `open` (which fans out the
@@ -249,18 +274,18 @@ action that runs through the captain's web UI.
 
 ### Recipes
 
-| Tool | R/W | Tier | Notes |
-|---|---|---|---|
-| `submit_recipe(source, payload)` | W | M | |
-| `list_recipes(filter)` | R | M (recipes with an accepted version) | [CORRECTION 2026-09-24] #243 replaced the ready/scheduled statuses; the tool now lists the recipe book only |
-| `schedule_recipe` / `reject_recipe` | W | kitchen L + C | |
+| Tool                                | R/W | Tier                                 | Notes                                                                                                       |
+| ----------------------------------- | --- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `submit_recipe(source, payload)`    | W   | M                                    |                                                                                                             |
+| `list_recipes(filter)`              | R   | M (recipes with an accepted version) | [CORRECTION 2026-09-24] #243 replaced the ready/scheduled statuses; the tool now lists the recipe book only |
+| `schedule_recipe` / `reject_recipe` | W   | kitchen L + C                        |                                                                                                             |
 
 ### Documents
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `list_documents(filter)` / `get_document(slug)` | R | M (published); author/team L/C (drafts) |
-| `create_document` / `update_document` / `publish_document` | W | author OR team L of doc's team OR C |
+| Tool                                                       | R/W | Tier                                    |
+| ---------------------------------------------------------- | --- | --------------------------------------- |
+| `list_documents(filter)` / `get_document(slug)`            | R   | M (published); author/team L/C (drafts) |
+| `create_document` / `update_document` / `publish_document` | W   | author OR team L of doc's team OR C     |
 
 [CORRECTION 2026-10-04] `create_document` takes only the guide's topics and
 can start a duty card, validated as the editor validates it;
@@ -270,14 +295,14 @@ survival-guide.camp-404.com, with members-only parts kept in the app.
 
 ### Reimbursements
 
-| Tool | R/W | Tier | Notes |
-|---|---|---|---|
-| `submit_reimbursement(...)` | W | M | accepts plaintext account details, encrypts at boundary |
-| `list_my_reimbursements` | R | M | own, decrypted |
-| `list_reimbursements(filter)` | R | L (own team, redacted) / C (all, decrypted) | |
-| `approve_reimbursement` / `reject_reimbursement` | W | team L of claim's team OR C | per existing routing |
-| `mark_paid` / `mark_reconciled` | W | C | [CORRECTION 2026-10-04] removed: website-only |
-| `get_claim_bank_details(claimId)` | R | captain or Finance lead | [2026-10-04] one claim's bank details [CORRECTION 2026-10-05: removed] |
+| Tool                                             | R/W | Tier                                        | Notes                                                                  |
+| ------------------------------------------------ | --- | ------------------------------------------- | ---------------------------------------------------------------------- |
+| `submit_reimbursement(...)`                      | W   | M                                           | accepts plaintext account details, encrypts at boundary                |
+| `list_my_reimbursements`                         | R   | M                                           | own, decrypted                                                         |
+| `list_reimbursements(filter)`                    | R   | L (own team, redacted) / C (all, decrypted) |                                                                        |
+| `approve_reimbursement` / `reject_reimbursement` | W   | team L of claim's team OR C                 | per existing routing                                                   |
+| `mark_paid` / `mark_reconciled`                  | W   | C                                           | [CORRECTION 2026-10-04] removed: website-only                          |
+| `get_claim_bank_details(claimId)`                | R   | captain or Finance lead                     | [2026-10-04] one claim's bank details [CORRECTION 2026-10-05: removed] |
 
 [CORRECTION 2026-09-30] The claim tools as built (#242):
 `submit_reimbursement` was removed, because a claim needs private receipt
@@ -293,11 +318,11 @@ returns no bank details to anyone.
 
 ### Broadcasts / inbox (read-only)
 
-| Tool | R/W | Tier | Notes |
-|---|---|---|---|
-| `list_my_inbox(unreadOnly?)` | R | M | `notification_deliveries` for self |
-| `mark_notification_read(id)` | W | M | flips own delivery row's `readAt` |
-| `list_broadcasts(filter)` | R | C | read history of sent announcements |
+| Tool                         | R/W | Tier | Notes                              |
+| ---------------------------- | --- | ---- | ---------------------------------- |
+| `list_my_inbox(unreadOnly?)` | R   | M    | `notification_deliveries` for self |
+| `mark_notification_read(id)` | W   | M    | flips own delivery row's `readAt`  |
+| `list_broadcasts(filter)`    | R   | C    | read history of sent announcements |
 
 **No write tools for broadcasts.** Camp-wide notifications are an
 explicit human-in-loop action — every broadcast that reaches phones
@@ -306,37 +331,37 @@ agent. The `broadcasts` table is read-only via MCP.
 
 ### Tasks
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `list_tasks(filter)` | R | M (own + team) / L / C |
-| `create_task` / `update_task` / `complete_task` | W | assignee / creator / team L / C |
+| Tool                                            | R/W | Tier                            |
+| ----------------------------------------------- | --- | ------------------------------- |
+| `list_tasks(filter)`                            | R   | M (own + team) / L / C          |
+| `create_task` / `update_task` / `complete_task` | W   | assignee / creator / team L / C |
 
 ### Workshops
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `list_workshops` / `get_workshop(id)` | R | M |
-| `rsvp_workshop(id)` / `cancel_rsvp(id)` | W | M |
-| `list_workshop_rsvps(id)` | R | host + C |
-| `create_workshop` / `update_workshop` / `cancel_workshop` | W | host + C |
+| Tool                                                      | R/W | Tier     |
+| --------------------------------------------------------- | --- | -------- |
+| `list_workshops` / `get_workshop(id)`                     | R   | M        |
+| `rsvp_workshop(id)` / `cancel_rsvp(id)`                   | W   | M        |
+| `list_workshop_rsvps(id)`                                 | R   | host + C |
+| `create_workshop` / `update_workshop` / `cancel_workshop` | W   | host + C |
 
 ### Inventory
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `list_inventory_items(filter)` / `get_inventory_item(id)` | R | M |
-| `propose_inventory_update(itemId?, payload)` | W | M |
-| `list_inventory_updates(filter)` | R | M (own + approved); L/C (all) |
-| `approve_inventory_update(id)` / `reject_inventory_update(id)` | W | any L + C (schema confirms cross-team) |
+| Tool                                                           | R/W | Tier                                   |
+| -------------------------------------------------------------- | --- | -------------------------------------- |
+| `list_inventory_items(filter)` / `get_inventory_item(id)`      | R   | M                                      |
+| `propose_inventory_update(itemId?, payload)`                   | W   | M                                      |
+| `list_inventory_updates(filter)`                               | R   | M (own + approved); L/C (all)          |
+| `approve_inventory_update(id)` / `reject_inventory_update(id)` | W   | any L + C (schema confirms cross-team) |
 
 ### Drivers / lifts
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `list_drivers(filter)` | R | M |
-| `get_driver_profile(userId)` | R | self (full) + C (full) + M (vehicle / seats / lift offer only) |
-| `list_car_members(driverUserId)` | R | M |
-| `add_car_member` / `remove_car_member` | W | driver of own car + C |
+| Tool                                   | R/W | Tier                                                           |
+| -------------------------------------- | --- | -------------------------------------------------------------- |
+| `list_drivers(filter)`                 | R   | M                                                              |
+| `get_driver_profile(userId)`           | R   | self (full) + C (full) + M (vehicle / seats / lift offer only) |
+| `list_car_members(driverUserId)`       | R   | M                                                              |
+| `add_car_member` / `remove_car_member` | W   | driver of own car + C                                          |
 
 [CORRECTION 2026-10-04] As built, on the Transport page's rules
 (`@camp404/db/transport`): `list_drivers` (every member: the cars as the page
@@ -349,16 +374,16 @@ only answers "my lift".
 
 ### Admin / audit
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `list_invite_codes` / `create_invite_code` / `revoke_invite_code` | R/W | C |
-| `list_audit_log(filter)` | R | C |
+| Tool                                                              | R/W | Tier |
+| ----------------------------------------------------------------- | --- | ---- |
+| `list_invite_codes` / `create_invite_code` / `revoke_invite_code` | R/W | C    |
+| `list_audit_log(filter)`                                          | R   | C    |
 
 ### Search
 
-| Tool | R/W | Tier |
-|---|---|---|
-| `search(q, types?)` | R | scoped to caller's view across people / docs / tasks / inventory |
+| Tool                | R/W | Tier                                                             |
+| ------------------- | --- | ---------------------------------------------------------------- |
+| `search(q, types?)` | R   | scoped to caller's view across people / docs / tasks / inventory |
 
 ## Cross-cutting rules
 
@@ -454,6 +479,7 @@ own car, a captain for any); the seat limit holds under concurrent adds. `set_us
 two-sided request the member accepts in the app.
 
 Out of scope:
+
 - **Camp-wide broadcasts as a write surface.** Every notification that
   reaches phones is composed and sent from the captain's web UI.
 - **Adoptees.** No app feature exists for the orphanage shadow gift

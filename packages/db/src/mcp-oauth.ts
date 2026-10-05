@@ -1,5 +1,17 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  notExists,
+  sql,
+} from "drizzle-orm";
+import type { DbOrTx } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
 import { isActiveMcpUser } from "./mcp";
 import * as schema from "./schema";
@@ -97,8 +109,8 @@ export interface RegisteredClient {
 
 export async function registerClient(
   input: RegisterClientInput,
+  db: DbOrTx = createHttpDb(),
 ): Promise<RegisteredClient> {
-  const db = createHttpDb();
   const clientId = generateOpaqueToken(16);
   const clientSecret =
     input.tokenEndpointAuthMethod === "none"
@@ -128,6 +140,121 @@ export async function registerClient(
     scope: row.scope,
     createdAt: row.createdAt,
   };
+}
+
+/**
+ * Register a client from the open registration endpoint, keeping at most
+ * `cap` never-authorized clients stored (makeRoomForClient). The count, any
+ * push-out and the insert run in one transaction under an advisory lock, so
+ * registrations arriving together cannot each see room and overshoot the
+ * cap. null when there is no room right now.
+ */
+export async function registerBoundedClient(
+  input: RegisterClientInput,
+  cap: number = MAX_UNUSED_CLIENTS,
+  now: Date = new Date(),
+): Promise<RegisteredClient | null> {
+  return withTransaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext('mcp_oauth_clients:register'))`,
+    );
+    if (!(await makeRoomForClient(cap, now, tx))) return null;
+    return registerClient(input, tx);
+  });
+}
+
+/**
+ * A registered client nobody ever authorized is deleted once it is this old.
+ * Claude registers and then sends the person to the consent screen within
+ * minutes, so a day is generous.
+ */
+export const UNUSED_CLIENT_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Delete clients registered over `UNUSED_CLIENT_TTL_MS` ago that were never
+ * authorized: no authorization code was ever issued to them, they hold no
+ * token, and no token was ever used through them. Registration is open to
+ * anyone (RFC 7591), so without this every abandoned or hostile registration
+ * stays in the database for good. Run from the daily upkeep (no cron).
+ * Returns how many went.
+ */
+export async function sweepUnusedClients(
+  now: Date = new Date(),
+): Promise<number> {
+  const db = createHttpDb();
+  const cutoff = new Date(now.getTime() - UNUSED_CLIENT_TTL_MS);
+  const gone = await db
+    .delete(schema.mcpOauthClients)
+    .where(
+      and(lt(schema.mcpOauthClients.createdAt, cutoff), neverAuthorized(db)),
+    )
+    .returning({ clientId: schema.mcpOauthClients.clientId });
+  return gone.length;
+}
+
+/** A client no authorization code or token was ever issued to, never used. */
+function neverAuthorized(db: DbOrTx) {
+  return and(
+    isNull(schema.mcpOauthClients.lastUsedAt),
+    notExists(
+      db
+        .select({ one: sql`1` })
+        .from(schema.mcpAuthCodes)
+        .where(
+          eq(schema.mcpAuthCodes.clientId, schema.mcpOauthClients.clientId),
+        ),
+    ),
+    notExists(
+      db
+        .select({ one: sql`1` })
+        .from(schema.mcpAccessTokens)
+        .where(
+          eq(schema.mcpAccessTokens.clientId, schema.mcpOauthClients.clientId),
+        ),
+    ),
+  );
+}
+
+/** At most this many never-authorized clients are kept at once. */
+export const MAX_UNUSED_CLIENTS = 500;
+/** A registration this young is mid-sign-in: it is never pushed out. */
+export const UNUSED_CLIENT_GRACE_MS = 10 * 60 * 1000;
+
+/**
+ * Make room for one more registration: while `cap` or more never-authorized
+ * clients are stored, delete the oldest one that is over
+ * UNUSED_CLIENT_GRACE_MS old. Storage stays bounded without refusing a
+ * newcomer. Returns false only when every stored one is younger than that
+ * (a flood inside ten minutes), so the caller refuses for now.
+ */
+export async function makeRoomForClient(
+  cap: number = MAX_UNUSED_CLIENTS,
+  now: Date = new Date(),
+  db: DbOrTx = createHttpDb(),
+): Promise<boolean> {
+  const [counted] = await db
+    .select({ n: count() })
+    .from(schema.mcpOauthClients)
+    .where(neverAuthorized(db));
+  const excess = (counted?.n ?? 0) - cap + 1;
+  if (excess <= 0) return true;
+  const graceCutoff = new Date(now.getTime() - UNUSED_CLIENT_GRACE_MS);
+  const oldest = db
+    .select({ clientId: schema.mcpOauthClients.clientId })
+    .from(schema.mcpOauthClients)
+    .where(
+      and(
+        lt(schema.mcpOauthClients.createdAt, graceCutoff),
+        neverAuthorized(db),
+      ),
+    )
+    .orderBy(asc(schema.mcpOauthClients.createdAt))
+    .limit(excess);
+  const gone = await db
+    .delete(schema.mcpOauthClients)
+    .where(inArray(schema.mcpOauthClients.clientId, oldest))
+    .returning();
+  return gone.length >= excess;
 }
 
 export async function findClient(clientId: string) {

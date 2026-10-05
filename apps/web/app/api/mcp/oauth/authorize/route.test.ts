@@ -14,6 +14,7 @@ vi.mock("@/lib/users", () => ({
   hasCampAccess: vi.fn(() => true),
   isApproved: vi.fn(() => true),
 }));
+vi.mock("@/lib/mcp/scope", () => ({ getMcpScope: vi.fn() }));
 vi.mock("@/lib/mcp/oauth", () => ({
   DEFAULT_SCOPE: "camp",
   findClient: vi.fn(),
@@ -21,13 +22,14 @@ vi.mock("@/lib/mcp/oauth", () => ({
   issueAuthCode: vi.fn(),
 }));
 
-import { POST } from "./route";
+import { GET, POST } from "./route";
 import {
   findUserByAuthId,
   getBurnerProfileByUserId,
 } from "@camp404/db/burner-profile";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findClient, issueAuthCode } from "@/lib/mcp/oauth";
+import { getMcpScope } from "@/lib/mcp/scope";
 
 const REDIRECT = "https://claude.ai/api/mcp/auth_callback";
 
@@ -56,6 +58,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(findClient).mockResolvedValue({
     clientId: "claude",
+    clientName: "Claude",
     redirectUris: [REDIRECT],
   } as never);
   vi.mocked(getAuthenticatedUser).mockResolvedValue({
@@ -95,5 +98,54 @@ describe("POST /api/mcp/oauth/authorize (consent approve)", () => {
     const res = await POST(approve());
     expect(res.status).toBe(200);
     expect(issueAuthCode).toHaveBeenCalledOnce();
+  });
+});
+
+describe("GET /api/mcp/oauth/authorize (the consent screen)", () => {
+  function consent(): Request {
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: "claude",
+      redirect_uri: REDIRECT,
+      code_challenge: "challenge",
+      code_challenge_method: "S256",
+      scope: "mcp:user",
+    });
+    return new Request(
+      `https://camp.test/api/mcp/oauth/authorize?${params.toString()}`,
+    );
+  }
+
+  const scopeOf = (
+    viewerRank: "camp_member" | "team_lead" | "captain",
+    leadTeams: string[] = [],
+  ) => ({
+    campUserId: "camp-1",
+    rank: viewerRank === "captain" ? "captain" : "member",
+    viewerRank,
+    leadTeams,
+    memberTeams: leadTeams,
+    isDriver: false,
+    isCaptain: viewerRank === "captain",
+  });
+
+  it("says the connector acts as the person, writes included, and what stays out", async () => {
+    vi.mocked(getMcpScope).mockResolvedValue(scopeOf("camp_member") as never);
+    const res = await GET(consent());
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).not.toContain("Read your basic profile");
+    expect(html).toContain(
+      "Act as you: read and change what your rank allows, except ID numbers, bank details and website-only actions.",
+    );
+    expect(html).toContain("As a member, that covers: You,");
+    expect(html).not.toContain("Camp settings");
+  });
+
+  it("names the wider reach of a captain", async () => {
+    vi.mocked(getMcpScope).mockResolvedValue(scopeOf("captain") as never);
+    const html = await (await GET(consent())).text();
+    expect(html).toContain("As a captain, that covers:");
+    expect(html).toContain("Invites and audit");
   });
 });

@@ -267,6 +267,14 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .delete(schema.telegramInvites)
       .where(eq(schema.telegramInvites.userId, userId));
 
+    // The Claude connector's log of their calls stays, like audit_log (which
+    // tool, when, and whether it worked), but what they passed in and the
+    // error text go: either can hold their own answers.
+    await tx
+      .update(schema.mcpAuditLog)
+      .set({ argsJson: null, errorMessage: null })
+      .where(eq(schema.mcpAuditLog.userId, userId));
+
     // The dues ledger stays for accounting, like reimbursements below, but the
     // captain's free-text note may name the person, so it goes.
     // Their proof-of-payment files go too (the web app deletes the files

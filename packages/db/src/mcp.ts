@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { DbOrTx } from "./audit";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
@@ -117,7 +117,15 @@ export async function getMcpScopeRows(
   };
 }
 
-/** Append one row to mcp_audit_log. Best-effort — never throws into the caller. */
+/**
+ * Append one row to mcp_audit_log. Best-effort — never throws into the caller.
+ *
+ * Written only for a member who is not erased, and serialized with erasure:
+ * the insert takes a share lock on the member's row, which erasure updates
+ * first. A call still running when its member is erased therefore either
+ * lands before the erasure (which then clears it) or finds the member erased
+ * and writes nothing, so it cannot put back what erasure cleared.
+ */
 export async function appendMcpAuditLog(input: {
   campUserId: string;
   clientId: string;
@@ -129,15 +137,18 @@ export async function appendMcpAuditLog(input: {
 }): Promise<void> {
   try {
     const db = createHttpDb();
-    await db.insert(schema.mcpAuditLog).values({
-      userId: input.campUserId,
-      clientId: input.clientId,
-      tool: input.tool,
-      argsJson: input.argsJson,
-      outcome: input.outcome,
-      errorMessage: input.errorMessage ?? null,
-      durationMs: input.durationMs ?? null,
-    });
+    const args =
+      input.argsJson === null ? null : JSON.stringify(input.argsJson);
+    await db.execute(sql`
+      INSERT INTO mcp_audit_log
+        (user_id, client_id, tool, args_json, outcome, error_message, duration_ms)
+      SELECT u.id, ${input.clientId}, ${input.tool}, ${args}::jsonb,
+             ${input.outcome}::mcp_audit_outcome, ${input.errorMessage ?? null},
+             ${input.durationMs ?? null}::integer
+        FROM users u
+       WHERE u.id = ${input.campUserId} AND u.sanitised = false
+         FOR SHARE
+    `);
   } catch {
     // Auditing must never break a tool call. Swallow + rely on DB-level
     // monitoring for persistent audit-log write failures.

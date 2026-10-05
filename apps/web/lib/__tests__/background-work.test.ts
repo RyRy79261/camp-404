@@ -9,6 +9,7 @@ vi.mock("next/server", () => ({ after: afterSpy }));
 vi.mock("@camp404/db/broadcasts", () => ({ dispatchDueBroadcasts: vi.fn() }));
 vi.mock("@camp404/db/email", () => ({ drainQueuedEmail: vi.fn() }));
 vi.mock("@camp404/db/push", () => ({ drainQueuedPush: vi.fn() }));
+vi.mock("@camp404/db/mcp-oauth", () => ({ sweepUnusedClients: vi.fn() }));
 vi.mock("@camp404/db/questionnaire-lifecycle", () => ({
   remindDueSoon: vi.fn(),
   remindRequiredActionsDueSoon: vi.fn(),
@@ -45,6 +46,7 @@ import {
 import { dispatchDueBroadcasts } from "@camp404/db/broadcasts";
 import { drainQueuedEmail } from "@camp404/db/email";
 import { drainQueuedPush } from "@camp404/db/push";
+import { sweepUnusedClients } from "@camp404/db/mcp-oauth";
 import {
   remindDueSoon,
   remindRequiredActionsDueSoon,
@@ -171,6 +173,12 @@ describe("runDueWork", () => {
     await runDueWork(NOON);
     expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
     expect(backfillIdEncryption).not.toHaveBeenCalled();
+    expect(sweepUnusedClients).not.toHaveBeenCalled();
+  });
+
+  it("sweeps connector clients nobody authorized, once a day, on every deployment", async () => {
+    await runDueWork(NOON);
+    expect(sweepUnusedClients).toHaveBeenCalledOnce();
   });
 
   it("sweeps orphan photos on production only", async () => {

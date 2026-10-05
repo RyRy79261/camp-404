@@ -128,6 +128,30 @@ describe("completeBuilderResponse with role answers", () => {
     expect(row).toEqual({ intendsToDrive: false });
   });
 
+  it("keeps the first time they said they would drive on a second submit", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const act = await makeActivation(db, { questionnaireKey: "transport" });
+    const drive = {
+      dietary: null,
+      participation: null,
+      driver: { intendsToDrive: true },
+    };
+    const stamp = async () => {
+      const [row] = await db
+        .select({ at: schema.driverProfiles.intentRegisteredAt })
+        .from(schema.driverProfiles)
+        .where(eq(schema.driverProfiles.userId, member.id));
+      return row!.at;
+    };
+    await submit(member.id, act.id, drive);
+    const first = await stamp();
+    expect(first).toBeInstanceOf(Date);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await submit(member.id, act.id, drive);
+    expect(await stamp()).toEqual(first);
+  });
+
   it("writes neither table without role answers", async () => {
     const db = h.db();
     const member = await makeUser(db);

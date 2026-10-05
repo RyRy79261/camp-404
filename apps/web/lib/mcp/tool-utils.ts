@@ -32,7 +32,8 @@ export interface ToolExtra {
  *      TOOL_CAPABILITIES does not allow (the same entry what_can_i_do
  *      reads, so the two cannot disagree).
  *   4. Run the handler under try/catch.
- *   5. Audit-log success or failure with duration + redacted args.
+ *   5. Audit-log success or failure with duration + redacted args (a
+ *      failure as auditErrorText: never a raw error's message).
  *   6. Stringify the result into a CallToolResult.
  *
  * Handlers may throw a {@link ToolError} for a controlled error reply
@@ -97,11 +98,33 @@ export async function runTool<T>(opts: {
       tool: opts.toolName,
       argsJson: opts.argsForAudit,
       outcome: "error",
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: auditErrorText(err),
       durationMs: Date.now() - started,
     });
     return errorContent(message);
   }
+}
+
+/** A Postgres SQLSTATE: five digits or capital letters. */
+function sqlState(err: unknown): string | null {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : null;
+}
+
+/**
+ * What the connector's log keeps of a failed call. A ToolError's message is
+ * our own sentence, so it is kept. Anything else is reduced to its class and
+ * Postgres code: a failed query's message carries the query's values (the
+ * phone number or answers being saved), and the log is no place for them.
+ */
+export function auditErrorText(err: unknown): string {
+  if (err instanceof ToolError) return err.message;
+  if (!(err instanceof Error)) return "Thrown non-error";
+  // DrizzleQueryError keeps the name "Error"; its class says more.
+  const kind =
+    err.name !== "Error" ? err.name : err.constructor?.name || err.name;
+  const code = sqlState(err) ?? sqlState(err.cause);
+  return code ? `${kind} (${code})` : kind;
 }
 
 /**

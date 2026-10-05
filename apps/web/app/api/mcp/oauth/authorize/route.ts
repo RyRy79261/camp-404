@@ -7,6 +7,8 @@ import {
 import { getAuthenticatedUser } from "@/lib/auth";
 import { hasCampAccess, isApproved } from "@/lib/users";
 import { mcpAccessError, type McpAccessDenial } from "@/lib/mcp/access";
+import { capabilitiesFor } from "@/lib/mcp/capabilities";
+import { getMcpScope } from "@/lib/mcp/scope";
 import {
   DEFAULT_SCOPE,
   findClient,
@@ -99,10 +101,24 @@ export async function GET(req: Request) {
   });
   if (denied) return denialResponse(denied);
 
+  // What this person may do through the connector, from the same gates the
+  // tools and what_can_i_do use, so the consent says what the token can do.
+  const mcpScope = await getMcpScope(campUser.id);
+  if (!mcpScope) {
+    return errorPage(
+      403,
+      "no_camp_account",
+      "Your Camp 404 account isn't active right now. Open the app, then connect Claude again.",
+    );
+  }
+  const powers = capabilitiesFor(mcpScope);
+
   return consentHtml({
     clientName: resolved.client.clientName,
     scope: resolved.scope,
     displayName: campUser.displayName ?? authUser.primaryEmail ?? "You",
+    rankLabel: powers.rankLabel,
+    areas: powers.areas.filter((a) => a.tools.length > 0).map((a) => a.area),
     params: parsed.data,
   });
 }
@@ -234,10 +250,12 @@ function svgIcon(inner: string): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 }
 
-// Human-facing copy for the (currently single) MCP scope.
-const SCOPE_COPY: Record<string, string> = {
-  "mcp:user": "Read your basic profile",
-};
+// Human-facing copy for the (currently single) MCP scope. The one scope is
+// the person's own access (owner, 2026-10-04), writes included, so the copy
+// says so; consentHtml adds what their rank reaches.
+const USER_ACCESS =
+  "Act as you: read and change what your rank allows, except ID numbers, bank details and website-only actions.";
+const SCOPE_COPY: Record<string, string> = { "mcp:user": USER_ACCESS };
 
 const THEME_STYLE = `
   :root {
@@ -357,6 +375,10 @@ function consentHtml(opts: {
   clientName: string;
   scope: string;
   displayName: string;
+  /** "Member", "Team lead" or "Captain". */
+  rankLabel: string;
+  /** The areas the connector's tools reach for this person. */
+  areas: string[];
   params: AuthorizeParams;
 }): NextResponse {
   const hiddenInputs = Object.entries(opts.params)
@@ -366,7 +388,7 @@ function consentHtml(opts: {
     )
     .join("\n      ");
 
-  const scopeDesc = SCOPE_COPY[opts.scope] ?? "Access your camp data";
+  const scopeDesc = SCOPE_COPY[opts.scope] ?? USER_ACCESS;
 
   const inner = `
     <div class="card">
@@ -384,6 +406,9 @@ function consentHtml(opts: {
         <span class="scope-text">
           <span class="scope-name">${escapeHtml(opts.scope)}</span>
           <span class="scope-desc">${escapeHtml(scopeDesc)}</span>
+          <span class="scope-desc">${escapeHtml(
+            `As a ${opts.rankLabel.toLowerCase()}, that covers: ${opts.areas.join(", ")}.`,
+          )}</span>
         </span>
       </div>
       <form method="POST" action="/api/mcp/oauth/authorize">

@@ -701,6 +701,13 @@
       "when": 1791118307831,
       "tag": "0099_seed_private_guide_sections",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1791189506463,
+      "tag": "0100_scrub_mcp_log_values",
+      "breakpoints": true
     }
   ]
 }

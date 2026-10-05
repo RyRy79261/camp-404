@@ -892,8 +892,8 @@ or lazily on a page load, both in `after()` (`apps/web/lib/background-work.ts`):
   come, deadline reminders for questionnaires, tasks and any other required
   action with a `due_at` (camp daytime only, 09:00–21:00), a retry of
   anything left queued, and once a day the upkeep (encrypt leftover plaintext
-  ID numbers; on production only, delete avatar folders whose owner has no
-  camp account). It is guarded by a row in `action_rate_limit`
+  ID numbers; delete Claude connector clients nobody authorized within a day;
+  on production only, delete avatar folders whose owner has no camp account). It is guarded by a row in `action_rate_limit`
   (`consumeRateLimit`, one statement on the database clock), so it runs at
   most once per five minutes across every server.
 - Every step is idempotent and claim-safe: broadcasts are claimed by

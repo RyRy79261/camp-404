@@ -36,48 +36,61 @@ export async function backfillIdEncryption(): Promise<{
   let migrated = 0;
   let stripped = 0;
   for (const { userId } of candidates) {
-    const outcome = await withTransaction(async (tx) => {
-      const [row] = await tx
-        .select({
-          responses: schema.burnerProfiles.responses,
-          passportEncrypted: schema.users.passportEncrypted,
-          saIdEncrypted: schema.users.saIdEncrypted,
-        })
-        .from(schema.burnerProfiles)
-        .innerJoin(
-          schema.users,
-          eq(schema.users.id, schema.burnerProfiles.userId),
-        )
-        .where(eq(schema.burnerProfiles.userId, userId))
-        .for("update");
-      if (!row) return "gone" as const;
-
-      const { cleaned, idType, idNumber } = splitIdNumber(
-        (row.responses as Record<string, unknown>) ?? {},
-      );
-      const hasEncrypted =
-        row.passportEncrypted !== null || row.saIdEncrypted !== null;
-      if (idNumber && !hasEncrypted) {
-        await tx
-          .update(schema.users)
-          .set({
-            ...idColumnsFor(idType, encrypt(idNumber)),
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.users.id, userId));
-      }
-      await tx
-        .update(schema.burnerProfiles)
-        .set({ responses: cleaned, updatedAt: new Date() })
-        .where(eq(schema.burnerProfiles.userId, userId));
-      return idNumber && !hasEncrypted
-        ? ("migrated" as const)
-        : ("stripped" as const);
-    });
+    const outcome = await encryptLeftoverIdNumber(userId);
     if (outcome === "migrated") migrated++;
     if (outcome === "stripped") stripped++;
   }
   return { scanned: candidates.length, migrated, stripped };
+}
+
+/**
+ * One member's share of backfillIdEncryption, in its own transaction: an ID
+ * number still in their burner profile answers goes to the encrypted column
+ * when that is empty, and leaves the answers either way. "none" when there
+ * was nothing to do. Throws when encryption is not set up (PGCRYPTO_KEY),
+ * having written nothing.
+ */
+export async function encryptLeftoverIdNumber(
+  userId: string,
+): Promise<"migrated" | "stripped" | "none"> {
+  return withTransaction(async (tx) => {
+    const [row] = await tx
+      .select({
+        responses: schema.burnerProfiles.responses,
+        passportEncrypted: schema.users.passportEncrypted,
+        saIdEncrypted: schema.users.saIdEncrypted,
+      })
+      .from(schema.burnerProfiles)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.burnerProfiles.userId),
+      )
+      .where(eq(schema.burnerProfiles.userId, userId))
+      .for("update");
+    if (!row) return "none" as const;
+    const responses = (row.responses as Record<string, unknown>) ?? {};
+    if (!(ID_NUMBER_KEY in responses)) return "none" as const;
+
+    const { cleaned, idType, idNumber } = splitIdNumber(responses);
+    const hasEncrypted =
+      row.passportEncrypted !== null || row.saIdEncrypted !== null;
+    if (idNumber && !hasEncrypted) {
+      await tx
+        .update(schema.users)
+        .set({
+          ...idColumnsFor(idType, encrypt(idNumber)),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.users.id, userId));
+    }
+    await tx
+      .update(schema.burnerProfiles)
+      .set({ responses: cleaned, updatedAt: new Date() })
+      .where(eq(schema.burnerProfiles.userId, userId));
+    return idNumber && !hasEncrypted
+      ? ("migrated" as const)
+      : ("stripped" as const);
+  });
 }
 
 /**

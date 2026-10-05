@@ -11,6 +11,10 @@ import {
   registerClient,
   rotateRefreshToken,
   sha256,
+  makeRoomForClient,
+  registerBoundedClient,
+  sweepUnusedClients,
+  UNUSED_CLIENT_TTL_MS,
   verifyClientSecret,
 } from "../mcp-oauth";
 import * as schema from "../schema";
@@ -79,6 +83,155 @@ describe("client registration", () => {
     expect(verifyClientSecret("wrong", stored!.clientSecretHash)).toBe(false);
     expect(verifyClientSecret("anything", null)).toBe(false);
     expect(await findClient("no-such-client")).toBeNull();
+  });
+});
+
+describe("sweeping clients nobody authorized", () => {
+  const h = useTestDb();
+
+  it("deletes an old client that never got a code or a token, and keeps the rest", async () => {
+    const db = h.db();
+    const now = new Date();
+    const old = new Date(now.getTime() - UNUSED_CLIENT_TTL_MS - 60_000);
+    const register = async (name: string, createdAt: Date) => {
+      const client = await registerClient({
+        clientName: name,
+        redirectUris: [REDIRECT],
+        tokenEndpointAuthMethod: "none",
+      });
+      await db
+        .update(schema.mcpOauthClients)
+        .set({ createdAt })
+        .where(eq(schema.mcpOauthClients.clientId, client.clientId));
+      return client.clientId;
+    };
+    const abandoned = await register("Abandoned", old);
+    const fresh = await register("Just registered", now);
+    const authorized = await register("Authorized once", old);
+    const withToken = await register("Holds a token", old);
+    const used = await register("Used", old);
+    const user = await makeUser(db, { approvalStatus: "approved" });
+    await issueAuthCode({
+      clientId: authorized,
+      userId: user.id,
+      redirectUri: REDIRECT,
+      codeChallenge: CHALLENGE,
+      codeChallengeMethod: "S256",
+      scope: "mcp:user",
+    });
+    await issueAccessToken({
+      clientId: withToken,
+      userId: user.id,
+      scope: "mcp:user",
+    });
+    await db
+      .update(schema.mcpOauthClients)
+      .set({ lastUsedAt: now })
+      .where(eq(schema.mcpOauthClients.clientId, used));
+
+    expect(await sweepUnusedClients(now)).toBe(1);
+    const left = (
+      await db
+        .select({ clientId: schema.mcpOauthClients.clientId })
+        .from(schema.mcpOauthClients)
+    ).map((r) => r.clientId);
+    expect(left).not.toContain(abandoned);
+    expect(left).toEqual(
+      expect.arrayContaining([fresh, authorized, withToken, used]),
+    );
+    // Run again: nothing left to sweep.
+    expect(await sweepUnusedClients(now)).toBe(0);
+  });
+});
+
+describe("bounding stored clients nobody authorized", () => {
+  const h = useTestDb();
+
+  it("pushes out the oldest unauthorized client past the grace period, never an authorized or a new one", async () => {
+    const db = h.db();
+    const now = new Date();
+    const at = (msAgo: number) => new Date(now.getTime() - msAgo);
+    const register = async (name: string, createdAt: Date) => {
+      const client = await registerClient({
+        clientName: name,
+        redirectUris: [REDIRECT],
+        tokenEndpointAuthMethod: "none",
+      });
+      await db
+        .update(schema.mcpOauthClients)
+        .set({ createdAt })
+        .where(eq(schema.mcpOauthClients.clientId, client.clientId));
+      return client.clientId;
+    };
+    const user = await makeUser(db, { approvalStatus: "approved" });
+    const authorized = await register("Authorized long ago", at(3_600_000));
+    await issueAccessToken({
+      clientId: authorized,
+      userId: user.id,
+      scope: "mcp:user",
+    });
+    const oldest = await register("Oldest", at(1_800_000));
+    const older = await register("Older", at(1_200_000));
+    const fresh = await register("Mid sign-in", at(60_000));
+    const ids = async () =>
+      (
+        await db
+          .select({ clientId: schema.mcpOauthClients.clientId })
+          .from(schema.mcpOauthClients)
+      ).map((r) => r.clientId);
+
+    // Under the cap: nothing goes.
+    expect(await makeRoomForClient(4, now)).toBe(true);
+    expect(await ids()).toHaveLength(4);
+    // At the cap of 3 unauthorized: the oldest goes, nobody is refused.
+    expect(await makeRoomForClient(3, now)).toBe(true);
+    expect(await ids()).not.toContain(oldest);
+    expect(await ids()).toEqual(
+      expect.arrayContaining([authorized, older, fresh]),
+    );
+    // Two over a cap of 1, and only one past the grace period: it goes,
+    // and the one mid sign-in is never pushed out, so this one is refused.
+    expect(await makeRoomForClient(1, now)).toBe(false);
+    const left = await ids();
+    expect(left).not.toContain(older);
+    expect(left).toEqual(expect.arrayContaining([authorized, fresh]));
+  });
+});
+
+describe("registering under the cap", () => {
+  const h = useTestDb();
+
+  it("registers while there is room, and refuses only when every unauthorized client is mid sign-in", async () => {
+    const db = h.db();
+    const input = {
+      clientName: "Claude",
+      redirectUris: [REDIRECT],
+      tokenEndpointAuthMethod: "none" as const,
+    };
+    const stored = async () =>
+      (await db.select().from(schema.mcpOauthClients)).length;
+
+    // Two at once against a cap of 2: both fit, never a third.
+    const both = await Promise.all([
+      registerBoundedClient(input, 2),
+      registerBoundedClient(input, 2),
+    ]);
+    expect(both.every((c) => c !== null)).toBe(true);
+    expect(await stored()).toBe(2);
+    // Both are minutes old at most: no room, nothing stored.
+    expect(await registerBoundedClient(input, 2)).toBeNull();
+    expect(await stored()).toBe(2);
+    // Later, the oldest is pushed out and the newcomer gets in.
+    // An hour after the newest was stored (by the database's clock, which
+    // stamps createdAt).
+    const newest = Math.max(
+      ...(await db.select().from(schema.mcpOauthClients)).map((c) =>
+        c.createdAt.getTime(),
+      ),
+    );
+    const later = new Date(newest + 60 * 60 * 1000);
+    expect(await registerBoundedClient(input, 2, later)).not.toBeNull();
+    expect(await stored()).toBe(2);
   });
 });
 

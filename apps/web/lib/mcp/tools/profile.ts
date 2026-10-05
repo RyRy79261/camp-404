@@ -3,21 +3,44 @@ import { z } from "zod";
 import { and, count, eq } from "drizzle-orm";
 import { createHttpDb, withTransaction } from "@camp404/db";
 import { satisfyRequiredAction } from "@camp404/db/activations";
+import {
+  getBurnerProfileByUserId,
+  getEmergencyContactsColumn,
+  getIdDocumentColumns,
+  saveBurnerProfileReplay,
+} from "@camp404/db/burner-profile";
+import { encryptLeftoverIdNumber } from "@camp404/db/maintenance";
 import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
-import { ID_NUMBER_KEY, splitIdNumber } from "@camp404/db/id-documents";
+import {
+  ID_NUMBER_KEY,
+  ID_TYPE_KEY,
+  splitIdNumber,
+} from "@camp404/db/id-documents";
 import { SEATS_BELOW_RIDERS } from "@camp404/db/transport";
 import {
   DIETS,
+  EmergencyContact,
   KITCHEN_ALLERGENS,
+  MAX_EMERGENCY_CONTACTS,
   SaveDietaryInput,
+  diffResponses,
+  flattenQuestions,
   incompleteContactErrors,
+  mergeEmergencyContacts,
+  questionIdForRole,
+  questionLabel,
   questionsWithRole,
   splitEmergencyContacts,
+  telegramHandleFromResponses,
+  validateResponses,
+  type Questionnaire,
+  type QuestionnaireResponses,
 } from "@camp404/types";
 import { getMyDietary, saveMyDietary } from "../../dietary";
 import { identityAnswerErrors } from "../../id-validation";
-import { BURNER_PROFILE_TEMPLATE } from "../../questionnaire";
+import { QUESTIONNAIRE_VERSION } from "../../questionnaire";
+import { getQuestionnaireForResponses } from "../../questionnaire-config";
 import { siteUrl } from "../capabilities";
 import { runTool, ToolError } from "../tool-utils";
 
@@ -68,89 +91,20 @@ export function registerProfileTools(server: McpServer): void {
     {
       title: "Update my burner profile",
       description:
-        "Patches the current user's burner_profiles responses JSONB. Pass the version string and the (possibly partial) responses object. Set `markComplete` to flip the completion timestamp. Never an ID number (`id.number` is refused): that is entered on the website's burner profile form.",
+        "Changes answers on your burner profile: the same save as My forms → Burner profile on the website. Pass only the answers to change, keyed by question id as get_my_burner_profile returns them; every other answer is kept. The whole profile is then checked as the website checks it, and the change goes in the form's change log. Never an ID number or its type, and never the profile photo: those are on the website's burner profile form.",
       inputSchema: {
-        version: z.string().min(1),
         responses: z.record(z.string(), z.unknown()),
-        markComplete: z.boolean().optional().default(false),
       },
     },
     async (args, extra) =>
       runTool({
         toolName: "update_my_burner_profile",
         extra,
-        argsForAudit: {
-          version: args.version,
-          markComplete: args.markComplete,
-        },
-        handler: async ({ scope }) => {
-          // An ID number never passes through the connector (owner,
-          // 2026-10-05): refused before anything is written, never stored.
-          if (ID_NUMBER_KEY in args.responses) {
-            throw new ToolError(
-              `ID numbers aren't taken through Claude. Enter yours on the website: ${siteUrl(BURNER_PROFILE_FORM)}`,
-            );
-          }
-          // The web form's other identity check, a possible date of birth,
-          // and complete emergency contacts. Nothing is written if one fails.
-          const identity = {
-            ...identityAnswerErrors(args.responses, new Date()),
-            ...incompleteContactErrors(BURNER_PROFILE_TEMPLATE, args.responses),
-          };
-          if (Object.keys(identity).length > 0) {
-            throw new ToolError(Object.values(identity).join(" "));
-          }
-          const db = createHttpDb();
-          const now = new Date();
-          // The emergency contacts go to users.emergency_contacts, as the web
-          // form does. The burner profile is a reserved code questionnaire, so
-          // its question roles are the template's.
-          const { cleaned, contacts } = splitEmergencyContacts(
-            BURNER_PROFILE_TEMPLATE,
-            args.responses,
-          );
-          const carriesContacts = questionsWithRole(
-            BURNER_PROFILE_TEMPLATE,
-            "emergency_contact_name",
-          ).some((q) => q.id in args.responses);
-          const [row] = await db
-            .insert(schema.burnerProfiles)
-            .values({
-              userId: scope.campUserId,
-              version: args.version,
-              responses: cleaned,
-              completedAt: args.markComplete ? now : null,
-            })
-            .onConflictDoUpdate({
-              target: schema.burnerProfiles.userId,
-              set: {
-                version: args.version,
-                responses: cleaned,
-                updatedAt: now,
-                ...(args.markComplete ? { completedAt: now } : {}),
-              },
-            })
-            .returning();
-          if (carriesContacts) {
-            await db
-              .update(schema.users)
-              .set({
-                emergencyContacts: contacts.length > 0 ? contacts : null,
-                updatedAt: new Date(),
-              })
-              .where(eq(schema.users.id, scope.campUserId));
-          }
-          // A profile finished here clears its gate, as the web form does.
-          // Without this the member stays held on /onboarding/questionnaire.
-          if (args.markComplete) {
-            await satisfyRequiredAction(
-              scope.campUserId,
-              "burner_profile",
-              args.version,
-            );
-          }
-          return row;
-        },
+        // Which answers, never what they say: this log outlives an erasure's
+        // answers.
+        argsForAudit: { fields: Object.keys(args.responses) },
+        handler: async ({ scope }) =>
+          await saveBurnerProfilePatch(scope.campUserId, args.responses),
       }),
   );
 
@@ -399,12 +353,6 @@ export function registerProfileTools(server: McpServer): void {
   // Emergency contacts (plaintext JSONB on users)
   // -------------------------------------------------------------------------
 
-  const EmergencyContact = z.object({
-    name: z.string().min(1),
-    phone: z.string().min(1),
-    relationship: z.string().min(1),
-  });
-
   server.registerTool(
     "get_my_emergency_contacts",
     {
@@ -417,15 +365,8 @@ export function registerProfileTools(server: McpServer): void {
         toolName: "get_my_emergency_contacts",
         extra,
         argsForAudit: null,
-        handler: async ({ scope }) => {
-          const db = createHttpDb();
-          const [row] = await db
-            .select({ contacts: schema.users.emergencyContacts })
-            .from(schema.users)
-            .where(eq(schema.users.id, scope.campUserId))
-            .limit(1);
-          return row?.contacts ?? [];
-        },
+        handler: async ({ scope }) =>
+          (await getEmergencyContactsColumn(scope.campUserId)) ?? [],
       }),
   );
 
@@ -433,10 +374,13 @@ export function registerProfileTools(server: McpServer): void {
     "update_my_emergency_contacts",
     {
       title: "Update my emergency contacts",
-      description:
-        "Replaces the user's full emergency_contacts list with the supplied array. Pass an empty array to clear.",
+      description: `Replaces your whole emergency contacts list: at least one, at most ${MAX_EMERGENCY_CONTACTS}. They are your burner profile's contact answers, saved the same way (checked, and recorded in its change log). Each contact needs a name, a phone number with 7 to 15 digits (include the country code) and how you know them.`,
       inputSchema: {
-        contacts: z.array(EmergencyContact),
+        // The website's rules for a contact (@camp404/types).
+        contacts: z
+          .array(EmergencyContact)
+          .min(1, CONTACT_REQUIRED)
+          .max(MAX_EMERGENCY_CONTACTS),
       },
     },
     async (args, extra) =>
@@ -445,16 +389,25 @@ export function registerProfileTools(server: McpServer): void {
         extra,
         argsForAudit: { count: args.contacts.length },
         handler: async ({ scope }) => {
-          const db = createHttpDb();
-          const [row] = await db
-            .update(schema.users)
-            .set({
-              emergencyContacts: args.contacts,
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.users.id, scope.campUserId))
-            .returning({ contacts: schema.users.emergencyContacts });
-          return row?.contacts ?? [];
+          // Checked again here: the shape above is advice to the caller.
+          const parsed = z
+            .array(EmergencyContact)
+            .min(1, CONTACT_REQUIRED)
+            .max(MAX_EMERGENCY_CONTACTS)
+            .safeParse(args.contacts);
+          if (!parsed.success) {
+            throw new ToolError(
+              parsed.error.issues[0]?.message ?? "Check your contacts.",
+            );
+          }
+          // The contacts are the burner profile's contact questions, so they
+          // are saved as those answers: checked as the website checks them
+          // (the first contact is required), logged, and compare-and-set.
+          await saveBurnerProfilePatch(
+            scope.campUserId,
+            await contactAnswers(parsed.data),
+          );
+          return parsed.data;
         },
       }),
   );
@@ -542,4 +495,203 @@ export function registerProfileTools(server: McpServer): void {
         },
       }),
   );
+}
+
+/** The website requires the first contact (the burner profile's question). */
+const CONTACT_REQUIRED =
+  "Keep at least one emergency contact: the burner profile requires one.";
+
+/** Where a member who has not finished their burner profile finishes it. */
+const ONBOARDING_FORM = "/onboarding/questionnaire";
+/** Where a member uploads their profile photo. */
+const PROFILE_PHOTO_PAGE = "/profile/edit";
+
+/**
+ * The burner profile's contact answers for a whole list of contacts: slot N
+ * from contact N, and an unused slot emptied.
+ */
+async function contactAnswers(
+  contacts: readonly EmergencyContact[],
+): Promise<Record<string, unknown>> {
+  const questionnaire = await getQuestionnaireForResponses();
+  const roles = [
+    ["emergency_contact_name", "name"],
+    ["emergency_contact_phone", "phone"],
+    ["emergency_contact_relationship", "relationship"],
+  ] as const;
+  const answers: Record<string, unknown> = {};
+  for (const [role, field] of roles) {
+    questionsWithRole(questionnaire, role)
+      .slice(0, MAX_EMERGENCY_CONTACTS)
+      .forEach((q, i) => {
+        answers[q.id] = contacts[i]?.[field] ?? "";
+      });
+  }
+  return answers;
+}
+
+/** The questionnaire without the ID number, which this path never handles. */
+function withoutIdNumber(questionnaire: Questionnaire): Questionnaire {
+  return {
+    ...questionnaire,
+    pages: questionnaire.pages.map((page) =>
+      page.kind === "questions"
+        ? {
+            ...page,
+            questions: page.questions.filter((b) => b.id !== ID_NUMBER_KEY),
+          }
+        : page,
+    ),
+  };
+}
+
+/** The checks' errors as one sentence per question, by its label. */
+function errorSentence(
+  questionnaire: Questionnaire,
+  errors: Record<string, string>,
+): string {
+  const labels = new Map(
+    flattenQuestions(questionnaire).map((q) => [q.id, questionLabel(q)]),
+  );
+  return Object.entries(errors)
+    .filter(([id]) => !id.startsWith("_"))
+    .map(([id, error]) => `${labels.get(id) ?? id}: ${error}`)
+    .join(" ");
+}
+
+/**
+ * The website's My forms save of the burner profile, for a patch: the stored
+ * answers with the patch laid over them, checked whole as the website checks
+ * a re-submit, then saved with its change-log row in one transaction, at the
+ * questionnaire's own version. The save is a compare-and-set on the profile
+ * the patch was merged over, so a change made meanwhile is never overwritten.
+ *
+ * Only a completed profile is changed here: a member finishes it on the
+ * website (connecting Claude needs a finished profile anyway). The ID number
+ * is neither read nor written, and the photo is uploaded on the website.
+ */
+async function saveBurnerProfilePatch(
+  userId: string,
+  patch: Record<string, unknown>,
+): Promise<{ saved: true; changed: string[] }> {
+  // An ID number never passes through the connector (owner, 2026-10-05):
+  // refused before anything is read or written. Its type goes with it: the
+  // type says which encrypted column holds the number.
+  if (ID_NUMBER_KEY in patch || ID_TYPE_KEY in patch) {
+    throw new ToolError(
+      `ID numbers aren't taken through Claude. Enter yours on the website: ${siteUrl(BURNER_PROFILE_FORM)}`,
+    );
+  }
+  const fields = Object.keys(patch);
+  if (fields.length === 0) {
+    throw new ToolError("Nothing to change: pass the answers to change.");
+  }
+  // Every team, archived ones included, as the website's re-submit uses, so a
+  // stored pick of an archived team is kept rather than dropped.
+  const questionnaire = await getQuestionnaireForResponses();
+  const photoId = questionIdForRole(questionnaire, "profile_photo");
+  if (photoId && photoId in patch) {
+    throw new ToolError(
+      `Profile photos are uploaded on the website: ${siteUrl(PROFILE_PHOTO_PAGE)}`,
+    );
+  }
+  const known = new Set(flattenQuestions(questionnaire).map((q) => q.id));
+  const unknown = fields.filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    throw new ToolError(
+      `Not a burner profile question: ${unknown
+        .slice(0, 5)
+        .map((id) => id.slice(0, 60))
+        .join(", ")}. get_my_burner_profile shows the question ids.`,
+    );
+  }
+
+  const unfinished = () =>
+    new ToolError(
+      `Finish your burner profile on the website first: ${siteUrl(ONBOARDING_FORM)}`,
+    );
+  let profile = await getBurnerProfileByUserId(userId);
+  if (!profile?.completedAt) throw unfinished();
+  // An ID number left in the answers from before encryption goes to its
+  // encrypted column first (the daily upkeep's step, for this member), so the
+  // save below, which never carries it, cannot drop it.
+  if (ID_NUMBER_KEY in profile.responses) {
+    try {
+      await encryptLeftoverIdNumber(userId);
+    } catch {
+      throw new ToolError(
+        "Your burner profile can't be saved just now. Try again later.",
+      );
+    }
+    profile = await getBurnerProfileByUserId(userId);
+    if (!profile?.completedAt) throw unfinished();
+  }
+  // The profile's ID question is required, and only the website takes it: a
+  // profile with no ID number on file is finished there, not cleared here.
+  const idColumns = await getIdDocumentColumns(userId);
+  if (!idColumns?.passportEncrypted && !idColumns?.saIdEncrypted) {
+    throw new ToolError(
+      `Your ID number isn't on file. Give it on the website's burner profile form first: ${siteUrl(BURNER_PROFILE_FORM)}`,
+    );
+  }
+  const contacts = await getEmergencyContactsColumn(userId);
+  // What My forms would show, less the ID number: the stored answers and the
+  // emergency contacts, which live on the member's row.
+  const stored = mergeEmergencyContacts(
+    questionnaire,
+    splitIdNumber(profile.responses).cleaned,
+    contacts,
+  ) as QuestionnaireResponses;
+
+  const checked = validateResponses(withoutIdNumber(questionnaire), {
+    ...stored,
+    ...patch,
+  });
+  if (!checked.ok) {
+    throw new ToolError(errorSentence(questionnaire, checked.errors));
+  }
+  const problems = {
+    ...identityAnswerErrors(checked.responses, new Date()),
+    ...incompleteContactErrors(questionnaire, checked.responses),
+  };
+  if (Object.keys(problems).length > 0) {
+    throw new ToolError(errorSentence(questionnaire, problems));
+  }
+
+  const changes = diffResponses(
+    questionnaire,
+    stored,
+    checked.responses,
+  ).filter((c) => c.fieldId !== ID_NUMBER_KEY);
+  const { cleaned, contacts: nextContacts } = splitEmergencyContacts(
+    questionnaire,
+    checked.responses,
+  );
+  const saved = await saveBurnerProfileReplay({
+    userId,
+    version: QUESTIONNAIRE_VERSION,
+    responses: cleaned,
+    // The ID number stays as it is.
+    idColumns: null,
+    emergencyContacts: nextContacts,
+    telegramHandle: telegramHandleFromResponses(questionnaire, cleaned, {
+      complete: true,
+    }),
+    edit:
+      changes.length > 0
+        ? {
+            questionnaireKey: "burner_profile",
+            editedByUserId: userId,
+            changes,
+          }
+        : null,
+    expectUpdatedAt: profile.updatedAt,
+    expectEmergencyContacts: contacts,
+  });
+  if (!saved) {
+    throw new ToolError(
+      "Your burner profile changed while this was saving, so nothing was saved. Read it again with get_my_burner_profile, then send the changes again.",
+    );
+  }
+  return { saved: true, changed: changes.map((c) => c.label) };
 }

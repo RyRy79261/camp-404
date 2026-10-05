@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { approvalNotification, isReviewTransition } from "@camp404/core";
 import type {
   ApprovalStatus,
@@ -485,6 +485,30 @@ export interface BurnerProfileReplay {
     editedByUserId: string | null;
     changes: QuestionnaireFieldChange[];
   } | null;
+  /**
+   * The `updated_at` of the completed profile the new answers were built on.
+   * Given, the save is a compare-and-set: it writes only while the stored
+   * profile is still complete and still that one, so answers merged over a
+   * copy someone has since changed never overwrite the change. The Claude
+   * connector merges a partial patch over the stored answers, so it passes it.
+   */
+  expectUpdatedAt?: Date;
+  /**
+   * With `expectUpdatedAt`: the emergency contacts the new answers were built
+   * on (null for none). They live on the member's row, which a contacts write
+   * changes without touching the profile, so they are compared too, under a
+   * row lock.
+   */
+  expectEmergencyContacts?: readonly EmergencyContact[] | null;
+}
+
+/** Contacts as comparable text; none and an empty list are the same. */
+function contactsKey(
+  contacts: readonly EmergencyContact[] | null | undefined,
+): string {
+  return JSON.stringify(
+    (contacts ?? []).map((c) => [c.name, c.phone, c.relationship]),
+  );
 }
 
 /**
@@ -492,21 +516,59 @@ export interface BurnerProfileReplay {
  * answers, the ID number, the emergency contacts, the gate, and the
  * change-log row. Before this each was its own write, so a failure after the
  * answers saved left them changed with no change-log row saying so.
+ *
+ * Returns false, having written nothing, when `expectUpdatedAt` is given and
+ * the stored profile is no longer that completed one.
  */
 export async function saveBurnerProfileReplay(
   input: BurnerProfileReplay,
-): Promise<void> {
-  await withTransaction(async (tx) => {
-    await upsertBurnerProfile(
-      {
-        userId: input.userId,
-        version: input.version,
-        responses: input.responses,
-        // A replay only happens on a completed form, so it stays complete.
-        markComplete: true,
-      },
-      tx,
-    );
+): Promise<boolean> {
+  return withTransaction(async (tx) => {
+    if (input.expectUpdatedAt) {
+      if (input.expectEmergencyContacts !== undefined) {
+        const [member] = await tx
+          .select({ contacts: schema.users.emergencyContacts })
+          .from(schema.users)
+          .where(eq(schema.users.id, input.userId))
+          .for("update");
+        if (
+          !member ||
+          contactsKey(member.contacts) !==
+            contactsKey(input.expectEmergencyContacts)
+        ) {
+          return false;
+        }
+      }
+      // Milliseconds: the stored stamp may carry microseconds (defaultNow),
+      // and the Date the caller read it into does not.
+      const won = await tx
+        .update(schema.burnerProfiles)
+        .set({
+          version: input.version,
+          responses: input.responses,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.burnerProfiles.userId, input.userId),
+            isNotNull(schema.burnerProfiles.completedAt),
+            sql`date_trunc('milliseconds', ${schema.burnerProfiles.updatedAt}) = ${input.expectUpdatedAt.toISOString()}::timestamp`,
+          ),
+        )
+        .returning({ userId: schema.burnerProfiles.userId });
+      if (won.length === 0) return false;
+    } else {
+      await upsertBurnerProfile(
+        {
+          userId: input.userId,
+          version: input.version,
+          responses: input.responses,
+          // A replay only happens on a completed form, so it stays complete.
+          markComplete: true,
+        },
+        tx,
+      );
+    }
     if (input.idColumns) {
       await setIdDocumentColumns(input.userId, input.idColumns, tx);
     }
@@ -533,5 +595,6 @@ export async function saveBurnerProfileReplay(
         tx,
       );
     }
+    return true;
   });
 }
