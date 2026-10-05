@@ -11,6 +11,8 @@ import {
   registerClient,
   rotateRefreshToken,
   sha256,
+  sweepUnusedClients,
+  UNUSED_CLIENT_TTL_MS,
   verifyClientSecret,
 } from "../mcp-oauth";
 import * as schema from "../schema";
@@ -79,6 +81,64 @@ describe("client registration", () => {
     expect(verifyClientSecret("wrong", stored!.clientSecretHash)).toBe(false);
     expect(verifyClientSecret("anything", null)).toBe(false);
     expect(await findClient("no-such-client")).toBeNull();
+  });
+});
+
+describe("sweeping clients nobody authorized", () => {
+  const h = useTestDb();
+
+  it("deletes an old client that never got a code or a token, and keeps the rest", async () => {
+    const db = h.db();
+    const now = new Date();
+    const old = new Date(now.getTime() - UNUSED_CLIENT_TTL_MS - 60_000);
+    const register = async (name: string, createdAt: Date) => {
+      const client = await registerClient({
+        clientName: name,
+        redirectUris: [REDIRECT],
+        tokenEndpointAuthMethod: "none",
+      });
+      await db
+        .update(schema.mcpOauthClients)
+        .set({ createdAt })
+        .where(eq(schema.mcpOauthClients.clientId, client.clientId));
+      return client.clientId;
+    };
+    const abandoned = await register("Abandoned", old);
+    const fresh = await register("Just registered", now);
+    const authorized = await register("Authorized once", old);
+    const withToken = await register("Holds a token", old);
+    const used = await register("Used", old);
+    const user = await makeUser(db, { approvalStatus: "approved" });
+    await issueAuthCode({
+      clientId: authorized,
+      userId: user.id,
+      redirectUri: REDIRECT,
+      codeChallenge: CHALLENGE,
+      codeChallengeMethod: "S256",
+      scope: "mcp:user",
+    });
+    await issueAccessToken({
+      clientId: withToken,
+      userId: user.id,
+      scope: "mcp:user",
+    });
+    await db
+      .update(schema.mcpOauthClients)
+      .set({ lastUsedAt: now })
+      .where(eq(schema.mcpOauthClients.clientId, used));
+
+    expect(await sweepUnusedClients(now)).toBe(1);
+    const left = (
+      await db
+        .select({ clientId: schema.mcpOauthClients.clientId })
+        .from(schema.mcpOauthClients)
+    ).map((r) => r.clientId);
+    expect(left).not.toContain(abandoned);
+    expect(left).toEqual(
+      expect.arrayContaining([fresh, authorized, withToken, used]),
+    );
+    // Run again: nothing left to sweep.
+    expect(await sweepUnusedClients(now)).toBe(0);
   });
 });
 

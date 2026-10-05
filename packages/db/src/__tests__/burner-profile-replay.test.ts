@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { useTestDb } from "./_harness";
 import { makeUser, requiredActionsFor } from "./_factories";
@@ -117,6 +117,69 @@ describe("saveBurnerProfileReplay", () => {
     const [gate] = await requiredActionsFor(h.db(), member.id);
     expect(gate?.status).toBe("completed");
     expect(await editsOf(member.id)).toHaveLength(1);
+  });
+
+  it("with an expected stamp, saves only over that completed profile (compare-and-set)", async () => {
+    const member = await seed();
+    const base = {
+      userId: member.id,
+      version: "v10",
+      responses: { "bio.statement": "Patched" },
+      idColumns: null,
+      emergencyContacts: [ADA],
+      edit: null,
+    };
+    const read = await profileOf(member.id);
+
+    // Someone saved since it was read: refused, nothing written.
+    await h
+      .db()
+      .update(schema.burnerProfiles)
+      .set({
+        responses: { "bio.statement": "Theirs" },
+        // Microseconds, as a real write's defaultNow stores them.
+        updatedAt: sql`now() + interval '5 seconds'`,
+      })
+      .where(eq(schema.burnerProfiles.userId, member.id));
+    expect(
+      await saveBurnerProfileReplay({
+        ...base,
+        expectUpdatedAt: read.updatedAt,
+      }),
+    ).toBe(false);
+    expect((await profileOf(member.id)).responses).toEqual({
+      "bio.statement": "Theirs",
+    });
+    expect((await userOf(member.id)).emergencyContacts).toBeNull();
+    const [gate] = await requiredActionsFor(h.db(), member.id);
+    expect(gate?.status).toBe("pending");
+
+    // Over the profile as it is now: saved, though the Date the caller holds
+    // has lost the stored stamp's microseconds.
+    const now = await profileOf(member.id);
+    expect(
+      await saveBurnerProfileReplay({
+        ...base,
+        expectUpdatedAt: now.updatedAt,
+      }),
+    ).toBe(true);
+    expect((await profileOf(member.id)).responses).toEqual({
+      "bio.statement": "Patched",
+    });
+
+    // A profile that is not complete is never saved this way.
+    await h
+      .db()
+      .update(schema.burnerProfiles)
+      .set({ completedAt: null })
+      .where(eq(schema.burnerProfiles.userId, member.id));
+    const open = await profileOf(member.id);
+    expect(
+      await saveBurnerProfileReplay({
+        ...base,
+        expectUpdatedAt: open.updatedAt,
+      }),
+    ).toBe(false);
   });
 
   it("writes nothing when a later write fails", async () => {

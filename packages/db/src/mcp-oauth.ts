@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, notExists, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction } from "./index";
 import { isActiveMcpUser } from "./mcp";
 import * as schema from "./schema";
@@ -128,6 +128,57 @@ export async function registerClient(
     scope: row.scope,
     createdAt: row.createdAt,
   };
+}
+
+/**
+ * A registered client nobody ever authorized is deleted once it is this old.
+ * Claude registers and then sends the person to the consent screen within
+ * minutes, so a day is generous.
+ */
+export const UNUSED_CLIENT_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Delete clients registered over `UNUSED_CLIENT_TTL_MS` ago that were never
+ * authorized: no authorization code was ever issued to them, they hold no
+ * token, and no token was ever used through them. Registration is open to
+ * anyone (RFC 7591), so without this every abandoned or hostile registration
+ * stays in the database for good. Run from the daily upkeep (no cron).
+ * Returns how many went.
+ */
+export async function sweepUnusedClients(
+  now: Date = new Date(),
+): Promise<number> {
+  const db = createHttpDb();
+  const cutoff = new Date(now.getTime() - UNUSED_CLIENT_TTL_MS);
+  const gone = await db
+    .delete(schema.mcpOauthClients)
+    .where(
+      and(
+        lt(schema.mcpOauthClients.createdAt, cutoff),
+        isNull(schema.mcpOauthClients.lastUsedAt),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(schema.mcpAuthCodes)
+            .where(
+              eq(schema.mcpAuthCodes.clientId, schema.mcpOauthClients.clientId),
+            ),
+        ),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(schema.mcpAccessTokens)
+            .where(
+              eq(
+                schema.mcpAccessTokens.clientId,
+                schema.mcpOauthClients.clientId,
+              ),
+            ),
+        ),
+      ),
+    )
+    .returning({ clientId: schema.mcpOauthClients.clientId });
+  return gone.length;
 }
 
 export async function findClient(clientId: string) {

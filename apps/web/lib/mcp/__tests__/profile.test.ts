@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The self-profile tools over MCP. ID numbers never pass through them (owner,
-// 2026-10-05): the burner profile refuses one before writing anything, and
-// there is no tool to read or change ID documents. The other checks the web
-// form makes hold here too, and a form marked complete clears its gate.
+// 2026-10-05): the burner profile refuses one before reading or writing
+// anything, and there is no tool to read or change ID documents. The burner
+// profile's save itself is tested on real rows in site-parity.test.ts.
 //
 // Mocked at the module boundary: only the Neon handle and the mcp_* DB helpers
 // (scope lookup + audit log).
@@ -27,7 +27,6 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { createHttpDb } from "@camp404/db";
-import { satisfyRequiredAction } from "@camp404/db/activations";
 import { getMcpScopeRows } from "@camp404/db/mcp";
 import { registerProfileTools } from "@/lib/mcp/tools/profile";
 import type { ToolExtra } from "@/lib/mcp/tool-utils";
@@ -118,12 +117,6 @@ function errorText(result: CallToolResult): string {
   return textOf(result);
 }
 
-/** The single patch the tool issued. Fails loudly if it wrote 0 or 2+. */
-function onlyPatch(): Record<string, unknown> {
-  expect(patches).toHaveLength(1);
-  return patches[0]!;
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   tools.clear();
@@ -157,7 +150,6 @@ describe("ID numbers and the burner profile", () => {
   it("refuses an ID number, valid or not, and writes nothing", async () => {
     for (const number of ["8001015009087", "12345"]) {
       const result = await call("update_my_burner_profile", {
-        version: "3",
         responses: { "id.type": "sa_id", "id.number": number },
       });
       expect(errorText(result)).toMatch(
@@ -168,74 +160,8 @@ describe("ID numbers and the burner profile", () => {
     expect(dbUpdate).not.toHaveBeenCalled();
   });
 
-  it("still refuses a birth date the web form would refuse", async () => {
-    const future = await call("update_my_burner_profile", {
-      version: "3",
-      responses: { birthday: "2999-01-01" },
-    });
-    expect(errorText(future)).toBe("Date of birth can't be in the future.");
-    expect(dbInsert).not.toHaveBeenCalled();
-  });
-
   it("has no tool to read or change ID documents", () => {
     expect(tools.has("get_my_id_documents")).toBe(false);
     expect(tools.has("update_my_id_documents")).toBe(false);
-  });
-});
-
-describe("a form marked complete through MCP clears its gate", () => {
-  it("satisfies the burner profile action at the version written", async () => {
-    await call("update_my_burner_profile", {
-      version: "3",
-      responses: { birthday: "1990-01-15" },
-      markComplete: true,
-    });
-
-    expect(inserts[0]?.completedAt).toBeInstanceOf(Date);
-    expect(satisfyRequiredAction).toHaveBeenCalledWith(
-      USER_ID,
-      "burner_profile",
-      "3",
-    );
-  });
-
-  it("leaves the gate alone for a progress save", async () => {
-    await call("update_my_burner_profile", {
-      version: "3",
-      responses: { birthday: "1990-01-15" },
-    });
-
-    expect(inserts).toHaveLength(1);
-    expect(satisfyRequiredAction).not.toHaveBeenCalled();
-  });
-});
-
-describe("update_my_burner_profile and emergency contacts", () => {
-  it("stores the contacts on the member, not in the answers", async () => {
-    await call("update_my_burner_profile", {
-      version: "3",
-      responses: {
-        "bio.statement": "Hi",
-        "emergency.1.name": "Ada Byron",
-        "emergency.1.phone": "+27 82 555 0199",
-        "emergency.1.relationship": "sister",
-      },
-    });
-
-    expect(inserts[0]?.responses).toEqual({ "bio.statement": "Hi" });
-    expect(onlyPatch().emergencyContacts).toEqual([
-      { name: "Ada Byron", phone: "+27 82 555 0199", relationship: "sister" },
-    ]);
-  });
-
-  it("refuses a half-filled contact and writes nothing", async () => {
-    const result = await call("update_my_burner_profile", {
-      version: "3",
-      responses: { "emergency.1.name": "Ada Byron" },
-    });
-
-    expect(result.isError).toBe(true);
-    expect(dbInsert).not.toHaveBeenCalled();
-    expect(dbUpdate).not.toHaveBeenCalled();
   });
 });

@@ -8,6 +8,7 @@ import {
   backfillIdEncryption,
   listLiveAuthUserIds,
 } from "@camp404/db/maintenance";
+import { sweepUnusedClients } from "@camp404/db/mcp-oauth";
 import { drainQueuedPush } from "@camp404/db/push";
 import {
   remindDueSoon,
@@ -49,7 +50,7 @@ import { isE2ETestMode } from "./test-mode";
 
 /** How often a page load may run the due work, across all servers. */
 export const DUE_WORK_EVERY_MS = 5 * 60 * 1000;
-/** How often the upkeep (ID encryption, orphan photos) runs. */
+/** How often the upkeep (ID encryption, unused clients, orphan photos) runs. */
 export const MAINTENANCE_EVERY_MS = 24 * 60 * 60 * 1000;
 /**
  * Reminders go out only in camp daytime, so a member loading a page at 02:00
@@ -136,12 +137,16 @@ async function claim(key: string, windowMs: number): Promise<boolean> {
 
 /**
  * The upkeep that used to be the daily maintenance cron: encrypt any ID number
- * still stored as plain text, and on the production deployment only, delete
+ * still stored as plain text, delete Claude connector clients nobody ever
+ * authorized, and on the production deployment only, delete
  * photos whose owner has no camp account. A preview's database is a copy that
  * can miss recent members, whose photos share the same store.
  */
 export async function runMaintenance(): Promise<void> {
   await step("ID encryption", () => backfillIdEncryption());
+  // Claude connector clients registered over a day ago and never authorized.
+  // Registration is open to anyone, so this is what keeps it bounded.
+  await step("unused connector clients", () => sweepUnusedClients());
   if (process.env.VERCEL_ENV === "production") {
     await step("orphan photos", async () => {
       const result = await sweepOrphanAvatarBlobs(await listLiveAuthUserIds());

@@ -753,8 +753,7 @@ export async function listOptionalQuestionnaires(
   const out: OptionalQuestionnaire[] = [];
   for (const act of open) {
     const mine = answers.find(
-      (a) =>
-        a.definitionKey === act.questionnaireKey && a.cycle === act.cycle,
+      (a) => a.definitionKey === act.questionnaireKey && a.cycle === act.cycle,
     );
     if (mine?.completedAt) continue;
     out.push({
@@ -981,7 +980,13 @@ async function writeRoleMirror(
         target: [schema.driverProfiles.userId, schema.driverProfiles.cycle],
         set: {
           ...driver,
-          ...intent,
+          // The first time they said they would drive, kept on a re-submit,
+          // as the Claude connector's save keeps it.
+          ...(driver.intendsToDrive === true
+            ? {
+                intentRegisteredAt: sql`coalesce(${schema.driverProfiles.intentRegisteredAt}, ${now})`,
+              }
+            : {}),
           version,
           completedAt: now,
           updatedAt: now,

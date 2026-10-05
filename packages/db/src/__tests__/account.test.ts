@@ -315,6 +315,44 @@ describe("sanitiseAccount", () => {
     expect(othersTokens).toHaveLength(1);
   });
 
+  it("clears what they passed to the Claude connector and its errors, keeping the call record", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const other = await makeUser(db);
+    for (const userId of [member.id, other.id]) {
+      await db.insert(schema.mcpAuditLog).values({
+        userId,
+        clientId: "client-1",
+        tool: "update_my_burner_profile",
+        argsJson: { fields: ["bio.statement"], note: "+27 82 555 0199" },
+        outcome: "error",
+        errorMessage: "Failed query: update ... params: +27 82 555 0199",
+        durationMs: 12,
+      });
+    }
+
+    const result = await sanitiseAccount(member.id);
+    expect(result.ok).toBe(true);
+
+    const [mine] = await db
+      .select()
+      .from(schema.mcpAuditLog)
+      .where(eq(schema.mcpAuditLog.userId, member.id));
+    expect(mine).toMatchObject({
+      tool: "update_my_burner_profile",
+      outcome: "error",
+      argsJson: null,
+      errorMessage: null,
+    });
+    // Another member's log is not theirs to lose.
+    const [theirs] = await db
+      .select()
+      .from(schema.mcpAuditLog)
+      .where(eq(schema.mcpAuditLog.userId, other.id));
+    expect(theirs!.argsJson).not.toBeNull();
+    expect(theirs!.errorMessage).not.toBeNull();
+  });
+
   it("leaves nothing of the person on the row, and writes one proof row", async () => {
     const db = h.db();
     await makeUser(db, { rank: "captain" });

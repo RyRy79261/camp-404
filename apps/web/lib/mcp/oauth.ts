@@ -37,9 +37,15 @@ export function isAllowedScope(scope: string): boolean {
 // DCR is unauthenticated by design (RFC 7591). Hardening rule: only allow
 // localhost (any port) or claude.ai / anthropic.com subdomains. Tightens
 // the attack surface for anyone hitting /register.
+//
+// RFC 6749 §3.1.2 and OAuth 2.1: a redirect URI is absolute and carries no
+// fragment; and one with a user name or password in it is refused too, since
+// no real client needs one and it can disguise the host.
 export function isAllowedRedirectUri(uri: string): boolean {
   try {
     const u = new URL(uri);
+    if (uri.includes("#")) return false;
+    if (u.username !== "" || u.password !== "") return false;
     const isLoopback = ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
     if (isLoopback) return u.protocol === "http:" || u.protocol === "https:";
     if (u.protocol !== "https:") return false;
@@ -53,4 +59,3 @@ export function isAllowedRedirectUri(uri: string): boolean {
     return false;
   }
 }
-

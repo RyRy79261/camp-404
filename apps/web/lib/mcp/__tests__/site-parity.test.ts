@@ -42,6 +42,7 @@ vi.mock("@/lib/forms", async (importOriginal) => ({
 }));
 
 import { listOptionalForms } from "@/lib/forms";
+import { QUESTIONNAIRE_VERSION } from "@/lib/questionnaire";
 import { registerCampMcpTools } from "../server";
 
 type Handler = (args: unknown, extra: unknown) => Promise<CallToolResult>;
@@ -427,5 +428,218 @@ describe("you: required actions and your own history", () => {
     expect(log!.argsJson).toEqual({
       fields: ["skills", "previousAfrikaburns"],
     });
+  });
+});
+
+describe("you: the burner profile, saved the way My forms saves it", () => {
+  const FIRST_DONE = new Date("2026-03-01T10:00:00.000Z");
+  const ANSWERS = {
+    birthday: "1990-01-15",
+    phone: "+27 82 555 0100",
+    country: "ZA",
+    "id.type": "sa_id",
+    "bio.statement": "Builder of things",
+    "competency.cooking": "follow",
+    "logistics.driving": "no",
+    "logistics.onsite_before": "no",
+    "logistics.onsite_after": "no",
+    "history.afrikaburn_count": "0",
+    "intent.this_year": "want",
+  };
+  const ADA = {
+    name: "Ada Byron",
+    phone: "+27 82 555 0199",
+    relationship: "sister",
+  };
+
+  /** An approved member with a finished profile, held by a newer version. */
+  async function finished() {
+    const member = await approved({ emergencyContacts: [ADA] });
+    await h.db().insert(schema.burnerProfiles).values({
+      userId: member.id,
+      version: "old",
+      responses: ANSWERS,
+      completedAt: FIRST_DONE,
+    });
+    await h.db().insert(schema.requiredActions).values({
+      userId: member.id,
+      type: "questionnaire",
+      actionKey: "burner_profile",
+      title: "Burner profile",
+      version: QUESTIONNAIRE_VERSION,
+    });
+    return member;
+  }
+
+  async function profileOf(userId: string) {
+    const [row] = await h
+      .db()
+      .select()
+      .from(schema.burnerProfiles)
+      .where(eq(schema.burnerProfiles.userId, userId));
+    return row!;
+  }
+
+  async function gateOf(userId: string) {
+    const [row] = await h
+      .db()
+      .select()
+      .from(schema.requiredActions)
+      .where(eq(schema.requiredActions.userId, userId));
+    return row!;
+  }
+
+  it("changes only the patched answer, keeps the first completion, logs the change and clears the gate", async () => {
+    const member = await finished();
+    const { data, error } = await call(
+      "update_my_burner_profile",
+      { responses: { "bio.statement": "Welder now" } },
+      member.id,
+    );
+    expect(error).toBeUndefined();
+    expect(data!.saved).toBe(true);
+
+    const row = await profileOf(member.id);
+    expect(row.responses).toEqual({
+      ...ANSWERS,
+      "bio.statement": "Welder now",
+    });
+    expect(row.completedAt).toEqual(FIRST_DONE);
+    // The questionnaire's own version, never one the caller picks.
+    expect(row.version).toBe(QUESTIONNAIRE_VERSION);
+    expect((await gateOf(member.id)).status).toBe("completed");
+    // The contacts on the member's row are untouched.
+    const [user] = await h
+      .db()
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, member.id));
+    expect(user!.emergencyContacts).toEqual([ADA]);
+    const edits = await h
+      .db()
+      .select()
+      .from(schema.questionnaireEdits)
+      .where(eq(schema.questionnaireEdits.userId, member.id));
+    expect(edits).toHaveLength(1);
+    expect(edits[0]!.changes).toEqual([
+      expect.objectContaining({
+        fieldId: "bio.statement",
+        from: "Builder of things",
+        to: "Welder now",
+      }),
+    ]);
+  });
+
+  it("refuses a patch that leaves the profile incomplete, an empty patch and an unfinished profile, writing nothing", async () => {
+    const member = await finished();
+    const before = await profileOf(member.id);
+
+    const cleared = await call(
+      "update_my_burner_profile",
+      { responses: { "bio.statement": "" } },
+      member.id,
+    );
+    expect(cleared.error).toMatch(/required/i);
+    const empty = await call(
+      "update_my_burner_profile",
+      { responses: {} },
+      member.id,
+    );
+    expect(empty.error).toMatch(/^Nothing to change/);
+    const badPhone = await call(
+      "update_my_burner_profile",
+      { responses: { "emergency.1.phone": "12" } },
+      member.id,
+    );
+    expect(badPhone.error).toBeDefined();
+    const future = await call(
+      "update_my_burner_profile",
+      { responses: { birthday: "2999-01-01" } },
+      member.id,
+    );
+    expect(future.error).toContain("Date of birth can't be in the future.");
+
+    expect(await profileOf(member.id)).toEqual(before);
+    expect((await gateOf(member.id)).status).toBe("pending");
+
+    // A profile never finished is finished on the website, not here.
+    const starter = await approved();
+    await h.db().insert(schema.burnerProfiles).values({
+      userId: starter.id,
+      version: "old",
+      responses: ANSWERS,
+    });
+    const unfinished = await call(
+      "update_my_burner_profile",
+      { responses: { "bio.statement": "Hi" } },
+      starter.id,
+    );
+    expect(unfinished.error).toMatch(
+      /^Finish your burner profile on the website first: .*\/onboarding\/questionnaire$/,
+    );
+    expect((await profileOf(starter.id)).completedAt).toBeNull();
+  });
+
+  it("refuses the profile photo, which is uploaded on the website", async () => {
+    const member = await finished();
+    const { error } = await call(
+      "update_my_burner_profile",
+      { responses: { "profile.image": "https://example.test/me.png" } },
+      member.id,
+    );
+    expect(error).toMatch(/^Profile photos are uploaded on the website/);
+  });
+
+  it("keeps the answers' values out of the connector's log", async () => {
+    const member = await finished();
+    await call(
+      "update_my_burner_profile",
+      { responses: { "bio.statement": "Welder now" } },
+      member.id,
+    );
+    const [log] = await h
+      .db()
+      .select()
+      .from(schema.mcpAuditLog)
+      .where(eq(schema.mcpAuditLog.tool, "update_my_burner_profile"));
+    expect(log!.argsJson).toEqual({ fields: ["bio.statement"] });
+  });
+});
+
+describe("you: emergency contacts, by the burner profile's rules", () => {
+  it("refuses a phone number the website's form would refuse", async () => {
+    const member = await approved();
+    const { error } = await call(
+      "update_my_emergency_contacts",
+      { contacts: [{ name: "Ada", phone: "12", relationship: "sister" }] },
+      member.id,
+    );
+    expect(error).toBe("Enter a valid phone number");
+    const [user] = await h
+      .db()
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, member.id));
+    expect(user!.emergencyContacts).toBeNull();
+  });
+
+  it("clears the list to nothing, as the burner profile's save does", async () => {
+    const member = await approved({
+      emergencyContacts: [
+        { name: "Ada", phone: "+27 82 555 0199", relationship: "sister" },
+      ],
+    });
+    const { error } = await call(
+      "update_my_emergency_contacts",
+      { contacts: [] },
+      member.id,
+    );
+    expect(error).toBeUndefined();
+    const [user] = await h
+      .db()
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, member.id));
+    expect(user!.emergencyContacts).toBeNull();
   });
 });
