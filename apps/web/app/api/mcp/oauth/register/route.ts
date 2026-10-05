@@ -4,8 +4,7 @@ import {
   DEFAULT_SCOPE,
   isAllowedRedirectUri,
   isAllowedScope,
-  makeRoomForClient,
-  registerClient,
+  registerBoundedClient,
   registrationAddressKey,
 } from "@/lib/mcp/oauth";
 import { rateLimiter, getClientIp } from "@/lib/rate-limit";
@@ -26,7 +25,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * Registration attempts allowed per address (an IPv6 /64), per minute and per
  * day. Registration is open to anyone (RFC 7591); these, the size caps above,
- * the cap on stored clients nobody authorized (makeRoomForClient) and the
+ * the cap on stored clients nobody authorized (registerBoundedClient) and the
  * daily sweep of those (background-work.ts) keep its storage bounded. The
  * camp has one connector per person, so a day's allowance is far more than a
  * member ever uses.
@@ -111,14 +110,13 @@ export async function POST(req: Request) {
 
   // Storage stays bounded by pushing out the oldest client nobody
   // authorized, rather than by turning newcomers away.
-  if (!(await makeRoomForClient())) return tooMany(600);
-
-  const client = await registerClient({
+  const client = await registerBoundedClient({
     clientName: parsed.data.client_name,
     redirectUris: [...new Set(parsed.data.redirect_uris)],
     tokenEndpointAuthMethod: parsed.data.token_endpoint_auth_method,
     scope,
   });
+  if (!client) return tooMany(600);
 
   return NextResponse.json(
     {

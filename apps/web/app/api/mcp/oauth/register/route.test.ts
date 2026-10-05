@@ -14,13 +14,12 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 vi.mock("@/lib/mcp/oauth", async (importOriginal) => ({
   ...(await importOriginal<typeof OAuth>()),
-  registerClient: vi.fn(),
-  makeRoomForClient: vi.fn(),
+  registerBoundedClient: vi.fn(),
 }));
 
 import { POST } from "./route";
 import { rateLimiter } from "@/lib/rate-limit";
-import { makeRoomForClient, registerClient } from "@/lib/mcp/oauth";
+import { registerBoundedClient as registerClient } from "@/lib/mcp/oauth";
 
 const REDIRECT = "https://claude.ai/api/mcp/auth_callback";
 
@@ -37,7 +36,6 @@ const valid = { client_name: "Claude", redirect_uris: [REDIRECT] };
 beforeEach(() => {
   vi.clearAllMocks();
   clientIp.value = "203.0.113.9";
-  vi.mocked(makeRoomForClient).mockResolvedValue(true);
   vi.mocked(rateLimiter.limit).mockResolvedValue({
     ok: true,
     retryAfterSeconds: 0,
@@ -151,7 +149,7 @@ describe("POST /api/mcp/oauth/register", () => {
   it("makes room among clients nobody authorized instead of refusing a newcomer", async () => {
     const res = await POST(register(valid));
     expect(res.status).toBe(201);
-    expect(makeRoomForClient).toHaveBeenCalledOnce();
+    expect(registerClient).toHaveBeenCalledOnce();
     // No camp-wide daily refusal any more.
     expect(
       vi
@@ -160,9 +158,8 @@ describe("POST /api/mcp/oauth/register", () => {
     ).toBe(false);
 
     // Only when every stored one is mid sign-in is it refused, for now.
-    vi.mocked(makeRoomForClient).mockResolvedValue(false);
+    vi.mocked(registerClient).mockResolvedValueOnce(null);
     const flooded = await POST(register(valid));
     expect(flooded.status).toBe(429);
-    expect(registerClient).toHaveBeenCalledOnce();
   });
 });

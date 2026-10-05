@@ -11,6 +11,7 @@ import {
   notExists,
   sql,
 } from "drizzle-orm";
+import type { DbOrTx } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
 import { isActiveMcpUser } from "./mcp";
 import * as schema from "./schema";
@@ -108,8 +109,8 @@ export interface RegisteredClient {
 
 export async function registerClient(
   input: RegisterClientInput,
+  db: DbOrTx = createHttpDb(),
 ): Promise<RegisteredClient> {
-  const db = createHttpDb();
   const clientId = generateOpaqueToken(16);
   const clientSecret =
     input.tokenEndpointAuthMethod === "none"
@@ -142,6 +143,27 @@ export async function registerClient(
 }
 
 /**
+ * Register a client from the open registration endpoint, keeping at most
+ * `cap` never-authorized clients stored (makeRoomForClient). The count, any
+ * push-out and the insert run in one transaction under an advisory lock, so
+ * registrations arriving together cannot each see room and overshoot the
+ * cap. null when there is no room right now.
+ */
+export async function registerBoundedClient(
+  input: RegisterClientInput,
+  cap: number = MAX_UNUSED_CLIENTS,
+  now: Date = new Date(),
+): Promise<RegisteredClient | null> {
+  return withTransaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext('mcp_oauth_clients:register'))`,
+    );
+    if (!(await makeRoomForClient(cap, now, tx))) return null;
+    return registerClient(input, tx);
+  });
+}
+
+/**
  * A registered client nobody ever authorized is deleted once it is this old.
  * Claude registers and then sends the person to the consent screen within
  * minutes, so a day is generous.
@@ -171,7 +193,7 @@ export async function sweepUnusedClients(
 }
 
 /** A client no authorization code or token was ever issued to, never used. */
-function neverAuthorized(db: ReturnType<typeof createHttpDb>) {
+function neverAuthorized(db: DbOrTx) {
   return and(
     isNull(schema.mcpOauthClients.lastUsedAt),
     notExists(
@@ -208,8 +230,8 @@ export const UNUSED_CLIENT_GRACE_MS = 10 * 60 * 1000;
 export async function makeRoomForClient(
   cap: number = MAX_UNUSED_CLIENTS,
   now: Date = new Date(),
+  db: DbOrTx = createHttpDb(),
 ): Promise<boolean> {
-  const db = createHttpDb();
   const [counted] = await db
     .select({ n: count() })
     .from(schema.mcpOauthClients)
@@ -231,7 +253,7 @@ export async function makeRoomForClient(
   const gone = await db
     .delete(schema.mcpOauthClients)
     .where(inArray(schema.mcpOauthClients.clientId, oldest))
-    .returning({ clientId: schema.mcpOauthClients.clientId });
+    .returning();
   return gone.length >= excess;
 }
 

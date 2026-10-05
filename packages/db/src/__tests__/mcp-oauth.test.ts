@@ -12,6 +12,7 @@ import {
   rotateRefreshToken,
   sha256,
   makeRoomForClient,
+  registerBoundedClient,
   sweepUnusedClients,
   UNUSED_CLIENT_TTL_MS,
   verifyClientSecret,
@@ -194,6 +195,43 @@ describe("bounding stored clients nobody authorized", () => {
     const left = await ids();
     expect(left).not.toContain(older);
     expect(left).toEqual(expect.arrayContaining([authorized, fresh]));
+  });
+});
+
+describe("registering under the cap", () => {
+  const h = useTestDb();
+
+  it("registers while there is room, and refuses only when every unauthorized client is mid sign-in", async () => {
+    const db = h.db();
+    const input = {
+      clientName: "Claude",
+      redirectUris: [REDIRECT],
+      tokenEndpointAuthMethod: "none" as const,
+    };
+    const stored = async () =>
+      (await db.select().from(schema.mcpOauthClients)).length;
+
+    // Two at once against a cap of 2: both fit, never a third.
+    const both = await Promise.all([
+      registerBoundedClient(input, 2),
+      registerBoundedClient(input, 2),
+    ]);
+    expect(both.every((c) => c !== null)).toBe(true);
+    expect(await stored()).toBe(2);
+    // Both are minutes old at most: no room, nothing stored.
+    expect(await registerBoundedClient(input, 2)).toBeNull();
+    expect(await stored()).toBe(2);
+    // Later, the oldest is pushed out and the newcomer gets in.
+    // An hour after the newest was stored (by the database's clock, which
+    // stamps createdAt).
+    const newest = Math.max(
+      ...(await db.select().from(schema.mcpOauthClients)).map((c) =>
+        c.createdAt.getTime(),
+      ),
+    );
+    const later = new Date(newest + 60 * 60 * 1000);
+    expect(await registerBoundedClient(input, 2, later)).not.toBeNull();
+    expect(await stored()).toBe(2);
   });
 });
 
