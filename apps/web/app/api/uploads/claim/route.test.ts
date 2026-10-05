@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // A member's claim with its receipts (#242). What matters is what the route
@@ -41,7 +43,12 @@ import { isApproved } from "@/lib/users";
 import { POST } from "./route";
 
 const PDF = [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37];
-const JPG = [0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0];
+// A real photo with a camera's EXIF and a GPS position in it.
+const JPG = [
+  ...readFileSync(
+    join(__dirname, "../../../../lib/__tests__/fixtures/gps-photo.jpg"),
+  ),
+];
 const HTML = [0x3c, 0x68, 0x74, 0x6d, 0x6c, 0x3e, 0, 0];
 
 function upload(
@@ -96,6 +103,11 @@ describe("POST /api/uploads/claim", () => {
       expect(call[0]).toMatch(/^claim-receipts\/camp-1\/receipt\./);
       expect(call[2]).toMatchObject({ access: "private" });
     }
+    // The photo is stored without its EXIF; the PDF as it came.
+    const [pdf, photo] = vi.mocked(put).mock.calls.map((c) => c[1] as Buffer);
+    expect([...pdf!]).toEqual(PDF);
+    expect(Buffer.from(JPG).includes("FixtureCam")).toBe(true);
+    expect(photo!.includes("FixtureCam")).toBe(false);
     expect(submitClaim).toHaveBeenCalledExactlyOnceWith({
       submitterId: "camp-1",
       cycle: 2027,

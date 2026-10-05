@@ -6,7 +6,7 @@ import { getAuthenticatedUser } from "@/lib/auth";
 import { revalidateDues } from "@/lib/dues-revalidate";
 import { PROOF_MAX_BYTES } from "@/lib/dues-copy";
 import {
-  proofBytesMatch,
+  proofBytesToStore,
   proofExtension,
   proofFolder,
 } from "@/lib/payment-proof";
@@ -68,8 +68,11 @@ export async function POST(req: Request) {
   if (file.size > PROOF_MAX_BYTES) {
     return refuse("That file is over 4 MB. Send a smaller photo or PDF.", 413);
   }
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (!proofBytesMatch(file.type, bytes.subarray(0, 16))) {
+  const bytes = proofBytesToStore(
+    file.type,
+    new Uint8Array(await file.arrayBuffer()),
+  );
+  if (!bytes) {
     return refuse("The proof must be a PDF or a JPG, PNG or WebP photo.", 415);
   }
 

@@ -6,7 +6,7 @@ import { claimReceiptFolder } from "@/lib/claim-receipts";
 import { submitClaim } from "@/lib/claims";
 import { revalidateClaims } from "@/lib/claims-revalidate";
 import { PROOF_MAX_BYTES } from "@/lib/dues-copy";
-import { proofBytesMatch, proofExtension } from "@/lib/payment-proof";
+import { proofBytesToStore, proofExtension } from "@/lib/payment-proof";
 import { ledgerCycle } from "@/lib/payments";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
@@ -21,8 +21,10 @@ export const runtime = "nodejs";
 // PRIVATE blob in the member's own folder, like proof of payment. The blobs'
 // addresses never leave the server; /api/claim-receipt/<file id> streams each
 // to the member and the Finance team only. The bank details are encrypted
-// before they are stored (lib/claims.ts). The files together stay under
-// 4 MB: that is what one request to the site may carry.
+// before they are stored (lib/claims.ts). A photo's EXIF (GPS position, time)
+// is stripped before it is stored. The files together stay under 4 MB: that
+// is what one request to the site may carry, so the receipt picker shrinks
+// each photo in the browser first (lib/image.ts).
 
 const TYPES_SENTENCE = "Receipts must be PDFs or JPG, PNG or WebP photos.";
 
@@ -90,10 +92,11 @@ export async function POST(req: Request) {
   for (const file of files) {
     const ext = proofExtension(file.type);
     if (!ext) return refuse(TYPES_SENTENCE, 415);
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    if (!proofBytesMatch(file.type, bytes.subarray(0, 16))) {
-      return refuse(TYPES_SENTENCE, 415);
-    }
+    const bytes = proofBytesToStore(
+      file.type,
+      new Uint8Array(await file.arrayBuffer()),
+    );
+    if (!bytes) return refuse(TYPES_SENTENCE, 415);
     checked.push({ bytes, type: file.type, ext });
   }
 

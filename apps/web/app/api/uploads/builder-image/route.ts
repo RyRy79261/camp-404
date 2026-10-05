@@ -3,6 +3,7 @@ import { put } from "@vercel/blob";
 import { slugify } from "@camp404/core";
 import { avatarProxyUrl } from "@/lib/avatar-blob";
 import { captainActionGate } from "@/lib/captain-gate";
+import { stripImageMetadata } from "@/lib/image-metadata";
 import { canEditQuestionnaire } from "@/lib/questionnaire-authoring";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
@@ -13,6 +14,12 @@ export const runtime = "nodejs";
 // link-paste only, and only links into the camp's own store are allowed, so a
 // captain had no way to add a picture). Stored private under
 // `builder-images/<questionnaire>/`, served through /api/avatar to camp members.
+//
+// The browser shrinks the picture and re-encodes it first (lib/image.ts). The
+// route still checks the first bytes are the picture the type claims, and
+// strips EXIF, XMP and the like (lib/image-metadata.ts) from whatever
+// arrives: every member who opens the questionnaire sees this file, and a
+// photo's GPS position must not go with it.
 //
 // Not pruned on replace: a published version of the questionnaire can still
 // show the old picture to members answering an open send.
@@ -91,6 +98,18 @@ export async function POST(req: Request) {
     );
   }
 
+  // The type is only the browser's claim; the bytes must agree with it.
+  const stripped = stripImageMetadata(
+    file.type,
+    new Uint8Array(await file.arrayBuffer()),
+  );
+  if (!stripped) {
+    return NextResponse.json(
+      { error: "The picture must be a JPEG, PNG or WebP image." },
+      { status: 415 },
+    );
+  }
+
   const folder = `builder-images/${slugify(key) || "questionnaire"}`;
   if (isE2ETestMode()) {
     return NextResponse.json({
@@ -107,7 +126,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const blob = await put(`${folder}/image.${ext}`, file, {
+    const blob = await put(`${folder}/image.${ext}`, Buffer.from(stripped), {
       access: "private",
       addRandomSuffix: true,
       contentType: file.type,

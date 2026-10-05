@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // A picture for a builder image block: authors only, only for a questionnaire
@@ -28,9 +30,22 @@ import { canEditQuestionnaire } from "@/lib/questionnaire-authoring";
 import { rateLimiter } from "@/lib/rate-limit";
 import { put } from "@vercel/blob";
 
-function upload(type: string, key: string | null = "camp-map"): Request {
+// Real pictures carrying a camera's EXIF with a GPS position
+// (lib/__tests__/image-metadata.test.ts).
+const FIXTURES = join(__dirname, "../../../../lib/__tests__/fixtures");
+const PICTURES: Record<string, Uint8Array<ArrayBuffer>> = {
+  "image/jpeg": new Uint8Array(readFileSync(join(FIXTURES, "gps-photo.jpg"))),
+  "image/png": new Uint8Array(readFileSync(join(FIXTURES, "gps-photo.png"))),
+  "image/webp": new Uint8Array(readFileSync(join(FIXTURES, "gps-photo.webp"))),
+};
+
+function upload(
+  type: string,
+  key: string | null = "camp-map",
+  bytes: Uint8Array<ArrayBuffer> = PICTURES[type] ?? new Uint8Array([1, 2, 3]),
+): Request {
   const form = new FormData();
-  form.set("image", new File([new Uint8Array([1, 2, 3])], "map", { type }));
+  form.set("image", new File([bytes], "map", { type }));
   const query = key === null ? "" : `?questionnaire=${key}`;
   return {
     method: "POST",
@@ -81,6 +96,25 @@ describe("POST /api/uploads/builder-image", () => {
       expect.objectContaining({ rank: "team_lead" }),
       "camp-map",
     );
+  });
+
+  it("stores the picture without the camera's EXIF or its GPS position", async () => {
+    expect(Buffer.from(PICTURES["image/jpeg"]!).includes("FixtureCam")).toBe(
+      true,
+    );
+    expect((await POST(upload("image/jpeg"))).status).toBe(200);
+    const stored = vi.mocked(put).mock.calls[0]![1] as Buffer;
+    expect(stored.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+    expect(stored.includes("FixtureCam")).toBe(false);
+    expect(stored.length).toBeLessThan(PICTURES["image/jpeg"]!.length);
+  });
+
+  it("refuses bytes that are not the picture the type claims", async () => {
+    const res = await POST(
+      upload("image/jpeg", "camp-map", PICTURES["image/png"]),
+    );
+    expect(res.status).toBe(415);
+    expect(put).not.toHaveBeenCalled();
   });
 
   it("refuses someone below team lead", async () => {
