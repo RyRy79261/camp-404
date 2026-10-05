@@ -62,7 +62,14 @@ export async function generateMetadata({
   return {
     title: chapter.title,
     description,
-    openGraph: { title: chapter.title, description, url: `/${chapter.slug}` },
+    openGraph: {
+      type: "article",
+      siteName: "Camp 404",
+      locale: "en_GB",
+      title: chapter.title,
+      description,
+      url: `/${chapter.slug}`,
+    },
   };
 }
 

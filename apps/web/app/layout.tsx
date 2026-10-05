@@ -76,7 +76,7 @@ export default function RootLayout({
   // (lib/os-skin.ts), which the head script adds before React hydrates.
   return (
     <html
-      lang="en"
+      lang="en-GB"
       suppressHydrationWarning
       className={`dark camp-accent ${montserrat.variable} ${jetbrainsMono.variable} ${inter.variable} ${silkscreen.variable}`}
     >

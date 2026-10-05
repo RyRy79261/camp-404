@@ -1,3 +1,4 @@
+import { SeoSummary } from "@/components/seo-summary";
 import { Os } from "@/components/os/os";
 import { loadJoinData } from "@/lib/load-join-data";
 
@@ -6,5 +7,11 @@ import { loadJoinData } from "@/lib/load-join-data";
 export const revalidate = 60;
 
 export default async function Page() {
-  return <Os data={await loadJoinData()} />;
+  const data = await loadJoinData();
+  return (
+    <>
+      <SeoSummary data={data} />
+      <Os data={data} />
+    </>
+  );
 }

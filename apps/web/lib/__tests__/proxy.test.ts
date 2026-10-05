@@ -84,6 +84,7 @@ describe("the proxy matcher", () => {
       "/favicon.ico",
       "/icon.svg",
       "/manifest.webmanifest",
+      "/robots.txt",
       "/firebase-messaging-sw.js",
       "/apple-icon",
       "/opengraph-image",
