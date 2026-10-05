@@ -93,7 +93,7 @@ describe("ClaimForm", () => {
     expect(screen.getAllByRole("alert")).toHaveLength(4);
   });
 
-  it("lists each chosen receipt by name, and takes one off again", () => {
+  it("lists each chosen receipt by name, and takes one off again", async () => {
     render(
       <ClaimForm
         teams={[{ key: "kitchen", label: "Kitchen" }]}
@@ -106,7 +106,8 @@ describe("ClaimForm", () => {
     fireEvent.change(screen.getByLabelText("Receipts"), {
       target: { files: [a, b] },
     });
-    const chosen = screen.getByRole("list", { name: "Chosen receipts" });
+    // Photos are shrunk in the browser first, so they arrive a moment later.
+    const chosen = await screen.findByRole("list", { name: "Chosen receipts" });
     expect(chosen.textContent).toContain("till-slip.pdf");
     expect(chosen.textContent).toContain("ice.jpg");
     expect(screen.getByText(/2 of 5 files/)).toBeTruthy();
@@ -115,7 +116,7 @@ describe("ClaimForm", () => {
     expect(screen.getByText(/1 of 5 files/)).toBeTruthy();
   });
 
-  it("keeps the receipts control when too many are picked, and takes focus to it", () => {
+  it("keeps the receipts control when too many are picked, and takes focus to it", async () => {
     vi.stubGlobal("fetch", vi.fn());
     fill();
     const six = Array.from(
@@ -125,7 +126,7 @@ describe("ClaimForm", () => {
     fireEvent.change(screen.getByLabelText("Receipts"), {
       target: { files: six },
     });
-    expect(screen.getByText(/6 of 5 files/)).toBeTruthy();
+    expect(await screen.findByText(/6 of 5 files/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Send my claim" }));
     const input = screen.getByLabelText("Receipts");
     expect(input.id).toBe("claim-receipts");
@@ -151,6 +152,7 @@ describe("ClaimForm", () => {
     fireEvent.change(screen.getByLabelText("Receipts"), {
       target: { files: [a, b] },
     });
+    await screen.findByText(/2 of 5 files/);
     fireEvent.click(screen.getByRole("button", { name: "Send my claim" }));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     const [url, init] = fetch.mock.calls[0]! as unknown as [

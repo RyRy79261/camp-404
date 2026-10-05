@@ -1,8 +1,9 @@
 "use client";
 
-import { useId, useState, type DragEvent } from "react";
-import { FileText, ImageIcon, Upload, X } from "lucide-react";
+import { useId, useRef, useState, type DragEvent } from "react";
+import { FileText, ImageIcon, Loader2, Upload, X } from "lucide-react";
 import { cn } from "@camp404/ui/lib/utils";
+import { downscaleForUpload, RECEIPT_UPLOAD } from "@/lib/image";
 
 // The receipts on a claim (#242), composed like AfrikaBurn's FileUpload in
 // its file variant: a chip per chosen file with its name and a remove (x),
@@ -10,6 +11,11 @@ import { cn } from "@camp404/ui/lib/utils";
 // their size against the limit. The files stay in the browser until the
 // claim is sent (one request with the whole claim), so nothing is uploaded
 // for a claim the member never sends.
+//
+// Each photo is shrunk as it is picked (lib/image.ts: at most 2000 px, JPEG,
+// its EXIF and GPS position gone), so five phone photos fit the 4 MB one
+// request may carry; the chip shows the size that will be sent. PDFs go as
+// they are.
 //
 // The same picker takes one file (`maxFiles` 1): a member's proof of payment
 // and the Finance team's bank statement use it, so no screen shows the
@@ -62,24 +68,45 @@ export function ReceiptPicker({
   const fallbackId = useId();
   const inputId = id ?? fallbackId;
   const [dragging, setDragging] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  // The files as of the last render, for an add that finishes after a wait.
+  const latest = useRef(files);
+  latest.current = files;
+  // A shrunk photo's original name and size, so picking it again is caught.
+  const picked = useRef(new WeakMap<File, string>());
+  const busy = disabled || preparing;
   const full = files.length >= maxFiles;
   const total = files.reduce((sum, f) => sum + f.size, 0);
   const limit = megabytes(maxBytes).replace(".0", "");
   const single = maxFiles === 1;
 
-  function add(picked: File[]) {
-    if (picked.length === 0) return;
+  async function add(chosen: File[]) {
+    if (chosen.length === 0 || preparing) return;
+    const key = (f: File) => picked.current.get(f) ?? `${f.name}:${f.size}`;
     // The same file picked twice is one receipt.
-    const known = new Set(files.map((f) => `${f.name}:${f.size}`));
-    const fresh = picked.filter((f) => !known.has(`${f.name}:${f.size}`));
-    onChange([...files, ...fresh]);
+    const known = new Set(latest.current.map(key));
+    const fresh = chosen.filter((f) => !known.has(`${f.name}:${f.size}`));
+    if (fresh.length === 0) return;
+    setPreparing(true);
+    try {
+      const shrunk = await Promise.all(
+        fresh.map(async (f) => {
+          const out = await downscaleForUpload(f, RECEIPT_UPLOAD);
+          picked.current.set(out, `${f.name}:${f.size}`);
+          return out;
+        }),
+      );
+      onChange([...latest.current, ...shrunk]);
+    } finally {
+      setPreparing(false);
+    }
   }
 
   function onDrop(e: DragEvent) {
     e.preventDefault();
     setDragging(false);
-    if (disabled || full) return;
-    add(Array.from(e.dataTransfer.files));
+    if (busy || full) return;
+    void add(Array.from(e.dataTransfer.files));
   }
 
   return (
@@ -103,7 +130,7 @@ export function ReceiptPicker({
                 <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                   {megabytes(file.size)}
                 </span>
-                {!disabled && (
+                {!busy && (
                   <button
                     type="button"
                     onClick={() => onChange(files.filter((_, j) => j !== i))}
@@ -125,7 +152,7 @@ export function ReceiptPicker({
         htmlFor={inputId}
         onDragOver={(e) => {
           e.preventDefault();
-          if (!disabled && !full) setDragging(true);
+          if (!busy && !full) setDragging(true);
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
@@ -141,10 +168,15 @@ export function ReceiptPicker({
               : full
                 ? "border-input text-muted-foreground"
                 : "border-input text-muted-foreground hover:border-primary/60 hover:text-foreground",
-          disabled && "pointer-events-none opacity-70",
+          busy && "pointer-events-none opacity-70",
         )}
       >
-        {full ? (
+        {preparing ? (
+          <>
+            <Loader2 className="h-5 w-5 motion-safe:animate-spin" aria-hidden />
+            <span role="status">Making the photos smaller…</span>
+          </>
+        ) : full ? (
           <span>
             {single
               ? "Remove the file to pick another."
@@ -178,7 +210,7 @@ export function ReceiptPicker({
             if (full) e.preventDefault();
           }}
           onChange={(e) => {
-            add(Array.from(e.currentTarget.files ?? []));
+            void add(Array.from(e.currentTarget.files ?? []));
             e.currentTarget.value = "";
           }}
         />
