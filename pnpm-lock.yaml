@@ -75,9 +75,6 @@ importers:
       '@camp404/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      lucide-react:
-        specifier: ^1.16.0
-        version: 1.16.0(react@19.2.6)
       next:
         specifier: ^16.3.8
         version: 16.3.8(@opentelemetry/api@1.9.1)(@playwright/test@1.60.0)(@types/node@25.9.5)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -351,12 +348,6 @@ importers:
       react-dom:
         specifier: ^19.2.6
         version: 19.2.6(react@19.2.6)
-      react-markdown:
-        specifier: ^10.1.0
-        version: 10.1.0(@types/react@19.2.15)(react@19.2.6)
-      rehype-sanitize:
-        specifier: ^6.0.0
-        version: 6.0.0
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
@@ -474,9 +465,6 @@ importers:
       '@camp404/types':
         specifier: workspace:*
         version: link:../types
-      zod:
-        specifier: ^4.4.3
-        version: 4.5.4
     devDependencies:
       '@camp404/eslint-config':
         specifier: workspace:*
