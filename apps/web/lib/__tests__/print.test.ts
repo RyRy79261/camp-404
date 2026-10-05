@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isPrintPath,
   mayRenderHost,
   parseCookieHeader,
   pdfFileName,
@@ -9,6 +10,17 @@ import {
 } from "../print";
 
 // The rules the PDF route and the print buttons share (#249).
+
+describe("isPrintPath", () => {
+  it("is every page under /print, and nothing else", () => {
+    expect(isPrintPath("/print")).toBe(true);
+    expect(isPrintPath("/print/kitchen/recipes")).toBe(true);
+    expect(isPrintPath("/printing")).toBe(false);
+    expect(isPrintPath("/kitchen/print")).toBe(false);
+    expect(isPrintPath("/")).toBe(false);
+    expect(isPrintPath(null)).toBe(false);
+  });
+});
 
 describe("printPagePath", () => {
   it("keeps a print page's path and query", () => {

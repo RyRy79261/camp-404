@@ -14,6 +14,15 @@ import { PRINT_SHEET_ATTR } from "./print";
 // Linux, unpacked into /tmp on the first call); anywhere else, the Chromium
 // Playwright installs for the tests (`playwright install chromium`).
 
+/**
+ * What the PDF browser may never call. It opens the page with the member's
+ * cookies and reports its tab as visible, so the notice gate there would
+ * claim the member's pop-ups (marking them read, in a browser nobody sees)
+ * and could cover the sheet. The gate stays quiet on print pages itself; this
+ * is the second lock.
+ */
+export const PDF_BLOCKED_REQUESTS = "**/api/notifications/**";
+
 /** How long the page may take to load and draw. */
 const PAGE_TIMEOUT_MS = 20_000;
 
@@ -54,6 +63,7 @@ export async function renderPrintPdf(input: {
         input.cookies.map((c) => ({ ...c, url: url.origin })),
       );
     }
+    await context.route(PDF_BLOCKED_REQUESTS, (route) => route.abort());
     const page = await context.newPage();
     const response = await page.goto(url.toString(), {
       waitUntil: "load",

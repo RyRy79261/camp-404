@@ -94,7 +94,9 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <Providers>
           {children}
-          <AcknowledgementGate />
+          {/* Asks for notices only while signed in, off print pages, and on
+              a visible tab; testSession stands in for the session in E2E. */}
+          <AcknowledgementGate testSession={isE2ETestMode()} />
           {/* The gate self-gates on the live client session; aiAvailable is a
               server-only env check passed down for the "Improve with AI" toggle. */}
           <FeedbackGate
@@ -104,8 +106,9 @@ export default function RootLayout({
           {/* App-wide toast outlet. Inert until something calls toast().
               Lifted clear of the desktop's taskbar and pinned strip, and of a
               phone's bottom bar with its home indicator, so a toast never
-              covers the tray, a pin or Home (--os-toast-bottom, globals.css). */}
-          <Toaster className="bottom-[var(--os-toast-bottom,0px)]" />
+              covers the tray, a pin or Home (--os-toast-bottom, globals.css).
+              Never on paper or in a PDF. */}
+          <Toaster className="bottom-[var(--os-toast-bottom,0px)] print:hidden" />
         </Providers>
       </body>
     </html>

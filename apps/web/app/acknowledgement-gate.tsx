@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Megaphone, TriangleAlert } from "lucide-react";
 import { Alert } from "@camp404/ui/components/alert";
 import { Button } from "@camp404/ui/components/button";
@@ -16,6 +16,8 @@ import { Card, CardContent } from "@camp404/ui/components/card";
 import { Spinner } from "@camp404/ui/components/spinner";
 import { toast } from "@camp404/ui/components/toast";
 import { plainPreview } from "@camp404/core";
+import { authClient } from "@/lib/auth-client";
+import { isPrintPath } from "@/lib/print";
 
 // Loaded on demand, never with the app. This gate is mounted in the ROOT
 // layout, so a static import would put react-markdown and the whole
@@ -47,8 +49,17 @@ const MarkdownBody = lazy(() =>
 // on the message title and cannot leave the takeover, and nothing behind it can
 // be clicked or read by a screen reader.
 //
-// Mounted once in the root layout. Unauthenticated visitors get an empty
-// queue from the API, so it renders nothing on public pages.
+// Mounted once in the root layout. It asks the server only while it can
+// matter, because each ask is three database queries that keep Neon awake:
+//   - only while someone is signed in (the live client session), so a public
+//     page never asks;
+//   - never under /print, where the PDF maker's headless browser opens the
+//     page with the member's cookies and reports its tab as visible: a claim
+//     there would mark the member's pop-ups read in a browser nobody sees,
+//     and a takeover would cover the sheet;
+//   - and on a timer only while the tab is visible. A hidden tab skips its
+//     turns, and the visibility and focus listeners catch up the moment the
+//     member comes back, so a notice still appears as they return.
 
 interface PendingItem {
   deliveryId: string;
@@ -65,8 +76,11 @@ interface Popup {
   link: string;
 }
 
-const POLL_INTERVAL_MS = 45_000;
+/** How often a visible, signed-in tab asks; coming back to the tab asks at once. */
+export const POLL_INTERVAL_MS = 120_000;
 const POPUP_DURATION_MS = 10_000;
+/** A tab's return fires two events; asks closer together than this are one. */
+const RETURN_DEDUPE_MS = 2_000;
 
 export const ACK_FAILED =
   "Your acknowledgement did not save. Check your connection, then press Acknowledge again.";
@@ -94,8 +108,21 @@ export function inertOutside(el: HTMLElement): () => void {
   };
 }
 
-export function AcknowledgementGate() {
+export function AcknowledgementGate({
+  testSession = false,
+}: {
+  /**
+   * E2E_TEST_MODE only: the in-memory test login has no Better Auth session
+   * for the client to read, so the gate asks as if signed in (FeedbackGate
+   * does the same). The API still answers an empty queue to anyone signed out.
+   */
+  testSession?: boolean;
+} = {}) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { data: session, isPending } = authClient.useSession();
+  const signedIn = testSession || (!isPending && !!session);
+  const active = signedIn && !isPrintPath(pathname);
   const [queue, setQueue] = useState<PendingItem[]>([]);
   const [acking, setAcking] = useState(false);
   const [ackError, setAckError] = useState<string | null>(null);
@@ -160,13 +187,28 @@ export function AcknowledgementGate() {
     }
   }, [showPopups]);
 
-  // Initial load, interval poll, and a refetch whenever the tab regains
-  // focus so an announcement appears promptly after it's published.
+  // While active: a first load, a timer that skips its turn on a hidden tab,
+  // and a refetch whenever the tab comes back, so an announcement appears
+  // promptly after it is published. Signing out (or opening a print page)
+  // stops all three and drops whatever was on screen.
   useEffect(() => {
-    void load();
-    const id = setInterval(() => void load(), POLL_INTERVAL_MS);
+    if (!active) {
+      requestIdRef.current++; // an answer still in flight lands nowhere
+      setQueue((q) => (q.length ? [] : q));
+      return;
+    }
+    const visible = () => document.visibilityState === "visible";
+    if (visible()) void load();
+    const id = setInterval(() => {
+      if (visible()) void load();
+    }, POLL_INTERVAL_MS);
+    // Coming back to a tab fires both `visibilitychange` and `focus`: one ask
+    // answers both.
+    let lastReturn = 0;
     const onVisible = () => {
-      if (document.visibilityState === "visible") void load();
+      if (!visible() || Date.now() - lastReturn < RETURN_DEDUPE_MS) return;
+      lastReturn = Date.now();
+      void load();
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
@@ -175,7 +217,7 @@ export function AcknowledgementGate() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [load]);
+  }, [active, load]);
 
   const current = queue[0];
   const open = current !== undefined;
@@ -262,7 +304,7 @@ export function AcknowledgementGate() {
       aria-modal="true"
       aria-labelledby="ack-title"
       onKeyDown={trapTab}
-      className="fixed inset-0 z-[130] overflow-hidden bg-background"
+      className="fixed inset-0 z-[130] overflow-hidden bg-background print:hidden"
     >
       <div
         ref={scrollRef}

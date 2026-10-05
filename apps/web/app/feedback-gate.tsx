@@ -11,7 +11,9 @@ import {
   REPORT_PROBLEM_EVENT,
   type ReportProblemRequest,
 } from "@/components/feedback/report-problem";
+import { usePathname } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { isPrintPath } from "@/lib/print";
 import { installClientErrorCapture } from "@/lib/client-errors";
 import type { FeedbackKind } from "@/lib/github-feedback";
 
@@ -42,7 +44,10 @@ export function FeedbackGate({
   testSession?: boolean;
 }) {
   const { data: session, isPending } = authClient.useSession();
-  const signedIn = testSession || (!isPending && !!session);
+  // Off on print pages: the PDF maker's headless browser opens them as the
+  // member, and a report dialog has no place on a sheet.
+  const printing = isPrintPath(usePathname());
+  const signedIn = !printing && (testSession || (!isPending && !!session));
   const [open, setOpen] = React.useState(false);
   const [prefill, setPrefill] = React.useState("");
   const [kind, setKind] = React.useState<FeedbackKind>("bug");
