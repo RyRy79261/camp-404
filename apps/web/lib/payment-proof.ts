@@ -2,6 +2,7 @@ import "server-only";
 
 import { del, list } from "@vercel/blob";
 import { PROOF_TYPES } from "./dues-copy";
+import { stripImageMetadata } from "./image-metadata";
 
 // Proof-of-payment files (#240). Private blobs under `payment-proofs/<member
 // id>/`, never handed out by their own address: /api/payment-proof streams
@@ -36,6 +37,20 @@ export function proofBytesMatch(type: string, head: Uint8Array): boolean {
     default:
       return false;
   }
+}
+
+/**
+ * The bytes to store for a proof or a receipt: a PDF as it came, a photo
+ * without its EXIF, XMP and comments (lib/image-metadata.ts), so a phone's GPS
+ * position does not reach the Finance team's store. Null when the first bytes
+ * are not what the type says, or the photo is not well formed.
+ */
+export function proofBytesToStore(
+  type: string,
+  bytes: Uint8Array,
+): Uint8Array | null {
+  if (!proofBytesMatch(type, bytes.subarray(0, 16))) return null;
+  return type === "application/pdf" ? bytes : stripImageMetadata(type, bytes);
 }
 
 /** The file extension for a proof type the upload takes, or null. */

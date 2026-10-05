@@ -1,5 +1,4 @@
 import type { JSONContent } from "@tiptap/react";
-import { StarterKit } from "@tiptap/starter-kit";
 import { parseInline, serializeInline, type InlineRun } from "@camp404/types";
 
 // The WYSIWYG editor's "paragraphs" mode: words kept as a list of paragraphs
@@ -13,24 +12,12 @@ import { parseInline, serializeInline, type InlineRun } from "@camp404/types";
 //
 // The editor's value in this mode is the paragraphs joined by a blank line;
 // `paragraphsFromValue` splits it back.
-
-export const PARAGRAPH_EDITOR_EXTENSIONS = [
-  StarterKit.configure({
-    heading: false,
-    bulletList: false,
-    orderedList: false,
-    listItem: false,
-    listKeymap: false,
-    blockquote: false,
-    code: false,
-    codeBlock: false,
-    horizontalRule: false,
-    hardBreak: false,
-    strike: false,
-    underline: false,
-    link: false,
-  }),
-];
+//
+// No editor code is imported here (only a type): the join-site words, About
+// and every MarkdownField's preview read paragraphs through this file, and
+// none of them should download Tiptap for it. The editor's extensions for
+// this mode are PARAGRAPH_EDITOR_EXTENSIONS in
+// components/guide/markdown-extensions.ts.
 
 const BREAK = "\n\n";
 

@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
+import { BUILDER_IMAGE_UPLOAD, downscaleForUpload } from "@/lib/image";
 
 // "Upload a picture" for an image block or an option picture. Posts the file to
 // Camp 404's builder image route rather than AB's FileUpload: the route checks
@@ -10,6 +11,11 @@ import { Button } from "@camp404/ui/components/button";
 // app's own store, which is the only place a published image may come from
 // (`isAllowedBuilderImageUrl`). Hands back the link the block stores. A Button
 // over a hidden file input, like the avatar uploader.
+//
+// The picture is shrunk to 1600 px and re-encoded as WebP in the browser
+// first (lib/image.ts): a phone photo arrives at a fraction of its size and
+// without its EXIF, so the GPS position it was taken at never reaches the
+// members who see the questionnaire.
 
 export function ImageUploadButton({
   questionnaireKey,
@@ -36,7 +42,7 @@ export function ImageUploadButton({
     setError(null);
     try {
       const form = new FormData();
-      form.append("image", file);
+      form.append("image", await downscaleForUpload(file, BUILDER_IMAGE_UPLOAD));
       const res = await fetch(
         `/api/uploads/builder-image?${new URLSearchParams({ questionnaire: questionnaireKey })}`,
         { method: "POST", body: form },

@@ -3,7 +3,7 @@
 // PURE: no I/O, no DOM, no parser dependency — a deliberate strip, like
 // AfrikaBurn's `apps/org/components/bulletins/preview-text.ts`, rather than a
 // second markdown implementation. The real rendering is react-markdown behind
-// rehype-sanitize (apps/web/components/announcements/markdown-body.tsx); this
+// rehype-sanitize (packages/ui/src/components/markdown-body.tsx); this
 // only has to read cleanly as prose.
 //
 // WHY IT EXISTS: a captain writes an announcement in markdown, and the app
@@ -228,7 +228,7 @@ const RULES: readonly [RegExp, string][] = [
  * That is the point rather than a cost: the same body is parsed as markdown by
  * the renderer, so the page shows it as a list or an italic too, and the two
  * readings agree. What must never diverge is this function and
- * `apps/web/components/announcements/markdown-body.tsx`.
+ * `packages/ui/src/components/markdown-body.tsx`.
  */
 export function plainPreview(markdown: string, max?: number): string {
   const parked: string[] = [];

@@ -3,12 +3,10 @@ import { Printer } from "lucide-react";
 import { canRunLounge, loungeDayOf, loungeDays } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { MarkdownBody } from "@/components/announcements/markdown-body";
+import { MarkdownBody } from "@camp404/ui/components/markdown-body";
 import { EventGuide } from "@/components/lounge/event-guide";
-import {
-  MusicNoteButton,
-  OfferButton,
-} from "@/components/lounge/lounge-controls";
+import { OfferButton } from "@/components/lounge/lounge-controls";
+import { MusicNoteButton } from "@/components/lounge/music-note-button";
 import { LoungeCard, LoungeCardHeader } from "@/components/lounge/lounge-parts";
 import { LoungeTabs, type LoungeTab } from "@/components/lounge/lounge-tabs";
 import { SearchFocus } from "@/components/search/search-focus";

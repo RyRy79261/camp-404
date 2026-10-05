@@ -30,9 +30,15 @@ describe("formatRelativeTime", () => {
   it("renders days", () => {
     expect(formatRelativeTime(ago(2 * 86_400_000), now)).toBe("2d ago");
   });
-  it("falls back to a locale date past a week", () => {
-    const old = ago(30 * 86_400_000);
-    expect(formatRelativeTime(old, now)).toBe(old.toLocaleDateString());
+  it("falls back to the date past a week, on the camp's clock", () => {
+    // 22:30 UTC on 10 Mar is 00:30 on 11 Mar in South Africa: a server in UTC
+    // and a browser in New York both say 11 Mar, as the camp does.
+    expect(
+      formatRelativeTime(
+        new Date("2026-03-10T22:30:00Z"),
+        new Date("2026-04-20T12:00:00Z"),
+      ),
+    ).toBe("11 Mar 2026");
   });
   it("accepts an ISO string", () => {
     expect(formatRelativeTime(ago(30_000).toISOString(), now)).toBe("Just now");

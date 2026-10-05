@@ -1,12 +1,24 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { Eye, PenLine } from "lucide-react";
 import { SegmentedControl } from "@camp404/ui/components/segmented-control";
 import { cn } from "@camp404/ui/lib/utils";
-import { MarkdownBody } from "@/components/announcements/markdown-body";
+import { MarkdownBody } from "@camp404/ui/components/markdown-body";
 import { InlineParagraphsValue } from "./inline-text";
-import { MarkdownEditor } from "@/components/guide/markdown-editor";
+
+// The editor (Tiptap and ProseMirror, the heaviest code a form here carries)
+// is fetched only when a field is drawn, never with the module: pages that
+// import a form holding a MarkdownField but show it only in a dialog (the
+// Lounge's music note) or not at all no longer download it. It has nothing to
+// render on the server anyway (`immediatelyRender: false`), so the empty box
+// below stands in for the moment it takes to arrive.
+const MarkdownEditor = dynamic(
+  () =>
+    import("@/components/guide/markdown-editor").then((m) => m.MarkdownEditor),
+  { ssr: false, loading: () => <div aria-hidden className="flex-1" /> },
+);
 
 // One long-text field written in the WYSIWYG Markdown editor with its live
 // preview (owner, 2026-10-01: long text is a WYSIWYG Markdown editor with a

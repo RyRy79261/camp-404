@@ -8,8 +8,11 @@ import { MarkdownBody } from "@camp404/ui/components/markdown-body";
 // the Survival Guide's public site renders through the same safety boundary
 // (#250). This file keeps what only the app's composers use: the hint under a
 // body field and the live preview.
-
-export { MarkdownBody };
+//
+// Import the renderer from @camp404/ui, never through this file. This one is
+// a client module, so a server page that took MarkdownBody from here would
+// send react-markdown and the whole remark/rehype stack to the browser, where
+// a page that only shows the words renders them on the server for nothing.
 
 /**
  * What a composer tells the captain, and what it shows them. Both composers

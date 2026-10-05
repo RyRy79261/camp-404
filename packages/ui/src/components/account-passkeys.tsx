@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Fingerprint, Trash2 } from "lucide-react";
+import { CAMP_TIME_ZONE } from "@camp404/core";
 import { Badge } from "./badge";
 import { Button } from "./button";
 import {
@@ -43,15 +44,20 @@ export interface AccountPasskeysProps {
   onChanged?: () => void;
 }
 
+// On the camp's clock (CAMP_TIME_ZONE), so the server's render and the
+// browser's give the same day.
+const ADDED = new Intl.DateTimeFormat("en-ZA", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: CAMP_TIME_ZONE,
+});
+
 function formatDate(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return ADDED.format(d);
 }
 
 export function AccountPasskeys({

@@ -55,6 +55,7 @@ describe("ClaimDialog", () => {
         files: [new File(["x"], "slip.jpg", { type: "image/jpeg" })],
       },
     });
+    await screen.findByText(/1 of 5 files/);
     fireEvent.click(screen.getByRole("button", { name: "Send my claim" }));
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
