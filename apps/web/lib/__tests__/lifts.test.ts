@@ -2,7 +2,7 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as schema from "@camp404/db/schema";
-import { addCarRider } from "@camp404/db/cars";
+import { addRider } from "@camp404/db/transport";
 import { useTestDb } from "../../../../packages/db/src/__tests__/_harness";
 import {
   makeDriverProfile,
@@ -84,7 +84,7 @@ describe("getMyLift: the database and the test store agree", () => {
     });
     const walker = await makeUser(db, { approvalStatus: "approved" });
     for (const rider of [ren, sam]) {
-      await addCarRider({
+      await addRider({
         driverUserId: ada.id,
         memberUserId: rider.id,
         actorId: ada.id,
@@ -127,7 +127,7 @@ describe("getMyLift: the database and the test store agree", () => {
       displayName: "Ren",
       approvalStatus: "approved",
     });
-    await addCarRider({
+    await addRider({
       driverUserId: ada.id,
       memberUserId: ren.id,
       actorId: ada.id,

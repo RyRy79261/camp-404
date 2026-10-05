@@ -1,6 +1,6 @@
 # MCP Tooling Proposal
 
-Status (checked 2026-09-29): largely built, in `apps/web/lib/mcp/` and `app/api/mcp/`; the "Status" section near the end says which tools exist. [CORRECTION 2026-09-29] Sign-in is self-hosted Better Auth (#226), not Neon Auth: `@neondatabase/auth` and `apps/web/lib/neon-auth.ts` are gone, and the authorize route reads the session with `getAuthenticatedUser`. Tools are registered in `lib/mcp/server.ts`, not `tools/register.ts`.
+Status (checked 2026-10-04): built, and since the owner's ruling of 2026-10-04 held to the website's own rules (see "Same access as the website" below). Earlier status (2026-09-29): largely built, in `apps/web/lib/mcp/` and `app/api/mcp/`; the "Status" section near the end says which tools exist. [CORRECTION 2026-09-29] Sign-in is self-hosted Better Auth (#226), not Neon Auth: `@neondatabase/auth` and `apps/web/lib/neon-auth.ts` are gone, and the authorize route reads the session with `getAuthenticatedUser`. Tools are registered in `lib/mcp/server.ts`, not `tools/register.ts`.
 
 > Connector design for letting Camp 404 members open Claude.ai (or any MCP
 > client) and chat against their camp data. Scope is full read + write, gated
@@ -23,6 +23,53 @@ read + write tools scoped to what that user can do in the web app.
 
 Non-public project, friends-only, no POPIA-strict wall — but ID documents
 (passport / SA ID / EFT) are gated behind a per-user opt-in.
+
+## Same access as the website (owner, 2026-10-04)
+
+The connector acts as the signed-in person with exactly their access on the
+website, never more, and takes data out the way the website does.
+
+- **One list of who may call what.** `apps/web/lib/mcp/capabilities.ts`
+  (`TOOL_CAPABILITIES`) gives every tool an area, a gate and a one-line
+  summary. A gate is the website's predicate on the caller's rung
+  (`scope.viewerRank`, from `deriveViewerRank`: member < team lead < captain,
+  team lead global) and led teams (`canManageMoney`, `canEditTransport`, …).
+  `runTool` refuses a call its gate does not allow, in the gate's sentence;
+  `withCapabilities` (lib/mcp/server.ts) refuses to register a tool with no
+  entry and starts each description with `Who: …`; `what_can_i_do` answers
+  from the same entries. Finer rules (whose claim, which car, which chapter)
+  stay in the database writes, which re-read the actor in their transaction.
+- **Explainer.** The server's `instructions` (`SERVER_INSTRUCTIONS`, returned
+  at initialize) say what the camp is, the ladder, the privacy and money
+  rules, that some things are website-only and why, and to call
+  `what_can_i_do` first. `what_can_i_do` returns the person's rank, the teams
+  they lead, area by area the tools they may call, and what they may do only
+  on the website, with the page's full address (`WEBSITE_ONLY`).
+- **Listing.** Every tool is listed to everyone, its description saying who may
+  use it; a client reads the list once per connection, so a list hidden per
+  person would go stale when someone is made a lead or a captain, and a hidden
+  tool cannot explain a refusal.
+- **Website-only** (never tools): approving or rejecting members, promotions,
+  rank; sends to many (announcements, questionnaire send / publish / close /
+  remind, car messages); moving money (payments, charges, refunds, settle-up,
+  fee tiers, gear-rental charging, marking claims paid or reconciled, team
+  budgets); sending recipes to Claude; the guide's public sections and
+  members-only marks; deletes, archives, year rollover, camp settings; making
+  invite codes; uploads.
+- **Taking data out.** `list_users` lists whom the roster lists (no declined
+  sign-up for a non-captain) with no safety data and no ID or bank numbers for
+  anyone. `get_user` is the member panel: a team lead or captain also gets
+  emergency contacts, each read of someone else's recorded after the
+  response.
+- **No ID numbers or bank details, for anyone** (owner, 2026-10-05: "The
+  agents won't need any access to that kind of information."). No tool reads
+  or writes an ALWAYS_PRIVATE value (`packages/core/src/privacy.ts`): ID /
+  passport numbers and bank or account details, the person's own included.
+  `update_my_burner_profile` refuses an `id.number` answer, and the claim read
+  behind `list_reimbursements` does not select the account at all. They are on
+  the website's audited pages for those who may see them; `what_can_i_do`
+  links there. `no-private-fields.test.ts` calls every tool, as a captain and
+  as the data's owner, and fails if any answer carries one.
 
 ## Auth foundation
 
@@ -83,7 +130,14 @@ type McpScope = {
 };
 ```
 
-Three tiers:
+[CORRECTION 2026-10-04] `McpScope` also carries `viewerRank`, and there are no
+per-team "tiers": the rung is the website's global ladder (a lead of any team
+is a team lead everywhere), and what a lead may do with a given team is the
+website's own predicate (`canManageMoney`, `canEditGuideChapter`,
+`canApproveClaim`, …). The per-team helpers that once lived in `scope.ts`
+(`canReadTeamOps`, `canWriteTeam`, `canApproveCrossTeam`, `canAdmin`) are gone.
+
+Three tiers (original proposal):
 
 | Tier | Scope |
 |---|---|
@@ -92,6 +146,13 @@ Three tiers:
 | **captain** | full read + write across the schema |
 
 ## Consent gate (ID documents only)
+
+[CORRECTION 2026-10-05] Superseded: the connector returns no ID numbers or
+bank details to anyone (see "Same access as the website"), so the consent flag
+gates nothing and its tools (`get_my_ai_consent`, `set_my_ai_consent`) and
+`lib/mcp/consent.ts` are gone. The `users.ai_data_consent` columns are dead
+(only erasure still clears them); dropping them is left for a later PR. The
+section below is the original design.
 
 `users.aiDataConsent` is opt-out by default. It gates **only** these fields
 when the subject is not the caller:
@@ -108,6 +169,14 @@ With consent: captain-only, decrypted at the boundary using the same
 Self always sees own data including encrypted fields, regardless of the
 flag.
 
+[CORRECTION 2026-10-04] Nobody else's `eft_details` (bank details on the member
+row) is returned at all: the website shows them to no one. A captain reads an
+ID number only with `get_member_id_number` (one member, recorded first), and
+the Finance team a claim's bank details only with `get_claim_bank_details`;
+both still need the subject's consent. The flag has no website screen (only
+`set_my_ai_consent` sets it), so it is kept as the safer extra gate until the
+owner decides.
+
 Everything else — phone, email, emergency contacts, dietary, burner
 profile, driver/vehicle details, skills, history — is freely visible to
 the appropriate tier with no consent gate.
@@ -121,20 +190,20 @@ the appropriate tier with no consent gate.
 | Tool | R/W | Tier | Notes |
 |---|---|---|---|
 | `whoami` | R | M | returns scope + display name + required actions count |
-| `list_my_required_actions` | R | M | own pending/blocking rows |
-| `complete_acknowledgement(actionKey)` | W | M | only `type=acknowledgement` |
-| `get_my_ai_consent` | R | M | `{ enabled, since }` |
-| `set_my_ai_consent(enabled)` | W | M | writes flag + timestamp + audit |
+| `list_my_required_actions` | R | M | own pending/blocking rows, and [2026-10-04] the open optional questionnaires (#347), marked optional |
+| `what_can_i_do` | R | M | [2026-10-04] rank, led teams, tools by area, website-only actions with links |
+| `get_my_ai_consent` | R | M | `{ enabled, since }` [CORRECTION 2026-10-05: removed] |
+| `set_my_ai_consent(enabled)` | W | M | writes flag + timestamp + audit [CORRECTION 2026-10-05: removed] |
 
 ### Profile (self only)
 
 | Tool | R/W | Tier |
 |---|---|---|
 | `get_my_burner_profile` / `update_my_burner_profile` | R/W | M |
-| `get_my_dietary_requirements` / `update_my_dietary_requirements` | R/W | M |
+| `get_my_dietary_requirements` / `update_my_dietary_requirements` | R/W | M — [CORRECTION 2026-10-04] the #245 pick-list (`saveMyDietary`), which the meal plan's allergy check reads |
 | `get_my_driver_profile` / `update_my_driver_profile` | R/W | M |
 | `get_my_emergency_contacts` / `update_my_emergency_contacts` | R/W | M |
-| `get_my_id_documents` / `update_my_id_documents` | R/W | M | passport / SA ID, decrypted for self |
+| `get_my_id_documents` / `update_my_id_documents` | R/W | M — passport / SA ID, decrypted for self [CORRECTION 2026-10-05: removed; no ID numbers through the connector] |
 
 ### People
 
@@ -142,6 +211,7 @@ the appropriate tier with no consent gate.
 |---|---|---|---|
 | `list_users(filter)` | R | M | directory fields for all + ID docs only for consenting subjects + captain |
 | `get_user(id)` | R | M / L / C | scope determines field set; ID docs require consent + captain |
+| `get_member_id_number(id)` | R | C | [2026-10-04] one ID number, audited first [CORRECTION 2026-10-05: removed] |
 | `set_user_rank` / `assign_team_membership` | W | C | |
 
 ### Teams
@@ -149,7 +219,7 @@ the appropriate tier with no consent gate.
 | Tool | R/W | Tier |
 |---|---|---|
 | `get_team_budget(team)` | R | M (any) |
-| `set_team_budget(team, ...)` | W | lead of team + C |
+| `set_team_budget(team, ...)` | W | [CORRECTION 2026-10-04] removed: website-only (was lead of team + C) |
 
 [CORRECTION 2026-09-30] `set_team_budget` is for captains and Finance leads
 only (#242, owner: one budget per team, set by Finance); a team's own lead
@@ -192,6 +262,12 @@ action that runs through the captain's web UI.
 | `list_documents(filter)` / `get_document(slug)` | R | M (published); author/team L/C (drafts) |
 | `create_document` / `update_document` / `publish_document` | W | author OR team L of doc's team OR C |
 
+[CORRECTION 2026-10-04] `create_document` takes only the guide's topics and
+can start a duty card, validated as the editor validates it;
+`publish_document` publishes only the version the writer read
+(`expectedVersion`); a chapter in a public section also goes on
+survival-guide.camp-404.com, with members-only parts kept in the app.
+
 ### Reimbursements
 
 | Tool | R/W | Tier | Notes |
@@ -200,7 +276,8 @@ action that runs through the captain's web UI.
 | `list_my_reimbursements` | R | M | own, decrypted |
 | `list_reimbursements(filter)` | R | L (own team, redacted) / C (all, decrypted) | |
 | `approve_reimbursement` / `reject_reimbursement` | W | team L of claim's team OR C | per existing routing |
-| `mark_paid` / `mark_reconciled` | W | C | |
+| `mark_paid` / `mark_reconciled` | W | C | [CORRECTION 2026-10-04] removed: website-only |
+| `get_claim_bank_details(claimId)` | R | captain or Finance lead | [2026-10-04] one claim's bank details [CORRECTION 2026-10-05: removed] |
 
 [CORRECTION 2026-09-30] The claim tools as built (#242):
 `submit_reimbursement` was removed, because a claim needs private receipt
@@ -210,7 +287,9 @@ a team lead their teams' claims, and captains and Finance leads every claim;
 another member's bank details come back decrypted only to captains and
 Finance leads, and only when that member's AI data consent is on. The paying
 tools are `mark_reimbursement_paid` and `mark_reimbursement_reconciled`, for
-captains and Finance leads.
+captains and Finance leads. [CORRECTION 2026-10-04] Both are removed, and so
+is `set_team_budget`: moving money is website-only. `list_reimbursements`
+returns no bank details to anyone.
 
 ### Broadcasts / inbox (read-only)
 
@@ -258,6 +337,15 @@ agent. The `broadcasts` table is read-only via MCP.
 | `get_driver_profile(userId)` | R | self (full) + C (full) + M (vehicle / seats / lift offer only) |
 | `list_car_members(driverUserId)` | R | M |
 | `add_car_member` / `remove_car_member` | W | driver of own car + C |
+
+[CORRECTION 2026-10-04] As built, on the Transport page's rules
+(`@camp404/db/transport`): `list_drivers` (every member: the cars as the page
+shows them), `list_car_riders`, `get_my_lift`, `add_car_rider` (the car's
+driver, a captain or a Transport & Logistics lead; refuses a second seat, a
+driver as a rider and a full car) and `remove_car_rider` (the same, and a rider
+may leave). `update_my_driver_profile` never sets seats below the riders
+already in. The old `@camp404/db/cars` seat functions are gone; that module
+only answers "my lift".
 
 ### Admin / audit
 

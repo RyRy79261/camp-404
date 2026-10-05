@@ -531,13 +531,15 @@ export async function reconcileClaim(input: {
 
 // --- The Claude connector's review list ------------------------------------------
 
+/**
+ * A claim as the connector reads it. Never its bank details, not even as
+ * ciphertext (owner, 2026-10-05: "The agents won't need any access to that
+ * kind of information"); those are read on the Finance page only.
+ */
 export interface ReimbursementReviewRow extends ClaimForApproval {
-  /** The submitter's AI data consent: gates a decrypted account for anyone else. */
-  submitterAiDataConsent: boolean;
   cycle: number;
   status: ClaimStatus;
   accountType: ClaimAccountType;
-  accountDetailsEncrypted: string;
   decisionNote: string | null;
   approverId: string | null;
   approvedAt: Date | null;
@@ -580,14 +582,12 @@ export async function listReimbursementsForReview(
       team: r.team,
       submitterId: r.submitterId,
       submitterName: submitter.displayName,
-      submitterAiDataConsent: submitter.aiDataConsent,
       description: r.description,
       amountCents: r.amountCents,
       spentOn: r.spentOn,
       createdAt: r.createdAt,
       status: r.status,
       accountType: r.accountType,
-      accountDetailsEncrypted: r.accountDetailsEncrypted,
       decisionNote: r.decisionNote,
       approverId: r.approverId,
       approvedAt: r.approvedAt,
@@ -601,7 +601,6 @@ export async function listReimbursementsForReview(
   const files = await filesFor(rows.map((row) => row.id));
   return rows.map((row) => ({
     ...row,
-    submitterAiDataConsent: row.submitterAiDataConsent ?? false,
     receiptCount: files.get(row.id)?.length ?? 0,
   }));
 }

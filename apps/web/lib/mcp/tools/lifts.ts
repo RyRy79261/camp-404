@@ -1,53 +1,66 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { getMyLift } from "../../lifts";
 import {
-  addCarRider,
-  listCarRiders,
-  listDrivers,
-  removeCarRider,
-  type AddRiderResult,
-} from "@camp404/db/cars";
-import type { McpScope } from "../scope";
-import { deny, runTool, ToolError, truncateList } from "../tool-utils";
+  addRider,
+  getTransportBoard,
+  removeRider,
+  type TransportCar,
+} from "../../transport";
+import { notFound, runTool, ToolError, truncateList } from "../tool-utils";
 
-// Lifts over MCP (docs/mcp-tooling-proposal.md phase 8), for THIS YEAR.
-// Driver details are captain-read in the field-access list, so the driver
-// list is a captain's. A driver sees and changes the riders in their own car;
-// a captain any car. The seat limit is the db module's.
+// Transport over MCP, on the Transport page's rules (#270), for THIS YEAR.
+//
+//  - Every approved member reads the cars as the page shows them: the driver,
+//    the car, where it leaves from, the seats and who rides (no phone,
+//    registration or travel dates of anyone else's car).
+//  - Seats are written by the same @camp404/db/transport functions the page
+//    calls. Each re-reads the actor's rank and led teams inside its own
+//    transaction and asks @camp404/core (canManageCar, canRemoveRider): the
+//    car's driver, a captain or a Transport & Logistics lead may seat someone;
+//    a rider may also leave. They refuse a second seat (ALREADY_SEATED), a
+//    driver as a rider (IS_DRIVING) and a full car, in the page's own words.
+//    Nothing here passes a rank or a team list.
+//  - Lift requests, trailers and the car message stay on the page for now.
 
 const UserId = z.string().uuid();
 
-const REFUSALS: Record<
-  Exclude<AddRiderResult, { ok: true }>["reason"],
-  string
-> = {
-  not_a_driver: "That member isn't driving this year.",
-  own_car: "A driver can't ride in their own car.",
-  not_a_member: "That member isn't an approved camp member.",
-  car_full: "That car is full: every seat offered is taken.",
-  already_in_this_car: "They are already in that car.",
-};
+function presentCar(car: TransportCar) {
+  return {
+    driverUserId: car.driverUserId,
+    driverName: car.driverName,
+    vehicle: car.vehicle,
+    departureCity: car.departureCity,
+    seatsOffered: car.seatsOffered,
+    seatsTaken: car.riders.length,
+    canTow: car.canTow,
+    riders: car.riders,
+    trailer: car.trailer,
+  };
+}
 
-/** The car this caller may manage: their own, or any for a captain. */
-function carFor(scope: McpScope, driverUserId: string | undefined): string {
-  const driver = driverUserId ?? scope.campUserId;
-  if (driver === scope.campUserId) {
-    if (!scope.isDriver && !scope.isCaptain) {
-      deny("You aren't driving this year.");
-    }
-    return driver;
-  }
-  if (!scope.isCaptain) deny("Only a captain can manage someone else's car.");
-  return driver;
+async function carOf(driverUserId: string) {
+  const { cars } = await getTransportBoard();
+  const car = cars.find((c) => c.driverUserId === driverUserId);
+  if (!car) notFound("That person isn't driving this year.");
+  return presentCar(car);
+}
+
+/** The car a member rides in this year, from the board, or null. */
+async function carRiddenBy(memberUserId: string) {
+  const { cars } = await getTransportBoard();
+  return (
+    cars.find((c) => c.riders.some((r) => r.userId === memberUserId)) ?? null
+  );
 }
 
 export function registerLiftTools(server: McpServer): void {
   server.registerTool(
     "list_drivers",
     {
-      title: "List this year's drivers",
+      title: "List this year's cars",
       description:
-        "Captain only. Everyone driving this year, with vehicle, seats offered, departure city, times and how many riders they have.",
+        "Every car driving this year, as the Transport page shows it to every member: driver, car, where it leaves from, seats offered and taken, who rides, and its trailer. No phone numbers, registrations or travel dates.",
       inputSchema: {},
     },
     async (_args, extra) =>
@@ -55,9 +68,9 @@ export function registerLiftTools(server: McpServer): void {
         toolName: "list_drivers",
         extra,
         argsForAudit: null,
-        handler: async ({ scope }) => {
-          if (!scope.isCaptain) deny("Only a captain can see the drivers.");
-          return truncateList(await listDrivers());
+        handler: async () => {
+          const { cars } = await getTransportBoard();
+          return truncateList(cars.map(presentCar));
         },
       }),
   );
@@ -67,7 +80,7 @@ export function registerLiftTools(server: McpServer): void {
     {
       title: "List the riders in a car",
       description:
-        "The riders in a driver's car this year. Leave driverUserId out for your own car. A captain may read any car.",
+        "Who rides in one car this year, as the Transport page shows it. Leave driverUserId out for the car you drive or ride in.",
       inputSchema: { driverUserId: UserId.optional() },
     },
     async (args, extra) =>
@@ -75,8 +88,29 @@ export function registerLiftTools(server: McpServer): void {
         toolName: "list_car_riders",
         extra,
         argsForAudit: args,
-        handler: async ({ scope }) =>
-          await listCarRiders(carFor(scope, args.driverUserId)),
+        handler: async ({ scope }) => {
+          if (args.driverUserId) return await carOf(args.driverUserId);
+          const riding = await carRiddenBy(scope.campUserId);
+          if (riding) return presentCar(riding);
+          return await carOf(scope.campUserId);
+        },
+      }),
+  );
+
+  server.registerTool(
+    "get_my_lift",
+    {
+      title: "My lift this year",
+      description:
+        "The car you drive this year (your riders, seats and travel), or the car you ride in (its driver, car and travel dates), or null when you have neither.",
+      inputSchema: {},
+    },
+    async (_args, extra) =>
+      runTool({
+        toolName: "get_my_lift",
+        extra,
+        argsForAudit: null,
+        handler: async ({ scope }) => await getMyLift(scope.campUserId),
       }),
   );
 
@@ -85,7 +119,7 @@ export function registerLiftTools(server: McpServer): void {
     {
       title: "Put a member in a car",
       description:
-        "Puts an approved member in a driver's car this year. Leave driverUserId out for your own car; a captain may fill any car. Refused when every seat offered is taken.",
+        "Seats an approved member in a car this year. The car's driver may fill their own car (leave driverUserId out); a captain or a Transport & Logistics lead any car. Refused when the car is full, when the member already has a seat in a car, or when they drive their own car this year.",
       inputSchema: { memberUserId: UserId, driverUserId: UserId.optional() },
     },
     async (args, extra) =>
@@ -94,14 +128,14 @@ export function registerLiftTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async ({ scope }) => {
-          const driverUserId = carFor(scope, args.driverUserId);
-          const result = await addCarRider({
+          const driverUserId = args.driverUserId ?? scope.campUserId;
+          const result = await addRider({
+            actorId: scope.campUserId,
             driverUserId,
             memberUserId: args.memberUserId,
-            actorId: scope.campUserId,
           });
-          if (!result.ok) throw new ToolError(REFUSALS[result.reason]);
-          return { driverUserId, riders: await listCarRiders(driverUserId) };
+          if (!result.ok) throw new ToolError(result.error);
+          return await carOf(driverUserId);
         },
       }),
   );
@@ -111,8 +145,11 @@ export function registerLiftTools(server: McpServer): void {
     {
       title: "Take a member out of a car",
       description:
-        "Takes a member out of a driver's car this year. Leave driverUserId out for your own car; a captain may change any car.",
-      inputSchema: { memberUserId: UserId, driverUserId: UserId.optional() },
+        "Takes someone out of a car this year. The car's driver, a captain or a Transport & Logistics lead may take anyone out; a rider may leave the car they ride in (leave memberUserId and driverUserId out to leave your own seat).",
+      inputSchema: {
+        memberUserId: UserId.optional(),
+        driverUserId: UserId.optional(),
+      },
     },
     async (args, extra) =>
       runTool({
@@ -120,14 +157,28 @@ export function registerLiftTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async ({ scope }) => {
-          const driverUserId = carFor(scope, args.driverUserId);
-          const removed = await removeCarRider({
-            driverUserId,
-            memberUserId: args.memberUserId,
+          const memberUserId = args.memberUserId ?? scope.campUserId;
+          let driverUserId = args.driverUserId;
+          if (!driverUserId) {
+            if (memberUserId === scope.campUserId) {
+              const riding = await carRiddenBy(memberUserId);
+              if (!riding) {
+                throw new ToolError(
+                  "You don't have a seat in a car this year.",
+                );
+              }
+              driverUserId = riding.driverUserId;
+            } else {
+              driverUserId = scope.campUserId;
+            }
+          }
+          const result = await removeRider({
             actorId: scope.campUserId,
+            driverUserId,
+            memberUserId,
           });
-          if (!removed) throw new ToolError("They aren't in that car.");
-          return { driverUserId, riders: await listCarRiders(driverUserId) };
+          if (!result.ok) throw new ToolError(result.error);
+          return await carOf(driverUserId);
         },
       }),
   );

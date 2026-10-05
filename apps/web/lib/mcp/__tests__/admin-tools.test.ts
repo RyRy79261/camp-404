@@ -16,7 +16,7 @@ const memberExists = { current: true };
 
 vi.mock("@camp404/db/mcp", () => ({
   getMcpScopeRows: vi.fn(async (id: string) => ({
-    user: { id, rank: rank.current, aiDataConsent: false },
+    user: { id, rank: rank.current },
     teamMemberships: [],
     driverIntent: false,
   })),

@@ -5,14 +5,29 @@ import { createHttpDb } from "@camp404/db";
 import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
 import type { AuditEvent } from "@camp404/db/audit";
-import { decryptField } from "@camp404/db/crypto";
-import { canReadMemberField } from "@camp404/core";
+import { canReadMemberField, safetyReadBasis } from "@camp404/core";
+import type { ViewerRank } from "@camp404/types";
 import { auditReadsAfterResponse } from "../../audit";
-import { canSeeIdDocuments } from "../consent";
+import { membersVisibleTo } from "../../camp-roster";
 import { notFound, runTool, truncateList } from "../tool-utils";
 
 const RankEnum = z.enum(schema.rankEnum.enumValues);
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
+
+// People over MCP, the way the website hands them out (owner, 2026-10-04):
+//
+//  - The roster (list_users) lists whom the roster page lists: a non-captain
+//    never sees a declined sign-up (membersVisibleTo, MEMBERS_SEE_REJECTED in
+//    lib/camp-roster.ts), and each column comes from canReadMemberField at the
+//    caller's real rung, team lead included. It carries no safety data and no
+//    ID or bank numbers for anyone: the website never lists those either.
+//  - One person (get_user) is the member panel: a team lead or a captain also
+//    reads their emergency contacts, and each such read of someone else is
+//    recorded, as resolveSafetyDataForViewer records it.
+//  - ID numbers and bank details never pass through the connector, for
+//    anyone, the member's own included (owner, 2026-10-05: "The agents won't
+//    need any access to that kind of information"). They are on the website's
+//    audited pages for those who may see them.
 
 export function registerPeopleTools(server: McpServer): void {
   server.registerTool(
@@ -20,7 +35,7 @@ export function registerPeopleTools(server: McpServer): void {
     {
       title: "List camp users",
       description:
-        "Camp-wide directory. Every user sees displayName, rank, team memberships, isLead status. Captain callers additionally see extended fields and (consent-permitting) ID documents.",
+        "The camp roster, as the roster page shows it to you: names, rank, this year's teams and leads, and whether someone is still waiting for approval. Captains also get the captain columns. Declined sign-ups are listed for captains only. No emergency contacts (read one person with get_user), and never ID numbers or bank details.",
       inputSchema: {
         team: TeamEnum.optional(),
         rank: RankEnum.optional(),
@@ -35,7 +50,10 @@ export function registerPeopleTools(server: McpServer): void {
         argsForAudit: args,
         handler: async ({ scope }) => {
           const db = createHttpDb();
-          let rows = await db.select().from(schema.users);
+          let rows = membersVisibleTo(
+            await db.select().from(schema.users),
+            scope.isCaptain,
+          );
           if (!args.includeSystem) rows = rows.filter((r) => !r.isSystem);
           if (args.rank) rows = rows.filter((r) => r.rank === args.rank);
 
@@ -45,10 +63,15 @@ export function registerPeopleTools(server: McpServer): void {
           const memberships = await db
             .select()
             .from(schema.teamMemberships)
-            .where(eq(schema.teamMemberships.cycle, await currentCycleNumber()));
+            .where(
+              eq(schema.teamMemberships.cycle, await currentCycleNumber()),
+            );
           const byUser = new Map<
             string,
-            { team: typeof schema.teamMemberships.$inferSelect.team; isLead: boolean }[]
+            {
+              team: typeof schema.teamMemberships.$inferSelect.team;
+              isLead: boolean;
+            }[]
           >();
           for (const m of memberships) {
             if (!byUser.has(m.userId)) byUser.set(m.userId, []);
@@ -59,21 +82,20 @@ export function registerPeopleTools(server: McpServer): void {
             .filter((r) => {
               if (!args.team && args.isLead === undefined) return true;
               const ms = byUser.get(r.id) ?? [];
-              if (args.team && !ms.some((m) => m.team === args.team)) return false;
-              if (args.isLead !== undefined && !ms.some((m) => m.isLead === args.isLead)) {
+              if (args.team && !ms.some((m) => m.team === args.team))
+                return false;
+              if (
+                args.isLead !== undefined &&
+                !ms.some((m) => m.isLead === args.isLead)
+              ) {
                 return false;
               }
               return true;
             })
-            .map((r) => shapeUser(r, byUser.get(r.id) ?? [], scope));
-
-          const listed = truncateList(shaped);
-          // The same trail the app leaves: one row per member whose private
-          // data this call returned.
-          auditReadsAfterResponse(
-            listed.rows.flatMap((user) => sensitiveReadEvents(user, scope)),
-          );
-          return listed;
+            .map((r) =>
+              shapeUser(r, byUser.get(r.id) ?? [], scope, { safety: false }),
+            );
+          return truncateList(shaped);
         },
       }),
   );
@@ -83,7 +105,7 @@ export function registerPeopleTools(server: McpServer): void {
     {
       title: "Get one user",
       description:
-        "Returns one user's full profile. Encrypted ID-document fields are only included when the caller is the subject, or a captain AND the subject has aiDataConsent = true.",
+        "One person, with the columns your rank may read: what the roster shows for a member; team leads and captains also get their emergency contacts (safety data: read it only when needed, and every read of someone else's is recorded with your name); captains also get the captain columns. Never an ID number or bank details. A non-captain can't open a declined sign-up.",
       inputSchema: { userId: z.string().uuid() },
     },
     async (args, extra) =>
@@ -98,7 +120,11 @@ export function registerPeopleTools(server: McpServer): void {
             .from(schema.users)
             .where(eq(schema.users.id, args.userId))
             .limit(1);
-          if (!row) notFound("No user with that id.");
+          // A declined sign-up is not on a non-captain's roster, so it is
+          // "no user" here too, never a refusal that confirms they applied.
+          if (!row || membersVisibleTo([row], scope.isCaptain).length === 0) {
+            notFound("No user with that id.");
+          }
           const memberships = await db
             .select({
               team: schema.teamMemberships.team,
@@ -111,7 +137,7 @@ export function registerPeopleTools(server: McpServer): void {
                 eq(schema.teamMemberships.cycle, await currentCycleNumber()),
               ),
             );
-          const user = shapeUser(row, memberships, scope);
+          const user = shapeUser(row, memberships, scope, { safety: true });
           auditReadsAfterResponse(sensitiveReadEvents(user, scope));
           return user;
         },
@@ -122,8 +148,8 @@ export function registerPeopleTools(server: McpServer): void {
 /**
  * The `users` columns these tools offer, in output order. Whether a caller gets
  * each one is `canReadMemberField` (the app's one field-access list), never a
- * rule written here. The ID documents are not in this list: they also need the
- * subject's consent, below.
+ * rule written here. The ID and bank columns (ALWAYS_PRIVATE) are not in this
+ * list and never will be: the connector has no path to them.
  */
 const USER_FIELDS = [
   "id",
@@ -132,6 +158,7 @@ const USER_FIELDS = [
   "isSystem",
   "sanitised",
   "lostCatNumber",
+  "approvalStatus",
   "membershipTier",
   "duesPaid",
   "duesPaidAt",
@@ -139,91 +166,70 @@ const USER_FIELDS = [
   "previousAfrikaburns",
   "previousBurningMans",
   "firstTime",
-  "emergencyContacts",
-  "aiDataConsent",
-  "aiDataConsentAt",
   "createdAt",
+] as const satisfies readonly (keyof typeof schema.users.$inferSelect)[];
+
+/** Safety columns: only on a one-person read, never in a list. */
+const SAFETY_FIELDS = [
+  "emergencyContacts",
 ] as const satisfies readonly (keyof typeof schema.users.$inferSelect)[];
 
 export function shapeUser(
   row: typeof schema.users.$inferSelect,
   memberships: { team: string; isLead: boolean }[],
-  scope: { campUserId: string; isCaptain: boolean },
-) {
-  // MCP knows captain or not, so a team lead reads here as a member. That is
-  // the narrower rung, so it can only withhold, never over-share.
+  scope: { campUserId: string; viewerRank: ViewerRank },
+  options: { safety: boolean },
+): Record<string, unknown> {
+  // The caller's real rung: a team lead reads what a team lead reads on the
+  // website (emergency contacts included), never less and never more.
   const viewer = {
-    rank: scope.isCaptain ? ("captain" as const) : ("camp_member" as const),
+    rank: scope.viewerRank,
     isSelf: row.id === scope.campUserId,
   };
-  const extended: Record<string, unknown> = {};
-  for (const field of USER_FIELDS) {
+  const shaped: Record<string, unknown> = {};
+  const fields = options.safety
+    ? [...USER_FIELDS, ...SAFETY_FIELDS]
+    : USER_FIELDS;
+  for (const field of fields) {
     if (canReadMemberField(viewer, `users.${field}`)) {
-      extended[field] = row[field];
+      shaped[field] = row[field];
     }
   }
   if (canReadMemberField(viewer, "teamMemberships.team")) {
-    extended.memberships = memberships;
+    shaped.memberships = memberships;
   }
   if (canReadMemberField(viewer, "teamMemberships.isLead")) {
-    extended.isLead = memberships.some((m) => m.isLead);
+    shaped.isLead = memberships.some((m) => m.isLead);
   }
-
-  if (
-    canSeeIdDocuments(scope, { id: row.id, aiDataConsent: row.aiDataConsent })
-  ) {
-    const passport = decryptField(row.passportEncrypted);
-    const saId = decryptField(row.saIdEncrypted);
-    const eft = decryptField(row.eftDetailsEncrypted);
-    return {
-      ...extended,
-      passport: passport.value,
-      saId: saId.value,
-      eft: eft.value,
-      // On file but undecryptable here — never report these as "not provided".
-      unreadableFields: [
-        ...(passport.state === "unreadable" ? ["passport"] : []),
-        ...(saId.state === "unreadable" ? ["saId"] : []),
-        ...(eft.state === "unreadable" ? ["eft"] : []),
-      ],
-    };
-  }
-  return extended;
+  return shaped;
 }
 
 /**
- * The audit rows one shaped user owes, the same ones the app writes when a
- * captain reads someone else's emergency contacts or ID. Only values actually
- * returned count, and a caller reading their own record owes none. Marked
- * `via: "mcp"` so the audit page can say the read went through Claude.
+ * The audit rows one shaped user owes: the website's emergency-contacts read
+ * record (`safety.emergency_contacts.view`, basis from safetyReadBasis) when
+ * contacts of someone else were returned. Marked `via: "mcp"` so the audit
+ * page can say the read went through Claude.
  */
 export function sensitiveReadEvents(
   user: Record<string, unknown>,
-  scope: { campUserId: string },
+  scope: { campUserId: string; viewerRank: ViewerRank },
 ): AuditEvent[] {
   const target = typeof user.id === "string" ? user.id : null;
   if (!target || target === scope.campUserId) return [];
-  const read = (action: AuditEvent["action"], extra = {}): AuditEvent => ({
-    actorId: scope.campUserId,
-    action,
-    target,
-    metadata: { basis: "captain", via: "mcp", ...extra },
-  });
-  const events: AuditEvent[] = [];
+  const basis = safetyReadBasis({ rank: scope.viewerRank, isSelf: false });
   if (
+    basis &&
     Array.isArray(user.emergencyContacts) &&
     user.emergencyContacts.length > 0
   ) {
-    events.push(read("safety.emergency_contacts.view"));
+    return [
+      {
+        actorId: scope.campUserId,
+        action: "safety.emergency_contacts.view",
+        target,
+        metadata: { basis, via: "mcp" },
+      },
+    ];
   }
-  if (typeof user.passport === "string") {
-    events.push(read("member.id_document.viewed", { idType: "passport" }));
-  }
-  if (typeof user.saId === "string") {
-    events.push(read("member.id_document.viewed", { idType: "sa_id" }));
-  }
-  if (typeof user.eft === "string") {
-    events.push(read("member.bank_details.viewed"));
-  }
-  return events;
+  return [];
 }

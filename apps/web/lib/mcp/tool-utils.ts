@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { appendMcpAuditLog } from "@camp404/db/mcp";
 import { getCampUserIdFromAuth } from "./auth";
+import { TOOL_CAPABILITIES } from "./capabilities";
 import { getMcpScope, type McpScope } from "./scope";
 
 /**
@@ -27,9 +28,12 @@ export interface ToolExtra {
  *   1. Pull camp user id from auth info; bail with 401-equivalent error
  *      if missing.
  *   2. Resolve the McpScope; bail if no camp profile exists.
- *   3. Run the handler under try/catch.
- *   4. Audit-log success or failure with duration + redacted args.
- *   5. Stringify the result into a CallToolResult.
+ *   3. Refuse, in the gate's own sentence, a caller the tool's entry in
+ *      TOOL_CAPABILITIES does not allow (the same entry what_can_i_do
+ *      reads, so the two cannot disagree).
+ *   4. Run the handler under try/catch.
+ *   5. Audit-log success or failure with duration + redacted args.
+ *   6. Stringify the result into a CallToolResult.
  *
  * Handlers may throw a {@link ToolError} for a controlled error reply
  * with a custom message; anything else gets wrapped as a generic
@@ -67,6 +71,11 @@ export async function runTool<T>(opts: {
   }
 
   try {
+    const capability = TOOL_CAPABILITIES[opts.toolName];
+    if (!capability) {
+      throw new Error(`MCP tool ${opts.toolName} has no capabilities entry`);
+    }
+    if (!capability.gate.allows(scope)) deny(capability.gate.refusal);
     const result = await opts.handler({ scope, clientId });
     await appendMcpAuditLog({
       campUserId,

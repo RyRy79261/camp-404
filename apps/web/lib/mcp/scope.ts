@@ -1,3 +1,5 @@
+import { deriveViewerRank } from "@camp404/core";
+import type { ViewerRank } from "@camp404/types";
 import { getMcpScopeRows, type McpScopeRows, type Team } from "@camp404/db/mcp";
 
 // Intentionally not `import "server-only"` — `resolveMcpScope` is a pure
@@ -11,20 +13,31 @@ import { getMcpScopeRows, type McpScopeRows, type Team } from "@camp404/db/mcp";
  * Resolved fresh on every tool invocation — no caps cached on the access
  * token, so a rank change or new team membership takes effect on the
  * next call rather than next reconnect.
+ *
+ * Who may do what is NOT decided here. The tools ask the same predicates the
+ * website asks (`./capabilities` for the rung, and @camp404/core's
+ * canManageMoney, canEditTransport, canEditGuideChapter, … for the rest),
+ * with `viewerRank` and `leadTeams` as their inputs.
  */
 export interface McpScope {
   campUserId: string;
   rank: "captain" | "member";
-  /** Teams this user leads (subset of `memberTeams`, plus `is_lead = true`). */
+  /**
+   * The rung on the website's one ladder, camp_member < team_lead < captain:
+   * `deriveViewerRank`, the function captain-gate.ts uses. Leading ANY team
+   * this year makes a member a team lead everywhere (the owner's global-lead
+   * ruling, AGENTS.md); which team they lead decides audiences, never
+   * clearance.
+   */
+  viewerRank: ViewerRank;
+  /** Teams this user leads THIS YEAR (subset of `memberTeams`). */
   leadTeams: Team[];
-  /** Every team this user belongs to. */
+  /** Every team this user belongs to this year. */
   memberTeams: Team[];
-  /** Driver intent flag — drives whether ride/lift tools are visible. */
+  /** Whether they intend to drive this year. */
   isDriver: boolean;
-  /** `rank === "captain"`. Captains carry god rights in-app. */
+  /** `rank === "captain"`. */
   isCaptain: boolean;
-  /** The subject's own AI data consent. Stored here for convenience. */
-  aiDataConsent: boolean;
 }
 
 /**
@@ -43,11 +56,11 @@ export function resolveMcpScope(rows: McpScopeRows): McpScope {
   return {
     campUserId: rows.user.id,
     rank: rows.user.rank,
+    viewerRank: deriveViewerRank(rows.user.rank, leadTeams.length > 0),
     leadTeams,
     memberTeams,
     isDriver: rows.driverIntent,
     isCaptain: rows.user.rank === "captain",
-    aiDataConsent: rows.user.aiDataConsent,
   };
 }
 
@@ -55,36 +68,10 @@ export function resolveMcpScope(rows: McpScopeRows): McpScope {
  * Reads the scope rows for `campUserId` and resolves the capability
  * snapshot. Returns `null` if the user row doesn't exist.
  */
-export async function getMcpScope(campUserId: string): Promise<McpScope | null> {
+export async function getMcpScope(
+  campUserId: string,
+): Promise<McpScope | null> {
   const rows = await getMcpScopeRows(campUserId);
   if (!rows) return null;
   return resolveMcpScope(rows);
-}
-
-// --- Capability predicates ------------------------------------------------
-// Per-domain checks that read the McpScope. Keeping them here (rather
-// than spread across tool handlers) means the matrix in
-// docs/mcp-tooling-proposal.md maps to one file you can grep.
-
-/** Captain reads everything. Otherwise team-lead reads of own team. */
-export function canReadTeamOps(scope: McpScope, team: Team): boolean {
-  if (scope.isCaptain) return true;
-  if (scope.memberTeams.includes(team)) return true;
-  return false;
-}
-
-/** Lead of `team` or captain. */
-export function canWriteTeam(scope: McpScope, team: Team): boolean {
-  if (scope.isCaptain) return true;
-  return scope.leadTeams.includes(team);
-}
-
-/** Any team lead OR captain. Used by cross-team approvers (inventory). */
-export function canApproveCrossTeam(scope: McpScope): boolean {
-  return scope.isCaptain || scope.leadTeams.length > 0;
-}
-
-/** Captain-only — admin surfaces (invite codes, audit log, etc.). */
-export function canAdmin(scope: McpScope): boolean {
-  return scope.isCaptain;
 }

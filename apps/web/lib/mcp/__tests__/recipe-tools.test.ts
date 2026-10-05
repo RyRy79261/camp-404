@@ -9,7 +9,7 @@ const MEMBER = "00000000-0000-4000-8000-0000000000cc";
 
 vi.mock("@camp404/db/mcp", () => ({
   getMcpScopeRows: vi.fn(async (id: string) => ({
-    user: { id, rank: "member", aiDataConsent: false },
+    user: { id, rank: "member" },
     teamMemberships: [],
     driverIntent: false,
   })),

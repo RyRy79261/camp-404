@@ -1,19 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { canManageMoney } from "@camp404/core";
 import * as schema from "@camp404/db/schema";
-import { decryptField } from "@camp404/db/crypto";
 import {
   decideClaim,
   listMyClaims,
   listReimbursementsForReview,
-  payClaim,
-  reconcileClaim,
   type ClaimResult,
-  type ReimbursementReviewRow,
   type ReimbursementTeam,
 } from "@camp404/db/reimbursements";
-import type { McpScope } from "../scope";
+import { GATES } from "../capabilities";
 import { deny, runTool, ToolError, truncateList } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
@@ -23,10 +18,14 @@ const StatusEnum = z.enum(schema.reimbursementStatusEnum.enumValues);
 // (My claims): it needs one or more receipt files, stored privately, which a
 // tool call cannot carry, so there is no submit tool. A member lists their
 // own; a lead of a team or a captain lists and decides the claims of that
-// team; the Finance team (captains and Finance leads) marks them paid or
-// reconciled. Every move is checked again inside the database's own
-// transaction (decideClaim, payClaim, reconcileClaim): the tool's checks here
-// only word a refusal early. Nobody moves their own claim.
+// team. Paying a claim back, marking it reconciled and setting budgets are
+// website-only (owner, 2026-10-04: money moves on the page). Every decision is
+// checked again inside the database's own transaction (decideClaim): the
+// tool's checks here only word a refusal early. Nobody decides their own claim.
+//
+// Bank details never pass through the connector, not even for the member's
+// own claim (owner, 2026-10-05: "The agents won't need any access to that kind
+// of information"). The Finance team reads them on the Finance page.
 
 export function registerReimbursementTools(server: McpServer): void {
   server.registerTool(
@@ -61,38 +60,6 @@ export function registerReimbursementTools(server: McpServer): void {
 
 // --- Review (team leads, captains, the Finance team) ---------------------------
 
-function keepsMoney(scope: McpScope): boolean {
-  return canManageMoney(
-    scope.isCaptain
-      ? "captain"
-      : scope.leadTeams.length > 0
-        ? "team_lead"
-        : "camp_member",
-    scope.leadTeams,
-  );
-}
-
-/**
- * The claim with its bank details only where the caller may see them: the
- * member themselves, or the Finance team when the member's AI data consent
- * is on (the connector's consent gate).
- */
-function presentForReview(scope: McpScope, row: ReimbursementReviewRow) {
-  const { accountDetailsEncrypted, submitterAiDataConsent, ...rest } = row;
-  const own = row.submitterId === scope.campUserId;
-  const mayRead = own || (keepsMoney(scope) && submitterAiDataConsent);
-  if (!mayRead) {
-    return { ...rest, accountDetails: null, accountDetailsWithheld: true };
-  }
-  const account = decryptField(accountDetailsEncrypted);
-  return {
-    ...rest,
-    accountDetails: account.value,
-    accountDetailsWithheld: false,
-    accountDetailsUnreadable: account.state === "unreadable",
-  };
-}
-
 type Move = {
   title: string;
   description: string;
@@ -104,7 +71,7 @@ const MOVES: Record<string, Move> = {
   approve_reimbursement: {
     title: "Approve a claim",
     description:
-      "A lead of the claim's team, or a captain, says yes to a waiting claim, at any amount. Nobody decides their own claim.",
+      "A lead of the claim's team, or a captain, says yes to a waiting claim, at any amount. Nobody decides their own claim. Paying it back is done on the website.",
     run: (claimId, actorId) =>
       decideClaim({ claimId, decision: "approved", actorId }),
     to: "approved",
@@ -117,20 +84,6 @@ const MOVES: Record<string, Move> = {
       decideClaim({ claimId, decision: "rejected", actorId }),
     to: "rejected",
   },
-  mark_reimbursement_paid: {
-    title: "Mark a claim paid",
-    description:
-      "A captain or a Finance lead marks an approved claim paid, after paying it back by bank transfer. Nobody pays their own claim.",
-    run: (claimId, actorId) => payClaim({ claimId, decision: "paid", actorId }),
-    to: "paid",
-  },
-  mark_reimbursement_reconciled: {
-    title: "Mark a claim reconciled",
-    description:
-      "A captain or a Finance lead marks a paid claim as matched to the bank statement.",
-    run: (claimId, actorId) => reconcileClaim({ claimId, actorId }),
-    to: "reconciled",
-  },
 };
 
 function registerReviewTools(server: McpServer): void {
@@ -139,7 +92,7 @@ function registerReviewTools(server: McpServer): void {
     {
       title: "List claims to review",
       description:
-        "A captain or a Finance lead gets every claim; a team lead gets the claims of teams they lead this year. Filter by status, or by team (\"general\" for old claims under no team). Amounts are whole rand cents. Someone else's bank details come back only for the Finance team, and only when that member's AI data consent is on.",
+        'A captain or a Finance lead gets every claim; a team lead gets the claims of teams they lead this year. Filter by status, or by team ("general" for old claims under no team). Amounts are whole rand cents. Never bank details: those are on the website\'s Finance page only.',
       inputSchema: {
         status: StatusEnum.optional(),
         team: z.union([TeamEnum, z.literal("general")]).optional(),
@@ -151,10 +104,7 @@ function registerReviewTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async ({ scope }) => {
-          const everything = scope.isCaptain || keepsMoney(scope);
-          if (!everything && scope.leadTeams.length === 0) {
-            deny("Only a captain or a team lead can review claims.");
-          }
+          const everything = scope.isCaptain || GATES.money.allows(scope);
           let teams: ReimbursementTeam[] | undefined;
           if (!everything) {
             if (args.team === "general") {
@@ -174,7 +124,7 @@ function registerReviewTools(server: McpServer): void {
             teams,
             generalOnly: args.team === "general",
           });
-          return truncateList(rows.map((row) => presentForReview(scope, row)));
+          return truncateList(rows);
         },
       }),
   );
