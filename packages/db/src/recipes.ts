@@ -2390,11 +2390,6 @@ function checkRecipe(recipe: unknown): KitchenRecipe {
 }
 
 /**
- * Add each line's ingredient to the catalogue by lower-cased name. A known
- * ingredient keeps its category; only an empty one is filled, as Noble
- * Notations keeps the category on its ingredient record.
- */
-/**
  * The catalogue rows a version writes: one per name (case-blind, the first
  * line's spelling and category), in name order rather than the recipe's. Two
  * versions saved at once that share ingredients then lock the catalogue rows
@@ -2418,16 +2413,27 @@ export function catalogueLines(recipe: Pick<KitchenRecipe, "ingredients">): {
     .map(([, line]) => line);
 }
 
+/**
+ * Add each line's ingredient to the catalogue by lower-cased name, in one
+ * statement (the catalogue is for the shopping list, #245; nothing reads it
+ * yet). A known ingredient keeps its category; only an empty one is filled,
+ * as Noble Notations keeps the category on its ingredient record. The lines
+ * are already one per name, so no row is touched twice.
+ */
 async function upsertIngredients(tx: Tx, recipe: KitchenRecipe): Promise<void> {
-  for (const { name, category } of catalogueLines(recipe)) {
-    await tx.execute(sql`
-      INSERT INTO ingredients (name, category)
-      VALUES (${name}, ${category})
-      ON CONFLICT (lower(name)) DO UPDATE SET
-        category = COALESCE(ingredients.category, EXCLUDED.category),
-        updated_at = now()
-    `);
-  }
+  const lines = catalogueLines(recipe);
+  if (lines.length === 0) return;
+  const values = sql.join(
+    lines.map(({ name, category }) => sql`(${name}, ${category})`),
+    sql`, `,
+  );
+  await tx.execute(sql`
+    INSERT INTO ingredients (name, category)
+    VALUES ${values}
+    ON CONFLICT (lower(name)) DO UPDATE SET
+      category = COALESCE(ingredients.category, EXCLUDED.category),
+      updated_at = now()
+  `);
 }
 
 /**
