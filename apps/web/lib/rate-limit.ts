@@ -123,6 +123,49 @@ export const rateLimiter: RateLimiter = {
 };
 
 /**
+ * The address a per-address limit counts against. One IPv6 user holds a whole
+ * /64 (often more), so counting single IPv6 addresses would give one person a
+ * fresh bucket on each of them: IPv6 counts by its first four groups. An
+ * IPv4-mapped IPv6 address counts as its IPv4 address; IPv4 counts as given.
+ * The other side: people behind one carrier NAT, or one IPv6 /64, share a
+ * bucket. Self-contained on purpose (no imports), so other limiters can share it.
+ */
+export function clientAddressKey(ip: string): string {
+  const address = ip.trim().toLowerCase().split("%")[0]!; // drop a zone id
+  if (!address.includes(":")) return address;
+  // Expand to eight groups. A dotted IPv4 tail (::ffff:192.0.2.1) is two.
+  const parts = address.split(":");
+  const tail = parts.at(-1)!;
+  if (tail.includes(".")) {
+    const octets = tail.split(".").map(Number);
+    parts.splice(
+      -1,
+      1,
+      ((octets[0]! << 8) | octets[1]!).toString(16),
+      ((octets[2]! << 8) | octets[3]!).toString(16),
+    );
+  }
+  const joined = parts.join(":");
+  const [head = "", rest] = joined.split("::");
+  const front = head ? head.split(":") : [];
+  const back = rest ? rest.split(":") : [];
+  const groups = (
+    rest === undefined
+      ? front
+      : [...front, ...Array(8 - front.length - back.length).fill("0"), ...back]
+  ).map((g) => Number.parseInt(g || "0", 16) || 0);
+  // IPv4-mapped (::ffff:a.b.c.d, in any spelling): the IPv4 address.
+  if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
+    const [hi = 0, lo = 0] = groups.slice(6);
+    return [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff].join(".");
+  }
+  return `${groups
+    .slice(0, 4)
+    .map((g) => g.toString(16))
+    .join(":")}::/64`;
+}
+
+/**
  * Best-effort IP extraction from a Next.js request. Takes anything with
  * `get`, so a server action can pass `await headers()` (a read-only bag).
  */

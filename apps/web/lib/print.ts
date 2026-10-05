@@ -16,6 +16,15 @@ export const PRINT_PDF_PATH = "/print/pdf";
 export const PRINT_ROOT = "/print/";
 
 /**
+ * Whether a path is a print page. The app-wide gates (notices, the report
+ * dialog) stay quiet there: the PDF maker's headless browser opens these
+ * pages as the member.
+ */
+export function isPrintPath(pathname: string | null): boolean {
+  return pathname === "/print" || !!pathname?.startsWith(PRINT_ROOT);
+}
+
+/**
  * The attribute the shell sets on the sheet. The PDF route makes a file only
  * when the page it opened has one, so a refusal or an error page never comes
  * back as a PDF.

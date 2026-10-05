@@ -1,6 +1,6 @@
 # join.camp-404.com — build brief
 
-Status: built as `apps/join` in #283 (2026-09-25). [CORRECTION 2026-09-29] Since #284 it is not static: it reads the database when `DATABASE_URL` is set (`getJoinSitePublic` in `@camp404/db/join-site`), and serves `DEFAULT_JOIN_DATA` (`lib/join-data.ts`) when it is not or the read fails. Captains edit its words and fee in the console's Join site program (`/captains/join-site`). Where this brief says `content.ts` holds the copy or the fee, the database now does.
+Status: built as `apps/join` in #283 (2026-09-25). [CORRECTION 2026-09-29] Since #284 it is not static: it reads the database when `DATABASE_URL` is set (`getJoinSitePublic` in `@camp404/db/join-site`), and serves `DEFAULT_JOIN_DATA` (`lib/join-data.ts`) when it is not or the read fails during the build (at runtime a failed read keeps the last good page, [CORRECTION 2026-10-05]). Captains edit its words and fee in the console's Join site program (`/captains/join-site`). Where this brief says `content.ts` holds the copy or the fee, the database now does.
 
 Handoff notes for building the Camp 404 recruitment site, agreed in chat on
 2026-09-25. [CORRECTION 2026-09-25] It is now built: `apps/join`. The owner's
@@ -15,7 +15,12 @@ its own app, **`apps/join`**, deployed as its own Vercel project. No sign-in.
 [CORRECTION 2026-09-29] It is not static content any more: it reads the
 database when `DATABASE_URL` is set, and serves `DEFAULT_JOIN_DATA`
 (`lib/join-data.ts`) when it is not or the read fails
-(`lib/load-join-data.ts`).
+(`lib/load-join-data.ts`). [CORRECTION 2026-10-05] A failed read falls back
+to `DEFAULT_JOIN_DATA` only during `next build`; at runtime it throws, so the
+background refresh keeps the last good page instead of caching the built-in
+copy. With no cached page at all and the database down, a visitor gets an
+error page; on Vercel the build always leaves a cached page, so in practice
+only `next dev` shows it.
 
 ## The reference: dimensional.org/prototype
 

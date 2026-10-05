@@ -12,6 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // was pressed.
 
 const session = vi.hoisted(() => ({ data: null as unknown }));
+const nav = vi.hoisted(() => ({ pathname: "/" }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => nav.pathname,
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
 vi.mock("@/lib/auth-client", () => ({
   authClient: { useSession: () => ({ data: session.data, isPending: false }) },
 }));
@@ -42,6 +47,7 @@ import { openReportProblem } from "../report-problem";
 
 beforeEach(() => {
   session.data = { user: { id: "u1" } };
+  nav.pathname = "/";
 });
 afterEach(cleanup);
 
@@ -92,6 +98,13 @@ describe("report entry points", () => {
       </>,
     );
     expect(screen.queryByRole("button", { name: "Report" })).toBeNull();
+    act(() => openReportProblem());
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens nothing on a print page, which the PDF maker opens as the member", () => {
+    nav.pathname = "/print/shifts";
+    render(<FeedbackGate aiAvailable={false} />);
     act(() => openReportProblem());
     expect(screen.queryByRole("dialog")).toBeNull();
   });

@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { renderNotificationEmail, type NotificationEmail } from "@camp404/core";
 import { withTransaction } from "./index";
 import * as schema from "./schema";
@@ -7,15 +7,58 @@ import * as schema from "./schema";
 // one email per recipient (never several addresses in one message, which would
 // disclose members' emails to each other), and records the outcome.
 
+/**
+ * What a send answered. `retryable` is a refusal that says "not now" (the
+ * provider down, no answer in time, the same email already in flight), never
+ * "never": the row stays queued for the next run instead of being marked
+ * failed for good. `rateLimited` is the provider saying "slow down" (429):
+ * the run stops.
+ */
+export type EmailSendResult =
+  | { ok: true }
+  | { ok: false; error: string; retryable?: boolean; rateLimited?: boolean };
+
 export type EmailSend = (
   to: string,
   email: NotificationEmail,
-) => Promise<{ ok: true } | { ok: false; error: string }>;
+  options: {
+    /**
+     * The same for every attempt at one delivery, so the provider sends it
+     * once even when a run is cut short after sending and its transaction
+     * rolls the row back to queued (Resend keeps the key for 24 hours).
+     */
+    idempotencyKey: string;
+  },
+) => Promise<EmailSendResult>;
 
 export interface EmailDrainResult {
   sent: number;
   failed: number;
   skipped: number;
+  /** Left queued after a "not now" answer, for a later run. */
+  deferred: number;
+  /** Queued too long to send safely: marked failed without a send. */
+  expired: number;
+}
+
+/**
+ * How long a queued email may wait. Older ones are marked failed, not sent:
+ * Resend keeps an idempotency key for 24 hours, so a retry later than that
+ * could send the email twice. And it bounds how long one email that never
+ * goes through stays queued. A row's created_at is when it was queued (no
+ * write path queues an existing row), read on the database clock.
+ */
+export const EMAIL_MAX_QUEUED_HOURS = 20;
+
+/**
+ * "Not now" answers in a row that end the run: the provider is down, and the
+ * rest would each wait out a timeout inside this transaction.
+ */
+export const EMAIL_MAX_DEFERRALS_IN_A_ROW = 3;
+
+/** The provider's idempotency key for one delivery's email. */
+export function emailIdempotencyKey(deliveryId: string): string {
+  return `notification-delivery/${deliveryId}`;
 }
 
 /** How many queued emails one run sends; a later page load sends the rest. */
@@ -27,7 +70,15 @@ export const EMAIL_DRAIN_LIMIT = 100;
  * The rows are locked (FOR UPDATE SKIP LOCKED) for the whole run, so two
  * overlapping runs cannot both email the same delivery. A member with no
  * verified address, or an erased or system account, is `skipped`; a send the
- * provider refuses is `failed` and not retried.
+ * provider refuses for good (a bad address, an unverified domain) is `failed`
+ * and not retried.
+ *
+ * A "not now" answer leaves that row queued for the next run (a page load,
+ * at most every five minutes), and the run moves on to the next row, so one
+ * email that never goes through cannot hold up the ones behind it. The run
+ * stops at a rate limit (429), or after EMAIL_MAX_DEFERRALS_IN_A_ROW "not
+ * now" answers in a row (the provider is down). A row queued longer than
+ * EMAIL_MAX_QUEUED_HOURS is marked failed without a send.
  */
 export async function drainQueuedEmail(
   send: EmailSend,
@@ -46,6 +97,7 @@ export async function drainQueuedEmail(
         sanitised: schema.users.sanitised,
         email: schema.user.email,
         emailVerified: schema.user.emailVerified,
+        expired: sql<boolean>`${schema.notificationDeliveries.createdAt} < now() - make_interval(hours => ${EMAIL_MAX_QUEUED_HOURS})`,
       })
       .from(schema.notificationDeliveries)
       .innerJoin(
@@ -58,12 +110,22 @@ export async function drainQueuedEmail(
       .limit(options.limit ?? EMAIL_DRAIN_LIMIT)
       .for("update", { of: schema.notificationDeliveries, skipLocked: true });
 
-    const result: EmailDrainResult = { sent: 0, failed: 0, skipped: 0 };
+    const result: EmailDrainResult = {
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      deferred: 0,
+      expired: 0,
+    };
+    let deferralsInARow = 0;
     for (const row of queued) {
       let status: "sent" | "failed" | "skipped";
       const address = row.email?.trim();
       if (!address || !row.emailVerified || row.isSystem || row.sanitised) {
         status = "skipped";
+      } else if (row.expired) {
+        status = "failed";
+        result.expired += 1;
       } else {
         const email = renderNotificationEmail(
           {
@@ -75,13 +137,26 @@ export async function drainQueuedEmail(
           },
           options.siteUrl,
         );
-        const outcome = await send(address, email).catch(
-          (err: unknown) =>
-            ({
-              ok: false,
-              error: err instanceof Error ? err.message : "send failed",
-            }) as const,
-        );
+        const outcome: EmailSendResult = await send(address, email, {
+          idempotencyKey: emailIdempotencyKey(row.id),
+        }).catch((err: unknown) => ({
+          ok: false,
+          error: err instanceof Error ? err.message : "send failed",
+          // A throw is not the provider's answer about this email.
+          retryable: true,
+        }));
+        if (!outcome.ok && (outcome.retryable || outcome.rateLimited)) {
+          result.deferred += 1;
+          deferralsInARow += 1;
+          if (
+            outcome.rateLimited ||
+            deferralsInARow >= EMAIL_MAX_DEFERRALS_IN_A_ROW
+          ) {
+            break;
+          }
+          continue;
+        }
+        deferralsInARow = 0;
         status = outcome.ok ? "sent" : "failed";
       }
       await tx

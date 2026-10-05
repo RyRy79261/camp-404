@@ -5,7 +5,7 @@ import { z } from "zod";
 import { sanitizeReportText, screenReport } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
-import { getClientIp, rateLimiter } from "@/lib/rate-limit";
+import { clientAddressKey, getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { isE2ETestMode } from "@/lib/test-mode";
 import {
   DEFAULT_FEEDBACK_REPO,
@@ -111,7 +111,7 @@ function resolveTracker():
 /**
  * File an in-app bug/feature report as a GitHub issue. Nothing is stored in our
  * DB — GitHub Issues is the store. Requires sign-in (so the report is
- * attributable) and is rate-limited per user. Degrades gracefully: a missing
+ * attributable) and is rate-limited per account and per address. Degrades gracefully: a missing
  * token or a GitHub error returns a typed {ok:false} the modal renders inline.
  */
 export async function submitFeedbackAction(
@@ -127,9 +127,11 @@ export async function submitFeedbackAction(
   const tracker = isE2ETestMode() ? null : resolveTracker();
   if (tracker && !tracker.ok) return tracker;
 
-  // Burst + daily caps. In-memory + per-instance (the app-wide limiter), so
-  // best-effort against a determined member — but the destination is a public
-  // tracker, so a daily ceiling is worth the cheap second check.
+  // Burst and daily caps, per account and per address. `rateLimiter` counts
+  // in Postgres, so every server instance shares one count and a cold start
+  // does not reset it. Filing stays open to any signed-in account on purpose
+  // (people without camp access can report too), and the destination is a
+  // public tracker, so each budget is worth its check.
   const burst = await rateLimiter.limit(`feedback:${user.id}`, { limit: 3 });
   if (!burst.ok) {
     return {
@@ -140,10 +142,13 @@ export async function submitFeedbackAction(
   // Per address too: sign-up is open, so one person can mint accounts to get
   // fresh per-account budgets, and each report files a public GitHub issue
   // and may spend an AI call.
-  const byIp = await rateLimiter.limit(
-    `feedback-ip:${getClientIp(await headers())}`,
-    { limit: 10, windowMs: 60_000 },
-  );
+  // An IPv6 /64 counts as one address (clientAddressKey). People behind one
+  // carrier NAT share these buckets; the limits are set high enough for that.
+  const ip = clientAddressKey(getClientIp(await headers()));
+  const byIp = await rateLimiter.limit(`feedback-ip:${ip}`, {
+    limit: 10,
+    windowMs: 60_000,
+  });
   if (!byIp.ok) {
     return {
       ok: false,
@@ -185,6 +190,21 @@ export async function submitFeedbackAction(
   const sanitized = cleaned.text;
   if (!sanitized) {
     return { ok: false, error: "Please describe the issue." };
+  }
+
+  // A day's ceiling per address too, or fresh accounts from one address
+  // reset the per-account day as fast as they can be made. Charged only for
+  // a report that would be filed: everyone on the address shares this
+  // budget, so invalid attempts must not use it up.
+  const dailyByIp = await rateLimiter.limit(`feedback-ip-day:${ip}`, {
+    limit: 30,
+    windowMs: 86_400_000,
+  });
+  if (!dailyByIp.ok) {
+    return {
+      ok: false,
+      error: "You've filed a lot of reports today — please try again tomorrow.",
+    };
   }
 
   // Opaque reporter reference: the camp user id maps internally and exposes no

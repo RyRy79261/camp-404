@@ -26,6 +26,11 @@ import { SnackList } from "./snack-list";
 
 export const dynamic = "force-dynamic";
 
+// A menu line's plate chip runs Claude in after() (proofreadPlatesAction),
+// inside this page's time budget, as the recipe pages do. PROOFREAD_TIMEOUT_MS
+// (240 s) assumes it.
+export const maxDuration = 300;
+
 export const metadata = { title: "Meal plan — Camp 404" };
 
 // The kitchen's meal plan (the owner's sketch, 2026-09-24): this year's days

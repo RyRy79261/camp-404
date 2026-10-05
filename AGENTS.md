@@ -898,7 +898,13 @@ or lazily on a page load, both in `after()` (`apps/web/lib/background-work.ts`):
   most once per five minutes across every server.
 - Every step is idempotent and claim-safe: broadcasts are claimed by
   `dispatched_at`, the push and email drains lock their rows `FOR UPDATE SKIP
-LOCKED`, reminders dedupe. A failing step is logged (`redactSecrets`) and does
+LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
+  delivery. A "not now" answer from Resend (5xx, a timeout, a 409 for the
+  same email in flight) leaves the row queued for the next page load and the
+  run moves on; a 429, or three such answers in a row, ends the run. An email
+  still queued 20 hours after it was queued is marked failed unsent (Resend
+  keeps the key 24 hours), so it is never sent twice and never blocks the
+  queue; that includes email queued while Resend was not set up. A failing step is logged (`redactSecrets`) and does
   not stop the others. None of it runs under `E2E_TEST_MODE`.
 - Erasure deletes the member's avatar folder at the moment of erasure
   (`apps/web/lib/account.ts`); the daily upkeep only catches leftovers.

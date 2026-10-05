@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { NotificationEmail } from "@camp404/core";
+import type { EmailSendResult } from "@camp404/db/email";
 import { isEmailConfigured as isEmailConfiguredIn } from "./integration-config";
 
 // Resend adapter for notification email (W4.3). A plain fetch to Resend's REST
@@ -13,6 +14,24 @@ import { isEmailConfigured as isEmailConfiguredIn } from "./integration-config";
 
 const RESEND_URL = "https://api.resend.com/emails";
 
+/**
+ * How long one send may take. The drain sends one after another inside one
+ * transaction, so a hung call must not hold it (and the page's time) open.
+ */
+export const EMAIL_SEND_TIMEOUT_MS = 10_000;
+
+/**
+ * Whether a refusal means "not now" rather than "never": a rate limit (429),
+ * the same idempotency key still in flight (409
+ * `concurrent_idempotent_requests`), or the provider's own failure (5xx).
+ * Anything else (a bad address, an unverified domain, or a 409 for a key
+ * reused with a different email) will fail the same way every time.
+ */
+function isRetryable(status: number, body: string): boolean {
+  if (status === 409) return body.includes("concurrent_idempotent_requests");
+  return status === 429 || status >= 500;
+}
+
 export function isEmailConfigured(): boolean {
   return isEmailConfiguredIn(process.env);
 }
@@ -20,7 +39,8 @@ export function isEmailConfigured(): boolean {
 export async function sendEmail(
   to: string,
   email: NotificationEmail,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+  options: { idempotencyKey: string },
+): Promise<EmailSendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
   if (!apiKey || !from) {
@@ -28,23 +48,47 @@ export async function sendEmail(
       "Email is not configured — set RESEND_API_KEY and RESEND_FROM_EMAIL.",
     );
   }
-  const res = await fetch(RESEND_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      subject: email.subject,
-      text: email.text,
-      html: email.html,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(RESEND_URL, {
+      method: "POST",
+      signal: AbortSignal.timeout(EMAIL_SEND_TIMEOUT_MS),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        // One delivery is one email, however many times a run is retried.
+        "Idempotency-Key": options.idempotencyKey,
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+      }),
+    });
+  } catch (err) {
+    // No answer (offline, or the timeout): the email may or may not have
+    // gone, and the idempotency key makes the retry safe either way.
+    // DOMException (the timeout's) is not an Error in every runtime.
+    const name =
+      typeof (err as { name?: unknown } | null)?.name === "string"
+        ? (err as { name: string }).name
+        : "error";
+    return {
+      ok: false,
+      error: `Resend unreachable (${name})`,
+      retryable: true,
+    };
+  }
   if (res.ok) return { ok: true };
   // Resend's error body names the problem (a bad address, an unverified
   // domain); it never echoes the key.
   const detail = await res.text().catch(() => "");
-  return { ok: false, error: `Resend ${res.status}: ${detail.slice(0, 200)}` };
+  return {
+    ok: false,
+    error: `Resend ${res.status}: ${detail.slice(0, 200)}`,
+    ...(isRetryable(res.status, detail) ? { retryable: true } : {}),
+    ...(res.status === 429 ? { rateLimited: true } : {}),
+  };
 }

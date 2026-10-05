@@ -11,12 +11,24 @@ const refresh = vi.fn();
 const push = vi.fn();
 // One router object for every render, as Next's useRouter gives.
 const router = { refresh, push };
+const nav = { pathname: "/" };
 vi.mock("next/navigation", () => ({
   useRouter: () => router,
+  usePathname: () => nav.pathname,
+}));
+const auth = {
+  session: { data: { user: { id: "u1" } } as unknown, isPending: false },
+};
+vi.mock("@/lib/auth-client", () => ({
+  authClient: { useSession: () => auth.session },
 }));
 
 import { getToasts, toast } from "@camp404/ui/components/toast";
-import { ACK_FAILED, AcknowledgementGate } from "./acknowledgement-gate";
+import {
+  ACK_FAILED,
+  AcknowledgementGate,
+  POLL_INTERVAL_MS,
+} from "./acknowledgement-gate";
 
 const fetchMock = vi.fn();
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
@@ -29,14 +41,24 @@ const ITEM = {
   createdAt: "2026-05-28T14:02:00.000Z",
 };
 
+let visibility: DocumentVisibilityState = "visible";
+
 beforeEach(() => {
   fetchMock.mockReset();
   refresh.mockReset();
   vi.stubGlobal("fetch", fetchMock);
+  nav.pathname = "/";
+  auth.session = { data: { user: { id: "u1" } }, isPending: false };
+  visibility = "visible";
+  vi.spyOn(document, "visibilityState", "get").mockImplementation(
+    () => visibility,
+  );
 });
 afterEach(() => {
   toast.dismiss();
   cleanup();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.body.style.overflow = "";
 });
@@ -219,5 +241,97 @@ describe("AcknowledgementGate — board S22", () => {
     render(<AcknowledgementGate />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(claims()).toHaveLength(0);
+  });
+});
+
+// Each ask is three database queries, so it keeps Neon awake: the gate asks
+// only while it can matter (web-other-routes-3, web-other-routes-4).
+describe("AcknowledgementGate: when it asks", () => {
+  const pendingCalls = () =>
+    fetchMock.mock.calls.filter((c) => c[0] === "/api/notifications/pending");
+
+  it("never asks on a signed-out page, or while the session is loading", async () => {
+    fetchMock.mockResolvedValue(ok({ pending: [] }));
+    auth.session = { data: null, isPending: false };
+    render(<AcknowledgementGate />);
+    auth.session = { data: null, isPending: true };
+    render(<AcknowledgementGate />);
+    window.dispatchEvent(new Event("focus"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("asks under the E2E test login, which has no client session", async () => {
+    fetchMock.mockResolvedValue(ok({ pending: [] }));
+    auth.session = { data: null, isPending: false };
+    render(<AcknowledgementGate testSession />);
+    await waitFor(() => expect(pendingCalls()).toHaveLength(1));
+  });
+
+  it("never asks, claims or covers a print page (the PDF maker's browser)", async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url === "/api/notifications/popups"
+        ? ok({ popups: [] })
+        : ok({ pending: [ITEM], popups: 3 }),
+    );
+    nav.pathname = "/print/kitchen/recipes";
+    render(<AcknowledgementGate />);
+    window.dispatchEvent(new Event("focus"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("skips its timer on a hidden tab and catches up when the tab returns", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValue(ok({ pending: [] }));
+    render(<AcknowledgementGate />);
+    expect(pendingCalls()).toHaveLength(1); // the first load
+
+    visibility = "hidden";
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3);
+    expect(pendingCalls()).toHaveLength(1);
+
+    visibility = "visible";
+    document.dispatchEvent(new Event("visibilitychange"));
+    // The same return also fires focus: one ask answers both.
+    window.dispatchEvent(new Event("focus"));
+    expect(pendingCalls()).toHaveLength(2);
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    expect(pendingCalls()).toHaveLength(3);
+  });
+
+  it("asks on every return to the tab, even one soon after the last", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValue(ok({ pending: [] }));
+    render(<AcknowledgementGate />);
+    expect(pendingCalls()).toHaveLength(1);
+
+    const leave = () => {
+      visibility = "hidden";
+      document.dispatchEvent(new Event("visibilitychange"));
+    };
+    const come = () => {
+      visibility = "visible";
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+    };
+    leave();
+    come();
+    expect(pendingCalls()).toHaveLength(2);
+    // Away and back again within a second: a notice may have come meanwhile.
+    await vi.advanceTimersByTimeAsync(500);
+    leave();
+    come();
+    expect(pendingCalls()).toHaveLength(3);
+  });
+
+  it("does not ask on a tab that opens hidden", async () => {
+    visibility = "hidden";
+    fetchMock.mockResolvedValue(ok({ pending: [] }));
+    render(<AcknowledgementGate />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

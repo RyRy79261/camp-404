@@ -19,6 +19,7 @@ import { twoFactor } from "better-auth/plugins/two-factor";
 import { passkey } from "@better-auth/passkey";
 import { createHttpDb, schema } from "@camp404/db";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@camp404/core";
+import { runAfterResponse } from "./background";
 import { sendAuthEmail } from "./email";
 import { emailProofGuards } from "./email-proof";
 import { oauthProxyDisabledPaths, oauthProxyPlugins } from "./oauth-proxy";
@@ -48,12 +49,24 @@ import {
 const PLACEHOLDER_SECRET =
   "camp404-build-placeholder-better-auth-secret-00000000000";
 
+/** What the server it runs in provides. */
+export interface AuthRuntime {
+  /**
+   * Runs Better Auth's emails after the response. Defaults to Next's after().
+   * Tests pass their own.
+   */
+  runInBackground?: (promise: Promise<unknown>) => void;
+}
+
 /**
  * Assemble the betterAuth() options from an env bag. Pure apart from binding
  * the drizzle adapter to an HTTP database client (which opens no connection
  * until a query runs). Exported so tests can inspect what an env resolves to.
  */
-export function buildAuthOptions(env: AuthEnv = process.env) {
+export function buildAuthOptions(
+  env: AuthEnv = process.env,
+  runtime: AuthRuntime = {},
+) {
   const baseURL = resolveBaseURL(env);
   const passkeyRpID = resolvePasskeyRpID(env);
   const passkeyOrigins = resolvePasskeyOrigins(env);
@@ -213,6 +226,14 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
     ],
 
     advanced: {
+      // Emails (reset, verification) go out after the response instead of
+      // inside it. Forgot-password sends only when the address has an
+      // account, so an awaited send made those answers slower, and the
+      // timing told anyone which addresses are members. Sign-in and
+      // forgot-password must stay enumeration-safe (AGENTS.md).
+      backgroundTasks: {
+        handler: runtime.runInBackground ?? runAfterResponse,
+      },
       cookiePrefix: "camp404",
       ...(useSecureCookies === undefined ? {} : { useSecureCookies }),
       // Lax, not strict: the Claude connector's OAuth round trip is a
@@ -224,11 +245,14 @@ export function buildAuthOptions(env: AuthEnv = process.env) {
 }
 
 /** Construct a Better Auth instance for an env, printing any warnings. */
-export function createAuth(env: AuthEnv = process.env) {
+export function createAuth(
+  env: AuthEnv = process.env,
+  runtime: AuthRuntime = {},
+) {
   for (const warning of authConfigWarnings(env)) {
     console.warn(`[auth] ${warning}`);
   }
-  return betterAuth(buildAuthOptions(env));
+  return betterAuth(buildAuthOptions(env, runtime));
 }
 
 /** The app's one instance: the route handler and every session read use it. */

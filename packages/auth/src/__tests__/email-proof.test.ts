@@ -137,6 +137,14 @@ describe("enrolling a passkey or two-factor", () => {
     expect(passkey.status).toBe(403);
   });
 
+  it("leaves a signed-out request to the endpoint, which answers 401", async () => {
+    const res = await call("/two-factor/enable", {
+      body: { password: PASSWORD },
+    });
+    expect(res.status).toBe(401);
+    expect(db.twoFactor).toEqual([]);
+  });
+
   it("is allowed once the email is confirmed, even before the cookie cache catches up", async () => {
     const { cookie, userId } = await signUp("owner@example.com");
     // Confirmed in the database; the session cookie still says unconfirmed.
@@ -209,6 +217,46 @@ describe("a password reset on an unconfirmed account", () => {
     expect(db.passkey).toHaveLength(1);
     expect(db.twoFactor).toHaveLength(1);
     expect(userRow(userId).twoFactorEnabled).toBe(true);
+  });
+
+  it("clears them for a link whose token rides in the address", async () => {
+    const { userId } = await signUp("owner@example.com");
+    enrol(userId);
+    await call("/request-password-reset", {
+      body: { email: "owner@example.com", redirectTo: "/auth/reset-password" },
+    });
+    const link = mail.find((m) => m.kind === "reset")!;
+
+    const res = await call(
+      `/reset-password?token=${encodeURIComponent(link.token)}`,
+      { body: { newPassword: "a whole new passphrase" } },
+    );
+    expect(res.status).toBe(200);
+    expect(db.passkey).toEqual([]);
+    expect(db.twoFactor).toEqual([]);
+  });
+
+  it("keeps them for an expired link, or a request with no new password", async () => {
+    const { userId } = await signUp("owner@example.com");
+    enrol(userId);
+    await call("/request-password-reset", {
+      body: { email: "owner@example.com", redirectTo: "/auth/reset-password" },
+    });
+    const link = mail.find((m) => m.kind === "reset")!;
+
+    const noPassword = await call("/reset-password", {
+      body: { token: link.token },
+    });
+    expect(noPassword.status).toBe(400);
+    expect(db.passkey).toHaveLength(1);
+
+    for (const row of db.verification!) row.expiresAt = new Date(0);
+    const expired = await call("/reset-password", {
+      body: { token: link.token, newPassword: "a whole new passphrase" },
+    });
+    expect(expired.status).toBe(400);
+    expect(db.passkey).toHaveLength(1);
+    expect(db.twoFactor).toHaveLength(1);
   });
 
   it("keeps them when the reset itself is refused", async () => {

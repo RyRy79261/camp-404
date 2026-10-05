@@ -8,7 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/users", () => ({ findCampUserByAuthId: vi.fn() }));
 vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));
-vi.mock("@/lib/rate-limit", () => ({
+vi.mock("@/lib/rate-limit", async (importOriginal) => ({
+  // The real address key, so the IPv6 /64 rule is what the test sees.
+  clientAddressKey: (await importOriginal<typeof import("@/lib/rate-limit")>())
+    .clientAddressKey,
   rateLimiter: { limit: vi.fn(() => ({ ok: true, retryAfterSeconds: 0 })) },
   getClientIp: vi.fn(() => "1.2.3.4"),
 }));
@@ -23,7 +26,7 @@ import { submitFeedbackAction } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
 import { isE2ETestMode } from "@/lib/test-mode";
-import { rateLimiter } from "@/lib/rate-limit";
+import { getClientIp, rateLimiter } from "@/lib/rate-limit";
 import { structureWithAi } from "@/lib/feedback-ai";
 import {
   isUnfiledScreenshotOf,
@@ -116,6 +119,54 @@ describe("submitFeedbackAction", () => {
     });
     expect(fetchFn).not.toHaveBeenCalled();
     expect(structureWithAi).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the address's daily cap trips, and files nothing", async () => {
+    // Fresh accounts from one address each get a new per-account day; the
+    // address's own day is what stops them.
+    refuseBucket("feedback-ip-day:");
+    const fetchFn = mockFetch({ status: 201 });
+    const res = await submitFeedbackAction({ ...VALID, useAi: true });
+    expect(res).toMatchObject({ ok: false });
+    if (!res.ok) expect(res.error).toMatch(/lot of reports today/i);
+    expect(rateLimiter.limit).toHaveBeenCalledWith("feedback-ip-day:1.2.3.4", {
+      limit: 30,
+      windowMs: 86_400_000,
+    });
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(structureWithAi).not.toHaveBeenCalled();
+  });
+
+  it("charges the address's daily budget only for a report that would be filed", async () => {
+    // Everyone on the address shares that budget: blank or HTML-only
+    // attempts must not use it up.
+    for (const description of ["", "<b></b>"]) {
+      await submitFeedbackAction({ kind: "bug", description });
+    }
+    const charged = vi
+      .mocked(rateLimiter.limit)
+      .mock.calls.filter(([key]) => key.startsWith("feedback-ip-day:"));
+    expect(charged).toHaveLength(0);
+  });
+
+  it("counts every address in one IPv6 /64 as one", async () => {
+    // One IPv6 user holds the whole /64: each address in it is not a fresh
+    // budget.
+    vi.mocked(getClientIp).mockReturnValue("2001:db8:abcd:12:aaaa::1");
+    await submitFeedbackAction(VALID);
+    vi.mocked(getClientIp).mockReturnValue("2001:0db8:abcd:0012:ffff:1:2:3");
+    await submitFeedbackAction(VALID);
+    const keys = vi
+      .mocked(rateLimiter.limit)
+      .mock.calls.map(([key]) => key)
+      .filter((key) => key.startsWith("feedback-ip"));
+    expect(new Set(keys)).toEqual(
+      new Set([
+        "feedback-ip:2001:db8:abcd:12::/64",
+        "feedback-ip-day:2001:db8:abcd:12::/64",
+      ]),
+    );
+    vi.mocked(getClientIp).mockReturnValue("1.2.3.4");
   });
 
   it("rejects when the daily cap trips", async () => {
