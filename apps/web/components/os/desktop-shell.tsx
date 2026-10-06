@@ -120,7 +120,7 @@ import {
   useDisplayState,
 } from "./desktop-display";
 import { WelcomeWizard } from "./welcome-wizard";
-import { DesktopVoice, PhoneVoiceSheet } from "@/components/voice/voice-panel";
+import { DesktopVoice, PhoneVoiceSheet } from "@/components/voice/voice-lazy";
 import { useVoiceCommand } from "@/components/voice/use-voice-command";
 import {
   ClockPrince,

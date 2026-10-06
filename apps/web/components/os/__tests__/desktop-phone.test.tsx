@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -259,7 +260,7 @@ describe("the bottom bar", () => {
     expect(screen.queryByRole("region", { name: "Open programs" })).toBeNull();
   });
 
-  it("puts the clock last for everyone, and gives only a captain the mic, just before it", () => {
+  it("puts the clock last for everyone, and gives only a captain the mic, just before it", async () => {
     const cells = () =>
       [...screen.getByRole("toolbar", { name: "Bottom bar" }).children].map(
         (el) =>
@@ -296,10 +297,13 @@ describe("the bottom bar", () => {
     ]);
     const clock = document.querySelector<HTMLElement>("[data-phone-clock]")!;
     expect(clock.className).toContain("min-w-[60px]");
-    // And on a desktop, the mic under the Today tab.
-    expect(
-      document.querySelector("[data-os-today] [data-voice-mic]"),
-    ).not.toBeNull();
+    // And on a desktop, the mic under the Today tab (its own chunk, so it
+    // lands just after the page).
+    await waitFor(() =>
+      expect(
+        document.querySelector("[data-os-today] [data-voice-mic]"),
+      ).not.toBeNull(),
+    );
   });
 
   it("Today opens a sheet on the home screen, and from a program goes home first", () => {
