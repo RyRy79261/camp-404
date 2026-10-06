@@ -132,7 +132,6 @@ export async function POST(req: Request) {
       "Voice can't reach Groq right now. Nothing changed: try again in a minute.",
     );
   }
-  file = null;
   if (!heardClearly(transcript)) {
     return NextResponse.json({
       words: transcript.text,

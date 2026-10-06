@@ -68,13 +68,6 @@ async function asMember(page: Page, request: APIRequestContext, id: string) {
 const panel = (page: Page) => page.getByRole("dialog", { name: "Voice" });
 const mic = (page: Page) => page.locator("[data-voice-mic]");
 
-async function speak(page: Page, start: Locator, stop: Locator) {
-  await start.click();
-  await expect(panel(page).getByText("Listening")).toBeVisible();
-  await page.waitForTimeout(600);
-  await stop.click();
-}
-
 test.describe("voice on the desktop", () => {
   test("a member has no mic; a captain's sits under Today, and runs a list of three with one refused", async ({
     page,

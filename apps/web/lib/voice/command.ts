@@ -257,7 +257,7 @@ function finalTurn(
         asks += 1;
         const options = Array.isArray(input.options)
           ? input.options.map((o: { tool?: unknown; args_json?: unknown }) => {
-              let args: unknown = null;
+              let args: unknown;
               try {
                 args = JSON.parse(String(o?.args_json ?? "null"));
               } catch {
