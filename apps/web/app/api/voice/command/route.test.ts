@@ -18,7 +18,7 @@ vi.mock("@/lib/rate-limit", () => ({
   getClientIp: vi.fn(() => "1.2.3.4"),
 }));
 vi.mock("@/lib/groq", async (orig) => ({
-  ...(await orig<typeof import("@/lib/groq")>()),
+  ...(await orig<typeof GroqModule>()),
   transcribeCommand: vi.fn(),
 }));
 vi.mock("@/lib/voice/service", () => ({
@@ -34,6 +34,7 @@ import { resolveMemberState } from "@/lib/member-gate";
 import { rateLimiter } from "@/lib/rate-limit";
 import { getVoiceConsent } from "@/lib/voice/consent";
 import { runVoiceCommand } from "@/lib/voice/service";
+import type * as GroqModule from "@/lib/groq";
 
 const WORDS = "Sign me up for breakfast cooks on Wednesday";
 

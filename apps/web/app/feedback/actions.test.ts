@@ -10,7 +10,7 @@ vi.mock("@/lib/users", () => ({ findCampUserByAuthId: vi.fn() }));
 vi.mock("@/lib/test-mode", () => ({ isE2ETestMode: vi.fn(() => false) }));
 vi.mock("@/lib/rate-limit", async (importOriginal) => ({
   // The real address key, so the IPv6 /64 rule is what the test sees.
-  clientAddressKey: (await importOriginal<typeof import("@/lib/rate-limit")>())
+  clientAddressKey: (await importOriginal<typeof RateLimitModule>())
     .clientAddressKey,
   rateLimiter: { limit: vi.fn(() => ({ ok: true, retryAfterSeconds: 0 })) },
   getClientIp: vi.fn(() => "1.2.3.4"),
@@ -33,6 +33,7 @@ import {
   markReportScreenshotFiled,
 } from "@/lib/report-screenshots";
 import { SCREENSHOT_ISSUE_LINE } from "@/lib/report-screenshot-copy";
+import type * as RateLimitModule from "@/lib/rate-limit";
 
 const VALID = {
   kind: "bug" as const,

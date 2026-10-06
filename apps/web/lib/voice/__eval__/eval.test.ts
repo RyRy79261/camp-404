@@ -21,7 +21,7 @@ process.env.PGCRYPTO_KEY ??= "test-pgcrypto-key-at-least-16-chars";
 
 vi.mock("next/server", () => ({ after: () => undefined }));
 vi.mock("@/lib/camp-calendar", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/camp-calendar")>()),
+  ...(await importOriginal<typeof CampCalendarModule>()),
   getUpcomingEvents: vi.fn(async () => ({
     status: "ok",
     events: (await import("./camp")).CALENDAR_EVENTS,
@@ -36,6 +36,7 @@ import { runVoiceCommand } from "../service";
 import { SPEAKER, seedEvalCamp } from "./camp";
 import { CASES } from "./cases";
 import { gradeCase, meetsBar, tally, type Grade } from "./grade";
+import type * as CampCalendarModule from "@/lib/camp-calendar";
 
 const LIVE = process.env.VOICE_EVAL_LIVE === "1";
 /** A comma list of case ids, to try a few against the real model. */
