@@ -61,7 +61,6 @@ A Turborepo with pnpm workspaces (Node 22 or newer, pnpm 10).
 | [`apps/web`](apps/web/README.md)                       | The console: Next.js 16, React 19, Tailwind v4           |
 | [`apps/join`](apps/join/README.md)                     | join.camp-404.com, the recruiting site                   |
 | [`apps/guide`](apps/guide/README.md)                   | survival-guide.camp-404.com, the guide's public sections |
-| [`apps/mobile`](apps/mobile/README.md)                 | The Capacitor shell for iOS and Android (deferred)       |
 | [`packages/core`](packages/core/README.md)             | Domain rules with no I/O: access, privacy, money, …      |
 | [`packages/db`](packages/db/README.md)                 | Drizzle schema, migrations and every query               |
 | [`packages/auth`](packages/auth/README.md)             | Self-hosted Better Auth: passwords, passkeys, two-factor |
@@ -77,7 +76,6 @@ A Turborepo with pnpm workspaces (Node 22 or newer, pnpm 10).
 flowchart TB
   subgraph apps
     direction LR
-    mobile["apps/mobile<br/>Capacitor shell"]
     web["apps/web<br/>the console, camp-404.com"]
     join["apps/join<br/>join.camp-404.com"]
   end
@@ -89,7 +87,6 @@ flowchart TB
     types["types"]
   end
   web --> packages
-  mobile -. wraps the web export .-> web
   join --> os & games & db & types
   games -. CSS order only .-> os
   ui --> core

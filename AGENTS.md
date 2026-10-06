@@ -19,7 +19,6 @@ apps/
   web/        Next.js 16 app (App Router, React 19, Tailwind v4): the 404 OS console
   join/       join.camp-404.com: the "404 OS" recruiting site; reads the db, no sign-in
   guide/      survival-guide.camp-404.com: the Survival Guide's public sections; reads the db, no sign-in
-  mobile/     Capacitor host wrapping the web static export
 packages/
   core/       Framework-free domain logic: access, privacy, redaction, … (@camp404/core)
   ui/         Shared shadcn/ui components (@camp404/ui)
@@ -852,12 +851,19 @@ invalidate when the var changes, causing stale builds.
 
 ## Mobile builds
 
-The web app is statically exported and wrapped by Capacitor (`build:mobile`,
+[CORRECTION 2026-10-06] There is no native app build: `apps/mobile` (the
+Capacitor shell), its `@capacitor/*` packages, `build:mobile` and the
+`MOBILE_BUILD` static-export switch were removed until the phone app is
+redone (#354). The critical advisory GHSA-rvm3-566m-v7fv has no fix and
+reached only that unshipped shell (owner's call: remove it). Phones use the
+web app. The notes below are what the shell met, for #354.
+
+The web app was statically exported and wrapped by Capacitor (`build:mobile`,
 `MOBILE_BUILD`). Server-only features — route handlers, server actions —
-do not exist in the mobile build. Anything a mobile screen depends on must
+do not exist in such a build. Anything a native screen depends on must
 work client-side or call a separately deployed API.
 
-**Status: `pnpm --filter @camp404/web build:mobile` is currently broken
+**Status before removal: `pnpm --filter @camp404/web build:mobile` was broken
 and deferred to Phase 7.** Next 16 tightened `output: "export"` so every
 route handler / dynamic page in the bundle has to be statically
 pre-renderable. Every page in this repo today reads cookies via

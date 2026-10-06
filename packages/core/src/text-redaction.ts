@@ -321,7 +321,7 @@ export function describeRedactions(kinds: readonly RedactionKind[]): string {
  * The environment variables whose VALUES are secret. Camp 404's `process.env`
  * surface is wider than this; everything left out is either public by design
  * (`NEXT_PUBLIC_*`, `VERCEL_URL`), a mode flag (`NODE_ENV`, `CI`,
- * `E2E_TEST_MODE`, `MOBILE_BUILD`, `NEXT_PHASE`, `NEXT_RUNTIME`,
+ * `E2E_TEST_MODE`, `NEXT_PHASE`, `NEXT_RUNTIME`,
  * `CAPTURE_THEME`), or test plumbing (`PLAYWRIGHT_*`, `NEON_LOCAL_PROXY`) —
  * redacting those would blank ordinary words like "production" or "1".
  *

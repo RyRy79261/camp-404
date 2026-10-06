@@ -35,8 +35,8 @@ pnpm --filter @camp404/web test:e2e:db  # Playwright on a local Postgres
 
 The Playwright suites are described in
 [`tests/e2e/README.md`](tests/e2e/README.md). `vercel-build` runs the
-migrations, then `next build`. The mobile build (`build:mobile`) is broken and
-deferred; see [`apps/mobile`](../mobile/README.md).
+migrations, then `next build`. There is no native app build: the Capacitor
+shell was removed until the phone app is redone (#354).
 
 ### Kitchen routes
 
