@@ -854,9 +854,11 @@ invalidate when the var changes, causing stale builds.
 [CORRECTION 2026-10-06] There is no native app build: `apps/mobile` (the
 Capacitor shell), its `@capacitor/*` packages, `build:mobile` and the
 `MOBILE_BUILD` static-export switch were removed until the phone app is
-redone (#354). The critical advisory GHSA-rvm3-566m-v7fv has no fix and
-reached only that unshipped shell (owner's call: remove it). Phones use the
-web app. The notes below are what the shell met, for #354.
+redone (#354). The critical advisory GHSA-rvm3-566m-v7fv reached only that
+unshipped shell; the 8.0.0 to 8.3.4 line it pinned has no fix, and patched
+releases exist (8.4.3 and later, 8.5.1, 7.6.9, 6.2.2). The owner chose to
+remove the shell rather than upgrade it; #354 starts from a patched release.
+Phones use the web app. The notes below are what the shell met, for #354.
 
 The web app was statically exported and wrapped by Capacitor (`build:mobile`,
 `MOBILE_BUILD`). Server-only features — route handlers, server actions —
