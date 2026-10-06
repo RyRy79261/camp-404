@@ -51,6 +51,7 @@ export function sanitisedUserPatch(
     // Consent belongs to a person; a tombstone gives none.
     aiDataConsent: false,
     aiDataConsentAt: null,
+    voiceConsentAt: null,
     telegramHandle: null,
     telegramUserId: null,
     // Their words about themselves, and their place on the public join site.

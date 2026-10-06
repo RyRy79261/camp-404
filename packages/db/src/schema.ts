@@ -682,6 +682,13 @@ export const users = pgTable(
     aiDataConsent: boolean("ai_data_consent").notNull().default(false),
     aiDataConsentAt: timestamp("ai_data_consent_at", { mode: "date" }),
 
+    // Voice to instruction (#356): when a captain read the one-time notice
+    // (their words go to Groq to become text, and the text to Anthropic's
+    // Claude; neither is kept) and turned voice on. NULL = never, or turned
+    // off again in Settings. Nothing else about voice is stored: no
+    // recordings, no transcripts. Erasure clears it.
+    voiceConsentAt: timestamp("voice_consent_at", { mode: "date" }),
+
     // "What I am in camp" (owner, 2026-09-25): an optional title, such as
     // "The Original Error Code", and a short blurb, written by the member on
     // their profile and read by other members. `show_on_join` puts a

@@ -19,9 +19,12 @@ import { LineIcon } from "./line-icons";
 //    with the Terminal), rows of big icons, then a My teams row of team
 //    folders. A fixed order: no dragging, no right-click menu, and the
 //    member's own folders and shortcuts are not here (desktop only);
-//  - the bottom bar, in place of the taskbar: Home, Open programs, the inbox
-//    bell and Today;
-//  - sheets over the home screen: the open-programs list and Today.
+//  - the bottom bar, in place of the taskbar: Home, Search, the inbox bell,
+//    Today, a captain's Voice, and the clock, always the last cell, with
+//    Prince asleep on it. No Programs button (owner, 2026-10-06: "Programs
+//    only show up on desktop"): an open program's icon glows on the home
+//    screen and a tap brings its window back;
+//  - sheets over the home screen: Today, and a captain's Voice.
 
 /** One group of the home screen: its name and its icons, in order. */
 export interface PhoneGroup {
@@ -171,37 +174,37 @@ function PhoneFoot() {
   );
 }
 
-/** The bottom bar: Home, Open programs, Search, the inbox bell, Today and the clock. */
+/**
+ * The bottom bar: Home, Search, the inbox bell, Today, a captain's Voice, and
+ * the clock, which is always the rightmost cell.
+ */
 export function PhoneBar({
   hidden,
-  openCount,
-  switcherOpen,
   todayOpen,
   todayCount,
   searchOpen = false,
   onHome,
-  onSwitcher,
   onToday,
   onSearch,
   bell,
+  voice,
   clock,
 }: {
   /** The soft keyboard is up: nothing fixed rides over the field. */
   hidden: boolean;
-  openCount: number;
-  switcherOpen: boolean;
   todayOpen: boolean;
   /** Things due today, when the page said. */
   todayCount?: number;
   /** The search sheet is open. */
   searchOpen?: boolean;
   onHome: () => void;
-  onSwitcher: () => void;
   onToday: () => void;
   /** Open program search (issue #326); no Search cell without it. */
   onSearch?: () => void;
   /** The inbox bell, as the tray draws it. */
   bell: ReactNode;
+  /** A captain's Voice cell (PhoneVoiceCell), just left of the clock; nobody else's. */
+  voice?: ReactNode;
   /** The clock cell's contents (the time, the days to the Burn). */
   clock?: ReactNode;
 }) {
@@ -229,21 +232,6 @@ export function PhoneBar({
           404
         </span>
         Home
-      </button>
-      <button
-        type="button"
-        onClick={onSwitcher}
-        aria-expanded={switcherOpen}
-        aria-label={`Open programs, ${openCount}`}
-        className={`${cell} ${switcherOpen ? on : idle}`}
-      >
-        <span
-          aria-hidden
-          className="grid h-4 min-w-5 place-items-center border border-current px-0.5 font-mono text-[11px] leading-none"
-        >
-          {openCount}
-        </span>
-        Programs
       </button>
       {onSearch && (
         <button
@@ -279,8 +267,58 @@ export function PhoneBar({
           </span>
         ) : null}
       </button>
-      {clock && <div className="relative min-w-0 flex-1">{clock}</div>}
+      {voice}
+      {/* Always the last cell, Prince asleep on it (owner, 2026-10-06: "The
+          clock must always be the most right hand side item"). At least 60
+          px: his 46 px, his 8 px inset and a little spare, so at 360 px the
+          other cells give way first. */}
+      {clock && (
+        <div data-phone-clock className="relative min-w-[60px] flex-1">
+          {clock}
+        </div>
+      )}
     </div>
+  );
+}
+
+/**
+ * A captain's Voice cell, just left of the clock: a full cell like Home,
+ * magenta-edged, reading VOICE; recording, solid magenta reading STOP. With
+ * no connection it shows off and says why.
+ */
+export function PhoneVoiceCell({
+  recording,
+  open,
+  offline,
+  onPress,
+}: {
+  recording: boolean;
+  open: boolean;
+  offline: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-phone-voice
+      onClick={onPress}
+      aria-expanded={open}
+      aria-label={
+        offline
+          ? "Voice is off: no internet"
+          : recording
+            ? "Stop and send"
+            : "Voice"
+      }
+      className={`relative flex h-12 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 border font-pixel text-[10px] uppercase outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-os-fg ${
+        recording
+          ? "border-os-primary bg-[var(--os-win-primary)] text-[#17191b]"
+          : "border-os-primary bg-[color-mix(in_oklab,var(--os-primary)_14%,var(--os-panel))] text-os-primary"
+      } ${offline ? "opacity-50" : ""}`}
+    >
+      <LineIcon name={recording ? "stop" : "mic"} className="size-[18px]" />
+      {recording ? "Stop" : "Voice"}
+    </button>
   );
 }
 
@@ -327,7 +365,7 @@ export function PhoneClock({
 /**
  * A sheet over the home screen, above the bottom bar: a title bar with a
  * big Back and the name, then its body, scrolling on its own. It fills the
- * screen above the bar (Today, the open-programs list), as the prototype's.
+ * screen above the bar (Today, a folder), as the prototype's.
  */
 export function PhoneSheet({
   title,
@@ -372,70 +410,5 @@ export function PhoneSheet({
         {children}
       </div>
     </section>
-  );
-}
-
-/** One open window in the open-programs list. */
-export interface SwitcherRow {
-  id: string;
-  label: string;
-  icon: ReactNode;
-  /** It is the one on screen now. */
-  current: boolean;
-}
-
-/** The open-programs list: each window by its plain name, to go to or close. */
-export function PhoneSwitcher({
-  rows,
-  onPick,
-  onCloseWindow,
-}: {
-  rows: readonly SwitcherRow[];
-  onPick: (id: string) => void;
-  onCloseWindow: (id: string) => void;
-}) {
-  if (rows.length === 0) {
-    return (
-      <p className="p-5 text-sm text-os-muted">
-        Nothing is open. Programs you open stay here until you close them.
-      </p>
-    );
-  }
-  return (
-    <div className="p-3">
-      <ul
-        aria-label="Open programs"
-        className="flex flex-col divide-y divide-os-line border border-os-line bg-os-bg/60"
-      >
-        {rows.map((row) => (
-          <li key={row.id} className="flex items-stretch">
-            <button
-              type="button"
-              onClick={() => onPick(row.id)}
-              aria-current={row.current || undefined}
-              className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-3 text-left text-os-accent hover:bg-os-primary/15"
-            >
-              {row.icon}
-              <span className="truncate font-pixel text-xs uppercase text-os-fg">
-                {row.label}
-              </span>
-              {row.current && (
-                <span className="ml-auto shrink-0 font-mono text-[10px] uppercase text-os-muted">
-                  On screen
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => onCloseWindow(row.id)}
-              aria-label={`Close ${row.label}`}
-              className="grid w-14 shrink-0 place-items-center text-xl text-os-muted hover:text-os-primary"
-            >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

@@ -69,6 +69,8 @@ export const GLYPH_KEYS = [
   "clock",
   "user",
   "bell",
+  "mic",
+  "stop",
 ] as const;
 
 export type ProgramIconKey = (typeof PROGRAM_ICON_KEYS)[number];
@@ -351,6 +353,13 @@ const PATHS: Record<IconKey, ReactNode> = {
   ),
 
   // --- glyphs ---
+  mic: (
+    <>
+      <path d="M9 3h6v11H9z" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8" />
+    </>
+  ),
+  stop: <path d="M7 7h10v10H7z" />,
   plus: <path d="M12 5v14M5 12h14" />,
   check: <path d="M5 12l5 5 9-10" />,
   x: <path d="M6 6l12 12M18 6L6 18" />,

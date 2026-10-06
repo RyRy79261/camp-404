@@ -146,6 +146,34 @@ describe("TodayGadget over the windows", () => {
     ).toContain("pointer-events-auto");
     // It slides in when it opens; the handle rides on the panel's edge.
     expect(frame.className).toContain("os-slide-in");
-    expect(frame.firstElementChild).toBe(handle);
+    expect(frame.firstElementChild!.firstElementChild).toBe(handle);
+  });
+
+  it("draws what the app puts below it under the tab when shut, and under the panel when open", () => {
+    const store = memoryStore(false);
+    function WithBelow() {
+      const [open, setOpen] = useStoredBoolean(store);
+      return (
+        <TodayGadget
+          open={open}
+          onOpenChange={setOpen}
+          below={<button type="button">Under it</button>}
+        >
+          <p>Your to-dos</p>
+        </TodayGadget>
+      );
+    }
+    const { container } = render(<WithBelow />);
+    const frame = container.querySelector<HTMLElement>("[data-os-today]")!;
+    const under = screen.getByRole("button", { name: "Under it" });
+    // A column: the handle's row, then what is below it, flush right.
+    expect(frame.className).toContain("flex-col");
+    expect(frame.className).toContain("items-end");
+    expect(frame.lastElementChild).toBe(under);
+    fireEvent.click(screen.getByRole("button", { name: /^Show Today/ }));
+    const panel = screen.getByRole("complementary", { name: "Today" });
+    // The panel sits in the row above it, so the slot follows the panel.
+    expect(frame.firstElementChild!.contains(panel)).toBe(true);
+    expect(frame.lastElementChild).toBe(under);
   });
 });

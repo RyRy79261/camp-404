@@ -76,6 +76,20 @@ export async function getAddressToConfirm(): Promise<string | null> {
   return session?.user.email ?? null;
 }
 
+/**
+ * The id of the sign-in session making this request, for binding something
+ * the server hands out (voice's sealed list, #356) to this sign-in alone.
+ * Null when signed out. In E2E test mode, the test login's user stands in.
+ */
+export async function getSessionId(): Promise<string | null> {
+  if (isE2ETestMode()) {
+    const fromCookie = await readTestUserCookie();
+    if (fromCookie) return `test:${fromCookie.id}`;
+  }
+  const session = await readSession();
+  return session?.session.id ?? null;
+}
+
 /** One Better Auth session read per request, shared by the two readers above. */
 const readSession = cache(async () => {
   if (!authMayServe(process.env)) return null;

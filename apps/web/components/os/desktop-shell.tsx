@@ -103,7 +103,7 @@ import {
   PhoneBar,
   PhoneHome,
   PhoneSheet,
-  PhoneSwitcher,
+  PhoneVoiceCell,
   type PhoneGroup,
   PhoneClock,
 } from "./phone-chrome";
@@ -120,6 +120,8 @@ import {
   useDisplayState,
 } from "./desktop-display";
 import { WelcomeWizard } from "./welcome-wizard";
+import { DesktopVoice, PhoneVoiceSheet } from "@/components/voice/voice-lazy";
+import { useVoiceCommand } from "@/components/voice/use-voice-command";
 import {
   ClockPrince,
   ClockReunion,
@@ -646,9 +648,9 @@ function DesktopInner({
 
   // --- The screen ----------------------------------------------------------------
   const [viewport, setViewport] = useState<Viewport>(FIRST_VIEWPORT);
-  // The phone's sheets (open programs, Today) and its soft keyboard.
-  const [switcherOpen, setSwitcherOpen] = useState(false);
+  // The phone's sheets (Today, and a captain's Voice) and its soft keyboard.
   const [todayOpen, setTodayOpen] = useState(false);
+  const [phoneVoiceOpen, setPhoneVoiceOpen] = useState(false);
   // Ctrl+K program search (program-search.tsx), on every screen.
   const [searchOpen, setSearchOpen] = useState(false);
   const [keyboard, setKeyboard] = useState(false);
@@ -696,7 +698,6 @@ function DesktopInner({
       setClosing(null);
       // A new page on a phone: the sheets over the old one go, and Today
       // stays open only on the home screen, where its body is.
-      setSwitcherOpen(false);
       if (pathname !== "/") setTodayOpen(false);
     }
     const open = held ? null : openPageAction(viewport);
@@ -1067,10 +1068,22 @@ function DesktopInner({
   // --- The phone (below md; design doc, section 5) ---------------------------------
   // The layout is CSS; these are the phone's own controls. One window shows at
   // a time (the live page, or a folder sheet on top of it), so Home puts every
-  // window away and goes to the home screen, keeping them in Open programs.
+  // window away and goes to the home screen, where an open program's icon
+  // glows and brings its window back.
+  // --- Voice (#356): a captain's only -----------------------------------------------
+  // The manifest carries `voice` for a captain on the full desktop and for
+  // nobody else, so nobody else has a mic in the page at all.
+  const voiceOn = !!manifest.voice && mode === "full" && !held;
+  const voice = useVoiceCommand({
+    consented: manifest.voice?.consented ?? false,
+  });
+  const closePhoneVoice = useCallback(() => {
+    setPhoneVoiceOpen(false);
+    voice.reset();
+  }, [voice]);
+
   /** Home on a phone: every window put away, the address the home screen. */
   const goHome = useCallback((): boolean => {
-    setSwitcherOpen(false);
     if (liveKey && !mayLeave(liveKey)) return false;
     if (liveKey) captureLive();
     for (const w of wm.windows) {
@@ -1087,7 +1100,6 @@ function DesktopInner({
   }, [captureLive, liveKey, mayLeave, router, wm.windows]);
 
   const toggleToday = useCallback(() => {
-    setSwitcherOpen(false);
     // The Today body is the home screen's page: from a program, go home.
     if (!page) {
       setTodayOpen((open) => !open);
@@ -2015,7 +2027,6 @@ function DesktopInner({
   // covers only part of it, and leaves it be.
   const phoneCovered =
     held ||
-    switcherOpen ||
     (phoneNow && searchOpen) ||
     !!page ||
     (!!top && !top.minimized && !top.lastUrl);
@@ -2036,7 +2047,7 @@ function DesktopInner({
   // Wherever a window, the Today panel or a phone program reaches down to
   // him there, he lets taps through to it rather than take them.
   const princeCovered = phoneNow
-    ? phoneCovered || todayOpen
+    ? phoneCovered || todayOpen || phoneVoiceOpen
     : (todayStored && !!today) ||
       wm.windows.some(
         (w) =>
@@ -2057,16 +2068,6 @@ function DesktopInner({
     ) : (
       <ClockPrince className={phone ? `right-2 ${princeClass}` : princeClass} />
     );
-  const switcherRows = [...wm.windows]
-    .sort((a, b) => b.z - a.z)
-    .map((w) => ({
-      id: w.id,
-      label: titleOf(w),
-      icon: iconOf(w, "size-5 shrink-0"),
-      current:
-        w.id === top?.id && !w.minimized && (w.id === liveKey || !w.lastUrl),
-    }));
-
   // Held, on a page other than the form or its completion page: the two
   // pages that gate on camp access alone (the inbox and an announcement, from
   // a push or email link) render bare, as they did before the desktop, with
@@ -2204,6 +2205,11 @@ function DesktopInner({
               count={today.count}
               clearTitleBar={!!top?.maximized}
               className="absolute bottom-2 right-0 top-3 z-30 max-md:hidden"
+              below={
+                voiceOn && !phoneNow ? (
+                  <DesktopVoice voice={voice} />
+                ) : undefined
+              }
             >
               {today.body}
             </TodayGadget>
@@ -2231,28 +2237,23 @@ function DesktopInner({
           <>
             <PhoneBar
               hidden={keyboard}
-              openCount={wm.windows.length}
-              switcherOpen={switcherOpen}
               todayOpen={todayOpen && !page}
               todayCount={today?.count}
               searchOpen={searchOpen}
               onHome={() => {
                 setTodayOpen(false);
                 setSearchOpen(false);
+                closePhoneVoice();
                 goHome();
-              }}
-              onSwitcher={() => {
-                setTodayOpen(false);
-                setSearchOpen(false);
-                setSwitcherOpen((open) => !open);
               }}
               onToday={() => {
                 setSearchOpen(false);
+                closePhoneVoice();
                 toggleToday();
               }}
               onSearch={() => {
                 setTodayOpen(false);
-                setSwitcherOpen(false);
+                closePhoneVoice();
                 if (searchOpen) {
                   setSearchOpen(false);
                   return;
@@ -2280,26 +2281,35 @@ function DesktopInner({
                   />
                 ) : null
               }
+              voice={
+                voiceOn ? (
+                  <PhoneVoiceCell
+                    recording={voice.phase === "recording"}
+                    open={phoneVoiceOpen}
+                    offline={!voice.online}
+                    onPress={() => {
+                      if (voice.phase === "recording") {
+                        voice.stop();
+                        return;
+                      }
+                      if (phoneVoiceOpen) {
+                        closePhoneVoice();
+                        return;
+                      }
+                      setTodayOpen(false);
+                      setSearchOpen(false);
+                      setPhoneVoiceOpen(true);
+                      if (voice.phase === "idle" && voice.online) {
+                        void voice.start();
+                      }
+                    }}
+                  />
+                ) : undefined
+              }
               clock={<PhoneClock burn={burn} decoration={clockCat(true)} />}
             />
-            {switcherOpen && (
-              <PhoneSheet
-                title="Open programs"
-                onClose={() => setSwitcherOpen(false)}
-              >
-                <PhoneSwitcher
-                  rows={switcherRows}
-                  onPick={(id) => {
-                    setSwitcherOpen(false);
-                    const w = wm.windows.find((x) => x.id === id);
-                    if (w) focusWindow(w);
-                  }}
-                  onCloseWindow={(id) => {
-                    if (id === liveKey && !mayLeave(id)) return;
-                    closeWindow(id);
-                  }}
-                />
-              </PhoneSheet>
+            {voiceOn && phoneNow && phoneVoiceOpen && (
+              <PhoneVoiceSheet voice={voice} onClose={closePhoneVoice} />
             )}
             {phoneNow && todayOpen && !page && today && (
               // The whole screen above the bar, the gadget boxed inside it,

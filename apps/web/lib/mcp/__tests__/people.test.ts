@@ -51,6 +51,7 @@ function row(
     telegramUserId: "123",
     aiDataConsent: true,
     aiDataConsentAt: null,
+    voiceConsentAt: null,
     campTitle: null,
     campBlurb: null,
     showOnJoin: false,

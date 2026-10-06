@@ -226,7 +226,7 @@ export function WelcomeWizard({
       title: (
         <>
           <Wide inline>Windows</Wide>
-          <Narrow inline>Open programs</Narrow>
+          <Narrow inline>Moving around</Narrow>
         </>
       ),
       body: (
@@ -240,14 +240,16 @@ export function WelcomeWizard({
             <DemoWindow />
           </Wide>
           {/* The phone's own: one program at a time, full screen (Back at
-              its top), and the bottom bar's Home and Programs. */}
+              its top), and the bottom bar's Home. There is no Programs
+              button on a phone (owner, 2026-10-06): a program left open
+              glows on the home screen. */}
           <Narrow>
             <p>
               An open program fills the screen. Back, at its top, closes it.
             </p>
             <p>
-              On the bar at the bottom, Home takes you back to your home screen,
-              and Programs lists what is still open: tap one to return to it.
+              On the bar at the bottom, Home takes you back to your home screen.
+              A program you left open glows there: tap it to return to it.
             </p>
           </Narrow>
         </>

@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "voice_consent_at" timestamp;

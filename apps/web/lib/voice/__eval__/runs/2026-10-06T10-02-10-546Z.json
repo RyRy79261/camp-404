@@ -1,0 +1,79 @@
+{
+  "at": "2026-10-06T10:02:10.546Z",
+  "model": "claude-sonnet-5-5",
+  "tally": {
+    "total": 5,
+    "exact": 5,
+    "wrong": 0,
+    "needless": 0,
+    "short": 0
+  },
+  "meetsBar": true,
+  "dollars": 0.0618,
+  "dollarsPerCommand": 0.0124,
+  "calls": 10,
+  "tokens": {
+    "input": 30,
+    "output": 1078,
+    "cacheRead": 51621,
+    "cacheWrite": 16259
+  },
+  "cases": [
+    {
+      "id": "att-01",
+      "grade": "exact",
+      "calls": 2,
+      "input": 6,
+      "cacheRead": 11285,
+      "cacheWrite": 0,
+      "output": 132,
+      "dollars": 0.0036,
+      "apiStatus": null
+    },
+    {
+      "id": "claim-01",
+      "grade": "exact",
+      "calls": 2,
+      "input": 6,
+      "cacheRead": 10012,
+      "cacheWrite": 4152,
+      "output": 182,
+      "dollars": 0.0142,
+      "apiStatus": null
+    },
+    {
+      "id": "claim-03",
+      "grade": "exact",
+      "calls": 2,
+      "input": 6,
+      "cacheRead": 9992,
+      "cacheWrite": 4152,
+      "output": 286,
+      "dollars": 0.0153,
+      "apiStatus": null
+    },
+    {
+      "id": "team-01",
+      "grade": "exact",
+      "calls": 2,
+      "input": 6,
+      "cacheRead": 7960,
+      "cacheWrite": 2763,
+      "output": 118,
+      "dollars": 0.0097,
+      "apiStatus": null
+    },
+    {
+      "id": "areas-03",
+      "grade": "exact",
+      "calls": 2,
+      "input": 6,
+      "cacheRead": 12372,
+      "cacheWrite": 5192,
+      "output": 360,
+      "dollars": 0.0191,
+      "apiStatus": null
+    }
+  ],
+  "misses": []
+}

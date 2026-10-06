@@ -110,6 +110,13 @@ type Props = {
   clearTitleBar?: boolean;
   /** The body, drawn only while open. */
   children: ReactNode;
+  /**
+   * Drawn under the tab (shut) or under the panel (open), flush with the
+   * edge, so it moves with the gadget. The app puts a captain's voice mic here
+   * (#356); this package knows nothing of voice. Takes no pointer unless its
+   * own contents ask for it.
+   */
+  below?: ReactNode;
 };
 
 /** The handle's arrow: points the way the panel will move. */
@@ -144,6 +151,7 @@ export function TodayGadget({
   className = "absolute inset-y-0 right-0",
   clearTitleBar = false,
   children,
+  below,
 }: Props) {
   const panelId = `${useId()}-today`;
   const handle = useRef<HTMLButtonElement>(null);
@@ -170,56 +178,59 @@ export function TodayGadget({
       // The frame runs the height of the desktop's edge but takes no
       // pointer itself, so a full-screen window's buttons under it still
       // answer; only the handle and the open panel do.
-      className={`pointer-events-none flex select-none items-start ${open ? "os-slide-in" : ""} ${className}`}
+      className={`pointer-events-none flex select-none flex-col items-end ${open ? "os-slide-in" : ""} ${className}`}
     >
-      <button
-        ref={handle}
-        type="button"
-        onClick={() => onOpenChange(!open)}
-        aria-expanded={open}
-        aria-controls={panelId}
-        aria-label={name}
-        title={name}
-        // 44 px to aim at; the tab drawn inside is 28 px, flush with the
-        // panel (or the screen's edge).
-        className={`group pointer-events-auto flex w-11 shrink-0 justify-end outline-none ${
-          clearTitleBar ? "mt-12" : "mt-2"
-        }`}
-      >
-        <span
-          className={`flex w-7 flex-col items-center gap-2 border border-r-0 py-3 font-pixel text-[10px] uppercase tracking-[0.3em] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-os-primary ${
-            open
-              ? "border-os-primary bg-os-primary text-os-bg"
-              : "border-os-line bg-os-chrome text-os-fg group-hover:border-os-primary group-hover:text-os-primary"
+      <div className="flex min-h-0 items-start">
+        <button
+          ref={handle}
+          type="button"
+          onClick={() => onOpenChange(!open)}
+          aria-expanded={open}
+          aria-controls={panelId}
+          aria-label={name}
+          title={name}
+          // 44 px to aim at; the tab drawn inside is 28 px, flush with the
+          // panel (or the screen's edge).
+          className={`group pointer-events-auto flex w-11 shrink-0 justify-end outline-none ${
+            clearTitleBar ? "mt-12" : "mt-2"
           }`}
         >
-          <Chevron open={open} />
-          <span aria-hidden className="[writing-mode:vertical-rl]">
-            {label}
-          </span>
-          {count > 0 && (
-            <span
-              aria-hidden
-              className={`grid h-4 min-w-4 place-items-center px-0.5 font-mono text-[10px] font-bold tracking-normal ${
-                open ? "bg-os-bg text-os-primary" : "bg-os-primary text-os-bg"
-              }`}
-            >
-              {count > 99 ? "99+" : count}
+          <span
+            className={`flex w-7 flex-col items-center gap-2 border border-r-0 py-3 font-pixel text-[10px] uppercase tracking-[0.3em] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-os-primary ${
+              open
+                ? "border-os-primary bg-os-primary text-os-bg"
+                : "border-os-line bg-os-chrome text-os-fg group-hover:border-os-primary group-hover:text-os-primary"
+            }`}
+          >
+            <Chevron open={open} />
+            <span aria-hidden className="[writing-mode:vertical-rl]">
+              {label}
             </span>
-          )}
-        </span>
-      </button>
-      {/* Closed, it is not in the DOM; aria-controls still names it. */}
-      {open && (
-        <aside
-          id={panelId}
-          aria-label={label}
-          onKeyDown={onKeyDown}
-          className="pointer-events-auto max-h-full w-80 max-w-[calc(100vw-3rem)] select-text overflow-y-auto overscroll-contain border border-r-0 border-os-primary bg-os-bg shadow-[6px_6px_0_0_rgb(0_0_0/0.45)]"
-        >
-          {children}
-        </aside>
-      )}
+            {count > 0 && (
+              <span
+                aria-hidden
+                className={`grid h-4 min-w-4 place-items-center px-0.5 font-mono text-[10px] font-bold tracking-normal ${
+                  open ? "bg-os-bg text-os-primary" : "bg-os-primary text-os-bg"
+                }`}
+              >
+                {count > 99 ? "99+" : count}
+              </span>
+            )}
+          </span>
+        </button>
+        {/* Closed, it is not in the DOM; aria-controls still names it. */}
+        {open && (
+          <aside
+            id={panelId}
+            aria-label={label}
+            onKeyDown={onKeyDown}
+            className="pointer-events-auto max-h-full w-80 max-w-[calc(100vw-3rem)] select-text overflow-y-auto overscroll-contain border border-r-0 border-os-primary bg-os-bg shadow-[6px_6px_0_0_rgb(0_0_0/0.45)]"
+          >
+            {children}
+          </aside>
+        )}
+      </div>
+      {below}
     </div>
   );
 }

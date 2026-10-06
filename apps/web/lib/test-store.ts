@@ -93,6 +93,7 @@ import {
   resetDuesStore,
 } from "./test-store-dues";
 import { resetClaimsStore } from "./test-store-claims";
+import { resetVoiceStore } from "./test-store-voice";
 import { resetKitchenMenuStore } from "./test-store-kitchen-menu";
 import {
   resetKitchenExtrasStore,
@@ -3941,7 +3942,7 @@ export const testStore = {
     ) {
       return { ok: false, error: NOT_A_MEMBER };
     }
-    const id = `test-task-${S.nextSerial++}`;
+    const id = crypto.randomUUID();
     tasks.push({
       id,
       title: input.title,
@@ -6635,6 +6636,7 @@ export const testStore = {
     resetShiftsStore();
     resetDailySheetStore();
     resetClaimsStore();
+    resetVoiceStore();
     resetKitchenMenuStore();
     resetKitchenExtrasStore();
   },
