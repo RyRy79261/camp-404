@@ -127,7 +127,11 @@ export function TaskBoard({
   const [removePending, startRemove] = React.useTransition();
 
   // The server's render is the truth once it arrives.
-  React.useEffect(() => setMoved({}), [cards]);
+  const [seenCards, setSeenCards] = React.useState(cards);
+  if (seenCards !== cards) {
+    setSeenCards(cards);
+    setMoved({});
+  }
 
   const canAdd = canAddWithoutTeam || addTeams.length > 0;
   // Pointer only. A keyboard or screen-reader user moves a card with its

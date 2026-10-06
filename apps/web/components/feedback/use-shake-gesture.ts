@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent } from "react";
 
 import { createShakeDetector } from "@camp404/core";
 
@@ -83,8 +83,8 @@ export function useShakeGesture({
   windowMs = 800,
   cooldownMs = 3000,
 }: UseShakeGestureOptions) {
-  const onShakeRef = useRef(onShake);
-  onShakeRef.current = onShake;
+  // Always the latest `onShake`, without resubscribing when it changes.
+  const fireShake = useEffectEvent(onShake);
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
@@ -107,7 +107,7 @@ export function useShakeGesture({
       lastSampleAt = now;
 
       if (detector.process({ x: acc.x, y: acc.y, z: acc.z }, now)) {
-        onShakeRef.current();
+        fireShake();
       }
     };
 

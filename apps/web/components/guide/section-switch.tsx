@@ -35,7 +35,13 @@ export function SectionSwitch({
   const [asking, setAsking] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  React.useEffect(() => setOn(isPublic), [isPublic]);
+  // A refreshed page is the truth: follow `isPublic` when it changes,
+  // adjusted for during render.
+  const [seenPublic, setSeenPublic] = React.useState(isPublic);
+  if (seenPublic !== isPublic) {
+    setSeenPublic(isPublic);
+    setOn(isPublic);
+  }
 
   async function flip(next: boolean): Promise<boolean> {
     setPending(true);

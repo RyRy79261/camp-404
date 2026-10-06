@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   act,
   cleanup,
@@ -79,9 +79,13 @@ function Form({
   );
 }
 
-let leave: (key?: string) => boolean;
+// What the guard hook returned on its last render.
+const guard = {} as { leave: (key?: string) => boolean };
 function Guard() {
-  leave = useLeaveGuard();
+  const leave = useLeaveGuard();
+  useEffect(() => {
+    guard.leave = leave;
+  });
   return null;
 }
 
@@ -153,7 +157,7 @@ describe("autosave", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(stored()).toBeNull();
     expect(screen.getByText("clean")).toBeTruthy();
-    expect(leave("note:1")).toBe(true);
+    expect(guard.leave("note:1")).toBe(true);
     expect(confirm).not.toHaveBeenCalled();
   });
 
@@ -229,7 +233,7 @@ describe("coming back to it", () => {
     type("not wanted");
     act(() => vi.advanceTimersByTime(AUTOSAVE_AFTER_MS));
     expect(stored()).not.toBeNull();
-    expect(leave("note:1")).toBe(true);
+    expect(guard.leave("note:1")).toBe(true);
     view.rerender(<Desk open={false} />);
     expect(stored()).toBeNull();
     view.rerender(<Desk />);

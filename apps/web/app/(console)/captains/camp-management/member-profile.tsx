@@ -151,25 +151,31 @@ export function MemberProfile({
   // How long they stay: from the roster row, and kept in step with it when a
   // refresh brings a newer value (a refused change reloads the roster).
   const [tier, setTier] = useState<MembershipTier | null>(row.membershipTier);
-  useEffect(() => {
+  // The row last rendered, so a change is adjusted for during render.
+  const [seenRow, setSeenRow] = useState({
+    id: row.id,
+    membershipTier: row.membershipTier,
+  });
+  if (seenRow.id !== row.id || seenRow.membershipTier !== row.membershipTier) {
+    setSeenRow({ id: row.id, membershipTier: row.membershipTier });
     setTier(row.membershipTier);
-  }, [row.id, row.membershipTier]);
-
-  // A new selection starts on a clean error slate. Deliberately NOT folded into
-  // the fetch effect below: a reload driven by a refused decision has to keep
-  // the error that caused it on screen.
-  useEffect(() => {
-    setActionError(null);
-  }, [row.id]);
+    if (seenRow.id !== row.id) {
+      // A new selection starts on a clean error slate, with its dialogs shut
+      // and its detail loading. A reload driven by a refused decision keeps
+      // the error that caused it on screen (see `decide`).
+      setActionError(null);
+      setRejectOpen(false);
+      setAssignOpen(false);
+      setDetail({ state: "loading" });
+    }
+  }
 
   // Fetch detail whenever a (new) row is selected, or `reloadToken` says the
   // loaded copy is known-stale; abandon a stale response if the captain has
-  // since clicked a different member.
+  // since clicked a different member. Whoever changes either one also puts
+  // the panel back to loading.
   useEffect(() => {
     let cancelled = false;
-    setRejectOpen(false);
-    setAssignOpen(false);
-    setDetail({ state: "loading" });
     void getMemberDetailAction(row.id)
       .then((res) => {
         if (cancelled) return;
@@ -226,6 +232,9 @@ export function MemberProfile({
         // fetch too — otherwise `approvalStatus` stays "pending" and the panel
         // keeps offering the decision that was just refused. Harmless for the
         // other error branches, which reload an unchanged member.
+        setRejectOpen(false);
+        setAssignOpen(false);
+        setDetail({ state: "loading" });
         setReloadToken((n) => n + 1);
         router.refresh();
         return;

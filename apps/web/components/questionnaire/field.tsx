@@ -1493,7 +1493,12 @@ function LongTextField({
     "aria-required": true | undefined;
   };
 }) {
-  const dictation = useDictationToggle();
+  const {
+    dictating,
+    pillRef: dictatePillRef,
+    open: openDictation,
+    close: closeDictation,
+  } = useDictationToggle();
   const voiceSupported = useVoiceSupported();
 
   function appendTranscript(text: string) {
@@ -1516,16 +1521,16 @@ function LongTextField({
       />
       {question.enableDictation &&
         voiceSupported &&
-        (dictation.dictating ? (
+        (dictating ? (
           <RecorderPanel
             onTranscript={appendTranscript}
-            onDismiss={dictation.close}
+            onDismiss={closeDictation}
             promptKey="questionnaire"
           />
         ) : (
           <DictatePill
-            ref={dictation.pillRef}
-            onActivate={dictation.open}
+            ref={dictatePillRef}
+            onActivate={openDictation}
             className="self-end"
           />
         ))}

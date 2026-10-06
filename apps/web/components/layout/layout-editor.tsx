@@ -142,7 +142,9 @@ export function LayoutWorkspace({
   const [saving, startSave] = React.useTransition();
   const [plotOpen, setPlotOpen] = React.useState(false);
   const [announcement, setAnnouncement] = React.useState("");
-  const [focusId, setFocusId] = React.useState<string | null>(null);
+  // A piece waiting for the keyboard focus. Each ask is a new object, so
+  // asking for the same piece twice moves the focus twice.
+  const [focusAsk, setFocusAsk] = React.useState<{ id: string } | null>(null);
   // An older version opens from the Versions tab, and keeps it in view.
   const [chosenTab, setChosenTab] = React.useState<RailTab | null>(
     underBanner ? "versions" : null,
@@ -182,13 +184,12 @@ export function LayoutWorkspace({
 
   // A piece just added (or picked in the key) takes the keyboard focus.
   React.useEffect(() => {
-    if (!focusId) return;
+    if (!focusAsk) return;
     const node = svgWrap.current?.querySelector<SVGGElement>(
-      `[data-piece="${focusId}"]`,
+      `[data-piece="${focusAsk.id}"]`,
     );
     node?.focus({ preventScroll: true });
-    setFocusId(null);
-  }, [focusId]);
+  }, [focusAsk]);
 
   function change(next: CampLayout, what: string) {
     setLayout(next);
@@ -234,7 +235,7 @@ export function LayoutWorkspace({
       `${LAYOUT_KIND_LABELS[addKind]} added`,
     );
     pick(piece.id);
-    setFocusId(piece.id);
+    setFocusAsk({ id: piece.id });
     setAnnouncement(`${LAYOUT_KIND_LABELS[addKind]} added in the middle.`);
   }
 
@@ -441,7 +442,7 @@ export function LayoutWorkspace({
             onPick={(id) => {
               const next = selectedId === id && !editing ? null : id;
               pick(next);
-              if (next && editing) setFocusId(next);
+              if (next && editing) setFocusAsk({ id: next });
             }}
           />
         </Card>

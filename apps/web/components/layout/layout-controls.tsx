@@ -99,6 +99,11 @@ export function RestoreVersionButton({
   );
 }
 
+/** The origin never changes while the page is open. */
+function subscribeToNothing(): () => void {
+  return () => {};
+}
+
 /**
  * A captain's neighbour link (the rail's Share tab): off until turned on,
  * then the link to copy, Replace link (the old one stops working) and Stop
@@ -117,9 +122,13 @@ export function NeighbourShareControls({
   const [busy, setBusy] = React.useState<"on" | "new" | "off" | null>(null);
   const [confirm, setConfirm] = React.useState<"new" | "off" | null>(null);
   const [copied, setCopied] = React.useState(false);
-  const [origin, setOrigin] = React.useState("");
-
-  React.useEffect(() => setOrigin(window.location.origin), []);
+  // The page's own origin, known only in the browser: empty in the server's
+  // render (and while hydrating), so the two agree.
+  const origin = React.useSyncExternalStore(
+    subscribeToNothing,
+    () => window.location.origin,
+    () => "",
+  );
 
   const url = token ? `${origin}${neighbourPath(token)}` : "";
 

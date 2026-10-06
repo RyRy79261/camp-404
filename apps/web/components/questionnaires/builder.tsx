@@ -200,7 +200,10 @@ export function QuestionnaireBuilderV2({
   // The block last clicked or focused in the active section: a page break
   // goes after it. Null when the author last worked on the section itself.
   const [activeBlock, setActiveBlock] = React.useState<string | null>(null);
-  const [focusTarget, setFocusTarget] = React.useState<string | null>(null);
+  // The element id waiting for focus. Each ask is a new object, so asking for
+  // the same element twice moves the focus twice.
+  const [focusAsk, setFocusAsk] = React.useState<{ id: string } | null>(null);
+  const setFocusTarget = (id: string) => setFocusAsk({ id });
 
   // Which rules the panel shows: none until the author tries a save or a
   // publish, then the live result of that step's rules, so a fix clears its
@@ -241,10 +244,10 @@ export function QuestionnaireBuilderV2({
   );
 
   // Move focus to what was just added, and bring it into view.
-  React.useEffect(() => {
-    if (!focusTarget) return;
-    const element = document.getElementById(focusTarget);
-    setFocusTarget(null);
+  // Reads the motion setting at the moment of the ask; a change to it later
+  // does not move the focus again.
+  const reveal = React.useEffectEvent((id: string) => {
+    const element = document.getElementById(id);
     if (!element) return;
     element.scrollIntoView?.({
       block: "center",
@@ -254,7 +257,10 @@ export function QuestionnaireBuilderV2({
       "input:not([type=hidden]):not([disabled]), textarea",
     );
     field?.focus({ preventScroll: true });
-  }, [focusTarget, reducedMotion]);
+  });
+  React.useEffect(() => {
+    if (focusAsk) reveal(focusAsk.id);
+  }, [focusAsk]);
 
   // --- draft mutation ----------------------------------------------------
 

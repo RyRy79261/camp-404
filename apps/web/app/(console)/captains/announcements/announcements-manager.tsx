@@ -351,7 +351,13 @@ function AnnouncementsManagerView({
       ),
   });
   const [error, setError] = useState<string | null>(null);
-  const dictation = useDictationToggle();
+  const {
+    dictating,
+    setDictating,
+    pillRef: dictatePillRef,
+    open: openDictation,
+    close: closeDictation,
+  } = useDictationToggle();
   const voiceSupported = useVoiceSupported();
   const [pending, startTransition] = useTransition();
   // A one-tap action on a draft card: which card, and which button spins.
@@ -418,7 +424,7 @@ function AnnouncementsManagerView({
   const reset = () => {
     setForm(emptyForm);
     setError(null);
-    dictation.setDictating(false);
+    setDictating(false);
   };
 
   // Append a dictated transcript to the message body (mirrors the questionnaire
@@ -680,15 +686,15 @@ function AnnouncementsManagerView({
             />
             {/* Voice dictation — same pattern as the questionnaire long-text
                 fields: tap to swap in the recorder, each transcript appends. */}
-            {!voiceSupported ? null : dictation.dictating ? (
+            {!voiceSupported ? null : dictating ? (
               <RecorderPanel
                 onTranscript={appendToBody}
-                onDismiss={dictation.close}
+                onDismiss={closeDictation}
               />
             ) : (
               <DictatePill
-                ref={dictation.pillRef}
-                onActivate={dictation.open}
+                ref={dictatePillRef}
+                onActivate={openDictation}
                 disabled={pending}
                 className="self-end"
               />

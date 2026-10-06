@@ -61,6 +61,12 @@ export function usePeek({
   const reduced = useReducedMotion();
   const [peeking, setPeeking] = useState(false);
   const off = useRef<number | undefined>(undefined);
+  // Reduced motion coming on ends a peek that is showing, at once.
+  const [wasReduced, setWasReduced] = useState(reduced);
+  if (reduced !== wasReduced) {
+    setWasReduced(reduced);
+    if (reduced) setPeeking(false);
+  }
 
   const show = useCallback(() => {
     if (reduced) return;
@@ -73,7 +79,6 @@ export function usePeek({
   useEffect(() => {
     if (reduced) {
       window.clearTimeout(off.current);
-      setPeeking(false);
       return;
     }
     let t: number | undefined;

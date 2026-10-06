@@ -242,14 +242,6 @@ export function ActivationForm({
   const [query, setQuery] = React.useState("");
   const [confirmOpen, setConfirmOpen] = React.useState(false);
 
-  // Starts "resolving": the first count is on its way the moment the form
-  // opens on a complete audience.
-  const [preview, setPreview] = React.useState<PreviewState>({
-    loading: true,
-    count: null,
-    error: null,
-  });
-
   // The spec the preview is keyed on, or "" when the audience is incomplete.
   // A string, so the effect below depends on the VALUE, not a fresh object.
   const incomplete = sendRefusal({
@@ -267,19 +259,31 @@ export function ActivationForm({
           targetUserIds: scope === "individual" ? [...selected].sort() : [],
         });
 
+  // "Resolving" while a count is on its way: from the moment the form opens
+  // on a complete audience, and again each time the audience changes. An
+  // incomplete one shows no count. The locked "close the current send" state
+  // leaves it as it was. Adjusted for during render, against the spec last
+  // seen.
+  const [preview, setPreview] = React.useState<PreviewState>(() =>
+    openActivationId ? COUNTING : previewBeforeCount(specKey),
+  );
+  const [seenSpec, setSeenSpec] = React.useState({ specKey, openActivationId });
+  if (
+    seenSpec.specKey !== specKey ||
+    seenSpec.openActivationId !== openActivationId
+  ) {
+    setSeenSpec({ specKey, openActivationId });
+    if (!openActivationId) setPreview(previewBeforeCount(specKey));
+  }
+
   // LIVE count of who this reaches, computed on the server by the same gate
   // and resolver the send uses. Debounced 300 ms so ticking through a member
   // list does not fan out a query per checkbox; `cancelled` drops the answer
   // to a spec no longer on screen. An incomplete audience asks nothing of the
   // server, and nor does the locked "close the current send" state.
   React.useEffect(() => {
-    if (openActivationId) return;
-    if (!specKey) {
-      setPreview({ loading: false, count: null, error: null });
-      return;
-    }
+    if (openActivationId || !specKey) return;
     let cancelled = false;
-    setPreview({ loading: true, count: null, error: null });
     const timer = setTimeout(() => {
       void (async () => {
         const result = await previewAudienceCount(JSON.parse(specKey));
@@ -932,6 +936,14 @@ interface PreviewState {
   loading: boolean;
   count: number | null;
   error: string | null;
+}
+
+const COUNTING: PreviewState = { loading: true, count: null, error: null };
+const NO_COUNT: PreviewState = { loading: false, count: null, error: null };
+
+/** The preview before the server answers: counting, or nothing to count. */
+function previewBeforeCount(specKey: string): PreviewState {
+  return specKey ? COUNTING : NO_COUNT;
 }
 
 /**

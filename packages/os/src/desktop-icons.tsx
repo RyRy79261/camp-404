@@ -208,7 +208,8 @@ export function DesktopIcons({
     x1: number;
     y1: number;
   } | null>(null);
-  const keyMenuAt = useRef(0);
+  // The event time (`timeStamp`) of the last keyboard-opened menu.
+  const keyMenuAt = useRef(Number.NEGATIVE_INFINITY);
   // A finger or a pen (a tablet at desktop width): the browser's dblclick is
   // not reliable for a double tap (iOS Safari), so two taps on one icon open
   // it here, and the dblclick that may follow is ignored.
@@ -350,7 +351,7 @@ export function DesktopIcons({
     // here) means the next contextmenu event is a real right-click, not the
     // echo of a keyboard-opened menu: without this, a right-click within a
     // second of Shift+F10 was swallowed.
-    keyMenuAt.current = 0;
+    keyMenuAt.current = Number.NEGATIVE_INFINITY;
     if (e.button !== 0 || e.target !== e.currentTarget) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x0 = e.clientX - rect.left;
@@ -392,7 +393,7 @@ export function DesktopIcons({
     e.preventDefault();
     e.stopPropagation();
     // The browser's own contextmenu after Shift+F10 or the Menu key.
-    if (Date.now() - keyMenuAt.current < KEY_MENU_ECHO_MS) return;
+    if (e.timeStamp - keyMenuAt.current < KEY_MENU_ECHO_MS) return;
     if (key) focusIcon(key);
     askMenu(key, e.clientX, e.clientY);
   }
@@ -404,7 +405,7 @@ export function DesktopIcons({
 
     if ((e.key === "F10" && e.shiftKey) || e.key === "ContextMenu") {
       e.preventDefault();
-      keyMenuAt.current = Date.now();
+      keyMenuAt.current = e.timeStamp;
       const r = (el ?? e.currentTarget).getBoundingClientRect();
       askMenu(
         key,

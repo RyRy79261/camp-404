@@ -40,12 +40,17 @@ export function PublicMemberProfile({
 }) {
   const [detail, setDetail] = useState<State>({ state: "loading" });
   const panelRef = useRef<HTMLElement>(null);
+  // A newly selected row starts loading, adjusted for during render.
+  const [seenRowId, setSeenRowId] = useState(row.id);
+  if (seenRowId !== row.id) {
+    setSeenRowId(row.id);
+    setDetail({ state: "loading" });
+  }
 
   // Load the public card whenever a (new) row is selected; abandon a stale
   // response if the member has since opened a different row.
   useEffect(() => {
     let cancelled = false;
-    setDetail({ state: "loading" });
     void getPublicMemberProfileAction(row.id)
       .then((res) => {
         if (cancelled) return;

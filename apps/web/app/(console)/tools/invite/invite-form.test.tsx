@@ -48,7 +48,7 @@ describe("InviteForm", () => {
       maxUses: 1,
       requiresApproval: true,
     });
-    render(<InviteForm isCaptain={false} />);
+    render(<InviteForm isCaptain={false} initialCode="dusty-otter" />);
     await submitWhenAvailable();
 
     const heading = await screen.findByRole("heading", {
@@ -63,7 +63,7 @@ describe("InviteForm", () => {
       error: "'dusty-otter' is already taken.",
       taken: "dusty-otter",
     });
-    render(<InviteForm isCaptain={false} />);
+    render(<InviteForm isCaptain={false} initialCode="dusty-otter" />);
     await submitWhenAvailable();
 
     await screen.findByText("'dusty-otter' is already taken.");

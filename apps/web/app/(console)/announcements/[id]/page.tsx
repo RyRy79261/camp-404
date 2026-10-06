@@ -6,7 +6,7 @@ import { MarkdownBody } from "@camp404/ui/components/markdown-body";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { getAnnouncementForMember, markRead } from "@/lib/notifications";
 import { ensureCampUser, hasCampAccess } from "@/lib/users";
-import { presentationIcon } from "../../notifications/presentation-meta";
+import { PresentationIcon } from "../../notifications/presentation-icon";
 
 export const dynamic = "force-dynamic";
 
@@ -44,8 +44,6 @@ export default async function AnnouncementPage({
   // Opening it reads it. Acknowledging stays with the full-screen gate.
   await markRead(campUser.id, [announcement.deliveryId]);
 
-  const Icon = presentationIcon(announcement.presentation);
-
   return (
     <article className="flex w-full max-w-3xl flex-col gap-5">
       <Link
@@ -58,7 +56,11 @@ export default async function AnnouncementPage({
 
       <header className="flex flex-col gap-3">
         <p className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-[0.25em] text-accent">
-          <Icon className="h-3.5 w-3.5" aria-hidden />
+          <PresentationIcon
+            presentation={announcement.presentation}
+            className="h-3.5 w-3.5"
+            aria-hidden
+          />
           Announcement
           {announcement.senderName ? ` · From ${announcement.senderName}` : ""}
         </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { Surface } from "@camp404/os";
 import { BOOT_COOKIE, type BootLine } from "@/lib/boot";
 
@@ -18,6 +18,20 @@ import { BOOT_COOKIE, type BootLine } from "@/lib/boot";
 
 const LINE_MS = 70;
 const HOLD_MS = 450;
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+function subscribeReducedMotion(onChange: () => void) {
+  const query = window.matchMedia(REDUCED_MOTION);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+const reducedMotion = () => window.matchMedia(REDUCED_MOTION).matches;
+const noReducedMotion = () => false;
+
+function markBooted() {
+  document.cookie = `${BOOT_COOKIE}=1; path=/; SameSite=Lax`;
+}
 
 export function ConsoleBoot({
   lines,
@@ -30,15 +44,22 @@ export function ConsoleBoot({
   const [done, setDone] = useState(false);
   const [shown, setShown] = useState(0);
   const total = lines.length;
+  // Under reduced motion it ends at once (CSS hid it on the first paint).
+  const reduced = useSyncExternalStore(
+    subscribeReducedMotion,
+    reducedMotion,
+    noReducedMotion,
+  );
+  if (reduced && !done) setDone(true);
 
   const finish = useCallback(() => {
-    document.cookie = `${BOOT_COOKIE}=1; path=/; SameSite=Lax`;
+    markBooted();
     setDone(true);
   }, []);
 
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      finish();
+    if (reduced) {
+      markBooted();
       return;
     }
     let i = 0;
@@ -55,7 +76,7 @@ export function ConsoleBoot({
       window.clearInterval(tick);
       window.clearTimeout(hold);
     };
-  }, [finish, total]);
+  }, [finish, total, reduced]);
 
   // The desktop under the boot sleeps until it goes. Left alone if it was
   // asleep already (a blocking form), so this never wakes what something

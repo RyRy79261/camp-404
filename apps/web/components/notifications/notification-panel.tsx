@@ -87,16 +87,25 @@ export function NotificationPanel({
   // The server's clock, frozen per open so every row in one panel agrees.
   const [now, setNow] = useState(() => new Date());
 
-  useEffect(() => {
-    if (!open) {
-      // Drop the last open's rows, so reopening shows "Loading…" rather than a
-      // stale list whose unread dots the inbox may since have cleared.
-      setState({ status: "loading" });
-      return;
-    }
-    let cancelled = false;
+  // Opening (or asking again) starts on "Loading…" with the clock frozen
+  // afresh; closing drops the last open's rows, so reopening shows "Loading…"
+  // rather than a stale list whose unread dots the inbox may since have
+  // cleared.
+  function changeOpen(next: boolean) {
+    if (next === open) return;
+    setOpen(next);
+    setState({ status: "loading" });
+    if (next) setNow(new Date());
+  }
+  function refetch() {
     setState({ status: "loading" });
     setNow(new Date());
+    setNonce((n) => n + 1);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
     void fetchNotificationPanelAction()
       .then((result) => {
         if (cancelled) return;
@@ -126,7 +135,7 @@ export function NotificationPanel({
   const rows = data ? data.pending.length + data.recent.length : 0;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={changeOpen}>
       <PopoverTrigger asChild>
         <NotificationBell
           count={count}
@@ -165,11 +174,11 @@ export function NotificationPanel({
             // a row that arrived since must not find the control dead.
             disabled={!data || data.clearable === 0}
             className="-mr-2"
-            onDone={() => setNonce((n) => n + 1)}
+            onDone={() => refetch()}
           />
         </div>
 
-        {pinned?.(() => setOpen(false))}
+        {pinned?.(() => changeOpen(false))}
 
         <div className="max-h-[60vh] overflow-y-auto">
           {state.status === "loading" ? (
@@ -185,7 +194,7 @@ export function NotificationPanel({
                 variant="outline"
                 size="sm"
                 className="mt-3"
-                onClick={() => setNonce((n) => n + 1)}
+                onClick={() => refetch()}
               >
                 Try again
               </Button>
@@ -203,7 +212,7 @@ export function NotificationPanel({
                 <PanelQuestionnaireRow
                   key={q.activationId}
                   item={q}
-                  onNavigate={() => setOpen(false)}
+                  onNavigate={() => changeOpen(false)}
                 />
               ))}
               {data?.recent.map((item) => (
@@ -211,7 +220,7 @@ export function NotificationPanel({
                   key={item.id}
                   item={item}
                   now={now}
-                  onNavigate={() => setOpen(false)}
+                  onNavigate={() => changeOpen(false)}
                 />
               ))}
             </ul>
@@ -221,7 +230,7 @@ export function NotificationPanel({
         <div className="border-t border-border px-4 py-2.5">
           <Link
             href="/notifications"
-            onClick={() => setOpen(false)}
+            onClick={() => changeOpen(false)}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-accent underline-offset-4 hover:underline"
           >
             See all

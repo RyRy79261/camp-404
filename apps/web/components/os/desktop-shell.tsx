@@ -55,6 +55,7 @@ import {
   type DesktopIconItem,
   type DesktopLayout,
   type DesktopMenuRequest,
+  type LastSeenCopy,
   type OsWindow,
   type Viewport,
   type WmAction,
@@ -360,6 +361,21 @@ function placeNew(
     ...after,
     windows: after.windows.map((w) => (w.id === id ? { ...w, ...at } : w)),
   };
+}
+
+/** The last-seen copies the windows draw, by window key. */
+type CopyView = ReadonlyMap<string, LastSeenCopy>;
+type CopyChange =
+  | "clear"
+  | { set?: [key: string, copy: LastSeenCopy]; drop: readonly string[] };
+const NO_COPIES: CopyView = new Map();
+
+function applyCopyChange(view: CopyView, change: CopyChange): CopyView {
+  if (change === "clear") return view.size === 0 ? view : NO_COPIES;
+  const next = new Map(view);
+  for (const key of change.drop) next.delete(key);
+  if (change.set) next.set(...change.set);
+  return next;
 }
 
 function reducer(state: WmState<string>, action: Action): WmState<string> {
@@ -706,9 +722,11 @@ function DesktopInner({
   const top = topWindow(wm);
 
   // --- Last-seen copies (memory only) ---------------------------------------------
+  // The store keeps the copies within their budget; `copyView` is what the
+  // windows draw, changed alongside it on every put, drop and clear.
   const copies = useRef<LastSeenStore>(null);
   if (copies.current === null) copies.current = new LastSeenStore();
-  const [, copiesChanged] = useReducer((n: number) => n + 1, 0);
+  const [copyView, changeCopyView] = useReducer(applyCopyChange, NO_COPIES);
   const scrollTops = useRef(new Map<string, number>());
   const resumeKey = useRef<string | null>(null);
 
@@ -720,9 +738,18 @@ function DesktopInner({
     scrollTops.current.set(liveKey, body.scrollTop);
     const copy = captureLastSeen(body);
     const store = copies.current!;
-    if (copy) store.put(liveKey, copy);
-    else store.drop(liveKey);
-    copiesChanged();
+    if (copy) {
+      const evicted = store.put(liveKey, copy);
+      const kept = store.get(liveKey);
+      changeCopyView(
+        kept
+          ? { set: [liveKey, kept], drop: evicted }
+          : { drop: [liveKey, ...evicted] },
+      );
+    } else {
+      store.drop(liveKey);
+      changeCopyView({ drop: [liveKey] });
+    }
   }, [held, liveKey]);
 
   // --- The member's layout (icons, shortcuts, folders) ------------------------------
@@ -980,6 +1007,7 @@ function DesktopInner({
   const closeWindow = useCallback(
     (id: string) => {
       copies.current!.drop(id);
+      changeCopyView({ drop: [id] });
       scrollTops.current.delete(id);
       // Closed on purpose (after the guard asked): no draft of it is kept,
       // in memory or in this tab's storage.
@@ -1145,6 +1173,7 @@ function DesktopInner({
     poppedFrom.current = null;
     if (from === liveKey) return;
     copies.current!.drop(from);
+    changeCopyView({ drop: [from] });
     scrollTops.current.delete(from);
     dispatch({ type: "close", id: from });
   }, [liveKey, url]);
@@ -1169,7 +1198,9 @@ function DesktopInner({
 
   // --- The stack, kept for this tab (layout only) -----------------------------------
   const storageKey = windowStorageKey(userId);
-  const [restored, setRestored] = useState(false);
+  // Restored once: nothing is drawn from it, so it is a ref. The stack is
+  // saved only after the restore has read what this tab kept.
+  const restored = useRef(false);
   const isFolderKey = useCallback(
     (key: string) => allowed.has(key) && !programs.has(key),
     [allowed, programs],
@@ -1177,7 +1208,7 @@ function DesktopInner({
   // A layout effect: the live window takes its place on the measured screen
   // in the same commit as hydration, so it never grows under a first click.
   useLayoutEffect(() => {
-    if (restored || held) return;
+    if (restored.current || held) return;
     let saved: OsWindow<string>[] = [];
     try {
       forgetOtherMembers(window.sessionStorage, userId);
@@ -1210,7 +1241,7 @@ function DesktopInner({
         ...(liveKey && page ? [windowProgram(page.programId, liveKey)] : []),
       ],
     });
-    setRestored(true);
+    restored.current = true;
   }, [
     allowed,
     held,
@@ -1218,14 +1249,13 @@ function DesktopInner({
     liveKey,
     mode,
     page,
-    restored,
     storageKey,
     userId,
     viewport,
   ]);
 
   useEffect(() => {
-    if (!restored || held) return;
+    if (!restored.current || held) return;
     try {
       window.sessionStorage.setItem(
         storageKey,
@@ -1234,7 +1264,7 @@ function DesktopInner({
     } catch {
       // Not kept; the desktop still works.
     }
-  }, [held, mode, restored, storageKey, wm.windows]);
+  }, [held, mode, storageKey, wm.windows]);
 
   // --- A new manifest: drop what the member may no longer open ----------------------
   // The version changes only when what the member may open changes (a
@@ -1247,7 +1277,7 @@ function DesktopInner({
     // draft typed into one.
     copies.current!.clear();
     keptDrafts.clear();
-    copiesChanged();
+    changeCopyView("clear");
     const programIds = [...programIndex(manifest).keys()];
     const next = pruneLayout(layout, {
       desktopKeys: desktopEntries(manifest, { cells: {}, items: [] }).map(
@@ -1286,7 +1316,7 @@ function DesktopInner({
     copies.current!.clear();
     keptDrafts.clear();
     scrollTops.current.clear();
-    copiesChanged();
+    changeCopyView("clear");
     setLayout(savedLayout);
   }, [keptDrafts, savedLayout, userId]);
 
@@ -1307,7 +1337,7 @@ function DesktopInner({
         setMenu(null);
         setNameDialog(null);
         copies.current!.clear();
-        copiesChanged();
+        changeCopyView("clear");
         // The layout still draws the desktop it drew before the hold; ask
         // the server for the held one.
         if (mode !== "held") router.refresh();
@@ -1899,7 +1929,7 @@ function DesktopInner({
           } else if (!w.lastUrl) {
             body = folderBody(w.id);
           } else {
-            const copy = w.minimized ? undefined : copies.current!.get(w.id);
+            const copy = w.minimized ? undefined : copyView.get(w.id);
             body = (
               <div inert aria-hidden className="h-full">
                 {copy ? (

@@ -70,7 +70,13 @@ export function ReportBugDialog({
 }: ReportBugDialogProps) {
   const [kind, setKind] = React.useState<FeedbackKind>(defaultKind);
   const [description, setDescription] = React.useState("");
-  const dictation = useDictationToggle();
+  const {
+    dictating,
+    setDictating,
+    pillRef: dictatePillRef,
+    open: openDictation,
+    close: closeDictation,
+  } = useDictationToggle();
   const voiceSupported = useVoiceSupported();
   const [dictated, setDictated] = React.useState(false);
   const [useAi, setUseAi] = React.useState(true);
@@ -92,23 +98,33 @@ export function ReportBugDialog({
   > | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
-  // Reset on each closed→open transition.
-  React.useEffect(() => {
-    if (!open) return;
-    setKind(defaultKind);
-    setDescription(defaultDescription);
-    setAttached(null);
-    dictation.setDictating(false);
-    setDictated(false);
-    setUseAi(true);
-    setScreenshot(null);
-    setScreenshotId(null);
-    setError(null);
-    setResult(null);
-    // Reset only when the dialog opens: `dictation` is a fresh object every
-    // render, and listing it would wipe the form while the member types.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on open only; dictation is new each render
-  }, [open, defaultKind, defaultDescription]);
+  // Reset on each closed→open transition (and when the defaults change while
+  // open), adjusted during render against the last props seen rather than in
+  // an effect, so the reset form is what the opening dialog first paints.
+  const [seen, setSeen] = React.useState({
+    open: false,
+    defaultKind,
+    defaultDescription,
+  });
+  if (
+    seen.open !== open ||
+    seen.defaultKind !== defaultKind ||
+    seen.defaultDescription !== defaultDescription
+  ) {
+    setSeen({ open, defaultKind, defaultDescription });
+    if (open) {
+      setKind(defaultKind);
+      setDescription(defaultDescription);
+      setAttached(null);
+      setDictating(false);
+      setDictated(false);
+      setUseAi(true);
+      setScreenshot(null);
+      setScreenshotId(null);
+      setError(null);
+      setResult(null);
+    }
+  }
 
   function appendTranscript(text: string) {
     const cleaned = text.trim();
@@ -271,10 +287,10 @@ export function ReportBugDialog({
                   </Label>
                   {/* Voice dictation — appends to the description. Hidden in
                       a browser that cannot record. */}
-                  {voiceSupported && !dictation.dictating && (
+                  {voiceSupported && !dictating && (
                     <DictatePill
-                      ref={dictation.pillRef}
-                      onActivate={dictation.open}
+                      ref={dictatePillRef}
+                      onActivate={openDictation}
                     />
                   )}
                 </div>
@@ -290,13 +306,13 @@ export function ReportBugDialog({
                       : "Describe the capability or improvement you have in mind."
                   }
                 />
-                {voiceSupported && dictation.dictating && (
+                {voiceSupported && dictating && (
                   // No promptKey: the transcribe route has no bug-report
                   // prompt, and free-form feedback doesn't benefit from one.
                   // Dictation runs with the generic (unbiased) transcription.
                   <RecorderPanel
                     onTranscript={appendTranscript}
-                    onDismiss={dictation.close}
+                    onDismiss={closeDictation}
                   />
                 )}
               </div>

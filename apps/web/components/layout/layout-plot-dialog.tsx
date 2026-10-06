@@ -85,16 +85,20 @@ export function PlotDialog({
     message: string;
   } | null>(null);
 
-  // Opening again starts from the plan as it is now.
-  React.useEffect(() => {
-    if (!open) return;
-    setWidth(String(plot.widthM));
-    setDepth(String(plot.depthM));
-    setNorth(plot.north);
-    setPart(plot.part);
-    setEdges(plot.edges);
-    setError(null);
-  }, [open, plot]);
+  // Opening again starts from the plan as it is now (and a plan that changes
+  // while open replaces the draft), adjusted for during render.
+  const [seen, setSeen] = React.useState({ open: false, plot });
+  if (seen.open !== open || seen.plot !== plot) {
+    setSeen({ open, plot });
+    if (open) {
+      setWidth(String(plot.widthM));
+      setDepth(String(plot.depthM));
+      setNorth(plot.north);
+      setPart(plot.part);
+      setEdges(plot.edges);
+      setError(null);
+    }
+  }
 
   const other = otherHalfSide(part);
 

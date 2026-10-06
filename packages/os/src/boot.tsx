@@ -1,9 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 const LINE_MS = 110;
 const HOLD_MS = 900;
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+function subscribeReducedMotion(onChange: () => void) {
+  const query = window.matchMedia(REDUCED_MOTION);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+const reducedMotion = () => window.matchMedia(REDUCED_MOTION).matches;
+const noReducedMotion = () => false;
 
 type Props = {
   /** The start-up log, one line at a time. */
@@ -18,15 +28,18 @@ type Props = {
 // A BIOS-style start-up that ends in the app's joke. Any key, click or tap
 // skips it; under reduced motion every line shows at once and it ends fast.
 export function Boot({ lines, finale, label, onDone }: Props) {
-  const [shown, setShown] = useState(0);
+  const [ticked, setShown] = useState(0);
   const total = lines.length;
+  const reduced = useSyncExternalStore(
+    subscribeReducedMotion,
+    reducedMotion,
+    noReducedMotion,
+  );
+  // Under reduced motion every line, and the finale, show at once.
+  const shown = reduced ? total + 1 : ticked;
 
   useEffect(() => {
-    const reduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
     if (reduced) {
-      setShown(total + 1);
       const t = window.setTimeout(onDone, 700);
       return () => window.clearTimeout(t);
     }
@@ -40,7 +53,7 @@ export function Boot({ lines, finale, label, onDone }: Props) {
       }
     }, LINE_MS);
     return () => window.clearInterval(tick);
-  }, [onDone, total]);
+  }, [onDone, total, reduced]);
 
   useEffect(() => {
     const skip = () => onDone();

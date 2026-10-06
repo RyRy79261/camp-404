@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { StartMenu, type StartMenuItem } from "./start-menu";
 
 /** One open window's button on the taskbar. */
@@ -57,7 +51,7 @@ type Props<K extends string> = {
    * and the way to shut the menu.
    */
   renderStartMenu?: (menu: {
-    anchor: RefObject<HTMLElement | null>;
+    anchor: HTMLElement | null;
     onClose: (refocus: boolean) => void;
   }) => ReactNode;
 };
@@ -79,12 +73,16 @@ export function Taskbar<K extends string>({
   console: consoleLook = false,
 }: Props<K>) {
   const [menu, setMenu] = useState(false);
-  const start = useRef<HTMLButtonElement>(null);
+  // The Start button, kept in state: the menu is drawn with it as its anchor.
+  const [start, setStart] = useState<HTMLButtonElement | null>(null);
 
-  const close = useCallback((refocus: boolean) => {
-    setMenu(false);
-    if (refocus) start.current?.focus();
-  }, []);
+  const close = useCallback(
+    (refocus: boolean) => {
+      setMenu(false);
+      if (refocus) start?.focus();
+    },
+    [start],
+  );
 
   return (
     <>
@@ -106,7 +104,7 @@ export function Taskbar<K extends string>({
         className="fixed inset-x-0 bottom-0 z-[90] flex h-10 select-none items-center gap-1 border-t border-os-primary/60 bg-os-chrome px-1"
       >
         <button
-          ref={start}
+          ref={setStart}
           type="button"
           data-os-start-button
           aria-haspopup="menu"

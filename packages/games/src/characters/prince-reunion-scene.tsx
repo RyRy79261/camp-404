@@ -249,7 +249,9 @@ export function PrinceReunion({
   const heartEl = useRef<HTMLSpanElement>(null);
   const bubbleEl = useRef<HTMLSpanElement>(null);
   const coveredNow = useRef(covered);
-  coveredNow.current = covered;
+  useLayoutEffect(() => {
+    coveredNow.current = covered;
+  }, [covered]);
   /** The scene's own clock, in ms; kept across a pause. */
   const elapsed = useRef(0);
   /** How long the empty clock has been seen before she walks on, in ms. */
@@ -262,13 +264,9 @@ export function PrinceReunion({
     setAtlas(drawAtlas(layout, resolveColours(frames.palette, root.current)));
   }, [frames, layout]);
 
-  useEffect(() => {
-    if (reduced) setOver(true);
-  }, [reduced]);
-  useEffect(() => {
-    // No canvas to draw the scene with: the pair, drawn as squares.
-    if (atlas === null) setOver(true);
-  }, [atlas]);
+  // Over for good under reduced motion, or with no canvas to draw the scene
+  // with (the pair, drawn as squares).
+  if (!over && (reduced || atlas === null)) setOver(true);
 
   const paint = useCallback(
     (shot: ReunionShot) => {

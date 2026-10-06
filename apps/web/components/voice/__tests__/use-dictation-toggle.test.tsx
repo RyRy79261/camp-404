@@ -9,18 +9,19 @@ import { useDictationToggle } from "../use-dictation-toggle";
 afterEach(cleanup);
 
 function Host() {
-  const dictation = useDictationToggle();
+  const { dictating, setDictating, open, close, pillRef } =
+    useDictationToggle();
   return (
     <>
-      <button type="button" onClick={() => dictation.setDictating(false)}>
+      <button type="button" onClick={() => setDictating(false)}>
         Reset form
       </button>
-      {dictation.dictating ? (
-        <button type="button" onClick={dictation.close}>
+      {dictating ? (
+        <button type="button" onClick={close}>
           Close dictation
         </button>
       ) : (
-        <DictatePill ref={dictation.pillRef} onActivate={dictation.open} />
+        <DictatePill ref={pillRef} onActivate={open} />
       )}
     </>
   );

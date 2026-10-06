@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
@@ -149,17 +150,17 @@ export function ProgramSearch({
   phone = false,
 }: ProgramSearchProps) {
   const list = useMemo(() => searchablePrograms(manifest), [manifest]);
-  const [recent, setRecent] = useState<RecentRef[]>([]);
-  const [scope, setScope] = useState<SearchScope>("programs");
+  // Read from this browser's storage (the server has none, and draws nothing
+  // here: the box is shut until the member opens it).
+  const [recent, setRecent] = useState<RecentRef[]>(() =>
+    readRecent(storage(), userId),
+  );
+  const [scope, setScope] = useState<SearchScope>(() =>
+    readScope(storage(), userId),
+  );
   // The window an entry was opened into: when it comes to the front, the
   // entry is what was opened, not the program that shares its window.
-  const entryWindow = useRef<string | null>(null);
-
-  // Read Recent once the page is in the browser (the server has no storage).
-  useEffect(() => {
-    setRecent(readRecent(storage(), userId));
-    setScope(readScope(storage(), userId));
-  }, [userId]);
+  const [entryWindow, setEntryWindow] = useState<string | null>(null);
 
   // Every switch is remembered (never sent anywhere).
   const changeScope = useCallback(
@@ -183,18 +184,33 @@ export function ProgramSearch({
   );
 
   // A program's window coming to the front counts as opened, however it was
-  // opened (an icon, the Start menu, a link, search).
-  useEffect(() => {
-    if (!liveKey) return;
-    if (entryWindow.current === liveKey) {
-      entryWindow.current = null;
-      return;
+  // opened (an icon, the Start menu, a link, search). Another member on this
+  // tab reads their own Recent first.
+  const [counted, setCounted] = useState<{
+    userId: string;
+    liveKey: string | null;
+    list: readonly SearchProgram[];
+  } | null>(null);
+  if (
+    counted === null ||
+    counted.userId !== userId ||
+    counted.liveKey !== liveKey ||
+    counted.list !== list
+  ) {
+    setCounted({ userId, liveKey, list });
+    if (counted !== null && counted.userId !== userId) {
+      setRecent(readRecent(storage(), userId));
+      setScope(readScope(storage(), userId));
     }
-    const entry = list.find(
-      (e) => matchProgram(e.program.href)?.instanceKey === liveKey,
-    );
-    if (entry) remember({ kind: "program", id: entry.program.id });
-  }, [liveKey, list, remember]);
+    if (liveKey && entryWindow === liveKey) {
+      setEntryWindow(null);
+    } else if (liveKey) {
+      const entry = list.find(
+        (e) => matchProgram(e.program.href)?.instanceKey === liveKey,
+      );
+      if (entry) remember({ kind: "program", id: entry.program.id });
+    }
+  }
 
   // Entries the server no longer returns for this member go from Recent.
   const forget = useCallback(
@@ -250,7 +266,7 @@ export function ProgramSearch({
       onPickEntry={(entry) => {
         onOpenChange(false);
         if (entry) {
-          entryWindow.current = matchProgram(entry.href)?.instanceKey ?? null;
+          setEntryWindow(matchProgram(entry.href)?.instanceKey ?? null);
           remember({ kind: entry.kind, id: entry.id });
         }
       }}
@@ -269,14 +285,16 @@ function storage(): Storage | null {
 
 /** Cmd on a Mac, Ctrl elsewhere; decided in the browser. */
 function useModKey(): string {
-  const [mod, setMod] = useState("Ctrl");
-  useEffect(() => {
-    if (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) {
-      setMod("⌘");
-    }
-  }, []);
-  return mod;
+  return useSyncExternalStore(noSubscription, browserModKey, serverModKey);
 }
+
+// The platform never changes while the page is open: nothing to subscribe to.
+const noSubscription = () => () => {};
+const browserModKey = () =>
+  /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
+    ? "⌘"
+    : "Ctrl";
+const serverModKey = () => "Ctrl";
 
 /** The shortcut's own name: "Ctrl K", or "⌘ K" on a Mac. */
 function shortcutName(mod: string): string {
@@ -343,14 +361,21 @@ function useEntrySearch(query: string): EntryState & { slow: boolean } {
     entries: [],
   });
   const [slow, setSlow] = useState(false);
-  useEffect(() => {
+  // New text: cleared, nothing is asked; typed, the last answer stays (the
+  // list narrows it) while the next is on its way.
+  const [asked, setAsked] = useState("");
+  if (asked !== query) {
+    setAsked(query);
     if (!query) {
       setState({ query: "", status: "idle", entries: [] });
       setSlow(false);
-      return;
+    } else {
+      setState((s) => ({ ...s, status: "loading" }));
     }
+  }
+  useEffect(() => {
+    if (!query) return;
     const ctrl = new AbortController();
-    setState((s) => ({ ...s, status: "loading" }));
     const slowTimer = setTimeout(() => setSlow(true), SLOW_MS);
     const timer = setTimeout(() => {
       fetchEntries(`q=${encodeURIComponent(query)}`, ctrl.signal).then(
@@ -436,8 +461,19 @@ interface RowModel {
   label: string;
   /** "Show N more", in the group's quieter style. */
   more?: boolean;
-  onSelect: () => void;
+  /** What choosing the row does; the search box carries it out. */
+  action: RowAction;
 }
+
+type RowAction =
+  | { kind: "program"; program: ClientProgram }
+  | { kind: "entry"; entry: SearchEntry }
+  /** The guide's own full-text page for the typed words. */
+  | { kind: "guide-text" }
+  /** Programs found nothing: search everything for the same words. */
+  | { kind: "everything" }
+  /** "Show N more": the group opens, and `reveal` takes the selection. */
+  | { kind: "more"; group: string; reveal: string };
 
 interface GroupModel {
   key: string;
@@ -450,7 +486,6 @@ interface GroupModel {
 function programRow(
   p: SearchProgram,
   marks: Mark[],
-  onPick: (program: ClientProgram) => void,
   keyword?: SearchHit["keyword"],
 ): RowModel {
   return {
@@ -465,7 +500,7 @@ function programRow(
     label: keyword
       ? `${p.program.label}, Program, ${keyword.text}, ${p.where}`
       : `${p.program.label}, Program, ${p.where}`,
-    onSelect: () => onPick(p.program),
+    action: { kind: "program", program: p.program },
   };
 }
 
@@ -478,7 +513,6 @@ function entryRow(
   entry: SearchEntry,
   marks: Mark[],
   detail: string,
-  onPick: (entry: SearchEntry) => void,
   line?: SearchTextMatch,
 ): RowModel {
   const kind = entry.card ? "Duty card" : ENTRY_KIND_LABEL[entry.kind];
@@ -497,7 +531,7 @@ function entryRow(
     ]
       .filter(Boolean)
       .join(", "),
-    onSelect: () => onPick(entry),
+    action: { kind: "entry", entry },
   };
 }
 
@@ -643,17 +677,14 @@ function SearchBox({
 
   // The toggle moved (a click, the arrows, Ctrl+K, the "Search everything"
   // row): the status line says so, until the text changes.
+  // New text, or the other scope, also folds every group's "Show more" away.
   const [switched, setSwitched] = useState(false);
-  const firstScope = useRef(scope);
-  useEffect(() => {
-    if (scope !== firstScope.current) {
-      firstScope.current = scope;
-      setSwitched(true);
-    }
-  }, [scope]);
-  useEffect(() => {
-    setSwitched(false);
-  }, [typed]);
+  const [seen, setSeen] = useState({ scope, typed });
+  if (seen.scope !== scope || seen.typed !== typed) {
+    setSeen({ scope, typed });
+    setSwitched(seen.typed === typed);
+    setExpanded(new Set());
+  }
 
   // Focus the field; on the way out (Esc, Cancel, a click outside), focus
   // goes back to where it was. Not after a pick: the window takes it.
@@ -673,21 +704,35 @@ function SearchBox({
     };
   }, []);
 
-  const pickProgram = (program: ClientProgram) => {
-    picked.current = true;
-    onPickProgram(program);
-  };
-  const pickEntry = (entry: SearchEntry) => {
-    picked.current = true;
-    onPickEntry(entry);
-    onOpenEntry(entry.href);
-  };
-  const pickGuideText = () => {
-    picked.current = true;
-    onPickEntry(null);
-    onOpenEntry(guideTextHref(typed));
-  };
   const focusField = () => input.current?.focus({ preventScroll: true });
+  // A row chosen (Enter, a click, a tap).
+  const choose = (action: RowAction) => {
+    switch (action.kind) {
+      case "program":
+        picked.current = true;
+        onPickProgram(action.program);
+        break;
+      case "entry":
+        picked.current = true;
+        onPickEntry(action.entry);
+        onOpenEntry(action.entry.href);
+        break;
+      case "guide-text":
+        picked.current = true;
+        onPickEntry(null);
+        onOpenEntry(guideTextHref(typed));
+        break;
+      case "everything":
+        onScope("everything");
+        focusField();
+        break;
+      case "more":
+        setExpanded((now) => new Set([...now, action.group]));
+        // The first row the press reveals takes the selection.
+        setSelected(action.reveal);
+        break;
+    }
+  };
 
   // --- What the list holds ---
   const offline =
@@ -714,15 +759,15 @@ function SearchBox({
         heading: "Recent",
         rows: rows.map((r) =>
           r.type === "program"
-            ? programRow(r.program, [], pickProgram)
-            : entryRow(r.entry, [], recentDetail(r.entry), pickEntry),
+            ? programRow(r.program, [])
+            : entryRow(r.entry, [], recentDetail(r.entry)),
         ),
       });
     } else {
       groups.push({
         key: "programs",
         heading: "Programs",
-        rows: list.map((p) => programRow(p, [], pickProgram)),
+        rows: list.map((p) => programRow(p, [])),
       });
     }
   } else {
@@ -755,10 +800,10 @@ function SearchBox({
                   icon: (c: string) => <Search className={c} />,
                   label: `Show ${hidden} more ${moreLabel}`,
                   more: true,
-                  onSelect: () => {
-                    setExpanded((now) => new Set([...now, key]));
-                    // The first row the press reveals takes the selection.
-                    setSelected(rows[GROUP_CAP]!.value);
+                  action: {
+                    kind: "more" as const,
+                    group: key,
+                    reveal: rows[GROUP_CAP]!.value,
                   },
                 },
               ]
@@ -771,7 +816,7 @@ function SearchBox({
       capped(
         "programs",
         "Programs",
-        programHits.map((h) => programRow(h, h.marks, pickProgram, h.keyword)),
+        programHits.map((h) => programRow(h, h.marks, h.keyword)),
         "programs",
       );
     } else if (!everything) {
@@ -787,10 +832,7 @@ function SearchBox({
             detail: phone ? "" : "Recipes, chapters, meetings and more",
             icon: (c) => <Search className={c} />,
             label: `Search everything for “${typed}”, Recipes, chapters, meetings and more`,
-            onSelect: () => {
-              onScope("everything");
-              focusField();
-            },
+            action: { kind: "everything" },
           },
         ],
       });
@@ -800,9 +842,7 @@ function SearchBox({
       capped(
         g.kind,
         g.label,
-        g.hits.map((h) =>
-          entryRow(h.entry, h.marks, h.entry.detail, pickEntry, h.line),
-        ),
+        g.hits.map((h) => entryRow(h.entry, h.marks, h.entry.detail, h.line)),
         g.label.toLowerCase(),
         {
           full,
@@ -819,7 +859,7 @@ function SearchBox({
                     icon: (c) => <BookOpen className={c} />,
                     label: `Every chapter that mentions “${typed}”, Survival Guide`,
                     more: true,
-                    onSelect: pickGuideText,
+                    action: { kind: "guide-text" },
                   },
                 ]
               : [],
@@ -848,7 +888,6 @@ function SearchBox({
   }, [first, holds]);
   useEffect(() => {
     moved.current = false;
-    setExpanded(new Set());
   }, [typed, scope]);
 
   // --- What is said ---
@@ -1016,7 +1055,12 @@ function SearchBox({
                 className={`${GROUP_CLASS} ${phone && gi > 0 ? "border-t border-border" : ""}`}
               >
                 {g.rows.map((row) => (
-                  <Row key={row.value} row={row} phone={phone} />
+                  <Row
+                    key={row.value}
+                    row={row}
+                    phone={phone}
+                    onChoose={choose}
+                  />
                 ))}
               </CommandGroup>
             ))}
@@ -1103,7 +1147,15 @@ function Marked({
   );
 }
 
-function Row({ row, phone }: { row: RowModel; phone: boolean }) {
+function Row({
+  row,
+  phone,
+  onChoose,
+}: {
+  row: RowModel;
+  phone: boolean;
+  onChoose: (action: RowAction) => void;
+}) {
   const title = (
     <span
       className={`min-w-0 truncate ${phone ? "text-[15px]" : ""} ${row.more ? "text-[13px] text-muted-foreground" : ""}`}
@@ -1163,7 +1215,7 @@ function Row({ row, phone }: { row: RowModel; phone: boolean }) {
     <CommandItem
       value={row.value}
       aria-label={row.label}
-      onSelect={row.onSelect}
+      onSelect={() => onChoose(row.action)}
       data-search-row={row.value}
       className={`gap-3 rounded-none px-4 text-sm data-[selected='true']:bg-[var(--color-pick)] data-[selected=true]:text-foreground data-[selected=true]:shadow-[inset_3px_0_0_0_var(--color-primary)] ${
         phone ? "min-h-12 border-b border-border py-2" : "min-h-10 py-1.5"
