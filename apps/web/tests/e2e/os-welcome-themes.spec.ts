@@ -170,12 +170,14 @@ test.describe("404 OS welcome and themes (test-mode)", () => {
       panel.getByRole("switch", { name: /Open with one click/ }),
     ).toBeHidden();
 
-    // Open programs and the home screen: the phone's own controls, and none
-    // of the desktop's (dragging, right-click, the taskbar).
+    // Moving around and the home screen: the phone's own controls, and none
+    // of the desktop's (dragging, right-click, the taskbar). No Programs
+    // button on a phone: a program left open glows on the home screen.
     await panel.getByRole("button", { name: "Next" }).click();
     await expect(
-      panel.getByRole("heading", { name: "Open programs" }),
+      panel.getByRole("heading", { name: "Moving around" }),
     ).toBeFocused();
+    await expect(panel.getByText(/glows there/)).toBeVisible();
     await expect(panel.getByText("Step 3 of 7")).toBeVisible();
     await expect(panel.getByText(/Back, at its top, closes it/)).toBeVisible();
     await expect(panel.locator("[data-welcome-demo]")).toBeHidden();

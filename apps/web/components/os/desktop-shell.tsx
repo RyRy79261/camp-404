@@ -2045,7 +2045,7 @@ function DesktopInner({
   // Wherever a window, the Today panel or a phone program reaches down to
   // him there, he lets taps through to it rather than take them.
   const princeCovered = phoneNow
-    ? phoneCovered || todayOpen
+    ? phoneCovered || todayOpen || phoneVoiceOpen
     : (todayStored && !!today) ||
       wm.windows.some(
         (w) =>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { VoiceOutcome } from "../resolve";
 import type { Expect } from "./cases";
 import { gradeAgainst, meetsBar, tally, type ProposedAction } from "./grade";
 
@@ -10,7 +11,7 @@ const B: ProposedAction = { tool: "approve_reimbursement", args: { id: "b" } };
 const list = (...actions: ProposedAction[]) => ({ list: actions, ask: null });
 const ask = (options: ProposedAction[], waiting: ProposedAction[] = []) => ({ list: null, ask: { options, waiting } });
 const none = { list: null, ask: null };
-const outcome = { kind: "refused", answers: [], message: "", path: null } as const;
+const outcome: VoiceOutcome = { kind: "refused", answers: [], message: "", path: null };
 
 describe("grading a case", () => {
   const wantA: Expect = { kind: "list", actions: [{ tool: A.tool, args: { id: "a" } }] };

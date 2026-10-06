@@ -1653,14 +1653,21 @@ test.describe("404 OS on a phone (test-mode)", () => {
       await expect(bar).toBeVisible();
       await expect(bar.getByRole("button", { name: "Home" })).toBeVisible();
       await expect(
-        bar.getByRole("button", { name: "Open programs, 1" }),
-      ).toBeVisible();
-      await expect(
         bar.getByRole("button", { name: /^Notifications/ }),
       ).toBeVisible();
       await expect(bar.getByRole("button", { name: /^Today/ })).toBeVisible();
+      // No Programs button on a phone (owner, 2026-10-06: "Programs only
+      // show up on desktop"), checked once the bar is drawn; the clock is its
+      // last cell.
+      await expect(
+        bar.getByRole("button", { name: /Open programs|^Programs/ }),
+      ).toHaveCount(0);
+      await expect(bar.locator("> *").last()).toHaveAttribute(
+        "data-phone-clock",
+      );
 
-      // Home, then a second program: two in Open programs.
+      // Home, then a second program: the first one's icon glows on the home
+      // screen, and a tap brings its window back, full screen.
       await bar.getByRole("button", { name: "Home" }).click();
       await expect(page).toHaveURL("/");
       await expect(home).toBeVisible();
@@ -1669,28 +1676,31 @@ test.describe("404 OS on a phone (test-mode)", () => {
       await expect(
         page.getByRole("heading", { level: 1, name: "Family tree" }),
       ).toBeVisible();
-      await bar.getByRole("button", { name: "Open programs, 2" }).click();
-      const switcher = page.getByRole("list", { name: "Open programs" });
-      await expect(
-        switcher.getByRole("button", { name: /^Roster/ }),
-      ).toBeVisible();
-      await page
-        .getByRole("region", { name: "Open programs" })
-        .getByRole("button", { name: "Close Open programs" })
-        .click();
-
-      // Back from the program closes its window and lands on the home screen
-      // entry; Back again reopens the Roster, full screen.
-      await page.goBack();
+      await bar.getByRole("button", { name: "Home" }).click();
       await expect(page).toHaveURL("/");
-      await expect(
-        bar.getByRole("button", { name: "Open programs, 1" }),
-      ).toBeVisible();
-      await page.goBack();
+      const rosterIcon = home.getByRole("button", {
+        name: "Roster",
+        exact: true,
+      });
+      await expect(rosterIcon.locator("[data-label]")).toHaveClass(
+        /bg-os-primary/,
+      );
+      await rosterIcon.click();
       await expect(page).toHaveURL("/captains/camp-management");
       await expect(
         page.getByRole("heading", { level: 1, name: "Camp management" }),
       ).toBeVisible();
+      expect((await osWindow(page, "Roster").boundingBox())!.width).toBe(width);
+      await expect(osWindow(page, "Roster")).toHaveCount(1);
+
+      // Back from the program closes its window and lands on the home
+      // screen, where its icon no longer glows.
+      await page.goBack();
+      await expect(page).toHaveURL("/");
+      await expect(home).toBeVisible();
+      await expect(rosterIcon.locator("[data-label]")).not.toHaveClass(
+        /bg-os-primary/,
+      );
 
       // Today is a sheet, from any program (it goes home first).
       const today = await openToday(page);

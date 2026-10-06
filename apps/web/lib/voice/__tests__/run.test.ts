@@ -6,7 +6,7 @@ import { sealKey, sealProposal, type SealedAction } from "../seal";
 // dependent action skipped when the one it needs did not work; the list spent
 // before anything runs.
 
-const KEY = sealKey({ BETTER_AUTH_SECRET: "run-test-secret" } as NodeJS.ProcessEnv);
+const KEY = sealKey({ BETTER_AUTH_SECRET: "run-test-secret" } as unknown as NodeJS.ProcessEnv);
 const ME = { userId: "11111111-1111-4111-8111-111111111111", sessionId: "s-1" };
 
 const action = (tool: string, dependsOn: number | null = null, blocked?: string): SealedAction => ({

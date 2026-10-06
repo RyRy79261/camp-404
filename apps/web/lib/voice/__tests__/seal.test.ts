@@ -10,7 +10,7 @@ import {
 // The sealed list (#356, defence 7): bound to one captain and one sign-in,
 // five minutes, and any change to a byte refuses it.
 
-const KEY = sealKey({ BETTER_AUTH_SECRET: "a-test-secret-of-some-length" } as NodeJS.ProcessEnv);
+const KEY = sealKey({ BETTER_AUTH_SECRET: "a-test-secret-of-some-length" } as unknown as NodeJS.ProcessEnv);
 const ME = { userId: "11111111-1111-4111-8111-111111111111", sessionId: "s-1" };
 const ACTION: SealedAction = {
   tool: "move_task",
@@ -55,7 +55,7 @@ describe("the sealed list", () => {
     const edited = `${Buffer.from(JSON.stringify(body)).toString("base64url")}.${sig}`;
     expect(openProposal(edited, KEY, ME)).toEqual({ ok: false, reason: "tampered" });
     // The same edit, re-signed with any other key, is still refused.
-    const other = sealKey({ BETTER_AUTH_SECRET: "another-secret" } as NodeJS.ProcessEnv);
+    const other = sealKey({ BETTER_AUTH_SECRET: "another-secret" } as unknown as NodeJS.ProcessEnv);
     const forged = sealProposal({ ...ME, actions: [ACTION] }, other).token;
     expect(openProposal(forged, KEY, ME)).toEqual({ ok: false, reason: "tampered" });
     expect(openProposal("not-a-token", KEY, ME)).toEqual({ ok: false, reason: "tampered" });

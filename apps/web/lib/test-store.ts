@@ -3942,7 +3942,7 @@ export const testStore = {
     ) {
       return { ok: false, error: NOT_A_MEMBER };
     }
-    const id = `test-task-${S.nextSerial++}`;
+    const id = crypto.randomUUID();
     tasks.push({
       id,
       title: input.title,

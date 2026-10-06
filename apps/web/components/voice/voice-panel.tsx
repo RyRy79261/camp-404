@@ -24,9 +24,16 @@ const TIME = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Africa/Johannesburg",
 });
 
-function Kbd({ children }: { children: React.ReactNode }) {
+function Kbd({ children, onGo }: { children: React.ReactNode; onGo?: boolean }) {
   return (
-    <kbd className="whitespace-nowrap border border-border px-1.5 py-px font-sans text-[11px] font-semibold text-muted-foreground">
+    <kbd
+      className={cn(
+        "whitespace-nowrap border px-1.5 py-px font-sans text-[11px] font-semibold",
+        onGo
+          ? "border-current px-1 text-[10px] text-current opacity-70"
+          : "border-border text-muted-foreground",
+      )}
+    >
       {children}
     </kbd>
   );
@@ -306,13 +313,13 @@ export function VoiceBody({
         <div className="flex flex-col gap-2.5 p-3.5">
           {error}
           <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-foreground">
+            <span className="whitespace-nowrap text-sm font-semibold text-foreground">
               {recording ? "Listening" : "Ready"}
               {recording && (
                 <span aria-hidden className="ml-2 inline-block size-1.5 animate-pulse bg-primary align-middle" />
               )}
             </span>
-            <Waveform analyser={voice.analyser} active={recording} className="h-[34px] flex-1" />
+            <Waveform analyser={voice.analyser} active={recording} className="h-[34px] min-w-0 flex-1" />
             {recording && <Elapsed since={voice.startedAt} />}
             <button
               type="button"
@@ -492,7 +499,7 @@ export function VoiceBody({
         </Btn>
         <Btn go onClick={() => void voice.run()} disabled={count === 0 || running} data-voice-do>
           {running && <Loader2 className="size-4 animate-spin" aria-hidden />}
-          {doLabel} {!phone && <Kbd>Enter</Kbd>}
+          {doLabel} {!phone && <Kbd onGo>Enter</Kbd>}
         </Btn>
       </div>
       {footer(

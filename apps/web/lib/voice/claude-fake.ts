@@ -107,8 +107,12 @@ interface AttendanceRead {
   phases: { phase: string; mine: string | null }[];
 }
 
+/** The slot of shift `name` on the Burn's Wednesday, else its first day. */
 function slotNamed(read: unknown, name: string): string | null {
-  for (const d of (read as ShiftsRead)?.days ?? []) {
+  const days = (read as ShiftsRead)?.days ?? [];
+  const weekday = (day: string) => new Date(`${day}T00:00:00Z`).getUTCDay();
+  const ordered = [...days.filter((d) => weekday(d.day) === 3), ...days];
+  for (const d of ordered) {
     const slot = d.slots.find((s) => s.shift === name);
     if (slot) return slot.slotId;
   }
@@ -118,7 +122,7 @@ function slotNamed(read: unknown, name: string): string | null {
 export const E2E_WORDS: Record<string, string> = {
   three:
     "Sign me up for breakfast cooks on Wednesday, move the shade cloth task to done, say I can help on build week, and what's on tomorrow?",
-  ask: "Sign me up for breakfast on Wednesday, move the shade cloth task to done, and say I can help on build week.",
+  ask: "Sign me up for breakfast on Wednesday, move the shade cloth task to done, and say I can't make strike.",
   unclear: "",
 };
 
@@ -147,6 +151,9 @@ function e2eTurn(script: string) {
       expected: build?.mine ?? null,
     });
     if (script === "ask") {
+      const strike = ((r.get_logistics_attendance as AttendanceRead)?.phases ?? []).find(
+        (p) => p.phase === "strike",
+      );
       return [
         toolUse("ask", {
           question: "Which breakfast shift on Wednesday?",
@@ -156,7 +163,11 @@ function e2eTurn(script: string) {
           ],
         }),
         move,
-        help,
+        toolUse("set_my_logistics_attendance", {
+          phase: "strike",
+          answer: "cant",
+          expected: strike?.mine ?? null,
+        }),
       ];
     }
     return [
