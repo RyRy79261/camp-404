@@ -40,6 +40,12 @@ import { gradeCase, meetsBar, tally, type Grade } from "./grade";
 const LIVE = process.env.VOICE_EVAL_LIVE === "1";
 /** A comma list of case ids, to try a few against the real model. */
 const ONLY = process.env.VOICE_EVAL_ONLY?.split(",").filter(Boolean) ?? null;
+/**
+ * Run only this many cases, spread evenly over the set (VOICE_EVAL_LIMIT=10:
+ * the first real run, to measure the cost before a full one). A partial run
+ * prints its numbers and keeps the recordings as they were.
+ */
+const LIMIT = Number(process.env.VOICE_EVAL_LIMIT) || null;
 
 if (LIVE && !process.env.ANTHROPIC_API_KEY) {
   // The key only, from the app's local env file; nothing else of it.
@@ -149,7 +155,14 @@ describe("voice eval", () => {
       }
       const real = LIVE ? (await import("../service")).voiceClaude() : null;
       const who = { userId: scope.campUserId, sessionId: SESSION };
-      const cases = ONLY ? CASES.filter((c) => ONLY.includes(c.id)) : CASES;
+      const cases = ONLY
+        ? CASES.filter((c) => ONLY.includes(c.id))
+        : LIMIT
+          ? CASES.filter(
+              (_, i) => i % Math.max(1, Math.floor(CASES.length / LIMIT)) === 0,
+            ).slice(0, LIMIT)
+          : CASES;
+      const partial = ONLY !== null || LIMIT !== null;
       const results = await pool(cases, LIVE ? 6 : 1, async (c) => {
         const replies: Anthropic.Message[] = [];
         const claude = LIVE
@@ -164,6 +177,21 @@ describe("voice eval", () => {
           now: NOW,
         });
         const grade = gradeCase(c, outcome, sealKey(), who);
+        if (LIVE) {
+          // The cost counter: what the API said it used, per case.
+          console.log(
+            [
+              c.id.padEnd(10),
+              grade.padEnd(8),
+              `calls ${usage.calls}`,
+              `in ${usage.inputTokens}`,
+              `cache-read ${usage.cacheReadTokens}`,
+              `cache-write ${usage.cacheWriteTokens}`,
+              `out ${usage.outputTokens}`,
+              `$${cost(usage).toFixed(4)}`,
+            ].join("  "),
+          );
+        }
         return { c, outcome, usage, grade, replies: replies.map(slim) };
       });
 
@@ -215,12 +243,14 @@ describe("voice eval", () => {
           `${HERE}runs/${report.at.replace(/[:.]/g, "-")}.json`,
           `${JSON.stringify(report, null, 2)}\n`,
         );
-        if (ONLY) {
+        if (partial) {
           console.log(
             JSON.stringify(
               {
                 tally: t,
                 dollars: report.dollars,
+                dollarsPerCommand: report.dollarsPerCommand,
+                tokens: report.tokens,
                 misses: report.misses,
                 outcomes: results.map((r) => ({
                   id: r.c.id,
@@ -241,7 +271,13 @@ describe("voice eval", () => {
         );
         console.log(
           JSON.stringify(
-            { tally: t, dollars: report.dollars, misses: report.misses },
+            {
+              tally: t,
+              dollars: report.dollars,
+              dollarsPerCommand: report.dollarsPerCommand,
+              tokens: report.tokens,
+              misses: report.misses,
+            },
             null,
             2,
           ),

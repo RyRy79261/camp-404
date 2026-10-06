@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { TOOL_CAPABILITIES } from "../mcp/capabilities";
+import { TOOL_CAPABILITIES, type Area } from "../mcp/capabilities";
 import type { McpScope } from "../mcp/scope";
 import { registerCampMcpTools } from "../mcp/server";
 
@@ -22,6 +22,7 @@ type Handler = (args: unknown, extra: unknown) => Promise<CallToolResult>;
 export interface VoiceTool {
   name: string;
   kind: "read" | "write";
+  area: Area;
   /** The connector's description, "Who: …" first. */
   description: string;
   shape: z.ZodRawShape;
@@ -45,7 +46,8 @@ export function voiceRegistry(): Map<string, VoiceTool> {
       tools.set(name, {
         name,
         kind: capability.kind,
-        description: config.description ?? capability.does,
+        area: capability.area,
+        description: shortDescription(config.description ?? capability.does),
         shape: config.inputSchema ?? {},
         handler,
       });
@@ -55,12 +57,62 @@ export function voiceRegistry(): Map<string, VoiceTool> {
   return tools;
 }
 
-/** The tools this person's gates allow, in the table's order. */
-export function toolsFor(scope: McpScope): VoiceTool[] {
+/**
+ * The tools this person's gates allow, in the table's order (a fixed order,
+ * so one set of areas is always the same bytes and its cache entry hits),
+ * narrowed to `areas` when given (lib/voice/areas.ts).
+ */
+export function toolsFor(
+  scope: McpScope,
+  areas?: readonly Area[],
+): VoiceTool[] {
   const all = voiceRegistry();
   return Object.entries(TOOL_CAPABILITIES)
-    .filter(([name, c]) => all.has(name) && c.gate.allows(scope))
+    .filter(
+      ([name, c]) =>
+        all.has(name) &&
+        c.gate.allows(scope) &&
+        (!areas || areas.includes(c.area)),
+    )
     .map(([name]) => all.get(name)!);
+}
+
+/** Longest tool description sent to Claude, in characters. */
+const MAX_DESCRIPTION = 420;
+/** Longest argument description. */
+const MAX_ARG_DESCRIPTION = 100;
+
+/**
+ * A tool's description as Claude needs it: without the connector's "Who: …"
+ * line (the server gates every call anyway), and cut at a sentence once it
+ * passes MAX_DESCRIPTION.
+ */
+export function shortDescription(description: string): string {
+  const text = description.replace(/^Who: [^.]*\.\s*/, "").trim();
+  if (text.length <= MAX_DESCRIPTION) return text;
+  const cut = text.slice(0, MAX_DESCRIPTION);
+  const end = cut.lastIndexOf(". ");
+  return end > 120 ? cut.slice(0, end + 1) : `${cut.trimEnd()}…`;
+}
+
+/** Keys a read keeps even when null: what a compare-and-set reads back. */
+const KEEP_NULL = new Set(["mine", "expected", "status", "from", "answer"]);
+
+/**
+ * A read's result as Claude gets it: no links (the panel links the page
+ * itself), no empty values except the ones a compare-and-set needs.
+ */
+export function compactResult(data: unknown): unknown {
+  if (Array.isArray(data)) return data.map(compactResult);
+  if (!data || typeof data !== "object") return data;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (key === "url") continue;
+    if (value === null && !KEEP_NULL.has(key)) continue;
+    if (value === undefined) continue;
+    out[key] = compactResult(value);
+  }
+  return out;
 }
 
 const STRIP = new Set([
@@ -89,7 +141,10 @@ function clean(node: unknown): unknown {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node)) {
     if (STRIP.has(key)) continue;
-    out[key] = clean(value);
+    out[key] =
+      key === "description" && typeof value === "string"
+        ? value.slice(0, MAX_ARG_DESCRIPTION)
+        : clean(value);
   }
   return out;
 }

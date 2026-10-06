@@ -23,5 +23,5 @@ export const PROMPT_VERSIONS = {
   recipeSource: "2026-10-02.1",
   recipeSourceRevision: "2026-10-02.1",
   recipeAdjust: "2026-10-02.1",
-  voiceCommand: "2026-10-06.1",
+  voiceCommand: "2026-10-06.2",
 } as const;

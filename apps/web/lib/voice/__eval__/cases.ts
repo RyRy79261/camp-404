@@ -45,6 +45,7 @@ export interface EvalCase {
     | "website"
     | "nonsense"
     | "days"
+    | "areas"
     | "other";
   expect: Expect;
 }
@@ -878,6 +879,83 @@ export const CASES: EvalCase[] = [
       tool: "set_logistics_days",
       args: { phase: "pack", startDate: "2027-04-17", endDate: "2027-04-17" },
     }),
+  },
+
+  // --- Several areas in one breath (the area step must send all of them) ---------
+  {
+    id: "areas-01",
+    area: "areas",
+    words:
+      "Approve Sipho's toilet paper claim, mark the shower pump task done, and put Sipho on Safety.",
+    expect: list(
+      approve(C.toiletPaper.id),
+      move(T.showerPump.id, "done"),
+      assign(P.sipho.id, "health_and_safety"),
+    ),
+  },
+  {
+    id: "areas-02",
+    area: "areas",
+    words:
+      "Sign me up for the MOOP sweep on Friday and add a Sanitation task to buy bin bags.",
+    expect: list(signUp("moop", FRI), {
+      tool: "add_task",
+      args: { title: { has: "bin bags" }, team: "sanitation_and_water" },
+    }),
+  },
+  {
+    id: "areas-03",
+    area: "areas",
+    words:
+      "Put Ben on Structures, approve Jonno's shade cloth deposit, and say I can't make unpack.",
+    expect: list(
+      assign(P.ben.id, "structures"),
+      approve(C.deposit.id),
+      help("unpack", "cant"),
+    ),
+  },
+  {
+    id: "areas-04",
+    area: "areas",
+    words:
+      "Mark all my notifications read and move the truck booking to in progress.",
+    expect: list(
+      { tool: "mark_all_notifications_read", args: {} },
+      move(T.truck.id, "in_progress"),
+    ),
+  },
+  {
+    id: "areas-05",
+    area: "areas",
+    words:
+      "Reject Lerato's fairy lights claim and take her off the Ministry of Vibes.",
+    expect: list(
+      reject(C.fairyLights.id),
+      remove(P.lerato.id, "ministry_of_vibes"),
+    ),
+  },
+  {
+    id: "areas-06",
+    area: "areas",
+    words: "What's on tomorrow? And approve the firewood claim.",
+    expect: list(approve(C.firewood.id)),
+  },
+  {
+    id: "areas-07",
+    area: "areas",
+    words:
+      "Take me off dinner cooks on Thursday and mark the paint the dome task as in progress.",
+    expect: list(leave("dinnerCooks", THU), move(T.dome.id, "in_progress")),
+  },
+  {
+    id: "areas-08",
+    area: "areas",
+    words:
+      "I can help on strike, and make Pieter a lead of Power and Lighting.",
+    expect: list(
+      help("strike", "going"),
+      lead(P.pieter.id, "power_and_lighting", true),
+    ),
   },
 
   // --- Everything else ---------------------------------------------------------------

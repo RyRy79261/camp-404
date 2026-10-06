@@ -884,7 +884,9 @@ version instead. Sonnet 5.5 (`claude-sonnet-5-5`, owner 2026-10-06) is voice's
 model only (#356): it turns a captain's words into connector tool calls
 (`voiceCommandPrompt`). A change to that prompt or model needs a new version
 and three passing real-model runs of `pnpm --filter @camp404/web eval:voice`
-(zero wrong actions); there is no fallback to another model.
+(zero wrong actions; `VOICE_EVAL_LIMIT=10` first, to see the cost); there is
+no fallback to another model. Voice sends Claude only the tools of the areas
+the words touch (`lib/voice/areas.ts`, every area when unsure).
 
 ## No cron jobs
 

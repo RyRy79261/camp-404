@@ -19,6 +19,7 @@ import type { VoiceTool } from "../tools";
 const tool = (name: string, kind: "read" | "write"): VoiceTool => ({
   name,
   kind,
+  area: "Tasks",
   description: name,
   shape: { id: z.string().optional() },
   handler: vi.fn(),
@@ -107,8 +108,22 @@ describe("the command loop", () => {
     for (const name of Object.values(VOICE_REPLY_TOOLS)) {
       expect(tools.find((x) => x.name === name)?.strict).toBe(true);
     }
-    expect(tools.filter((x) => x.cache_control)).toHaveLength(1);
-    expect(tools.at(-1)!.cache_control).toEqual({ type: "ephemeral" });
+    // The reply tools first, the same bytes every time; then the camp's.
+    expect(tools.slice(0, 4).map((x) => x.name)).toEqual(
+      Object.values(VOICE_REPLY_TOOLS),
+    );
+    expect(tools.some((x) => x.cache_control)).toBe(false);
+    // One breakpoint at the end of the stable prefix (tools, then system),
+    // and automatic caching for the conversation's tail.
+    expect(body.system).toEqual([
+      expect.objectContaining({
+        type: "text",
+        cache_control: { type: "ephemeral" },
+      }),
+    ]);
+    expect((body as { cache_control?: unknown }).cache_control).toEqual({
+      type: "ephemeral",
+    });
   });
 
   it("keeps the history append-only: each turn is sent back unchanged", async () => {

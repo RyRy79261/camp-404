@@ -5,7 +5,12 @@ import {
   type VoiceCommandContext,
 } from "@camp404/ai-prompts";
 import { MODELS } from "../anthropic";
-import { inputJsonSchema, type ToolCallResult, type VoiceTool } from "./tools";
+import {
+  compactResult,
+  inputJsonSchema,
+  type ToolCallResult,
+  type VoiceTool,
+} from "./tools";
 
 // The command loop (#356): Claude Sonnet 5.5 reads the camp through the
 // captain's own connector tools and replies with the changes it proposes.
@@ -89,27 +94,37 @@ export interface LoopInput {
   now?: () => number;
 }
 
-/** The request body's stable half: the same bytes for every captain, so it caches. */
+/**
+ * The tools as Claude gets them: the reply tools first (the same bytes on
+ * every command), then the camp tools of the picked areas in the table's
+ * fixed order, so one set of areas is always one cache entry.
+ */
 export function requestTools(
   tools: readonly VoiceTool[],
   websitePaths: readonly string[],
 ): Anthropic.Tool[] {
+  const reply = voiceCommandPrompt.replyTools(websitePaths) as Anthropic.Tool[];
   const camp: Anthropic.Tool[] = tools.map((t) => ({
     name: t.name,
-    description:
-      t.kind === "write"
-        ? `${t.description} (A change: calling it proposes it to the captain; it runs only after they confirm.)`
-        : t.description,
+    description: t.description,
     input_schema: inputJsonSchema(t) as Anthropic.Tool.InputSchema,
   }));
-  const reply = voiceCommandPrompt.replyTools(websitePaths) as Anthropic.Tool[];
-  const all = [...camp, ...reply];
-  // One breakpoint after the tools and the system prompt: the per-command
-  // context comes after it, in the first user message.
-  const last = all[all.length - 1]!;
-  all[all.length - 1] = { ...last, cache_control: { type: "ephemeral" } };
-  return all;
+  return [...reply, ...camp];
 }
+
+/**
+ * The system prompt with the stable prefix's breakpoint on it: the API
+ * renders tools, then system, so this one marker caches both (Sonnet 5.5
+ * caches a prefix of 512 tokens or more). The per-command context comes after
+ * it, in the first user message.
+ */
+const SYSTEM: Anthropic.TextBlockParam[] = [
+  {
+    type: "text",
+    text: voiceCommandPrompt.system,
+    cache_control: { type: "ephemeral" },
+  },
+];
 
 const NOT_YET =
   "Not done: read first. Send the changes again in a turn of their own, after the reads come back.";
@@ -142,12 +157,16 @@ export async function runCommandLoop(input: LoopInput): Promise<LoopOutcome> {
         {
           model: MODELS.sonnet,
           max_tokens: 16_000,
-          system: voiceCommandPrompt.system,
+          system: SYSTEM,
           tools,
           tool_choice: { type: "auto" },
           thinking: { type: "adaptive" },
           output_config: { effort: "medium" },
           messages,
+          // Automatic caching for the growing tail: each call of the loop
+          // reads the one before it from the cache. (Not in this SDK's
+          // types yet; the API takes it.)
+          ...({ cache_control: { type: "ephemeral" } } as object),
         },
         { timeout: left, signal: AbortSignal.timeout(left) },
       );
@@ -208,7 +227,7 @@ export async function runCommandLoop(input: LoopInput): Promise<LoopOutcome> {
             type: "tool_result",
             tool_use_id: c.id,
             ...(result.ok
-              ? { content: JSON.stringify(result.data) }
+              ? { content: JSON.stringify(compactResult(result.data)) }
               : { is_error: true, content: result.error }),
           };
         }),

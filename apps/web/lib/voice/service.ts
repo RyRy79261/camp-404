@@ -11,6 +11,7 @@ import { getShiftsView } from "../shifts";
 import { isE2ETestMode } from "../test-mode";
 import { commandPrompt } from "../voice-prompts";
 import { runCommandLoop, type ClaudeClient, type Usage } from "./command";
+import { pickAreas } from "./areas";
 import { readRoster, readTeamLabels } from "./reads";
 import { resolveOutcome, type VoiceOutcome } from "./resolve";
 import { sealKey } from "./seal";
@@ -126,7 +127,9 @@ export async function runVoiceCommand(input: {
   now?: Date;
 }): Promise<CommandRun> {
   const now = input.now ?? new Date();
-  const tools = toolsFor(input.scope);
+  // Only the areas the words touch (lib/voice/areas.ts); every area when
+  // unsure.
+  const tools = toolsFor(input.scope, pickAreas(input.words).areas);
   const loop = await runCommandLoop({
     context: await contextFor(input.scope, input.captainName, input.words, now),
     tools,
