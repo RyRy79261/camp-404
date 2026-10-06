@@ -30,7 +30,8 @@ export function actionsOf(
 } {
   const open = (token: string) => {
     const opened = openProposal(token, key, who, 0);
-    if (!opened.ok) throw new Error(`eval: cannot open a list (${opened.reason})`);
+    if (!opened.ok)
+      throw new Error(`eval: cannot open a list (${opened.reason})`);
     return opened.body.actions.map((a) => ({ tool: a.tool, args: a.args }));
   };
   if (outcome.kind === "list") return { list: open(outcome.token), ask: null };
@@ -53,19 +54,29 @@ function argMatches(expected: ArgMatch, actual: unknown): boolean {
   if (expected && typeof expected === "object" && "has" in expected) {
     return (
       typeof actual === "string" &&
-      actual.toLowerCase().includes(String((expected as { has: string }).has).toLowerCase())
+      actual
+        .toLowerCase()
+        .includes(String((expected as { has: string }).has).toLowerCase())
     );
   }
   return JSON.stringify(expected) === JSON.stringify(actual);
 }
 
-export function matches(expected: ExpectedAction, actual: ProposedAction): boolean {
+export function matches(
+  expected: ExpectedAction,
+  actual: ProposedAction,
+): boolean {
   if (expected.tool !== actual.tool) return false;
-  return Object.entries(expected.args).every(([k, v]) => argMatches(v, actual.args[k]));
+  return Object.entries(expected.args).every(([k, v]) =>
+    argMatches(v, actual.args[k]),
+  );
 }
 
 /** Whether `actual` is exactly `expected`, as multisets. */
-function sameSet(expected: readonly ExpectedAction[], actual: readonly ProposedAction[]): boolean {
+function sameSet(
+  expected: readonly ExpectedAction[],
+  actual: readonly ProposedAction[],
+): boolean {
   if (expected.length !== actual.length) return false;
   const left = [...actual];
   for (const e of expected) {
@@ -77,7 +88,10 @@ function sameSet(expected: readonly ExpectedAction[], actual: readonly ProposedA
 }
 
 /** Every action proposed is one expected (none is a stranger). */
-function allExpected(expected: readonly ExpectedAction[], actual: readonly ProposedAction[]): boolean {
+function allExpected(
+  expected: readonly ExpectedAction[],
+  actual: readonly ProposedAction[],
+): boolean {
   return actual.every((a) => expected.some((e) => matches(e, a)));
 }
 
@@ -163,5 +177,7 @@ export function tally(grades: readonly Grade[]): Tally {
 
 /** The merge bar: no wrong action, 90% exact, at most 10% needless. */
 export function meetsBar(t: Tally): boolean {
-  return t.wrong === 0 && t.exact / t.total >= 0.9 && t.needless / t.total <= 0.1;
+  return (
+    t.wrong === 0 && t.exact / t.total >= 0.9 && t.needless / t.total <= 0.1
+  );
 }

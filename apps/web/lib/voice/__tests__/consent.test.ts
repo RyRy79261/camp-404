@@ -29,7 +29,11 @@ describe("voice consent", () => {
     const captain = await makeUser(h.db(), { rank: "captain" });
     await setVoiceConsent(captain.id, true);
     expect((await sanitiseAccount(captain.id)).ok).toBe(true);
-    const [row] = await h.db().select({ at: schema.users.voiceConsentAt }).from(schema.users).where(eq(schema.users.id, captain.id));
+    const [row] = await h
+      .db()
+      .select({ at: schema.users.voiceConsentAt })
+      .from(schema.users)
+      .where(eq(schema.users.id, captain.id));
     expect(row!.at).toBeNull();
   });
 });

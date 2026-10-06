@@ -39,23 +39,24 @@ export const SPEAKER = PEOPLE.ryno;
 
 type Team = (typeof schema.teamEnum.enumValues)[number];
 
-const MEMBERSHIPS: { who: keyof typeof PEOPLE; team: Team; lead?: boolean }[] = [
-  { who: "ryno", team: "structures" },
-  { who: "mpho", team: "kitchen" },
-  { who: "spotty", team: "kitchen", lead: true },
-  { who: "priya", team: "kitchen" },
-  { who: "gekko", team: "kitchen" },
-  { who: "gecko", team: "structures" },
-  { who: "jonno", team: "structures", lead: true },
-  { who: "thandiM", team: "art_and_activities" },
-  { who: "thandiB", team: "health_and_safety" },
-  { who: "lerato", team: "ministry_of_vibes" },
-  { who: "pieter", team: "power_and_lighting" },
-  { who: "ayesha", team: "finance", lead: true },
-  { who: "sipho", team: "sanitation_and_water" },
-  { who: "ben", team: "transport_and_logistics" },
-  { who: "zanele", team: "health_and_safety", lead: true },
-];
+const MEMBERSHIPS: { who: keyof typeof PEOPLE; team: Team; lead?: boolean }[] =
+  [
+    { who: "ryno", team: "structures" },
+    { who: "mpho", team: "kitchen" },
+    { who: "spotty", team: "kitchen", lead: true },
+    { who: "priya", team: "kitchen" },
+    { who: "gekko", team: "kitchen" },
+    { who: "gecko", team: "structures" },
+    { who: "jonno", team: "structures", lead: true },
+    { who: "thandiM", team: "art_and_activities" },
+    { who: "thandiB", team: "health_and_safety" },
+    { who: "lerato", team: "ministry_of_vibes" },
+    { who: "pieter", team: "power_and_lighting" },
+    { who: "ayesha", team: "finance", lead: true },
+    { who: "sipho", team: "sanitation_and_water" },
+    { who: "ben", team: "transport_and_logistics" },
+    { who: "zanele", team: "health_and_safety", lead: true },
+  ];
 
 export const BURN_DAYS = [
   "2027-04-26",
@@ -68,13 +69,62 @@ export const BURN_DAYS = [
 ] as const;
 
 export const SHIFT_TYPES = [
-  { key: "breakfastCooks", name: "Breakfast cooks", team: "kitchen", start: 7 * 60, minutes: 120, places: 4 },
-  { key: "breakfastWashUp", name: "Breakfast wash-up", team: "kitchen", start: 9 * 60, minutes: 60, places: 2 },
-  { key: "dinnerCooks", name: "Dinner cooks", team: "kitchen", start: 17 * 60, minutes: 120, places: 4 },
-  { key: "dinnerWashUp", name: "Dinner wash-up", team: "kitchen", start: 19 * 60 + 30, minutes: 60, places: 2 },
-  { key: "moop", name: "MOOP sweep", team: "sanitation_and_water", start: 10 * 60, minutes: 60, places: 3 },
-  { key: "generator", name: "Generator check", team: "power_and_lighting", start: 8 * 60, minutes: 30, places: 1 },
-  { key: "bar", name: "Bar shift", team: "ministry_of_vibes", start: 21 * 60, minutes: 120, places: 3 },
+  {
+    key: "breakfastCooks",
+    name: "Breakfast cooks",
+    team: "kitchen",
+    start: 7 * 60,
+    minutes: 120,
+    places: 4,
+  },
+  {
+    key: "breakfastWashUp",
+    name: "Breakfast wash-up",
+    team: "kitchen",
+    start: 9 * 60,
+    minutes: 60,
+    places: 2,
+  },
+  {
+    key: "dinnerCooks",
+    name: "Dinner cooks",
+    team: "kitchen",
+    start: 17 * 60,
+    minutes: 120,
+    places: 4,
+  },
+  {
+    key: "dinnerWashUp",
+    name: "Dinner wash-up",
+    team: "kitchen",
+    start: 19 * 60 + 30,
+    minutes: 60,
+    places: 2,
+  },
+  {
+    key: "moop",
+    name: "MOOP sweep",
+    team: "sanitation_and_water",
+    start: 10 * 60,
+    minutes: 60,
+    places: 3,
+  },
+  {
+    key: "generator",
+    name: "Generator check",
+    team: "power_and_lighting",
+    start: 8 * 60,
+    minutes: 30,
+    places: 1,
+  },
+  {
+    key: "bar",
+    name: "Bar shift",
+    team: "ministry_of_vibes",
+    start: 21 * 60,
+    minutes: 120,
+    places: 3,
+  },
 ] as const;
 
 export type ShiftKey = (typeof SHIFT_TYPES)[number]["key"];
@@ -88,26 +138,129 @@ export function slot(key: ShiftKey, day: string): string {
 }
 
 export const TASKS = {
-  shadeCloth: { id: fixed(4, 1), title: "Buy 30 m of shade cloth", team: "structures", status: "in_progress" },
-  shopping: { id: fixed(4, 2), title: "Kitchen shopping list", team: "kitchen", status: "open" },
-  showerPump: { id: fixed(4, 3), title: "Fix the shower pump", team: "sanitation_and_water", status: "open" },
-  truck: { id: fixed(4, 4), title: "Book the truck", team: "transport_and_logistics", status: "open" },
-  ledStrips: { id: fixed(4, 5), title: "Order LED strips", team: "power_and_lighting", status: "in_progress" },
-  ledBulbs: { id: fixed(4, 6), title: "Order LED bulbs", team: "power_and_lighting", status: "open" },
-  campSign: { id: fixed(4, 7), title: "Design the camp sign", team: "art_and_activities", status: "done" },
-  dome: { id: fixed(4, 8), title: "Paint the dome", team: "structures", status: "open" },
+  shadeCloth: {
+    id: fixed(4, 1),
+    title: "Buy 30 m of shade cloth",
+    team: "structures",
+    status: "in_progress",
+  },
+  shopping: {
+    id: fixed(4, 2),
+    title: "Kitchen shopping list",
+    team: "kitchen",
+    status: "open",
+  },
+  showerPump: {
+    id: fixed(4, 3),
+    title: "Fix the shower pump",
+    team: "sanitation_and_water",
+    status: "open",
+  },
+  truck: {
+    id: fixed(4, 4),
+    title: "Book the truck",
+    team: "transport_and_logistics",
+    status: "open",
+  },
+  ledStrips: {
+    id: fixed(4, 5),
+    title: "Order LED strips",
+    team: "power_and_lighting",
+    status: "in_progress",
+  },
+  ledBulbs: {
+    id: fixed(4, 6),
+    title: "Order LED bulbs",
+    team: "power_and_lighting",
+    status: "open",
+  },
+  campSign: {
+    id: fixed(4, 7),
+    title: "Design the camp sign",
+    team: "art_and_activities",
+    status: "done",
+  },
+  dome: {
+    id: fixed(4, 8),
+    title: "Paint the dome",
+    team: "structures",
+    status: "open",
+  },
 } as const;
 
 export const CLAIMS = {
-  gasBottles: { id: fixed(5, 1), who: "gecko", team: "kitchen", description: "Gas bottles, 2 × 9 kg", cents: 124_000, status: "submitted" },
-  cableTies: { id: fixed(5, 2), who: "gekko", team: "structures", description: "Cable ties and rope", cents: 35_000, status: "submitted" },
-  spices: { id: fixed(5, 3), who: "thandiM", team: "kitchen", description: "Spices and oil", cents: 48_050, status: "submitted" },
-  firewood: { id: fixed(5, 4), who: "thandiM", team: "kitchen", description: "Firewood", cents: 60_000, status: "submitted" },
-  deposit: { id: fixed(5, 5), who: "jonno", team: "structures", description: "Shade cloth deposit", cents: 150_000, status: "submitted" },
-  fairyLights: { id: fixed(5, 6), who: "lerato", team: "ministry_of_vibes", description: "Fairy lights", cents: 89_900, status: "submitted" },
-  generator: { id: fixed(5, 7), who: "pieter", team: "power_and_lighting", description: "Generator service", cents: 250_000, status: "approved" },
-  printerInk: { id: fixed(5, 8), who: "ryno", team: "finance", description: "Printer ink", cents: 30_000, status: "submitted" },
-  toiletPaper: { id: fixed(5, 9), who: "sipho", team: "sanitation_and_water", description: "Toilet paper in bulk", cents: 72_000, status: "submitted" },
+  gasBottles: {
+    id: fixed(5, 1),
+    who: "gecko",
+    team: "kitchen",
+    description: "Gas bottles, 2 × 9 kg",
+    cents: 124_000,
+    status: "submitted",
+  },
+  cableTies: {
+    id: fixed(5, 2),
+    who: "gekko",
+    team: "structures",
+    description: "Cable ties and rope",
+    cents: 35_000,
+    status: "submitted",
+  },
+  spices: {
+    id: fixed(5, 3),
+    who: "thandiM",
+    team: "kitchen",
+    description: "Spices and oil",
+    cents: 48_050,
+    status: "submitted",
+  },
+  firewood: {
+    id: fixed(5, 4),
+    who: "thandiM",
+    team: "kitchen",
+    description: "Firewood",
+    cents: 60_000,
+    status: "submitted",
+  },
+  deposit: {
+    id: fixed(5, 5),
+    who: "jonno",
+    team: "structures",
+    description: "Shade cloth deposit",
+    cents: 150_000,
+    status: "submitted",
+  },
+  fairyLights: {
+    id: fixed(5, 6),
+    who: "lerato",
+    team: "ministry_of_vibes",
+    description: "Fairy lights",
+    cents: 89_900,
+    status: "submitted",
+  },
+  generator: {
+    id: fixed(5, 7),
+    who: "pieter",
+    team: "power_and_lighting",
+    description: "Generator service",
+    cents: 250_000,
+    status: "approved",
+  },
+  printerInk: {
+    id: fixed(5, 8),
+    who: "ryno",
+    team: "finance",
+    description: "Printer ink",
+    cents: 30_000,
+    status: "submitted",
+  },
+  toiletPaper: {
+    id: fixed(5, 9),
+    who: "sipho",
+    team: "sanitation_and_water",
+    description: "Toilet paper in bulk",
+    cents: 72_000,
+    status: "submitted",
+  },
 } as const;
 
 /** Seed the eval camp into an empty database. */
@@ -138,12 +291,41 @@ export async function seedEvalCamp(db: DB): Promise<void> {
     })),
   );
   await db.insert(schema.logisticsPhases).values([
-    { cycle: 1, phase: "pack", startDate: "2027-04-17", endDate: "2027-04-18", place: "storage unit" },
-    { cycle: 1, phase: "travel", startDate: "2027-04-21", endDate: "2027-04-21" },
-    { cycle: 1, phase: "build", startDate: "2027-04-22", endDate: "2027-04-25", place: "on site" },
+    {
+      cycle: 1,
+      phase: "pack",
+      startDate: "2027-04-17",
+      endDate: "2027-04-18",
+      place: "storage unit",
+    },
+    {
+      cycle: 1,
+      phase: "travel",
+      startDate: "2027-04-21",
+      endDate: "2027-04-21",
+    },
+    {
+      cycle: 1,
+      phase: "build",
+      startDate: "2027-04-22",
+      endDate: "2027-04-25",
+      place: "on site",
+    },
     { cycle: 1, phase: "burn", startDate: "2027-04-26", endDate: "2027-05-02" },
-    { cycle: 1, phase: "strike", startDate: "2027-05-03", endDate: "2027-05-04", place: "on site" },
-    { cycle: 1, phase: "unpack", startDate: "2027-05-08", endDate: "2027-05-08", place: "storage unit" },
+    {
+      cycle: 1,
+      phase: "strike",
+      startDate: "2027-05-03",
+      endDate: "2027-05-04",
+      place: "on site",
+    },
+    {
+      cycle: 1,
+      phase: "unpack",
+      startDate: "2027-05-08",
+      endDate: "2027-05-08",
+      place: "storage unit",
+    },
   ]);
   await db.insert(schema.logisticsAttendance).values([
     { cycle: 1, phase: "pack", userId: SPEAKER.id, answer: "going" },
@@ -163,9 +345,11 @@ export async function seedEvalCamp(db: DB): Promise<void> {
       durationMinutes: type.minutes,
       places: type.places,
     });
-    await db.insert(schema.shiftSlots).values(
-      BURN_DAYS.map((day) => ({ id: slot(type.key, day), typeId, day })),
-    );
+    await db
+      .insert(schema.shiftSlots)
+      .values(
+        BURN_DAYS.map((day) => ({ id: slot(type.key, day), typeId, day })),
+      );
   }
   await db.insert(schema.shiftSignups).values([
     { slotId: slot("dinnerCooks", "2027-04-29"), userId: SPEAKER.id },
@@ -182,8 +366,12 @@ export async function seedEvalCamp(db: DB): Promise<void> {
       status: t.status,
       createdByUserId: PEOPLE.mpho.id,
       assigneeId: t.id === TASKS.showerPump.id ? PEOPLE.sipho.id : null,
-      dueAt: t.id === TASKS.shopping.id ? new Date("2026-10-07T08:00:00+02:00") : null,
-      completedAt: t.status === "done" ? new Date("2026-10-01T10:00:00Z") : null,
+      dueAt:
+        t.id === TASKS.shopping.id
+          ? new Date("2026-10-07T08:00:00+02:00")
+          : null,
+      completedAt:
+        t.status === "done" ? new Date("2026-10-01T10:00:00Z") : null,
     })),
   );
   await db.insert(schema.reimbursements).values(
@@ -196,12 +384,17 @@ export async function seedEvalCamp(db: DB): Promise<void> {
       currency: "ZAR",
       spentOn: "2026-10-01",
       accountType: "sa" as const,
-      accountDetailsEncrypted: encrypt(JSON.stringify({ bank: "Test", account: `000${i}` })),
+      accountDetailsEncrypted: encrypt(
+        JSON.stringify({ bank: "Test", account: `000${i}` }),
+      ),
       description: c.description,
       status: c.status,
       createdAt: new Date(`2026-10-0${1 + (i % 5)}T09:00:00Z`),
       ...(c.status === "approved"
-        ? { approverId: PEOPLE.mpho.id, approvedAt: new Date("2026-10-04T09:00:00Z") }
+        ? {
+            approverId: PEOPLE.mpho.id,
+            approvedAt: new Date("2026-10-04T09:00:00Z"),
+          }
         : {}),
     })),
   );

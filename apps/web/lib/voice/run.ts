@@ -33,7 +33,11 @@ export interface RunDeps {
   /** Claims the list's id once; false when it was already spent (or cannot be counted). */
   spend: (proposalId: string) => Promise<boolean>;
   /** One tool as the signed-in person (lib/voice/tools callTool). */
-  call: (tool: string, args: unknown, userId: string) => Promise<ToolCallResult>;
+  call: (
+    tool: string,
+    args: unknown,
+    userId: string,
+  ) => Promise<ToolCallResult>;
   now?: number;
 }
 
@@ -66,11 +70,19 @@ export async function runSealedList(
   for (const [index, action] of body.actions.entries()) {
     const base = { index, sentence: action.sentence, path: action.path };
     if (!chosen.has(index)) {
-      results.push({ ...base, status: "unticked", detail: "Not ticked. Nothing changed." });
+      results.push({
+        ...base,
+        status: "unticked",
+        detail: "Not ticked. Nothing changed.",
+      });
       continue;
     }
     if (action.blocked) {
-      results.push({ ...base, status: "not_done", detail: `${action.blocked} Nothing changed.` });
+      results.push({
+        ...base,
+        status: "not_done",
+        detail: `${action.blocked} Nothing changed.`,
+      });
       continue;
     }
     if (action.dependsOn !== null) {

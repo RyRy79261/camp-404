@@ -5,7 +5,12 @@ import { z } from "zod";
 import { VOICE_REPLY_TOOLS } from "@camp404/ai-prompts";
 import { TOOL_CAPABILITIES } from "../../mcp/capabilities";
 import { message, toolUse } from "../claude-fake";
-import { MAX_CALLS, runCommandLoop, type ClaudeClient, type LoopInput } from "../command";
+import {
+  MAX_CALLS,
+  runCommandLoop,
+  type ClaudeClient,
+  type LoopInput,
+} from "../command";
 import { PREVIEWS } from "../previews";
 import type { VoiceTool } from "../tools";
 
@@ -34,7 +39,10 @@ function input(replies: Anthropic.Message[], over: Partial<LoopInput> = {}) {
       },
     },
   };
-  const callRead = vi.fn(async () => ({ ok: true as const, data: { rows: [{ id: "t1" }] } }));
+  const callRead = vi.fn(async () => ({
+    ok: true as const,
+    data: { rows: [{ id: "t1" }] },
+  }));
   return {
     bodies,
     callRead,
@@ -61,14 +69,21 @@ function input(replies: Anthropic.Message[], over: Partial<LoopInput> = {}) {
 describe("the command loop", () => {
   it("runs reads, never a write, and ends on the turn with no read", async () => {
     const t = input([
-      message([toolUse("list_tasks", {}), toolUse("move_task", { id: "early" })]),
-      message([toolUse("move_task", { id: "t1" }), toolUse(VOICE_REPLY_TOOLS.answer, { text: "Done soon", path: null })]),
+      message([
+        toolUse("list_tasks", {}),
+        toolUse("move_task", { id: "early" }),
+      ]),
+      message([
+        toolUse("move_task", { id: "t1" }),
+        toolUse(VOICE_REPLY_TOOLS.answer, { text: "Done soon", path: null }),
+      ]),
     ]);
     const out = await runCommandLoop(t.input);
     expect(t.callRead).toHaveBeenCalledTimes(1);
     expect(t.callRead).toHaveBeenCalledWith("list_tasks", {});
     // The early write was answered "not done", never run.
-    const results = t.bodies[1]!.messages.at(-1)!.content as Anthropic.ToolResultBlockParam[];
+    const results = t.bodies[1]!.messages.at(-1)!
+      .content as Anthropic.ToolResultBlockParam[];
     expect(results[1]).toMatchObject({ is_error: true });
     expect(out).toMatchObject({
       kind: "reply",
@@ -79,7 +94,9 @@ describe("the command loop", () => {
   });
 
   it("asks Sonnet 5.5 as its rules require: auto tool choice, adaptive thinking at medium, strict reply tools, one cache breakpoint", async () => {
-    const t = input([message([toolUse(VOICE_REPLY_TOOLS.unsure, { reason: "?" })])]);
+    const t = input([
+      message([toolUse(VOICE_REPLY_TOOLS.unsure, { reason: "?" })]),
+    ]);
     await runCommandLoop(t.input);
     const body = t.bodies[0]!;
     expect(body.model).toBe("claude-sonnet-5-5");
@@ -96,27 +113,48 @@ describe("the command loop", () => {
 
   it("keeps the history append-only: each turn is sent back unchanged", async () => {
     const first = message([toolUse("list_tasks", {})]);
-    const t = input([first, message([toolUse(VOICE_REPLY_TOOLS.unsure, { reason: "?" })])]);
+    const t = input([
+      first,
+      message([toolUse(VOICE_REPLY_TOOLS.unsure, { reason: "?" })]),
+    ]);
     await runCommandLoop(t.input);
-    expect(t.bodies[1]!.messages[1]).toEqual({ role: "assistant", content: first.content });
+    expect(t.bodies[1]!.messages[1]).toEqual({
+      role: "assistant",
+      content: first.content,
+    });
     expect(t.bodies[1]!.messages.slice(0, 1)).toEqual(t.bodies[0]!.messages);
   });
 
   it("nudges once when a reply has no tool call, then gives up", async () => {
-    const text = (s: string) => message([{ type: "text", text: s, citations: null } as Anthropic.TextBlock], "end_turn");
+    const text = (s: string) =>
+      message(
+        [{ type: "text", text: s, citations: null } as Anthropic.TextBlock],
+        "end_turn",
+      );
     const t = input([text("hm"), text("still")]);
-    expect(await runCommandLoop(t.input)).toMatchObject({ kind: "error", code: "no_reply" });
+    expect(await runCommandLoop(t.input)).toMatchObject({
+      kind: "error",
+      code: "no_reply",
+    });
     expect(t.bodies).toHaveLength(2);
   });
 
   it("ends on a refusal, with nothing proposed", async () => {
     const t = input([message([], "refusal")]);
-    expect(await runCommandLoop(t.input)).toMatchObject({ kind: "error", code: "refusal" });
+    expect(await runCommandLoop(t.input)).toMatchObject({
+      kind: "error",
+      code: "refusal",
+    });
   });
 
   it("stops after five calls", async () => {
-    const t = input(Array.from({ length: 9 }, () => message([toolUse("list_tasks", {})])));
-    expect(await runCommandLoop(t.input)).toMatchObject({ kind: "error", code: "timeout" });
+    const t = input(
+      Array.from({ length: 9 }, () => message([toolUse("list_tasks", {})])),
+    );
+    expect(await runCommandLoop(t.input)).toMatchObject({
+      kind: "error",
+      code: "timeout",
+    });
     expect(t.bodies).toHaveLength(MAX_CALLS);
   });
 
@@ -136,7 +174,11 @@ describe("the command loop", () => {
     expect(await runCommandLoop(t.input)).toMatchObject({
       kind: "reply",
       writes: [{ tool: "move_task", args: { id: "a" } }],
-      ask: { question: "Which?", index: 1, options: [{ args: { id: "x" } }, { args: { id: "y" } }] },
+      ask: {
+        question: "Which?",
+        index: 1,
+        options: [{ args: { id: "x" } }, { args: { id: "y" } }],
+      },
     });
   });
 });

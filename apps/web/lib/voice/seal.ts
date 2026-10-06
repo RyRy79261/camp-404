@@ -122,7 +122,8 @@ export const OPEN_REFUSALS: Record<
   string
 > = {
   tampered: "That list was changed after it was made. Nothing ran.",
-  expired: "That list is more than five minutes old. Nothing ran: say it again.",
+  expired:
+    "That list is more than five minutes old. Nothing ran: say it again.",
   not_yours: "That list was made for another sign-in. Nothing ran.",
   spent: "That list has already run. Nothing ran twice.",
 };

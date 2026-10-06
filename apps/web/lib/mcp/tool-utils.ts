@@ -12,7 +12,10 @@ import { getMcpScope, type McpScope } from "./scope";
 async function appendMcpAuditLog(
   row: Parameters<typeof dbAppendMcpAuditLog>[0],
 ): Promise<void> {
-  if (process.env.E2E_TEST_MODE === "1" && process.env.E2E_DATABASE !== "real") {
+  if (
+    process.env.E2E_TEST_MODE === "1" &&
+    process.env.E2E_DATABASE !== "real"
+  ) {
     const { voiceTestStore } = await import("../test-store-voice");
     voiceTestStore.appendAudit({
       campUserId: row.campUserId,

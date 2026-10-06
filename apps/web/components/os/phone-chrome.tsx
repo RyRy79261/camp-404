@@ -303,7 +303,13 @@ export function PhoneVoiceCell({
       data-phone-voice
       onClick={onPress}
       aria-expanded={open}
-      aria-label={offline ? "Voice is off: no internet" : recording ? "Stop and send" : "Voice"}
+      aria-label={
+        offline
+          ? "Voice is off: no internet"
+          : recording
+            ? "Stop and send"
+            : "Voice"
+      }
       className={`relative flex h-12 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 border font-pixel text-[10px] uppercase outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-os-fg ${
         recording
           ? "border-os-primary bg-[var(--os-win-primary)] text-[#17191b]"

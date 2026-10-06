@@ -23,7 +23,10 @@ export async function getVoiceConsent(userId: string): Promise<Date | null> {
   return row?.at ?? null;
 }
 
-export async function setVoiceConsent(userId: string, on: boolean): Promise<void> {
+export async function setVoiceConsent(
+  userId: string,
+  on: boolean,
+): Promise<void> {
   const at = on ? new Date() : null;
   if (usesTestStore()) {
     voiceTestStore.setConsent(userId, at);

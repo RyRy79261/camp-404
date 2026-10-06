@@ -229,32 +229,45 @@ describe("the bottom bar", () => {
       }),
     );
     render(<Desktop {...props()} />);
-    const icon = document.querySelector<HTMLElement>('[data-phone-icon="calendar"]')!;
+    const icon = document.querySelector<HTMLElement>(
+      '[data-phone-icon="calendar"]',
+    )!;
     // Its label wears the open colour, as the glow on the home screen.
-    expect(icon.querySelector("[data-label]")!.className).toContain("bg-os-primary");
-    const shut = document.querySelector<HTMLElement>('[data-phone-icon="roster"]');
-    expect(shut?.querySelector("[data-label]")!.className).not.toContain("bg-os-primary");
+    expect(icon.querySelector("[data-label]")!.className).toContain(
+      "bg-os-primary",
+    );
+    const shut = document.querySelector<HTMLElement>(
+      '[data-phone-icon="roster"]',
+    );
+    expect(shut?.querySelector("[data-label]")!.className).not.toContain(
+      "bg-os-primary",
+    );
     fireEvent.click(icon);
     expect(nav.push).toHaveBeenCalledWith("/calendar");
     // Its one window, not a second.
-    expect(document.querySelectorAll('[data-window="calendar"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-window="calendar"]')).toHaveLength(
+      1,
+    );
   });
 
   it("has no Programs button", () => {
     render(<Desktop {...props()} />);
     expect(bar().getByRole("button", { name: "Home" })).toBeTruthy();
-    expect(bar().queryByRole("button", { name: /Open programs|Programs/ })).toBeNull();
+    expect(
+      bar().queryByRole("button", { name: /Open programs|Programs/ }),
+    ).toBeNull();
     expect(screen.queryByRole("region", { name: "Open programs" })).toBeNull();
   });
 
   it("puts the clock last for everyone, and gives only a captain the mic, just before it", () => {
     const cells = () =>
-      [...screen.getByRole("toolbar", { name: "Bottom bar" }).children].map((el) =>
-        el.hasAttribute("data-phone-clock")
-          ? "clock"
-          : el.hasAttribute("data-phone-voice")
-            ? "voice"
-            : (el.getAttribute("aria-label") ?? "bell"),
+      [...screen.getByRole("toolbar", { name: "Bottom bar" }).children].map(
+        (el) =>
+          el.hasAttribute("data-phone-clock")
+            ? "clock"
+            : el.hasAttribute("data-phone-voice")
+              ? "voice"
+              : (el.getAttribute("aria-label") ?? "bell"),
       );
     const member = render(<Desktop {...props()} />);
     expect(cells()).toEqual(["Home", "Search", "bell", "Today", "clock"]);
@@ -273,11 +286,20 @@ describe("the bottom bar", () => {
         })}
       />,
     );
-    expect(cells()).toEqual(["Home", "Search", "bell", "Today", "voice", "clock"]);
+    expect(cells()).toEqual([
+      "Home",
+      "Search",
+      "bell",
+      "Today",
+      "voice",
+      "clock",
+    ]);
     const clock = document.querySelector<HTMLElement>("[data-phone-clock]")!;
     expect(clock.className).toContain("min-w-[60px]");
     // And on a desktop, the mic under the Today tab.
-    expect(document.querySelector("[data-os-today] [data-voice-mic]")).not.toBeNull();
+    expect(
+      document.querySelector("[data-os-today] [data-voice-mic]"),
+    ).not.toBeNull();
   });
 
   it("Today opens a sheet on the home screen, and from a program goes home first", () => {

@@ -102,7 +102,10 @@ export function lookAlikes<T extends { id: string; name: string }>(
   const tw = words(target.name);
   return roster.filter((other) => {
     if (other.id === target.id) return false;
-    if (namesAlike(other.name, target.name) && words(other.name).length === tw.length) {
+    if (
+      namesAlike(other.name, target.name) &&
+      words(other.name).length === tw.length
+    ) {
       return true;
     }
     const ow = words(other.name);

@@ -1074,7 +1074,9 @@ function DesktopInner({
   // The manifest carries `voice` for a captain on the full desktop and for
   // nobody else, so nobody else has a mic in the page at all.
   const voiceOn = !!manifest.voice && mode === "full" && !held;
-  const voice = useVoiceCommand({ consented: manifest.voice?.consented ?? false });
+  const voice = useVoiceCommand({
+    consented: manifest.voice?.consented ?? false,
+  });
   const closePhoneVoice = useCallback(() => {
     setPhoneVoiceOpen(false);
     voice.reset();
@@ -2204,7 +2206,9 @@ function DesktopInner({
               clearTitleBar={!!top?.maximized}
               className="absolute bottom-2 right-0 top-3 z-30 max-md:hidden"
               below={
-                voiceOn && !phoneNow ? <DesktopVoice voice={voice} /> : undefined
+                voiceOn && !phoneNow ? (
+                  <DesktopVoice voice={voice} />
+                ) : undefined
               }
             >
               {today.body}

@@ -29,7 +29,12 @@ export interface ShownList {
 export const VOICE_OFFLINE =
   "Voice needs an internet connection. On site there is no internet: use the printed daily sheet and duty cards.";
 
-const MIME = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+const MIME = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+  "audio/ogg;codecs=opus",
+];
 const MAX_MS = 60_000;
 
 function pickMime(): string | undefined {
@@ -56,7 +61,9 @@ export function useOnline(): boolean {
 export function useVoiceCommand({ consented }: { consented: boolean }) {
   const [agreed, setAgreed] = React.useState(consented);
   React.useEffect(() => setAgreed(consented), [consented]);
-  const [phase, setPhase] = React.useState<VoicePhase>(consented ? "idle" : "consent");
+  const [phase, setPhase] = React.useState<VoicePhase>(
+    consented ? "idle" : "consent",
+  );
   const [words, setWords] = React.useState<string | null>(null);
   const [outcome, setOutcome] = React.useState<VoiceOutcome | null>(null);
   const [shown, setShown] = React.useState<ShownList | null>(null);
@@ -117,17 +124,24 @@ export function useVoiceCommand({ consented }: { consented: boolean }) {
     const form = new FormData();
     form.append(
       "audio",
-      new File([blob], `command.${mime.includes("mp4") ? "m4a" : "webm"}`, { type: mime }),
+      new File([blob], `command.${mime.includes("mp4") ? "m4a" : "webm"}`, {
+        type: mime,
+      }),
     );
     try {
-      const res = await fetch("/api/voice/command", { method: "POST", body: form });
+      const res = await fetch("/api/voice/command", {
+        method: "POST",
+        body: form,
+      });
       const data = (await res.json().catch(() => ({}))) as {
         words?: string;
         outcome?: VoiceOutcome;
         error?: string;
       };
       if (!res.ok || !data.outcome) {
-        setError(data.error ?? "Something went wrong. Nothing changed: try again.");
+        setError(
+          data.error ?? "Something went wrong. Nothing changed: try again.",
+        );
         setPhase("idle");
         return;
       }
@@ -152,12 +166,17 @@ export function useVoiceCommand({ consented }: { consented: boolean }) {
     }
     try {
       const media = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       });
       stream.current = media;
       const Ctx =
         window.AudioContext ??
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
       const ctx = new Ctx();
       const node = ctx.createAnalyser();
       node.fftSize = 1024;
@@ -165,7 +184,10 @@ export function useVoiceCommand({ consented }: { consented: boolean }) {
       audio.current = ctx;
       setAnalyser(node);
       const mime = pickMime();
-      const rec = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
+      const rec = new MediaRecorder(
+        media,
+        mime ? { mimeType: mime } : undefined,
+      );
       recorder.current = rec;
       chunks.current = [];
       discardNext.current = false;
@@ -224,7 +246,11 @@ export function useVoiceCommand({ consented }: { consented: boolean }) {
     if (outcome?.kind !== "ask") return;
     const option = outcome.options[i];
     if (!option) return;
-    setShown({ rows: option.rows, token: option.token, expiresAt: option.expiresAt });
+    setShown({
+      rows: option.rows,
+      token: option.token,
+      expiresAt: option.expiresAt,
+    });
     setTicked(new Set(option.rows.flatMap((r, j) => (r.blocked ? [] : [j]))));
   }
 
@@ -234,9 +260,15 @@ export function useVoiceCommand({ consented }: { consented: boolean }) {
     let result: RunResult;
     try {
       const { runVoiceList } = await import("@/app/(console)/voice-actions");
-      result = await runVoiceList(shown.token, [...ticked].sort((a, b) => a - b));
+      result = await runVoiceList(
+        shown.token,
+        [...ticked].sort((a, b) => a - b),
+      );
     } catch {
-      result = { ok: false, message: "Something went wrong. Check the pages before trying again." };
+      result = {
+        ok: false,
+        message: "Something went wrong. Check the pages before trying again.",
+      };
     }
     if (!result.ok) {
       setError(result.message);

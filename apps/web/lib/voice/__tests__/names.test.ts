@@ -21,13 +21,25 @@ describe("look-alike names", () => {
   });
 
   it("always finds the other of a pair whose whole names sound alike, whatever was said", () => {
-    expect(lookAlikes(of("1"), ROSTER, "Put Gecko Naidoo on kitchen").map((p) => p.id)).toEqual(["2"]);
-    expect(lookAlikes(of("2"), ROSTER, "Put Gekko Naidoo on kitchen").map((p) => p.id)).toEqual(["1"]);
+    expect(
+      lookAlikes(of("1"), ROSTER, "Put Gecko Naidoo on kitchen").map(
+        (p) => p.id,
+      ),
+    ).toEqual(["2"]);
+    expect(
+      lookAlikes(of("2"), ROSTER, "Put Gekko Naidoo on kitchen").map(
+        (p) => p.id,
+      ),
+    ).toEqual(["1"]);
   });
 
   it("finds the other Thandi when only the first name was said, and not when the surname was", () => {
-    expect(lookAlikes(of("3"), ROSTER, "Put Thandi on vibes").map((p) => p.id)).toEqual(["4"]);
-    expect(lookAlikes(of("3"), ROSTER, "Put Thandi Mokoena on vibes")).toEqual([]);
+    expect(
+      lookAlikes(of("3"), ROSTER, "Put Thandi on vibes").map((p) => p.id),
+    ).toEqual(["4"]);
+    expect(lookAlikes(of("3"), ROSTER, "Put Thandi Mokoena on vibes")).toEqual(
+      [],
+    );
     expect(lookAlikes(of("4"), ROSTER, "Make Thandi Botha a lead")).toEqual([]);
   });
 
@@ -38,17 +50,29 @@ describe("look-alike names", () => {
 });
 
 describe("one claim among several", () => {
-  const gas = { description: "Gas bottles, 2 × 9 kg Kitchen", amountCents: 124_000 };
-  const ties = { description: "Cable ties and rope Structures", amountCents: 35_000 };
+  const gas = {
+    description: "Gas bottles, 2 × 9 kg Kitchen",
+    amountCents: 124_000,
+  };
+  const ties = {
+    description: "Cable ties and rope Structures",
+    amountCents: 35_000,
+  };
   it("is singled out by what it was for, or by its amount in rands", () => {
-    expect(wordsSingleOut("approve the gas bottles claim", gas, [ties])).toBe(true);
-    expect(wordsSingleOut("approve the claim for R1,240", gas, [ties])).toBe(true);
+    expect(wordsSingleOut("approve the gas bottles claim", gas, [ties])).toBe(
+      true,
+    );
+    expect(wordsSingleOut("approve the claim for R1,240", gas, [ties])).toBe(
+      true,
+    );
     expect(wordsSingleOut("approve Gecko's claim", gas, [ties])).toBe(false);
     // A word both claims share says nothing.
     expect(
-      wordsSingleOut("approve the kitchen claim", { description: "Spices Kitchen", amountCents: 1 }, [
-        { description: "Firewood Kitchen", amountCents: 2 },
-      ]),
+      wordsSingleOut(
+        "approve the kitchen claim",
+        { description: "Spices Kitchen", amountCents: 1 },
+        [{ description: "Firewood Kitchen", amountCents: 2 }],
+      ),
     ).toBe(false);
   });
 });

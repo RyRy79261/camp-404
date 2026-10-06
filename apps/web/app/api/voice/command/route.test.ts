@@ -6,7 +6,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // log. The load-bearing assertions for a refusal are that Groq and Claude
 // were never called.
 
-vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn(), getSessionId: vi.fn() }));
+vi.mock("@/lib/auth", () => ({
+  getAuthenticatedUser: vi.fn(),
+  getSessionId: vi.fn(),
+}));
 vi.mock("@/lib/member-gate", () => ({ resolveMemberState: vi.fn() }));
 vi.mock("@/lib/mcp/scope", () => ({ getMcpScope: vi.fn() }));
 vi.mock("@/lib/voice/consent", () => ({ getVoiceConsent: vi.fn() }));
@@ -36,7 +39,10 @@ const WORDS = "Sign me up for breakfast cooks on Wednesday";
 
 function clip(headers: Record<string, string> = {}): Request {
   const form = new FormData();
-  form.set("audio", new File([new Uint8Array([1, 2, 3])], "c.webm", { type: "audio/webm" }));
+  form.set(
+    "audio",
+    new File([new Uint8Array([1, 2, 3])], "c.webm", { type: "audio/webm" }),
+  );
   return {
     method: "POST",
     url: "https://camp.test/api/voice/command",
@@ -53,7 +59,9 @@ function as(rank: "captain" | "member", block: unknown = null) {
     block,
   } as never);
   vi.mocked(getMcpScope).mockResolvedValue(
-    rank === "captain" ? ({ campUserId: "camp-1", isCaptain: true } as never) : ({ campUserId: "camp-1", isCaptain: false } as never),
+    rank === "captain"
+      ? ({ campUserId: "camp-1", isCaptain: true } as never)
+      : ({ campUserId: "camp-1", isCaptain: false } as never),
   );
 }
 
@@ -65,15 +73,30 @@ const nothingAsked = () => {
 describe("POST /api/voice/command", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: "auth-1" } as never);
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      id: "auth-1",
+    } as never);
     vi.mocked(getSessionId).mockResolvedValue("session-1");
     as("captain");
     vi.mocked(getVoiceConsent).mockResolvedValue(new Date());
-    vi.mocked(rateLimiter.limit).mockResolvedValue({ ok: true, retryAfterSeconds: 0 });
-    vi.mocked(transcribeCommand).mockResolvedValue({ text: WORDS, avgLogprob: -0.2, noSpeechProb: 0.01 });
+    vi.mocked(rateLimiter.limit).mockResolvedValue({
+      ok: true,
+      retryAfterSeconds: 0,
+    });
+    vi.mocked(transcribeCommand).mockResolvedValue({
+      text: WORDS,
+      avgLogprob: -0.2,
+      noSpeechProb: 0.01,
+    });
     vi.mocked(runVoiceCommand).mockResolvedValue({
       outcome: { kind: "answers", answers: [] },
-      usage: { calls: 1, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      usage: {
+        calls: 1,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+      },
     });
   });
 
@@ -105,39 +128,62 @@ describe("POST /api/voice/command", () => {
 
   it("counts the command before Groq and Claude are asked, and refuses the one over the day's 30", async () => {
     vi.mocked(rateLimiter.limit).mockImplementation(async (key) =>
-      key.startsWith("voice-command:") ? { ok: false, retryAfterSeconds: 600 } : { ok: true, retryAfterSeconds: 0 },
+      key.startsWith("voice-command:")
+        ? { ok: false, retryAfterSeconds: 600 }
+        : { ok: true, retryAfterSeconds: 0 },
     );
     const res = await POST(clip());
     expect(res.status).toBe(429);
-    expect(vi.mocked(rateLimiter.limit)).toHaveBeenCalledWith("voice-command:camp-1", {
-      limit: 30,
-      windowMs: 86_400_000,
-    });
+    expect(vi.mocked(rateLimiter.limit)).toHaveBeenCalledWith(
+      "voice-command:camp-1",
+      {
+        limit: 30,
+        windowMs: 86_400_000,
+      },
+    );
     nothingAsked();
   });
 
   it("refuses a request from another site", async () => {
-    expect((await POST(clip({ origin: "https://evil.example" }))).status).toBe(403);
+    expect((await POST(clip({ origin: "https://evil.example" }))).status).toBe(
+      403,
+    );
     nothingAsked();
   });
 
   it("stops before Claude when Whisper did not hear clearly", async () => {
-    vi.mocked(transcribeCommand).mockResolvedValue({ text: "mm", avgLogprob: -1.6, noSpeechProb: 0.2 });
+    vi.mocked(transcribeCommand).mockResolvedValue({
+      text: "mm",
+      avgLogprob: -1.6,
+      noSpeechProb: 0.2,
+    });
     const body = await (await POST(clip())).json();
-    expect(body.outcome).toMatchObject({ kind: "refused", message: "I didn't catch that clearly. Say it again, a bit slower." });
+    expect(body.outcome).toMatchObject({
+      kind: "refused",
+      message: "I didn't catch that clearly. Say it again, a bit slower.",
+    });
     expect(runVoiceCommand).not.toHaveBeenCalled();
   });
 
   it("works out the command as the signed-in captain and this sign-in, and logs no words when it fails", async () => {
     const res = await POST(clip({ origin: "https://camp.test" }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ words: WORDS, outcome: { kind: "answers", answers: [] } });
+    expect(await res.json()).toEqual({
+      words: WORDS,
+      outcome: { kind: "answers", answers: [] },
+    });
     expect(runVoiceCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ words: WORDS, sessionId: "session-1", scope: expect.objectContaining({ campUserId: "camp-1" }) }),
+      expect.objectContaining({
+        words: WORDS,
+        sessionId: "session-1",
+        scope: expect.objectContaining({ campUserId: "camp-1" }),
+      }),
     );
 
     const logged: unknown[] = [];
-    vi.spyOn(console, "error").mockImplementation((...a) => void logged.push(a));
+    vi.spyOn(console, "error").mockImplementation(
+      (...a) => void logged.push(a),
+    );
     vi.mocked(runVoiceCommand).mockRejectedValue(new Error(`boom ${WORDS}`));
     expect((await POST(clip())).status).toBe(500);
     expect(JSON.stringify(logged)).not.toContain("breakfast");

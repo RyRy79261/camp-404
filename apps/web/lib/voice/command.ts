@@ -96,9 +96,10 @@ export function requestTools(
 ): Anthropic.Tool[] {
   const camp: Anthropic.Tool[] = tools.map((t) => ({
     name: t.name,
-    description: t.kind === "write"
-      ? `${t.description} (A change: calling it proposes it to the captain; it runs only after they confirm.)`
-      : t.description,
+    description:
+      t.kind === "write"
+        ? `${t.description} (A change: calling it proposes it to the captain; it runs only after they confirm.)`
+        : t.description,
     input_schema: inputJsonSchema(t) as Anthropic.Tool.InputSchema,
   }));
   const reply = voiceCommandPrompt.replyTools(websitePaths) as Anthropic.Tool[];
@@ -201,7 +202,8 @@ export async function runCommandLoop(input: LoopInput): Promise<LoopOutcome> {
             };
           }
           const result = await input.callRead(c.name, c.input);
-          if (result.ok) reads.push({ tool: c.name, args: c.input, data: result.data });
+          if (result.ok)
+            reads.push({ tool: c.name, args: c.input, data: result.data });
           return {
             type: "tool_result",
             tool_use_id: c.id,
@@ -264,11 +266,18 @@ function finalTurn(
               return { tool: String(o?.tool ?? ""), args };
             })
           : [];
-        ask = { question: String(input.question ?? ""), options, index: writes.length };
+        ask = {
+          question: String(input.question ?? ""),
+          options,
+          index: writes.length,
+        };
         break;
       }
       case VOICE_REPLY_TOOLS.cannot:
-        cannot = { what: String(input.what ?? ""), path: String(input.path ?? "") };
+        cannot = {
+          what: String(input.what ?? ""),
+          path: String(input.path ?? ""),
+        };
         break;
       case VOICE_REPLY_TOOLS.unsure:
         unsure = String(input.reason ?? "");

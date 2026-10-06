@@ -34,7 +34,8 @@ const SHORT = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
   timeZone: "UTC",
 });
-const day = (key: string) => SHORT.format(new Date(`${key}T00:00:00Z`)).replace(",", "");
+const day = (key: string) =>
+  SHORT.format(new Date(`${key}T00:00:00Z`)).replace(",", "");
 
 let liveClient: Anthropic | null = null;
 
@@ -57,7 +58,11 @@ export async function whisperPromptFor(scope: McpScope): Promise<string> {
   const [labels, roster, shifts] = await Promise.all([
     readTeamLabels(),
     readRoster(),
-    getShiftsView({ userId: scope.campUserId, rank: scope.viewerRank, ledTeams: [] }),
+    getShiftsView({
+      userId: scope.campUserId,
+      rank: scope.viewerRank,
+      ledTeams: [],
+    }),
   ]);
   return commandPrompt({
     teams: Object.values(labels),
@@ -84,7 +89,9 @@ export async function contextFor(
     todayKey: campDayKey(now),
     burnYear: settings.current ? String(settings.current.year) : null,
     burnDays:
-      burn?.startDate && burn.endDate ? `${day(burn.startDate)} to ${day(burn.endDate)}` : null,
+      burn?.startDate && burn.endDate
+        ? `${day(burn.startDate)} to ${day(burn.endDate)}`
+        : null,
     phases: phases
       .filter((p) => p.startDate)
       .map(

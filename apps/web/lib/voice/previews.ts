@@ -111,7 +111,12 @@ const shiftPreviews: Record<string, PreviewFn> = {
   async sign_up_for_shift(args, ctx) {
     const found = await findSlot(ctx, str(args.slotId));
     if (!found) {
-      return blocked("Sign you up for a shift", "That shift slot isn't on the roster.", args, "/shifts");
+      return blocked(
+        "Sign you up for a shift",
+        "That shift slot isn't on the roster.",
+        args,
+        "/shifts",
+      );
     }
     const { day, slot } = found;
     const what = `${slot.type.name}, ${day.label} ${slot.type.timeText}`;
@@ -131,7 +136,12 @@ const shiftPreviews: Record<string, PreviewFn> = {
   async leave_shift(args, ctx) {
     const found = await findSlot(ctx, str(args.slotId));
     if (!found) {
-      return blocked("Take you off a shift", "That shift slot isn't on the roster.", args, "/shifts");
+      return blocked(
+        "Take you off a shift",
+        "That shift slot isn't on the roster.",
+        args,
+        "/shifts",
+      );
     }
     const { day, slot } = found;
     const base = {
@@ -159,13 +169,19 @@ const taskPreviews: Record<string, PreviewFn> = {
     const task = tasks.find((t) => t.id === str(args.taskId));
     const to = str(args.to) as keyof typeof TASK_COLUMN_LABEL;
     if (!task) {
-      return blocked("Move a task", "That task isn't on the board.", args, "/tasks");
+      return blocked(
+        "Move a task",
+        "That task isn't on the board.",
+        args,
+        "/tasks",
+      );
     }
     const card = presentTask(task, {
       viewer: {
         id: ctx.scope.campUserId,
         isCaptain: ctx.scope.isCaptain,
-        leadTeams: ctx.scope.viewerRank === "team_lead" ? ctx.scope.leadTeams : [],
+        leadTeams:
+          ctx.scope.viewerRank === "team_lead" ? ctx.scope.leadTeams : [],
       },
       now: ctx.now,
       teamLabels: labels,
@@ -182,8 +198,13 @@ const taskPreviews: Record<string, PreviewFn> = {
       args: { taskId: task.id, from: task.status, to },
       keys: [`task:${task.id}`],
     };
-    if (task.status === to) return { ...preview, blocked: `It is already in ${TASK_COLUMN_LABEL[to]}.` };
-    if (!card.canMove) return { ...preview, blocked: "You may not move this task." };
+    if (task.status === to)
+      return {
+        ...preview,
+        blocked: `It is already in ${TASK_COLUMN_LABEL[to]}.`,
+      };
+    if (!card.canMove)
+      return { ...preview, blocked: "You may not move this task." };
     return preview;
   },
   async add_task(args) {
@@ -268,7 +289,12 @@ async function claimPreview(
     : await listReimbursementsForReview({ id });
   const verb = decision === "approved" ? "Approve" : "Turn down";
   if (!claim) {
-    return blocked(`${verb} a claim`, "That claim isn't one you can see.", args, "/captains/payments/claims");
+    return blocked(
+      `${verb} a claim`,
+      "That claim isn't one you can see.",
+      args,
+      "/captains/payments/claims",
+    );
   }
   const amount = formatMoney(claim.amountCents);
   const labels = await readTeamLabels();
@@ -300,7 +326,10 @@ async function claimPreview(
     keys: [`claim:${id}`],
   };
   if (claim.status !== "submitted") {
-    return { ...preview, blocked: `It is no longer waiting (${claim.status}).` };
+    return {
+      ...preview,
+      blocked: `It is no longer waiting (${claim.status}).`,
+    };
   }
   if (claim.submitterId === ctx.scope.campUserId) {
     return { ...preview, blocked: "Nobody decides their own claim." };
@@ -348,7 +377,9 @@ const teamPreviews: Record<string, PreviewFn> = {
     return {
       sentence: `Put ${f.name} on ${f.label} for this year`,
       facts: [
-        f.others.length > 0 ? `Also on: ${f.others.join(", ")}` : "On no other team",
+        f.others.length > 0
+          ? `Also on: ${f.others.join(", ")}`
+          : "On no other team",
         `${f.label} will have ${f.people.length + (onIt ? 0 : 1)} members`,
       ].join(" · "),
       path: "/captains/camp-management",
@@ -364,8 +395,12 @@ const teamPreviews: Record<string, PreviewFn> = {
     return {
       sentence: `Take ${f.name} off ${f.label} for this year`,
       facts: [
-        f.membership?.isLead ? `${f.name} leads ${f.label} now` : `Not a lead of ${f.label}`,
-        f.others.length > 0 ? `Still on: ${f.others.join(", ")}` : "On no other team after this",
+        f.membership?.isLead
+          ? `${f.name} leads ${f.label} now`
+          : `Not a lead of ${f.label}`,
+        f.others.length > 0
+          ? `Still on: ${f.others.join(", ")}`
+          : "On no other team after this",
       ].join(" · "),
       path: "/captains/camp-management",
       args: { userId, team },
@@ -425,7 +460,8 @@ const otherPreviews: Record<string, PreviewFn> = {
   async propose_inventory_change(args) {
     return {
       sentence: `Suggest a change to a gear item: ${args.quantity}, ${str(args.condition)}, ${str(args.location)}`,
-      facts: "Inventory · a lead of its team or a captain approves it on the page",
+      facts:
+        "Inventory · a lead of its team or a captain approves it on the page",
       path: "/inventory",
       args,
       keys: [`item:${str(args.itemId)}`],
@@ -433,7 +469,9 @@ const otherPreviews: Record<string, PreviewFn> = {
   },
   async revoke_invite_code(args) {
     const code = str(args.code);
-    const row = usesTestStore() ? null : await findInviteCodeByCode(code.trim().toUpperCase());
+    const row = usesTestStore()
+      ? null
+      : await findInviteCodeByCode(code.trim().toUpperCase());
     return {
       sentence: `Revoke the invite code ${code}`,
       facts: row
@@ -465,9 +503,13 @@ const otherPreviews: Record<string, PreviewFn> = {
     };
   },
   async request_lift(args) {
-    const driver = args.driverUserId ? await personName(args.driverUserId) : null;
+    const driver = args.driverUserId
+      ? await personName(args.driverUserId)
+      : null;
     return {
-      sentence: driver ? `Ask ${driver} for a seat in their car` : "Ask for a seat in any car",
+      sentence: driver
+        ? `Ask ${driver} for a seat in their car`
+        : "Ask for a seat in any car",
       facts: "Transport · the driver answers on the page",
       path: "/transport",
       args: { driverUserId: args.driverUserId ?? null },
@@ -498,7 +540,13 @@ const otherPreviews: Record<string, PreviewFn> = {
   },
   async remove_car_rider(args, ctx) {
     if (!args.memberUserId || args.memberUserId === ctx.scope.campUserId) {
-      return { sentence: "Leave the car you ride in", facts: "Transport", path: "/transport", args, keys: ["rider:me"] };
+      return {
+        sentence: "Leave the car you ride in",
+        facts: "Transport",
+        path: "/transport",
+        args,
+        keys: ["rider:me"],
+      };
     }
     const [member, driver] = await Promise.all([
       personName(args.memberUserId),
@@ -514,8 +562,16 @@ const otherPreviews: Record<string, PreviewFn> = {
   },
   async update_meeting_notes(args) {
     const note = await getMeetingNote(str(args.meetingId));
-    if (!note) return blocked("Change a meeting's notes", "That meeting isn't there.", args, "/meetings");
-    const fields = ["title", "agenda", "notes", "decisions"].filter((k) => args[k] !== undefined);
+    if (!note)
+      return blocked(
+        "Change a meeting's notes",
+        "That meeting isn't there.",
+        args,
+        "/meetings",
+      );
+    const fields = ["title", "agenda", "notes", "decisions"].filter(
+      (k) => args[k] !== undefined,
+    );
     return {
       sentence: `Change the ${fields.join(", ") || "notes"} of ${quote(note.title)}`,
       facts: `Meetings · ${dayLabel(note.heldAt.toISOString().slice(0, 10))} · as you read it`,
@@ -534,8 +590,16 @@ const otherPreviews: Record<string, PreviewFn> = {
     };
   },
   async update_document(args) {
-    const doc = usesTestStore() ? null : await getDocumentBySlug(str(args.slug));
-    if (!doc && !usesTestStore()) return blocked("Change a guide draft", "No chapter with that slug.", args, "/guide");
+    const doc = usesTestStore()
+      ? null
+      : await getDocumentBySlug(str(args.slug));
+    if (!doc && !usesTestStore())
+      return blocked(
+        "Change a guide draft",
+        "No chapter with that slug.",
+        args,
+        "/guide",
+      );
     return {
       sentence: `Change the draft of ${quote(doc?.title ?? str(args.slug))}`,
       facts: "Survival Guide · as you read it",
@@ -545,14 +609,26 @@ const otherPreviews: Record<string, PreviewFn> = {
     };
   },
   async publish_document(args) {
-    const doc = usesTestStore() ? null : await getDocumentBySlug(str(args.slug));
-    if (!doc && !usesTestStore()) return blocked("Publish a guide chapter", "No chapter with that slug.", args, "/guide");
+    const doc = usesTestStore()
+      ? null
+      : await getDocumentBySlug(str(args.slug));
+    if (!doc && !usesTestStore())
+      return blocked(
+        "Publish a guide chapter",
+        "No chapter with that slug.",
+        args,
+        "/guide",
+      );
     const title = quote(doc?.title ?? str(args.slug));
     return {
-      sentence: args.published ? `Publish ${title} for members` : `Take ${title} off the guide`,
+      sentence: args.published
+        ? `Publish ${title} for members`
+        : `Take ${title} off the guide`,
       facts: "Survival Guide · the version you read",
       path: "/guide",
-      args: args.published ? { ...args, expectedVersion: doc?.version ?? args.expectedVersion } : args,
+      args: args.published
+        ? { ...args, expectedVersion: doc?.version ?? args.expectedVersion }
+        : args,
       keys: [`doc:${str(args.slug)}`],
     };
   },
@@ -594,14 +670,28 @@ const otherPreviews: Record<string, PreviewFn> = {
   },
   async update_my_burner_profile(args) {
     const keys = Object.keys((args.responses as Args) ?? {});
-    return { sentence: `Change your burner profile: ${keys.join(", ")}`, facts: "Your profile", path: "/profile", args, keys: ["me:burner"] };
+    return {
+      sentence: `Change your burner profile: ${keys.join(", ")}`,
+      facts: "Your profile",
+      path: "/profile",
+      args,
+      keys: ["me:burner"],
+    };
   },
   async update_my_dietary_requirements() {
-    return { sentence: "Replace your dietary pick-list", facts: "Your profile · the Kitchen's allergy check reads it", path: "/profile", args: {}, keys: ["me:dietary"] };
+    return {
+      sentence: "Replace your dietary pick-list",
+      facts: "Your profile · the Kitchen's allergy check reads it",
+      path: "/profile",
+      args: {},
+      keys: ["me:dietary"],
+    };
   },
   async update_my_driver_profile(args) {
     return {
-      sentence: args.intendsToDrive ? "Update your driver profile: you are driving" : "Update your driver profile: you are not driving",
+      sentence: args.intendsToDrive
+        ? "Update your driver profile: you are driving"
+        : "Update your driver profile: you are not driving",
       facts: "Transport · this year",
       path: "/transport",
       args,
@@ -610,11 +700,20 @@ const otherPreviews: Record<string, PreviewFn> = {
   },
   async update_my_emergency_contacts(args) {
     const n = Array.isArray(args.contacts) ? args.contacts.length : 0;
-    return { sentence: `Replace your emergency contacts with ${n} contact${n === 1 ? "" : "s"}`, facts: "Your profile", path: "/profile", args, keys: ["me:contacts"] };
+    return {
+      sentence: `Replace your emergency contacts with ${n} contact${n === 1 ? "" : "s"}`,
+      facts: "Your profile",
+      path: "/profile",
+      args,
+      keys: ["me:contacts"],
+    };
   },
   async set_my_membership_tier(args) {
     return {
-      sentence: str(args.tier) === "build_week" ? "Say you are there for build week only" : "Say you stay the whole event",
+      sentence:
+        str(args.tier) === "build_week"
+          ? "Say you are there for build week only"
+          : "Say you stay the whole event",
       facts: "Your profile · this year",
       path: "/profile",
       args,
@@ -623,7 +722,13 @@ const otherPreviews: Record<string, PreviewFn> = {
   },
   async update_my_history(args) {
     const parts = Object.keys(args).join(", ");
-    return { sentence: `Change your burn history: ${parts}`, facts: "Your profile", path: "/profile", args, keys: ["me:history"] };
+    return {
+      sentence: `Change your burn history: ${parts}`,
+      facts: "Your profile",
+      path: "/profile",
+      args,
+      keys: ["me:history"],
+    };
   },
 };
 
@@ -643,7 +748,10 @@ export const PREVIEWS: Readonly<Record<string, PreviewFn>> = {
  */
 export function doneDetail(tool: string, data: unknown): string | null {
   const d = (data ?? {}) as Record<string, unknown>;
-  if ((tool === "sign_up_for_shift" || tool === "leave_shift") && typeof d.myCount === "number") {
+  if (
+    (tool === "sign_up_for_shift" || tool === "leave_shift") &&
+    typeof d.myCount === "number"
+  ) {
     return `${d.myCount} shift${d.myCount === 1 ? "" : "s"} this year.`;
   }
   if (tool === "mark_all_notifications_read" && typeof d.marked === "number") {

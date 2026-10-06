@@ -64,11 +64,16 @@ interface Recorded {
 function slim(m: Anthropic.Message): Anthropic.Message {
   return {
     ...m,
-    content: m.content.filter((b) => b.type === "tool_use" || b.type === "text"),
+    content: m.content.filter(
+      (b) => b.type === "tool_use" || b.type === "text",
+    ),
   };
 }
 
-function recording(real: ClaudeClient, into: Anthropic.Message[]): ClaudeClient {
+function recording(
+  real: ClaudeClient,
+  into: Anthropic.Message[],
+): ClaudeClient {
   return {
     messages: {
       async create(body, options) {
@@ -80,7 +85,11 @@ function recording(real: ClaudeClient, into: Anthropic.Message[]): ClaudeClient 
   };
 }
 
-async function pool<T, R>(items: readonly T[], size: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+async function pool<T, R>(
+  items: readonly T[],
+  size: number,
+  fn: (t: T) => Promise<R>,
+): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   await Promise.all(
@@ -110,8 +119,12 @@ const h = useTestDb();
 describe("voice eval", () => {
   it("has the cases the bar asks for", () => {
     expect(CASES.length).toBeGreaterThanOrEqual(100);
-    expect(CASES.filter((c) => c.area === "claim").length).toBeGreaterThanOrEqual(15);
-    expect(CASES.filter((c) => c.area === "team").length).toBeGreaterThanOrEqual(15);
+    expect(
+      CASES.filter((c) => c.area === "claim").length,
+    ).toBeGreaterThanOrEqual(15);
+    expect(
+      CASES.filter((c) => c.area === "team").length,
+    ).toBeGreaterThanOrEqual(15);
     const lookAlikeAsks = CASES.filter(
       (c) => c.expect.kind === "ask" && /gecko|gekko|thandi/i.test(c.words),
     );
@@ -120,7 +133,9 @@ describe("voice eval", () => {
   });
 
   it(
-    LIVE ? "runs every case against the real model" : "replays every recorded case",
+    LIVE
+      ? "runs every case against the real model"
+      : "replays every recorded case",
     async () => {
       await seedEvalCamp(h.db());
       const scope = (await getMcpScope(SPEAKER.id))!;
@@ -185,25 +200,58 @@ describe("voice eval", () => {
                   : r.outcome.kind === "list"
                     ? r.outcome.rows.map((row) => row.sentence)
                     : r.outcome.kind === "ask"
-                      ? { question: r.outcome.question, options: r.outcome.options.map((o) => o.choice.sentence), waiting: r.outcome.waiting.map((w) => w.sentence) }
+                      ? {
+                          question: r.outcome.question,
+                          options: r.outcome.options.map(
+                            (o) => o.choice.sentence,
+                          ),
+                          waiting: r.outcome.waiting.map((w) => w.sentence),
+                        }
                       : r.outcome.kind,
             })),
         };
         mkdirSync(`${HERE}runs`, { recursive: true });
-        writeFileSync(`${HERE}runs/${report.at.replace(/[:.]/g, "-")}.json`, `${JSON.stringify(report, null, 2)}\n`);
+        writeFileSync(
+          `${HERE}runs/${report.at.replace(/[:.]/g, "-")}.json`,
+          `${JSON.stringify(report, null, 2)}\n`,
+        );
         if (ONLY) {
-          console.log(JSON.stringify({ tally: t, dollars: report.dollars, misses: report.misses, outcomes: results.map((r) => ({ id: r.c.id, grade: r.grade, outcome: r.outcome, replies: r.replies.map((m) => m.content) })) }, null, 2));
+          console.log(
+            JSON.stringify(
+              {
+                tally: t,
+                dollars: report.dollars,
+                misses: report.misses,
+                outcomes: results.map((r) => ({
+                  id: r.c.id,
+                  grade: r.grade,
+                  outcome: r.outcome,
+                  replies: r.replies.map((m) => m.content),
+                })),
+              },
+              null,
+              2,
+            ),
+          );
           return;
         }
         writeFileSync(
           RECORDINGS,
           `${JSON.stringify(Object.fromEntries(results.map((r) => [r.c.id, { grade: r.grade, replies: r.replies }])), null, 1)}\n`,
         );
-        console.log(JSON.stringify({ tally: t, dollars: report.dollars, misses: report.misses }, null, 2));
+        console.log(
+          JSON.stringify(
+            { tally: t, dollars: report.dollars, misses: report.misses },
+            null,
+            2,
+          ),
+        );
         return;
       }
       for (const r of results) {
-        expect(r.grade, `${r.c.id}: "${r.c.words}"`).toBe(recorded[r.c.id]!.grade);
+        expect(r.grade, `${r.c.id}: "${r.c.words}"`).toBe(
+          recorded[r.c.id]!.grade,
+        );
       }
       expect(t.wrong).toBe(0);
       expect(meetsBar(t)).toBe(true);

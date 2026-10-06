@@ -14,7 +14,10 @@ import { callTool } from "@/lib/voice/tools";
 // "use server" file.
 
 /** The signed-in captain, or null for anyone else (held, signed out, a member). */
-async function captainNow(): Promise<{ userId: string; sessionId: string } | null> {
+async function captainNow(): Promise<{
+  userId: string;
+  sessionId: string;
+} | null> {
   const user = await getAuthenticatedUser();
   const sessionId = await getSessionId();
   if (!user || !sessionId) return null;
@@ -35,14 +38,16 @@ export async function runVoiceList(
   ticked: number[],
 ): Promise<RunResult> {
   const who = await captainNow();
-  if (!who) return { ok: false, message: "Voice is for captains. Nothing ran." };
+  if (!who)
+    return { ok: false, message: "Voice is for captains. Nothing ran." };
   if (!Array.isArray(ticked) || !ticked.every((n) => Number.isInteger(n))) {
     return { ok: false, message: "Nothing ran." };
   }
   return runSealedList(String(token), ticked, {
     key: sealKey(),
     who,
-    stillCaptain: async () => (await getMcpScope(who.userId))?.isCaptain === true,
+    stillCaptain: async () =>
+      (await getMcpScope(who.userId))?.isCaptain === true,
     spend: async (id) => {
       const verdict = await rateLimiter.limit(`voice-proposal:${id}`, {
         limit: 1,

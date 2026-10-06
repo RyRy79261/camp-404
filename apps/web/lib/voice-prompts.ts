@@ -49,7 +49,9 @@ export function commandPrompt(input: {
   const parts = [
     head,
     input.teams.length ? `Teams: ${input.teams.join(", ")}.` : "",
-    input.shifts.length ? `Shifts: ${[...new Set(input.shifts)].join(", ")}.` : "",
+    input.shifts.length
+      ? `Shifts: ${[...new Set(input.shifts)].join(", ")}.`
+      : "",
     input.names.length ? `People: ${input.names.join(", ")}.` : "",
   ].filter(Boolean);
   const text = parts.join(" ");

@@ -79,7 +79,8 @@ const ERRORS: Record<Extract<LoopOutcome, { kind: "error" }>["code"], string> =
     no_reply: "I couldn't work out what to do. Say it again.",
     refusal: "I can't do that by voice. Do it on its page.",
     timeout: "That took too long. Nothing changed: say it again.",
-    claude_down: "Voice can't reach Claude right now. Nothing changed: try again in a minute.",
+    claude_down:
+      "Voice can't reach Claude right now. Nothing changed: try again in a minute.",
     too_long: "That was too much at once. Nothing changed: say it in parts.",
   };
 
@@ -177,15 +178,18 @@ function check(
   return { tool: p.tool, args: parsed.args };
 }
 
-function refused(answers: VoiceAnswer[], message: string, path: string | null = null): VoiceOutcome {
+function refused(
+  answers: VoiceAnswer[],
+  message: string,
+  path: string | null = null,
+): VoiceOutcome {
   return { kind: "refused", answers, message, path };
 }
 
 function cleanAnswers(raw: readonly VoiceAnswer[]): VoiceAnswer[] {
   return raw.slice(0, MAX_ANSWERS).map((a) => ({
     text: a.text.trim(),
-    path:
-      a.path && /^\/[a-z0-9/_?=&.-]{0,120}$/i.test(a.path) ? a.path : null,
+    path: a.path && /^\/[a-z0-9/_?=&.-]{0,120}$/i.test(a.path) ? a.path : null,
   }));
 }
 
@@ -203,7 +207,8 @@ async function secondChoice(
 ): Promise<{ other: Checked; question: string } | "many" | null> {
   for (const key of PERSON_ARGS[action.tool] ?? []) {
     const id = action.args[key];
-    if (typeof id !== "string" || id === deps.scope.campUserId || !roster) continue;
+    if (typeof id !== "string" || id === deps.scope.campUserId || !roster)
+      continue;
     const target = roster.find((p) => p.id === id);
     if (!target) continue;
     const alikes = lookAlikes(target, roster, deps.words);
@@ -217,7 +222,8 @@ async function secondChoice(
     }
   }
   if (
-    (action.tool === "approve_reimbursement" || action.tool === "reject_reimbursement") &&
+    (action.tool === "approve_reimbursement" ||
+      action.tool === "reject_reimbursement") &&
     claims
   ) {
     const claim = claims.find((c) => c.id === action.args.id);
@@ -243,7 +249,10 @@ async function secondChoice(
       if (unclear.length > 1) return "many";
       if (unclear.length === 1) {
         return {
-          other: { tool: action.tool, args: { ...action.args, id: unclear[0]!.id } },
+          other: {
+            tool: action.tool,
+            args: { ...action.args, id: unclear[0]!.id },
+          },
           question: `Which claim did you mean?`,
         };
       }
@@ -284,7 +293,11 @@ async function buildList(
     ...(previews[i]!.blocked ? { blocked: previews[i]!.blocked } : {}),
   }));
   const { token, body } = sealProposal(
-    { userId: deps.scope.campUserId, sessionId: deps.sessionId, actions: sealed },
+    {
+      userId: deps.scope.campUserId,
+      sessionId: deps.sessionId,
+      actions: sealed,
+    },
     deps.sealKey,
     deps.now.getTime(),
   );
@@ -336,7 +349,9 @@ export async function resolveOutcome(
   let note: string | null = null;
   if (total > MAX_ACTIONS) {
     note = TOO_MANY;
-    const keep = MAX_ACTIONS - (outcome.ask && askAt !== null && askAt < MAX_ACTIONS ? 1 : 0);
+    const keep =
+      MAX_ACTIONS -
+      (outcome.ask && askAt !== null && askAt < MAX_ACTIONS ? 1 : 0);
     writes = writes.slice(0, keep);
     if (askAt !== null && askAt >= MAX_ACTIONS) askAt = null;
   }
@@ -352,10 +367,15 @@ export async function resolveOutcome(
     if (!c) return refused(answers, SAY_AGAIN);
     checked.push(c);
   }
-  let ask: { question: string; options: [Checked, Checked]; index: number } | null = null;
+  let ask: {
+    question: string;
+    options: [Checked, Checked];
+    index: number;
+  } | null = null;
   if (outcome.ask && askAt !== null) {
     const opts = outcome.ask.options.map((o) => check(o, byName, seen, self));
-    if (opts.length !== 2 || opts.some((o) => o === null)) return refused(answers, SAY_AGAIN);
+    if (opts.length !== 2 || opts.some((o) => o === null))
+      return refused(answers, SAY_AGAIN);
     ask = {
       question: outcome.ask.question.trim() || "Which did you mean?",
       options: [opts[0]!, opts[1]!],
@@ -365,15 +385,26 @@ export async function resolveOutcome(
 
   // The server's own look for a second fit, on every action Claude did not
   // already ask about.
-  const needsRoster = checked.some((c) => PERSON_ARGS[c.tool] || c.tool.endsWith("_reimbursement"));
+  const needsRoster = checked.some(
+    (c) => PERSON_ARGS[c.tool] || c.tool.endsWith("_reimbursement"),
+  );
   const roster = needsRoster ? await deps.readRoster() : null;
   const needsClaims = checked.some((c) => c.tool.endsWith("_reimbursement"));
-  const claims = needsClaims && !usesTestStore() ? await deps.readWaitingClaims() : null;
+  const claims =
+    needsClaims && !usesTestStore() ? await deps.readWaitingClaims() : null;
   const targeted = new Set(
-    checked.filter((c) => c.tool.endsWith("_reimbursement")).map((c) => String(c.args.id)),
+    checked
+      .filter((c) => c.tool.endsWith("_reimbursement"))
+      .map((c) => String(c.args.id)),
   );
   for (let i = 0; i < checked.length; i += 1) {
-    const second = await secondChoice(checked[i]!, deps, roster, claims, targeted);
+    const second = await secondChoice(
+      checked[i]!,
+      deps,
+      roster,
+      claims,
+      targeted,
+    );
     if (!second) continue;
     if (second === "many" || ask) {
       return refused(
@@ -382,7 +413,11 @@ export async function resolveOutcome(
       );
     }
     const [chosen] = checked.splice(i, 1);
-    ask = { question: second.question, options: [chosen!, second.other], index: i };
+    ask = {
+      question: second.question,
+      options: [chosen!, second.other],
+      index: i,
+    };
     i -= 1;
   }
 

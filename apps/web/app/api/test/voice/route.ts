@@ -41,7 +41,11 @@ export async function POST(req: Request) {
     voiceTestStore.setConsent(user.id, body.consent ? new Date() : null);
   }
   if (body.seed) {
-    const phase = (p: "build" | "burn" | "strike", startDate: string, endDate: string) =>
+    const phase = (
+      p: "build" | "burn" | "strike",
+      startDate: string,
+      endDate: string,
+    ) =>
       testStore.setLogisticsPhase({
         actorId: user.id,
         phase: p,
@@ -69,7 +73,11 @@ export async function POST(req: Request) {
         note: null,
         expectedVersion: 0,
       });
-      if (saved.ok) shiftsTestStore.fillShiftDays({ actorId: user.id, typeId: saved.type.id });
+      if (saved.ok)
+        shiftsTestStore.fillShiftDays({
+          actorId: user.id,
+          typeId: saved.type.id,
+        });
     }
     const task = testStore.addTask({
       creatorId: user.id,
@@ -80,13 +88,25 @@ export async function POST(req: Request) {
       dueAt: null,
     });
     if (task.ok) {
-      testStore.moveTask({ taskId: task.id, actorId: user.id, from: "open", to: "in_progress" });
+      testStore.moveTask({
+        taskId: task.id,
+        actorId: user.id,
+        from: "open",
+        to: "in_progress",
+      });
     }
   }
   if (body.moveTask) {
-    const card = testStore.listBoardTasks(new Date()).find((t) => t.title === SHADE);
+    const card = testStore
+      .listBoardTasks(new Date())
+      .find((t) => t.title === SHADE);
     if (card) {
-      testStore.moveTask({ taskId: card.id, actorId: user.id, from: card.status, to: body.moveTask });
+      testStore.moveTask({
+        taskId: card.id,
+        actorId: user.id,
+        from: card.status,
+        to: body.moveTask,
+      });
     }
   }
   return NextResponse.json({ ok: true });

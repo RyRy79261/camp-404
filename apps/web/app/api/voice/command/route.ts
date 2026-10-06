@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser, getSessionId } from "@/lib/auth";
-import { heardClearly, transcribeCommand, type CommandTranscript } from "@/lib/groq";
+import {
+  heardClearly,
+  transcribeCommand,
+  type CommandTranscript,
+} from "@/lib/groq";
 import { getMcpScope } from "@/lib/mcp/scope";
 import { resolveMemberState } from "@/lib/member-gate";
 import { getClientIp, rateLimiter } from "@/lib/rate-limit";
@@ -42,14 +46,21 @@ function sameOrigin(req: Request): boolean {
   }
 }
 
-async function heard(file: File, prompt: () => Promise<string>): Promise<CommandTranscript> {
+async function heard(
+  file: File,
+  prompt: () => Promise<string>,
+): Promise<CommandTranscript> {
   if (isE2ETestMode()) {
     const [{ voiceTestStore }, { E2E_WORDS }] = await Promise.all([
       import("@/lib/test-store-voice"),
       import("@/lib/voice/claude-fake"),
     ]);
     const text = E2E_WORDS[voiceTestStore.script() ?? "three"] ?? "";
-    return { text, avgLogprob: text ? -0.2 : -2, noSpeechProb: text ? 0.01 : 0.9 };
+    return {
+      text,
+      avgLogprob: text ? -0.2 : -2,
+      noSpeechProb: text ? 0.01 : 0.9,
+    };
   }
   return transcribeCommand(file, await prompt());
 }
@@ -70,10 +81,13 @@ export async function POST(req: Request) {
     return say(409, "Turn voice on first.");
   }
 
-  const ip = await rateLimiter.limit(`voice-command-ip:${getClientIp(req.headers)}`, {
-    limit: 20,
-    windowMs: 60_000,
-  });
+  const ip = await rateLimiter.limit(
+    `voice-command-ip:${getClientIp(req.headers)}`,
+    {
+      limit: 20,
+      windowMs: 60_000,
+    },
+  );
   if (!ip.ok) return say(429, "Too many at once. Wait a minute.");
   // Claimed before Groq and Claude are asked: a command that fails later
   // still counts, so a broken clip cannot be retried without limit.
@@ -82,9 +96,13 @@ export async function POST(req: Request) {
     windowMs: 24 * 60 * 60_000,
   });
   if (!daily.ok) {
-    return say(429, `That is ${DAILY_COMMANDS} voice commands today. Use the pages until tomorrow.`, {
-      "Retry-After": String(daily.retryAfterSeconds),
-    });
+    return say(
+      429,
+      `That is ${DAILY_COMMANDS} voice commands today. Use the pages until tomorrow.`,
+      {
+        "Retry-After": String(daily.retryAfterSeconds),
+      },
+    );
   }
 
   let file: FormDataEntryValue | null;
@@ -96,7 +114,8 @@ export async function POST(req: Request) {
   if (!(file instanceof File) || !file.type.startsWith("audio/")) {
     return say(400, "That clip didn't arrive. Try again.");
   }
-  if (file.size > MAX_BYTES) return say(413, "That was too long. Say it in parts.");
+  if (file.size > MAX_BYTES)
+    return say(413, "That was too long. Say it in parts.");
 
   let transcript: CommandTranscript;
   try {
@@ -108,7 +127,10 @@ export async function POST(req: Request) {
       err instanceof Error ? err.name : typeof err,
       (err as { status?: unknown } | null)?.status ?? "",
     );
-    return say(502, "Voice can't reach Groq right now. Nothing changed: try again in a minute.");
+    return say(
+      502,
+      "Voice can't reach Groq right now. Nothing changed: try again in a minute.",
+    );
   }
   file = null;
   if (!heardClearly(transcript)) {

@@ -74,7 +74,10 @@ export async function getMcpScope(
   // The E2E test store stands in for the database (voice drives the
   // connector's tools in Playwright, #356). Checked inline: this file stays
   // free of `server-only` imports for its unit tests.
-  if (process.env.E2E_TEST_MODE === "1" && process.env.E2E_DATABASE !== "real") {
+  if (
+    process.env.E2E_TEST_MODE === "1" &&
+    process.env.E2E_DATABASE !== "real"
+  ) {
     const { testStore } = await import("../test-store");
     const user = testStore.findUserById(campUserId);
     if (!user || user.approvalStatus !== "approved") return null;

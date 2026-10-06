@@ -20,7 +20,10 @@ export function toolUse(name: string, input: unknown): Anthropic.ToolUseBlock {
   } as Anthropic.ToolUseBlock;
 }
 
-export function message(content: Block[], stop: Anthropic.StopReason = "tool_use"): Anthropic.Message {
+export function message(
+  content: Block[],
+  stop: Anthropic.StopReason = "tool_use",
+): Anthropic.Message {
   return {
     id: `msg_fake_${(seq += 1)}`,
     type: "message",
@@ -39,7 +42,9 @@ export function message(content: Block[], stop: Anthropic.StopReason = "tool_use
 }
 
 /** A fake that plays back a fixed list of replies, one per call. */
-export function replayClaude(replies: readonly Anthropic.Message[]): ClaudeClient {
+export function replayClaude(
+  replies: readonly Anthropic.Message[],
+): ClaudeClient {
   let i = 0;
   return {
     messages: {
@@ -61,7 +66,12 @@ export function lastResults(
   const msgs = body.messages;
   const user = msgs[msgs.length - 1];
   const assistant = msgs[msgs.length - 2];
-  if (!user || !assistant || typeof user.content === "string" || typeof assistant.content === "string") {
+  if (
+    !user ||
+    !assistant ||
+    typeof user.content === "string" ||
+    typeof assistant.content === "string"
+  ) {
     return out;
   }
   const names = new Map<string, string>();
@@ -82,7 +92,10 @@ export function lastResults(
 
 /** A fake that writes each reply from the conversation so far. */
 export function scriptedClaude(
-  turn: (body: Anthropic.MessageCreateParamsNonStreaming, call: number) => Block[],
+  turn: (
+    body: Anthropic.MessageCreateParamsNonStreaming,
+    call: number,
+  ) => Block[],
 ): ClaudeClient {
   let call = 0;
   return {
@@ -127,7 +140,10 @@ export const E2E_WORDS: Record<string, string> = {
 };
 
 function e2eTurn(script: string) {
-  return (body: Anthropic.MessageCreateParamsNonStreaming, call: number): Block[] => {
+  return (
+    body: Anthropic.MessageCreateParamsNonStreaming,
+    call: number,
+  ): Block[] => {
     if (call === 1) {
       return [
         toolUse("list_shifts", {}),
@@ -139,27 +155,37 @@ function e2eTurn(script: string) {
     const task = ((r.list_tasks as TasksRead)?.rows ?? []).find((t) =>
       t.title.toLowerCase().includes("shade cloth"),
     );
-    const build = ((r.get_logistics_attendance as AttendanceRead)?.phases ?? []).find(
-      (p) => p.phase === "build",
-    );
+    const build = (
+      (r.get_logistics_attendance as AttendanceRead)?.phases ?? []
+    ).find((p) => p.phase === "build");
     const cooks = slotNamed(r.list_shifts, "Breakfast cooks");
     const washUp = slotNamed(r.list_shifts, "Breakfast wash-up");
-    const move = toolUse("move_task", { taskId: task?.id, from: task?.status, to: "done" });
+    const move = toolUse("move_task", {
+      taskId: task?.id,
+      from: task?.status,
+      to: "done",
+    });
     const help = toolUse("set_my_logistics_attendance", {
       phase: "build",
       answer: "going",
       expected: build?.mine ?? null,
     });
     if (script === "ask") {
-      const strike = ((r.get_logistics_attendance as AttendanceRead)?.phases ?? []).find(
-        (p) => p.phase === "strike",
-      );
+      const strike = (
+        (r.get_logistics_attendance as AttendanceRead)?.phases ?? []
+      ).find((p) => p.phase === "strike");
       return [
         toolUse("ask", {
           question: "Which breakfast shift on Wednesday?",
           options: [
-            { tool: "sign_up_for_shift", args_json: JSON.stringify({ slotId: cooks }) },
-            { tool: "sign_up_for_shift", args_json: JSON.stringify({ slotId: washUp }) },
+            {
+              tool: "sign_up_for_shift",
+              args_json: JSON.stringify({ slotId: cooks }),
+            },
+            {
+              tool: "sign_up_for_shift",
+              args_json: JSON.stringify({ slotId: washUp }),
+            },
           ],
         }),
         move,

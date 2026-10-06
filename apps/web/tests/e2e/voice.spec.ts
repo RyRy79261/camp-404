@@ -20,7 +20,10 @@ import { desktopOnly } from "./lib/dom";
 test.use({
   permissions: ["microphone"],
   launchOptions: {
-    args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
+    args: [
+      "--use-fake-device-for-media-stream",
+      "--use-fake-ui-for-media-stream",
+    ],
   },
 });
 
@@ -35,8 +38,17 @@ test.beforeEach(async ({ request }) => {
   await resetTestState(request);
 });
 
-async function asCaptain(page: Page, request: APIRequestContext, id: string, consent: boolean) {
-  await login(page, { id, email: "god@example.com", displayName: "Ryno Steyn" });
+async function asCaptain(
+  page: Page,
+  request: APIRequestContext,
+  id: string,
+  consent: boolean,
+) {
+  await login(page, {
+    id,
+    email: "god@example.com",
+    displayName: "Ryno Steyn",
+  });
   await page.goto("/");
   await completeOnboarding(request, id);
   await setRank(request, id, "captain");
@@ -74,7 +86,9 @@ test.describe("voice on the desktop", () => {
     await asMember(page, request, "voice-member");
     await page.goto("/");
     await expectDesktop(page);
-    await expect(page.getByRole("button", { name: /^(Show|Hide) Today/ })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /^(Show|Hide) Today/ }),
+    ).toBeVisible();
     await expect(mic(page)).toHaveCount(0);
 
     await asCaptain(page, request, "voice-captain", false);
@@ -92,7 +106,10 @@ test.describe("voice on the desktop", () => {
 
     // Today open: the mic sits under the card.
     await handle.click();
-    const card = page.getByRole("complementary", { name: "Today", exact: true });
+    const card = page.getByRole("complementary", {
+      name: "Today",
+      exact: true,
+    });
     await expect(card).toBeVisible();
     // Once it has slid in: flush with the edge, under the card.
     await expect
@@ -109,7 +126,9 @@ test.describe("voice on the desktop", () => {
 
     // The one-time notice, then the recording.
     await mic(page).click();
-    await expect(panel(page).getByText(/sent to Groq to become words/)).toBeVisible();
+    await expect(
+      panel(page).getByText(/sent to Groq to become words/),
+    ).toBeVisible();
     await panel(page).getByRole("button", { name: "Turn on voice" }).click();
     await panel(page).getByRole("button", { name: "Start speaking" }).click();
     await expect(panel(page).getByText("Listening")).toBeVisible();
@@ -120,39 +139,63 @@ test.describe("voice on the desktop", () => {
     // Three actions, each in the server's own words, and the answer on top.
     const list = panel(page);
     await expect(list.getByText(/Here is what I'll do · 3 of 3/)).toBeVisible();
-    await expect(list.getByText("Sign you up for Breakfast cooks, Wed 28 Apr 07:00–09:00")).toBeVisible();
-    await expect(list.getByText("Move “Buy 30 m of shade cloth” from Doing to Done")).toBeVisible();
-    await expect(list.getByText(/Say you can help on Build, Thu 22 Apr – Sun 25 Apr/)).toBeVisible();
+    await expect(
+      list.getByText("Sign you up for Breakfast cooks, Wed 28 Apr 07:00–09:00"),
+    ).toBeVisible();
+    await expect(
+      list.getByText("Move “Buy 30 m of shade cloth” from Doing to Done"),
+    ).toBeVisible();
+    await expect(
+      list.getByText(/Say you can help on Build, Thu 22 Apr – Sun 25 Apr/),
+    ).toBeVisible();
     await expect(list.getByText(/build-week planning call/i)).toBeVisible();
-    await expect(list.getByRole("button", { name: /Do 3 actions/ })).toBeEnabled();
+    await expect(
+      list.getByRole("button", { name: /Do 3 actions/ }),
+    ).toBeEnabled();
     await shot(page, "confirm-3");
 
     // Someone moves the task before Do: that one is refused, the others run.
-    await request.post("/api/test/voice", { data: { authUserId: "voice-captain", moveTask: "done" } });
+    await request.post("/api/test/voice", {
+      data: { authUserId: "voice-captain", moveTask: "done" },
+    });
     await list.getByRole("button", { name: /Do 3 actions/ }).click();
     await expect(list.getByText(/2 done, 1 not done/)).toBeVisible();
     await expect(list.locator('[data-voice-result="done"]')).toHaveCount(2);
-    await expect(list.locator('[data-voice-result="not_done"]')).toContainText("Someone else moved this task");
+    await expect(list.locator('[data-voice-result="not_done"]')).toContainText(
+      "Someone else moved this task",
+    );
     await shot(page, "results");
 
     // Did you mean: two breakfast shifts fit; untick one, and Do 2. (The
     // task goes back to Doing first.)
     await request.post("/api/test/voice", {
-      data: { authUserId: "voice-captain", script: "ask", moveTask: "in_progress" },
+      data: {
+        authUserId: "voice-captain",
+        script: "ask",
+        moveTask: "in_progress",
+      },
     });
     await list.getByRole("button", { name: /Say something else/ }).click();
     await expect(list.getByText("Listening")).toBeVisible();
     await page.waitForTimeout(600);
     await list.getByRole("button", { name: "Stop and send" }).click();
-    await expect(list.getByText("Which breakfast shift on Wednesday?")).toBeVisible();
-    await expect(list.getByText(/Waiting, shown with this one before anything runs/)).toBeVisible();
+    await expect(
+      list.getByText("Which breakfast shift on Wednesday?"),
+    ).toBeVisible();
+    await expect(
+      list.getByText(/Waiting, shown with this one before anything runs/),
+    ).toBeVisible();
     await shot(page, "did-you-mean");
     await list.locator('[data-voice-choice="2"]').click();
     await expect(list.getByText(/Here is what I'll do · 3 of 3/)).toBeVisible();
     await expect(list.getByText(/Breakfast wash-up, Wed 28 Apr/)).toBeVisible();
     await list.locator('[data-voice-row="3"]').click();
-    await expect(list.getByRole("checkbox", { name: /^3\./ })).not.toBeChecked();
-    await expect(list.getByRole("button", { name: /Do 2 actions/ })).toBeVisible();
+    await expect(
+      list.getByRole("checkbox", { name: /^3\./ }),
+    ).not.toBeChecked();
+    await expect(
+      list.getByRole("button", { name: /Do 2 actions/ }),
+    ).toBeVisible();
     await list.getByRole("button", { name: /Do 2 actions/ }).click();
     await expect(list.locator('[data-voice-result="unticked"]')).toHaveCount(1);
 
@@ -176,16 +219,24 @@ test.describe("voice on a phone", () => {
       const bar = bottomBar(page);
       await expect(bar.getByRole("button", { name: "Home" })).toBeVisible();
       const cells = () =>
-        bar.locator("> *").evaluateAll((els) =>
-          els.map((el) =>
-            el.hasAttribute("data-phone-clock")
-              ? "clock"
-              : el.hasAttribute("data-phone-voice")
-                ? "voice"
-                : (el.getAttribute("aria-label")?.split(",")[0] ?? "bell"),
-          ),
-        );
-      expect(await cells()).toEqual(["Home", "Search", "bell", "Today", "clock"]);
+        bar
+          .locator("> *")
+          .evaluateAll((els) =>
+            els.map((el) =>
+              el.hasAttribute("data-phone-clock")
+                ? "clock"
+                : el.hasAttribute("data-phone-voice")
+                  ? "voice"
+                  : (el.getAttribute("aria-label")?.split(",")[0] ?? "bell"),
+            ),
+          );
+      expect(await cells()).toEqual([
+        "Home",
+        "Search",
+        "bell",
+        "Today",
+        "clock",
+      ]);
       await expect(bar.locator("[data-phone-voice]")).toHaveCount(0);
       if (width === 390) await shot(page, "phone-member");
 
@@ -193,7 +244,14 @@ test.describe("voice on a phone", () => {
       await page.goto("/");
       await expectDesktop(page);
       await expect(bar.getByRole("button", { name: "Home" })).toBeVisible();
-      expect(await cells()).toEqual(["Home", "Search", "bell", "Today", "voice", "clock"]);
+      expect(await cells()).toEqual([
+        "Home",
+        "Search",
+        "bell",
+        "Today",
+        "voice",
+        "clock",
+      ]);
 
       // Prince lies inside the clock's edges; the mic ends before the clock.
       const clock = (await bar.locator("[data-phone-clock]").boundingBox())!;
@@ -203,7 +261,9 @@ test.describe("voice on a phone", () => {
       const cat = (await prince.boundingBox())!;
       expect(cat.x).toBeGreaterThanOrEqual(clock.x);
       expect(cat.x + cat.width).toBeLessThanOrEqual(clock.x + clock.width);
-      const voiceCell = (await bar.locator("[data-phone-voice]").boundingBox())!;
+      const voiceCell = (await bar
+        .locator("[data-phone-voice]")
+        .boundingBox())!;
       expect(voiceCell.x + voiceCell.width).toBeLessThan(clock.x);
       expect(voiceCell.width).toBeGreaterThanOrEqual(44);
       // His pet bubble sits above the mic, never over it.
@@ -220,10 +280,16 @@ test.describe("voice on a phone", () => {
       await expect(bar.locator("[data-phone-voice]")).toHaveText(/Stop/);
       await page.waitForTimeout(600);
       await bar.locator("[data-phone-voice]").click();
-      await expect(panel(page).getByText(/Here is what I'll do · 3 of 3/)).toBeVisible();
-      await expect(panel(page).getByRole("button", { name: /Do 3 actions/ })).toBeVisible();
+      await expect(
+        panel(page).getByText(/Here is what I'll do · 3 of 3/),
+      ).toBeVisible();
+      await expect(
+        panel(page).getByRole("button", { name: /Do 3 actions/ }),
+      ).toBeVisible();
       if (width === 390) await shot(page, "phone-voice");
-      await panel(page).getByRole("button", { name: /^Cancel/ }).click();
+      await panel(page)
+        .getByRole("button", { name: /^Cancel/ })
+        .click();
       await expect(panel(page)).toHaveCount(0);
       await expect(homeScreen(page)).toBeVisible();
     });

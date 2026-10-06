@@ -9,19 +9,45 @@ import { gradeAgainst, meetsBar, tally, type ProposedAction } from "./grade";
 const A: ProposedAction = { tool: "approve_reimbursement", args: { id: "a" } };
 const B: ProposedAction = { tool: "approve_reimbursement", args: { id: "b" } };
 const list = (...actions: ProposedAction[]) => ({ list: actions, ask: null });
-const ask = (options: ProposedAction[], waiting: ProposedAction[] = []) => ({ list: null, ask: { options, waiting } });
+const ask = (options: ProposedAction[], waiting: ProposedAction[] = []) => ({
+  list: null,
+  ask: { options, waiting },
+});
 const none = { list: null, ask: null };
-const outcome: VoiceOutcome = { kind: "refused", answers: [], message: "", path: null };
+const outcome: VoiceOutcome = {
+  kind: "refused",
+  answers: [],
+  message: "",
+  path: null,
+};
 
 describe("grading a case", () => {
-  const wantA: Expect = { kind: "list", actions: [{ tool: A.tool, args: { id: "a" } }] };
-  const wantAsk: Expect = { kind: "ask", options: [{ tool: A.tool, args: { id: "a" } }, { tool: B.tool, args: { id: "b" } }] };
+  const wantA: Expect = {
+    kind: "list",
+    actions: [{ tool: A.tool, args: { id: "a" } }],
+  };
+  const wantAsk: Expect = {
+    kind: "ask",
+    options: [
+      { tool: A.tool, args: { id: "a" } },
+      { tool: B.tool, args: { id: "b" } },
+    ],
+  };
 
   it("scores the right list exact, a stranger in it wrong, and a missing one short", () => {
     expect(gradeAgainst(wantA, outcome, list(A))).toBe("exact");
     expect(gradeAgainst(wantA, outcome, list(B))).toBe("wrong");
     expect(gradeAgainst(wantA, outcome, list(A, B))).toBe("wrong");
-    expect(gradeAgainst({ kind: "list", actions: [wantA.actions[0]!, { tool: B.tool, args: { id: "b" } }] }, outcome, list(A))).toBe("short");
+    expect(
+      gradeAgainst(
+        {
+          kind: "list",
+          actions: [wantA.actions[0]!, { tool: B.tool, args: { id: "b" } }],
+        },
+        outcome,
+        list(A),
+      ),
+    ).toBe("short");
   });
 
   it("scores a question or a refusal where a list was right as needless", () => {
@@ -41,8 +67,53 @@ describe("grading a case", () => {
   });
 
   it("holds the bar: no wrong action, 90% exact, at most 10% needless", () => {
-    expect(meetsBar(tally(["exact", "exact", "exact", "exact", "exact", "exact", "exact", "exact", "exact", "needless"]))).toBe(true);
-    expect(meetsBar(tally(["exact", "exact", "exact", "exact", "exact", "exact", "exact", "exact", "exact", "wrong"]))).toBe(false);
-    expect(meetsBar(tally(["exact", "exact", "exact", "exact", "exact", "exact", "exact", "exact", "short", "short"]))).toBe(false);
+    expect(
+      meetsBar(
+        tally([
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "needless",
+        ]),
+      ),
+    ).toBe(true);
+    expect(
+      meetsBar(
+        tally([
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "wrong",
+        ]),
+      ),
+    ).toBe(false);
+    expect(
+      meetsBar(
+        tally([
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "exact",
+          "short",
+          "short",
+        ]),
+      ),
+    ).toBe(false);
   });
 });

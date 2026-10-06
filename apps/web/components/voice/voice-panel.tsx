@@ -24,7 +24,13 @@ const TIME = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Africa/Johannesburg",
 });
 
-function Kbd({ children, onGo }: { children: React.ReactNode; onGo?: boolean }) {
+function Kbd({
+  children,
+  onGo,
+}: {
+  children: React.ReactNode;
+  onGo?: boolean;
+}) {
   return (
     <kbd
       className={cn(
@@ -39,7 +45,13 @@ function Kbd({ children, onGo }: { children: React.ReactNode; onGo?: boolean }) 
   );
 }
 
-function Label({ children, muted }: { children: React.ReactNode; muted?: boolean }) {
+function Label({
+  children,
+  muted,
+}: {
+  children: React.ReactNode;
+  muted?: boolean;
+}) {
   return (
     <p
       className={cn(
@@ -89,7 +101,13 @@ function Elapsed({ since }: { since: number | null }) {
   );
 }
 
-function Said({ words, onAgain }: { words: string | null; onAgain: () => void }) {
+function Said({
+  words,
+  onAgain,
+}: {
+  words: string | null;
+  onAgain: () => void;
+}) {
   if (!words) return null;
   return (
     <p className="text-[13px] leading-relaxed text-muted-foreground">
@@ -141,9 +159,14 @@ function ActionRow({
           ticked && !blocked ? "bg-primary" : "bg-transparent",
         )}
       >
-        {ticked && !blocked && <LineIcon name="check" className="size-3.5 [stroke-width:3]" />}
+        {ticked && !blocked && (
+          <LineIcon name="check" className="size-3.5 [stroke-width:3]" />
+        )}
       </span>
-      <span aria-hidden className="mt-0.5 w-3 shrink-0 text-[11px] font-bold text-muted-foreground">
+      <span
+        aria-hidden
+        className="mt-0.5 w-3 shrink-0 text-[11px] font-bold text-muted-foreground"
+      >
         {index + 1}
       </span>
       <span className="min-w-0">
@@ -158,7 +181,9 @@ function ActionRow({
             </span>
           )}
           {blocked && (
-            <span className="block text-[oklch(0.82_0.13_75)]">Can't be done: {row.blocked}</span>
+            <span className="block text-[oklch(0.82_0.13_75)]">
+              Can't be done: {row.blocked}
+            </span>
           )}
         </span>
       </span>
@@ -180,7 +205,8 @@ function ResultRow({ result }: { result: RowResult }) {
       data-voice-result={result.status}
       className={cn(
         "flex items-start gap-2.5 border border-border px-3 py-2.5",
-        no && "border-l-[3px] border-[oklch(0.78_0.15_75)] bg-[color-mix(in_oklab,oklch(0.78_0.15_75)_7%,var(--os-win-card))]",
+        no &&
+          "border-l-[3px] border-[oklch(0.78_0.15_75)] bg-[color-mix(in_oklab,oklch(0.78_0.15_75)_7%,var(--os-win-card))]",
         !ok && !no && "opacity-70",
       )}
     >
@@ -205,7 +231,11 @@ function ResultRow({ result }: { result: RowResult }) {
           {result.index + 1} · {tag}
         </p>
         <p className="text-sm font-semibold leading-snug">
-          {ok ? result.sentence : no ? `${result.sentence}: not done.` : result.sentence}
+          {ok
+            ? result.sentence
+            : no
+              ? `${result.sentence}: not done.`
+              : result.sentence}
         </p>
         {result.detail && (
           <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
@@ -213,7 +243,10 @@ function ResultRow({ result }: { result: RowResult }) {
             {!ok && result.path && (
               <>
                 {" "}
-                <a href={result.path} className="text-[var(--os-accent)] underline underline-offset-2">
+                <a
+                  href={result.path}
+                  className="text-[var(--os-accent)] underline underline-offset-2"
+                >
                   Open the page
                 </a>
               </>
@@ -241,10 +274,16 @@ export function VoiceBody({
     void voice.start();
   };
 
-  const answers = outcome && outcome.kind !== "refused" ? outcome.answers : outcome?.answers ?? [];
+  const answers =
+    outcome && outcome.kind !== "refused"
+      ? outcome.answers
+      : (outcome?.answers ?? []);
   const answerBox =
     answers.length > 0 ? (
-      <div data-voice-answers className="border border-dashed border-border px-3 py-2.5">
+      <div
+        data-voice-answers
+        className="border border-dashed border-border px-3 py-2.5"
+      >
         <Label muted>Answer{answers.length > 1 ? "s" : ""}</Label>
         <ul className="mt-1.5 space-y-1 text-[13px] leading-relaxed text-foreground">
           {answers.map((a, i) => (
@@ -253,7 +292,10 @@ export function VoiceBody({
               {a.path && (
                 <>
                   {" "}
-                  <a href={a.path} className="text-[var(--os-accent)] underline underline-offset-2">
+                  <a
+                    href={a.path}
+                    className="text-[var(--os-accent)] underline underline-offset-2"
+                  >
                     Open
                   </a>
                 </>
@@ -273,7 +315,10 @@ export function VoiceBody({
     );
 
   const error = voice.error ? (
-    <p role="alert" className="border border-[oklch(0.78_0.15_75)] px-3 py-2 text-[13px] text-foreground">
+    <p
+      role="alert"
+      className="border border-[oklch(0.78_0.15_75)] px-3 py-2 text-[13px] text-foreground"
+    >
       {voice.error}
     </p>
   ) : null;
@@ -281,7 +326,10 @@ export function VoiceBody({
   if (!voice.online) {
     return (
       <div className="flex flex-col gap-2.5 p-3.5">
-        <p data-voice-offline className="text-[13px] leading-relaxed text-muted-foreground">
+        <p
+          data-voice-offline
+          className="text-[13px] leading-relaxed text-muted-foreground"
+        >
           {VOICE_OFFLINE}
         </p>
       </div>
@@ -292,9 +340,16 @@ export function VoiceBody({
     return (
       <div className="flex flex-col gap-3 p-3.5">
         <p className="text-sm font-semibold">Before your first command</p>
-        <p className="text-[13px] leading-relaxed text-muted-foreground">{NOTICE}</p>
+        <p className="text-[13px] leading-relaxed text-muted-foreground">
+          {NOTICE}
+        </p>
         {error}
-        <div className={cn("flex gap-2.5", phone ? "flex-col-reverse" : "justify-end")}>
+        <div
+          className={cn(
+            "flex gap-2.5",
+            phone ? "flex-col-reverse" : "justify-end",
+          )}
+        >
           <Btn onClick={onClose} data-voice-not-now>
             Not now
           </Btn>
@@ -316,10 +371,17 @@ export function VoiceBody({
             <span className="whitespace-nowrap text-sm font-semibold text-foreground">
               {recording ? "Listening" : "Ready"}
               {recording && (
-                <span aria-hidden className="ml-2 inline-block size-1.5 animate-pulse bg-primary align-middle" />
+                <span
+                  aria-hidden
+                  className="ml-2 inline-block size-1.5 animate-pulse bg-primary align-middle"
+                />
               )}
             </span>
-            <Waveform analyser={voice.analyser} active={recording} className="h-[34px] min-w-0 flex-1" />
+            <Waveform
+              analyser={voice.analyser}
+              active={recording}
+              className="h-[34px] min-w-0 flex-1"
+            />
             {recording && <Elapsed since={voice.startedAt} />}
             <button
               type="button"
@@ -327,18 +389,21 @@ export function VoiceBody({
               aria-label={recording ? "Stop and send" : "Start speaking"}
               className="grid size-[38px] shrink-0 place-items-center bg-primary text-primary-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
-              <LineIcon name={recording ? "stop" : "mic"} className="size-[18px]" />
+              <LineIcon
+                name={recording ? "stop" : "mic"}
+                className="size-[18px]"
+              />
             </button>
           </div>
           <p className="text-[13px] leading-relaxed text-muted-foreground">
-            Say up to five things to do, the way you would ask a camp mate. Questions are fine
-            too: “what’s on tomorrow?”
+            Say up to five things to do, the way you would ask a camp mate.
+            Questions are fine too: “what’s on tomorrow?”
           </p>
         </div>
         {footer(
           <>
-            <Kbd>Space</Kbd> {recording ? "stop and send" : "start"} <Kbd>Esc</Kbd>{" "}
-            {recording ? "throw away" : "close"}
+            <Kbd>Space</Kbd> {recording ? "stop and send" : "start"}{" "}
+            <Kbd>Esc</Kbd> {recording ? "throw away" : "close"}
           </>,
           null,
         )}
@@ -348,28 +413,41 @@ export function VoiceBody({
 
   if (phase === "thinking") {
     return (
-      <div className="flex items-center gap-2.5 p-3.5 text-sm text-muted-foreground" role="status">
-        <Loader2 className="size-4 animate-spin" aria-hidden /> Working out what you mean…
+      <div
+        className="flex items-center gap-2.5 p-3.5 text-sm text-muted-foreground"
+        role="status"
+      >
+        <Loader2 className="size-4 animate-spin" aria-hidden /> Working out what
+        you mean…
       </div>
     );
   }
 
   if (phase === "results" && results) {
     const done = results.filter((r) => r.status === "done").length;
-    const notDone = results.filter((r) => r.status === "not_done" || r.status === "skipped").length;
+    const notDone = results.filter(
+      (r) => r.status === "not_done" || r.status === "skipped",
+    ).length;
     return (
       <>
         <div className="flex flex-col gap-2.5 p-3.5">
           <Said words={voice.words} onAgain={again} />
           <p className="text-sm font-semibold" role="status">
             {done} done{notDone > 0 ? `, ${notDone} not done` : ""}{" "}
-            <span className="font-medium text-muted-foreground">· each ran on its own</span>
+            <span className="font-medium text-muted-foreground">
+              · each ran on its own
+            </span>
           </p>
           {results.map((r) => (
             <ResultRow key={r.index} result={r} />
           ))}
         </div>
-        <div className={cn("flex gap-2.5 border-t border-border px-3.5 py-2.5", phone ? "flex-col-reverse" : "justify-between")}>
+        <div
+          className={cn(
+            "flex gap-2.5 border-t border-border px-3.5 py-2.5",
+            phone ? "flex-col-reverse" : "justify-between",
+          )}
+        >
           <Btn onClick={onClose} data-voice-close>
             Close
           </Btn>
@@ -377,7 +455,12 @@ export function VoiceBody({
             <LineIcon name="mic" className="size-4" /> Say something else
           </Btn>
         </div>
-        {footer(<><Kbd>Esc</Kbd> close</>, "Each action is in the audit log")}
+        {footer(
+          <>
+            <Kbd>Esc</Kbd> close
+          </>,
+          "Each action is in the audit log",
+        )}
       </>
     );
   }
@@ -393,12 +476,18 @@ export function VoiceBody({
           <Said words={voice.words} onAgain={again} />
           {answerBox}
           {outcome.kind === "refused" && (
-            <p data-voice-refused className="text-sm leading-relaxed text-foreground">
+            <p
+              data-voice-refused
+              className="text-sm leading-relaxed text-foreground"
+            >
               {outcome.message}
               {outcome.path && (
                 <>
                   {" "}
-                  <a href={outcome.path} className="text-[var(--os-accent)] underline underline-offset-2">
+                  <a
+                    href={outcome.path}
+                    className="text-[var(--os-accent)] underline underline-offset-2"
+                  >
                     Open the page
                   </a>
                 </>
@@ -406,13 +495,23 @@ export function VoiceBody({
             </p>
           )}
         </div>
-        <div className={cn("flex gap-2.5 border-t border-border px-3.5 py-2.5", phone ? "flex-col-reverse" : "justify-between")}>
+        <div
+          className={cn(
+            "flex gap-2.5 border-t border-border px-3.5 py-2.5",
+            phone ? "flex-col-reverse" : "justify-between",
+          )}
+        >
           <Btn onClick={onClose}>Close</Btn>
           <Btn onClick={again}>
             <LineIcon name="mic" className="size-4" /> Say something else
           </Btn>
         </div>
-        {footer(<><Kbd>Esc</Kbd> close</>, "Nothing saved")}
+        {footer(
+          <>
+            <Kbd>Esc</Kbd> close
+          </>,
+          "Nothing saved",
+        )}
       </>
     );
   }
@@ -433,12 +532,19 @@ export function VoiceBody({
               onClick={() => voice.pick(i)}
               className="flex w-full items-center gap-3 border border-choice-edge bg-choice px-3 py-2.5 text-left text-foreground hover:bg-choice-hover"
             >
-              <span aria-hidden className="grid size-[22px] shrink-0 place-items-center border border-muted-foreground text-[11px] font-semibold text-muted-foreground">
+              <span
+                aria-hidden
+                className="grid size-[22px] shrink-0 place-items-center border border-muted-foreground text-[11px] font-semibold text-muted-foreground"
+              >
                 {i + 1}
               </span>
               <span className="min-w-0">
-                <b className="block text-[14.5px] font-semibold">{o.choice.sentence}</b>
-                <span className="text-xs text-muted-foreground">{o.choice.facts}</span>
+                <b className="block text-[14.5px] font-semibold">
+                  {o.choice.sentence}
+                </b>
+                <span className="text-xs text-muted-foreground">
+                  {o.choice.facts}
+                </span>
               </span>
             </button>
           ))}
@@ -470,7 +576,9 @@ export function VoiceBody({
   }
 
   if (!shown) return null;
-  const count = [...ticked].filter((i) => shown.rows[i] && !shown.rows[i]!.blocked).length;
+  const count = [...ticked].filter(
+    (i) => shown.rows[i] && !shown.rows[i]!.blocked,
+  ).length;
   const doLabel = `Do ${count} action${count === 1 ? "" : "s"}`;
   return (
     <>
@@ -484,7 +592,13 @@ export function VoiceBody({
           <p className="text-[13px] text-muted-foreground">{outcome.note}</p>
         )}
         {shown.rows.map((row, i) => (
-          <ActionRow key={i} row={row} index={i} ticked={ticked.has(i)} onToggle={() => voice.toggle(i)} />
+          <ActionRow
+            key={i}
+            row={row}
+            index={i}
+            ticked={ticked.has(i)}
+            onToggle={() => voice.toggle(i)}
+          />
         ))}
         {error}
       </div>
@@ -497,7 +611,12 @@ export function VoiceBody({
         <Btn onClick={onClose} disabled={running}>
           Cancel {!phone && <Kbd>Esc</Kbd>}
         </Btn>
-        <Btn go onClick={() => void voice.run()} disabled={count === 0 || running} data-voice-do>
+        <Btn
+          go
+          onClick={() => void voice.run()}
+          disabled={count === 0 || running}
+          data-voice-do
+        >
           {running && <Loader2 className="size-4 animate-spin" aria-hidden />}
           {doLabel} {!phone && <Kbd onGo>Enter</Kbd>}
         </Btn>
@@ -518,7 +637,8 @@ export function useVoiceKeys(voice: VoiceCommand, onClose: () => void) {
     (e: React.KeyboardEvent) => {
       if (e.defaultPrevented) return;
       const t = e.target as HTMLElement;
-      const typing = t.tagName === "INPUT" && (t as HTMLInputElement).type !== "checkbox";
+      const typing =
+        t.tagName === "INPUT" && (t as HTMLInputElement).type !== "checkbox";
       if (typing) return;
       if (e.key === "Escape") {
         e.preventDefault();
@@ -527,7 +647,10 @@ export function useVoiceKeys(voice: VoiceCommand, onClose: () => void) {
         else onClose();
         return;
       }
-      if (e.key === " " && (voice.phase === "recording" || voice.phase === "idle")) {
+      if (
+        e.key === " " &&
+        (voice.phase === "recording" || voice.phase === "idle")
+      ) {
         if (t.tagName === "BUTTON") return;
         e.preventDefault();
         if (voice.phase === "recording") voice.stop();
@@ -541,10 +664,16 @@ export function useVoiceKeys(voice: VoiceCommand, onClose: () => void) {
         return;
       }
       const n = Number(e.key);
-      if (Number.isInteger(n) && n >= 1 && n <= 5 && voice.phase === "outcome") {
+      if (
+        Number.isInteger(n) &&
+        n >= 1 &&
+        n <= 5 &&
+        voice.phase === "outcome"
+      ) {
         e.preventDefault();
         if (voice.outcome?.kind === "ask" && !voice.shown) voice.pick(n - 1);
-        else if (voice.shown && n <= voice.shown.rows.length) voice.toggle(n - 1);
+        else if (voice.shown && n <= voice.shown.rows.length)
+          voice.toggle(n - 1);
       }
     },
     [voice, onClose],
@@ -583,13 +712,23 @@ export function VoiceFrame({
     >
       <div className="flex shrink-0 select-none items-center justify-between bg-[var(--os-primary)] px-3 py-1.5 font-pixel text-[11px] uppercase tracking-[0.2em] text-white">
         <span>
-          Voice <small className="ml-2 font-sans text-[11px] normal-case tracking-normal opacity-85">captains</small>
+          Voice{" "}
+          <small className="ml-2 font-sans text-[11px] normal-case tracking-normal opacity-85">
+            captains
+          </small>
         </span>
-        <button type="button" onClick={onClose} aria-label="Close Voice" className="grid size-7 place-items-center tracking-normal hover:bg-black/20">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close Voice"
+          className="grid size-7 place-items-center tracking-normal hover:bg-black/20"
+        >
           ×
         </button>
       </div>
-      <div className="min-h-0 overflow-y-auto overscroll-contain">{children}</div>
+      <div className="min-h-0 overflow-y-auto overscroll-contain">
+        {children}
+      </div>
     </section>
   );
 }
@@ -644,7 +783,13 @@ export function DesktopVoice({ voice }: { voice: VoiceCommand }) {
         ref={mic}
         type="button"
         data-voice-mic
-        aria-label={offline ? "Voice is off: no internet" : recording ? "Stop and send" : "Voice"}
+        aria-label={
+          offline
+            ? "Voice is off: no internet"
+            : recording
+              ? "Stop and send"
+              : "Voice"
+        }
         aria-expanded={open}
         title={offline ? VOICE_OFFLINE : "Voice"}
         onClick={() => {
@@ -685,7 +830,13 @@ export function DesktopVoice({ voice }: { voice: VoiceCommand }) {
 }
 
 /** The phone's Voice sheet: it rises above the bottom bar, Do under the thumb. */
-export function PhoneVoiceSheet({ voice, onClose }: { voice: VoiceCommand; onClose: () => void }) {
+export function PhoneVoiceSheet({
+  voice,
+  onClose,
+}: {
+  voice: VoiceCommand;
+  onClose: () => void;
+}) {
   const ref = React.useRef<HTMLElement>(null);
   React.useEffect(() => ref.current?.focus({ preventScroll: true }), []);
   return (
