@@ -21,6 +21,8 @@ type GuardClass =
   | "camp-access"
   /** A captain or team-lead surface (`captainActionGate`). */
   | "captain-gate"
+  /** Captains only, by users.rank read fresh (`isCaptain`): voice (#356). */
+  | "captain-only"
   /** The MCP server: an OAuth bearer token (`withMcpAuth`). */
   | "bearer-mcp"
   /** An inbound webhook with a shared secret (`verifyWebhookSecret`). */
@@ -80,6 +82,7 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   "test/seed-team": "test-only",
   "test/set-approval": "test-only",
   "test/set-rank": "test-only",
+  "test/voice": "test-only",
   "tools/invite/check": "camp-access",
   "uploads/avatar": "camp-access",
   "uploads/builder-image": "captain-gate",
@@ -91,6 +94,8 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   // A bug report's screenshot (#313), stored privately in the member's folder.
   "uploads/report-screenshot": "camp-access",
   "voice/transcribe": "camp-access",
+  // A captain's voice command: spends Groq and Claude, so captains only.
+  "voice/command": "captain-only",
 };
 
 /** The name each class must find in the route's source, if any. */
@@ -99,6 +104,7 @@ const REQUIRED_GUARD: Record<GuardClass, string | null> = {
   session: "getAuthenticatedUser",
   "camp-access": "hasCampAccess",
   "captain-gate": "captainActionGate",
+  "captain-only": "isCaptain",
   "bearer-mcp": "withMcpAuth",
   "webhook-secret": "verifyWebhookSecret",
   public: null,
