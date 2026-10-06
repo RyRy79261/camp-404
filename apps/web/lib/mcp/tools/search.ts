@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { canApproveRecipe, canRunLounge } from "@camp404/core";
 import type { SearchViewer } from "@camp404/db/search";
@@ -34,7 +34,7 @@ export function registerSearchTools(server: McpServer): void {
       title: "Search the camp",
       description:
         "Search everything you may open in the app, as Ctrl+K's Everything does: recipes, Survival Guide chapters and duty cards, meetings, tasks, inventory, shifts, gear, people, the announcements you received, and more by your rank. Each hit has its kind, title, a detail line and the page's address; a hit inside the text (not the title) has `match`, a short line around the words. Never the full text: open it with the matching tool or the page.",
-      inputSchema: { query: z.string().trim().min(1).max(80) },
+      inputSchema: z.object({ query: z.string().trim().min(1).max(80) }),
     },
     async (args, extra) =>
       runTool({

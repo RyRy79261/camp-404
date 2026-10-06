@@ -1,5 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Claims and team budgets over MCP (#242): who may list which claims, that
@@ -61,7 +61,7 @@ registerTeamTools(server);
 
 async function call(name: string, args: unknown, as: string) {
   const result = await tools.get(name)!(args, {
-    authInfo: { clientId: "test", extra: { campUserId: as } },
+    http: { authInfo: { clientId: "test", extra: { campUserId: as } } },
   });
   const text = (result.content[0] as { text: string }).text;
   return result.isError ? { error: text } : { data: JSON.parse(text) };

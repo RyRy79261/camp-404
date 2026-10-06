@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { AddTaskInput, MoveTaskInput, Team } from "@camp404/types";
 import { activeTeams, getTeamsConfig } from "../../camp-config";
@@ -32,11 +32,11 @@ export function registerTaskTools(server: McpServer): void {
       title: "List the task board",
       description:
         "Every task on the camp's board, as the Tasks page shows it: open and in-progress tasks, and those done in the last 30 days, soonest deadline first. Each has its team, who is responsible (`mine` when it is you), who added it, the deadline, its `status` column, and what you may do to it (`canMove`). Filter with `team` or `status`.",
-      inputSchema: {
+      inputSchema: z.object({
         team: Team.optional(),
         status: MoveTaskInput.shape.to.optional(),
         mineOnly: z.boolean().optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -93,13 +93,13 @@ export function registerTaskTools(server: McpServer): void {
       title: "Add a task",
       description:
         "Adds a task to the board, as the Tasks page's Add does. A team lead adds tasks only for a team they lead (give `team`); a captain for any active team, or none. `assigneeId` is the approved member responsible (or null), `due` a day as YYYY-MM-DD (or null). Returns the new task's id.",
-      inputSchema: {
+      inputSchema: z.object({
         title: z.string().max(120),
         description: z.string().max(2000).optional(),
         team: Team.nullable().optional(),
         assigneeId: z.string().uuid().nullable().optional(),
         due: z.string().nullable().optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -158,11 +158,11 @@ export function registerTaskTools(server: McpServer): void {
       title: "Move a task",
       description:
         "Moves a task to another column (open, in_progress, done), as dragging its card does. Give `from`, the column you read it in from list_tasks: if someone moved it since, nothing changes and you are told to read the board again. The person responsible, whoever added it, a lead of its team and a captain may move it.",
-      inputSchema: {
+      inputSchema: z.object({
         taskId: z.string().uuid(),
         from: MoveTaskInput.shape.from,
         to: MoveTaskInput.shape.to,
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

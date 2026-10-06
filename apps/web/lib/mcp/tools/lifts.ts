@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { getMyLift } from "../../lifts";
 import {
@@ -61,7 +61,7 @@ export function registerLiftTools(server: McpServer): void {
       title: "List this year's cars",
       description:
         "Every car driving this year, as the Transport page shows it to every member: driver, car, where it leaves from, seats offered and taken, who rides, and its trailer. No phone numbers, registrations or travel dates.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -81,7 +81,7 @@ export function registerLiftTools(server: McpServer): void {
       title: "List the riders in a car",
       description:
         "Who rides in one car this year, as the Transport page shows it. Leave driverUserId out for the car you drive or ride in.",
-      inputSchema: { driverUserId: UserId.optional() },
+      inputSchema: z.object({ driverUserId: UserId.optional() }),
     },
     async (args, extra) =>
       runTool({
@@ -103,7 +103,7 @@ export function registerLiftTools(server: McpServer): void {
       title: "My lift this year",
       description:
         "The car you drive this year (your riders, seats and travel), or the car you ride in (its driver, car and travel dates), or null when you have neither.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -120,7 +120,10 @@ export function registerLiftTools(server: McpServer): void {
       title: "Put a member in a car",
       description:
         "Seats an approved member in a car this year. The car's driver may fill their own car (leave driverUserId out); a captain or a Transport & Logistics lead any car. Refused when the car is full, when the member already has a seat in a car, or when they drive their own car this year.",
-      inputSchema: { memberUserId: UserId, driverUserId: UserId.optional() },
+      inputSchema: z.object({
+        memberUserId: UserId,
+        driverUserId: UserId.optional(),
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -146,10 +149,10 @@ export function registerLiftTools(server: McpServer): void {
       title: "Take a member out of a car",
       description:
         "Takes someone out of a car this year. The car's driver, a captain or a Transport & Logistics lead may take anyone out; a rider may leave the car they ride in (leave memberUserId and driverUserId out to leave your own seat).",
-      inputSchema: {
+      inputSchema: z.object({
         memberUserId: UserId.optional(),
         driverUserId: UserId.optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

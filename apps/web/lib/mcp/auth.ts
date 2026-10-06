@@ -1,5 +1,5 @@
 import { findActiveAccessToken, touchAccessToken } from "@camp404/db/mcp";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { AuthInfo } from "@modelcontextprotocol/server";
 import { sha256 } from "./tokens";
 
 /**

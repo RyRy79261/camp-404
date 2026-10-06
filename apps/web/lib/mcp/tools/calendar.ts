@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { getUpcomingEvents } from "../../camp-calendar";
 import { getTeamsConfig } from "../../camp-config";
@@ -34,11 +34,11 @@ export function registerCalendarTools(server: McpServer): void {
       title: "List the camp calendar",
       description:
         "Events on the camp's shared calendar, by camp day, as the Calendar page shows them. It covers today to a year ahead (an event already under way is listed under today). `from` and `to` (YYYY-MM-DD, camp days) narrow it; `team` is a team key for that team's events, or \"camp\" for whole-camp events only. Each event says whose team it is and whether you are on that team.",
-      inputSchema: {
+      inputSchema: z.object({
         from: z.string().regex(DAY).optional(),
         to: z.string().regex(DAY).optional(),
         team: z.string().max(60).optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

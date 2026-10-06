@@ -1,4 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { z } from "zod";
 import { attendanceIsOpen, campDayKey } from "@camp404/core";
 import {
   ATTENDANCE_ANSWER_LABELS,
@@ -37,7 +38,7 @@ export function registerAttendanceTools(server: McpServer): void {
       title: "Who can help on the camp's days",
       description:
         "For pack, build, strike and unpack: the phase's dates, whether it still takes answers, your own answer (going, maybe, cant, or null), who said what, and how many who are coming have not answered (team leads and captains also get their names). Whether a captain asked you to answer.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -89,11 +90,11 @@ export function registerAttendanceTools(server: McpServer): void {
     {
       title: "Say whether I can help on a phase",
       description: `Your own answer for one phase (pack, build, strike, unpack): going, maybe or cant (${Object.values(ATTENDANCE_ANSWER_LABELS).join(", ")}), as the Logistics page's buttons. Give \`expected\`: your answer as get_logistics_attendance read it (null when you had not answered). If it changed since, nothing changes and you are told to read it again. Refused once the phase's first day has come.`,
-      inputSchema: {
+      inputSchema: z.object({
         phase: AttendancePhase,
         answer: AttendanceAnswer,
         expected: AttendanceAnswer.nullable(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

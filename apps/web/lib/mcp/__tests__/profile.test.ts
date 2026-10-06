@@ -24,8 +24,8 @@ vi.mock("@camp404/db/mcp", () => ({
 }));
 
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { createHttpDb } from "@camp404/db";
 import { getMcpScopeRows } from "@camp404/db/mcp";
 import { registerProfileTools } from "@/lib/mcp/tools/profile";
@@ -93,11 +93,13 @@ async function call(
   return registered.handler(
     parsed as never,
     {
-      authInfo: {
-        token: "t",
-        clientId: "client-1",
-        scopes: [],
-        extra: { campUserId: USER_ID },
+      http: {
+        authInfo: {
+          token: "t",
+          clientId: "client-1",
+          scopes: [],
+          extra: { campUserId: USER_ID },
+        },
       },
     } as unknown as ToolExtra,
   );
@@ -126,10 +128,10 @@ beforeEach(() => {
   registerProfileTools({
     registerTool: (
       name: string,
-      config: { inputSchema?: ToolShape },
+      config: { inputSchema?: z.ZodObject<ToolShape> },
       handler: ToolHandler,
     ) => {
-      tools.set(name, { shape: config.inputSchema ?? {}, handler });
+      tools.set(name, { shape: config.inputSchema?.shape ?? {}, handler });
     },
   } as unknown as McpServer);
   vi.mocked(createHttpDb).mockReturnValue(fakeDb as never);

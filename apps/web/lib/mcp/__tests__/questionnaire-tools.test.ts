@@ -1,5 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import type { Questionnaire } from "@camp404/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -59,7 +59,7 @@ registerQuestionnaireTools({
 
 async function call(name: string, args: unknown, as: string) {
   const result = await tools.get(name)!(args, {
-    authInfo: { clientId: "test", extra: { campUserId: as } },
+    http: { authInfo: { clientId: "test", extra: { campUserId: as } } },
   });
   const text = (result.content[0] as { text: string }).text;
   return result.isError ? { error: text } : { data: JSON.parse(text) };

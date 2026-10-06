@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import * as schema from "@camp404/db/schema";
 import {
@@ -34,7 +34,7 @@ export function registerReimbursementTools(server: McpServer): void {
       title: "List my claims",
       description:
         "Returns the current user's own claims, every year, newest first: team, what for, amount in whole rand cents, day paid, status, and the reason if it was not approved. To make a claim, use My claims in the app: a claim needs its receipts.",
-      inputSchema: { status: StatusEnum.optional() },
+      inputSchema: z.object({ status: StatusEnum.optional() }),
     },
     async (args, extra) =>
       runTool({
@@ -93,10 +93,10 @@ function registerReviewTools(server: McpServer): void {
       title: "List claims to review",
       description:
         'A captain or a Finance lead gets every claim; a team lead gets the claims of teams they lead this year. Filter by status, or by team ("general" for old claims under no team). Amounts are whole rand cents. Never bank details: those are on the website\'s Finance page only.',
-      inputSchema: {
+      inputSchema: z.object({
         status: StatusEnum.optional(),
         team: z.union([TeamEnum, z.literal("general")]).optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -135,7 +135,7 @@ function registerReviewTools(server: McpServer): void {
       {
         title: move.title,
         description: move.description,
-        inputSchema: { id: z.string().uuid() },
+        inputSchema: z.object({ id: z.string().uuid() }),
       },
       async (args, extra) =>
         runTool({

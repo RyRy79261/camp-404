@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { createHttpDb } from "@camp404/db";
@@ -55,10 +55,10 @@ export function registerInboxTools(server: McpServer): void {
       title: "List my notifications",
       description:
         "Your inbox, as the Notifications page shows it: newest first, 30 a page. `filter` is the page's tab (all, unread, announcements). Give `before` the `nextCursor` of the last page for the next one (null when there are no more). Listing marks nothing read.",
-      inputSchema: {
+      inputSchema: z.object({
         filter: z.enum(INBOX_FILTERS).optional(),
         before: z.string().min(1).max(100).optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -85,7 +85,7 @@ export function registerInboxTools(server: McpServer): void {
       title: "Mark notifications read",
       description:
         "Marks some of your notifications read, by the ids list_my_notifications gave. Only your own; a pop-up is left for the app to show you first.",
-      inputSchema: { ids: z.array(z.string().uuid()).min(1).max(30) },
+      inputSchema: z.object({ ids: z.array(z.string().uuid()).min(1).max(30) }),
     },
     async (args, extra) =>
       runTool({
@@ -123,7 +123,7 @@ export function registerInboxTools(server: McpServer): void {
       title: "Mark all my notifications read",
       description:
         "The inbox's Mark all read: clears every unread notification of yours except pop-ups the app has not shown yet. Says how many it cleared.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({

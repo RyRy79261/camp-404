@@ -1,5 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { TOOL_CAPABILITIES, type Area } from "../mcp/capabilities";
 import type { McpScope } from "../mcp/scope";
@@ -38,7 +38,7 @@ export function voiceRegistry(): Map<string, VoiceTool> {
   registerCampMcpTools({
     registerTool: (
       name: string,
-      config: { description?: string; inputSchema?: z.ZodRawShape },
+      config: { description?: string; inputSchema?: z.ZodObject },
       handler: Handler,
     ) => {
       const capability = TOOL_CAPABILITIES[name];
@@ -48,7 +48,7 @@ export function voiceRegistry(): Map<string, VoiceTool> {
         kind: capability.kind,
         area: capability.area,
         description: shortDescription(config.description ?? capability.does),
-        shape: config.inputSchema ?? {},
+        shape: config.inputSchema?.shape ?? {},
         handler,
       });
     },
@@ -212,11 +212,13 @@ export async function callTool(
   const parsed = parseArgs(tool, rawArgs);
   if (!parsed.ok) return parsed;
   const result = await tool.handler(parsed.args, {
-    authInfo: {
-      token: "",
-      clientId: VOICE_CLIENT_ID,
-      scopes: [],
-      extra: { campUserId },
+    http: {
+      authInfo: {
+        token: "",
+        clientId: VOICE_CLIENT_ID,
+        scopes: [],
+        extra: { campUserId },
+      },
     },
   });
   const text = result.content

@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   campDayKey,
@@ -85,10 +85,10 @@ export function registerMeetingTools(server: McpServer): void {
       title: "List meetings",
       description:
         'Meeting notes, newest meeting first, as the Meetings page lists them: the team (or the whole camp), title, when, how many decisions, action items and people, and the first decision. `team` is a team key, or "camp" for whole-camp meetings.',
-      inputSchema: {
+      inputSchema: z.object({
         team: MeetingFilter.optional(),
         limit: z.number().int().min(1).max(200).optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -125,7 +125,7 @@ export function registerMeetingTools(server: McpServer): void {
       title: "Read a meeting's notes",
       description:
         "One meeting in full, as its page shows it: the agenda, the notes, who was there, the decisions and the action items (with the task each became). `version` is what update_meeting_notes needs; `canEdit` says whether you may change it (its team's members this year, and captains).",
-      inputSchema: { meetingId: z.string().uuid() },
+      inputSchema: z.object({ meetingId: z.string().uuid() }),
     },
     async (args, extra) =>
       runTool({
@@ -148,14 +148,14 @@ export function registerMeetingTools(server: McpServer): void {
     {
       title: "Change a meeting's notes",
       description: `Changes a meeting's title, agenda, notes or decisions, as the editor's Save does. Give \`expectedVersion\`: the \`version\` from get_meeting. If someone saved since, nothing changes and you are told to read it again. What you leave out stays as it is; \`decisions\` replaces the whole list. Who was there and the action items stay as they are (change them on the page). ${MEETING_NOTE_PRIVACY_REMINDER}`,
-      inputSchema: {
+      inputSchema: z.object({
         meetingId: z.string().uuid(),
         expectedVersion: z.number().int().min(1),
         title: z.string().max(120).optional(),
         agenda: z.string().max(10_000).optional(),
         notes: z.string().max(20_000).optional(),
         decisions: z.array(z.string().max(500)).max(50).optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

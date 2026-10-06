@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   canViewBuilderDefinition,
@@ -86,7 +86,7 @@ export function registerQuestionnaireTools(server: McpServer): void {
       title: "List builder questionnaires",
       description:
         "The questionnaires the builder hub shows you: a captain sees all; a team lead sees published and unpublished ones plus their own drafts.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -116,7 +116,7 @@ export function registerQuestionnaireTools(server: McpServer): void {
       title: "Read a builder questionnaire",
       description:
         "Returns the working definition the builder edits (in the unified questionnaire model), its status, and what still blocks publishing. Use it before update_questionnaire_draft.",
-      inputSchema: { key: z.string().min(1) },
+      inputSchema: z.object({ key: z.string().min(1) }),
     },
     async (args, extra) =>
       runTool({
@@ -155,10 +155,10 @@ export function registerQuestionnaireTools(server: McpServer): void {
       title: "Draft a questionnaire",
       description:
         "A captain or a team lead starts a builder questionnaire as a draft, blank or from a full definition (the unified questionnaire model). Returns its key, the builder page, and what still blocks publishing. Publishing and sending happen in the app.",
-      inputSchema: {
+      inputSchema: z.object({
         title: Title,
         definition: DefinitionInput.optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -199,10 +199,10 @@ export function registerQuestionnaireTools(server: McpServer): void {
       title: "Replace a questionnaire's working definition",
       description:
         "Saves a whole definition over the working head, as the builder's autosave does (the unified questionnaire model). A captain may change any questionnaire; a team lead only their own. On a published questionnaire the live version keeps serving open sends until a captain re-publishes in the app.",
-      inputSchema: {
+      inputSchema: z.object({
         key: z.string().min(1),
         definition: DefinitionInput,
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

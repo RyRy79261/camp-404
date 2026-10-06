@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
@@ -36,12 +36,12 @@ export function registerPeopleTools(server: McpServer): void {
       title: "List camp users",
       description:
         "The camp roster, as the roster page shows it to you: names, rank, this year's teams and leads, and whether someone is still waiting for approval. Captains also get the captain columns. Declined sign-ups are listed for captains only. No emergency contacts (read one person with get_user), and never ID numbers or bank details.",
-      inputSchema: {
+      inputSchema: z.object({
         team: TeamEnum.optional(),
         rank: RankEnum.optional(),
         isLead: z.boolean().optional(),
         includeSystem: z.boolean().optional().default(false),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -106,7 +106,7 @@ export function registerPeopleTools(server: McpServer): void {
       title: "Get one user",
       description:
         "One person, with the columns your rank may read: what the roster shows for a member; team leads and captains also get their emergency contacts (safety data: read it only when needed, and every read of someone else's is recorded with your name); captains also get the captain columns. Never an ID number or bank details. A non-captain can't open a declined sign-up.",
-      inputSchema: { userId: z.string().uuid() },
+      inputSchema: z.object({ userId: z.string().uuid() }),
     },
     async (args, extra) =>
       runTool({

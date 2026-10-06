@@ -1,6 +1,6 @@
 // @vitest-environment node
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { ALWAYS_PRIVATE } from "@camp404/core";
@@ -38,10 +38,10 @@ const tools = new Map<string, { shape: z.ZodRawShape; handler: Handler }>();
 registerCampMcpTools({
   registerTool: (
     name: string,
-    config: { inputSchema?: z.ZodRawShape },
+    config: { inputSchema?: z.ZodObject },
     handler: Handler,
   ) => {
-    tools.set(name, { shape: config.inputSchema ?? {}, handler });
+    tools.set(name, { shape: config.inputSchema?.shape ?? {}, handler });
   },
 } as unknown as McpServer);
 
@@ -333,7 +333,7 @@ describe("no tool returns ID numbers or bank details", () => {
       const args = z.object(shape).parse(SAMPLE_ARGS[name]);
       for (const as of [captain.id, member.id]) {
         const result = await handler(args, {
-          authInfo: { clientId: "test", extra: { campUserId: as } },
+          http: { authInfo: { clientId: "test", extra: { campUserId: as } } },
         });
         const text = (result.content[0] as { text: string }).text;
         const where = `${name} as ${as === captain.id ? "captain" : "member"}`;

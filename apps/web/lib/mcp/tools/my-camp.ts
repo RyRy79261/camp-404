@@ -1,4 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { z } from "zod";
 import { campDayKey, rentalOrderState } from "@camp404/core";
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
 import { getCycles } from "../../camp-config";
@@ -41,7 +42,7 @@ export function registerMyCampTools(server: McpServer): void {
       title: "My dues",
       description:
         "What the My dues page shows you this year: what you owe in a sentence and in figures (charged, paid, being checked, refunded, balance: rand cents), your next instalment or the year's deadline, your fee tier pledge, your payment reference, your charges, and your payments with their status and any refund. Read-only: paying, pledging, proof and refunds are on the page.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -120,7 +121,7 @@ export function registerMyCampTools(server: McpServer): void {
       title: "My gear rental",
       description:
         "What the My gear page shows you this year: your order's state, its lines and your tent answer (the captain's tent, source and price once confirmed), who has you in their tent, whether a captain asked for your order, and the catalogue with prices. Read-only: ordering is on the page.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -196,7 +197,7 @@ export function registerMyCampTools(server: McpServer): void {
       title: "List my forms",
       description:
         "Your questionnaires, as My forms and the inbox show them: the ones waiting for your answer (`waiting`, blocking ones first: the app holds you until they are done), the optional ones anyone may answer (`optional`, `started` when you saved a draft), the forms you can update any time, and the questionnaires you submitted. Each with its page's address: answer or change them there.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({

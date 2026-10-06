@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   getMyShifts,
@@ -33,13 +33,13 @@ export function registerShiftTools(server: McpServer): void {
       title: "List the camp's shifts",
       description:
         "This year's shift roster, as the Shifts page shows it: each Burn day, its slots (the shift, team, time, places and how many are taken, who is on it by short name, whether you are, whether it is still needed and still open), and the duty card to read. `slotId` is what sign_up_for_shift needs. Narrow with `day` (YYYY-MM-DD) or `team`.",
-      inputSchema: {
+      inputSchema: z.object({
         day: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
           .optional(),
         team: z.string().max(60).optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -98,7 +98,7 @@ export function registerShiftTools(server: McpServer): void {
       title: "List my shifts",
       description:
         "Your own week, as My shifts shows it: the camp shifts you are on (day, shift, team, time, duty card, what else of yours clashes) and the AfrikaBurn volunteer shifts you noted, with the reminder when you are under the camp's minimum.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -143,7 +143,7 @@ export function registerShiftTools(server: McpServer): void {
       title: "Sign up for a shift",
       description:
         "Takes a place on one shift slot for you, as the Shifts page's Sign up does. Refused when the shift is full, no longer needed, its day has started, or you are already on it. Says how many shifts you are on this year.",
-      inputSchema: { slotId: SlotId },
+      inputSchema: z.object({ slotId: SlotId }),
     },
     async (args, extra) =>
       runTool({
@@ -166,7 +166,7 @@ export function registerShiftTools(server: McpServer): void {
       title: "Leave a shift",
       description:
         "Gives up your place on a shift slot, as the Shifts page's Leave does. Refused once its day has started. Says how many shifts you are on this year.",
-      inputSchema: { slotId: SlotId },
+      inputSchema: z.object({ slotId: SlotId }),
     },
     async (args, extra) =>
       runTool({
