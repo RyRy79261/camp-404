@@ -163,7 +163,7 @@ describe("voice eval", () => {
             ).slice(0, LIMIT)
           : CASES;
       const partial = ONLY !== null || LIMIT !== null;
-      const results = await pool(cases, LIVE ? 2 : 1, async (c) => {
+      const runCase = async (c: (typeof CASES)[number]) => {
         const replies: Anthropic.Message[] = [];
         const claude = LIVE
           ? recording(await real!, replies)
@@ -204,7 +204,25 @@ describe("voice eval", () => {
           apiStatus,
           replies: replies.map(slim),
         };
-      });
+      };
+      const results = await pool(cases, LIVE ? 2 : 1, runCase);
+      // A case that could not reach Claude (a rate limit) is run once more,
+      // on its own, inside the same run, and the report says so. The eval's
+      // own rule, never a retry in the product (owner: no automatic retries).
+      const rerun: { id: string; firstStatus: number | null; grade: Grade }[] =
+        [];
+      if (LIVE) {
+        for (const [i, r] of results.entries()) {
+          if (r.grade !== "error") continue;
+          const again = await runCase(r.c);
+          rerun.push({
+            id: r.c.id,
+            firstStatus: r.apiStatus,
+            grade: again.grade,
+          });
+          results[i] = again;
+        }
+      }
 
       const t = tally(results.map((r) => r.grade));
       if (LIVE) {
@@ -216,6 +234,7 @@ describe("voice eval", () => {
           tally: t,
           meetsBar: meetsBar(t),
           dollars: Number(spent.toFixed(4)),
+          rerunAfterError: rerun,
           dollarsPerCommand: Number((spent / results.length).toFixed(4)),
           calls,
           tokens: results.reduce(
