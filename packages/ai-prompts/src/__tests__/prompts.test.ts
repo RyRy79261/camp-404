@@ -13,6 +13,7 @@ import {
   type RecipeAdjustInput,
 } from "../recipe-adjust";
 import { PROMPT_VERSIONS } from "../index";
+import { VOICE_REPLY_TOOLS, voiceCommandPrompt } from "../voice-command";
 import {
   INGREDIENT_CATEGORIES,
   KITCHEN_ALLERGENS,
@@ -607,5 +608,62 @@ describe("recipeSource 2026-10-02.1: allergens (#245)", () => {
     const parsed = SourceProofread.parse(answer());
     expect(parsed.recipe?.ingredients[0]?.allergens).toBeUndefined();
     expect(KitchenRecipe.safeParse(parsed.recipe).success).toBe(true);
+  });
+});
+
+describe("voiceCommandPrompt", () => {
+  const base = {
+    today: "Tuesday 6 October 2026",
+    todayKey: "2026-10-06",
+    burnYear: "2027",
+    burnDays: "Mon 26 Apr 2027 to Sun 2 May 2027",
+    phases: ["Build (build): Thu 22 Apr 2027 to Sun 25 Apr 2027"],
+    captainName: "Ryno Steyn",
+    teams: ["Structures (lead)"],
+    words: "Sign me up for breakfast cooks on Wednesday",
+  };
+
+  it("puts the day, the year, the camp's days, the captain and the words after the stable prompt", () => {
+    const text = voiceCommandPrompt.context(base);
+    expect(text).toContain(
+      "Today is Tuesday 6 October 2026 (2026-10-06) in camp time.",
+    );
+    expect(text).toContain("The burn year is 2027.");
+    expect(text).toContain("The Burn: Mon 26 Apr 2027 to Sun 2 May 2027.");
+    expect(text).toContain(
+      "- Build (build): Thu 22 Apr 2027 to Sun 25 Apr 2027",
+    );
+    expect(text).toContain("Their teams this year: Structures (lead).");
+    expect(text.endsWith(`<words>\n${base.words}\n</words>`)).toBe(true);
+    // Nothing per-command is in the system prompt, so it caches.
+    expect(voiceCommandPrompt.system).not.toContain("Ryno");
+  });
+
+  it("says plainly when the camp has no year, no days and no teams for the captain", () => {
+    const text = voiceCommandPrompt.context({
+      ...base,
+      burnYear: null,
+      burnDays: null,
+      phases: [],
+      teams: [],
+    });
+    expect(text).toContain("No burn year is set.");
+    expect(text).not.toContain("The Burn:");
+    expect(text).not.toContain("The camp's days");
+    expect(text).toContain("They are on no team this year.");
+  });
+
+  it("gives four strict reply tools, the website-only one limited to real pages", () => {
+    const tools = voiceCommandPrompt.replyTools([
+      "/tasks",
+      "/captains/payments",
+    ]);
+    expect(tools.map((t) => t.name)).toEqual(Object.values(VOICE_REPLY_TOOLS));
+    expect(tools.every((t) => t.strict)).toBe(true);
+    const cannot = tools.find((t) => t.name === VOICE_REPLY_TOOLS.cannot)!;
+    expect(cannot.input_schema.properties).toMatchObject({
+      path: { enum: ["/tasks", "/captains/payments"] },
+    });
+    expect(PROMPT_VERSIONS.voiceCommand).toBe("2026-10-06.2");
   });
 });

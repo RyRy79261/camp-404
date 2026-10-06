@@ -189,7 +189,10 @@ function refused(
 function cleanAnswers(raw: readonly VoiceAnswer[]): VoiceAnswer[] {
   return raw.slice(0, MAX_ANSWERS).map((a) => ({
     text: a.text.trim(),
-    path: a.path && /^\/[a-z0-9/_?=&.-]{0,120}$/i.test(a.path) ? a.path : null,
+    path:
+      a.path && /^\/(?!\/)[a-z0-9/_?=&.-]{0,120}$/i.test(a.path)
+        ? a.path
+        : null,
   }));
 }
 

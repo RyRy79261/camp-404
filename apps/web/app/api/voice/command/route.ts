@@ -89,8 +89,21 @@ export async function POST(req: Request) {
     },
   );
   if (!ip.ok) return say(429, "Too many at once. Wait a minute.");
-  // Claimed before Groq and Claude are asked: a command that fails later
-  // still counts, so a broken clip cannot be retried without limit.
+  let file: FormDataEntryValue | null;
+  try {
+    file = (await req.formData()).get("audio");
+  } catch {
+    return say(400, "That clip didn't arrive. Try again.");
+  }
+  if (!(file instanceof File) || !file.type.startsWith("audio/")) {
+    return say(400, "That clip didn't arrive. Try again.");
+  }
+  if (file.size > MAX_BYTES)
+    return say(413, "That was too long. Say it in parts.");
+
+  // Claimed once the clip is known good and before Groq and Claude are
+  // asked: a command that fails later still counts, so it cannot be retried
+  // without limit, but a clip that never arrived costs nothing.
   const daily = await rateLimiter.limit(`voice-command:${scope.campUserId}`, {
     limit: DAILY_COMMANDS,
     windowMs: 24 * 60 * 60_000,
@@ -104,18 +117,6 @@ export async function POST(req: Request) {
       },
     );
   }
-
-  let file: FormDataEntryValue | null;
-  try {
-    file = (await req.formData()).get("audio");
-  } catch {
-    return say(400, "That clip didn't arrive. Try again.");
-  }
-  if (!(file instanceof File) || !file.type.startsWith("audio/")) {
-    return say(400, "That clip didn't arrive. Try again.");
-  }
-  if (file.size > MAX_BYTES)
-    return say(413, "That was too long. Say it in parts.");
 
   let transcript: CommandTranscript;
   try {

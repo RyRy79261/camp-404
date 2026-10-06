@@ -458,8 +458,13 @@ const otherPreviews: Record<string, PreviewFn> = {
     };
   },
   async propose_inventory_change(args) {
+    const parts = [
+      args.quantity != null ? `count ${args.quantity}` : null,
+      str(args.condition) || null,
+      str(args.location) || null,
+    ].filter(Boolean);
     return {
-      sentence: `Suggest a change to a gear item: ${args.quantity}, ${str(args.condition)}, ${str(args.location)}`,
+      sentence: `Suggest a change to a gear item: ${parts.join(", ") || "no change given"}`,
       facts:
         "Inventory · a lead of its team or a captain approves it on the page",
       path: "/inventory",
@@ -678,12 +683,14 @@ const otherPreviews: Record<string, PreviewFn> = {
       keys: ["me:burner"],
     };
   },
-  async update_my_dietary_requirements() {
+  async update_my_dietary_requirements(args) {
+    const foods = Array.isArray(args.foods) ? args.foods.length : 0;
+    const diets = Array.isArray(args.diets) ? args.diets.join(", ") : "";
     return {
-      sentence: "Replace your dietary pick-list",
+      sentence: `Replace your dietary pick-list: ${foods} food${foods === 1 ? "" : "s"}${diets ? `, diets ${diets}` : ""}`,
       facts: "Your profile · the Kitchen's allergy check reads it",
       path: "/profile",
-      args: {},
+      args,
       keys: ["me:dietary"],
     };
   },

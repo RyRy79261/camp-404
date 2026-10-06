@@ -145,6 +145,22 @@ describe("POST /api/voice/command", () => {
     nothingAsked();
   });
 
+  it("does not count a clip that never arrived against the day's 30", async () => {
+    const empty = {
+      method: "POST",
+      url: "https://camp.test/api/voice/command",
+      headers: new Headers({ host: "camp.test" }),
+      formData: async () => new FormData(),
+    } as unknown as Request;
+    expect((await POST(empty)).status).toBe(400);
+    expect(
+      vi
+        .mocked(rateLimiter.limit)
+        .mock.calls.some(([key]) => key.startsWith("voice-command:")),
+    ).toBe(false);
+    nothingAsked();
+  });
+
   it("refuses a request from another site", async () => {
     expect((await POST(clip({ origin: "https://evil.example" }))).status).toBe(
       403,
