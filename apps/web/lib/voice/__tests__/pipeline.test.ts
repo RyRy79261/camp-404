@@ -372,17 +372,13 @@ describe("a captain's voice command, through the connector's own tools", () => {
       runDeps({ userId: SPEAKER.id, sessionId: SESSION }),
     );
 
-    const tables = await h
-      .client()
-      .query<{
-        tablename: string;
-      }>("select tablename from pg_tables where schemaname = 'public'");
+    const tables = await h.client().query<{
+      tablename: string;
+    }>("select tablename from pg_tables where schemaname = 'public'");
     for (const { tablename } of tables.rows) {
-      const rows = await h
-        .client()
-        .query<{
-          row: string;
-        }>(`select row_to_json(t)::text as row from "public"."${tablename}" t`);
+      const rows = await h.client().query<{
+        row: string;
+      }>(`select row_to_json(t)::text as row from "public"."${tablename}" t`);
       for (const r of rows.rows) expect(r.row, tablename).not.toContain(MARKER);
     }
     expect(JSON.stringify(logs)).not.toContain(MARKER);

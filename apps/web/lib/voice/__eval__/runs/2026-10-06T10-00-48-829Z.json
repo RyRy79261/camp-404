@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-06T10:00:48.829Z",
+  "model": "claude-sonnet-5-5",
+  "tally": {
+    "total": 10,
+    "exact": 10,
+    "wrong": 0,
+    "needless": 0,
+    "short": 0
+  },
+  "meetsBar": true,
+  "dollars": 0.2045,
+  "dollarsPerCommand": 0.0205,
+  "calls": 19,
+  "tokens": {
+    "input": 58,
+    "output": 2360,
+    "cacheRead": 54545,
+    "cacheWrite": 67955
+  },
+  "misses": []
+}

@@ -163,12 +163,12 @@ describe("voice eval", () => {
             ).slice(0, LIMIT)
           : CASES;
       const partial = ONLY !== null || LIMIT !== null;
-      const results = await pool(cases, LIVE ? 6 : 1, async (c) => {
+      const results = await pool(cases, LIVE ? 2 : 1, async (c) => {
         const replies: Anthropic.Message[] = [];
         const claude = LIVE
           ? recording(await real!, replies)
           : replayClaude(recorded[c.id]!.replies);
-        const { outcome, usage } = await runVoiceCommand({
+        const { outcome, usage, apiStatus } = await runVoiceCommand({
           scope,
           captainName: SPEAKER.name,
           words: c.words,
@@ -176,7 +176,11 @@ describe("voice eval", () => {
           claude,
           now: NOW,
         });
-        const grade = gradeCase(c, outcome, sealKey(), who);
+        // Claude unreachable is not the model's answer: never graded as one.
+        const grade: Grade =
+          apiStatus !== null || (usage.calls === 0 && LIVE)
+            ? "error"
+            : gradeCase(c, outcome, sealKey(), who);
         if (LIVE) {
           // The cost counter: what the API said it used, per case.
           console.log(
@@ -192,7 +196,14 @@ describe("voice eval", () => {
             ].join("  "),
           );
         }
-        return { c, outcome, usage, grade, replies: replies.map(slim) };
+        return {
+          c,
+          outcome,
+          usage,
+          grade,
+          apiStatus,
+          replies: replies.map(slim),
+        };
       });
 
       const t = tally(results.map((r) => r.grade));
@@ -216,6 +227,17 @@ describe("voice eval", () => {
             }),
             { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
           ),
+          cases: results.map((r) => ({
+            id: r.c.id,
+            grade: r.grade,
+            calls: r.usage.calls,
+            input: r.usage.inputTokens,
+            cacheRead: r.usage.cacheReadTokens,
+            cacheWrite: r.usage.cacheWriteTokens,
+            output: r.usage.outputTokens,
+            dollars: Number(cost(r.usage).toFixed(4)),
+            apiStatus: r.apiStatus,
+          })),
           misses: results
             .filter((r) => r.grade !== "exact")
             .map((r) => ({

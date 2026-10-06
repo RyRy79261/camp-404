@@ -97,6 +97,7 @@ describe("POST /api/voice/command", () => {
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
       },
+      apiStatus: null,
     });
   });
 

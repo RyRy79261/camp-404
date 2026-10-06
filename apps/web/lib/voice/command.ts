@@ -80,6 +80,7 @@ export type LoopOutcome =
   | {
       kind: "error";
       code: "no_reply" | "refusal" | "timeout" | "claude_down" | "too_long";
+      status?: number | null;
       reads: ReadRecord[];
       usage: Usage;
     };
@@ -179,6 +180,9 @@ export async function runCommandLoop(input: LoopInput): Promise<LoopOutcome> {
       return {
         kind: "error",
         code: timedOut ? "timeout" : "claude_down",
+        // The API's status and error type only (never its message), for the
+        // eval report and a server log.
+        status: (err as { status?: number } | null)?.status ?? null,
         reads,
         usage,
       };

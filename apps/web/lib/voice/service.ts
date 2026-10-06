@@ -115,6 +115,8 @@ export function websitePaths(): string[] {
 export interface CommandRun {
   outcome: VoiceOutcome;
   usage: Usage;
+  /** The API's HTTP status when Claude could not be reached. */
+  apiStatus: number | null;
 }
 
 /** Words to what the captain is shown. Nothing of it is stored. */
@@ -160,5 +162,9 @@ export async function runVoiceCommand(input: {
       }));
     },
   });
-  return { outcome, usage: loop.usage };
+  return {
+    outcome,
+    usage: loop.usage,
+    apiStatus: loop.kind === "error" ? (loop.status ?? null) : null,
+  };
 }

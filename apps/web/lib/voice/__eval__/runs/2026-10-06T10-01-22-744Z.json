@@ -1,0 +1,155 @@
+{
+  "at": "2026-10-06T10:01:22.744Z",
+  "model": "claude-sonnet-5-5",
+  "tally": {
+    "total": 10,
+    "exact": 5,
+    "wrong": 0,
+    "needless": 4,
+    "short": 1
+  },
+  "meetsBar": false,
+  "dollars": 0.0282,
+  "dollarsPerCommand": 0.0028,
+  "calls": 8,
+  "tokens": {
+    "input": 24,
+    "output": 1188,
+    "cacheRead": 46855,
+    "cacheWrite": 2763
+  },
+  "cases": [
+    {
+      "id": "shift-01",
+      "grade": "exact",
+      "calls": 2,
+      "input": 6,
+      "cacheRead": 10420,
+      "cacheWrite": 0,
+      "output": 125,
+      "dollars": 0.0033
+    },
+    {
+      "id": "task-01",
+      "grade": "exact",
+      "calls": 2,
+      "input": 6,
+      "cacheRead": 10649,
+      "cacheWrite": 0,
+      "output": 138,
+      "dollars": 0.0035
+    },
+    {
+      "id": "att-01",
+      "grade": "needless",
+      "calls": 0,
+      "input": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "output": 0,
+      "dollars": 0
+    },
+    {
+      "id": "claim-01",
+      "grade": "needless",
+      "calls": 0,
+      "input": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "output": 0,
+      "dollars": 0
+    },
+    {
+      "id": "claim-03",
+      "grade": "short",
+      "calls": 0,
+      "input": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "output": 0,
+      "dollars": 0
+    },
+    {
+      "id": "team-01",
+      "grade": "needless",
+      "calls": 0,
+      "input": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "output": 0,
+      "dollars": 0
+    },
+    {
+      "id": "team-06",
+      "grade": "exact",
+      "calls": 2,
+      "input": 6,
+      "cacheRead": 7948,
+      "cacheWrite": 2763,
+      "output": 339,
+      "dollars": 0.0119
+    },
+    {
+      "id": "multi-01",
+      "grade": "exact",
+      "calls": 2,
+      "input": 6,
+      "cacheRead": 17838,
+      "cacheWrite": 0,
+      "output": 586,
+      "dollars": 0.0094
+    },
+    {
+      "id": "web-03",
+      "grade": "exact",
+      "calls": 0,
+      "input": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "output": 0,
+      "dollars": 0
+    },
+    {
+      "id": "areas-03",
+      "grade": "needless",
+      "calls": 0,
+      "input": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "output": 0,
+      "dollars": 0
+    }
+  ],
+  "misses": [
+    {
+      "id": "att-01",
+      "grade": "needless",
+      "words": "I can help on build week.",
+      "got": "refused: Voice can't reach Claude right now. Nothing changed: try again in a minute."
+    },
+    {
+      "id": "claim-01",
+      "grade": "needless",
+      "words": "Approve Gecko Naidoo's gas bottles claim.",
+      "got": "refused: Voice can't reach Claude right now. Nothing changed: try again in a minute."
+    },
+    {
+      "id": "claim-03",
+      "grade": "short",
+      "words": "Approve Gecko's claim.",
+      "got": "refused: Voice can't reach Claude right now. Nothing changed: try again in a minute."
+    },
+    {
+      "id": "team-01",
+      "grade": "needless",
+      "words": "Put Kat Jacobs on the Kitchen team.",
+      "got": "refused: Voice can't reach Claude right now. Nothing changed: try again in a minute."
+    },
+    {
+      "id": "areas-03",
+      "grade": "needless",
+      "words": "Put Ben on Structures, approve Jonno's shade cloth deposit, and say I can't make unpack.",
+      "got": "refused: Voice can't reach Claude right now. Nothing changed: try again in a minute."
+    }
+  ]
+}

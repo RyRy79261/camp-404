@@ -12,7 +12,9 @@ import type { ArgMatch, EvalCase, Expect, ExpectedAction } from "./cases";
 //  - short: not wrong and not needless, but not exact either (a list missing
 //    an action, a refusal where a question was due).
 
-export type Grade = "exact" | "wrong" | "needless" | "short";
+//  - error: Claude could not be reached (a rate limit, an outage). Says
+//    nothing about the model; a run with any is run again, never passed.
+export type Grade = "exact" | "wrong" | "needless" | "short" | "error";
 
 export interface ProposedAction {
   tool: string;
@@ -163,6 +165,7 @@ export interface Tally {
   wrong: number;
   needless: number;
   short: number;
+  error: number;
 }
 
 export function tally(grades: readonly Grade[]): Tally {
@@ -172,12 +175,16 @@ export function tally(grades: readonly Grade[]): Tally {
     wrong: grades.filter((g) => g === "wrong").length,
     needless: grades.filter((g) => g === "needless").length,
     short: grades.filter((g) => g === "short").length,
+    error: grades.filter((g) => g === "error").length,
   };
 }
 
 /** The merge bar: no wrong action, 90% exact, at most 10% needless. */
 export function meetsBar(t: Tally): boolean {
   return (
-    t.wrong === 0 && t.exact / t.total >= 0.9 && t.needless / t.total <= 0.1
+    t.error === 0 &&
+    t.wrong === 0 &&
+    t.exact / t.total >= 0.9 &&
+    t.needless / t.total <= 0.1
   );
 }
