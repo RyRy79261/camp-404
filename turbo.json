@@ -9,6 +9,9 @@
   ],
   "globalEnv": [
     "NODE_ENV",
+    "VOICE_EVAL_LIVE",
+    "VOICE_EVAL_ONLY",
+    "VOICE_SHOTS",
     "DATABASE_URL",
     "BETTER_AUTH_SECRET",
     "BETTER_AUTH_URL",

@@ -2,6 +2,8 @@ import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ProfileSections } from "@/components/profile/profile-sections";
 import { getMyDesktopPreferences } from "@/lib/desktop-preferences";
 import { requireMemberPage } from "@/lib/member-gate";
+import { getVoiceConsent } from "@/lib/voice/consent";
+import { VoiceSetting } from "@/components/voice/voice-setting";
 import { DisplaySettings } from "./display-settings";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +17,13 @@ export const metadata = { title: "Display — Camp 404" };
 // again from here.
 
 export default async function DisplayPage() {
-  await requireMemberPage();
+  const { campUser } = await requireMemberPage();
   const preferences = await getMyDesktopPreferences();
+  // Voice (#356) is a captain's: nobody else sees its switch.
+  const voice =
+    campUser.rank === "captain"
+      ? { on: (await getVoiceConsent(campUser.id)) !== null }
+      : null;
   return (
     <div className="flex flex-col">
       <PageHeading
@@ -27,6 +34,7 @@ export default async function DisplayPage() {
       <div className="flex flex-col gap-6">
         <ProfileSections active="display" />
         <DisplaySettings initial={preferences} />
+        {voice && <VoiceSetting on={voice.on} />}
       </div>
     </div>
   );

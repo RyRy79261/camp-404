@@ -14,7 +14,7 @@ import { desktopOnly } from "./lib/dom";
 // through the connector's real tools, and every list, run and result after
 // that is the production code. Chromium's fake microphone records the clip.
 //
-// SHOTS=1 also saves the screenshots compared with the mock-up
+// VOICE_SHOTS=1 also saves the screenshots compared with the mock-up
 // (camp404-night/voice/built-*.png).
 
 test.use({
@@ -24,7 +24,7 @@ test.use({
   },
 });
 
-const SHOTS = process.env.SHOTS === "1";
+const SHOTS = process.env.VOICE_SHOTS === "1";
 const SHOT_DIR = "/home/ryan/camp404-night/voice";
 async function shot(page: Page, name: string, clip?: Locator) {
   if (!SHOTS) return;
