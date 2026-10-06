@@ -155,6 +155,8 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "users.telegramUserId": "captain",
   "users.aiDataConsent": "captain",
   "users.aiDataConsentAt": "captain",
+  // A captain's own voice notice (#356); only they act on it.
+  "users.voiceConsentAt": "captain",
   "users.createdAt": "captain",
   "users.updatedAt": "captain",
 
