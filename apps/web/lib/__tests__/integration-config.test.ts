@@ -7,6 +7,7 @@ import {
   founderEmailsUseOldName,
   isEmailConfigured,
   isWebPushConfigured,
+  mayContactMembers,
   webPushConfigFromEnv,
 } from "../integration-config";
 
@@ -86,5 +87,19 @@ describe("integration config", () => {
       owner: "RyRy79261",
       name: "camp-404",
     });
+  });
+});
+
+describe("mayContactMembers", () => {
+  it("lets production alone reach real people", () => {
+    expect(mayContactMembers({ VERCEL_ENV: "production" })).toBe(true);
+  });
+
+  it("keeps a preview, local dev and a test run from sending", () => {
+    expect(mayContactMembers({ VERCEL_ENV: "preview" })).toBe(false);
+    expect(mayContactMembers({ VERCEL_ENV: "development" })).toBe(false);
+    expect(mayContactMembers({ NODE_ENV: "production" })).toBe(false);
+    expect(mayContactMembers({ E2E_TEST_MODE: "1" })).toBe(false);
+    expect(mayContactMembers({})).toBe(false);
   });
 });

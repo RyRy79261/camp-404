@@ -34,7 +34,7 @@ const calendar = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/google-calendar", async (importOriginal) => ({
   ...(await importOriginal<typeof GoogleCalendar>()),
-  calendarConfig: () => ({
+  calendarWriteConfig: () => ({
     calendarId: "camp@example.com",
     clientEmail: "bot@example.com",
     privateKey: "key",

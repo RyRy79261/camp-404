@@ -45,6 +45,19 @@ export function founderEmailsUseOldName(env: EnvBag): boolean {
  */
 export const MIN_PREAPPROVED_ENV_CODE_LENGTH = 20;
 
+/**
+ * Whether this deployment may reach real people: send push, send email and
+ * write to the camp's Google Calendar. Production only (owner, 2026-10-07): a
+ * preview's database starts as a copy of production's, members and their
+ * addresses included, and local dev may hold the same, so a preview or a
+ * laptop must never buzz a member's phone, email them or change the calendar
+ * they read. Their queued notices simply stay queued. This is the one check;
+ * every send path asks it.
+ */
+export function mayContactMembers(env: EnvBag): boolean {
+  return env.VERCEL_ENV === "production";
+}
+
 /** Email notices need both the Resend key and a verified from-address. */
 export function isEmailConfigured(env: EnvBag): boolean {
   return Boolean(env.RESEND_API_KEY && env.RESEND_FROM_EMAIL);

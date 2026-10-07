@@ -1,7 +1,7 @@
 import "server-only";
 
 import { after } from "next/server";
-import { CAMP_TIME_ZONE, redactSecrets } from "@camp404/core";
+import { CAMP_TIME_ZONE, errorLogText } from "@camp404/core";
 import { dispatchDueBroadcasts } from "@camp404/db/broadcasts";
 import { drainQueuedEmail } from "@camp404/db/email";
 import {
@@ -19,7 +19,10 @@ import { remindTaskDeadlines } from "@camp404/db/tasks";
 import { sweepOrphanAvatarBlobs } from "./avatar-blob";
 import { isEmailConfigured, sendEmail } from "./email";
 import { sendPush } from "./firebase-admin";
-import { firebaseAdminCredentials } from "./integration-config";
+import {
+  firebaseAdminCredentials,
+  mayContactMembers,
+} from "./integration-config";
 import { catchUpCampCalendar } from "./logistics";
 import { SITE_URL } from "./site";
 import { isE2ETestMode } from "./test-mode";
@@ -85,10 +88,13 @@ export function isReminderHour(now: Date): boolean {
   return hour >= REMINDER_HOURS.from && hour < REMINDER_HOURS.until;
 }
 
+/**
+ * The class and Postgres code only (errorLogText): a failed query's message
+ * holds the values it was writing, a member's answers among them.
+ */
 function logFailure(step: string, err: unknown): void {
-  const text = err instanceof Error ? err.message : String(err);
   console.error(
-    `[background] ${step} failed: ${redactSecrets(text, process.env)}`,
+    `[background] ${step} failed: ${errorLogText(err, process.env)}`,
   );
 }
 
@@ -109,15 +115,21 @@ async function step(
 /**
  * Deliver what is due now: fan out every published announcement whose time
  * has come, then send queued push and email. Push and email are skipped while
- * their service is not set up, so their rows stay queued until it is.
+ * their service is not set up, and on any deployment but production, so their
+ * rows stay queued until it is.
  */
 export async function deliverDue(): Promise<void> {
   await step("announcement fan-out", async () => {
     const result = await dispatchDueBroadcasts();
     for (const f of result.failures) {
-      logFailure(`announcement ${f.broadcastId}`, new Error(f.error));
+      console.error(
+        `[background] announcement ${f.broadcastId} failed: ${f.error}`,
+      );
     }
   });
+  // Only production sends (mayContactMembers): elsewhere the in-app notices
+  // still land, and push and email stay queued in this database.
+  if (!mayContactMembers(process.env)) return;
   if (firebaseAdminCredentials(process.env)) {
     await step("push", () => drainQueuedPush(sendPush));
   }
@@ -150,7 +162,10 @@ export async function runMaintenance(): Promise<void> {
   if (process.env.VERCEL_ENV === "production") {
     await step("orphan photos", async () => {
       const result = await sweepOrphanAvatarBlobs(await listLiveAuthUserIds());
-      if (result.status === "refused") throw new Error(result.message);
+      if (result.status === "refused") {
+        // Our own sentence, which a thrown error's log line would drop.
+        console.error(`[background] orphan photos refused: ${result.message}`);
+      }
     });
   }
 }

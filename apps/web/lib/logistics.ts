@@ -32,7 +32,7 @@ import {
   type ViewerRank,
 } from "@camp404/types";
 import {
-  calendarConfig,
+  calendarWriteConfig,
   deleteCalendarEvent,
   forgetCalendarCache,
   newCalendarEventId,
@@ -85,7 +85,7 @@ export type LogisticsCalendarOutcome =
 
 /** Whether there is a camp calendar to write the phases to. */
 export function isLogisticsCalendarConnected(): boolean {
-  return usesTestStore() || calendarConfig(process.env) !== null;
+  return usesTestStore() || calendarWriteConfig(process.env) !== null;
 }
 
 export async function listLogisticsPhases(): Promise<LogisticsPhaseRow[]> {

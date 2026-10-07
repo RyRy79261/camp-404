@@ -3,7 +3,7 @@ import "server-only";
 import { addCampCalendarEvent } from "@camp404/db/calendar-events";
 import type { AddCalendarEventInput } from "@camp404/types";
 import {
-  calendarConfig,
+  calendarWriteConfig,
   createCalendarEvent,
   deleteCalendarEvent,
   eventRequestBody,
@@ -52,7 +52,7 @@ export async function getUpcomingEvents(
 
 /** Whether the add-event page can write anywhere. */
 export function isCalendarConnected(): boolean {
-  return usesTestStore() || calendarConfig(process.env) !== null;
+  return usesTestStore() || calendarWriteConfig(process.env) !== null;
 }
 
 export type AddCalendarEventOutcome =
@@ -83,7 +83,9 @@ export async function addCalendarEvent(input: {
   }
 
   const env = process.env;
-  if (!calendarConfig(env)) return { ok: false, error: CALENDAR_NOT_CONNECTED };
+  if (!calendarWriteConfig(env)) {
+    return { ok: false, error: CALENDAR_NOT_CONNECTED };
+  }
 
   const body: CalendarEventBody = {
     id: newCalendarEventId(),

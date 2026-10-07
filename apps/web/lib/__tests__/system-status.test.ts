@@ -245,6 +245,15 @@ describe("deriveSystemStatus", () => {
     expect(codes.detail).toContain("2 are shorter than 20 characters");
   });
 
+  it("says a preview sends nothing to members", () => {
+    expect(
+      check({ VERCEL_ENV: "preview" }, OK_PROBE, "deployment").detail,
+    ).toContain("Only production sends push, email and calendar changes");
+    expect(
+      check({ VERCEL_ENV: "production" }, OK_PROBE, "deployment").detail,
+    ).toBe("Running as production.");
+  });
+
   it("flags test mode on any deployment", () => {
     const deployment = check({ E2E_TEST_MODE: "1" }, OK_PROBE, "deployment");
     expect(deployment.tone).toBe("attention");

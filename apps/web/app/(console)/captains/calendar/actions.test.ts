@@ -28,7 +28,7 @@ vi.mock("@camp404/db/calendar-events", () => ({
 }));
 vi.mock("@/lib/google-calendar", async (importActual) => ({
   ...(await importActual<typeof GoogleCalendar>()),
-  calendarConfig: vi.fn(() => ({
+  calendarWriteConfig: vi.fn(() => ({
     calendarId: "camp",
     clientEmail: "x",
     privateKey: "y",
@@ -43,7 +43,7 @@ import { addCampCalendarEvent } from "@camp404/db/calendar-events";
 import { revalidatePath } from "next/cache";
 import { captainActionGate } from "@/lib/captain-gate";
 import {
-  calendarConfig,
+  calendarWriteConfig,
   createCalendarEvent,
   deleteCalendarEvent,
   forgetCalendarCache,
@@ -210,7 +210,7 @@ describe("addCalendarEventAction", () => {
   });
 
   it("says so when the calendar is not connected, without touching the database", async () => {
-    vi.mocked(calendarConfig).mockReturnValueOnce(null);
+    vi.mocked(calendarWriteConfig).mockReturnValueOnce(null);
     expect(await addCalendarEventAction(INPUT)).toEqual({
       ok: false,
       error: "The camp calendar isn't connected yet.",
