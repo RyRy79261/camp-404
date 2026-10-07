@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
-import { createHttpDb, withTransaction } from "./index";
+import { createHttpDb, createPooledDb } from "./index";
 import * as schema from "./schema";
 import {
   chunk,
@@ -156,10 +156,33 @@ export interface PushDrainResult {
 export const PUSH_DRAIN_LIMIT = 200;
 
 /**
- * Sends in a row that threw before one run stops: the push service is down,
- * and the rest would each wait out a failure too.
+ * Sends in a row that threw or timed out before one run stops: the push
+ * service is down, and the rest would each wait out a failure too.
  */
 export const PUSH_MAX_THROWS_IN_A_ROW = 3;
+
+/**
+ * How long one push may take before it counts as a failed send. Each one is
+ * sent inside its claim's transaction, so a send that never answers would hold
+ * the row, and the run, open until the function is stopped.
+ */
+export const PUSH_SEND_TIMEOUT_MS = 10_000;
+
+/** `send`, refused with an error if it has not answered within `ms`. */
+function withTimeout(send: PushSend, ms: number): PushSend {
+  return (tokens, notification, data) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`push send timed out after ${ms} ms`)),
+        ms,
+      );
+    });
+    return Promise.race([send(tokens, notification, data), late]).finally(() =>
+      clearTimeout(timer),
+    );
+  };
+}
 
 /**
  * Drain queued push deliveries, oldest first. Reads `notification_deliveries`
@@ -167,21 +190,39 @@ export const PUSH_MAX_THROWS_IN_A_ROW = 3;
  * sends each to the recipient's device tokens via the injected `send` fn, flips
  * `pushStatus` to sent/failed/skipped, and prunes dead tokens.
  *
- * One delivery per transaction: claim it (FOR UPDATE SKIP LOCKED, so an
- * overlapping drain skips it and no phone buzzes twice), send it, write its
- * status and commit. A push that went out stays marked sent whatever happens
+ * One pooled connection for the whole run, and one transaction on it per
+ * delivery: claim it (FOR UPDATE SKIP LOCKED, so an overlapping drain skips it
+ * and no phone buzzes twice), send it, write its status and commit. A push that went out stays marked sent whatever happens
  * to the ones after it, so a later failure, or the function being stopped,
  * can never put it back in the queue to be sent again.
  *
  * A send that throws is not FCM's answer about this push (the service down,
- * no answer, bad credentials): the delivery stays queued for a later run and
- * this run moves on, stopping after PUSH_MAX_THROWS_IN_A_ROW throws in a row.
+ * no answer within PUSH_SEND_TIMEOUT_MS, bad credentials): the delivery stays
+ * queued for a later run and this run moves on, stopping after
+ * PUSH_MAX_THROWS_IN_A_ROW in a row.
  */
 export async function drainQueuedPush(
-  send: PushSend,
-  options: { limit?: number } = {},
+  sendPush: PushSend,
+  options: { limit?: number; sendTimeoutMs?: number } = {},
 ): Promise<PushDrainResult> {
   const limit = options.limit ?? PUSH_DRAIN_LIMIT;
+  const send = withTimeout(
+    sendPush,
+    options.sendTimeoutMs ?? PUSH_SEND_TIMEOUT_MS,
+  );
+  const { db, pool } = createPooledDb();
+  try {
+    return await drainOn(db, send, limit);
+  } finally {
+    await pool.end();
+  }
+}
+
+async function drainOn(
+  db: ReturnType<typeof createPooledDb>["db"],
+  send: PushSend,
+  limit: number,
+): Promise<PushDrainResult> {
   const result: PushDrainResult = { sent: 0, failed: 0, skipped: 0, pruned: 0 };
   // Left queued after a throw: not claimed again in this run.
   const passed: string[] = [];
@@ -190,7 +231,7 @@ export async function drainQueuedPush(
   let throwsInARow = 0;
 
   for (let i = 0; i < limit; i++) {
-    const outcome = await withTransaction(async (tx) => {
+    const outcome = await db.transaction(async (tx) => {
       const [claimed] = await tx
         .select({
           id: schema.notificationDeliveries.id,

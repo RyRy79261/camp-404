@@ -26,6 +26,7 @@ import {
   REFUND_ALREADY_OPEN,
   REFUND_CHANGED,
   REFUND_HOLDS_PAYMENT,
+  REFUND_PAID_HOLDS_PAYMENT,
   REFUND_NOT_RECEIVED,
   REFUND_PAYMENT_NOT_RECEIVED,
   requestRefund,
@@ -906,6 +907,44 @@ describe("dues", () => {
           actorId: captain.id,
         }),
       ).toBe(true);
+    });
+
+    it("keeps a received payment received once its refund is paid out", async () => {
+      const { member, captain } = await people();
+      const payment = await received(member.id, captain.id);
+      const asked = await requestRefund({
+        paymentId: payment.id,
+        amountCents: 50_000,
+        note: null,
+        actorId: captain.id,
+        today: "2027-02-20",
+      });
+      if (!asked.ok) throw new Error(asked.error);
+      expect(
+        await decideRefund({
+          refundId: asked.id,
+          to: "refunded",
+          amountCents: 50_000,
+          actorId: captain.id,
+        }),
+      ).toEqual({ ok: true });
+
+      // The paid-out refund still counts in the balance, so a payment moved
+      // back to pending would have the member owe the payment and the refund.
+      await expect(
+        setPaymentStatus({
+          paymentId: payment.id,
+          from: "reconciled",
+          to: "pending",
+          actorId: captain.id,
+        }),
+      ).rejects.toThrow(REFUND_PAID_HOLDS_PAYMENT);
+      const [row] = await h
+        .db()
+        .select({ status: schema.payments.status })
+        .from(schema.payments)
+        .where(eq(schema.payments.id, payment.id));
+      expect(row!.status).toBe("reconciled");
     });
 
     it("decides a refund only while its payment is still received", async () => {

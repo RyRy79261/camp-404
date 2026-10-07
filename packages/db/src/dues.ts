@@ -87,6 +87,8 @@ export const REFUND_CHANGED =
   "Someone already decided this refund. Reload the page.";
 export const REFUND_HOLDS_PAYMENT =
   "This payment has a refund waiting for a decision. Pay out or decline the refund first, then change the payment.";
+export const REFUND_PAID_HOLDS_PAYMENT =
+  "This payment's refund has been paid out, so the payment stays received. Moving it would make the member owe it again.";
 export const REFUND_PAYMENT_NOT_RECEIVED =
   "This payment isn't marked received any more. Mark it received again before deciding its refund.";
 export const NOT_YOUR_PAYMENT = "That isn't one of your payments.";

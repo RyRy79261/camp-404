@@ -105,7 +105,7 @@ describe("0105_adopt_sentinel_year_rows", () => {
     ]);
   });
 
-  it("leaves a table alone when the founding year already holds rows of it", async () => {
+  it("leaves a group alone when the founding year already holds rows of it", async () => {
     const member = await makeUser(h.db());
     await settings(FOUNDED_AND_ROLLED);
     await q(
@@ -123,6 +123,48 @@ describe("0105_adopt_sentinel_year_rows", () => {
     expect(await cyclesOf("payments")).toEqual([1, 2026]);
     // Meeting notes had nothing in 2026: moved.
     expect(await cyclesOf("meeting_notes")).toEqual([2026]);
+  });
+
+  it("moves a refund only with its payment's group, never on its own", async () => {
+    const member = await makeUser(h.db());
+    await settings(FOUNDED_AND_ROLLED);
+    // The founding year has a payment but no refund. The sentinel payment and
+    // its refund must stay together: the refund may not move into 2026 alone.
+    const [payment] = await q<{ id: string }>(
+      `INSERT INTO payments (user_id, cycle, amount_cents, reference)
+       VALUES ($1, 1, 50000, 'PAY-1') RETURNING id`,
+      [member.id],
+    );
+    const stranded = payment!.id;
+    await q(
+      `INSERT INTO payments (user_id, cycle, amount_cents, reference)
+       VALUES ($1, 2026, 50000, 'PAY-2')`,
+      [member.id],
+    );
+    await q(
+      `INSERT INTO payment_refunds (payment_id, user_id, cycle, amount_cents)
+       VALUES ($1, $2, 1, 20000)`,
+      [stranded, member.id],
+    );
+
+    await h.client().exec(SQL);
+
+    expect(await cyclesOf("payments")).toEqual([1, 2026]);
+    expect(await cyclesOf("payment_refunds")).toEqual([1]);
+  });
+
+  it("names every year-scoped table, so none is left out of the sweep", async () => {
+    const rows = await q<{ table_name: string }>(
+      `SELECT table_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND column_name = 'cycle'`,
+    );
+    expect(rows.length).toBeGreaterThan(40);
+    for (const { table_name } of rows) {
+      expect({ table_name, named: SQL.includes(table_name) }).toEqual({
+        table_name,
+        named: true,
+      });
+    }
   });
 
   it("does nothing on a camp that has not named its year", async () => {

@@ -177,4 +177,25 @@ describe("drainQueuedPush", () => {
     const after = await pushStatuses(db);
     expect([...after.values()].every((s) => s === "queued")).toBe(true);
   });
+
+  it("counts a send that never answers as a failure, and stops after three", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    await db
+      .insert(schema.pushTokens)
+      .values({ userId: member.id, token: "tok-5", platform: "web" });
+    for (let day = 1; day <= 4; day++) {
+      await queue(db, member.id, "push", new Date(`2026-09-0${day}`));
+    }
+    const send = vi.fn<PushSend>(() => new Promise(() => {}));
+    expect(await drainQueuedPush(send, { sendTimeoutMs: 20 })).toEqual({
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      pruned: 0,
+    });
+    expect(send).toHaveBeenCalledTimes(3);
+    const after = await pushStatuses(db);
+    expect([...after.values()].every((s) => s === "queued")).toBe(true);
+  });
 });

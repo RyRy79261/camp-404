@@ -16,6 +16,7 @@ import {
   MoneyRefused,
   NOT_A_MONEY_KEEPER,
   REFUND_HOLDS_PAYMENT,
+  REFUND_PAID_HOLDS_PAYMENT,
 } from "./dues";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
@@ -209,9 +210,9 @@ export async function recordPayment(
  * Compare-and-set on `from`, the status the captain saw: false when it had
  * already moved, so a captain on a stale page is told instead of overwriting.
  * Throws MoneyRefused for anyone but a captain or a Finance lead, and when a
- * received payment with a refund still waiting for a decision would leave
- * `reconciled`: the member would then owe the payment again while the refund
- * could still be paid out.
+ * received payment with a refund that is waiting or paid out would leave
+ * `reconciled`: the member would then owe the payment again on top of the
+ * refund. Only a declined refund lets it move.
  */
 export async function setPaymentStatus(input: {
   paymentId: string;
@@ -234,17 +235,27 @@ export async function setPaymentStatus(input: {
       .for("update");
     if (!current || current.status !== input.from) return false;
     if (input.from === "reconciled") {
-      const [open] = await tx
-        .select({ id: schema.paymentRefunds.id })
+      // Only a declined refund lets a received payment move. One waiting for
+      // a decision could still be paid out, and one paid out still counts in
+      // the member's balance: either way, moving the payment would make them
+      // owe it twice.
+      const [live] = await tx
+        .select({ status: schema.paymentRefunds.status })
         .from(schema.paymentRefunds)
         .where(
           and(
             eq(schema.paymentRefunds.paymentId, input.paymentId),
-            eq(schema.paymentRefunds.status, "requested"),
+            ne(schema.paymentRefunds.status, "declined"),
           ),
         )
         .limit(1);
-      if (open) throw new MoneyRefused(REFUND_HOLDS_PAYMENT);
+      if (live) {
+        throw new MoneyRefused(
+          live.status === "refunded"
+            ? REFUND_PAID_HOLDS_PAYMENT
+            : REFUND_HOLDS_PAYMENT,
+        );
+      }
     }
     const [row] = await tx
       .update(schema.payments)

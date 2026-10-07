@@ -86,6 +86,7 @@ import {
   MoneyRefused,
   NOT_A_MONEY_KEEPER,
   REFUND_HOLDS_PAYMENT,
+  REFUND_PAID_HOLDS_PAYMENT,
 } from "@camp404/db/dues";
 import type { PaymentMethod, PaymentSource, ViewerRank } from "@camp404/types";
 import type { SearchEntryRow } from "@camp404/db/search";
@@ -4365,11 +4366,14 @@ export const testStore = {
       (p) => p.id === input.paymentId && p.status === input.from,
     );
     if (!row) return false;
-    if (
-      input.from === "reconciled" &&
-      refundStatusOf(input.paymentId) === "requested"
-    ) {
-      throw new MoneyRefused(REFUND_HOLDS_PAYMENT);
+    const refund =
+      input.from === "reconciled" ? refundStatusOf(input.paymentId) : null;
+    if (refund !== null) {
+      throw new MoneyRefused(
+        refund === "refunded"
+          ? REFUND_PAID_HOLDS_PAYMENT
+          : REFUND_HOLDS_PAYMENT,
+      );
     }
     row.status = input.to;
     row.updatedAt = new Date();

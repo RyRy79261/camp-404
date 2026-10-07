@@ -15,18 +15,23 @@
 -- Safe by construction:
 --   * A camp that has not named a year is left alone: setFoundingYear will
 --     adopt its rows.
---   * A table's sentinel rows move only when the founding year holds none of
---     that table's rows. If it holds some, a captain may have entered the same
---     things again after founding, and moving the old rows in would show them
---     twice; they stay where they are. It also means no key can collide.
---   * A row that points at its year's parent row moves with it: car seats ride
---     their driver's profile (ON UPDATE CASCADE); a meal plan's days and a
---     layout's versions move with a copy of their parent.
+--   * Tables whose rows point at each other move as one GROUP: a refund and
+--     its payment, a gear order and its dues charge, an answer and its send, a
+--     prep step and its menu item, a lounge slot and its offer, a seat and its
+--     car. A group's sentinel rows move only when the founding year holds no
+--     row in ANY of its tables. If it holds some, a captain may have entered
+--     the same things again after founding (moving the old ones in would show
+--     them twice), and moving only part of a group would split a row from the
+--     row it belongs to. Either way, the whole group stays where it is.
+--   * No key can collide: nothing of the group is in the founding year.
 --   * Re-running it changes nothing: a moved row is no longer on the sentinel.
 DO $$
 DECLARE
   founding integer;
+  grp text;
+  tables text[];
   t text;
+  taken boolean;
   token text;
 BEGIN
   SELECT min((c->>'year')::int) INTO founding
@@ -39,80 +44,88 @@ BEGIN
     RETURN;
   END IF;
 
-  -- driver_profiles first: car_members follow it through ON UPDATE CASCADE.
-  FOREACH t IN ARRAY ARRAY[
-    'driver_profiles',
+  -- One string per group, its tables comma-separated, in update order.
+  FOREACH grp IN ARRAY ARRAY[
+    -- The money: dues settings and accounts, charges (a settle-up's, a gear
+    -- order's), payments and their refunds, the gear catalogue and orders.
+    'dues_years,fee_tiers,dues_accounts,dues_settle_ups,dues_charges,dues_instalments,payments,payment_refunds,rental_items,rental_orders',
+    -- Questionnaire sends and the answers given to them.
+    'questionnaire_activations,questionnaire_responses',
+    -- Transport: driver_profiles first, its car seats follow by ON UPDATE
+    -- CASCADE; lift requests and trailers name the year's drivers.
+    'driver_profiles,car_members,lift_requests,transport_trailers',
+    -- Logistics phases, who helps on them, and the AfrikaBurn dates.
+    'logistics_phases,logistics_attendance,afrikaburn_deadlines',
+    -- Shift types (their slots and sign-ups hang off them) and members'
+    -- AfrikaBurn volunteer shifts.
+    'shift_types,volunteer_shifts',
+    -- Inventory needs (their pledges ride along), bookings and loans.
+    'inventory_needs,inventory_bookings,inventory_loans',
+    -- Power: grid nodes and the loads on them, the plan and the rest.
+    'power_plans,power_sharing_agreements,power_grid_nodes,power_loads,power_work_plan_tasks,fuel_cans,generator_readiness_items',
+    -- The lounge programme: settings, offers and the slots built from them.
+    'lounge_settings,lounge_offers,lounge_slots',
+    -- Teams: memberships and budgets.
+    'team_memberships,team_budgets',
     'adoptees',
-    'afrikaburn_deadlines',
     'camp_participations',
     'camp_tickets',
-    'dues_accounts',
-    'dues_charges',
-    'dues_instalments',
-    'dues_settle_ups',
-    'dues_years',
-    'fee_tiers',
-    'fuel_cans',
-    'generator_readiness_items',
-    'inventory_bookings',
-    'inventory_loans',
-    'inventory_needs',
     'join_site_content',
-    'kitchen_menu_items',
-    'kitchen_prep_steps',
-    'kitchen_shopping_prices',
-    'kitchen_shopping_ticks',
-    'kitchen_snacks',
-    'lift_requests',
-    'logistics_attendance',
-    'logistics_phases',
-    'lounge_offers',
-    'lounge_settings',
-    'lounge_slots',
     'meeting_notes',
-    'payment_refunds',
-    'payments',
-    'power_grid_nodes',
-    'power_loads',
-    'power_plans',
-    'power_sharing_agreements',
-    'power_work_plan_tasks',
-    'questionnaire_activations',
-    'questionnaire_responses',
     'recipe_lessons',
-    'reimbursements',
-    'rental_items',
-    'rental_orders',
-    'shift_types',
-    'team_budgets',
-    'team_memberships',
-    'transport_trailers',
-    'volunteer_shifts'
+    'reimbursements'
   ] LOOP
-    EXECUTE format(
-      'UPDATE %1$I SET cycle = $1 WHERE cycle = 1
-         AND NOT EXISTS (SELECT 1 FROM %1$I WHERE cycle = $1)',
-      t
-    ) USING founding;
+    tables := string_to_array(grp, ',');
+    taken := false;
+    FOREACH t IN ARRAY tables LOOP
+      EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I WHERE cycle = $1)', t)
+        INTO taken USING founding;
+      EXIT WHEN taken;
+    END LOOP;
+    CONTINUE WHEN taken;
+    FOREACH t IN ARRAY tables LOOP
+      EXECUTE format('UPDATE %I SET cycle = $1 WHERE cycle = 1', t)
+        USING founding;
+    END LOOP;
   END LOOP;
 
-  -- The meal plan: its days point at the plan's year with no ON UPDATE
-  -- CASCADE, so the plan is copied, the days follow, the sentinel plan goes.
+  -- The Kitchen, as one group: the meal plan and its days, the menu and the
+  -- prep steps on it, snacks, and the shopping list's prices and ticks. The
+  -- days point at the plan's year with no ON UPDATE CASCADE, so the plan is
+  -- copied, the days follow, and the sentinel plan goes.
   IF EXISTS (SELECT 1 FROM kitchen_meal_plans WHERE cycle = 1)
-     AND NOT EXISTS (SELECT 1 FROM kitchen_meal_plans WHERE cycle = founding)
-     AND NOT EXISTS (SELECT 1 FROM kitchen_meal_plan_days WHERE cycle = founding)
+     OR EXISTS (SELECT 1 FROM kitchen_menu_items WHERE cycle = 1)
+     OR EXISTS (SELECT 1 FROM kitchen_prep_steps WHERE cycle = 1)
+     OR EXISTS (SELECT 1 FROM kitchen_snacks WHERE cycle = 1)
+     OR EXISTS (SELECT 1 FROM kitchen_shopping_prices WHERE cycle = 1)
+     OR EXISTS (SELECT 1 FROM kitchen_shopping_ticks WHERE cycle = 1)
   THEN
-    INSERT INTO kitchen_meal_plans (cycle, version, updated_by_user_id, updated_at)
-    SELECT founding, version, updated_by_user_id, updated_at
-    FROM kitchen_meal_plans WHERE cycle = 1;
-    UPDATE kitchen_meal_plan_days SET cycle = founding WHERE cycle = 1;
-    DELETE FROM kitchen_meal_plans WHERE cycle = 1;
+    IF NOT EXISTS (SELECT 1 FROM kitchen_meal_plans WHERE cycle = founding)
+       AND NOT EXISTS (SELECT 1 FROM kitchen_meal_plan_days WHERE cycle = founding)
+       AND NOT EXISTS (SELECT 1 FROM kitchen_menu_items WHERE cycle = founding)
+       AND NOT EXISTS (SELECT 1 FROM kitchen_prep_steps WHERE cycle = founding)
+       AND NOT EXISTS (SELECT 1 FROM kitchen_snacks WHERE cycle = founding)
+       AND NOT EXISTS (SELECT 1 FROM kitchen_shopping_prices WHERE cycle = founding)
+       AND NOT EXISTS (SELECT 1 FROM kitchen_shopping_ticks WHERE cycle = founding)
+    THEN
+      INSERT INTO kitchen_meal_plans (cycle, version, updated_by_user_id, updated_at)
+      SELECT founding, version, updated_by_user_id, updated_at
+      FROM kitchen_meal_plans WHERE cycle = 1;
+      UPDATE kitchen_meal_plan_days SET cycle = founding WHERE cycle = 1;
+      DELETE FROM kitchen_meal_plans WHERE cycle = 1;
+      UPDATE kitchen_menu_items SET cycle = founding WHERE cycle = 1;
+      UPDATE kitchen_prep_steps SET cycle = founding WHERE cycle = 1;
+      UPDATE kitchen_snacks SET cycle = founding WHERE cycle = 1;
+      UPDATE kitchen_shopping_prices SET cycle = founding WHERE cycle = 1;
+      UPDATE kitchen_shopping_ticks SET cycle = founding WHERE cycle = 1;
+    END IF;
   END IF;
 
-  -- The camp layout, the same way. Its share link is unique, so the copy
-  -- takes it only once the sentinel layout is gone.
+  -- The camp layout and its versions, the same way. Its share link is unique,
+  -- so the copy takes it only once the sentinel layout is gone.
   IF EXISTS (SELECT 1 FROM camp_layouts WHERE cycle = 1)
      AND NOT EXISTS (SELECT 1 FROM camp_layouts WHERE cycle = founding)
+     AND NOT EXISTS (SELECT 1 FROM camp_layout_versions WHERE cycle = founding)
   THEN
     SELECT share_token INTO token FROM camp_layouts WHERE cycle = 1;
     INSERT INTO camp_layouts
