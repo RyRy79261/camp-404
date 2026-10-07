@@ -164,8 +164,8 @@ export function registerQuestionnaireTools(server: McpServer): void {
       runTool({
         toolName: "create_questionnaire_draft",
         extra,
+        // Never the title's words: nothing said to voice is kept.
         argsForAudit: {
-          title: args.title,
           pages: args.definition?.pages.length ?? 0,
         },
         handler: async ({ scope }) => {

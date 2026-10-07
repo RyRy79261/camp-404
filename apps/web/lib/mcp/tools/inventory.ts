@@ -62,7 +62,14 @@ export function registerInventoryTools(server: McpServer): void {
       runTool({
         toolName: "list_inventory_items",
         extra,
-        argsForAudit: args,
+        // The filters, and only whether there were search words: never the
+        // words themselves (nothing said to voice is kept).
+        argsForAudit: {
+          q: args.q ? "given" : null,
+          team: args.team ?? null,
+          location: args.location ?? null,
+          condition: args.condition ?? null,
+        },
         handler: async ({ scope }) => {
           const [items, pending, config] = await Promise.all([
             listInventoryItems(),

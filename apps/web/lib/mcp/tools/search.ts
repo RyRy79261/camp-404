@@ -40,7 +40,9 @@ export function registerSearchTools(server: McpServer): void {
       runTool({
         toolName: "search_camp",
         extra,
-        argsForAudit: args,
+        // That a search ran, never its words: nothing said to voice is kept
+        // (owner's rule), and a search can name a member or their health.
+        argsForAudit: { query: "given" },
         handler: async ({ scope }) => {
           const entries = await searchCamp(searchViewerOf(scope), args.query);
           return {
