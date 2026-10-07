@@ -23,6 +23,8 @@ import {
   RunnerHeader,
 } from "@/components/questionnaire/blocking-chrome";
 import { QuestionnaireFill } from "@/components/questionnaire/fill";
+import { VoiceOffLine } from "@/components/voice/voice-off-line";
+import { getVoiceConsent } from "@/lib/voice/consent";
 import { RunnerEdgeCard } from "./edge-states";
 import { RunnerFrame } from "./runner-frame";
 
@@ -118,6 +120,10 @@ export default async function QuestionnaireFillPage({
     { cycle: activation.cycle, carryOver: activation.carryOver },
   );
   const initialResponses: QuestionnaireResponses = stored?.responses ?? {};
+  // A captain held by this questionnaire keeps voice's off switch: Display,
+  // where it lives, is out of reach until the form is done.
+  const voiceOn =
+    activation.blocking && (await getVoiceConsent(campUser.id)) !== null;
 
   const fill = (
     <QuestionnaireFill
@@ -147,6 +153,7 @@ export default async function QuestionnaireFillPage({
               <CardContent className="pt-6">{fill}</CardContent>
             </Card>
             <BlockingNotice />
+            {voiceOn && <VoiceOffLine />}
           </>
         ) : (
           fill

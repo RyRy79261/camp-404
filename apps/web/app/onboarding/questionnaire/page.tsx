@@ -16,6 +16,8 @@ import {
   BlockingNotice,
   RunnerHeader,
 } from "@/components/questionnaire/blocking-chrome";
+import { VoiceOffLine } from "@/components/voice/voice-off-line";
+import { getVoiceConsent } from "@/lib/voice/consent";
 import { QuestionnaireGate } from "./gate";
 import { BurnerProfileRunner } from "./burner-profile-runner";
 import type { QuestionnaireResponses } from "@camp404/types";
@@ -76,6 +78,8 @@ export default async function QuestionnairePage({
   ) as QuestionnaireResponses;
 
   const { start } = await searchParams;
+  // A captain held here keeps voice's off switch (Display is out of reach).
+  const voiceOn = (await getVoiceConsent(campUser.id)) !== null;
   const questionCount = flattenQuestions(questionnaire).length;
   const estimatedMinutes = Math.max(2, Math.round(questionCount / 8));
 
@@ -102,6 +106,7 @@ export default async function QuestionnairePage({
         </CardContent>
       </Card>
       <BlockingNotice />
+      {voiceOn && <VoiceOffLine />}
     </main>
   );
 }

@@ -11,14 +11,8 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/member-gate", () => ({ resolveMemberState: vi.fn() }));
 vi.mock("@/lib/voice/consent", () => ({ setVoiceConsent: vi.fn() }));
 vi.mock("@/lib/manifest-revalidate", () => ({ revalidateManifest: vi.fn() }));
-vi.mock("@/lib/mcp/scope", () => ({ getMcpScope: vi.fn() }));
-vi.mock("@/lib/rate-limit", () => ({ rateLimiter: { limit: vi.fn() } }));
 vi.mock("@/lib/voice/run", () => ({ runSealedList: vi.fn() }));
-vi.mock("@/lib/voice/seal", () => ({
-  PROPOSAL_TTL_MS: 300_000,
-  sealKey: vi.fn(),
-}));
-vi.mock("@/lib/voice/tools", () => ({ callTool: vi.fn() }));
+vi.mock("@/lib/voice/run-deps", () => ({ voiceRunDeps: vi.fn() }));
 
 import { resolveMemberState } from "@/lib/member-gate";
 import { setVoiceConsent } from "@/lib/voice/consent";

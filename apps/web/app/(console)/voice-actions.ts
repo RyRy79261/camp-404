@@ -2,13 +2,10 @@
 
 import { getAuthenticatedUser, getSessionId } from "@/lib/auth";
 import { revalidateManifest } from "@/lib/manifest-revalidate";
-import { getMcpScope } from "@/lib/mcp/scope";
 import { resolveMemberState } from "@/lib/member-gate";
-import { rateLimiter } from "@/lib/rate-limit";
 import { setVoiceConsent } from "@/lib/voice/consent";
 import { runSealedList, type RunResult } from "@/lib/voice/run";
-import { PROPOSAL_TTL_MS, sealKey } from "@/lib/voice/seal";
-import { callTool } from "@/lib/voice/tools";
+import { voiceRunDeps } from "@/lib/voice/run-deps";
 
 // Voice's two server actions (#356). Async exports only: this is a
 // "use server" file.
@@ -43,20 +40,7 @@ export async function runVoiceList(
   if (!Array.isArray(ticked) || !ticked.every((n) => Number.isInteger(n))) {
     return { ok: false, message: "Nothing ran." };
   }
-  return runSealedList(String(token), ticked, {
-    key: sealKey(),
-    who,
-    stillCaptain: async () =>
-      (await getMcpScope(who.userId))?.isCaptain === true,
-    spend: async (id) => {
-      const verdict = await rateLimiter.limit(`voice-proposal:${id}`, {
-        limit: 1,
-        windowMs: PROPOSAL_TTL_MS * 2,
-      });
-      return verdict.ok;
-    },
-    call: callTool,
-  });
+  return runSealedList(String(token), ticked, voiceRunDeps(who));
 }
 
 /**
