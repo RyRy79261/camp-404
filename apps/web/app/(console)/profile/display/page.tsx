@@ -19,11 +19,11 @@ export const metadata = { title: "Display — Camp 404" };
 export default async function DisplayPage() {
   const { campUser } = await requireMemberPage();
   const preferences = await getMyDesktopPreferences();
-  // Voice (#356) is a captain's: nobody else sees its switch.
-  const voice =
-    campUser.rank === "captain"
-      ? { on: (await getVoiceConsent(campUser.id)) !== null }
-      : null;
+  // Voice (#356) is a captain's to turn on. Anyone who still has it on (a
+  // captain since demoted) sees the switch too, to turn it off.
+  const captain = campUser.rank === "captain";
+  const consented = (await getVoiceConsent(campUser.id)) !== null;
+  const voice = captain || consented ? { on: consented, captain } : null;
   return (
     <div className="flex flex-col">
       <PageHeading
@@ -34,7 +34,7 @@ export default async function DisplayPage() {
       <div className="flex flex-col gap-6">
         <ProfileSections active="display" />
         <DisplaySettings initial={preferences} />
-        {voice && <VoiceSetting on={voice.on} />}
+        {voice && <VoiceSetting on={voice.on} canTurnOn={voice.captain} />}
       </div>
     </div>
   );

@@ -8,15 +8,13 @@ import type { VoiceRow } from "@/lib/voice/resolve";
 import type { RowResult } from "@/lib/voice/run";
 import { VOICE_OFFLINE, type VoiceCommand } from "./use-voice-command";
 import { Waveform } from "./waveform";
+import { VOICE_NOTICE } from "@/lib/voice/notice";
 
 // The Voice panel (#356; mock-up camp404-night/design/voice.html): the
 // recording, then one ticked list of what the server read back, then one
 // result per action. The desktop draws it as a small window beside the mic
 // under the Today gadget; a phone as a sheet over the bottom bar. Captains
 // only: nobody else is given this component.
-
-const NOTICE =
-  "Your voice is sent to Groq to become words, and the words to Anthropic's Claude to work out what you mean. Neither is kept here. Nothing is saved until you press Do.";
 
 const TIME = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit",
@@ -341,7 +339,7 @@ export function VoiceBody({
       <div className="flex flex-col gap-3 p-3.5">
         <p className="text-sm font-semibold">Before your first command</p>
         <p className="text-[13px] leading-relaxed text-muted-foreground">
-          {NOTICE}
+          {VOICE_NOTICE}
         </p>
         {error}
         <div

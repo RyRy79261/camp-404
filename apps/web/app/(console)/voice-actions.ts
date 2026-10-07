@@ -59,11 +59,22 @@ export async function runVoiceList(
   });
 }
 
-/** The one-time notice: turn voice on, or off again (Settings). */
+/**
+ * The one-time notice: turn voice on, or off again (Settings). Turning it on
+ * is a captain's; turning it off is anyone's who has it on, so a captain who
+ * was demoted or is held can still withdraw their consent (POPIA: a consent
+ * that cannot be withdrawn is not one).
+ */
 export async function setVoiceOn(on: boolean): Promise<{ ok: boolean }> {
-  const who = await captainNow();
-  if (!who) return { ok: false };
-  await setVoiceConsent(who.userId, on === true);
+  if (on === true) {
+    const who = await captainNow();
+    if (!who) return { ok: false };
+    await setVoiceConsent(who.userId, true);
+  } else {
+    const state = await resolveMemberState();
+    if (state.kind !== "member") return { ok: false };
+    await setVoiceConsent(state.campUser.id, false);
+  }
   revalidateManifest();
   return { ok: true };
 }
