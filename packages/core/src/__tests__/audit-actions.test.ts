@@ -190,24 +190,6 @@ describe("auditDetail", () => {
     );
   });
 
-  it("says how long a member now stays, in the panel's words", () => {
-    expect(auditActionLabel("member.membership_tier_set")).toBe(
-      "Changed how long a member stays",
-    );
-    expect(
-      auditDetail("member.membership_tier_set", {
-        from: "full",
-        to: "build_week_only",
-      }),
-    ).toBe("Whole event to Build week only");
-    expect(
-      auditDetail("member.membership_tier_set", { from: null, to: "full" }),
-    ).toBe("Whole event");
-    expect(
-      auditDetail("member.membership_tier_set", { to: "toString" }),
-    ).toBeNull();
-  });
-
   it("says a rank change and a team change in words", () => {
     expect(
       auditDetail("member.rank_changed", { from: "member", to: "captain" }),

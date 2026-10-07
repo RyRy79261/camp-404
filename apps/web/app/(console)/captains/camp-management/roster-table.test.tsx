@@ -32,7 +32,6 @@ function pendingMember(): CampManagementMember {
     isLead: false,
     teams: [],
     duesPaid: false,
-    membershipTier: null,
     onboardingComplete: false,
     pendingRequiredActions: 3,
     pendingRequiredActionItems: [],

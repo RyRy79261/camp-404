@@ -41,7 +41,6 @@ const MEMBER = {
   isLead: false,
   teams: [],
   duesPaid: false,
-  membershipTier: null,
   onboardingComplete: true,
   pendingRequiredActions: 0,
   pendingRequiredActionItems: [],

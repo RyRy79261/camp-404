@@ -27,7 +27,6 @@ function member(
     isLead: false,
     teams: [],
     duesPaid: false,
-    membershipTier: "full",
     onboardingComplete: true,
     pendingRequiredActions: 0,
     pendingRequiredActionItems: [],
@@ -129,15 +128,6 @@ describe("toRosterRow derivations", () => {
     const row = toRosterRow(member({ country: null }));
     expect(row.inSouthAfrica).toBe(false);
     expect(row.country).toBeNull();
-  });
-
-  it("carries how long the member stays onto the captain row", () => {
-    expect(
-      toRosterRow(member({ membershipTier: "build_week_only" })).membershipTier,
-    ).toBe("build_week_only");
-    expect(toRosterRow(member({ membershipTier: null })).membershipTier).toBe(
-      null,
-    );
   });
 
   it("surfaces driver intent", () => {

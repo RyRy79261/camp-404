@@ -152,11 +152,6 @@ export const teamEnum = pgEnum("team", [
   "water",
 ]);
 
-export const membershipTierEnum = pgEnum("membership_tier", [
-  "full",
-  "build_week_only",
-]);
-
 // The recipe lifecycle (#243). Mirrors RECIPE_STATUSES in @camp404/types; the
 // allowed moves are RECIPE_TRANSITIONS in @camp404/core. Only `queued` recipes
 // are ever sent to Anthropic, and only a captain queues one.
@@ -607,7 +602,6 @@ export const users = pgTable(
     // foreign keys resolve, but is excluded from human-facing audiences.
     isSystem: boolean("is_system").notNull().default(false),
 
-    membershipTier: membershipTierEnum("membership_tier"),
     // Superseded by the payments ledger: the roster's paid state is now derived
     // from this year's settled payments. Kept because the year rollover still
     // clears it, and nothing reads it for display any more.

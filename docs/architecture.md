@@ -137,7 +137,7 @@ and every read filters on the camp's current burn year.
 ```mermaid
 flowchart LR
   authT["Sign-in (Better Auth)<br/>user, session, account,<br/>two_factor, passkey"]
-  users(["users<br/>rank: captain or member,<br/>membership_tier (staying for)"])
+  users(["users<br/>rank: captain or member"])
   year["This year<br/>camp_participations,<br/>camp_tickets (DDT, WAP),<br/>team_memberships"]
   gates["Gates and questionnaires<br/>required_actions, questionnaire_*"]
   notes["Notices<br/>broadcasts, notification_deliveries,<br/>push_tokens"]

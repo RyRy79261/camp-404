@@ -159,7 +159,6 @@ const USER_FIELDS = [
   "sanitised",
   "lostCatNumber",
   "approvalStatus",
-  "membershipTier",
   "duesPaid",
   "duesPaidAt",
   "skills",

@@ -17,8 +17,7 @@ import {
   type ReviewOption,
 } from "@camp404/core";
 import type { MemberQuestionnaire } from "@camp404/core";
-import { membershipTierLabel } from "@camp404/core";
-import type { ApprovalStatus, MembershipTier } from "@camp404/types";
+import type { ApprovalStatus } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
 import { Button } from "@camp404/ui/components/button";
 import {
@@ -47,7 +46,6 @@ import {
 } from "./actions";
 import { AssignCaptainDialog } from "./assign-captain-dialog";
 import { MemberNotes } from "./member-notes";
-import { MembershipTierCard } from "./membership-tier-card";
 import { RejectConfirmDialog } from "./reject-confirm-dialog";
 import { MemberQuestionnaires } from "./member-questionnaires";
 import { ProfileHead } from "./roster-presentation";
@@ -148,26 +146,17 @@ export function MemberProfile({
   const [assignOpen, setAssignOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [confirm, confirmDialog] = useConfirm();
-  // How long they stay: from the roster row, and kept in step with it when a
-  // refresh brings a newer value (a refused change reloads the roster).
-  const [tier, setTier] = useState<MembershipTier | null>(row.membershipTier);
-  // The row last rendered, so a change is adjusted for during render.
-  const [seenRow, setSeenRow] = useState({
-    id: row.id,
-    membershipTier: row.membershipTier,
-  });
-  if (seenRow.id !== row.id || seenRow.membershipTier !== row.membershipTier) {
-    setSeenRow({ id: row.id, membershipTier: row.membershipTier });
-    setTier(row.membershipTier);
-    if (seenRow.id !== row.id) {
-      // A new selection starts on a clean error slate, with its dialogs shut
-      // and its detail loading. A reload driven by a refused decision keeps
-      // the error that caused it on screen (see `decide`).
-      setActionError(null);
-      setRejectOpen(false);
-      setAssignOpen(false);
-      setDetail({ state: "loading" });
-    }
+  // The row last rendered, so a new selection is adjusted for during render.
+  const [seenRowId, setSeenRowId] = useState(row.id);
+  if (seenRowId !== row.id) {
+    setSeenRowId(row.id);
+    // A new selection starts on a clean error slate, with its dialogs shut
+    // and its detail loading. A reload driven by a refused decision keeps
+    // the error that caused it on screen (see `decide`).
+    setActionError(null);
+    setRejectOpen(false);
+    setAssignOpen(false);
+    setDetail({ state: "loading" });
   }
 
   // Fetch detail whenever a (new) row is selected, or `reloadToken` says the
@@ -369,7 +358,6 @@ export function MemberProfile({
         },
         // From the payments ledger: a received or waived payment this year.
         { label: "Dues this year", value: row.duesPaid ? "Paid" : "Not paid" },
-        { label: "Staying for", value: membershipTierLabel(tier) },
       ]
     : [];
 
@@ -550,16 +538,6 @@ export function MemberProfile({
                 </CardContent>
               </Card>
             )}
-
-            <MembershipTierCard
-              userId={row.id}
-              tier={tier}
-              onChange={(next) => {
-                setTier(next);
-                router.refresh();
-              }}
-              onStale={() => router.refresh()}
-            />
 
             {/* Team assignment — the write path behind every team-scoped
                 broadcast, questionnaire send and roster badge. */}

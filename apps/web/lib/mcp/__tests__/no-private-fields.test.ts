@@ -209,7 +209,6 @@ describe("no tool returns ID numbers or bank details", () => {
           { name: "Ada", phone: "+27 82 555 0199", relationship: "sister" },
         ],
       },
-      set_my_membership_tier: { tier: "full" },
       update_my_history: { skills: ["welding"] },
       list_users: {},
       get_user: { userId: member.id },

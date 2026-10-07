@@ -19,7 +19,6 @@ vi.mock("./actions", () => ({
   // Imported at module scope by AssignCaptainDialog.
   sendCaptainPromotionAction: vi.fn(),
   cancelCaptainPromotionAction: vi.fn(),
-  setMembershipTierAction: vi.fn(),
 }));
 
 import { MemberProfile } from "./member-profile";
@@ -58,7 +57,6 @@ function row(over: Partial<RosterRow> = {}): RosterRow {
     isDriver: false,
     driverProfileComplete: false,
     duesPaid: false,
-    membershipTier: null,
     thisYear: null,
     thisYearSays: null,
     ...over,
@@ -331,32 +329,16 @@ describe("MemberProfile — what the member still owes", () => {
   });
 });
 
-describe("MemberProfile — how long they stay", () => {
-  function stayingFor() {
-    const term = screen.getByText("Staying for", { selector: "dt" });
-    return term.nextElementSibling?.textContent;
-  }
-
-  it("shows the stored value in the overview and on the control", async () => {
-    vi.mocked(getMemberDetailAction).mockResolvedValue(detail("approved"));
-    renderProfile({
-      approvalStatus: "approved",
-      membershipTier: "build_week_only",
-    });
-    await screen.findByText("Staying for", { selector: "dt" });
-    expect(stayingFor()).toBe("Build week only");
-    expect(
-      screen
-        .getByRole("radio", { name: "Build week only" })
-        .getAttribute("aria-checked"),
-    ).toBe("true");
-  });
-
-  it("says Not set when the member never said", async () => {
+describe("MemberProfile — no stay length", () => {
+  // The owner removed "Staying for" (whole event / build week only): nobody
+  // in the camp stays for build week alone.
+  it("renders the overview without a Staying for row or control", async () => {
     vi.mocked(getMemberDetailAction).mockResolvedValue(detail("approved"));
     renderProfile({ approvalStatus: "approved" });
-    await screen.findByText("Staying for", { selector: "dt" });
-    expect(stayingFor()).toBe("Not set");
+    await screen.findByText("Outstanding", { selector: "dt" });
+    expect(screen.getByText("Dues this year", { selector: "dt" })).toBeTruthy();
+    expect(screen.queryByText("Staying for")).toBeNull();
+    expect(screen.queryByRole("radio", { name: /build week/i })).toBeNull();
   });
 });
 

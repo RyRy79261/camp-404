@@ -23,7 +23,6 @@ function row(
     profileImageUrl: null,
     rank: "member",
     isSystem: false,
-    membershipTier: "full",
     duesPaid: true,
     duesPaidAt: new Date("2026-08-01T00:00:00Z"),
     refCode: "C404-M001",

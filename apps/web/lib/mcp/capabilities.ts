@@ -215,12 +215,6 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     gate: GATES.member,
     does: "Replace your emergency contacts.",
   },
-  set_my_membership_tier: {
-    kind: "write",
-    area: "You",
-    gate: GATES.member,
-    does: "Say whether you stay the whole event or build week only.",
-  },
   update_my_history: {
     kind: "write",
     area: "You",

@@ -8,7 +8,7 @@ no `process.env`, no I/O, so every rule is tested on its own.
 - **Exports:** one entry point, `@camp404/core` (`src/index.ts`). Its header
   comment lists what each module adds. The modules include `access`,
   `privacy`, `audience-authz`, `money`, `dues`, `claims`, `rental`, `participation`, `tickets`,
-  `membership-tier`, `team-programs`, `transport`, `power`, `power-site`,
+  `team-programs`, `transport`, `power`, `power-site`,
   `power-grid`, `power-sharing`, `inventory`, `lounge`, `camp-layout`,
   `logistics` and `recipes`; there are no subpath imports.
 - **Depends on:** `@camp404/types` only.

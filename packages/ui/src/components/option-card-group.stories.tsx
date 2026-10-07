@@ -16,21 +16,21 @@ export const Default: Story = {
   args: { options: [{ value: "a", label: "A" }], onValueChange: () => {} },
   // A named component, so the Rules of Hooks see useState inside one.
   render: function Render() {
-    const [v, setV] = React.useState("full");
+    const [v, setV] = React.useState("going");
     return (
       <div className="w-96">
         <OptionCardGroup
-          aria-label="Membership tier"
+          aria-label="Coming this year?"
           options={[
             {
-              value: "full",
-              label: "Full membership",
-              description: "All of build week plus the event.",
+              value: "going",
+              label: "Yes",
+              description: "Count me in for this year's burn.",
             },
             {
-              value: "build",
-              label: "Build week only",
-              description: "Just the setup days.",
+              value: "maybe",
+              label: "Maybe",
+              description: "Still working it out.",
             },
           ]}
           value={v}

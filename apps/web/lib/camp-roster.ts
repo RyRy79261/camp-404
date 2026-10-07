@@ -164,11 +164,6 @@ export interface RosterRow extends PublicRosterRow {
   driverProfileComplete: boolean;
   /** Dues settled for this year in the payments ledger (received or waived). */
   duesPaid: boolean;
-  /**
-   * How long the member stays (whole event or build week only), null when not
-   * set. Captain-only (`users.membershipTier` in MEMBER_FIELD_READERS).
-   */
-  membershipTier: CampManagementMember["membershipTier"];
   /** This year's attendance status; always present on a captain's row. */
   thisYear: ParticipationStatus | null;
   /** The member's own answer this year; always present on a captain's row. */
@@ -236,7 +231,6 @@ export function toRosterRow(member: CampManagementMember): RosterRow {
     isDriver: member.intendsToDrive,
     driverProfileComplete: member.driverProfileComplete,
     duesPaid: member.duesPaid,
-    membershipTier: member.membershipTier,
   };
 }
 

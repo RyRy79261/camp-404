@@ -324,7 +324,7 @@ The merged master list: previously-known open work (12 open GitHub issues #125�
 | Audit the captain ID decrypt | donor | high | M | `writeAuditEvent`, `decryptField` |
 | `schema-invariants.test.ts` | donor | high | S | — |
 | Approval decision reason + applicant notification | **both** (WP9 #133) | high | M | `withTransaction`, payload-builder, TOCTOU |
-| Roster: surface email, dues, membership tier, arrival/travel; search by email | **planned** (WP5 #129) | high | M | `toRosterRow` already drops `duesPaid`/`membershipTier` that the query selects |
+| Roster: surface email, dues, membership tier, arrival/travel; search by email | **planned** (WP5 #129) | high | M | `toRosterRow` already drops `duesPaid`/`membershipTier` that the query selects [CORRECTION 2026-10-07] Membership tier ("Staying for") is removed, column and all: the owner ruled no one in the camp stays for build week only. |
 | Roster ops: reversal, offboarding, bulk approve, CSV, column sort, captain notes | **planned** (WP9 #133) | high | L | `decision-panel.tsx` is the reference for reversal — read it |
 | Captain-promotion accept/decline UI | **planned** (WP3 #127) | high | M | actions exist, guarded and tested, imported by nothing |
 | Verified-email gate on god bootstrap | donor | high | M | **blocked on confirming Neon Auth exposes the claim** |

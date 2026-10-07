@@ -128,7 +128,6 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "users.emergencyContacts": "team_lead",
   // users — captain-only
   "users.authUserId": "captain",
-  "users.membershipTier": "captain",
   "users.duesPaid": "captain",
   "users.duesPaidAt": "captain",
   "users.passportEncrypted": "captain",

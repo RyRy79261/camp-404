@@ -28,7 +28,6 @@ function member(
     isLead: false,
     teams: [],
     duesPaid: false,
-    membershipTier: "full",
     onboardingComplete: true,
     pendingRequiredActions: 0,
     pendingRequiredActionItems: [],

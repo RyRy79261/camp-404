@@ -26,8 +26,6 @@ const PRIVATE_KEYS = [
   "isDriver",
   "driverProfileComplete",
   "duesPaid",
-  // How long they stay: captain-only (MEMBER_FIELD_READERS).
-  "membershipTier",
   // This year's attendance status: team lead and up, so never on a member's
   // row (the fixture below carries one, so a leak would show).
   "participation",
@@ -67,7 +65,6 @@ function member(
     isLead: false,
     teams: ["kitchen"],
     duesPaid: false,
-    membershipTier: "full",
     onboardingComplete: false,
     pendingRequiredActions: 3,
     pendingRequiredActionItems: [

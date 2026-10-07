@@ -133,7 +133,6 @@ describe("camp-management: this year's status on a non-captain's roster", () => 
     isLead: false,
     teams: [],
     duesPaid: false,
-    membershipTier: null,
     onboardingComplete: true,
     pendingRequiredActions: 0,
     pendingRequiredActionItems: [],
