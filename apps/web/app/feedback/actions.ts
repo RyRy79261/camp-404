@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { z } from "zod";
-import { sanitizeReportText, screenReport } from "@camp404/core";
+import { errorLogText, sanitizeReportText, screenReport } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { findCampUserByAuthId } from "@/lib/users";
 import { clientAddressKey, getClientIp, rateLimiter } from "@/lib/rate-limit";
@@ -244,7 +244,10 @@ export async function submitFeedbackAction(
         console.error("submitFeedbackAction: screenshot not stamped");
       return stamped;
     } catch (err) {
-      console.error("submitFeedbackAction: screenshot stamp failed", err);
+      console.error(
+        "submitFeedbackAction: screenshot stamp failed",
+        errorLogText(err, process.env),
+      );
       return false;
     }
   }

@@ -44,7 +44,8 @@ describe("auditReadAfterResponse", () => {
 
     expect(logged).toHaveBeenCalledWith(
       "audit write failed: member.id_document.viewed",
-      expect.any(Error),
+      // The class only: a failed insert's message holds the row's values.
+      "Error",
     );
   });
 });

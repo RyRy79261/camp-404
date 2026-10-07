@@ -15,6 +15,7 @@ import {
   canEditTeamProgram,
   canManageMoney,
   canWorkInTeam,
+  errorLogText,
 } from "@camp404/core";
 import { Team } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
@@ -173,7 +174,10 @@ export default async function TeamPage({
   const teamPanel = TEAM_PANELS[team.data];
   const panel = teamPanel
     ? await teamPanel({ rank, leadTeams }).catch((error: unknown) => {
-        console.error(`[team-panel:${team.data}]`, error);
+        console.error(
+          `[team-panel:${team.data}]`,
+          errorLogText(error, process.env),
+        );
         return null;
       })
     : null;

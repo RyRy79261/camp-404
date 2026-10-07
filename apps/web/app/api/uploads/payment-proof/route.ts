@@ -1,3 +1,4 @@
+import { errorLogText } from "@camp404/core";
 import { NextResponse } from "next/server";
 import { del, put } from "@vercel/blob";
 import { MoneyRefused } from "@camp404/db/dues";
@@ -140,7 +141,7 @@ export async function POST(req: Request) {
       );
     }
     if (err instanceof MoneyRefused) return refuse(err.sentence, 403);
-    console.error("payment-proof record error", err);
+    console.error("payment-proof record error", errorLogText(err, process.env));
     return refuse("Something went wrong. Try again.", 500);
   }
 }

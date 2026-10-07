@@ -3,11 +3,13 @@ import {
   flattenQuestions,
   type Question,
   type QuestionnaireResponses,
+  type QuestionRole,
 } from "@camp404/types";
 import {
   currentCycle as currentOf,
   UNSET_CYCLE,
 } from "@camp404/db/camp-config";
+import type { AuditEvent } from "@camp404/db/audit";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import {
   listActivationResponses,
@@ -45,6 +47,8 @@ export interface ResultsView {
   activations: ResultsActivationRow[];
   /** The send whose gates the reach figures describe: the open one, else the newest. */
   activeActivation: ResultsActivationRow | null;
+  /** The captain looking: the actor on the allergy read rows. */
+  viewerId: string;
 }
 
 export type ResultsAccess =
@@ -67,7 +71,7 @@ export async function loadResults(
   key: string,
   cycleParam?: string,
 ): Promise<ResultsAccess> {
-  const { cleared } = await captainPageGate("captain");
+  const { cleared, campUser } = await captainPageGate("captain");
   if (!cleared) return { ok: false, reason: "locked" };
 
   const meta = await getDefinitionMetaRow(key);
@@ -125,6 +129,7 @@ export async function loadResults(
       activations,
       activeActivation:
         activations.find((a) => a.status === "open") ?? activations[0] ?? null,
+      viewerId: campUser.id,
     },
   };
 }
@@ -137,6 +142,53 @@ export interface Respondent {
   completedAt: Date;
   definitionVersion: string | null;
   responses: QuestionnaireResponses;
+}
+
+/**
+ * The roles whose answers are allergies (SAFETY_VISIBLE: `allergies` and
+ * `isAnaphylactic`). Reading them on a member's behalf is recorded, as on the
+ * daily site sheet, so "who saw my data?" has an answer.
+ */
+export const ALLERGY_ROLES: readonly QuestionRole[] = [
+  "dietary_allergies",
+  "dietary_anaphylactic",
+];
+
+function answered(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+/**
+ * One `safety.allergies.view` row per member whose allergy answer the reader
+ * is shown: a finished answer to a question carrying an allergy role. A "no"
+ * to anaphylaxis is an answer too. A question removed from the definition has
+ * no role to read, so its column is not counted.
+ */
+export function allergyReadEvents(
+  view: Pick<ResultsView, "key" | "title" | "cycle" | "questions" | "viewerId">,
+  respondents: readonly Pick<Respondent, "userId" | "responses">[],
+  via: "questionnaire_results" | "questionnaire_answers" | "questionnaire_csv",
+): AuditEvent[] {
+  const ids = view.questions
+    .filter((q) => "role" in q && q.role && ALLERGY_ROLES.includes(q.role))
+    .map((q) => q.id);
+  if (ids.length === 0) return [];
+  return respondents
+    .filter((r) => ids.some((id) => answered(r.responses[id])))
+    .map((r) => ({
+      actorId: view.viewerId,
+      action: "safety.allergies.view" as const,
+      target: r.userId,
+      metadata: {
+        via,
+        questionnaire: view.key,
+        title: view.title,
+        cycle: view.cycle,
+      },
+    }));
 }
 
 export function memberName(displayName: string | null): string {

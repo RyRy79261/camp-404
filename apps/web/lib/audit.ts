@@ -1,5 +1,6 @@
 import "server-only";
 
+import { errorLogText } from "@camp404/core";
 import { after } from "next/server";
 import { appendAuditEvent, type AuditEvent } from "@camp404/db/audit";
 
@@ -17,7 +18,10 @@ export function auditReadAfterResponse(event: AuditEvent): void {
     try {
       await appendAuditEvent(event);
     } catch (error) {
-      console.error(`audit write failed: ${event.action}`, error);
+      console.error(
+        `audit write failed: ${event.action}`,
+        errorLogText(error, process.env),
+      );
     }
   });
 }
@@ -34,7 +38,10 @@ export function auditReadsAfterResponse(events: readonly AuditEvent[]): void {
       try {
         await appendAuditEvent(event);
       } catch (error) {
-        console.error(`audit write failed: ${event.action}`, error);
+        console.error(
+          `audit write failed: ${event.action}`,
+          errorLogText(error, process.env),
+        );
       }
     }
   });

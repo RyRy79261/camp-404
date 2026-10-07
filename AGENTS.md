@@ -909,6 +909,11 @@ or lazily on a page load, both in `after()` (`apps/web/lib/background-work.ts`):
   on production only, delete avatar folders whose owner has no camp account). It is guarded by a row in `action_rate_limit`
   (`consumeRateLimit`, one statement on the database clock), so it runs at
   most once per five minutes across every server.
+- **Only production contacts people** (owner, 2026-10-07): push, email and
+  Google Calendar writes go out only where `VERCEL_ENV` is `production`
+  (`mayContactMembers` in `apps/web/lib/integration-config.ts`, the one
+  check). A preview's database is a copy of production's members, so on a
+  preview or a laptop the in-app notices land and the rest stays queued.
 - Every step is idempotent and claim-safe: broadcasts are claimed by
   `dispatched_at`, the push and email drains lock their rows `FOR UPDATE SKIP
 LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
@@ -926,7 +931,8 @@ LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
   of a batch at the same time so it fits the page's 300 s; a run stuck over 10
   minutes (one queued but never started too) is reset when a Kitchen page
   loads or the source editor's loading panel polls (`resetStaleRuns`). The
-  Anthropic call sets `maxRetries: 0`: the owner ruled out automatic retries.
+  owner ruled out automatic retries on every AI call (2026-10-07): the shared
+  Anthropic and Groq clients are built with `maxRetries: 0`.
 - Telegram outbound stays off (`DEFERRED.md`). `dispatchPendingAnnouncements`
   is kept in `@camp404/telegram`; when Telegram is turned on, call it from
   `deliverDue`, not from a scheduled route.
@@ -1062,7 +1068,13 @@ never measured.
 - **Reads of private data are recorded.** Opening a member's ID document,
   their safety data or captain notes writes an `audit_log` row after the
   response (`auditReadAfterResponse`: never blocks the read, logs if it
-  fails). A member export writes its row BEFORE the file and fails closed.
+  fails). An allergy answer on a questionnaire's results is a
+  `safety.allergies.view` read too (`allergyReadEvents`). A member export and
+  a questionnaire's CSV write their rows BEFORE the file and fail closed.
+- **No member value in a server log.** A failed query's message holds the
+  values it was saving (drizzle writes its params into it), and a log
+  outlives erasure. Log a caught error as `errorLogText(err, process.env)`
+  (`@camp404/core`: class, SQLSTATE, HTTP status), never the error itself.
 - **A record, not monitoring.** The audit rows answer "who saw my data?" and
   let an incident be rebuilt. Do not add volume thresholds, per-person
   profiling or alerts on top of them. Reading many members' safety data in

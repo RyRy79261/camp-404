@@ -1,5 +1,6 @@
 import "server-only";
 
+import { errorLogText } from "@camp404/core";
 import { z } from "zod";
 import { anthropic, MODELS } from "@/lib/anthropic";
 import type { FeedbackKind, StructuredReport } from "@/lib/github-feedback";
@@ -96,7 +97,10 @@ export async function structureWithAi(
     const parsed = StructuredSchema.safeParse(block.input);
     return parsed.success ? parsed.data : null;
   } catch (err) {
-    console.error("structureWithAi failed; filing plain report", err);
+    console.error(
+      "structureWithAi failed; filing plain report",
+      errorLogText(err, process.env),
+    );
     return null;
   }
 }

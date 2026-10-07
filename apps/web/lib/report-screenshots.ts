@@ -1,5 +1,6 @@
 import "server-only";
 
+import { errorLogText } from "@camp404/core";
 import { del, get, list, put } from "@vercel/blob";
 import {
   createReportScreenshot as dbCreate,
@@ -94,7 +95,10 @@ export async function storeReportScreenshot(input: {
     await del(pathname, { token }).catch((cleanupErr: unknown) =>
       console.error("report-screenshot cleanup error", cleanupErr),
     );
-    console.error("report-screenshot record error", err);
+    console.error(
+      "report-screenshot record error",
+      errorLogText(err, process.env),
+    );
     return { ok: false, error: "The upload failed. Try again.", status: 500 };
   }
 }

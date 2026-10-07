@@ -1,3 +1,4 @@
+import { errorLogText } from "@camp404/core";
 import { sql } from "drizzle-orm";
 import { createHttpDb } from "./index";
 
@@ -110,7 +111,10 @@ export async function consumeRateLimit(input: {
       ),
     };
   } catch (err) {
-    console.error("[rate-limit] the counter could not be stored", err);
+    console.error(
+      "[rate-limit] the counter could not be stored",
+      errorLogText(err, process.env),
+    );
     return null;
   }
 }

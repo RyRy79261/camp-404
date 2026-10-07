@@ -39,6 +39,24 @@ describe("auditDetail", () => {
     expect(auditDetail("logistics.phase_set", { phase: "party" })).toBeNull();
   });
 
+  it("says where a member's allergies were read", () => {
+    expect(auditDetail("safety.allergies.view", { via: "daily_sheet" })).toBe(
+      "On the daily site sheet",
+    );
+    expect(
+      auditDetail("safety.allergies.view", {
+        via: "questionnaire_results",
+        title: "Dietary",
+      }),
+    ).toBe("In the answers to Dietary");
+    expect(
+      auditDetail("safety.allergies.view", {
+        via: "questionnaire_csv",
+        title: "Dietary",
+      }),
+    ).toBe("In the CSV of Dietary");
+  });
+
   it("names the shift, and the day a member or a slot changed on", () => {
     expect(auditActionLabel("shifts.member_placed")).toBe(
       "Put a member on a shift",

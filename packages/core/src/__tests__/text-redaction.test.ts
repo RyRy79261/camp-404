@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   SECRET_ENV_KEYS,
+  errorLogText,
   describeRedactions,
   redactPii,
   redactSecrets,
@@ -234,5 +235,54 @@ describe("redactSecrets", () => {
 
   it("returns empty for empty input", () => {
     expect(redactSecrets("", env)).toBe("");
+  });
+});
+
+describe("errorLogText", () => {
+  // drizzle-orm's DrizzleQueryError, as it builds itself: the query's values
+  // go into the message, and the driver's error (with its SQLSTATE) is the
+  // cause.
+  class DrizzleQueryError extends Error {
+    constructor(
+      public query: string,
+      public params: unknown[],
+      cause?: unknown,
+    ) {
+      super(`Failed query: ${query}\nparams: ${params}`);
+      this.cause = cause;
+    }
+  }
+  const pgError = Object.assign(
+    new Error('value too long for type character varying(20): "Mom"'),
+    { code: "22001", detail: "Failing row contains (+27 82 555 0100)" },
+  );
+
+  it("keeps the class and the SQLSTATE, and none of the values", () => {
+    const err = new DrizzleQueryError(
+      'update "users" set "emergency_contacts" = $1',
+      ['[{"name":"Mom","phone":"+27 82 555 0100"}]', "peanuts"],
+      pgError,
+    );
+    const line = errorLogText(err, {});
+    expect(line).toBe("DrizzleQueryError (22001)");
+    expect(line).not.toContain("0100");
+    expect(line).not.toContain("peanuts");
+    expect(line).not.toContain("Mom");
+  });
+
+  it("keeps an SDK error's HTTP status", () => {
+    class APIError extends Error {
+      status = 529;
+      constructor() {
+        super('{"error":"overloaded","request":"my report text"}');
+        this.name = "APIError";
+      }
+    }
+    expect(errorLogText(new APIError(), {})).toBe("APIError (status 529)");
+  });
+
+  it("says a non-error was thrown, without printing it", () => {
+    expect(errorLogText("peanuts", {})).toBe("Thrown non-error");
+    expect(errorLogText(new Error("peanuts"), {})).toBe("Error");
   });
 });

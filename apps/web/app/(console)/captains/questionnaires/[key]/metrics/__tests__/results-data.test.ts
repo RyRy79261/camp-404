@@ -49,6 +49,8 @@ import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { deriveViewerRank, hasClearance } from "@camp404/core";
 import type { StoredRank } from "@camp404/types";
 import {
+  ALLERGY_ROLES,
+  allergyReadEvents,
   cycleLabel,
   emptyStateFor,
   loadResults,
@@ -280,6 +282,7 @@ function viewWith(over: Partial<ResultsView>): ResultsView {
     rows: [],
     activations: [],
     activeActivation: null,
+    viewerId: "viewer",
     ...over,
   };
 }
@@ -526,5 +529,55 @@ describe("emptyStateFor", () => {
         0,
       )?.title,
     ).toBe("Closed before anyone answered");
+  });
+});
+
+describe("allergyReadEvents", () => {
+  const [allergies, anaphylactic] = ALLERGY_ROLES;
+  const questions = [
+    { id: "a", kind: "long_text", prompt: "Allergies", role: allergies },
+    { id: "b", kind: "boolean", prompt: "Anaphylactic?", role: anaphylactic },
+    { id: "c", kind: "short_text", prompt: "Anything else?" },
+  ] as never[];
+  const view = viewWith({ questions, viewerId: "cap1" });
+  const respondent = (userId: string, responses: Record<string, unknown>) => ({
+    userId,
+    responses: responses as never,
+  });
+
+  it("records a read for each member with an allergy answer, and nobody else", () => {
+    const events = allergyReadEvents(
+      view,
+      [
+        respondent("u1", { a: "Peanuts" }),
+        // "No" to anaphylaxis is still their safety answer.
+        respondent("u2", { b: false }),
+        respondent("u3", { a: "  ", c: "Peanuts in my bag" }),
+        respondent("u4", {}),
+      ],
+      "questionnaire_results",
+    );
+    expect(events.map((e) => e.target)).toEqual(["u1", "u2"]);
+    expect(events[0]).toEqual({
+      actorId: "cap1",
+      action: "safety.allergies.view",
+      target: "u1",
+      metadata: {
+        via: "questionnaire_results",
+        questionnaire: KEY,
+        title: "Camp feedback",
+        cycle: 2027,
+      },
+    });
+  });
+
+  it("records nothing for a questionnaire without an allergy question", () => {
+    expect(
+      allergyReadEvents(
+        viewWith({ questions: [questions[2]!], viewerId: "cap1" }),
+        [respondent("u1", { c: "Peanuts" })],
+        "questionnaire_csv",
+      ),
+    ).toEqual([]);
   });
 });

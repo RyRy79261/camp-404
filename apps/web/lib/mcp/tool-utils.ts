@@ -1,4 +1,5 @@
 import type { AuthInfo, CallToolResult } from "@modelcontextprotocol/server";
+import { errorLogText } from "@camp404/core";
 import { appendMcpAuditLog as dbAppendMcpAuditLog } from "@camp404/db/mcp";
 import { getCampUserIdFromAuth } from "./auth";
 import { refusalFor, TOOL_CAPABILITIES } from "./capabilities";
@@ -130,26 +131,16 @@ export async function runTool<T>(opts: {
   }
 }
 
-/** A Postgres SQLSTATE: five digits or capital letters. */
-function sqlState(err: unknown): string | null {
-  const code = (err as { code?: unknown } | null)?.code;
-  return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : null;
-}
-
 /**
  * What the connector's log keeps of a failed call. A ToolError's message is
  * our own sentence, so it is kept. Anything else is reduced to its class and
- * Postgres code: a failed query's message carries the query's values (the
- * phone number or answers being saved), and the log is no place for them.
+ * Postgres code (errorLogText, the server log's rule too): a failed query's
+ * message carries the query's values (the phone number or answers being
+ * saved), and the log is no place for them.
  */
 export function auditErrorText(err: unknown): string {
   if (err instanceof ToolError) return err.message;
-  if (!(err instanceof Error)) return "Thrown non-error";
-  // DrizzleQueryError keeps the name "Error"; its class says more.
-  const kind =
-    err.name !== "Error" ? err.name : err.constructor?.name || err.name;
-  const code = sqlState(err) ?? sqlState(err.cause);
-  return code ? `${kind} (${code})` : kind;
+  return errorLogText(err, process.env);
 }
 
 /**

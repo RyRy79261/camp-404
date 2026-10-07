@@ -26,7 +26,8 @@
 //     boundary shares (push, email, Telegram, clipped rows) (./markdown-text)
 //   - text redaction: redactPii, sanitizeReportText (both return a
 //     RedactionResult: the text and the RedactionKind[] found),
-//     describeRedactions, redactSecrets + SECRET_ENV_KEYS (./text-redaction)
+//     describeRedactions, redactSecrets + SECRET_ENV_KEYS, and errorLogText
+//     (an error as a log may keep it: class, SQLSTATE, status) (./text-redaction)
 //   - GitHub labels: GITHUB_LABELS, the issue label taxonomy, and
 //     reportLabels for the in-app reporter (./github-labels)
 //   - shake detector: createShakeDetector + ShakeSample/ShakeDetectorConfig

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { errorLogText } from "@camp404/core";
 import { cache } from "react";
 import {
   getDesktopLayout as dbGetDesktopLayout,
@@ -60,7 +61,10 @@ const readSavedLayout = cache(
       if (usesTestStore()) return testStore.getDesktopLayout(userId);
       return await dbGetDesktopLayout(userId);
     } catch (err) {
-      console.error("[desktop-layout] read failed; drawing the default", err);
+      console.error(
+        "[desktop-layout] read failed; drawing the default",
+        errorLogText(err, process.env),
+      );
       return null;
     }
   },

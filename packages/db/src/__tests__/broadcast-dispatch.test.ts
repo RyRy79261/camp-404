@@ -68,7 +68,9 @@ describe("dispatchDueBroadcasts", () => {
 
       expect(result).toMatchObject({ dispatched: 1, deliveries: 1 });
       expect(result.failures).toEqual([
-        { broadcastId: broken, error: "delivery refused for boom" },
+        // The class and SQLSTATE only: a failed query's message carries the
+        // values it was writing, and this text goes to the server log.
+        { broadcastId: broken, error: "DrizzleQueryError (P0001)" },
       ]);
 
       const rows = await db

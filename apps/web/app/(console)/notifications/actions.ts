@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { revalidateManifest } from "@/lib/manifest-revalidate";
 import { z } from "zod";
-import { canDecidePromotion, type PromotionParticipants } from "@camp404/core";
+import {
+  canDecidePromotion,
+  errorLogText,
+  type PromotionParticipants,
+} from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import {
@@ -197,7 +201,10 @@ export async function loadOlderNotificationsAction(
         // gets their notifications, and the badge stays up until the next
         // visit. Letting this reach `runAction` would blank the list instead,
         // and retrying could not help while the write path is down.
-        console.error("notifications markRead failed", err);
+        console.error(
+          "notifications markRead failed",
+          errorLogText(err, process.env),
+        );
       }
     }
     return { ok: true, data: page };

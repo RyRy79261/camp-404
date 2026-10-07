@@ -15,6 +15,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import {
   announcementNotification,
+  errorLogText,
   notificationLink,
   QUESTIONNAIRE_REF_TYPE,
   scheduledBroadcastNotification,
@@ -1017,9 +1018,9 @@ export interface DispatchFailure {
  * one whose message is the whole query and its parameters (announcement text,
  * member ids), and keeps the Postgres error as `cause`.
  */
+/** The class and Postgres code only: a query's message holds its values. */
 function failureMessage(err: unknown): string {
-  if (!(err instanceof Error)) return String(err);
-  return err.cause instanceof Error ? err.cause.message : err.message;
+  return errorLogText(err, process.env);
 }
 
 export interface DispatchResult {

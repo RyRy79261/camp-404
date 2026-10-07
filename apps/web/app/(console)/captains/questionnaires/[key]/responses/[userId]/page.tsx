@@ -7,7 +7,10 @@ import { Badge } from "@camp404/ui/components/badge";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import { PageHeading } from "@camp404/ui/components/page-heading";
+import { auditReadsAfterResponse } from "@/lib/audit";
+import { usesTestStore } from "@/lib/test-mode";
 import {
+  allergyReadEvents,
   cycleLabel,
   loadResults,
   respondentsOf,
@@ -99,6 +102,12 @@ export default async function RespondentPage({
   // orphan-column pass, narrowed to one person.
   const columns = answerColumns(view.questions, [respondent]);
   if (columns.length === 0) notFound();
+  // Their allergy answer, if they gave one, is a recorded read.
+  if (!usesTestStore()) {
+    auditReadsAfterResponse(
+      allergyReadEvents(view, [respondent], "questionnaire_answers"),
+    );
+  }
 
   return chrome(
     <>

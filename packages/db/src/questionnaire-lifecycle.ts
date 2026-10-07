@@ -1,17 +1,18 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import {
-  QUESTIONNAIRE_REF_TYPE,
-  REQUIRED_ACTION_REF_TYPE,
   canSendToAudience,
   classifyChange,
+  type DefinitionIssue,
   definitionLimitErrors,
+  errorLogText,
+  type NotificationPayload,
   optInQuestionnaireNotification,
+  QUESTIONNAIRE_REF_TYPE,
   questionnaireReleaseNotification,
   questionnaireReminderNotification,
+  REQUIRED_ACTION_REF_TYPE,
   requiredActionReminderNotification,
   validateQuestionnaireDefinition,
-  type DefinitionIssue,
-  type NotificationPayload,
 } from "@camp404/core";
 import { deliveryValues } from "./deliveries";
 import { safeParseStoredDefinition } from "@camp404/types";
@@ -555,7 +556,10 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
           senderId: input.activatedByUserId,
         });
     await notice?.catch((err: unknown) => {
-      console.error("sendActivation: release notice failed", err);
+      console.error(
+        "sendActivation: release notice failed",
+        errorLogText(err, process.env),
+      );
     });
     return { ok: true, activationId, created: opened.created };
   } catch (err) {

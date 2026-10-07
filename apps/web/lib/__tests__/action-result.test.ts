@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DrizzleQueryError } from "drizzle-orm";
+
 import { runAction } from "@/lib/action-result";
 
 describe("runAction", () => {
@@ -56,12 +58,30 @@ describe("runAction", () => {
     expect(message).toBe("Something went wrong. Please try again.");
   });
 
-  it("logs the original error for the server operator", async () => {
-    const err = new Error("kaboom");
+  it("logs the error's class for the server operator", async () => {
     await runAction("boom", async () => {
+      throw new TypeError("kaboom");
+    });
+    expect(console.error).toHaveBeenCalledWith("[action:boom]", "TypeError");
+  });
+
+  it("logs a failed query's class and SQLSTATE, never the values it was saving", async () => {
+    // drizzle's own error: the message is the query and its params, here a
+    // member's emergency contact and allergy.
+    const pg = Object.assign(new Error("value too long"), { code: "22001" });
+    const err = new DrizzleQueryError(
+      'update "users" set "emergency_contacts" = $1, "allergies" = $2',
+      ['[{"name":"Mom","phone":"+27 82 555 0100"}]', "peanuts"],
+      pg,
+    );
+    await runAction("saveProfile", async () => {
       throw err;
     });
-    expect(console.error).toHaveBeenCalledWith("[action:boom]", err);
+    const logged = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logged).toContain("DrizzleQueryError (22001)");
+    expect(logged).not.toContain("0100");
+    expect(logged).not.toContain("peanuts");
+    expect(logged).not.toContain("emergency_contacts");
   });
 
   it("re-throws Next's redirect control flow instead of swallowing it", async () => {
