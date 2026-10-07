@@ -114,9 +114,11 @@ describe("needsSeatRows", () => {
       kind: "car",
       driverUserId: "sipho",
       label: "Sipho's Land Rover",
+      requestedAt: "2027-01-01T00:00:00.000Z",
     });
     expect(rows.find((r) => r.userId === "pieter")?.asked).toEqual({
       kind: "any",
+      requestedAt: "2027-01-01T00:00:00.000Z",
     });
     expect(rows.find((r) => r.userId === "ayesha")?.asked).toEqual({
       kind: "none",
@@ -282,7 +284,13 @@ describe("liftPanel", () => {
       kind: "driver",
       arriving: null,
       riders: [{ userId: "zanele", name: "Zanele Mokoena" }],
-      asking: [{ userId: "jess", name: "Jess Naidoo" }],
+      asking: [
+        {
+          userId: "jess",
+          name: "Jess Naidoo",
+          requestedAt: "2027-01-01T00:00:00.000Z",
+        },
+      ],
     });
   });
 

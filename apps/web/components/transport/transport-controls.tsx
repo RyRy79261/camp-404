@@ -312,10 +312,13 @@ export function AskForLift({
 export function AnswerRequest({
   memberUserId,
   name,
+  requestedAt,
   phone,
 }: {
   memberUserId: string;
   name: string;
+  /** When the request was made: the answer is refused if they asked again. */
+  requestedAt: string;
   phone?: boolean;
 }) {
   const [accepting, runAccept] = useRowAction();
@@ -331,7 +334,12 @@ export function AnswerRequest({
         aria-label={`Decline ${name}`}
         onClick={() =>
           runDecline(
-            () => answerLiftRequestAction({ memberUserId, accept: false }),
+            () =>
+              answerLiftRequestAction({
+                memberUserId,
+                accept: false,
+                requestedAt,
+              }),
             "Request declined",
           )
         }
@@ -346,7 +354,12 @@ export function AnswerRequest({
         aria-label={`Accept ${name}`}
         onClick={() =>
           runAccept(
-            () => answerLiftRequestAction({ memberUserId, accept: true }),
+            () =>
+              answerLiftRequestAction({
+                memberUserId,
+                accept: true,
+                requestedAt,
+              }),
             `${name} is in the car`,
           )
         }

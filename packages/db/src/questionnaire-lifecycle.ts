@@ -852,8 +852,8 @@ export type ReminderResult =
  * Delivery reuses the existing spine — one `broadcasts` row (`kind='reminder'`,
  * `scope='individual'`) fanned out into `notification_deliveries`, drained to
  * `push_tokens` by the existing worker. `publishedAt`/`dispatchedAt` are both
- * stamped inline, exactly as {@link publishAnnouncement} does, so the deferred
- * dispatch cron cannot fan the same broadcast out a second time. §7.4 says to
+ * stamped inline, exactly as {@link publishAnnouncement} does: the deliveries
+ * are written in the same transaction. §7.4 says to
  * skip members with no push token: `planPushDrain` already resolves those to
  * `pushStatus='skipped'`, and writing the delivery anyway is what puts the
  * reminder in their in-app inbox — dropping them here would leave a member with
@@ -907,6 +907,24 @@ export async function sendReminder(input: {
   });
 
   return await withTransaction(async (tx): Promise<ReminderResult> => {
+    // Lock the send first. Two reminders for it at once (a captain's press and
+    // a page load's deadline nudge, or a double press) would otherwise both
+    // read "nobody reminded yet" below and both send. The second waits here
+    // until the first commits, and its read of recent deliveries then sees
+    // the first one's. Read the status again under the lock: a close that
+    // landed since the read above has expired every pending gate.
+    const [locked] = await tx
+      .select({ status: schema.questionnaireActivations.status })
+      .from(schema.questionnaireActivations)
+      .where(eq(schema.questionnaireActivations.id, act.id))
+      .for("update");
+    if (locked?.status !== "open") {
+      return {
+        ok: false,
+        error: "This send is closed, so nobody is waiting on it any more.",
+      };
+    }
+
     const pending = await tx
       .select({ userId: schema.requiredActions.userId })
       .from(schema.requiredActions)

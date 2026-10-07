@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const afterSpy = vi.hoisted(() => vi.fn());
 vi.mock("next/server", () => ({ after: afterSpy }));
-vi.mock("@camp404/db/broadcasts", () => ({ dispatchDueBroadcasts: vi.fn() }));
 vi.mock("@camp404/db/email", () => ({ drainQueuedEmail: vi.fn() }));
 vi.mock("@camp404/db/push", () => ({ drainQueuedPush: vi.fn() }));
 vi.mock("@camp404/db/mcp-oauth", () => ({ sweepUnusedClients: vi.fn() }));
@@ -44,7 +43,6 @@ import {
   runDueWork,
   runDueWorkAfterResponse,
 } from "@/lib/background-work";
-import { dispatchDueBroadcasts } from "@camp404/db/broadcasts";
 import { drainQueuedEmail } from "@camp404/db/email";
 import { drainQueuedPush } from "@camp404/db/push";
 import { sweepUnusedClients } from "@camp404/db/mcp-oauth";
@@ -72,11 +70,6 @@ const DENY = { ok: false, retryAfterSeconds: 60 };
 beforeEach(() => {
   vi.clearAllMocks();
   resetLocalCheckForTests();
-  vi.mocked(dispatchDueBroadcasts).mockResolvedValue({
-    dispatched: 0,
-    deliveries: 0,
-    failures: [],
-  });
   vi.mocked(consumeRateLimit).mockResolvedValue(ALLOW);
   vi.mocked(firebaseAdminCredentials).mockReturnValue({} as never);
   vi.mocked(isEmailConfigured).mockReturnValue(true);
@@ -98,9 +91,8 @@ describe("deliverDue", () => {
     process.env.VERCEL_ENV = "production";
   });
 
-  it("fans out, then sends push and email", async () => {
+  it("sends push and email", async () => {
     await deliverDue();
-    expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
     expect(drainQueuedPush).toHaveBeenCalledOnce();
     expect(drainQueuedEmail).toHaveBeenCalledOnce();
   });
@@ -109,7 +101,6 @@ describe("deliverDue", () => {
     vi.mocked(firebaseAdminCredentials).mockReturnValue(null);
     vi.mocked(isEmailConfigured).mockReturnValue(false);
     await deliverDue();
-    expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
     expect(drainQueuedPush).not.toHaveBeenCalled();
     expect(drainQueuedEmail).not.toHaveBeenCalled();
   });
@@ -120,8 +111,7 @@ describe("deliverDue", () => {
       if (stage) process.env.VERCEL_ENV = stage;
       else delete process.env.VERCEL_ENV;
       await deliverDue();
-      // The in-app notices still land; the rest stays queued.
-      expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
+      // The in-app notices were written by the action; the rest stays queued.
       expect(drainQueuedPush).not.toHaveBeenCalled();
       expect(drainQueuedEmail).not.toHaveBeenCalled();
     }
@@ -140,15 +130,19 @@ describe("deliverDue", () => {
     expect(logged).not.toContain("peanuts");
   });
 
-  it("still sends push and email when the fan-out throws", async () => {
-    vi.mocked(dispatchDueBroadcasts).mockRejectedValue(new Error("db down"));
+  it("still sends email when the push drain throws", async () => {
+    vi.mocked(drainQueuedPush).mockRejectedValue(new Error("db down"));
     await deliverDue();
-    expect(drainQueuedPush).toHaveBeenCalledOnce();
     expect(drainQueuedEmail).toHaveBeenCalledOnce();
   });
 });
 
 describe("runDueWork", () => {
+  // Production, so the push drain runs and shows the delivery step happened.
+  beforeEach(() => {
+    process.env.VERCEL_ENV = "production";
+  });
+
   it("claims the guard, reminds, delivers and runs the upkeep", async () => {
     expect(await runDueWork(NOON)).toBe("ran");
     expect(consumeRateLimit).toHaveBeenCalledWith({
@@ -164,7 +158,7 @@ describe("runDueWork", () => {
     expect(remindDueSoon).toHaveBeenCalledWith({ now: NOON });
     expect(remindRequiredActionsDueSoon).toHaveBeenCalledWith({ now: NOON });
     expect(remindTaskDeadlines).toHaveBeenCalledWith({ now: NOON });
-    expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
+    expect(drainQueuedPush).toHaveBeenCalledOnce();
     expect(backfillIdEncryption).toHaveBeenCalledOnce();
   });
 
@@ -172,21 +166,21 @@ describe("runDueWork", () => {
     vi.mocked(consumeRateLimit).mockResolvedValue(DENY);
     expect(await runDueWork(NOON)).toBe("not_due");
     expect(remindDueSoon).not.toHaveBeenCalled();
-    expect(dispatchDueBroadcasts).not.toHaveBeenCalled();
+    expect(drainQueuedPush).not.toHaveBeenCalled();
   });
 
   it("does nothing when the guard cannot be stored", async () => {
     vi.mocked(consumeRateLimit).mockResolvedValue(null);
     expect(await runDueWork(NOON)).toBe("not_due");
-    expect(dispatchDueBroadcasts).not.toHaveBeenCalled();
+    expect(drainQueuedPush).not.toHaveBeenCalled();
   });
 
   it("asks the database at most once a minute from one server", async () => {
     await runDueWork(NOON);
     await runDueWork(new Date(NOON.getTime() + 30_000));
-    expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
+    expect(drainQueuedPush).toHaveBeenCalledOnce();
     await runDueWork(new Date(NOON.getTime() + 61_000));
-    expect(dispatchDueBroadcasts).toHaveBeenCalledTimes(2);
+    expect(drainQueuedPush).toHaveBeenCalledTimes(2);
   });
 
   it("sends no reminders at night, but still delivers", async () => {
@@ -194,7 +188,7 @@ describe("runDueWork", () => {
     expect(remindDueSoon).not.toHaveBeenCalled();
     expect(remindRequiredActionsDueSoon).not.toHaveBeenCalled();
     expect(remindTaskDeadlines).not.toHaveBeenCalled();
-    expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
+    expect(drainQueuedPush).toHaveBeenCalledOnce();
   });
 
   it("skips the upkeep when it already ran today", async () => {
@@ -202,7 +196,7 @@ describe("runDueWork", () => {
       key === MAINTENANCE_KEY ? DENY : ALLOW,
     );
     await runDueWork(NOON);
-    expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
+    expect(drainQueuedPush).toHaveBeenCalledOnce();
     expect(backfillIdEncryption).not.toHaveBeenCalled();
     expect(sweepUnusedClients).not.toHaveBeenCalled();
   });
@@ -213,6 +207,7 @@ describe("runDueWork", () => {
   });
 
   it("sweeps orphan photos on production only", async () => {
+    process.env.VERCEL_ENV = "preview";
     await runDueWork(NOON);
     expect(sweepOrphanAvatarBlobs).not.toHaveBeenCalled();
 
@@ -243,7 +238,7 @@ describe("runDueWork", () => {
     await runDueWork(NOON);
     expect(remindRequiredActionsDueSoon).toHaveBeenCalledOnce();
     expect(remindTaskDeadlines).toHaveBeenCalledOnce();
-    expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
+    expect(drainQueuedPush).toHaveBeenCalledOnce();
     expect(console.error).toHaveBeenCalled();
   });
 });

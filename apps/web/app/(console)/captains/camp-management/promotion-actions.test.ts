@@ -379,6 +379,27 @@ describe("cancelCaptainPromotionAction", () => {
     expect(decideCaptainPromotion).not.toHaveBeenCalled();
   });
 
+  it("says so when the member answered between the read and the cancel", async () => {
+    signInAsCaptain();
+    vi.mocked(getPromotionRequestById).mockResolvedValue({
+      id: "req-1",
+      status: "sent",
+      targetUserId: "member-1",
+      requestedByUserId: CAPTAIN,
+    } as never);
+    // The compare-and-set on `sent` lost: the member's accept landed first.
+    vi.mocked(decideCaptainPromotion).mockResolvedValueOnce(null);
+
+    const res = await cancelCaptainPromotionAction("req-1");
+
+    expect(res).toEqual({
+      ok: false,
+      error:
+        "This request is no longer open: the member may have just answered it. The list is up to date now.",
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/captains/camp-management");
+  });
+
   it("refuses cancelling a request that is no longer open", async () => {
     signInAsCaptain();
     vi.mocked(getPromotionRequestById).mockResolvedValue({

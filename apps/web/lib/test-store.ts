@@ -82,7 +82,11 @@ import type {
   CampMemberDetailOptions,
 } from "@camp404/db/roster";
 import type { PaymentRow, RecordPaymentInput } from "@camp404/db/payments";
-import { MoneyRefused, NOT_A_MONEY_KEEPER } from "@camp404/db/dues";
+import {
+  MoneyRefused,
+  NOT_A_MONEY_KEEPER,
+  REFUND_HOLDS_PAYMENT,
+} from "@camp404/db/dues";
 import type { PaymentMethod, PaymentSource, ViewerRank } from "@camp404/types";
 import type { SearchEntryRow } from "@camp404/db/search";
 import {
@@ -124,6 +128,7 @@ import {
   NOT_IN_CAR,
   NOT_YOUR_CAR,
   OWN_CAR,
+  REQUEST_CHANGED,
   REQUEST_GONE,
   SEATS_BELOW_RIDERS,
   TRAILER_CHANGED,
@@ -2908,6 +2913,7 @@ export const testStore = {
     const ticketsStamped = rekey(tickets);
     const trailersStamped = adopt(transportTrailers);
     const liftRequestsStamped = adopt(liftRequests);
+    adopt(payments);
     for (const [key, row] of [...logisticsPhases]) {
       if (row.cycle !== UNSET_CYCLE) continue;
       logisticsPhases.delete(key);
@@ -4359,6 +4365,12 @@ export const testStore = {
       (p) => p.id === input.paymentId && p.status === input.from,
     );
     if (!row) return false;
+    if (
+      input.from === "reconciled" &&
+      refundStatusOf(input.paymentId) === "requested"
+    ) {
+      throw new MoneyRefused(REFUND_HOLDS_PAYMENT);
+    }
     row.status = input.to;
     row.updatedAt = new Date();
     return true;
@@ -7199,12 +7211,16 @@ export const testStore = {
     actorId: string;
     memberUserId: string;
     accept: boolean;
+    requestedAt: string;
   }): TransportResult {
     const actor = transportActor(input.actorId);
     const request = liftRequests.find(
       (r) => r.userId === input.memberUserId && r.cycle === actor.cycle,
     );
     if (!request) return { ok: false, error: REQUEST_GONE };
+    if (request.createdAt.getTime() !== new Date(input.requestedAt).getTime()) {
+      return { ok: false, error: REQUEST_CHANGED };
+    }
     const car = request.driverUserId;
     const mayAnswer =
       car !== null

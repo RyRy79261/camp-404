@@ -23,6 +23,7 @@ import {
   REFUND_ALREADY_OPEN,
   REFUND_CHANGED,
   REFUND_NOT_RECEIVED,
+  REFUND_PAYMENT_NOT_RECEIVED,
   REFUND_TOO_LARGE,
   SETTLE_UP_CHANGED,
   SETTLE_UP_NOBODY,
@@ -813,9 +814,10 @@ export const duesTestStore = {
         (r) => r.id === input.refundId && r.status === "requested",
       );
       if (!row) return REFUND_CHANGED;
+      const payment = testStore.getPayment(row.paymentId);
+      if (payment?.status !== "reconciled") return REFUND_PAYMENT_NOT_RECEIVED;
       if (input.to === "refunded") {
-        const paid = testStore.getPayment(row.paymentId)?.amountCents ?? 0;
-        if (input.amountCents > paid) return REFUND_TOO_LARGE;
+        if (input.amountCents > payment.amountCents) return REFUND_TOO_LARGE;
         row.amountCents = input.amountCents;
       } else {
         row.declineReason = input.reason;

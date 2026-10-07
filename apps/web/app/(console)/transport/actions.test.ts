@@ -49,6 +49,12 @@ function actAs(user: { id: string }) {
   });
 }
 
+/** When a member's open request was made, as the answerer's page shows it. */
+function seen(userId: string): string {
+  const request = testStore.listLiftRequests().find((r) => r.userId === userId);
+  return (request?.createdAt ?? new Date(0)).toISOString();
+}
+
 function person(name: string, rank: "member" | "captain" = "member") {
   return testStore.createUser({
     authUserId: `auth-${name}`,
@@ -159,14 +165,22 @@ describe("seats and requests", () => {
     });
     actAs(kitchenLead);
     expect(
-      await answerLiftRequestAction({ memberUserId: bea.id, accept: true }),
+      await answerLiftRequestAction({
+        memberUserId: bea.id,
+        accept: true,
+        requestedAt: seen(bea.id),
+      }),
     ).toEqual({ ok: false, error: NOT_YOUR_CAR });
     expect(
       await addRiderAction({ driverUserId: ada.id, memberUserId: bea.id }),
     ).toEqual({ ok: false, error: NOT_YOUR_CAR });
     actAs(ada);
     expect(
-      await answerLiftRequestAction({ memberUserId: bea.id, accept: true }),
+      await answerLiftRequestAction({
+        memberUserId: bea.id,
+        accept: true,
+        requestedAt: seen(bea.id),
+      }),
     ).toEqual({ ok: true });
     expect(
       testStore.getTransportBoard().cars[0]?.riders.map((r) => r.name),

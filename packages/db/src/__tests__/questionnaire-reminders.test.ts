@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/pglite";
 import { reminderBody } from "@camp404/core";
 import { useTestDb } from "./_harness";
 import { makeActivation, makeUser } from "./_factories";
@@ -10,6 +11,7 @@ import {
   sendReminder,
 } from "../questionnaire-lifecycle";
 import * as schema from "../schema";
+import { __setDbOverride, type Database, type PooledDatabase } from "../index";
 
 // The §7.4 reminder against real Postgres. Everything worth testing here is a
 // WHERE clause over rows a mock would happily invent: which gate statuses count
@@ -304,7 +306,7 @@ describe("sendReminder — who is outstanding", () => {
       suppressed: 0,
     });
     // Nothing was written — no empty broadcast left behind to confuse the
-    // announcements list or the dispatch cron.
+    // announcements list.
     expect(await db.select().from(schema.broadcasts)).toHaveLength(0);
   });
 });
@@ -338,9 +340,7 @@ describe("sendReminder — what it writes", () => {
       refType: REMINDER_REF_TYPE,
       refId: act.id,
     });
-    // Published AND dispatched inline, exactly as publishAnnouncement does, so
-    // dispatchDueBroadcasts (published + dispatched_at IS NULL) cannot fan the
-    // same reminder out a second time.
+    // Published AND dispatched inline, exactly as publishAnnouncement does.
     expect(broadcast!.publishedAt).toEqual(now);
     expect(broadcast!.dispatchedAt).toEqual(now);
 
@@ -437,5 +437,54 @@ describe("remindDueSoon — the daily deadline nudge", () => {
       reminded: 0,
     });
     expect(await remindedUserIds(db, act.id)).toEqual([member.id]);
+  });
+});
+
+describe("sendReminder — two at once", () => {
+  const h = useTestDb();
+
+  it("locks the send before it reads who was already reminded", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const act = await makeActivation(db, { status: "open", cycle: 1 });
+    await gate(db, { userId: member.id, activationId: act.id });
+
+    // PGlite is one connection, so two transactions cannot overlap here and a
+    // race cannot be staged. What can be checked is the order that makes the
+    // race safe on Postgres: the activation row is locked FOR UPDATE before
+    // the dedup read, so a second reminder waits for the first to commit and
+    // then sees its deliveries.
+    const queries: string[] = [];
+    const logged = drizzle(h.client(), {
+      schema,
+      logger: { logQuery: (query) => queries.push(query) },
+    });
+    __setDbOverride({
+      http: logged as unknown as Database,
+      pooled: {
+        db: logged as unknown as PooledDatabase["db"],
+        pool: { end: async () => {} } as unknown as PooledDatabase["pool"],
+      },
+    });
+    try {
+      await sendReminder({ activationId: act.id, senderId: null });
+    } finally {
+      __setDbOverride({
+        http: db as unknown as Database,
+        pooled: {
+          db: db as unknown as PooledDatabase["db"],
+          pool: { end: async () => {} } as unknown as PooledDatabase["pool"],
+        },
+      });
+    }
+
+    const lock = queries.findIndex((q) =>
+      /from "questionnaire_activations".* for update/i.test(q),
+    );
+    const dedup = queries.findIndex((q) =>
+      /from "notification_deliveries"/i.test(q),
+    );
+    expect(lock).toBeGreaterThanOrEqual(0);
+    expect(dedup).toBeGreaterThan(lock);
   });
 });

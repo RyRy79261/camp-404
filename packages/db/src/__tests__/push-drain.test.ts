@@ -121,4 +121,60 @@ describe("drainQueuedPush", () => {
     });
     expect(await db.select().from(schema.pushTokens)).toEqual([]);
   });
+
+  it("keeps a push it sent marked sent when a later send in the run throws", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    await db
+      .insert(schema.pushTokens)
+      .values({ userId: member.id, token: "tok-3", platform: "web" });
+    const first = await queue(db, member.id, "push", new Date("2026-09-01"));
+    const second = await queue(db, member.id, "push", new Date("2026-09-02"));
+    const third = await queue(db, member.id, "push", new Date("2026-09-03"));
+
+    // FCM refuses the whole request for the second push only.
+    const send = vi.fn<PushSend>(async (tokens, _note, data) => {
+      if (data.deliveryId === second) throw new Error("FCM 503");
+      return tokens.map((token) => ({ token, success: true }));
+    });
+    expect(await drainQueuedPush(send)).toEqual({
+      sent: 2,
+      failed: 0,
+      skipped: 0,
+      pruned: 0,
+    });
+    const after = await pushStatuses(db);
+    expect(after.get(first)).toBe("sent");
+    expect(after.get(second)).toBe("queued");
+    expect(after.get(third)).toBe("sent");
+
+    // The next run sends only the one that was left: nobody gets a push twice.
+    const again = okSend();
+    expect((await drainQueuedPush(again)).sent).toBe(1);
+    expect(again).toHaveBeenCalledOnce();
+    expect(again.mock.calls[0]![2].deliveryId).toBe(second);
+  });
+
+  it("stops after three sends in a row throw, leaving the rest queued", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    await db
+      .insert(schema.pushTokens)
+      .values({ userId: member.id, token: "tok-4", platform: "web" });
+    for (let day = 1; day <= 5; day++) {
+      await queue(db, member.id, "push", new Date(`2026-09-0${day}`));
+    }
+    const send = vi.fn<PushSend>(async () => {
+      throw new Error("FCM down");
+    });
+    expect(await drainQueuedPush(send)).toEqual({
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      pruned: 0,
+    });
+    expect(send).toHaveBeenCalledTimes(3);
+    const after = await pushStatuses(db);
+    expect([...after.values()].every((s) => s === "queued")).toBe(true);
+  });
 });

@@ -269,10 +269,21 @@ export async function getDefinitionRowForClone(
   return row ?? null;
 }
 
-/** Hard-delete a definition row (caller enforces draft-only + ownership). */
-export async function deleteDefinitionRow(key: string): Promise<void> {
+/**
+ * Hard-delete a draft (the caller enforces ownership). A compare-and-set on
+ * `status = 'draft'`: false when the row is gone or was published since the
+ * caller read it, so a publish that lands first is never deleted.
+ */
+export async function deleteDraftDefinitionRow(key: string): Promise<boolean> {
   const db = createHttpDb();
-  await db
+  const gone = await db
     .delete(questionnaireDefinitions)
-    .where(eq(questionnaireDefinitions.key, key));
+    .where(
+      and(
+        eq(questionnaireDefinitions.key, key),
+        eq(questionnaireDefinitions.status, "draft"),
+      ),
+    )
+    .returning({ key: questionnaireDefinitions.key });
+  return gone.length > 0;
 }

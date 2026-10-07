@@ -151,6 +151,9 @@ const SEND_PROMOTION_COPY: Record<string, string> = {
 };
 
 // Guard reason code → captain-facing copy for cancelling an in-flight request.
+const CANCEL_RACE_LOST =
+  "This request is no longer open: the member may have just answered it. The list is up to date now.";
+
 const CANCEL_PROMOTION_COPY: Record<string, string> = {
   request_not_open: "This request is no longer open.",
   only_requester_may_cancel: "Only the captain who sent it can cancel it.",
@@ -690,13 +693,18 @@ export async function cancelCaptainPromotionAction(
     }
 
     // Bind the actor in the write predicate too (defense in depth): the cancel
-    // only flips a row this captain actually requested.
-    await decideCaptainPromotion({
+    // only flips a row this captain actually requested. The write is a
+    // compare-and-set on `sent`: null means the member answered (or it was
+    // cancelled) between the read above and here, and the captain is told.
+    const cancelled = await decideCaptainPromotion({
       requestId,
       status: "cancelled",
       actorUserId: gate.captainId,
     });
     revalidatePath("/captains/camp-management");
+    if (!cancelled) {
+      return { ok: false, error: CANCEL_RACE_LOST };
+    }
     return { ok: true };
   });
 }

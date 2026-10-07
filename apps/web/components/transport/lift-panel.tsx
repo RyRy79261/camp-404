@@ -267,12 +267,17 @@ export function LiftPanel({
                 <li key={p.userId} className={REQ}>
                   <span className="min-w-0 flex-1">{p.name}</span>
                   <span className="hidden page-sm:inline">
-                    <AnswerRequest memberUserId={p.userId} name={p.name} />
+                    <AnswerRequest
+                      memberUserId={p.userId}
+                      name={p.name}
+                      requestedAt={p.requestedAt}
+                    />
                   </span>
                   <span className="page-sm:hidden">
                     <AnswerRequest
                       memberUserId={p.userId}
                       name={p.name}
+                      requestedAt={p.requestedAt}
                       phone
                     />
                   </span>

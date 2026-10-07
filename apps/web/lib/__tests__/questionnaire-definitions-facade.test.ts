@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@camp404/db/questionnaire-definitions", () => ({
   RESERVED_DEFINITION_KEYS: new Set(["burner_profile"]),
   definitionKeyExists: vi.fn(async () => false),
-  deleteDefinitionRow: vi.fn(),
+  deleteDraftDefinitionRow: vi.fn(),
   getDefinitionRowForClone: vi.fn(),
   getQuestionnaireDefinitionRow: vi.fn(),
   getQuestionnaireVersionRow: vi.fn(),

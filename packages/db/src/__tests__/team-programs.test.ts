@@ -254,7 +254,7 @@ describe("a team's announcements on its program", () => {
       ...DRAFT,
       audience: { scope: "team", team: "water" },
     });
-    // Published but waiting for its time: not gone out, so not listed.
+    // Published but never dispatched: not gone out, so not listed.
     const [scheduled] = await db
       .insert(schema.broadcasts)
       .values({
@@ -265,7 +265,6 @@ describe("a team's announcements on its program", () => {
         title: "Water later",
         body: "Not yet.",
         publishedAt: new Date(),
-        sendAt: new Date(Date.now() + 86_400_000),
       })
       .returning({ id: schema.broadcasts.id });
     expect(scheduled).toBeTruthy();

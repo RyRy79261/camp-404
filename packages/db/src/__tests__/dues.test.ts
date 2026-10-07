@@ -25,7 +25,9 @@ import {
   publishSettleUp,
   REFUND_ALREADY_OPEN,
   REFUND_CHANGED,
+  REFUND_HOLDS_PAYMENT,
   REFUND_NOT_RECEIVED,
+  REFUND_PAYMENT_NOT_RECEIVED,
   requestRefund,
   saveDuesYear,
   savePledge,
@@ -858,6 +860,87 @@ describe("dues", () => {
         expect(refund.declineReason).toBe("Too late");
         expect(dues!.balance.balanceCents).toBe(0);
       }
+    });
+
+    it("keeps a received payment received while its refund waits for a decision", async () => {
+      const { member, captain } = await people();
+      const payment = await received(member.id, captain.id);
+      const asked = await requestRefund({
+        paymentId: payment.id,
+        amountCents: 50_000,
+        note: null,
+        actorId: captain.id,
+        today: "2027-02-20",
+      });
+      if (!asked.ok) throw new Error(asked.error);
+
+      await expect(
+        setPaymentStatus({
+          paymentId: payment.id,
+          from: "reconciled",
+          to: "pending",
+          actorId: captain.id,
+        }),
+      ).rejects.toThrow(REFUND_HOLDS_PAYMENT);
+      const [row] = await h
+        .db()
+        .select({ status: schema.payments.status })
+        .from(schema.payments)
+        .where(eq(schema.payments.id, payment.id));
+      expect(row!.status).toBe("reconciled");
+
+      // Once the refund is decided the payment may move again.
+      expect(
+        await decideRefund({
+          refundId: asked.id,
+          to: "declined",
+          reason: "Too late",
+          actorId: captain.id,
+        }),
+      ).toEqual({ ok: true });
+      expect(
+        await setPaymentStatus({
+          paymentId: payment.id,
+          from: "reconciled",
+          to: "pending",
+          actorId: captain.id,
+        }),
+      ).toBe(true);
+    });
+
+    it("decides a refund only while its payment is still received", async () => {
+      const { member, captain } = await people();
+      const payment = await received(member.id, captain.id);
+      const asked = await requestRefund({
+        paymentId: payment.id,
+        amountCents: 50_000,
+        note: null,
+        actorId: captain.id,
+        today: "2027-02-20",
+      });
+      if (!asked.ok) throw new Error(asked.error);
+      // A payment moved off received some other way (data from before the
+      // hold above): the refund can't be paid out against it.
+      await h
+        .db()
+        .update(schema.payments)
+        .set({ status: "pending" })
+        .where(eq(schema.payments.id, payment.id));
+
+      expect(
+        await decideRefund({
+          refundId: asked.id,
+          to: "refunded",
+          amountCents: 50_000,
+          actorId: captain.id,
+        }),
+      ).toEqual({ ok: false, error: REFUND_PAYMENT_NOT_RECEIVED });
+      const [refund] = await h
+        .db()
+        .select({ status: schema.paymentRefunds.status })
+        .from(schema.paymentRefunds)
+        .where(eq(schema.paymentRefunds.id, asked.id));
+      expect(refund!.status).toBe("requested");
     });
 
     it("refuses a refund of a payment not received", async () => {

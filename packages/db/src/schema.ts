@@ -2914,10 +2914,13 @@ export const broadcasts = pgTable(
     // NULL while the broadcast is a draft. A captain composes and saves a
     // draft, then publishing stamps this and triggers the fan-out below.
     publishedAt: timestamp("published_at", { mode: "date" }),
-    // NULL until the fan-out worker has materialised the deliveries.
+    // Stamped with publishedAt by every write that publishes: the deliveries
+    // are written in the same transaction.
     dispatchedAt: timestamp("dispatched_at", { mode: "date" }),
-    // When the broadcast should fan out. NULL or <= now means immediate (the
-    // inline publish path); a future value defers fan-out to the dispatch cron.
+    // Unused. Nothing writes or reads it: scheduled announcements were never
+    // built, and the worker that would have sent them was removed (audit 2,
+    // 2026-10-07). The column stays because dropping it is a schema change
+    // nobody needs.
     sendAt: timestamp("send_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 
@@ -3045,7 +3048,7 @@ export const notificationDeliveries = pgTable(
     broadcastIdx: index("notification_deliveries_broadcast_idx").on(
       n.broadcastId,
     ),
-    // One delivery per (broadcast, user): lets the scheduled fan-out worker
+    // One delivery per (broadcast, user): a fan-out can
     // INSERT ... ON CONFLICT DO NOTHING without double-delivering. System rows
     // (broadcast_id NULL) are exempt via the partial predicate.
     broadcastUserUniq: uniqueIndex(

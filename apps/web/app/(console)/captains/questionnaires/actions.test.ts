@@ -107,6 +107,7 @@ function asViewer(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(deleteDraft).mockResolvedValue(true);
 });
 
 describe("publishAction — captain gate", () => {
@@ -1002,6 +1003,21 @@ describe("draft authoring — a team lead and another author's draft", () => {
     });
     expect(await deleteDraftAction("kitchen-rota")).toEqual({ ok: true });
     expect(deleteDraft).toHaveBeenCalledWith("kitchen-rota");
+  });
+});
+
+describe("draft authoring — a publish that lands first", () => {
+  it("says so when the draft was published between the read and the delete", async () => {
+    asViewer("captain");
+    definitionRow("draft", "u1");
+    // The delete's compare-and-set on `draft` found nothing to delete.
+    vi.mocked(deleteDraft).mockResolvedValueOnce(false);
+
+    expect(await deleteDraftAction("kitchen-rota")).toEqual({
+      ok: false,
+      error:
+        "This questionnaire is no longer a draft: someone published or deleted it. The list is up to date now.",
+    });
   });
 });
 

@@ -534,6 +534,85 @@ export async function planRollover(): Promise<RolloverPlan> {
 }
 
 /**
+ * The year-scoped tables setFoundingYear moves off the sentinel with one plain
+ * UPDATE each: rows written before the camp had a year. The tables it handles
+ * one by one (counted for the receipt, or with rows that point at each other)
+ * are in YEAR_TABLES_ADOPTED_BY_HAND. schema-invariants.test.ts fails when a
+ * table with a `cycle` column is in neither list, so a new one cannot be left
+ * stranded on the sentinel.
+ */
+export const YEAR_TABLES_ADOPTED_AS_IS = [
+  // Inventory (#246): needs (their pledges ride along), bookings and loans.
+  schema.inventoryNeeds,
+  schema.inventoryBookings,
+  schema.inventoryLoans,
+  // Claims (#242).
+  schema.reimbursements,
+  // Dues and payments (#241, the ledger): a gear order's charge moves with
+  // the order, so the two stay in the same year.
+  schema.duesYears,
+  schema.feeTiers,
+  schema.duesAccounts,
+  schema.duesCharges,
+  schema.duesInstalments,
+  schema.duesSettleUps,
+  schema.payments,
+  schema.paymentRefunds,
+  // Gear rental (#241).
+  schema.rentalItems,
+  schema.rentalOrders,
+  // Logistics (#247) and the shift roster (#248).
+  schema.logisticsPhases,
+  schema.logisticsAttendance,
+  schema.afrikaburnDeadlines,
+  schema.shiftTypes,
+  schema.volunteerShifts,
+  // The Kitchen (#244, #245) beyond the meal plan.
+  schema.kitchenMenuItems,
+  schema.kitchenSnacks,
+  schema.kitchenShoppingTicks,
+  schema.kitchenShoppingPrices,
+  schema.kitchenPrepSteps,
+  schema.recipeLessons,
+  // Power (#52, #298).
+  schema.powerLoads,
+  schema.powerPlans,
+  schema.powerSharingAgreements,
+  schema.powerGridNodes,
+  schema.powerWorkPlanTasks,
+  schema.fuelCans,
+  schema.generatorReadinessItems,
+  // The lounge programme (#301), meeting notes and the join site.
+  schema.loungeSettings,
+  schema.loungeOffers,
+  schema.loungeSlots,
+  schema.meetingNotes,
+  schema.joinSiteContent,
+] as const;
+
+/**
+ * The year-scoped tables setFoundingYear adopts one by one, by SQL name: see
+ * YEAR_TABLES_ADOPTED_AS_IS.
+ */
+export const YEAR_TABLES_ADOPTED_BY_HAND: readonly string[] = [
+  "questionnaire_activations",
+  "questionnaire_responses",
+  "driver_profiles",
+  "car_members",
+  "team_memberships",
+  "team_budgets",
+  "adoptees",
+  "camp_participations",
+  "kitchen_meal_plans",
+  "kitchen_meal_plan_days",
+  "camp_layouts",
+  "camp_layout_versions",
+  "transport_trailers",
+  "lift_requests",
+  "camp_tickets",
+];
+
+/**
  * Name the camp's founding year — the one-time write that turns the year
  * namespace on.
  *
@@ -637,59 +716,9 @@ export async function setFoundingYear(input: {
       .set({ cycle: input.year })
       .where(eq(schema.campParticipations.cycle, UNSET_CYCLE))
       .returning({ userId: schema.campParticipations.userId });
-    // The inventory's year-scoped rows (#246): needs (their pledges ride
-    // along), bookings and loans written before the camp had a year.
-    for (const table of [
-      schema.inventoryNeeds,
-      schema.inventoryBookings,
-      schema.inventoryLoans,
-    ]) {
-      await tx
-        .update(table)
-        .set({ cycle: input.year })
-        .where(eq(table.cycle, UNSET_CYCLE));
-    }
-    // Claims (#242): a claim lodged before the camp had a year.
-    await tx
-      .update(schema.reimbursements)
-      .set({ cycle: input.year })
-      .where(eq(schema.reimbursements.cycle, UNSET_CYCLE));
-    // Gear rental (#241): the year's catalogue and orders, and the charge a
-    // confirmed order made on the member's dues, so the order and its charge
-    // stay in the same year.
-    await tx.execute(sql`
-      update dues_charges c set cycle = ${input.year}
-      from rental_orders o
-      where o.charge_id = c.id and o.cycle = ${UNSET_CYCLE}
-    `);
-    for (const table of [schema.rentalItems, schema.rentalOrders]) {
-      await tx
-        .update(table)
-        .set({ cycle: input.year })
-        .where(eq(table.cycle, UNSET_CYCLE));
-    }
-    // Logistics (#247): the year's phases, who can help on them, and the
-    // AfrikaBurn deadlines, written before the camp had a year. Nothing can
-    // hold the founding year yet (every write stamps the current year, which
-    // was the sentinel), so moving them cannot collide.
-    for (const table of [
-      schema.logisticsPhases,
-      schema.logisticsAttendance,
-      schema.afrikaburnDeadlines,
-      // The shift roster (#248): its shift types (their days and sign-ups
-      // hang off them) and members' AfrikaBurn volunteer shifts.
-      schema.shiftTypes,
-      schema.volunteerShifts,
-    ]) {
-      await tx
-        .update(table)
-        .set({ cycle: input.year })
-        .where(eq(table.cycle, UNSET_CYCLE));
-    }
-    // The Kitchen (#244, #245): the meal plan, the recipes on its meals, the
-    // snacks and the shopping list's ticks. The plan's days point at the
-    // plan's year with no ON UPDATE CASCADE, so the plan is copied to the
-    // founding year, its days follow, and the sentinel plan goes.
+    // The Kitchen's meal plan (#244): the plan's days point at the plan's
+    // year with no ON UPDATE CASCADE, so the plan is copied to the founding
+    // year, its days follow, and the sentinel plan goes.
     await tx.execute(sql`
       insert into kitchen_meal_plans
         (cycle, version, updated_by_user_id, updated_at)
@@ -697,20 +726,47 @@ export async function setFoundingYear(input: {
       from kitchen_meal_plans where cycle = ${UNSET_CYCLE}
       on conflict (cycle) do nothing
     `);
-    for (const table of [
-      schema.kitchenMealPlanDays,
-      schema.kitchenMenuItems,
-      schema.kitchenSnacks,
-      schema.kitchenShoppingTicks,
-    ]) {
+    await tx
+      .update(schema.kitchenMealPlanDays)
+      .set({ cycle: input.year })
+      .where(eq(schema.kitchenMealPlanDays.cycle, UNSET_CYCLE));
+    await tx
+      .delete(schema.kitchenMealPlans)
+      .where(eq(schema.kitchenMealPlans.cycle, UNSET_CYCLE));
+    // The camp layout (#305) is the same shape: its versions point at the
+    // layout's year with no ON UPDATE CASCADE. The share link is unique, so
+    // the copy takes it only once the sentinel layout is gone.
+    const [layout] = await tx
+      .select()
+      .from(schema.campLayouts)
+      .where(eq(schema.campLayouts.cycle, UNSET_CYCLE));
+    if (layout) {
+      await tx
+        .insert(schema.campLayouts)
+        .values({ ...layout, cycle: input.year, shareToken: null });
+      await tx
+        .update(schema.campLayoutVersions)
+        .set({ cycle: input.year })
+        .where(eq(schema.campLayoutVersions.cycle, UNSET_CYCLE));
+      await tx
+        .delete(schema.campLayouts)
+        .where(eq(schema.campLayouts.cycle, UNSET_CYCLE));
+      if (layout.shareToken !== null) {
+        await tx
+          .update(schema.campLayouts)
+          .set({ shareToken: layout.shareToken })
+          .where(eq(schema.campLayouts.cycle, input.year));
+      }
+    }
+    // Every other year-scoped table. Nothing can hold the founding year yet
+    // (every write stamps the current year, which was the sentinel), so
+    // moving them cannot collide.
+    for (const table of YEAR_TABLES_ADOPTED_AS_IS) {
       await tx
         .update(table)
         .set({ cycle: input.year })
         .where(eq(table.cycle, UNSET_CYCLE));
     }
-    await tx
-      .delete(schema.kitchenMealPlans)
-      .where(eq(schema.kitchenMealPlans.cycle, UNSET_CYCLE));
     // The Survival Guide (#250): a chapter published or marked reviewed
     // before the camp had a year was checked for the founding year, not for
     // "year 1", or every one of them would wait for review again.
@@ -990,8 +1046,7 @@ export async function advanceCycle(
 
     // 6. Optional camp-wide announcement, as the existing full-screen
     //    acknowledge takeover. Published + dispatched inline (like
-    //    publishAnnouncement) rather than left for the dispatch cron, so the
-    //    rollover is one atomic act.
+    //    publishAnnouncement), so the rollover is one atomic act.
     let announcementBroadcastId: string | null = null;
     if (input.announcement) {
       const [broadcast] = await tx

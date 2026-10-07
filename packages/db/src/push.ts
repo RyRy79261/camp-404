@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import {
@@ -156,96 +156,116 @@ export interface PushDrainResult {
 export const PUSH_DRAIN_LIMIT = 200;
 
 /**
+ * Sends in a row that threw before one run stops: the push service is down,
+ * and the rest would each wait out a failure too.
+ */
+export const PUSH_MAX_THROWS_IN_A_ROW = 3;
+
+/**
  * Drain queued push deliveries, oldest first. Reads `notification_deliveries`
  * with `pushStatus='queued'` and `channel IN ('push','both')` (never `in_app`),
  * sends each to the recipient's device tokens via the injected `send` fn, flips
  * `pushStatus` to sent/failed/skipped, and prunes dead tokens.
  *
- * Drains now overlap: a send runs one right after it writes deliveries, and a
- * page load runs one for anything left. So the rows are locked (FOR UPDATE SKIP
- * LOCKED) for the whole run, as the email drain does: a second run skips what
- * the first holds, and no phone buzzes twice. Every query goes through `tx`.
+ * One delivery per transaction: claim it (FOR UPDATE SKIP LOCKED, so an
+ * overlapping drain skips it and no phone buzzes twice), send it, write its
+ * status and commit. A push that went out stays marked sent whatever happens
+ * to the ones after it, so a later failure, or the function being stopped,
+ * can never put it back in the queue to be sent again.
+ *
+ * A send that throws is not FCM's answer about this push (the service down,
+ * no answer, bad credentials): the delivery stays queued for a later run and
+ * this run moves on, stopping after PUSH_MAX_THROWS_IN_A_ROW throws in a row.
  */
 export async function drainQueuedPush(
   send: PushSend,
   options: { limit?: number } = {},
 ): Promise<PushDrainResult> {
-  return await withTransaction(async (tx) => {
-    const queued = await tx
-      .select({
-        id: schema.notificationDeliveries.id,
-        userId: schema.notificationDeliveries.userId,
-        title: schema.notificationDeliveries.title,
-        body: schema.notificationDeliveries.body,
-        refType: schema.notificationDeliveries.refType,
-        refId: schema.notificationDeliveries.refId,
-      })
-      .from(schema.notificationDeliveries)
-      .where(
-        and(
-          eq(schema.notificationDeliveries.pushStatus, "queued"),
-          inArray(schema.notificationDeliveries.channel, ["push", "both"]),
-        ),
-      )
-      .orderBy(asc(schema.notificationDeliveries.createdAt))
-      .limit(options.limit ?? PUSH_DRAIN_LIMIT)
-      .for("update", { skipLocked: true });
+  const limit = options.limit ?? PUSH_DRAIN_LIMIT;
+  const result: PushDrainResult = { sent: 0, failed: 0, skipped: 0, pruned: 0 };
+  // Left queued after a throw: not claimed again in this run.
+  const passed: string[] = [];
+  // Pruned earlier in this run, so a later delivery does not send to them.
+  const pruned = new Set<string>();
+  let throwsInARow = 0;
 
-    if (queued.length === 0) {
-      return { sent: 0, failed: 0, skipped: 0, pruned: 0 };
-    }
+  for (let i = 0; i < limit; i++) {
+    const outcome = await withTransaction(async (tx) => {
+      const [claimed] = await tx
+        .select({
+          id: schema.notificationDeliveries.id,
+          userId: schema.notificationDeliveries.userId,
+          title: schema.notificationDeliveries.title,
+          body: schema.notificationDeliveries.body,
+          refType: schema.notificationDeliveries.refType,
+          refId: schema.notificationDeliveries.refId,
+        })
+        .from(schema.notificationDeliveries)
+        .where(
+          and(
+            eq(schema.notificationDeliveries.pushStatus, "queued"),
+            inArray(schema.notificationDeliveries.channel, ["push", "both"]),
+            passed.length > 0
+              ? notInArray(schema.notificationDeliveries.id, passed)
+              : undefined,
+          ),
+        )
+        .orderBy(
+          asc(schema.notificationDeliveries.createdAt),
+          asc(schema.notificationDeliveries.id),
+        )
+        .limit(1)
+        .for("update", { skipLocked: true });
+      if (!claimed) return { kind: "empty" as const };
 
-    const userIds = [...new Set(queued.map((d) => d.userId))];
-    const tokenRows = await tx
-      .select({
-        userId: schema.pushTokens.userId,
-        token: schema.pushTokens.token,
-      })
-      .from(schema.pushTokens)
-      .where(inArray(schema.pushTokens.userId, userIds));
+      const tokenRows = await tx
+        .select({ token: schema.pushTokens.token })
+        .from(schema.pushTokens)
+        .where(eq(schema.pushTokens.userId, claimed.userId));
+      const tokens = tokenRows
+        .map((r) => r.token)
+        .filter((t) => !pruned.has(t));
 
-    const tokensByUser = new Map<string, string[]>();
-    for (const r of tokenRows) {
-      const list = tokensByUser.get(r.userId) ?? [];
-      list.push(r.token);
-      tokensByUser.set(r.userId, list);
-    }
-
-    const { statusById, deadTokens } = await planPushDrain(
-      queued,
-      tokensByUser,
-      send,
-    );
-
-    let sent = 0;
-    let failed = 0;
-    let skipped = 0;
-    let pruned = 0;
-    for (const [id, status] of statusById) {
-      const updated = await tx
+      let plan: Awaited<ReturnType<typeof planPushDrain>>;
+      try {
+        plan = await planPushDrain(
+          [claimed],
+          new Map([[claimed.userId, tokens]]),
+          send,
+        );
+      } catch {
+        return { kind: "threw" as const, id: claimed.id };
+      }
+      const status = plan.statusById.get(claimed.id) ?? "skipped";
+      await tx
         .update(schema.notificationDeliveries)
         .set({
           pushStatus: status,
           ...(status === "sent" ? { deliveredAt: new Date() } : {}),
         })
-        .where(
-          and(
-            eq(schema.notificationDeliveries.id, id),
-            eq(schema.notificationDeliveries.pushStatus, "queued"),
-          ),
-        )
-        .returning({ id: schema.notificationDeliveries.id });
-      if (updated.length === 0) continue;
-      if (status === "sent") sent += 1;
-      else if (status === "failed") failed += 1;
-      else skipped += 1;
+        .where(eq(schema.notificationDeliveries.id, claimed.id));
+      const dead = [...plan.deadTokens];
+      if (dead.length > 0) {
+        await tx
+          .delete(schema.pushTokens)
+          .where(inArray(schema.pushTokens.token, dead));
+      }
+      return { kind: "done" as const, status, dead };
+    });
+
+    if (outcome.kind === "empty") break;
+    if (outcome.kind === "threw") {
+      passed.push(outcome.id);
+      throwsInARow += 1;
+      if (throwsInARow >= PUSH_MAX_THROWS_IN_A_ROW) break;
+      continue;
     }
-    if (deadTokens.size > 0) {
-      await tx
-        .delete(schema.pushTokens)
-        .where(inArray(schema.pushTokens.token, [...deadTokens]));
-      pruned = deadTokens.size;
+    throwsInARow = 0;
+    result[outcome.status] += 1;
+    for (const t of outcome.dead) {
+      if (!pruned.has(t)) result.pruned += 1;
+      pruned.add(t);
     }
-    return { sent, failed, skipped, pruned };
-  });
+  }
+  return result;
 }

@@ -62,10 +62,16 @@ export const THIS_YEAR_LABEL: Record<NonNullable<ThisYear>, string> = {
   maybe: "Maybe",
 };
 
+/** `requestedAt` is when the request was made, sent back with an answer. */
 export type Asked =
   | { kind: "none" }
-  | { kind: "any" }
-  | { kind: "car"; driverUserId: string; label: string };
+  | { kind: "any"; requestedAt: string }
+  | {
+      kind: "car";
+      driverUserId: string;
+      label: string;
+      requestedAt: string;
+    };
 
 export interface NeedsSeatRow {
   userId: string;
@@ -96,13 +102,15 @@ export function needsSeatRows(
     const r = requestOf.get(userId);
     if (!r) return { kind: "none" };
     const car = cars.find((c) => c.driverUserId === r.driverUserId);
+    const requestedAt = r.createdAt.toISOString();
     return car
       ? {
           kind: "car",
           driverUserId: car.driverUserId,
           label: shortCarLabel(car),
+          requestedAt,
         }
-      : { kind: "any" };
+      : { kind: "any", requestedAt };
   };
   const rows: NeedsSeatRow[] = unseated.map((m) => ({
     userId: m.userId,
@@ -398,6 +406,11 @@ export interface LiftPerson {
   name: string;
 }
 
+/** Someone asking to ride, with when they asked (sent back with the answer). */
+export interface LiftAsker extends LiftPerson {
+  requestedAt: string;
+}
+
 export type LiftPanel =
   | {
       kind: "rider";
@@ -415,7 +428,7 @@ export type LiftPanel =
       arriving: string | null;
       seatsOffered: number | null;
       riders: LiftPerson[];
-      asking: LiftPerson[];
+      asking: LiftAsker[];
     }
   | {
       kind: "asked";
@@ -451,7 +464,11 @@ export function liftPanel(input: {
       })),
       asking: requests
         .filter((r) => r.driverUserId === me)
-        .map((r) => ({ userId: r.userId, name: nameOf(r.name) })),
+        .map((r) => ({
+          userId: r.userId,
+          name: nameOf(r.name),
+          requestedAt: r.createdAt.toISOString(),
+        })),
     };
   }
   if (lift?.role === "rider") {

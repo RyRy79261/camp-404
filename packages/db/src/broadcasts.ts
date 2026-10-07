@@ -5,7 +5,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  lte,
   ne,
   notInArray,
   or,
@@ -15,10 +14,8 @@ import { alias } from "drizzle-orm/pg-core";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import {
   announcementNotification,
-  errorLogText,
   notificationLink,
   QUESTIONNAIRE_REF_TYPE,
-  scheduledBroadcastNotification,
   sortPinned,
   type NotificationKind,
 } from "@camp404/core";
@@ -27,7 +24,7 @@ import {
   type InboxFilter,
 } from "@camp404/types";
 import { deliveryValues } from "./deliveries";
-import { createHttpDb, createPooledDb, withTransaction } from "./index";
+import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 import { currentCycleNumber } from "./cycles";
@@ -1005,132 +1002,6 @@ async function explainPinRefusal(
     return pinned ? PIN_ALREADY : PIN_ALREADY_OFF;
   }
   return PIN_MISSING;
-}
-
-export interface DispatchFailure {
-  broadcastId: string;
-  /** The error message, unredacted: the caller scrubs it before showing it. */
-  error: string;
-}
-
-/**
- * The database's own words for a failure. Drizzle wraps a Postgres error in
- * one whose message is the whole query and its parameters (announcement text,
- * member ids), and keeps the Postgres error as `cause`.
- */
-/** The class and Postgres code only: a query's message holds its values. */
-function failureMessage(err: unknown): string {
-  return errorLogText(err, process.env);
-}
-
-export interface DispatchResult {
-  dispatched: number;
-  deliveries: number;
-  /**
-   * Broadcasts that threw. Each one's claim rolled back, so it is still due
-   * and the next run tries it again.
-   */
-  failures: DispatchFailure[];
-}
-
-/**
- * Scheduled fan-out worker. Materialises `notification_deliveries` for every
- * broadcast that is published, not yet dispatched, and whose `send_at` has
- * arrived (or is immediate / NULL). Each broadcast is claimed by atomically
- * flipping `dispatched_at`, so overlapping runs (a send's own, a page load's)
- * can't double-process it;
- * the `(broadcast_id, user_id)` dedupe index makes the insert idempotent too.
- * Immediate camp-wide announcements still fan out inline via
- * {@link publishAnnouncement} — this drains the deferred / scheduled tail.
- *
- * One broadcast that throws does not stop the others. It is reported in
- * `failures` and stays due.
- */
-export async function dispatchDueBroadcasts(
-  now: Date = new Date(),
-): Promise<DispatchResult> {
-  const httpDb = createHttpDb();
-  const due = await httpDb
-    .select({
-      id: schema.broadcasts.id,
-      kind: schema.broadcasts.kind,
-      senderId: schema.broadcasts.senderId,
-      scope: schema.broadcasts.scope,
-      team: schema.broadcasts.team,
-      title: schema.broadcasts.title,
-      body: schema.broadcasts.body,
-      channel: schema.broadcasts.channel,
-      presentation: schema.broadcasts.presentation,
-      refType: schema.broadcasts.refType,
-      refId: schema.broadcasts.refId,
-    })
-    .from(schema.broadcasts)
-    .where(
-      and(
-        isNotNull(schema.broadcasts.publishedAt),
-        isNull(schema.broadcasts.dispatchedAt),
-        or(
-          isNull(schema.broadcasts.sendAt),
-          lte(schema.broadcasts.sendAt, now),
-        ),
-      ),
-    );
-
-  if (due.length === 0) return { dispatched: 0, deliveries: 0, failures: [] };
-
-  const { db, pool } = createPooledDb();
-  let dispatched = 0;
-  let deliveries = 0;
-  const failures: DispatchFailure[] = [];
-  try {
-    for (const b of due) {
-      try {
-        const recipientIds = await resolveAudience(
-          { id: b.id, scope: b.scope, team: b.team },
-          b.senderId,
-        );
-        const claimedOk = await db.transaction(async (tx) => {
-          const claimed = await tx
-            .update(schema.broadcasts)
-            .set({ dispatchedAt: now })
-            .where(
-              and(
-                eq(schema.broadcasts.id, b.id),
-                isNull(schema.broadcasts.dispatchedAt),
-              ),
-            )
-            .returning({ id: schema.broadcasts.id });
-          if (!claimed[0]) return false; // another run already dispatched it
-          if (recipientIds.length > 0) {
-            const payload = scheduledBroadcastNotification(b);
-            await tx
-              .insert(schema.notificationDeliveries)
-              .values(
-                recipientIds.map((userId) =>
-                  deliveryValues(payload, {
-                    userId,
-                    broadcastId: b.id,
-                    channel: b.channel,
-                    presentation: b.presentation,
-                  }),
-                ),
-              )
-              .onConflictDoNothing();
-          }
-          return true;
-        });
-        if (claimedOk) {
-          dispatched += 1;
-          deliveries += recipientIds.length;
-        }
-      } catch (err) {
-        failures.push({ broadcastId: b.id, error: failureMessage(err) });
-      }
-    }
-    return { dispatched, deliveries, failures };
-  } finally {
-    await pool.end();
-  }
 }
 
 // --- Recipient side ------------------------------------------------------

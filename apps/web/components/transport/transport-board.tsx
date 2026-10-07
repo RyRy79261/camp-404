@@ -163,7 +163,13 @@ function useOpen() {
 
 // --- Needs a seat -------------------------------------------------------------
 
-function DeclineButton({ row }: { row: NeedsSeatRow }) {
+function DeclineButton({
+  row,
+  requestedAt,
+}: {
+  row: NeedsSeatRow;
+  requestedAt: string;
+}) {
   const [pending, run] = useRowAction();
   return (
     <Button
@@ -178,6 +184,7 @@ function DeclineButton({ row }: { row: NeedsSeatRow }) {
             answerLiftRequestAction({
               memberUserId: row.userId,
               accept: false,
+              requestedAt,
             }),
           "Request declined",
         )
@@ -198,7 +205,7 @@ function AskedText({ row }: { row: NeedsSeatRow }) {
       <span className="min-w-0">
         {row.asked.kind === "car" ? row.asked.label : "Any car"}
       </span>
-      <DeclineButton row={row} />
+      <DeclineButton row={row} requestedAt={row.asked.requestedAt} />
     </span>
   );
 }

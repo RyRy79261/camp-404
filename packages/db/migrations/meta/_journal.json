@@ -736,6 +736,13 @@
       "when": 1791243155300,
       "tag": "0104_voice_consent_at",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1791363054118,
+      "tag": "0105_adopt_sentinel_year_rows",
+      "breakpoints": true
     }
   ]
 }

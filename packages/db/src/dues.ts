@@ -85,6 +85,10 @@ export const REFUND_ALREADY_OPEN =
 export const REFUND_TOO_LARGE = "A refund can't be more than the payment.";
 export const REFUND_CHANGED =
   "Someone already decided this refund. Reload the page.";
+export const REFUND_HOLDS_PAYMENT =
+  "This payment has a refund waiting for a decision. Pay out or decline the refund first, then change the payment.";
+export const REFUND_PAYMENT_NOT_RECEIVED =
+  "This payment isn't marked received any more. Mark it received again before deciding its refund.";
 export const NOT_YOUR_PAYMENT = "That isn't one of your payments.";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1412,7 +1416,9 @@ export async function requestRefund(input: {
 
 /**
  * The Finance team's answer to a refund: paid out (at the amount they name),
- * or declined with a reason. A compare-and-set on `requested`.
+ * or declined with a reason. A compare-and-set on `requested`, and on the
+ * payment still being received: the payment row is locked first, the same
+ * row setPaymentStatus locks, so the two cannot cross.
  */
 export async function decideRefund(
   input: (
@@ -1424,17 +1430,26 @@ export async function decideRefund(
     await assertMoneyKeeper(tx, input.actorId);
     if (!UUID.test(input.refundId)) refuse(REFUND_CHANGED);
     const now = new Date();
-    if (input.to === "refunded") {
-      const [open] = await tx
-        .select({ paid: schema.payments.amountCents })
-        .from(schema.paymentRefunds)
-        .innerJoin(
-          schema.payments,
-          eq(schema.payments.id, schema.paymentRefunds.paymentId),
-        )
-        .where(eq(schema.paymentRefunds.id, input.refundId))
-        .limit(1);
-      if (open && input.amountCents > open.paid) refuse(REFUND_TOO_LARGE);
+    const [refund] = await tx
+      .select({
+        paymentId: schema.paymentRefunds.paymentId,
+        status: schema.paymentRefunds.status,
+      })
+      .from(schema.paymentRefunds)
+      .where(eq(schema.paymentRefunds.id, input.refundId))
+      .limit(1);
+    if (refund?.status !== "requested") refuse(REFUND_CHANGED);
+    const [paid] = await tx
+      .select({
+        status: schema.payments.status,
+        amountCents: schema.payments.amountCents,
+      })
+      .from(schema.payments)
+      .where(eq(schema.payments.id, refund.paymentId))
+      .for("update");
+    if (paid?.status !== "reconciled") refuse(REFUND_PAYMENT_NOT_RECEIVED);
+    if (input.to === "refunded" && input.amountCents > paid.amountCents) {
+      refuse(REFUND_TOO_LARGE);
     }
     const rows = await tx
       .update(schema.paymentRefunds)

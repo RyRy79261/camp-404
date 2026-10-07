@@ -5,7 +5,6 @@ import {
   approvalNotification,
   captainPromotionNotification,
   carMessageNotification,
-  kindForBroadcast,
   notificationMentionsAny,
   payloadLink,
   questionnaireReleaseNotification,
@@ -232,22 +231,6 @@ describe("requiredActionReminderNotification", () => {
   });
 });
 
-describe("kindForBroadcast", () => {
-  it("maps each broadcast kind to what the member is told it is", () => {
-    expect(kindForBroadcast("announcement", null)).toBe("announcement");
-    expect(kindForBroadcast("team_message", null)).toBe("team_message");
-    expect(kindForBroadcast("lead_directive", null)).toBe("lead_directive");
-    expect(kindForBroadcast("car_message", null)).toBe("car_message");
-    expect(kindForBroadcast("reminder", "questionnaire_activation")).toBe(
-      "questionnaire_reminder",
-    );
-    expect(kindForBroadcast("system", "questionnaire_activation")).toBe(
-      "questionnaire_release",
-    );
-    expect(kindForBroadcast("system", null)).toBe("announcement");
-  });
-});
-
 // A builder takes only display-level facts, so it cannot leak a private
 // value. These prove it for every builder, with the secrets this camp actually
 // holds, and prove the guard itself can say yes.
@@ -300,7 +283,10 @@ describe("notificationMentionsAny", () => {
         title: TITLE,
         dueAt: new Date("2026-03-10T22:30:00Z"),
       }),
-      optInQuestionnaireNotification({ activationId: ACTIVATION, title: TITLE }),
+      optInQuestionnaireNotification({
+        activationId: ACTIVATION,
+        title: TITLE,
+      }),
       approvalNotification(),
       captainPromotionNotification({
         requestId: BROADCAST,
