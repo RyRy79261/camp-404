@@ -6,7 +6,9 @@ function groqClient(): Groq {
   if (!client) {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) throw new Error("GROQ_API_KEY is not set");
-    client = new Groq({ apiKey });
+    // No automatic retries (the SDK's default is 2): a failed transcription is
+    // shown, and the captain records again if they want to.
+    client = new Groq({ apiKey, maxRetries: 0 });
   }
   return client;
 }

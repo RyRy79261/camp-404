@@ -8,7 +8,9 @@ export function anthropic(): Anthropic {
     if (!apiKey) {
       throw new Error("ANTHROPIC_API_KEY is not set");
     }
-    client = new Anthropic({ apiKey });
+    // No automatic retries, on any call (owner, 2026-10-07): a retry is a
+    // second paid request nobody asked for, and a failure is shown instead.
+    client = new Anthropic({ apiKey, maxRetries: 0 });
   }
   return client;
 }
