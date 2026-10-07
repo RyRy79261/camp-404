@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { __setDbOverride } from "../index";
 import { useTestDb } from "./_harness";
 import { RATE_LIMIT_ROW_HORIZON_MS, consumeRateLimit } from "../rate-limit";
 import * as schema from "../schema";
@@ -190,5 +191,25 @@ describe("consumeRateLimit", () => {
         windowMs: RATE_LIMIT_ROW_HORIZON_MS + 1,
       }),
     ).rejects.toThrow(RangeError);
+  });
+});
+
+// A statement that comes back with no row is not a count. Most limits let it
+// through; a single-use claim (voice's sealed list) asks for "unknown" and
+// runs nothing.
+describe("consumeRateLimit with no row back", () => {
+  it("allows by default, and answers null when the caller says a missing row is unknown", async () => {
+    const empty = { execute: async () => ({ rows: [] }) };
+    __setDbOverride({ http: empty as never, pooled: empty as never });
+    try {
+      const input = { key: "claim", limit: 1, windowMs: WINDOW, now: T0 };
+      expect(await consumeRateLimit(input)).toEqual({
+        ok: true,
+        retryAfterSeconds: 0,
+      });
+      expect(await consumeRateLimit({ ...input, noRow: "unknown" })).toBe(null);
+    } finally {
+      __setDbOverride(null);
+    }
   });
 });

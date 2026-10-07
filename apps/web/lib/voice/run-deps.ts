@@ -15,7 +15,8 @@ import { callTool } from "./tools";
 /**
  * Claims a list's id once, in Postgres, so a second Do on any server instance
  * is refused (audit 2 tests-2). Fails closed: when the database cannot store
- * the claim it answers null and nothing runs. The shared limiter would fall
+ * the claim, or the statement returns no row, it answers null and nothing
+ * runs. The shared limiter would fall
  * back to a count kept in this process, which another instance cannot see,
  * so the same list could run twice. E2E test mode has no database and one
  * process, so its in-memory bucket is the whole truth there.
@@ -24,7 +25,8 @@ export async function spendProposal(id: string): Promise<boolean | null> {
   const key = `voice-proposal:${id}`;
   const opts = { limit: 1, windowMs: PROPOSAL_TTL_MS * 2 };
   if (isE2ETestMode()) return rateLimit(key, opts).ok;
-  const verdict = await consumeRateLimit({ key, ...opts });
+  // No row back is not a claim: nothing runs (noRow "unknown").
+  const verdict = await consumeRateLimit({ key, ...opts, noRow: "unknown" });
   return verdict === null ? null : verdict.ok;
 }
 

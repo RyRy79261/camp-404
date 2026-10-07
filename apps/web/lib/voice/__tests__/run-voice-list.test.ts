@@ -2,6 +2,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as RateLimitDb from "@camp404/db/rate-limit";
+import type * as MeetingNotesLib from "@/lib/meeting-notes";
 import * as schema from "@camp404/db/schema";
 import { useTestDb } from "../../../../../packages/db/src/__tests__/_harness";
 
@@ -19,6 +20,26 @@ vi.mock("@/lib/auth", () => ({
 }));
 vi.mock("@/lib/member-gate", () => ({ resolveMemberState: vi.fn() }));
 vi.mock("@/lib/manifest-revalidate", () => ({ revalidateManifest: vi.fn() }));
+// The connector's update_meeting_notes saves, then reads the note again: a
+// hook here lets a test land someone else's save in between.
+const between = vi.hoisted(() => ({
+  save: null as null | (() => Promise<void>),
+}));
+vi.mock("@/lib/meeting-notes", async (importOriginal) => {
+  const real = await importOriginal<typeof MeetingNotesLib>();
+  let calls = 0;
+  return {
+    ...real,
+    editMeetingNote: async (
+      input: Parameters<typeof real.editMeetingNote>[0],
+    ) => {
+      const result = await real.editMeetingNote(input);
+      calls += 1;
+      if (result.ok && calls === 1 && between.save) await between.save();
+      return result;
+    },
+  };
+});
 vi.mock("@camp404/db/rate-limit", async (importOriginal) => {
   const real = await importOriginal<typeof RateLimitDb>();
   return { ...real, consumeRateLimit: vi.fn(real.consumeRateLimit) };
@@ -97,6 +118,10 @@ describe("runVoiceList", () => {
     expect(first.ok && first.results.map((r) => r.status)).toEqual(["done"]);
     expect(await onDinnerThursday()).toBe(false);
     expect(vi.mocked(consumeRateLimit)).toHaveBeenCalledTimes(1);
+    // A claim that comes back with no row is not a claim: nothing runs.
+    expect(vi.mocked(consumeRateLimit)).toHaveBeenCalledWith(
+      expect.objectContaining({ noRow: "unknown" }),
+    );
 
     expect(await runVoiceList(token, [0])).toEqual({
       ok: false,
@@ -257,5 +282,75 @@ describe("change a chapter, then publish it, on one list", () => {
       "done",
       "not_done",
     ]);
+  });
+});
+
+describe("two changes to one meeting's notes, on one list", () => {
+  it("carries the version the first save made, so a save landing between refuses the second", async () => {
+    await seedEvalCamp(h.db());
+    const [note] = await h
+      .db()
+      .insert(schema.meetingNotes)
+      .values({
+        cycle: 1,
+        team: null,
+        title: "Build planning",
+        heldAt: new Date("2026-10-01T16:00:00Z"),
+        agenda: "Shade",
+        notes: "",
+        createdByUserId: SPEAKER.id,
+      })
+      .returning();
+    const scope = (await getMcpScope(SPEAKER.id))!;
+    const ctx = { scope, now: new Date("2026-10-07T10:00:00Z") };
+    const first = await PREVIEWS.update_meeting_notes!(
+      { meetingId: note!.id, agenda: "Shade and water" },
+      ctx,
+    );
+    const second = await PREVIEWS.update_meeting_notes!(
+      { meetingId: note!.id, notes: "Ryno buys the shade cloth." },
+      ctx,
+    );
+    // Someone else saves right after the first save, before it reads back.
+    between.save = async () => {
+      await h
+        .db()
+        .update(schema.meetingNotes)
+        .set({ notes: "Mpho's notes.", version: 3 })
+        .where(eq(schema.meetingNotes.id, note!.id));
+    };
+    const row = (p: Preview, dependsOn: number | null) => ({
+      tool: "update_meeting_notes",
+      args: p.args,
+      sentence: p.sentence,
+      facts: p.facts,
+      path: p.path,
+      dependsOn,
+    });
+    const token = sealProposal(
+      {
+        userId: SPEAKER.id,
+        sessionId: SESSION,
+        actions: [row(first, null), row(second, 0)],
+      },
+      sealKey(),
+    ).token;
+    const run = await runSealedList(
+      token,
+      [0, 1],
+      voiceRunDeps({ userId: SPEAKER.id, sessionId: SESSION }),
+    );
+    between.save = null;
+    expect(run.ok && run.results.map((r) => r.status)).toEqual([
+      "done",
+      "not_done",
+    ]);
+    const [after] = await h
+      .db()
+      .select()
+      .from(schema.meetingNotes)
+      .where(eq(schema.meetingNotes.id, note!.id));
+    // Mpho's save stands.
+    expect(after).toMatchObject({ notes: "Mpho's notes.", version: 3 });
   });
 });
