@@ -19,7 +19,7 @@ import type { GridRow } from "@camp404/types";
 import {
   RESERVED_DEFINITION_KEYS,
   definitionKeyExists,
-  deleteDefinitionRow,
+  deleteDraftDefinitionRow,
   getDefinitionRowForClone,
   getQuestionnaireDefinitionRow,
   getQuestionnaireVersionRow,
@@ -247,9 +247,12 @@ export async function duplicateDefinition(input: {
   return key;
 }
 
-/** Hard-delete a draft (caller enforces draft-only + ownership). */
-export async function deleteDraft(key: string): Promise<void> {
-  await deleteDefinitionRow(key);
+/**
+ * Hard-delete a draft (the caller enforces ownership). False when it is no
+ * longer a draft: published, or deleted, since the caller read it.
+ */
+export async function deleteDraft(key: string): Promise<boolean> {
+  return deleteDraftDefinitionRow(key);
 }
 
 export interface DefinitionSummary {

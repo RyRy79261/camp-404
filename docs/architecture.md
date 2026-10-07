@@ -192,13 +192,13 @@ flowchart TD
   act -- deliverAfterResponse --> due
   load -- "runDueWorkAfterResponse<br/>(at most once per 5 minutes)" --> work
   work["runDueWork<br/>reminders 09:00 to 21:00,<br/>upkeep once a day"] --> due
-  due["deliverDue, in after()"] --> fan["dispatchDueBroadcasts<br/>broadcasts to notification_deliveries"]
-  fan --> push["drainQueuedPush<br/>Firebase"]
-  fan --> mail["drainQueuedEmail<br/>Resend"]
+  due["deliverDue, in after()"] --> push["drainQueuedPush<br/>Firebase"]
+  due --> mail["drainQueuedEmail<br/>Resend"]
 ```
 
-- A broadcast is claimed by setting `dispatched_at`, and fan-out writes one
-  `notification_deliveries` row per member (a unique index stops doubles).
+- The action that publishes a notice writes one `notification_deliveries` row
+  per member in its own transaction (a unique index stops doubles). There are
+  no scheduled announcements: `broadcasts.send_at` is unused.
 - The push and email drains lock their rows `FOR UPDATE SKIP LOCKED`, so two
   servers never send the same notice.
 - The page-load run is guarded by a row in `action_rate_limit`, so it runs at

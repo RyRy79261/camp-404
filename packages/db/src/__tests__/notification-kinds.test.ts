@@ -7,7 +7,6 @@ import { makeActivation, makeUser } from "./_factories";
 import { setUserApproval } from "../burner-profile";
 import {
   createAnnouncementDraft,
-  dispatchDueBroadcasts,
   listInbox,
   publishAnnouncement,
 } from "../broadcasts";
@@ -128,27 +127,6 @@ describe("notification kinds", () => {
     for (const item of inbox) {
       expect(item.link).toBe(`/questionnaires/${act.id}`);
     }
-  });
-
-  it("marks a scheduled team message with its own kind", async () => {
-    const db = h.db();
-    const captain = await makeUser(db, { rank: "captain" });
-    const member = await makeUser(db, { approvalStatus: "approved" });
-    await db.insert(schema.broadcasts).values({
-      senderId: captain.id,
-      kind: "team_message",
-      scope: "everyone",
-      title: "Kitchen crew",
-      body: "Prep at 4.",
-      channel: "in_app",
-      presentation: "feed",
-      publishedAt: new Date("2026-03-01T08:00:00Z"),
-    });
-    await dispatchDueBroadcasts(new Date("2026-03-01T09:00:00Z"));
-
-    expect(await kindsFor(db, member.id)).toEqual([
-      { kind: "team_message", presentation: "feed", title: "Kitchen crew" },
-    ]);
   });
 
   it("tells an approved member once, and a rejected one nothing", async () => {

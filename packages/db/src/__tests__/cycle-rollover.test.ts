@@ -1370,3 +1370,66 @@ describe("setFoundingYear adopts the year-scoped roster facts", () => {
     });
   });
 });
+
+describe("setFoundingYear adopts every other year-scoped table", () => {
+  const h = useTestDb();
+
+  it("moves the ledger, power, meeting notes and the camp layout off the sentinel", async () => {
+    const db = h.db();
+    const client = h.client();
+    const member = await makeUser(db);
+    // Rows written before the camp named its year: every write stamps the
+    // current year, which is the sentinel until then.
+    await client.query(
+      `INSERT INTO payments (user_id, cycle, amount_cents, reference)
+       VALUES ($1, $2, 50000, 'PAY-1')`,
+      [member.id, UNSET_CYCLE],
+    );
+    await client.query(
+      `INSERT INTO power_plans (cycle, run_from_hour, run_to_hour) VALUES ($1, 18, 6)`,
+      [UNSET_CYCLE],
+    );
+    await client.query(
+      `INSERT INTO meeting_notes (cycle, title, held_at) VALUES ($1, 'Build day', now())`,
+      [UNSET_CYCLE],
+    );
+    await client.query(
+      `INSERT INTO camp_layouts (cycle, latest_version, share_token) VALUES ($1, 1, 'share-1')`,
+      [UNSET_CYCLE],
+    );
+    await client.query(
+      `INSERT INTO camp_layout_versions (cycle, number, body) VALUES ($1, 1, '{}')`,
+      [UNSET_CYCLE],
+    );
+
+    expect((await setFoundingYear({ year: 2026, actorUserId: null })).ok).toBe(
+      true,
+    );
+
+    const cycles = async (table: string) =>
+      (
+        await client.query<{ cycle: number }>(
+          `SELECT cycle FROM ${table} ORDER BY cycle`,
+        )
+      ).rows.map((r) => r.cycle);
+    for (const table of [
+      "payments",
+      "power_plans",
+      "meeting_notes",
+      "camp_layouts",
+      "camp_layout_versions",
+    ]) {
+      expect({ table, cycles: await cycles(table) }).toEqual({
+        table,
+        cycles: [2026],
+      });
+    }
+    // The layout keeps its share link and its version count.
+    const [layout] = await db.select().from(schema.campLayouts);
+    expect(layout).toMatchObject({
+      cycle: 2026,
+      latestVersion: 1,
+      shareToken: "share-1",
+    });
+  });
+});

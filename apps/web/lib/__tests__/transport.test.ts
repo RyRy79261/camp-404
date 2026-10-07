@@ -30,6 +30,14 @@ type DB = ReturnType<ReturnType<typeof useTestDb>["db"]>;
 const NAMES = ["Ada", "Cai", "Bea", "Dee", "Eve", "Fay", "Tran", "Kit", "Gus"];
 type Ids = Record<string, string>;
 
+/** When a member's open request was made, as the answerer's page shows it. */
+async function seen(userId: string): Promise<string> {
+  const request = (await transport.listLiftRequests()).find(
+    (r) => r.userId === userId,
+  );
+  return (request?.createdAt ?? new Date(0)).toISOString();
+}
+
 /** The same script, whichever backend the facade is on. */
 async function script(id: Ids) {
   const results: unknown[] = [];
@@ -44,6 +52,7 @@ async function script(id: Ids) {
       actorId: id.Kit!,
       memberUserId: id.Bea!,
       accept: true,
+      requestedAt: await seen(id.Bea!),
     }),
   );
   note(
@@ -51,6 +60,7 @@ async function script(id: Ids) {
       actorId: id.Ada!,
       memberUserId: id.Bea!,
       accept: true,
+      requestedAt: await seen(id.Bea!),
     }),
   );
   note(

@@ -57,6 +57,8 @@ export const SEATS_BELOW_RIDERS =
   "More people already ride in this car. Take someone out first.";
 export const REQUEST_GONE =
   "That lift request isn't there any more. Reload the page.";
+export const REQUEST_CHANGED =
+  "They changed their lift request since you looked. Reload the page to see it.";
 export const YOU_ARE_DRIVING =
   "You're driving this year, so you don't need a lift.";
 export const YOU_HAVE_A_SEAT = "You already have a seat in a car this year.";
@@ -687,7 +689,18 @@ export async function requestLift(input: {
       })
       .onConflictDoUpdate({
         target: [schema.liftRequests.userId, schema.liftRequests.cycle],
-        set: { driverUserId: input.driverUserId, createdAt: new Date() },
+        // A renewal is a new request, and its time is what an answer is
+        // checked against, so it always moves forward by at least a
+        // millisecond, even for two asks inside the same one.
+        set: {
+          driverUserId: input.driverUserId,
+          // The app's clock, written as drizzle writes a timestamp (UTC wall
+          // time), not the database's now(), which follows the session zone.
+          createdAt: sql`greatest(
+            ${new Date().toISOString()}::timestamp,
+            date_trunc('milliseconds', ${schema.liftRequests.createdAt}) + interval '1 millisecond'
+          )`,
+        },
       });
     return {};
   });
@@ -718,18 +731,25 @@ export async function withdrawLiftRequest(input: {
  * for, and only that car's driver or a transport editor may; a request for
  * "any car" is matched by a transport editor putting them in a car
  * (addRider). Declining deletes the request: the asked driver, or a
- * transport editor for any request.
+ * transport editor for any request, and is audited (it is another member's
+ * row). A compare-and-set on `requestedAt`, when the request the answerer saw
+ * was made: asking again rewrites it, so a newer request is never answered
+ * from a stale page.
  */
 export async function answerLiftRequest(input: {
   actorId: string;
   memberUserId: string;
   accept: boolean;
+  requestedAt: string;
 }): Promise<TransportResult> {
   return write(async (tx) => {
     const actor = await lockActor(tx, input.actorId);
     if (!UUID.test(input.memberUserId)) refuse(REQUEST_GONE);
     const [request] = await tx
-      .select({ driverUserId: schema.liftRequests.driverUserId })
+      .select({
+        driverUserId: schema.liftRequests.driverUserId,
+        createdAt: schema.liftRequests.createdAt,
+      })
       .from(schema.liftRequests)
       .where(
         and(
@@ -739,6 +759,10 @@ export async function answerLiftRequest(input: {
       )
       .for("update");
     if (!request) refuse(REQUEST_GONE);
+    // Both sides are read through a JS Date, so both are whole milliseconds.
+    if (request.createdAt.getTime() !== new Date(input.requestedAt).getTime()) {
+      refuse(REQUEST_CHANGED);
+    }
     const editor = canEditTransport(actor.rank, actor.ledTeams);
     const car = request.driverUserId;
     const mayAnswer =
@@ -765,6 +789,12 @@ export async function answerLiftRequest(input: {
           eq(schema.liftRequests.cycle, actor.cycle),
         ),
       );
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "car.lift_request_declined",
+      target: input.memberUserId,
+      metadata: { driverUserId: car, cycle: actor.cycle },
+    });
     return {};
   });
 }
@@ -974,7 +1004,7 @@ export async function sendCarMessage(input: {
         presentation: "feed",
         refType: "car_message",
         publishedAt: now,
-        // Fanned out right here, so the scheduled drain never picks it up.
+        // Fanned out right here, in the same transaction.
         dispatchedAt: now,
       })
       .returning({ id: schema.broadcasts.id });

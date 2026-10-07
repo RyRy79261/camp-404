@@ -51,9 +51,18 @@ export const LiftRequestInput = z
   .strict();
 export type LiftRequestInput = z.infer<typeof LiftRequestInput>;
 
-/** The driver or the transport team answers a member's request. */
+/**
+ * The driver or the transport team answers a member's request. `requestedAt`
+ * is when the request they saw was made: a member who asked again since (for
+ * another car, or after taking it back) has made a new request, and the answer
+ * is refused rather than applied to one the answerer never saw.
+ */
 export const LiftRequestAnswerInput = z
-  .object({ memberUserId: Id, accept: z.boolean() })
+  .object({
+    memberUserId: Id,
+    accept: z.boolean(),
+    requestedAt: z.string().datetime(),
+  })
   .strict();
 export type LiftRequestAnswerInput = z.infer<typeof LiftRequestAnswerInput>;
 

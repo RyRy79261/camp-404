@@ -11,7 +11,13 @@ import {
 import type { PaymentMethod, PaymentSource } from "@camp404/types";
 import { writeAuditEvent } from "./audit";
 import { currentCycleNumber } from "./cycles";
-import { lockMoneyKeeper, MoneyRefused, NOT_A_MONEY_KEEPER } from "./dues";
+import {
+  lockMoneyKeeper,
+  MoneyRefused,
+  NOT_A_MONEY_KEEPER,
+  REFUND_HOLDS_PAYMENT,
+  REFUND_PAID_HOLDS_PAYMENT,
+} from "./dues";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 
@@ -203,7 +209,10 @@ export async function recordPayment(
  * Move a payment between statuses (received, waived, or back to pending).
  * Compare-and-set on `from`, the status the captain saw: false when it had
  * already moved, so a captain on a stale page is told instead of overwriting.
- * Throws MoneyRefused for anyone but a captain or a Finance lead.
+ * Throws MoneyRefused for anyone but a captain or a Finance lead, and when a
+ * received payment with a refund that is waiting or paid out would leave
+ * `reconciled`: the member would then owe the payment again on top of the
+ * refund. Only a declined refund lets it move.
  */
 export async function setPaymentStatus(input: {
   paymentId: string;
@@ -215,6 +224,38 @@ export async function setPaymentStatus(input: {
   return withTransaction(async (tx) => {
     if (!(await lockMoneyKeeper(tx, input.actorId))) {
       throw new MoneyRefused(NOT_A_MONEY_KEEPER);
+    }
+    // Lock the payment before looking at its refunds. requestRefund and
+    // decideRefund lock the same row first, so a refund asked for (or paid
+    // out) at the same moment waits for this, and this sees it.
+    const [current] = await tx
+      .select({ status: schema.payments.status })
+      .from(schema.payments)
+      .where(eq(schema.payments.id, input.paymentId))
+      .for("update");
+    if (!current || current.status !== input.from) return false;
+    if (input.from === "reconciled") {
+      // Only a declined refund lets a received payment move. One waiting for
+      // a decision could still be paid out, and one paid out still counts in
+      // the member's balance: either way, moving the payment would make them
+      // owe it twice.
+      const [live] = await tx
+        .select({ status: schema.paymentRefunds.status })
+        .from(schema.paymentRefunds)
+        .where(
+          and(
+            eq(schema.paymentRefunds.paymentId, input.paymentId),
+            ne(schema.paymentRefunds.status, "declined"),
+          ),
+        )
+        .limit(1);
+      if (live) {
+        throw new MoneyRefused(
+          live.status === "refunded"
+            ? REFUND_PAID_HOLDS_PAYMENT
+            : REFUND_HOLDS_PAYMENT,
+        );
+      }
     }
     const [row] = await tx
       .update(schema.payments)

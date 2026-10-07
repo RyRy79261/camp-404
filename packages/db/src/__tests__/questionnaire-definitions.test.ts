@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import type { Questionnaire } from "@camp404/types";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
 import {
   definitionKeyExists,
-  deleteDefinitionRow,
+  deleteDraftDefinitionRow,
   getDefinitionMetaRow,
   getQuestionnaireDefinitionRow,
   getQuestionnaireVersionRow,
@@ -137,14 +138,32 @@ describe("definition writers / readers", () => {
     expect(await getQuestionnaireVersionRow("feedback", "99")).toBeNull();
   });
 
-  it("deleteDefinitionRow removes the row", async () => {
+  it("deleteDraftDefinitionRow removes a draft", async () => {
     await insertDefinitionDraft({
       key: "feedback",
       title: "Camp feedback",
       createdBy: null,
       definition: def("Camp feedback"),
     });
-    await deleteDefinitionRow("feedback");
+    expect(await deleteDraftDefinitionRow("feedback")).toBe(true);
     expect(await getQuestionnaireDefinitionRow("feedback")).toBeNull();
+  });
+
+  it("deleteDraftDefinitionRow leaves a questionnaire published since it was read", async () => {
+    await insertDefinitionDraft({
+      key: "feedback",
+      title: "Camp feedback",
+      createdBy: null,
+      definition: def("Camp feedback"),
+    });
+    // A captain publishes between the delete's read and its write.
+    await h
+      .db()
+      .update(schema.questionnaireDefinitions)
+      .set({ status: "published" })
+      .where(eq(schema.questionnaireDefinitions.key, "feedback"));
+    expect(await deleteDraftDefinitionRow("feedback")).toBe(false);
+    expect(await getQuestionnaireDefinitionRow("feedback")).not.toBeNull();
+    expect(await deleteDraftDefinitionRow("nobody")).toBe(false);
   });
 });

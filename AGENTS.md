@@ -901,8 +901,7 @@ or lazily on a page load, both in `after()` (`apps/web/lib/background-work.ts`):
   out right then. A new action that writes `notification_deliveries` calls it
   too.
 - **On a page load.** `resolveMemberState` (every signed-in console page)
-  calls `runDueWorkAfterResponse()`: scheduled announcements whose time has
-  come, deadline reminders for questionnaires, tasks and any other required
+  calls `runDueWorkAfterResponse()`: deadline reminders for questionnaires, tasks and any other required
   action with a `due_at` (camp daytime only, 09:00–21:00), a retry of
   anything left queued, and once a day the upkeep (encrypt leftover plaintext
   ID numbers; delete Claude connector clients nobody authorized within a day;
@@ -915,8 +914,12 @@ or lazily on a page load, both in `after()` (`apps/web/lib/background-work.ts`):
   check). A preview's database is a copy of production's members, so on a
   preview or a laptop the in-app notices land, push and email stay queued,
   and the calendar reads as "not connected" for writing.
-- Every step is idempotent and claim-safe: broadcasts are claimed by
-  `dispatched_at`, the push and email drains lock their rows `FOR UPDATE SKIP
+- There are no scheduled announcements. [CORRECTION 2026-10-07] This list
+  used to start with "scheduled announcements whose time has come", but
+  nothing ever wrote `broadcasts.send_at`, so that worker
+  (`dispatchDueBroadcasts`) was dead code and is gone. Every write that
+  publishes a notice writes its deliveries in the same transaction.
+- Every step is idempotent and claim-safe: the push and email drains lock their rows `FOR UPDATE SKIP
 LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
   delivery. A "not now" answer from Resend (5xx, a timeout, a 409 for the
   same email in flight) leaves the row queued for the next page load and the

@@ -11,7 +11,7 @@
 // notification. notificationMentionsAny is the check the tests run against
 // every builder to keep that true.
 
-import type { NotificationKind, NotificationPayload } from "@camp404/types";
+import type { NotificationPayload } from "@camp404/types";
 import { notificationLink } from "./notification-links";
 import { GEAR_ORDER_ACTION_TITLE, GEAR_ORDER_REF_TYPE } from "./rental";
 import { CAMP_TIME_ZONE } from "./time-zone";
@@ -244,59 +244,6 @@ export function taskDeadlineNotification(input: {
     body: `${when}: ${input.title}. Tap to open the task board.`,
     refType: TASK_REF_TYPE,
     refId: input.taskId,
-  };
-}
-
-/**
- * The kind of a delivery fanned out from a scheduled broadcast. Broadcast
- * kinds that name who it is for map to themselves. A reminder is always about
- * a questionnaire today. A system broadcast is a questionnaire release when it
- * points at one; anything else reads as an announcement.
- */
-export function kindForBroadcast(
-  kind:
-    | "announcement"
-    | "team_message"
-    | "lead_directive"
-    | "reminder"
-    | "system"
-    | "car_message",
-  refType: string | null,
-): NotificationKind {
-  switch (kind) {
-    case "team_message":
-    case "lead_directive":
-    case "car_message":
-      return kind;
-    case "reminder":
-      return "questionnaire_reminder";
-    case "system":
-      return refType === QUESTIONNAIRE_REF_TYPE
-        ? "questionnaire_release"
-        : "announcement";
-    default:
-      return "announcement";
-  }
-}
-
-/**
- * A scheduled broadcast, fanned out once its time has come (on a page load). Its text is what the
- * sender wrote; it points at its own reference, or at itself.
- */
-export function scheduledBroadcastNotification(input: {
-  id: string;
-  kind: Parameters<typeof kindForBroadcast>[0];
-  title: string;
-  body: string;
-  refType: string | null;
-  refId: string | null;
-}): NotificationPayload {
-  return {
-    kind: kindForBroadcast(input.kind, input.refType),
-    title: input.title,
-    body: input.body,
-    refType: input.refType,
-    refId: input.refId ?? input.id,
   };
 }
 

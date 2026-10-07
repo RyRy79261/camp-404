@@ -23,6 +23,7 @@ import {
   REFUND_ALREADY_OPEN,
   REFUND_CHANGED,
   REFUND_NOT_RECEIVED,
+  REFUND_PAYMENT_NOT_RECEIVED,
   REFUND_TOO_LARGE,
   SETTLE_UP_CHANGED,
   SETTLE_UP_NOBODY,
@@ -193,6 +194,36 @@ export function refundStatusOf(
   return live?.status === "requested" || live?.status === "refunded"
     ? live.status
     : null;
+}
+
+/**
+ * The founding twin's half for dues: the year's settings, tiers, accounts,
+ * charges, instalments and refunds written before the camp had a year move
+ * into it with the payments (mirrors setFoundingYear).
+ */
+export function adoptDuesChargesInStore(
+  fromCycle: number,
+  toCycle: number,
+): void {
+  const d = state();
+  for (const rows of [d.tiers, d.charges, d.instalments, d.refunds]) {
+    for (const row of rows) {
+      if (row.cycle === fromCycle) row.cycle = toCycle;
+    }
+  }
+  for (const [key, account] of [...d.accounts]) {
+    if (account.cycle !== fromCycle) continue;
+    d.accounts.delete(key);
+    d.accounts.set(accountKey(account.userId, toCycle), {
+      ...account,
+      cycle: toCycle,
+    });
+  }
+  const year = d.years.get(fromCycle);
+  if (year && !d.years.has(toCycle)) {
+    d.years.delete(fromCycle);
+    d.years.set(toCycle, { ...year, cycle: toCycle });
+  }
 }
 
 /**
@@ -813,9 +844,10 @@ export const duesTestStore = {
         (r) => r.id === input.refundId && r.status === "requested",
       );
       if (!row) return REFUND_CHANGED;
+      const payment = testStore.getPayment(row.paymentId);
+      if (payment?.status !== "reconciled") return REFUND_PAYMENT_NOT_RECEIVED;
       if (input.to === "refunded") {
-        const paid = testStore.getPayment(row.paymentId)?.amountCents ?? 0;
-        if (input.amountCents > paid) return REFUND_TOO_LARGE;
+        if (input.amountCents > payment.amountCents) return REFUND_TOO_LARGE;
         row.amountCents = input.amountCents;
       } else {
         row.declineReason = input.reason;

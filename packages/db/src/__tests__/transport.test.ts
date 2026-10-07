@@ -19,6 +19,7 @@ import {
   NOT_A_MEMBER,
   NOT_A_TRANSPORT_EDITOR,
   NOT_YOUR_CAR,
+  REQUEST_CHANGED,
   SEATS_BELOW_RIDERS,
   TRAILER_CHANGED,
   YOU_ARE_DRIVING,
@@ -390,6 +391,13 @@ describe("seats", () => {
 describe("lift requests", () => {
   const h = useTestDb();
 
+  /** When the member's open request was made, as the answerer's page shows it. */
+  async function seen(userId: string): Promise<string> {
+    const request = (await listLiftRequests()).find((r) => r.userId === userId);
+    if (!request) throw new Error("no lift request");
+    return request.createdAt.toISOString();
+  }
+
   it("lets a member ask, and the asked driver accept, which spends the request", async () => {
     const db = h.db();
     const ada = await driver(db, "Ada");
@@ -412,6 +420,7 @@ describe("lift requests", () => {
           actorId: actor.id,
           memberUserId: bea.id,
           accept: true,
+          requestedAt: await seen(bea.id),
         }),
       ).toEqual({ ok: false, error: NOT_YOUR_CAR });
     }
@@ -420,6 +429,7 @@ describe("lift requests", () => {
         actorId: ada.id,
         memberUserId: bea.id,
         accept: true,
+        requestedAt: await seen(bea.id),
       }),
     ).toEqual({ ok: true });
     expect(await listLiftRequests()).toEqual([]);
@@ -451,6 +461,7 @@ describe("lift requests", () => {
         actorId: ada.id,
         memberUserId: bea.id,
         accept: false,
+        requestedAt: await seen(bea.id),
       }),
     ).toEqual({ ok: false, error: NOT_YOUR_CAR });
     expect(
@@ -465,9 +476,80 @@ describe("lift requests", () => {
         actorId: transportLead.id,
         memberUserId: cid.id,
         accept: false,
+        requestedAt: await seen(cid.id),
       }),
     ).toEqual({ ok: true });
     expect(await listLiftRequests()).toEqual([]);
+  });
+
+  it("declines only the request the answerer saw, and records who declined it", async () => {
+    const db = h.db();
+    const ada = await driver(db, "Ada");
+    const cai = await driver(db, "Cai");
+    const transportLead = await lead(db, "Transport lead", TRANSPORT_TEAM);
+    const bea = await approved(db, "Bea");
+    await requestLift({ actorId: bea.id, driverUserId: ada.id });
+    const stale = await seen(bea.id);
+    // Bea asks again, for another car, before the answer lands.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await requestLift({ actorId: bea.id, driverUserId: cai.id });
+
+    expect(
+      await answerLiftRequest({
+        actorId: transportLead.id,
+        memberUserId: bea.id,
+        accept: false,
+        requestedAt: stale,
+      }),
+    ).toEqual({ ok: false, error: REQUEST_CHANGED });
+    expect(await listLiftRequests()).toEqual([
+      expect.objectContaining({ userId: bea.id, driverUserId: cai.id }),
+    ]);
+
+    expect(
+      await answerLiftRequest({
+        actorId: transportLead.id,
+        memberUserId: bea.id,
+        accept: false,
+        requestedAt: await seen(bea.id),
+      }),
+    ).toEqual({ ok: true });
+    expect(await listLiftRequests()).toEqual([]);
+    const audit = await db
+      .select({
+        actorId: schema.auditLog.actorId,
+        target: schema.auditLog.target,
+      })
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.action, "car.lift_request_declined"));
+    expect(audit).toEqual([{ actorId: transportLead.id, target: bea.id }]);
+  });
+
+  it("gives a renewed request a later time, even inside the same millisecond", async () => {
+    const db = h.db();
+    const ada = await driver(db, "Ada");
+    const bea = await approved(db, "Bea");
+    await requestLift({ actorId: bea.id, driverUserId: ada.id });
+    // The clock can't be stopped, so put the stored time ahead of it: a
+    // renewal stamped with "now" would then repeat or go back in time.
+    const ahead = new Date(Date.now() + 60 * 60 * 1000);
+    await db
+      .update(schema.liftRequests)
+      .set({ createdAt: ahead })
+      .where(eq(schema.liftRequests.userId, bea.id));
+    const stale = await seen(bea.id);
+
+    await requestLift({ actorId: bea.id, driverUserId: null });
+
+    expect(new Date(await seen(bea.id)).getTime()).toBe(ahead.getTime() + 1);
+    expect(
+      await answerLiftRequest({
+        actorId: ada.id,
+        memberUserId: bea.id,
+        accept: false,
+        requestedAt: stale,
+      }),
+    ).toEqual({ ok: false, error: REQUEST_CHANGED });
   });
 
   it("lets a member withdraw their own request", async () => {

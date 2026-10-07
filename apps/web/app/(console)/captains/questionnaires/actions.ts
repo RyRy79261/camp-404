@@ -315,8 +315,17 @@ export async function deleteDraftAction(key: string): Promise<QResult> {
         error: "Only drafts can be deleted — unpublish it first.",
       };
     }
-    await deleteDraft(key);
+    // A compare-and-set on `draft`: a captain who published it since the
+    // read above wins, and nothing published is ever deleted.
+    const deleted = await deleteDraft(key);
     revalidateBuilder();
+    if (!deleted) {
+      return {
+        ok: false,
+        error:
+          "This questionnaire is no longer a draft: someone published or deleted it. The list is up to date now.",
+      };
+    }
     return { ok: true };
   });
 }

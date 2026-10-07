@@ -2,7 +2,6 @@ import "server-only";
 
 import { after } from "next/server";
 import { CAMP_TIME_ZONE, errorLogText } from "@camp404/core";
-import { dispatchDueBroadcasts } from "@camp404/db/broadcasts";
 import { drainQueuedEmail } from "@camp404/db/email";
 import {
   backfillIdEncryption,
@@ -38,9 +37,8 @@ import { isE2ETestMode } from "./test-mode";
 //    moves the camp to a new year calls `deliverAfterResponse()`: the notices
 //    that write fan out, and push and email go out, right then.
 //  - On a page load. Any signed-in member loading a console page calls
-//    `runDueWorkAfterResponse()`, which does what is due: a scheduled
-//    announcement whose time has come, deadline reminders, a retry of anything
-//    left queued, the camp calendar catch-up (a logistics phase or AfrikaBurn
+//    `runDueWorkAfterResponse()`, which does what is due: deadline reminders,
+//    a retry of anything left queued, the camp calendar catch-up (a logistics phase or AfrikaBurn
 //    deadline Google did not take yet), and the upkeep. A row in `action_rate_limit` (one statement,
 //    compare-and-set on the database clock) lets it run at most once per
 //    DUE_WORK_EVERY_MS across every server, and the upkeep once per
@@ -113,20 +111,13 @@ async function step(
 }
 
 /**
- * Deliver what is due now: fan out every published announcement whose time
- * has come, then send queued push and email. Push and email are skipped while
- * their service is not set up, and on any deployment but production, so their
- * rows stay queued until it is.
+ * Deliver what is due now: send queued push and email. Every write that
+ * publishes a notice fans it out in its own transaction, so there is nothing
+ * left to fan out here. Push and email are skipped while their service is not
+ * set up, and on any deployment but production, so their rows stay queued
+ * until it is.
  */
 export async function deliverDue(): Promise<void> {
-  await step("announcement fan-out", async () => {
-    const result = await dispatchDueBroadcasts();
-    for (const f of result.failures) {
-      console.error(
-        `[background] announcement ${f.broadcastId} failed: ${f.error}`,
-      );
-    }
-  });
   // Only production sends (mayContactMembers): elsewhere the in-app notices
   // still land, and push and email stay queued in this database.
   if (!mayContactMembers(process.env)) return;
