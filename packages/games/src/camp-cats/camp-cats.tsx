@@ -94,7 +94,7 @@ const MODA_ATLAS = atlasLayout(MODA_FRAMES);
 const NIPSTER_ATLAS = atlasLayout(NIPSTER_FRAMES);
 
 /** How long each frame of a looping pose shows. */
-const FRAME_MS: Record<string, number> = { walk: 140, eat: 350, scratch: 110 };
+const FRAME_MS: Record<string, number> = { walk: 80, eat: 350, scratch: 110 };
 /** One burst of scratching (in frame pairs), and the rest after it. */
 const SCRATCH_REPEATS = 14;
 const SCRATCH_REST_MS = 7_000;

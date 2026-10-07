@@ -39,7 +39,7 @@ export const BOWL_PX_H = BOWL_H * SCALE;
 /** How long a program's window stays open before the cats come. */
 export const DWELL_MS = 90_000;
 /** Walking pace, px a second. */
-export const WALK_PX_PER_S = 80;
+export const WALK_PX_PER_S = 200;
 /** A walk never takes less than this (a step or two). */
 export const MIN_WALK_MS = 300;
 /** How long they eat. */
