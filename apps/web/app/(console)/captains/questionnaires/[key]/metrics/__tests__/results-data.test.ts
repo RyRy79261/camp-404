@@ -25,6 +25,7 @@ vi.mock("@/lib/member-gate", () => ({
 vi.mock("next/navigation", () => ({ notFound: vi.fn(), redirect: vi.fn() }));
 vi.mock("@camp404/db/questionnaire-definitions", () => ({
   getDefinitionMetaRow: vi.fn(),
+  listVersionDefinitions: vi.fn(async () => []),
 }));
 vi.mock("@camp404/db/questionnaire-results", () => ({
   listActivationResponses: vi.fn(),
@@ -38,7 +39,10 @@ vi.mock("@/lib/questionnaire-definitions", () => ({
 
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
-import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
+import {
+  getDefinitionMetaRow,
+  listVersionDefinitions,
+} from "@camp404/db/questionnaire-definitions";
 import {
   listActivationResponses,
   listActivationsForCycle,
@@ -49,6 +53,9 @@ import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { deriveViewerRank, hasClearance } from "@camp404/core";
 import type { StoredRank } from "@camp404/types";
 import {
+  ALLERGY_ROLES,
+  allergyQuestionIdsOf,
+  allergyReadEvents,
   cycleLabel,
   emptyStateFor,
   loadResults,
@@ -280,6 +287,8 @@ function viewWith(over: Partial<ResultsView>): ResultsView {
     rows: [],
     activations: [],
     activeActivation: null,
+    viewerId: "viewer",
+    allergyQuestionIds: [],
     ...over,
   };
 }
@@ -526,5 +535,94 @@ describe("emptyStateFor", () => {
         0,
       )?.title,
     ).toBe("Closed before anyone answered");
+  });
+});
+
+describe("allergyReadEvents", () => {
+  const [allergies, anaphylactic] = ALLERGY_ROLES;
+  const page = (questions: unknown[]) =>
+    ({
+      version: "1",
+      title: "Dietary",
+      pages: [{ kind: "questions", id: "p1", title: "P", questions }],
+    }) as never;
+  const head = page([
+    { id: "a", kind: "long_text", prompt: "Allergies", role: allergies },
+    { id: "b", kind: "boolean", prompt: "Anaphylactic?", role: anaphylactic },
+    { id: "c", kind: "short_text", prompt: "Anything else?" },
+  ]);
+  const respondent = (userId: string, responses: Record<string, unknown>) => ({
+    userId,
+    responses: responses as never,
+  });
+
+  it("records a read for each member with an allergy answer, and nobody else", () => {
+    const view = viewWith({
+      viewerId: "cap1",
+      allergyQuestionIds: allergyQuestionIdsOf([head]),
+    });
+    const events = allergyReadEvents(
+      view,
+      [
+        respondent("u1", { a: "Peanuts" }),
+        // "No" to anaphylaxis is still their safety answer.
+        respondent("u2", { b: false }),
+        respondent("u3", { a: "  ", c: "Peanuts in my bag" }),
+        respondent("u4", {}),
+      ],
+      "questionnaire_results",
+    );
+    expect(events.map((e) => e.target)).toEqual(["u1", "u2"]);
+    expect(events[0]).toEqual({
+      actorId: "cap1",
+      action: "safety.allergies.view",
+      target: "u1",
+      metadata: {
+        via: "questionnaire_results",
+        questionnaire: KEY,
+        title: "Camp feedback",
+        cycle: 2027,
+      },
+    });
+  });
+
+  it("still records an answer to an allergy question a later version removed", () => {
+    const older = page([
+      { id: "old", kind: "long_text", prompt: "Allergies", role: allergies },
+    ]);
+    const now = page([{ id: "c", kind: "short_text", prompt: "Anything?" }]);
+    const ids = allergyQuestionIdsOf([now, older]);
+    expect(ids).toEqual(["old"]);
+    expect(
+      allergyReadEvents(
+        viewWith({ viewerId: "cap1", allergyQuestionIds: ids }),
+        [respondent("u1", { old: "Shellfish" })],
+        "questionnaire_csv",
+      ).map((e) => e.target),
+    ).toEqual(["u1"]);
+  });
+
+  it("records nothing for a questionnaire that never had an allergy question", () => {
+    const plain = page([{ id: "c", kind: "short_text", prompt: "Anything?" }]);
+    expect(
+      allergyReadEvents(
+        viewWith({
+          viewerId: "cap1",
+          allergyQuestionIds: allergyQuestionIdsOf([plain]),
+        }),
+        [respondent("u1", { c: "Peanuts" })],
+        "questionnaire_csv",
+      ),
+    ).toEqual([]);
+  });
+
+  it("reads every published version when it loads", async () => {
+    asRank("captain");
+    vi.mocked(listVersionDefinitions).mockResolvedValue([
+      page([{ id: "old", kind: "long_text", prompt: "A", role: allergies }]),
+    ]);
+    const access = await loadResults(KEY);
+    expect(listVersionDefinitions).toHaveBeenCalledWith(KEY);
+    expect(access.ok && access.view.allergyQuestionIds).toContain("old");
   });
 });

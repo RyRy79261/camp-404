@@ -50,6 +50,8 @@ import {
 import { testStore } from "../test-store";
 
 const GOOGLE_ENV = {
+  // Calendar writes happen on production only (mayContactMembers).
+  VERCEL_ENV: "production",
   GOOGLE_CALENDAR_ID: "camp@group.calendar.google.com",
   GOOGLE_CALENDAR_CLIENT_EMAIL: "calendar@camp-404.iam.gserviceaccount.com",
   GOOGLE_CALENDAR_PRIVATE_KEY:

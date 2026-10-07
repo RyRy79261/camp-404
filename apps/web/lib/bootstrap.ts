@@ -15,7 +15,7 @@ import type { AuthenticatedUser } from "./auth";
 // admin-CLI `bootstrap-founder` slug). It lives in core so pure code can
 // name the founder too.
 export { FOUNDER_CODE } from "@camp404/core";
-import { FOUNDER_CODE } from "@camp404/core";
+import { errorLogText, FOUNDER_CODE } from "@camp404/core";
 
 /**
  * Whether the camp has completed first-time setup — i.e. a captain exists (the
@@ -101,7 +101,10 @@ export async function runFirstTimeSetup(
   // recovered by the home page's `completedAt` fallback (which routes to
   // onboarding), so log it rather than unwinding a successful bootstrap.
   await seedBurnerProfileAction(result.userId).catch((err) => {
-    console.error("Failed to seed founder burner_profile required action", err);
+    console.error(
+      "Failed to seed founder burner_profile required action",
+      errorLogText(err, process.env),
+    );
   });
   return { ok: true };
 }

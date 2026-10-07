@@ -27,7 +27,8 @@ vi.mock("@/lib/email", () => ({
 }));
 vi.mock("@/lib/firebase-admin", () => ({ sendPush: vi.fn() }));
 vi.mock("@/lib/logistics", () => ({ catchUpCampCalendar: vi.fn() }));
-vi.mock("@/lib/integration-config", () => ({
+vi.mock("@/lib/integration-config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/integration-config")>()),
   firebaseAdminCredentials: vi.fn(),
 }));
 
@@ -93,6 +94,10 @@ afterEach(() => {
 });
 
 describe("deliverDue", () => {
+  beforeEach(() => {
+    process.env.VERCEL_ENV = "production";
+  });
+
   it("fans out, then sends push and email", async () => {
     await deliverDue();
     expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
@@ -107,6 +112,32 @@ describe("deliverDue", () => {
     expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
     expect(drainQueuedPush).not.toHaveBeenCalled();
     expect(drainQueuedEmail).not.toHaveBeenCalled();
+  });
+
+  it("sends no push or email off production: a preview or a laptop holds real members", async () => {
+    for (const stage of ["preview", "development", undefined]) {
+      vi.clearAllMocks();
+      if (stage) process.env.VERCEL_ENV = stage;
+      else delete process.env.VERCEL_ENV;
+      await deliverDue();
+      // The in-app notices still land; the rest stays queued.
+      expect(dispatchDueBroadcasts).toHaveBeenCalledOnce();
+      expect(drainQueuedPush).not.toHaveBeenCalled();
+      expect(drainQueuedEmail).not.toHaveBeenCalled();
+    }
+  });
+
+  it("logs a failed step's class and code, never the values in its query", async () => {
+    const query = Object.assign(
+      new Error("Failed query: insert ...\nparams: +27 82 555 0100,peanuts"),
+      { cause: Object.assign(new Error("boom"), { code: "23505" }) },
+    );
+    vi.mocked(drainQueuedPush).mockRejectedValue(query);
+    await deliverDue();
+    const logged = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(logged).toContain("push failed: Error (23505)");
+    expect(logged).not.toContain("0100");
+    expect(logged).not.toContain("peanuts");
   });
 
   it("still sends push and email when the fan-out throws", async () => {

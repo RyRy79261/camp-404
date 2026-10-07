@@ -141,7 +141,7 @@ export const AUDIT_ACTION_LABELS = {
   "rental.order_reopened": "Reopened a member's gear order",
   "rental.orders_asked": "Asked members for their gear orders",
   "rental.tent_labelled": "Labelled a tent",
-  "safety.allergies.view": "Read the camp's allergies for the daily site sheet",
+  "safety.allergies.view": "Read a member's allergies",
   "safety.emergency_contacts.view": "Read emergency contacts",
   "shifts.asked": "Asked members to sign up for shifts",
   "shifts.days_added": "Added days to a shift",
@@ -672,6 +672,22 @@ export function auditDetail(
     case "member.bank_details.viewed":
     case "safety.emergency_contacts.view":
       return text(metadata, "via") === "mcp" ? "Through Claude" : null;
+    // Where the allergies were read: the daily site sheet, or a
+    // questionnaire's answers (on screen or as the CSV).
+    case "safety.allergies.view": {
+      const via = text(metadata, "via");
+      const title = text(metadata, "title");
+      if (via === "daily_sheet") return "On the daily site sheet";
+      if (via === "questionnaire_results" || via === "questionnaire_answers") {
+        return title
+          ? `In the answers to ${title}`
+          : "In a questionnaire's answers";
+      }
+      if (via === "questionnaire_csv") {
+        return title ? `In the CSV of ${title}` : "In a questionnaire's CSV";
+      }
+      return null;
+    }
     case "member.export": {
       const rows = count(metadata, "rows");
       return rows === null

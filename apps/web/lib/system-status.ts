@@ -30,6 +30,7 @@ import {
   founderEmailsUseOldName,
   isEmailConfigured,
   isWebPushConfigured,
+  mayContactMembers,
   MIN_PREAPPROVED_ENV_CODE_LENGTH,
   webPushConfigFromEnv,
   type EnvBag,
@@ -258,7 +259,9 @@ function deploymentCheck(env: EnvBag): SystemCheck {
     ...base,
     value: stage,
     tone: "info",
-    detail: `Running as ${stage}.`,
+    detail: mayContactMembers(env)
+      ? `Running as ${stage}.`
+      : `Running as ${stage}. Only production sends push, email and calendar changes: here push and email stay queued, and calendar writes are off.`,
   };
 }
 

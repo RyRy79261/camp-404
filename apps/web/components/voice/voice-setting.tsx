@@ -11,16 +11,21 @@ import {
   CardTitle,
 } from "@camp404/ui/components/card";
 import { setVoiceOn } from "@/app/(console)/voice-actions";
-
-const NOTICE =
-  "Your voice is sent to Groq to become words, and the words to Anthropic's Claude to work out what you mean. Neither is kept here. Nothing is saved until you press Do.";
+import { VOICE_NOTICE } from "@/lib/voice/notice";
 
 /**
  * A captain's voice switch on the Display page (#356): the one-time notice,
  * and where it is withdrawn. Turning it off clears users.voice_consent_at;
- * the mic asks again before the next recording.
+ * the mic asks again before the next recording. Someone who is no longer a
+ * captain sees it only while voice is still on, to turn it off.
  */
-export function VoiceSetting({ on }: { on: boolean }) {
+export function VoiceSetting({
+  on,
+  canTurnOn,
+}: {
+  on: boolean;
+  canTurnOn: boolean;
+}) {
   const [enabled, setEnabled] = useState(on);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +40,7 @@ export function VoiceSetting({ on }: { on: boolean }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">{NOTICE}</p>
+        <p className="text-sm text-muted-foreground">{VOICE_NOTICE}</p>
         <p className="text-sm font-semibold" role="status">
           {enabled ? "Voice is on." : "Voice is off."}
         </p>
@@ -44,26 +49,28 @@ export function VoiceSetting({ on }: { on: boolean }) {
             {error}
           </p>
         )}
-        <div>
-          <Button
-            variant={enabled ? "outline" : "default"}
-            disabled={pending}
-            onClick={() =>
-              start(async () => {
-                const res = await setVoiceOn(!enabled);
-                if (!res.ok) {
-                  setError("That didn't save. Try again.");
-                  return;
-                }
-                setError(null);
-                setEnabled(!enabled);
-                router.refresh();
-              })
-            }
-          >
-            {enabled ? "Turn voice off" : "Turn on voice"}
-          </Button>
-        </div>
+        {(enabled || canTurnOn) && (
+          <div>
+            <Button
+              variant={enabled ? "outline" : "default"}
+              disabled={pending}
+              onClick={() =>
+                start(async () => {
+                  const res = await setVoiceOn(!enabled);
+                  if (!res.ok) {
+                    setError("That didn't save. Try again.");
+                    return;
+                  }
+                  setError(null);
+                  setEnabled(!enabled);
+                  router.refresh();
+                })
+              }
+            >
+              {enabled ? "Turn voice off" : "Turn on voice"}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

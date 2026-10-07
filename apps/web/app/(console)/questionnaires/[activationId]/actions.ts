@@ -6,6 +6,7 @@ import { QuestionnaireResponses, type SaveResult } from "@camp404/types";
 import {
   answersLeadsOnly,
   boundDraftResponses,
+  errorLogText,
   questionnaireForViewer,
   questionnaireRoleMirror,
   validateSubmission,
@@ -173,7 +174,10 @@ export async function saveBuilderResponses(
       });
     }
   } catch (err) {
-    console.error("saveBuilderResponses persistence failed", err);
+    console.error(
+      "saveBuilderResponses persistence failed",
+      errorLogText(err, process.env),
+    );
     return { ok: false, errors: { _form: SAVE_FAILED } };
   }
   // Lost the race to another submit of the same optional questionnaire.

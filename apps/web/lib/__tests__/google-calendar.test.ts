@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}));
 
 import {
   calendarConfig,
+  calendarWriteConfig,
   createCalendarEvent,
   deleteCalendarEvent,
   eventRequestBody,
@@ -28,6 +29,8 @@ const { privateKey, publicKey } = generateKeyPairSync("rsa", {
 });
 
 const ENV = {
+  // Calendar writes happen on production only (mayContactMembers).
+  VERCEL_ENV: "production",
   GOOGLE_CALENDAR_ID: "camp@group.calendar.google.com",
   GOOGLE_CALENDAR_CLIENT_EMAIL: "calendar@camp-404.iam.gserviceaccount.com",
   // Stored the way Vercel keeps it: literal \n.
@@ -429,6 +432,24 @@ describe("writing to the calendar", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("writes nothing off production, though a preview still reads", async () => {
+    const fetchSpy = vi.fn(async () => Response.json({ items: [] }));
+    vi.stubGlobal("fetch", fetchSpy);
+    for (const stage of ["preview", "development", undefined]) {
+      const env = { ...ENV, VERCEL_ENV: stage };
+      expect(calendarWriteConfig(env)).toBeNull();
+      await expect(createCalendarEvent(env, body)).rejects.toThrow(
+        "calendar not configured",
+      );
+      await expect(putCalendarEvent(env, "ev1", body)).rejects.toThrow(
+        "calendar not configured",
+      );
+      expect(await deleteCalendarEvent(env, "ev1")).toBe(false);
+    }
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(calendarConfig({ ...ENV, VERCEL_ENV: "preview" })).not.toBeNull();
   });
 
   it("asks for the write scope only to write; a read keeps the read-only scope", async () => {

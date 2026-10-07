@@ -1,3 +1,4 @@
+import { errorLogText } from "@camp404/core";
 import { redirect } from "next/navigation";
 import { BellOff, ClipboardList, Megaphone } from "lucide-react";
 import { EmptyState } from "@camp404/ui/components/empty-state";
@@ -109,7 +110,10 @@ export default async function NotificationsPage({
       await markRead(campUser.id, feedIds(items));
     } catch (err) {
       // The list is still worth showing. The badge stays until the next visit.
-      console.error("notifications markRead failed", err);
+      console.error(
+        "notifications markRead failed",
+        errorLogText(err, process.env),
+      );
     }
   }
   // The number beside the Unread tab is read AFTER that clear, so it is what

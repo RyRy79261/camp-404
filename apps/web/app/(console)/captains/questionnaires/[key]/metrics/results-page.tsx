@@ -9,12 +9,15 @@ import {
   type ResultRowView,
   type ResultsTab,
 } from "@/components/questionnaires/results-view";
+import { auditReadsAfterResponse } from "@/lib/audit";
 import { audienceLabel, getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
+import { usesTestStore } from "@/lib/test-mode";
 import { answerColumns, formatAnswer } from "../responses/answer-values";
 import { responsesCsvHref } from "../responses/csv-export";
 import { CloseActivationButton } from "./close-send-button";
 import { ReminderButton } from "./reminder-button";
 import {
+  allergyReadEvents,
   emptyStateFor,
   loadResults,
   recipientsOf,
@@ -44,7 +47,8 @@ import {
 // the privacy rules are enforced: free text is counted and never listed, every
 // "Other…" answer collapses into one row, and a removed question's answers are
 // counted, never shown. The answers the Individual tab shows go through
-// `formatAnswer`, the label path the CSV export also uses.
+// `formatAnswer`, the label path the CSV export also uses. A member's allergy
+// answer on the page is a recorded read (allergyReadEvents).
 
 const COMPLETED = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -85,6 +89,14 @@ async function ResultsBody({
   initialTab: ResultsTab;
 }) {
   const respondents = respondentsOf(view);
+  // Both tabs send every member's answers to the page (the Individual table
+  // switches in place), so an allergy answer is read on either address. The
+  // test store keeps no audit log.
+  if (!usesTestStore()) {
+    auditReadsAfterResponse(
+      allergyReadEvents(view, respondents, "questionnaire_results"),
+    );
+  }
   const summary = summarise(view);
   const aggregate = aggregateQuestions(
     view.questions,

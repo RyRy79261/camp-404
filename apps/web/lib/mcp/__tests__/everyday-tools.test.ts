@@ -742,4 +742,30 @@ describe("the connector's own log", () => {
       ]),
     );
   });
+
+  it("records that search words were given, never the words", async () => {
+    const { captain } = await camp();
+    const words = "Lo Ner peanut allergy";
+    await call("search_camp", { query: words }, captain.id);
+    await call("list_inventory_items", { q: words }, captain.id);
+    const rows = await h
+      .db()
+      .select({
+        tool: schema.mcpAuditLog.tool,
+        args: schema.mcpAuditLog.argsJson,
+      })
+      .from(schema.mcpAuditLog)
+      .where(eq(schema.mcpAuditLog.userId, captain.id));
+    expect(rows).toHaveLength(2);
+    expect(JSON.stringify(rows)).not.toContain("peanut");
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { tool: "search_camp", args: { query: "given" } },
+        {
+          tool: "list_inventory_items",
+          args: { q: "given", team: null, location: null, condition: null },
+        },
+      ]),
+    );
+  });
 });

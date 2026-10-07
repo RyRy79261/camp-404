@@ -1,5 +1,6 @@
 import "server-only";
 
+import { errorLogText } from "@camp404/core";
 import { after } from "next/server";
 import * as db from "@camp404/db/documents";
 import type {
@@ -116,7 +117,10 @@ export function recordChapterReadAfterResponse(
     try {
       await recordChapterRead(input);
     } catch (error) {
-      console.error("guide read write failed", error);
+      console.error(
+        "guide read write failed",
+        errorLogText(error, process.env),
+      );
     }
   });
 }

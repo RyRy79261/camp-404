@@ -8,7 +8,11 @@ import {
   redactSecrets,
   teamEventTitle,
 } from "@camp404/core";
-import { calendarCredentials, type EnvBag } from "./integration-config";
+import {
+  calendarCredentials,
+  mayContactMembers,
+  type EnvBag,
+} from "./integration-config";
 
 // The camp's shared Google Calendar, read for the member home page's "coming
 // up" list (owner, 2026-09-23: "we have a shared Google Calendar. It would be
@@ -112,6 +116,15 @@ export function calendarConfig(env: EnvBag): CalendarConfig | null {
     clientEmail: credentials.clientEmail,
     privateKey: credentials.privateKey,
   };
+}
+
+/**
+ * The calendar to WRITE to: calendarConfig, on production only
+ * (mayContactMembers). A preview or a laptop still reads the calendar, but
+ * never adds, changes or removes an event members see.
+ */
+export function calendarWriteConfig(env: EnvBag): CalendarConfig | null {
+  return mayContactMembers(env) ? calendarConfig(env) : null;
 }
 
 function base64url(input: string | Buffer): string {
@@ -381,7 +394,7 @@ export async function createCalendarEvent(
   now: Date = new Date(),
   timeoutMs: number = CALENDAR_TIMEOUT_MS,
 ): Promise<string> {
-  const config = calendarConfig(env);
+  const config = calendarWriteConfig(env);
   if (!config) throw new Error("calendar not configured");
   try {
     const token = await accessToken(config, WRITE_SCOPE, now, timeoutMs);
@@ -424,7 +437,7 @@ export async function putCalendarEvent(
   now: Date = new Date(),
   timeoutMs: number = CALENDAR_TIMEOUT_MS,
 ): Promise<void> {
-  const config = calendarConfig(env);
+  const config = calendarWriteConfig(env);
   if (!config) throw new Error("calendar not configured");
   try {
     const token = await accessToken(config, WRITE_SCOPE, now, timeoutMs);
@@ -470,7 +483,7 @@ export async function deleteCalendarEvent(
   now: Date = new Date(),
   timeoutMs: number = CALENDAR_TIMEOUT_MS,
 ): Promise<boolean> {
-  const config = calendarConfig(env);
+  const config = calendarWriteConfig(env);
   if (!config) return false;
   try {
     const token = await accessToken(config, WRITE_SCOPE, now, timeoutMs);

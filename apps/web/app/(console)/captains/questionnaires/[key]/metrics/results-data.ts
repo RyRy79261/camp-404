@@ -1,14 +1,21 @@
 import { notFound } from "next/navigation";
 import {
   flattenQuestions,
+  safeParseStoredDefinition,
   type Question,
+  type Questionnaire,
   type QuestionnaireResponses,
+  type QuestionRole,
 } from "@camp404/types";
 import {
   currentCycle as currentOf,
   UNSET_CYCLE,
 } from "@camp404/db/camp-config";
-import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
+import type { AuditEvent } from "@camp404/db/audit";
+import {
+  getDefinitionMetaRow,
+  listVersionDefinitions,
+} from "@camp404/db/questionnaire-definitions";
 import {
   listActivationResponses,
   listActivationsForCycle,
@@ -45,6 +52,15 @@ export interface ResultsView {
   activations: ResultsActivationRow[];
   /** The send whose gates the reach figures describe: the open one, else the newest. */
   activeActivation: ResultsActivationRow | null;
+  /** The captain looking: the actor on the allergy read rows. */
+  viewerId: string;
+  /**
+   * Every question id that carries, or ever carried, an allergy role: the head
+   * definition's and every published version's. A question since removed or
+   * re-roled still shows its stored answers (a removed-question column), so
+   * reading them is still an allergy read.
+   */
+  allergyQuestionIds: string[];
 }
 
 export type ResultsAccess =
@@ -67,7 +83,7 @@ export async function loadResults(
   key: string,
   cycleParam?: string,
 ): Promise<ResultsAccess> {
-  const { cleared } = await captainPageGate("captain");
+  const { cleared, campUser } = await captainPageGate("captain");
   if (!cleared) return { ok: false, reason: "locked" };
 
   const meta = await getDefinitionMetaRow(key);
@@ -85,9 +101,10 @@ export async function loadResults(
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  const [cycles, years] = await Promise.all([
+  const [cycles, years, versions] = await Promise.all([
     listResultCycles(key),
     getCycles(),
+    listVersionDefinitions(key),
   ]);
   const currentCycle = currentOf(years)?.year ?? null;
   const cycleNames = Object.fromEntries(
@@ -125,6 +142,14 @@ export async function loadResults(
       activations,
       activeActivation:
         activations.find((a) => a.status === "open") ?? activations[0] ?? null,
+      viewerId: campUser.id,
+      allergyQuestionIds: allergyQuestionIdsOf([
+        definition,
+        ...versions.flatMap((raw) => {
+          const parsed = safeParseStoredDefinition(raw);
+          return parsed ? [parsed] : [];
+        }),
+      ]),
     },
   };
 }
@@ -137,6 +162,67 @@ export interface Respondent {
   completedAt: Date;
   definitionVersion: string | null;
   responses: QuestionnaireResponses;
+}
+
+/**
+ * The roles whose answers are allergies (SAFETY_VISIBLE: `allergies` and
+ * `isAnaphylactic`). Reading them on a member's behalf is recorded, as on the
+ * daily site sheet, so "who saw my data?" has an answer.
+ */
+export const ALLERGY_ROLES: readonly QuestionRole[] = [
+  "dietary_allergies",
+  "dietary_anaphylactic",
+];
+
+function answered(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+/** The ids of every question carrying an allergy role, across definitions. */
+export function allergyQuestionIdsOf(
+  definitions: readonly Questionnaire[],
+): string[] {
+  const ids = new Set<string>();
+  for (const definition of definitions) {
+    for (const q of flattenQuestions(definition)) {
+      if ("role" in q && q.role && ALLERGY_ROLES.includes(q.role))
+        ids.add(q.id);
+    }
+  }
+  return [...ids];
+}
+
+/**
+ * One `safety.allergies.view` row per member whose allergy answer the reader
+ * is shown: a finished answer to a question that carries, or once carried, an
+ * allergy role (`allergyQuestionIds`). A "no" to anaphylaxis is an answer too.
+ */
+export function allergyReadEvents(
+  view: Pick<
+    ResultsView,
+    "key" | "title" | "cycle" | "allergyQuestionIds" | "viewerId"
+  >,
+  respondents: readonly Pick<Respondent, "userId" | "responses">[],
+  via: "questionnaire_results" | "questionnaire_answers" | "questionnaire_csv",
+): AuditEvent[] {
+  const ids = view.allergyQuestionIds;
+  if (ids.length === 0) return [];
+  return respondents
+    .filter((r) => ids.some((id) => answered(r.responses[id])))
+    .map((r) => ({
+      actorId: view.viewerId,
+      action: "safety.allergies.view" as const,
+      target: r.userId,
+      metadata: {
+        via,
+        questionnaire: view.key,
+        title: view.title,
+        cycle: view.cycle,
+      },
+    }));
 }
 
 export function memberName(displayName: string | null): string {

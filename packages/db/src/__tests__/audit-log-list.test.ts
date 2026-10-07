@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
-import { isAuditCursor, listAuditLog } from "../audit";
+import { appendAuditEvents, isAuditCursor, listAuditLog } from "../audit";
 import * as schema from "../schema";
 
 // The audit page reads the trail newest first, a bounded page at a time, with
@@ -87,5 +87,32 @@ describe("listAuditLog", () => {
       nextCursor: null,
     });
     expect((await listAuditLog({ limit: 10_000 })).rows).toHaveLength(1);
+  });
+});
+
+describe("appendAuditEvents", () => {
+  const h = useTestDb();
+
+  it("writes every read in one statement", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { displayName: "Cap Tain" });
+    const a = await makeUser(db, { displayName: "Ay" });
+    const b = await makeUser(db, { displayName: "Bee" });
+    await appendAuditEvents(
+      [a.id, b.id].map((target) => ({
+        actorId: captain.id,
+        action: "safety.allergies.view" as const,
+        target,
+        metadata: { via: "questionnaire_csv" },
+      })),
+    );
+    await appendAuditEvents([]);
+    const { rows } = await listAuditLog();
+    expect(rows.map((r) => [r.action, r.target]).sort()).toEqual(
+      [
+        ["safety.allergies.view", a.id],
+        ["safety.allergies.view", b.id],
+      ].sort(),
+    );
   });
 });

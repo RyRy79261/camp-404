@@ -1,5 +1,6 @@
 import "server-only";
 
+import { errorLogText } from "@camp404/core";
 import { getJoinSitePublic } from "@camp404/db/join-site";
 import { DEFAULT_JOIN_DATA, type JoinData } from "./join-data";
 
@@ -40,13 +41,13 @@ export async function loadJoinData(): Promise<JoinData> {
     if (process.env.NEXT_PHASE === BUILD_PHASE) {
       console.error(
         "[join] database read failed during the build; showing the built-in copy",
-        error,
+        errorLogText(error, process.env),
       );
       return DEFAULT_JOIN_DATA;
     }
     console.error(
       "[join] database read failed; keeping the last good page",
-      error,
+      errorLogText(error, process.env),
     );
     throw error;
   }

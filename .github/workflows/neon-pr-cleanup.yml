@@ -6,10 +6,12 @@ name: Delete Neon branch for closed PR
 #
 #   preview/<head-branch-name>
 #
-# We look up by `preview/<head-branch-name>` prefix rather than
-# reconstructing the full name from event data — head-ref slugging can
-# differ between Vercel, the Neon integration, and tj-actions/branch-names,
-# so a prefix match is more robust and is still narrowly scoped to this PR.
+# The integration uses the git branch name as it is, with only `preview/` in
+# front (Neon's docs), so this deletes the branch whose name is EXACTLY
+# `preview/<head-branch-name>`. It used to match by prefix, which also took
+# other open PRs' databases: closing `feat/prints` deleted the database of
+# `feat/prints-round`. A name that does not match exactly is left alone and
+# listed in the log, so a leak is visible and nothing else is ever deleted.
 
 # `pull_request_target`, not `pull_request`, so the repository's secrets are
 # there when Dependabot opens or closes the PR. Under `pull_request` a
@@ -46,8 +48,8 @@ jobs:
             exit 1
           fi
 
-          prefix="preview/${HEAD_REF}"
-          echo "Looking up Neon branches with prefix: $prefix"
+          target="preview/${HEAD_REF}"
+          echo "Looking up the Neon branch named: $target"
 
           api="https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}"
           auth="Authorization: Bearer ${NEON_API_KEY}"
@@ -84,23 +86,35 @@ jobs:
             cursor="$next"
           done
 
-          # Find non-primary branches matching this PR's prefix. The primary
-          # branch is production and is never a candidate. jq emits one
-          # "id<TAB>name" record per match.
-          targets=$(printf '%s' "$all_branches" | jq -r --arg prefix "$prefix" '
+          # Find the non-primary branch whose name is exactly this PR's. The
+          # primary branch is production and is never a candidate. jq emits
+          # one "id<TAB>name" record per match.
+          targets=$(printf '%s' "$all_branches" | jq -r --arg target "$target" '
             .[]
             | select(.primary != true)
-            | select(.name | startswith($prefix))
+            | select(.name == $target)
             | [.id, .name] | @tsv
           ')
 
           if [ -z "$targets" ]; then
-            echo "No Neon branch found for PR #${PR_NUMBER} (prefix: $prefix). Nothing to delete."
+            echo "No Neon branch named $target for PR #${PR_NUMBER}. Nothing to delete."
+            # Say what is near, without touching it, so a renamed or slugged
+            # branch shows up here instead of leaking quietly.
+            near=$(printf '%s' "$all_branches" | jq -r --arg target "$target" '
+              .[]
+              | select(.primary != true)
+              | select(.name | startswith($target))
+              | .name
+            ')
+            if [ -n "$near" ]; then
+              echo "Branches that start with that name, left alone:"
+              printf '%s\n' "$near"
+            fi
             exit 0
           fi
 
-          # In practice there should be exactly one match per PR; loop is
-          # defensive in case a previous run left duplicates behind.
+          # One match in practice; the loop is defensive in case two branches
+          # ever share the exact name.
           while IFS=$'\t' read -r id name; do
             [ -z "$id" ] && continue
             echo "Deleting branch: $name (id=$id)"

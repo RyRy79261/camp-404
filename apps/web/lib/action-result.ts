@@ -1,3 +1,4 @@
+import { errorLogText } from "@camp404/core";
 import { unstable_rethrow } from "next/navigation";
 
 // The `{ok:true} | {ok:false, error}` contract every result-object server
@@ -29,17 +30,20 @@ export type ActionFailure = { ok: false; error: string };
  * constant: `packages/db` nests the driver's error under `.cause`, so mapping
  * `error.message` through would put Postgres text ("duplicate key value
  * violates unique constraint …", a column name, sometimes the value) on
- * screen. The real error goes to the server log instead.
+ * screen. The server log gets the error's class and Postgres code instead
+ * (errorLogText): never its message, which holds the values being saved.
  */
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
 /**
  * Run a server action's body so a thrown error becomes its typed failure arm.
  *
- * The original error is `console.error`d with `label` for the server log; the
- * caller only ever sees `GENERIC_ERROR`. Next's own control-flow throws
- * (`redirect`, `notFound`, dynamic-usage bailouts) are re-thrown untouched via
- * `unstable_rethrow`, so wrapping an action that redirects on success is safe.
+ * The error's class and Postgres code are `console.error`d with `label` for
+ * the server log (never its message: a failed query's message lists the
+ * member's answers it was saving); the caller only ever sees `GENERIC_ERROR`.
+ * Next's own control-flow throws (`redirect`, `notFound`, dynamic-usage
+ * bailouts) are re-thrown untouched via `unstable_rethrow`, so wrapping an
+ * action that redirects on success is safe.
  *
  * ```ts
  * export async function publishAction(id: string): Promise<ActionResult> {
@@ -70,7 +74,7 @@ export async function runAction<T extends { ok: boolean }, F>(
     return await body();
   } catch (err) {
     unstable_rethrow(err);
-    console.error(`[action:${label}]`, err);
+    console.error(`[action:${label}]`, errorLogText(err, process.env));
     return toFailure
       ? toFailure(GENERIC_ERROR)
       : { ok: false, error: GENERIC_ERROR };

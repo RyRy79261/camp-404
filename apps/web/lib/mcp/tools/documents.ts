@@ -178,9 +178,9 @@ function registerDocumentAuthoringTools(server: McpServer): void {
       runTool({
         toolName: "create_document",
         extra,
+        // Never the title's words: nothing said to voice is kept.
         argsForAudit: {
           kind: args.kind,
-          title: args.title,
           category: args.category,
           team: args.team ?? null,
         },

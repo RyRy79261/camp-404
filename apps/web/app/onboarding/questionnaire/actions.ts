@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidateManifest } from "@/lib/manifest-revalidate";
-import { boundDraftResponses } from "@camp404/core";
+import { boundDraftResponses, errorLogText } from "@camp404/core";
 import {
   incompleteContactErrors,
   questionIdForRole,
@@ -185,7 +185,10 @@ export async function saveBurnerProfile(
     // Leave a server-side trace (which await threw) while keeping the
     // user-facing message generic — matches the catch pattern in the API
     // routes and the new error boundaries.
-    console.error("saveBurnerProfile persistence failed", err);
+    console.error(
+      "saveBurnerProfile persistence failed",
+      errorLogText(err, process.env),
+    );
     return {
       ok: false,
       errors: {

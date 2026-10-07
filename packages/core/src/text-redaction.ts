@@ -425,3 +425,45 @@ export function redactSecrets(
 
   return out;
 }
+
+// --- Error log lines ------------------------------------------------------
+
+/** A Postgres SQLSTATE: five digits or capital letters. */
+function sqlState(err: unknown): string | null {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : null;
+}
+
+/** An HTTP status an SDK error carries (Anthropic's, Groq's), or null. */
+function httpStatus(err: unknown): number | null {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status === "number" && Number.isInteger(status) ? status : null;
+}
+
+/**
+ * What a server log keeps of a thrown error: its class, the Postgres code
+ * (SQLSTATE) when the error or its cause has one, and an SDK's HTTP status.
+ * Never the message: a failed query's message carries the query's values
+ * (drizzle writes `params: …` into it, so an emergency contact's phone number
+ * or an allergy being saved), and an SDK error's carries the provider's
+ * response. Erasure cannot reach a log, so nothing a member typed may go in.
+ *
+ * Passed through redactSecrets as well, though a class name and a code hold
+ * no secret, so the line is safe whatever a future class is called.
+ */
+export function errorLogText(
+  err: unknown,
+  env: Record<string, string | undefined>,
+): string {
+  if (!(err instanceof Error)) return "Thrown non-error";
+  // DrizzleQueryError keeps the name "Error"; its class says more.
+  const kind =
+    err.name !== "Error" ? err.name : err.constructor?.name || err.name;
+  const code = sqlState(err) ?? sqlState(err.cause);
+  const status = httpStatus(err);
+  const parts = [code, status === null ? null : `status ${status}`].filter(
+    (part): part is string => part !== null,
+  );
+  const text = parts.length > 0 ? `${kind} (${parts.join(", ")})` : kind;
+  return redactSecrets(text, env);
+}

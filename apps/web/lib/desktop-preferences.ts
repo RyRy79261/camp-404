@@ -1,5 +1,6 @@
 import "server-only";
 
+import { errorLogText } from "@camp404/core";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import {
@@ -53,7 +54,10 @@ const readPreferences = cache(
       return await dbGetDesktopPreferences(userId);
     } catch (err) {
       // Never a reason for the desktop not to draw: the default look.
-      console.error("[desktop-preferences] read failed; the defaults", err);
+      console.error(
+        "[desktop-preferences] read failed; the defaults",
+        errorLogText(err, process.env),
+      );
       return defaultDesktopPreferences();
     }
   },

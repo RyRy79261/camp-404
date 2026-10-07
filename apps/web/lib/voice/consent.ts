@@ -9,9 +9,7 @@ import { voiceTestStore } from "../test-store-voice";
 // goes to Groq to become words and the words to Anthropic's Claude, that
 // neither is kept here, and that nothing is saved until they press Do. Their
 // yes is `users.voice_consent_at`; withdrawing clears it, and so does erasure.
-
-export const VOICE_NOTICE =
-  "Your voice is sent to Groq to become words, and the words to Anthropic's Claude to work out what you mean. Neither is kept here. Nothing is saved until you press Do.";
+// The notice's words are VOICE_NOTICE (./notice).
 
 export async function getVoiceConsent(userId: string): Promise<Date | null> {
   if (usesTestStore()) return voiceTestStore.getConsent(userId);

@@ -1,3 +1,4 @@
+import { errorLogText } from "@camp404/core";
 import { NextResponse } from "next/server";
 import {
   handleChatMemberUpdate,
@@ -46,7 +47,10 @@ export async function POST(req: Request) {
   } catch (err) {
     // Telegram will not retry a 200 — and we don't want it to. Log and
     // move on so a single malformed update doesn't block subsequent ones.
-    console.error("[telegram/webhook] update handler failed", err);
+    console.error(
+      "[telegram/webhook] update handler failed",
+      errorLogText(err, process.env),
+    );
   }
 
   return NextResponse.json({ ok: true });

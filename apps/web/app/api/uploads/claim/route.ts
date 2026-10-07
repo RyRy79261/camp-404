@@ -1,3 +1,4 @@
+import { errorLogText } from "@camp404/core";
 import { NextResponse } from "next/server";
 import { del, put } from "@vercel/blob";
 import { CLAIM_MAX_FILES, ClaimInput } from "@camp404/types";
@@ -145,7 +146,7 @@ export async function POST(req: Request) {
       files: stored,
     });
   } catch (err) {
-    console.error("claim record error", err);
+    console.error("claim record error", errorLogText(err, process.env));
     if (!isE2ETestMode()) await removeStored(stored, token);
     return refuse("Something went wrong. Try again.", 500);
   }

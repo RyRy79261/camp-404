@@ -1,3 +1,4 @@
+import { errorLogText } from "@camp404/core";
 import { after } from "next/server";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
@@ -27,7 +28,10 @@ export default async function ReportScreenshotsPage() {
       try {
         await clearStaleUnfiledScreenshots();
       } catch (err) {
-        console.error("report-screenshot stale cleanup failed", err);
+        console.error(
+          "report-screenshot stale cleanup failed",
+          errorLogText(err, process.env),
+        );
       }
     });
   }

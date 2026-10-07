@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Questionnaire } from "@camp404/types";
 import { writeAuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
@@ -91,6 +91,20 @@ export async function getQuestionnaireVersionRow(
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Every published version's definition of one questionnaire, oldest first.
+ * The results pages read them to tell which stored answers were given to a
+ * question that WAS an allergy question, even after the head dropped it.
+ */
+export async function listVersionDefinitions(key: string): Promise<unknown[]> {
+  const rows = await createHttpDb()
+    .select({ definition: questionnaireVersions.definition })
+    .from(questionnaireVersions)
+    .where(eq(questionnaireVersions.definitionKey, key))
+    .orderBy(asc(questionnaireVersions.publishedAt));
+  return rows.map((r) => r.definition);
 }
 
 // --- Builder writers (Phase C) -------------------------------------------

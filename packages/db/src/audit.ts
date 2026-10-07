@@ -63,6 +63,27 @@ export async function appendAuditEvent(event: AuditEvent): Promise<void> {
   await writeAuditEvent(createHttpDb(), event);
 }
 
+/**
+ * Append several read rows in one statement, so they are all written or none
+ * is: a download that must be recorded before it is handed over (a
+ * questionnaire's CSV) records every member in it, or fails.
+ */
+export async function appendAuditEvents(
+  events: readonly AuditEvent[],
+): Promise<void> {
+  if (events.length === 0) return;
+  await createHttpDb()
+    .insert(schema.auditLog)
+    .values(
+      events.map((event) => ({
+        actorId: event.actorId ?? null,
+        action: event.action,
+        target: event.target ?? null,
+        metadata: event.metadata ?? null,
+      })),
+    );
+}
+
 /** How many audit rows the audit page shows at a time. */
 export const AUDIT_PAGE_SIZE = 50;
 
