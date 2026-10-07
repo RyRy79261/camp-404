@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   createEvent,
@@ -9,15 +9,33 @@ import {
 import { windowStorageKey } from "@/components/os/window-storage";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 
+const loadDeviceToken = vi.hoisted(() =>
+  vi.fn(() => Promise.resolve({} as never)),
+);
+vi.mock("@/components/push/load-device-token", () => ({ loadDeviceToken }));
+
 // The push token is forgotten on /auth/sign-out itself (SignOutView), which
 // every sign-out reaches; the link only clears this tab's desktop and goes.
 
 afterEach(() => {
+  loadDeviceToken.mockClear();
   cleanup();
   window.sessionStorage.clear();
 });
 
 describe("SignOutLink", () => {
+  it("starts downloading the push-token cleanup when pointed at, focused or clicked", () => {
+    render(<SignOutLink />);
+    const link = screen.getByRole("link", { name: "Sign out" });
+    expect(loadDeviceToken).not.toHaveBeenCalled();
+    fireEvent.pointerEnter(link);
+    expect(loadDeviceToken).toHaveBeenCalledTimes(1);
+    fireEvent.focus(link);
+    expect(loadDeviceToken).toHaveBeenCalledTimes(2);
+    fireEvent.click(link);
+    expect(loadDeviceToken).toHaveBeenCalledTimes(3);
+  });
+
   it("is a plain sign-out link", () => {
     render(<SignOutLink className="x" />);
     const link = screen.getByRole("link", { name: "Sign out" });
