@@ -16,6 +16,7 @@ vi.mock("@/lib/users", () => ({
 vi.mock("next/navigation", () => ({ notFound: vi.fn(), redirect: vi.fn() }));
 vi.mock("@camp404/db/questionnaire-definitions", () => ({
   getDefinitionMetaRow: vi.fn(),
+  listVersionDefinitions: vi.fn(async () => []),
 }));
 vi.mock("@camp404/db/questionnaire-results", () => ({
   listActivationResponses: vi.fn(),
@@ -86,6 +87,7 @@ const view: ResultsView = {
   activations: [],
   activeActivation: null,
   viewerId: "cap1",
+  allergyQuestionIds: ["q2"],
 };
 
 function get(query = "?cycle=2026") {

@@ -913,7 +913,8 @@ or lazily on a page load, both in `after()` (`apps/web/lib/background-work.ts`):
   Google Calendar writes go out only where `VERCEL_ENV` is `production`
   (`mayContactMembers` in `apps/web/lib/integration-config.ts`, the one
   check). A preview's database is a copy of production's members, so on a
-  preview or a laptop the in-app notices land and the rest stays queued.
+  preview or a laptop the in-app notices land, push and email stay queued,
+  and the calendar reads as "not connected" for writing.
 - Every step is idempotent and claim-safe: broadcasts are claimed by
   `dispatched_at`, the push and email drains lock their rows `FOR UPDATE SKIP
 LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per

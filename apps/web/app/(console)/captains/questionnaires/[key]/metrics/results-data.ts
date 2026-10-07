@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import {
   flattenQuestions,
+  safeParseStoredDefinition,
   type Question,
+  type Questionnaire,
   type QuestionnaireResponses,
   type QuestionRole,
 } from "@camp404/types";
@@ -10,7 +12,10 @@ import {
   UNSET_CYCLE,
 } from "@camp404/db/camp-config";
 import type { AuditEvent } from "@camp404/db/audit";
-import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
+import {
+  getDefinitionMetaRow,
+  listVersionDefinitions,
+} from "@camp404/db/questionnaire-definitions";
 import {
   listActivationResponses,
   listActivationsForCycle,
@@ -49,6 +54,13 @@ export interface ResultsView {
   activeActivation: ResultsActivationRow | null;
   /** The captain looking: the actor on the allergy read rows. */
   viewerId: string;
+  /**
+   * Every question id that carries, or ever carried, an allergy role: the head
+   * definition's and every published version's. A question since removed or
+   * re-roled still shows its stored answers (a removed-question column), so
+   * reading them is still an allergy read.
+   */
+  allergyQuestionIds: string[];
 }
 
 export type ResultsAccess =
@@ -89,9 +101,10 @@ export async function loadResults(
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  const [cycles, years] = await Promise.all([
+  const [cycles, years, versions] = await Promise.all([
     listResultCycles(key),
     getCycles(),
+    listVersionDefinitions(key),
   ]);
   const currentCycle = currentOf(years)?.year ?? null;
   const cycleNames = Object.fromEntries(
@@ -130,6 +143,13 @@ export async function loadResults(
       activeActivation:
         activations.find((a) => a.status === "open") ?? activations[0] ?? null,
       viewerId: campUser.id,
+      allergyQuestionIds: allergyQuestionIdsOf([
+        definition,
+        ...versions.flatMap((raw) => {
+          const parsed = safeParseStoredDefinition(raw);
+          return parsed ? [parsed] : [];
+        }),
+      ]),
     },
   };
 }
@@ -161,20 +181,34 @@ function answered(value: unknown): boolean {
   return true;
 }
 
+/** The ids of every question carrying an allergy role, across definitions. */
+export function allergyQuestionIdsOf(
+  definitions: readonly Questionnaire[],
+): string[] {
+  const ids = new Set<string>();
+  for (const definition of definitions) {
+    for (const q of flattenQuestions(definition)) {
+      if ("role" in q && q.role && ALLERGY_ROLES.includes(q.role))
+        ids.add(q.id);
+    }
+  }
+  return [...ids];
+}
+
 /**
  * One `safety.allergies.view` row per member whose allergy answer the reader
- * is shown: a finished answer to a question carrying an allergy role. A "no"
- * to anaphylaxis is an answer too. A question removed from the definition has
- * no role to read, so its column is not counted.
+ * is shown: a finished answer to a question that carries, or once carried, an
+ * allergy role (`allergyQuestionIds`). A "no" to anaphylaxis is an answer too.
  */
 export function allergyReadEvents(
-  view: Pick<ResultsView, "key" | "title" | "cycle" | "questions" | "viewerId">,
+  view: Pick<
+    ResultsView,
+    "key" | "title" | "cycle" | "allergyQuestionIds" | "viewerId"
+  >,
   respondents: readonly Pick<Respondent, "userId" | "responses">[],
   via: "questionnaire_results" | "questionnaire_answers" | "questionnaire_csv",
 ): AuditEvent[] {
-  const ids = view.questions
-    .filter((q) => "role" in q && q.role && ALLERGY_ROLES.includes(q.role))
-    .map((q) => q.id);
+  const ids = view.allergyQuestionIds;
   if (ids.length === 0) return [];
   return respondents
     .filter((r) => ids.some((id) => answered(r.responses[id])))

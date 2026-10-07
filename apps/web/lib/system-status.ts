@@ -261,7 +261,7 @@ function deploymentCheck(env: EnvBag): SystemCheck {
     tone: "info",
     detail: mayContactMembers(env)
       ? `Running as ${stage}.`
-      : `Running as ${stage}. Only production sends push, email and calendar changes, so here they stay queued.`,
+      : `Running as ${stage}. Only production sends push, email and calendar changes: here push and email stay queued, and calendar writes are off.`,
   };
 }
 
