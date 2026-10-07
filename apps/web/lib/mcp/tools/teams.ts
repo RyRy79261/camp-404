@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
@@ -19,7 +19,7 @@ export function registerTeamTools(server: McpServer): void {
       title: "Get a team's budget",
       description:
         "Returns this year's totals for one team, in whole rand cents: its budget (null when none is set), what it has spent (the claims its team said yes to), what is waiting for a yes, and what is left. Readable by any member.",
-      inputSchema: { team: TeamEnum },
+      inputSchema: z.object({ team: TeamEnum }),
     },
     async (args, extra) =>
       runTool({
@@ -39,7 +39,7 @@ export function registerTeamTools(server: McpServer): void {
       title: "List every team's budget",
       description:
         "Returns this year's totals for every team, in whole rand cents: budget, spent, waiting and left. Readable by any member.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({

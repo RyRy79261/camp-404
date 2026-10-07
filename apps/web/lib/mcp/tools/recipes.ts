@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
@@ -116,7 +116,7 @@ export function registerRecipeTools(server: McpServer): void {
       title: "Suggest a recipe",
       description:
         "Any camp member can suggest a recipe for the kitchen by giving its text (ingredients and method), or its `sections` (ingredients, equipment, steps, notes; give one or the other, and a `title` with sections). The server never opens links, so a link alone is refused; a link may be added for reference. The name is optional and defaults to the text's first line. There is no serves field on the form: say how many it serves in the notes. It lands as 'suggested' until a Kitchen lead or a captain approves it in the app. Nothing is sent to an AI model unless a captain or a Kitchen lead later chooses to, and only if aiConsent is true.",
-      inputSchema: {
+      inputSchema: z.object({
         text: z.string().min(1).optional(),
         sections: z
           .object({
@@ -130,7 +130,7 @@ export function registerRecipeTools(server: McpServer): void {
         link: z.string().nullable().optional(),
         suitabilityNote: z.string().nullable().optional(),
         aiConsent: z.boolean().optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -197,9 +197,9 @@ export function registerRecipeTools(server: McpServer): void {
       title: "List the recipe book",
       description:
         "Returns the camp's recipe book: every recipe with an accepted version, by name, with the plates it is written for (plates) and every plate count that has a result (readyPlates). Suggestions still in review are not listed.",
-      inputSchema: {
+      inputSchema: z.object({
         submittedBy: z.string().uuid().optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -236,10 +236,10 @@ export function registerRecipeTools(server: McpServer): void {
       title: "Read a recipe",
       description:
         "One recipe as its page shows it to you. In the book: the accepted version (`recipe`: ingredients, steps, notes), the plates it is written for, every plate count that has a result (`readyPlates`), the amounts at `plates` when that count has a result (else at the version's own count, with `askedPlatesNotReady`), how it was scaled, and the cooks' notes (`lessons`). Before the book, only its submitter and the Kitchen's reviewers see it: its status and the original text. Nothing here sends anything to Claude.",
-      inputSchema: {
+      inputSchema: z.object({
         recipeId: z.string().uuid(),
         plates: z.number().int().min(1).max(MAX_PLATES).optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -309,11 +309,11 @@ export function registerRecipeTools(server: McpServer): void {
       title: "Add a note on cooking a recipe",
       description:
         "Adds a note on what the kitchen learned cooking a recipe in the book, as the version page's Notes form does. It goes on the version given (`versionId`, from get_recipe), or on the current one when none is given. Any camp member.",
-      inputSchema: {
+      inputSchema: z.object({
         recipeId: z.string().uuid(),
         versionId: z.string().uuid().optional(),
         body: z.string().min(1).max(2_000),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

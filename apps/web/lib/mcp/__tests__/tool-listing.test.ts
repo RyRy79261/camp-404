@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Client } from "@modelcontextprotocol/client";
+import { InMemoryTransport } from "@modelcontextprotocol/client";
+import { McpServer } from "@modelcontextprotocol/server";
 import { describe, expect, it } from "vitest";
 import { registerCampMcpTools, SERVER_INSTRUCTIONS } from "../server";
 

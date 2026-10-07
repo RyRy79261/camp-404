@@ -266,7 +266,6 @@ describe("useMinuteClock", () => {
 
 describe("GroupedStartMenu's columns", () => {
   it("stands the groups in the columns it is given, one under another, and any left over after", () => {
-    const anchor = { current: null };
     const group = (key: string, label: string): StartMenuGroup => ({
       key,
       label,
@@ -288,7 +287,7 @@ describe("GroupedStartMenu's columns", () => {
         ]}
         label="Start"
         banner="Camp 404 OS"
-        anchor={anchor}
+        anchor={null}
         onClose={() => {}}
       />,
     );

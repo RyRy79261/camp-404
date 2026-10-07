@@ -1,7 +1,8 @@
 import { plainPreview } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { cn } from "@camp404/ui/lib/utils";
-import { formatRelativeTime, presentationIcon } from "./presentation-meta";
+import { PresentationIcon } from "./presentation-icon";
+import { formatRelativeTime } from "./presentation-meta";
 import type { InboxItem } from "@/lib/notifications";
 
 interface NotificationRowProps {
@@ -40,8 +41,6 @@ export function NotificationRow({
   href,
   now,
 }: NotificationRowProps) {
-  const Icon = presentationIcon(presentation);
-
   // Acknowledgement state wins over the bare attribution; suppressed entirely
   // when there's no sender (system / deleted-sender deliveries).
   const attribution = senderName
@@ -67,7 +66,11 @@ export function NotificationRow({
             : "bg-muted text-muted-foreground",
         )}
       >
-        <Icon className="h-4 w-4" aria-hidden="true" />
+        <PresentationIcon
+          presentation={presentation}
+          className="h-4 w-4"
+          aria-hidden="true"
+        />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-start justify-between gap-3">

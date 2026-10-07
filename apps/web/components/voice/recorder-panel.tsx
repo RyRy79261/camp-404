@@ -63,22 +63,27 @@ export function RecorderPanel({
   } = useVoiceRecorder({ onTranscript, promptKey, maxDurationMs });
 
   const [elapsedMs, setElapsedMs] = React.useState(0);
-  const [editedTranscript, setEditedTranscript] = React.useState("");
+  const [editedTranscript, setEditedTranscript] = React.useState(
+    transcript ?? "",
+  );
+
+  // The timer goes back to 0:00 whenever recording stops, and the editable
+  // copy is seeded whenever a fresh transcript arrives for review.
+  const [seen, setSeen] = React.useState({ state, transcript });
+  if (seen.state !== state || seen.transcript !== transcript) {
+    setSeen({ state, transcript });
+    if (seen.state !== state && state !== "recording") setElapsedMs(0);
+    if (seen.transcript !== transcript && transcript !== null) {
+      setEditedTranscript(transcript);
+    }
+  }
 
   React.useEffect(() => {
-    if (state !== "recording") {
-      setElapsedMs(0);
-      return;
-    }
+    if (state !== "recording") return;
     const startedAt = Date.now();
     const id = setInterval(() => setElapsedMs(Date.now() - startedAt), 100);
     return () => clearInterval(id);
   }, [state]);
-
-  // Seed the editable copy whenever a fresh transcript arrives for review.
-  React.useEffect(() => {
-    if (transcript !== null) setEditedTranscript(transcript);
-  }, [transcript]);
 
   // Each state has one control to act on next. The one that had focus unmounts
   // on every change, so move focus to the new one: Start when the panel opens,

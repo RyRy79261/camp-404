@@ -167,8 +167,8 @@ export function ShoppingListView({
   const [seen, setSeen] = useState(groups);
   if (seen !== groups) {
     setSeen(groups);
-    const fresh = ticksOf(groups);
     setTicked((t) => {
+      const fresh = ticksOf(groups);
       for (const key of Object.keys(busy)) {
         if (busy[key] && key in t) fresh[key] = t[key]!;
       }

@@ -1,4 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { z } from "zod";
 import {
   buildShoppingList,
   canRunProofread,
@@ -54,7 +55,7 @@ export function registerKitchenTools(server: McpServer): void {
       title: "Read this year's meal plan",
       description:
         "This year's meal plan as the Meal plan page shows it: each day on site (named by its date once Logistics has the days), the plates at breakfast and dinner, the recipes on each meal (`verified`: the recipe has a count for those plates), and the year's snacks. The camp does no lunch.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -113,7 +114,7 @@ export function registerKitchenTools(server: McpServer): void {
       title: "Read the shopping list",
       description:
         "The Kitchen's shopping list as its page works it out from the menu: by shop area, each line's exact amount and what to buy, whether it is ticked (ticks are shared by the camp; `tickedAtOtherAmount` means it was ticked before the amount changed), and which meals it comes from. `notCounted` lists menu recipes with no count for their meal's plates yet: they add nothing until proofread. Captains and Kitchen leads also get each line's shop and price (rand cents).",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -205,7 +206,7 @@ export function registerKitchenTools(server: McpServer): void {
       title: "List the Kitchen's review queue",
       description:
         "The Kitchen's review page: suggestions waiting for a decision (and those sent back for changes), recipes ready to send to Claude (`blockedReason` says why one cannot go yet), and older drafts waiting to be accepted. Approving, sending to Claude and accepting happen on the page, by a person.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({

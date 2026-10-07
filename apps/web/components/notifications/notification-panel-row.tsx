@@ -9,10 +9,8 @@ import {
 } from "@camp404/core";
 import { cn } from "@camp404/ui/lib/utils";
 import type { InboxItem } from "@/lib/notifications";
-import {
-  formatRelativeTime,
-  presentationIcon,
-} from "@/app/(console)/notifications/presentation-meta";
+import { formatRelativeTime } from "@/app/(console)/notifications/presentation-meta";
+import { PresentationIcon } from "@/app/(console)/notifications/presentation-icon";
 import type { PanelQuestionnaire } from "@/app/(console)/notifications/actions";
 
 // The two row shapes the header panel lists, drawn like AfrikaBurn's
@@ -123,12 +121,17 @@ export function PanelNotificationRow({
   /** Fired when the row is opened, so the panel can close behind it. */
   onNavigate?: () => void;
 }) {
-  const Icon = presentationIcon(item.presentation);
   const unread = item.readAt === null;
   return (
     <Shell
       href={item.link || NOTIFICATION_FALLBACK_LINK}
-      icon={<Icon className="h-4 w-4" aria-hidden />}
+      icon={
+        <PresentationIcon
+          presentation={item.presentation}
+          className="h-4 w-4"
+          aria-hidden
+        />
+      }
       iconTone={
         unread ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
       }

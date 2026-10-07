@@ -1,6 +1,12 @@
 "use client";
 
-import { useId, useRef, useState, type DragEvent } from "react";
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 import { FileText, ImageIcon, Loader2, Upload, X } from "lucide-react";
 import { cn } from "@camp404/ui/lib/utils";
 import { downscaleForUpload, RECEIPT_UPLOAD } from "@/lib/image";
@@ -72,9 +78,11 @@ export function ReceiptPicker({
   const inputId = id ?? fallbackId;
   const [dragging, setDragging] = useState(false);
   const [preparing, setPreparing] = useState(false);
-  // The files as of the last render, for an add that finishes after a wait.
+  // The files as of the last commit, for an add that finishes after a wait.
   const latest = useRef(files);
-  latest.current = files;
+  useLayoutEffect(() => {
+    latest.current = files;
+  }, [files]);
   // A shrunk photo's original name and size, so picking it again is caught.
   const picked = useRef(new WeakMap<File, string>());
   const busy = disabled || preparing;

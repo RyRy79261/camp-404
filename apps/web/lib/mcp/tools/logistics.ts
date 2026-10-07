@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { afrikaburnDateGroups } from "@camp404/core";
 import {
@@ -41,7 +41,7 @@ export function registerLogisticsTools(server: McpServer): void {
       title: "List the camp's days",
       description:
         "This year's phases in the camp's order (pack, travel, build, burn, strike, unpack): the first and last day (YYYY-MM-DD, null when not set), the place and note, and `version`, which set_logistics_days needs. `calendar` says whether the phase is on the camp's Google Calendar yet. Also the AfrikaBurn dates a captain has set for the year.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -100,14 +100,14 @@ export function registerLogisticsTools(server: McpServer): void {
       title: "Set a phase's days",
       description:
         "Sets one phase's first and last day (YYYY-MM-DD, at most 31 days), and its place and note, as the Logistics page's Save does. Leave `place` or `note` out to keep what is there; give null or \"\" to clear it. Give `expectedVersion`: the phase's `version` from list_logistics_days (0 when it has no days yet). If someone saved first, it is refused: read again and retry. The phase goes on the camp's Google Calendar, and when Day 1 moves, the meal plan's prep steps move with it.",
-      inputSchema: {
+      inputSchema: z.object({
         phase: z.enum(LOGISTICS_PHASES),
         startDate: z.string(),
         endDate: z.string(),
         place: z.string().max(120).nullable().optional(),
         note: z.string().max(500).nullable().optional(),
         expectedVersion: z.number().int().min(0),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

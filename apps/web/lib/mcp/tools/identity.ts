@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
 import { createHttpDb } from "@camp404/db";
@@ -15,7 +15,7 @@ export function registerIdentityTools(server: McpServer): void {
       title: "Who am I",
       description:
         "Returns your id, stored rank (captain or member), your rung on the ladder (member, team lead or captain), this year's teams and the ones you lead, and whether you drive this year. For what you may do, call what_can_i_do.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -40,7 +40,7 @@ export function registerIdentityTools(server: McpServer): void {
       title: "What can I do here?",
       description:
         "Call this first. For the signed-in person: their rank, the teams they lead this year, area by area the tools they may call (one line each), and what they may do only on the website, with why and the page's full address to send them to.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -74,9 +74,9 @@ export function registerIdentityTools(server: McpServer): void {
       title: "List my required actions",
       description:
         "Your waiting forms and steps (`required`: blocking ones first must be done before the app lets you in), and the open optional questionnaires anyone may answer (`optional`, each marked optional: nobody has to). Answer a questionnaire in the app at the link given.",
-      inputSchema: {
+      inputSchema: z.object({
         includeCompleted: z.boolean().optional().default(false),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

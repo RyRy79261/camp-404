@@ -1,5 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type * as Documents from "@camp404/db/documents";
@@ -75,11 +75,11 @@ const tools = new Map<
 registerDocumentTools({
   registerTool: (
     name: string,
-    config: { inputSchema?: z.ZodRawShape; description: string },
+    config: { inputSchema?: z.ZodObject; description: string },
     handler: Handler,
   ) => {
     tools.set(name, {
-      shape: config.inputSchema ?? {},
+      shape: config.inputSchema?.shape ?? {},
       handler,
       description: config.description,
     });
@@ -92,7 +92,7 @@ async function call(name: string, args: Record<string, unknown>, as: string) {
   const parsed = z.object(tool.shape).safeParse(args);
   if (!parsed.success) return { invalid: parsed.error.issues[0]?.message };
   const result = await tool.handler(parsed.data, {
-    authInfo: { clientId: "test", extra: { campUserId: as } },
+    http: { authInfo: { clientId: "test", extra: { campUserId: as } } },
   });
   const text = (result.content[0] as { text: string }).text;
   return result.isError ? { error: text } : { data: JSON.parse(text) };

@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { and, count, eq } from "drizzle-orm";
 import { createHttpDb, withTransaction } from "@camp404/db";
@@ -60,7 +60,7 @@ export function registerProfileTools(server: McpServer): void {
       title: "Get my burner profile",
       description:
         "Returns the current user's burner_profiles row — the long-lived onboarding questionnaire responses + completion state.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -92,9 +92,9 @@ export function registerProfileTools(server: McpServer): void {
       title: "Update my burner profile",
       description:
         "Changes answers on your burner profile: the same save as My forms → Burner profile on the website. Pass only the answers to change, keyed by question id as get_my_burner_profile returns them; every other answer is kept. The whole profile is then checked as the website checks it, and the change goes in the form's change log. Never an ID number or its type, and never the profile photo: those are on the website's burner profile form.",
-      inputSchema: {
+      inputSchema: z.object({
         responses: z.record(z.string(), z.unknown()),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -118,7 +118,7 @@ export function registerProfileTools(server: McpServer): void {
       title: "Get my dietary requirements",
       description:
         "Your dietary pick-list, as My forms → Dietary needs shows it: `foods` (each food you react to and how: allergy, intolerance or anaphylaxis), `diets`, when you last saved it, and `old`: the words from the old free-text form, if any, which the Kitchen's allergy check does not read (pick those foods again to count them).",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -134,10 +134,10 @@ export function registerProfileTools(server: McpServer): void {
     {
       title: "Update my dietary requirements",
       description: `Saves your dietary pick-list, the same save as My forms → Dietary needs: the whole list of foods you react to (each once, with how it affects you; anaphylaxis is the hard stop the Kitchen plans around) and your diets. It replaces what was saved. The meal plan's allergy check and the daily site sheet read it. Foods: ${KITCHEN_ALLERGENS.join(", ")}. Diets: ${DIETS.join(", ")}. Only you, captains and team leads can see it.`,
-      inputSchema: {
+      inputSchema: z.object({
         foods: SaveDietaryInput.shape.foods,
         diets: SaveDietaryInput.shape.diets,
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -175,7 +175,7 @@ export function registerProfileTools(server: McpServer): void {
       title: "Get my driver profile",
       description:
         "Returns the current user's driver_profiles row — intent to drive, vehicle details, seats, lift offer.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -208,7 +208,7 @@ export function registerProfileTools(server: McpServer): void {
       title: "Update my driver profile",
       description:
         "Upserts the current user's driver profile for this year. Setting `intendsToDrive: true` for the first time triggers the driver-detail questionnaire gate in the web app on next sign-in. Refused when `seatsOffered` is below the riders already in your car: take someone out first (remove_car_rider).",
-      inputSchema: {
+      inputSchema: z.object({
         version: z.string().min(1),
         intendsToDrive: z.boolean(),
         vehicleMake: z.string().nullable().optional(),
@@ -225,7 +225,7 @@ export function registerProfileTools(server: McpServer): void {
         departureAt: z.string().datetime().nullable().optional(),
         notes: z.string().nullable().optional(),
         markComplete: z.boolean().optional().default(false),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -358,7 +358,7 @@ export function registerProfileTools(server: McpServer): void {
     {
       title: "Get my emergency contacts",
       description: "Returns the user's emergency_contacts list (plaintext).",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -375,13 +375,13 @@ export function registerProfileTools(server: McpServer): void {
     {
       title: "Update my emergency contacts",
       description: `Replaces your whole emergency contacts list: at least one, at most ${MAX_EMERGENCY_CONTACTS}. They are your burner profile's contact answers, saved the same way (checked, and recorded in its change log). Each contact needs a name, a phone number with 7 to 15 digits (include the country code) and how you know them.`,
-      inputSchema: {
+      inputSchema: z.object({
         // The website's rules for a contact (@camp404/types).
         contacts: z
           .array(EmergencyContact)
           .min(1, CONTACT_REQUIRED)
           .max(MAX_EMERGENCY_CONTACTS),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -422,9 +422,9 @@ export function registerProfileTools(server: McpServer): void {
       title: "Set my membership tier",
       description:
         "Pick between 'full' (whole event) and 'build_week_only'. Setting this is a member-side choice; payment status is captain-managed.",
-      inputSchema: {
+      inputSchema: z.object({
         tier: MembershipTierEnum,
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -453,12 +453,12 @@ export function registerProfileTools(server: McpServer): void {
       title: "Update my burn history + skills",
       description:
         "Free-form fields about who you are: skills array, previous Afrikaburn / Burning Man counts, first-time flag.",
-      inputSchema: {
+      inputSchema: z.object({
         skills: z.array(z.string()).optional(),
         previousAfrikaburns: z.number().int().min(0).optional(),
         previousBurningMans: z.number().int().min(0).optional(),
         firstTime: z.boolean().optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

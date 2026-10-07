@@ -585,25 +585,19 @@ export function InkblotWindow({
     }
   }
 
-  function hold(action: keyof Input) {
-    return {
-      onPointerDown: (e: React.PointerEvent) => {
-        e.preventDefault();
-        if (game.current.phase === "title") return begin();
-        if (game.current.phase === "won") return;
-        input.current[action] = true;
-      },
-      onPointerUp: () => {
-        if (action === "left" || action === "right" || action === "down") {
-          input.current[action] = false;
-        }
-      },
-      onPointerLeave: () => {
-        if (action === "left" || action === "right" || action === "down") {
-          input.current[action] = false;
-        }
-      },
-    };
+  // The on-screen pads: pressed, a move is held (a jump or a swipe fires);
+  // let go, or the finger slides off, a held move stops.
+  function press(e: React.PointerEvent, action: keyof Input) {
+    e.preventDefault();
+    if (game.current.phase === "title") return begin();
+    if (game.current.phase === "won") return;
+    input.current[action] = true;
+  }
+
+  function release(action: keyof Input) {
+    if (action === "left" || action === "right" || action === "down") {
+      input.current[action] = false;
+    }
   }
 
   const pad =
@@ -645,7 +639,9 @@ export function InkblotWindow({
             type="button"
             aria-label="Left"
             className={pad}
-            {...hold("left")}
+            onPointerDown={(e) => press(e, "left")}
+            onPointerUp={() => release("left")}
+            onPointerLeave={() => release("left")}
           >
             ◀
           </button>
@@ -653,7 +649,9 @@ export function InkblotWindow({
             type="button"
             aria-label="Right"
             className={pad}
-            {...hold("right")}
+            onPointerDown={(e) => press(e, "right")}
+            onPointerUp={() => release("right")}
+            onPointerLeave={() => release("right")}
           >
             ▶
           </button>
@@ -661,7 +659,9 @@ export function InkblotWindow({
             type="button"
             aria-label="Down"
             className={pad}
-            {...hold("down")}
+            onPointerDown={(e) => press(e, "down")}
+            onPointerUp={() => release("down")}
+            onPointerLeave={() => release("down")}
           >
             ▼
           </button>
@@ -671,7 +671,9 @@ export function InkblotWindow({
             type="button"
             aria-label="Swipe"
             className={pad}
-            {...hold("swipe")}
+            onPointerDown={(e) => press(e, "swipe")}
+            onPointerUp={() => release("swipe")}
+            onPointerLeave={() => release("swipe")}
           >
             Paw
           </button>
@@ -679,7 +681,9 @@ export function InkblotWindow({
             type="button"
             aria-label="Jump"
             className={pad}
-            {...hold("jump")}
+            onPointerDown={(e) => press(e, "jump")}
+            onPointerUp={() => release("jump")}
+            onPointerLeave={() => release("jump")}
           >
             Jump
           </button>

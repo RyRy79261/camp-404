@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   getTransportBoard,
@@ -46,7 +46,7 @@ export function registerLiftRequestTools(server: McpServer): void {
       title: "My lift request",
       description:
         "Your lift request this year, as the Transport page shows it to you: the car you asked for (or any car) and when, or null when you have none.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -66,7 +66,7 @@ export function registerLiftRequestTools(server: McpServer): void {
       title: "Ask for a lift",
       description:
         "Asks for a seat this year, as the Transport page's Ask for a lift: in one car (its driver's id, from list_drivers) or, with driverUserId null, in any car. A new request replaces your last one. Refused when you drive this year, already have a seat, or the person you name is not driving. The driver, or a captain or Transport & Logistics lead, answers it on the website.",
-      inputSchema: { driverUserId: z.string().uuid().nullable() },
+      inputSchema: z.object({ driverUserId: z.string().uuid().nullable() }),
     },
     async (args, extra) =>
       runTool({
@@ -90,7 +90,7 @@ export function registerLiftRequestTools(server: McpServer): void {
       title: "Withdraw my lift request",
       description:
         "Withdraws your lift request this year, as the Transport page's Withdraw does.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({

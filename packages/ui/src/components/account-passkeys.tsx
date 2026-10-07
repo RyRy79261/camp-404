@@ -60,6 +60,13 @@ function formatDate(iso: string | null): string {
   return ADDED.format(d);
 }
 
+// Whether this browser can make a passkey. It never changes while the page is
+// open, so there is nothing to subscribe to.
+const noSubscription = () => () => {};
+const browserHasPasskeys = () =>
+  typeof window.PublicKeyCredential !== "undefined";
+const notAskedYet = () => null;
+
 export function AccountPasskeys({
   client,
   passkeys,
@@ -82,12 +89,14 @@ export function AccountPasskeys({
   //
   // null = not asked yet. We render the button live and say nothing about
   // support in that state: claiming nothing is the only honest thing to say
-  // before the answer exists. `useEffect` runs after mount, in the real browser,
-  // and only then may the card refuse — with its reason.
-  const [supported, setSupported] = React.useState<boolean | null>(null);
-  React.useEffect(() => {
-    setSupported(typeof window.PublicKeyCredential !== "undefined");
-  }, []);
+  // before the answer exists. `useSyncExternalStore` answers null on the server
+  // and while hydrating, then asks the real browser, and only then may the card
+  // refuse — with its reason.
+  const supported = React.useSyncExternalStore<boolean | null>(
+    noSubscription,
+    browserHasPasskeys,
+    notAskedYet,
+  );
 
   async function add(e: React.FormEvent) {
     e.preventDefault();

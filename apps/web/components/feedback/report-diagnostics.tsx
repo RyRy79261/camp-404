@@ -41,21 +41,38 @@ export interface ReportDiagnosticsPanelProps {
   className?: string;
 }
 
+/** Nothing to subscribe to: only whether this render is in the browser. */
+function subscribeToNothing(): () => void {
+  return () => {};
+}
+
 /**
- * Snapshot the diagnostics once per mount, in an effect rather than in render:
- * `collectDiagnostics()` reads `window` and `navigator`, and this renders
- * inside a server-rendered tree. Deliberately not recomputed as the page is
- * used — a panel whose contents shift under the reader is worse than one that
- * is a few pixels stale.
+ * Snapshot the diagnostics once per mount (and again each time it is turned
+ * back on), only in the browser: `collectDiagnostics()` reads `window` and
+ * `navigator`, and this renders inside a server-rendered tree, so the server's
+ * render and the hydrating one show nothing and the snapshot is taken in the
+ * render right after. Deliberately not recomputed as the page is used — a
+ * panel whose contents shift under the reader is worse than one that is a few
+ * pixels stale.
  */
 function useOwnSnapshot(enabled: boolean): ReportDiagnostics | null {
-  const [snapshot, setSnapshot] = React.useState<ReportDiagnostics | null>(
-    null,
+  const inBrowser = React.useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
   );
-  React.useEffect(() => {
-    if (enabled) setSnapshot(collectDiagnostics());
-  }, [enabled]);
-  return snapshot;
+  const wanted = enabled && inBrowser;
+  const [own, setOwn] = React.useState<{
+    wanted: boolean;
+    snapshot: ReportDiagnostics | null;
+  }>({ wanted: false, snapshot: null });
+  if (own.wanted !== wanted) {
+    setOwn({
+      wanted,
+      snapshot: wanted ? collectDiagnostics() : own.snapshot,
+    });
+  }
+  return own.snapshot;
 }
 
 export function ReportDiagnosticsPanel({

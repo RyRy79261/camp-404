@@ -159,42 +159,47 @@ export function AcknowledgementGate({
     }
   }, [router]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(() => {
     const requestId = ++requestIdRef.current;
-    try {
-      const res = await fetch("/api/notifications/pending", {
-        cache: "no-store",
+    return fetch("/api/notifications/pending", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          pending: PendingItem[];
+          popups?: number;
+        };
+        if (requestId !== requestIdRef.current) return; // superseded — drop it
+        const pending = data.pending ?? [];
+        setQueue(pending);
+        // A pop-up that nobody sees is lost, since claiming marks it read. So
+        // claim only on a visible tab with no takeover in front of the toast.
+        if (
+          pending.length === 0 &&
+          (data.popups ?? 0) > 0 &&
+          document.visibilityState === "visible"
+        ) {
+          await showPopups();
+        }
+      })
+      .catch(() => {
+        // Network hiccup — the next poll (or focus) retries.
       });
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        pending: PendingItem[];
-        popups?: number;
-      };
-      if (requestId !== requestIdRef.current) return; // superseded — drop it
-      const pending = data.pending ?? [];
-      setQueue(pending);
-      // A pop-up that nobody sees is lost, since claiming marks it read. So
-      // claim only on a visible tab with no takeover in front of the toast.
-      if (
-        pending.length === 0 &&
-        (data.popups ?? 0) > 0 &&
-        document.visibilityState === "visible"
-      ) {
-        await showPopups();
-      }
-    } catch {
-      // Network hiccup — the next poll (or focus) retries.
-    }
   }, [showPopups]);
 
   // While active: a first load, a timer that skips its turn on a hidden tab,
   // and a refetch whenever the tab comes back, so an announcement appears
   // promptly after it is published. Signing out (or opening a print page)
   // stops all three and drops whatever was on screen.
+  // Signing out drops whatever was on screen, adjusted for during render; a
+  // fresh start (signing back in) starts from an empty queue too.
+  const [wasActive, setWasActive] = useState(active);
+  if (wasActive !== active) {
+    setWasActive(active);
+    setQueue((q) => (q.length ? [] : q));
+  }
   useEffect(() => {
     if (!active) {
       requestIdRef.current++; // an answer still in flight lands nowhere
-      setQueue((q) => (q.length ? [] : q));
       return;
     }
     const visible = () => document.visibilityState === "visible";
@@ -224,7 +229,9 @@ export function AcknowledgementGate({
     };
   }, [active, load]);
 
-  const current = queue[0];
+  // Nothing shows while inactive, even an answer that landed in the moment
+  // between signing out and the poll above standing down.
+  const current = active ? queue[0] : undefined;
   const open = current !== undefined;
   const currentId = current?.deliveryId;
 
@@ -241,11 +248,15 @@ export function AcknowledgementGate({
     };
   }, [open]);
 
-  // Each new message starts at the top, with focus on its title, and without
-  // the last message's error.
+  // Each new message starts without the last message's error (adjusted for
+  // during render), at the top, and with focus on its title.
+  const [seenId, setSeenId] = useState(currentId);
+  if (seenId !== currentId) {
+    setSeenId(currentId);
+    if (currentId) setAckError(null);
+  }
   useEffect(() => {
     if (!currentId) return;
-    setAckError(null);
     scrollRef.current?.scrollTo({ top: 0 });
     titleRef.current?.focus();
   }, [currentId]);

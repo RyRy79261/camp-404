@@ -16,11 +16,13 @@ import { runTool, ToolError, type ToolExtra } from "@/lib/mcp/tool-utils";
 const USER_ID = "00000000-0000-0000-0000-0000000000aa";
 const PHONE = "+27 82 555 0199";
 const extra = {
-  authInfo: {
-    token: "t",
-    clientId: "client-1",
-    scopes: [],
-    extra: { campUserId: USER_ID },
+  http: {
+    authInfo: {
+      token: "t",
+      clientId: "client-1",
+      scopes: [],
+      extra: { campUserId: USER_ID },
+    },
   },
 } as unknown as ToolExtra;
 

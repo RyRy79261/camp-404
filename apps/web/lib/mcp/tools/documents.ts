@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   chapterRefusal,
@@ -66,10 +66,10 @@ export function registerDocumentTools(server: McpServer): void {
       title: "List the Survival Guide's chapters",
       description:
         "The guide's published chapters and duty cards, by title, as every member reads them in the app. Filter by topic or team. Captains and team leads find drafts with list_document_drafts.",
-      inputSchema: {
+      inputSchema: z.object({
         team: Team.optional(),
         category: GuideCategory.optional().describe("The guide topic."),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -96,7 +96,7 @@ export function registerDocumentTools(server: McpServer): void {
       title: "Read a published chapter",
       description:
         "One published chapter or duty card, as members read it in the app (members-only parts included). Captains and team leads read drafts with get_document_draft.",
-      inputSchema: { slug: z.string().min(1) },
+      inputSchema: z.object({ slug: z.string().min(1) }),
     },
     async (args, extra) =>
       runTool({
@@ -121,7 +121,7 @@ function registerDocumentAuthoringTools(server: McpServer): void {
       title: "List unpublished chapters",
       description:
         "A captain gets every draft; a team lead gets the drafts of teams they lead this year and the ones they wrote.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -146,7 +146,7 @@ function registerDocumentAuthoringTools(server: McpServer): void {
       title: "Read a chapter's working copy",
       description:
         "A captain, or a lead of the chapter's team, reads its working copy whatever its state, with its `version`: pass that version to update_document and publish_document.",
-      inputSchema: { slug: GuideSlug },
+      inputSchema: z.object({ slug: GuideSlug }),
     },
     async (args, extra) =>
       runTool({
@@ -163,7 +163,7 @@ function registerDocumentAuthoringTools(server: McpServer): void {
       title: "Start a Survival Guide chapter or duty card",
       description:
         "Starts a draft in one of the guide's topics: a plain chapter in Markdown, or a duty card (kind duty_card, with its card: sub-roles, steps, hard rules, checklist and who to ask; it may be half-written until it is published). A captain may write any chapter; a team lead only one for a team they lead (a chapter with no team is a captain's). A part only members may read goes between a `:::members` line and a `:::` line. The address comes from the title. Publish it with publish_document.",
-      inputSchema: {
+      inputSchema: z.object({
         kind: GuideChapterKind.default("chapter"),
         title: z.string(),
         category: GuideCategory.describe("The guide topic."),
@@ -172,7 +172,7 @@ function registerDocumentAuthoringTools(server: McpServer): void {
         card: DutyCardDraft.nullable()
           .optional()
           .describe("Only for a duty card: its parts, any still empty."),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -224,7 +224,7 @@ function registerDocumentAuthoringTools(server: McpServer): void {
       title: "Edit a chapter's draft",
       description:
         "Changes a chapter's title, topic, team, Markdown or (for a duty card) its card, and bumps its version. Pass the version you read: if someone saved in between, nothing changes and you read it again. Editing never publishes.",
-      inputSchema: {
+      inputSchema: z.object({
         slug: GuideSlug,
         expectedVersion: z.number().int().min(1),
         title: z.string().optional(),
@@ -232,7 +232,7 @@ function registerDocumentAuthoringTools(server: McpServer): void {
         team: Team.nullable().optional(),
         markdown: GuideMarkdown.optional(),
         card: DutyCardDraft.optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -271,7 +271,7 @@ function registerDocumentAuthoringTools(server: McpServer): void {
     {
       title: "Publish a chapter, or take it off the guide",
       description: `Publishes the version you read (expectedVersion, from get_document_draft or update_document): if someone saved since, nothing is published and you read it again. Each publish that changes the chapter is a new version; old versions stay. A duty card must be complete to publish. ${PUBLISHING} published: false takes it off the guide (and the public site); its versions stay. Making a section public and keeping a chapter members only are a captain's, on the website.`,
-      inputSchema: {
+      inputSchema: z.object({
         slug: GuideSlug,
         published: z.boolean(),
         expectedVersion: z
@@ -280,7 +280,7 @@ function registerDocumentAuthoringTools(server: McpServer): void {
           .min(1)
           .optional()
           .describe("Required to publish: the version you read."),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

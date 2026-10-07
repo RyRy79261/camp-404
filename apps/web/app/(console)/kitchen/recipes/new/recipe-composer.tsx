@@ -47,7 +47,12 @@ export function RecipeComposer() {
   const [aiConsent, setAiConsent] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const dictation = useDictationToggle();
+  const {
+    dictating,
+    pillRef: dictatePillRef,
+    open: openDictation,
+    close: closeDictation,
+  } = useDictationToggle();
   const voiceSupported = useVoiceSupported();
 
   function clear(field: FieldKey) {
@@ -115,7 +120,7 @@ export function RecipeComposer() {
                 }}
               />
               {voiceSupported &&
-                (dictation.dictating ? (
+                (dictating ? (
                   <RecorderPanel
                     promptKey="recipe"
                     onTranscript={(t) => {
@@ -125,13 +130,13 @@ export function RecipeComposer() {
                       if (t.trim()) setDictated(true);
                       clear("text");
                     }}
-                    onDismiss={dictation.close}
+                    onDismiss={closeDictation}
                   />
                 ) : (
                   <DictatePill
-                    ref={dictation.pillRef}
+                    ref={dictatePillRef}
                     label="Dictate the recipe"
-                    onActivate={dictation.open}
+                    onActivate={openDictation}
                     disabled={pending}
                     className="self-start"
                   />

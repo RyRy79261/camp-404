@@ -1,6 +1,6 @@
 // @vitest-environment node
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { and, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -41,10 +41,10 @@ const tools = new Map<string, { shape: z.ZodRawShape; handler: Handler }>();
 registerCampMcpTools({
   registerTool: (
     name: string,
-    config: { inputSchema?: z.ZodRawShape },
+    config: { inputSchema?: z.ZodObject },
     handler: Handler,
   ) => {
-    tools.set(name, { shape: config.inputSchema ?? {}, handler });
+    tools.set(name, { shape: config.inputSchema?.shape ?? {}, handler });
   },
 } as unknown as McpServer);
 
@@ -52,7 +52,7 @@ registerCampMcpTools({
 async function call(name: string, args: Record<string, unknown>, as: string) {
   const tool = tools.get(name)!;
   const result = await tool.handler(z.object(tool.shape).parse(args), {
-    authInfo: { clientId: "test", extra: { campUserId: as } },
+    http: { authInfo: { clientId: "test", extra: { campUserId: as } } },
   });
   const text = (result.content[0] as { text: string }).text;
   return result.isError

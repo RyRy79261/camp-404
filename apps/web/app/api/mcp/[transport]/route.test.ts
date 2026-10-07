@@ -14,22 +14,41 @@ vi.mock("@/lib/mcp/auth", () => ({
   ),
   getCampUserIdFromAuth: () => "u1",
 }));
-vi.mock("@/lib/mcp/server", () => ({
-  SERVER_INSTRUCTIONS: "Test camp.",
-  registerCampMcpTools: (server: {
-    registerTool: (
-      name: string,
-      config: object,
-      cb: () => Promise<unknown>,
-    ) => void;
-  }) => {
-    server.registerTool(
-      "ping",
-      { title: "Ping", description: "Answers pong.", inputSchema: {} },
-      async () => ({ content: [{ type: "text", text: "pong" }] }),
-    );
-  },
-}));
+vi.mock("@/lib/mcp/server", async () => {
+  const { z } = await import("zod");
+  return {
+    SERVER_INSTRUCTIONS: "Test camp.",
+    registerCampMcpTools: (server: {
+      registerTool: (
+        name: string,
+        config: object,
+        cb: (
+          args: object,
+          ctx: { http?: { authInfo?: { extra?: { campUserId?: string } } } },
+        ) => Promise<unknown>,
+      ) => void;
+    }) => {
+      // Answers with the camp user the verified token carries, as runTool
+      // reads it: the token check's result must reach the tool.
+      server.registerTool(
+        "ping",
+        {
+          title: "Ping",
+          description: "Answers pong.",
+          inputSchema: z.object({}),
+        },
+        async (_args, ctx) => ({
+          content: [
+            {
+              type: "text",
+              text: `pong ${ctx.http?.authInfo?.extra?.campUserId}`,
+            },
+          ],
+        }),
+      );
+    },
+  };
+});
 
 import { POST } from "./route";
 
@@ -111,7 +130,22 @@ describe("POST /api/mcp/mcp", () => {
       ),
     );
     expect(call.result).toMatchObject({
-      content: [{ type: "text", text: "pong" }],
+      content: [{ type: "text", text: "pong u1" }],
     });
+  });
+
+  it("answers 404 on any path but the connector's", async () => {
+    const res = await POST(
+      new Request("https://camp.test/api/mcp/sse", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer good",
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      }),
+    );
+    expect(res.status).toBe(404);
   });
 });

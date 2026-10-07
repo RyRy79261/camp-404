@@ -1,6 +1,7 @@
 import { listInviteCodes } from "@camp404/db/invite-codes";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { requireMemberPage } from "@/lib/member-gate";
+import { generateInviteCode } from "@/lib/invite-words";
 import { usesTestStore } from "@/lib/test-mode";
 import { InviteForm } from "./invite-form";
 import { InviteList } from "./invite-list";
@@ -33,7 +34,10 @@ export default async function InviteToolPage() {
 
       <div className="grid gap-6 page-lg:grid-cols-3">
         <div className="page-lg:sticky page-lg:top-6 page-lg:col-start-3 page-lg:row-start-1 page-lg:self-start">
-          <InviteForm isCaptain={isCaptain} />
+          <InviteForm
+            isCaptain={isCaptain}
+            initialCode={generateInviteCode()}
+          />
         </div>
         <div className="page-lg:col-span-2 page-lg:col-start-1 page-lg:row-start-1">
           <InviteList

@@ -3,18 +3,25 @@ import { NextResponse } from "next/server";
 import { verifyMcpToken } from "@/lib/mcp/auth";
 import { registerCampMcpTools, SERVER_INSTRUCTIONS } from "@/lib/mcp/server";
 
-// IMPORTANT: with basePath: "/api/mcp" + file at
-// /api/mcp/[transport]/route.ts, the connector URL is /api/mcp/mcp
-// (transport segment value = "mcp"). Looks wrong, is correct.
-const baseHandler = createMcpHandler(
-  (server) => registerCampMcpTools(server),
-  {
-    serverInfo: { name: "camp-404", version: "0.1.0" },
-    // Returned at initialize: what the camp is and how to use the tools.
-    instructions: SERVER_INSTRUCTIONS,
-  },
-  { basePath: "/api/mcp", disableSse: true },
-);
+// IMPORTANT: the file is /api/mcp/[transport]/route.ts and the connector URL
+// is /api/mcp/mcp (transport segment value = "mcp"). Looks wrong, is correct:
+// connectors already hold that URL. mcp-handler 2 serves whatever route it is
+// mounted on, so any other segment (the old /api/mcp/sse) answers 404 here,
+// as it did under 1.x's basePath.
+const CONNECTOR_PATH = "/api/mcp/mcp";
+
+const mcpHandler = createMcpHandler((server) => registerCampMcpTools(server), {
+  serverInfo: { name: "camp-404", version: "0.1.0" },
+  // Returned at initialize: what the camp is and how to use the tools.
+  instructions: SERVER_INSTRUCTIONS,
+});
+
+async function baseHandler(req: Request): Promise<Response> {
+  if (new URL(req.url).pathname !== CONNECTOR_PATH) {
+    return new Response("Not found", { status: 404 });
+  }
+  return mcpHandler(req);
+}
 
 const authedHandler = withMcpAuth(baseHandler, verifyMcpToken, {
   required: true,

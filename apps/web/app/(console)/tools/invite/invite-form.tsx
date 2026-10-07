@@ -35,17 +35,42 @@ import { AvailabilityHint } from "./availability-hint";
 import { NumberStepper } from "./number-stepper";
 import type { Availability } from "./types";
 
-export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
-  // Start empty and generate the code after mount: the generator is random, so
-  // running it in the initializer produces a different code on the server than
-  // on the client and trips a hydration mismatch on the input value.
-  const [code, setCode] = useState<string>("");
-  useEffect(() => {
-    setCode(generateInviteCode());
-  }, []);
-  const [availability, setAvailability] = useState<Availability>({
-    state: "idle",
-  });
+/**
+ * What the availability hint says the moment the code changes, before any
+ * check answers: nothing for an empty box, the rules for a malformed code, and
+ * "checking" while the debounced lookup is pending.
+ */
+function availabilityBeforeCheck(code: string): Availability {
+  if (!code) return { state: "idle" };
+  if (!isSyntacticallyValidCode(code)) {
+    return { state: "invalid", hint: CODE_RULES_HINT };
+  }
+  return { state: "checking" };
+}
+
+export function InviteForm({
+  isCaptain,
+  initialCode,
+}: {
+  isCaptain: boolean;
+  /**
+   * The first silly code, made by the page on the server: the generator is
+   * random, so making it here would give the server and the browser different
+   * codes and trip a hydration mismatch on the input value.
+   */
+  initialCode: string;
+}) {
+  const [code, setCode] = useState<string>(initialCode);
+  const [availability, setAvailability] = useState<Availability>(() =>
+    availabilityBeforeCheck(initialCode),
+  );
+  // A changed code starts over from what is known without a lookup, adjusted
+  // for during render; the lookup below fills in the answer.
+  const [seenCode, setSeenCode] = useState(code);
+  if (seenCode !== code) {
+    setSeenCode(code);
+    setAvailability(availabilityBeforeCheck(code));
+  }
   // Captain-only knobs. Pre-approve waves the redeemer straight in (skip
   // vetting); maxUses lets a captain hand one code to several people.
   const [preApprove, setPreApprove] = useState(false);
@@ -59,15 +84,7 @@ export function InviteForm({ isCaptain }: { isCaptain: boolean }) {
   // GitHub-style availability check: debounce 350ms after the user
   // stops typing, then GET /api/tools/invite/check.
   useEffect(() => {
-    if (!code) {
-      setAvailability({ state: "idle" });
-      return;
-    }
-    if (!isSyntacticallyValidCode(code)) {
-      setAvailability({ state: "invalid", hint: CODE_RULES_HINT });
-      return;
-    }
-    setAvailability({ state: "checking" });
+    if (availabilityBeforeCheck(code).state !== "checking") return;
     const ctrl = new AbortController();
     const handle = setTimeout(async () => {
       try {

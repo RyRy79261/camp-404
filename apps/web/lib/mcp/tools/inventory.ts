@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { canEditInventory } from "@camp404/core";
 import { NOT_AN_INVENTORY_EDITOR } from "@camp404/db/inventory";
@@ -51,12 +51,12 @@ export function registerInventoryTools(server: McpServer): void {
       title: "List the camp's gear",
       description:
         "The camp's gear as the Inventory page lists it, with the team, the count, the condition, where it is and any maintenance due. `toReview` holds the changes members suggested that you may approve on the page (a captain, or a lead of the item's team). Filter with `q` (name, details or spot), `team`, `location` or `condition`. `version` is what the page's edit would name.",
-      inputSchema: {
+      inputSchema: z.object({
         q: z.string().max(80).optional(),
         team: z.string().max(80).optional(),
         location: z.enum(INVENTORY_LOCATIONS).optional(),
         condition: z.enum(INVENTORY_CONDITIONS).optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -140,7 +140,7 @@ export function registerInventoryTools(server: McpServer): void {
     {
       title: "Add an item of gear",
       description: `Adds an item to the camp's gear, for a team you may edit: a captain any team, a team lead their own. The Inventory page's own write: it checks you again and logs the item's history ("Added", by you). \`location\` "custodian_home" needs \`custodianUserId\` (an approved member); \`requiresMaintenance\` needs \`maintenanceIntervalDays\`. Categories: ${INVENTORY_CATEGORIES.join(", ")}.`,
-      inputSchema: {
+      inputSchema: z.object({
         name: z.string().min(1).max(80),
         team: z.string().max(80),
         category: z.enum(INVENTORY_CATEGORIES),
@@ -156,7 +156,7 @@ export function registerInventoryTools(server: McpServer): void {
         requiresMaintenance: z.boolean().default(false),
         maintenanceIntervalDays: z.number().int().min(1).nullable().optional(),
         bookableCount: z.number().int().min(1).nullable().optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -197,7 +197,7 @@ export function registerInventoryTools(server: McpServer): void {
       title: "Suggest a change to an item",
       description:
         'Suggests a new count, condition or place for an item (after a count, say), as the item\'s page does. A lead of its team or a captain approves or turns it down on the page; nothing changes until then. Give the whole picture: `quantity`, `condition` and `location` (with `custodianUserId` for "custodian_home"); `maintenanceDone` says maintenance was just done.',
-      inputSchema: {
+      inputSchema: z.object({
         itemId: z.string().uuid(),
         quantity: z.number().int().min(0),
         condition: z.enum(INVENTORY_CONDITIONS),
@@ -206,7 +206,7 @@ export function registerInventoryTools(server: McpServer): void {
         storageLocation: z.string().max(80).nullable().optional(),
         maintenanceDone: z.boolean().default(false),
         note: z.string().max(300).nullable().optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

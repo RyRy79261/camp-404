@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -42,11 +42,18 @@ function Note({ start = "" }: { start?: string }) {
   );
 }
 
-let guard: ReturnType<typeof useLeaveGuard>;
-let keeper: ReturnType<typeof useKeptDrafts>;
+// What the probe's hooks returned on its last render.
+const probe = {} as {
+  guard: ReturnType<typeof useLeaveGuard>;
+  keeper: ReturnType<typeof useKeptDrafts>;
+};
 function Probe() {
-  guard = useLeaveGuard();
-  keeper = useKeptDrafts();
+  const guard = useLeaveGuard();
+  const keeper = useKeptDrafts();
+  useEffect(() => {
+    probe.guard = guard;
+    probe.keeper = keeper;
+  });
   return null;
 }
 
@@ -96,7 +103,7 @@ describe("a draft kept across a Back", () => {
   it("keeps nothing when the member said leave anyway", () => {
     const { rerender } = render(<Harness open />);
     type("throw this away");
-    expect(guard("note:1")).toBe(true);
+    expect(probe.guard("note:1")).toBe(true);
     rerender(<Harness open={false} />);
     rerender(<Harness open />);
     expect(note()).toBe("");
@@ -105,7 +112,7 @@ describe("a draft kept across a Back", () => {
   it("keeps it when the member said stay and then went by Back", () => {
     const { rerender } = render(<Harness open confirm={() => false} />);
     type("keep me");
-    expect(guard("note:1")).toBe(false);
+    expect(probe.guard("note:1")).toBe(false);
     rerender(<Harness open={false} confirm={() => false} />);
     rerender(<Harness open confirm={() => false} />);
     expect(note()).toBe("keep me");
@@ -124,13 +131,13 @@ describe("a draft kept across a Back", () => {
     const { rerender } = render(<Harness open />);
     type("one");
     rerender(<Harness open={false} />);
-    keeper.drop("note:1");
+    probe.keeper.drop("note:1");
     rerender(<Harness open />);
     expect(note()).toBe("");
 
     type("two");
     rerender(<Harness open={false} />);
-    keeper.clear();
+    probe.keeper.clear();
     rerender(<Harness open />);
     expect(note()).toBe("");
   });

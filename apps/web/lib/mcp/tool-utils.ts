@@ -1,5 +1,4 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { AuthInfo, CallToolResult } from "@modelcontextprotocol/server";
 import { appendMcpAuditLog as dbAppendMcpAuditLog } from "@camp404/db/mcp";
 import { getCampUserIdFromAuth } from "./auth";
 import { refusalFor, TOOL_CAPABILITIES } from "./capabilities";
@@ -41,11 +40,11 @@ export interface ToolCtx {
 }
 
 /**
- * Standard `extra` object shape passed by mcp-handler / the MCP SDK.
- * We only care about `authInfo` here.
+ * The part of the MCP SDK's handler context (`ctx`) a tool reads: the token
+ * withMcpAuth verified, which mcp-handler passes in as `ctx.http.authInfo`.
  */
 export interface ToolExtra {
-  authInfo?: AuthInfo;
+  http?: { authInfo?: AuthInfo };
 }
 
 /**
@@ -73,8 +72,9 @@ export async function runTool<T>(opts: {
   handler: (ctx: ToolCtx) => Promise<T>;
 }): Promise<CallToolResult> {
   const started = Date.now();
-  const campUserId = getCampUserIdFromAuth(opts.extra.authInfo);
-  const clientId = opts.extra.authInfo?.clientId ?? "unknown";
+  const authInfo = opts.extra.http?.authInfo;
+  const campUserId = getCampUserIdFromAuth(authInfo);
+  const clientId = authInfo?.clientId ?? "unknown";
 
   if (!campUserId) {
     return errorContent("Token is missing a camp user binding.");

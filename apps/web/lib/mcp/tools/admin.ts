@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import {
@@ -66,7 +66,7 @@ export function registerAdminTools(server: McpServer): void {
       title: "Put a member on a team",
       description:
         "Puts a member on an active team for the camp's current year, not leading. Doing it twice changes nothing.",
-      inputSchema: { userId: UserId, team: z.string() },
+      inputSchema: z.object({ userId: UserId, team: z.string() }),
     },
     async (args, extra) =>
       runTool({
@@ -95,7 +95,7 @@ export function registerAdminTools(server: McpServer): void {
       title: "Take a member off a team",
       description:
         "Takes a member off a team for the camp's current year. Works for an archived team too. Removing a team's last lead is allowed.",
-      inputSchema: { userId: UserId, team: z.string() },
+      inputSchema: z.object({ userId: UserId, team: z.string() }),
     },
     async (args, extra) =>
       runTool({
@@ -124,7 +124,11 @@ export function registerAdminTools(server: McpServer): void {
       title: "Make a member lead a team, or stop leading it",
       description:
         "Sets or clears the lead flag on a member's membership of an active team this year. The member must already be on the team.",
-      inputSchema: { userId: UserId, team: z.string(), isLead: z.boolean() },
+      inputSchema: z.object({
+        userId: UserId,
+        team: z.string(),
+        isLead: z.boolean(),
+      }),
     },
     async (args, extra) =>
       runTool({
@@ -155,7 +159,7 @@ export function registerAdminTools(server: McpServer): void {
       title: "List invite codes",
       description:
         "A captain gets every invite code; anyone else gets the codes they made. Newest first, with each code's state (active, used_up, expired or revoked).",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, extra) =>
       runTool({
@@ -191,7 +195,7 @@ export function registerAdminTools(server: McpServer): void {
       title: "Revoke an invite code",
       description:
         "Stops a code letting anyone else join. People who already joined keep their place. A captain may revoke any code; anyone else only the codes they made.",
-      inputSchema: { code: z.string() },
+      inputSchema: z.object({ code: z.string() }),
     },
     async (args, extra) =>
       runTool({
@@ -229,10 +233,10 @@ export function registerAdminTools(server: McpServer): void {
       title: "Read the audit log",
       description:
         "Who changed or read whose data, newest first, 50 entries a page. Pass the returned nextCursor as `before` for older entries.",
-      inputSchema: {
+      inputSchema: z.object({
         before: z.string().optional(),
         limit: z.number().int().min(1).max(200).optional(),
-      },
+      }),
     },
     async (args, extra) =>
       runTool({

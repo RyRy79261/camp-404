@@ -60,7 +60,12 @@ export function useOnline(): boolean {
 
 export function useVoiceCommand({ consented }: { consented: boolean }) {
   const [agreed, setAgreed] = React.useState(consented);
-  React.useEffect(() => setAgreed(consented), [consented]);
+  // A new answer from the server replaces the one given here.
+  const [consentedBefore, setConsentedBefore] = React.useState(consented);
+  if (consented !== consentedBefore) {
+    setConsentedBefore(consented);
+    setAgreed(consented);
+  }
   const [phase, setPhase] = React.useState<VoicePhase>(
     consented ? "idle" : "consent",
   );

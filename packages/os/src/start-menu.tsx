@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  type KeyboardEvent,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 export type StartMenuItem = {
   key: string;
@@ -41,7 +35,7 @@ type Props = {
   /** Written up the menu's side, like an old Start menu's banner. */
   banner: string;
   /** The button that opened the menu: a press on it is not a press away. */
-  anchor: RefObject<HTMLElement | null>;
+  anchor: HTMLElement | null;
   /** Shut the menu; `refocus` hands focus back to the anchor. */
   onClose: (refocus: boolean) => void;
   /** Wraps the menu in a nav landmark with this name, when given. */
@@ -74,7 +68,7 @@ export function StartMenu({
     menuRef.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
     function away(e: globalThis.PointerEvent) {
       const t = e.target as Node;
-      if (!menuRef.current?.contains(t) && !anchor.current?.contains(t)) {
+      if (!menuRef.current?.contains(t) && !anchor?.contains(t)) {
         closeRef.current(false);
       }
     }
@@ -175,7 +169,7 @@ type GroupedProps = {
   header?: ReactNode;
   label: string;
   banner: string;
-  anchor: RefObject<HTMLElement | null>;
+  anchor: HTMLElement | null;
   onClose: (refocus: boolean) => void;
   landmark?: string;
 };
@@ -212,7 +206,7 @@ export function GroupedStartMenu({
     menuRef.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
     function away(e: globalThis.PointerEvent) {
       const t = e.target as Node;
-      if (!menuRef.current?.contains(t) && !anchor.current?.contains(t)) {
+      if (!menuRef.current?.contains(t) && !anchor?.contains(t)) {
         closeRef.current(false);
       }
     }
