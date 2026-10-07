@@ -10,4 +10,7 @@ export const jetbrainsMonoFont = localFont({
   src: "../../fonts/jetbrains-mono/jetbrains-mono-latin-wght-normal.woff2",
   variable: "--font-brand-mono",
   display: "swap",
+  // Not preloaded, as Montserrat (lib/fonts/montserrat.ts): inside the 404 OS
+  // skin --font-mono is the system's monospace, so the console never draws it.
+  preload: false,
 });
