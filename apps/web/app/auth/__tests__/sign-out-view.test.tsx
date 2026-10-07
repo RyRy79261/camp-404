@@ -14,10 +14,7 @@ const signOut = vi.hoisted(() => vi.fn(() => new Promise(() => {})));
 vi.mock("@/lib/auth-client", () => ({ authClient: { signOut } }));
 
 const forgetDeviceToken = vi.hoisted(() => vi.fn());
-vi.mock("@/components/push/device-token", () => ({
-  FORGET_TOKEN_TIMEOUT_MS: 2000,
-  forgetDeviceToken,
-}));
+vi.mock("@/components/push/device-token", () => ({ forgetDeviceToken }));
 
 beforeEach(() => {
   forgetDeviceToken.mockReset().mockResolvedValue(undefined);
@@ -57,11 +54,19 @@ describe("SignOutView", () => {
       new Promise<void>((resolve) => (finish = resolve)),
     );
     render(<SignOutView />);
+    // Loaded on sign-out only, so Firebase stays out of the sign-in bundle.
+    await act(async () => {});
     expect(forgetDeviceToken).toHaveBeenCalledTimes(1);
     // The DELETE needs the session: sign-out waits for it.
-    await act(async () => {});
     expect(signOut).not.toHaveBeenCalled();
     await act(async () => finish());
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("signs out anyway when the token cleanup fails", async () => {
+    forgetDeviceToken.mockRejectedValue(new Error("chunk failed"));
+    render(<SignOutView />);
+    await act(async () => {});
     expect(signOut).toHaveBeenCalledTimes(1);
   });
 

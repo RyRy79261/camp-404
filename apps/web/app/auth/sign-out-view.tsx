@@ -3,11 +3,21 @@
 import { useEffect, useState } from "react";
 import { Button } from "@camp404/ui/components/button";
 import { forgetAllWindows } from "@/components/os/window-storage";
-import {
-  FORGET_TOKEN_TIMEOUT_MS,
-  forgetDeviceToken,
-} from "@/components/push/device-token";
 import { authClient } from "@/lib/auth-client";
+
+/** How long sign-out waits for the token cleanup before it goes anyway. */
+export const FORGET_TOKEN_TIMEOUT_MS = 2000;
+
+/**
+ * The push-token cleanup, loaded only when someone signs out: a static import
+ * would put the Firebase SDK in the bundle of every /auth page, sign-in
+ * included. A chunk that fails to load is no reason to stay signed in.
+ */
+function forgetDeviceTokenLazily(): Promise<void> {
+  return import("@/components/push/device-token")
+    .then((m) => m.forgetDeviceToken())
+    .catch(() => {});
+}
 
 /**
  * /auth/sign-out: end the session, then go to sign-in. Every "Sign out" in the
@@ -41,7 +51,7 @@ export function SignOutView() {
       // Storage refused (a private window): nothing was kept there.
     }
     Promise.race([
-      forgetDeviceToken(),
+      forgetDeviceTokenLazily(),
       new Promise((resolve) => setTimeout(resolve, FORGET_TOKEN_TIMEOUT_MS)),
     ])
       .then(() => authClient.signOut())
