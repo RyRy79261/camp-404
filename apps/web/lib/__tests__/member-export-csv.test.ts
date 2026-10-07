@@ -22,7 +22,6 @@ function member(
     isLead: true,
     teams: ["kitchen", "structures"],
     duesPaid: true,
-    membershipTier: null,
     onboardingComplete: true,
     pendingRequiredActions: 0,
     pendingRequiredActionItems: [],

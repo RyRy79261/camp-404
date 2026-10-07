@@ -743,6 +743,13 @@
       "when": 1791364898220,
       "tag": "0105_adopt_sentinel_year_rows",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1791381279183,
+      "tag": "0106_drop_membership_tier",
+      "breakpoints": true
     }
   ]
 }

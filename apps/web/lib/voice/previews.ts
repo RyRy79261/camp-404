@@ -898,18 +898,6 @@ const otherPreviews: Record<string, PreviewFn> = {
       keys: ["me:contacts"],
     };
   },
-  async set_my_membership_tier(args) {
-    return {
-      sentence:
-        str(args.tier) === "build_week"
-          ? "Say you are there for build week only"
-          : "Say you stay the whole event",
-      facts: "Your profile · this year",
-      path: "/profile",
-      args,
-      keys: ["me:tier"],
-    };
-  },
   async update_my_history(args) {
     const label: Record<string, string> = {
       skills: "Skills (the whole list)",

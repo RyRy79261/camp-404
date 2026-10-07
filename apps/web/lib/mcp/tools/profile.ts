@@ -44,8 +44,6 @@ import { getQuestionnaireForResponses } from "../../questionnaire-config";
 import { siteUrl } from "../capabilities";
 import { runTool, ToolError } from "../tool-utils";
 
-const MembershipTierEnum = z.enum(schema.membershipTierEnum.enumValues);
-
 /** Where a member gives their ID number: the burner profile form, on the website. */
 const BURNER_PROFILE_FORM = "/tools/forms/burner_profile";
 
@@ -408,37 +406,6 @@ export function registerProfileTools(server: McpServer): void {
             await contactAnswers(parsed.data),
           );
           return parsed.data;
-        },
-      }),
-  );
-
-  // -------------------------------------------------------------------------
-  // Membership tier (self-only writable; matches existing app flow)
-  // -------------------------------------------------------------------------
-
-  server.registerTool(
-    "set_my_membership_tier",
-    {
-      title: "Set my membership tier",
-      description:
-        "Pick between 'full' (whole event) and 'build_week_only'. Setting this is a member-side choice; payment status is captain-managed.",
-      inputSchema: z.object({
-        tier: MembershipTierEnum,
-      }),
-    },
-    async (args, extra) =>
-      runTool({
-        toolName: "set_my_membership_tier",
-        extra,
-        argsForAudit: args,
-        handler: async ({ scope }) => {
-          const db = createHttpDb();
-          const [row] = await db
-            .update(schema.users)
-            .set({ membershipTier: args.tier, updatedAt: new Date() })
-            .where(eq(schema.users.id, scope.campUserId))
-            .returning({ tier: schema.users.membershipTier });
-          return row;
         },
       }),
   );

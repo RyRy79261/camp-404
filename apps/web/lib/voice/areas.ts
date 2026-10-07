@@ -21,7 +21,7 @@ const WORDS: Partial<Record<Area, RegExp>> = {
   // only means the command is not unknown.
   People:
     /\b(teams?|leads?|leader|leading|captain|member|members|roster|who|kitchen|structures|power|lighting|sanitation|safety|art|activities|memes|vibes|finance|transport|logistics|comms|put \w+( \w+)? on|take \w+( \w+)? off|add \w+( \w+)? to|move \w+( \w+)? from)\b/,
-  You: /\b(my profile|profile|dietary|diet|allerg\w*|vegan|vegetarian|emergency|contact|membership|tier|whole event|build week only|skills?|burns? (i'?ve|i have)|first burn|history|dues|owe|gear order|my forms|required|driver profile|my car)\b/,
+  You: /\b(my profile|profile|dietary|diet|allerg\w*|vegan|vegetarian|emergency|contact|skills?|burns? (i'?ve|i have)|first burn|history|dues|owe|gear order|my forms|required|driver profile|my car)\b/,
   Inbox: /\b(notifications?|inbox|unread|mark .* read|messages?)\b/,
   Tasks:
     /\b(tasks?|to ?do|board|done|doing|in progress|reopen|started?|finish(ed)?|complete[d]?|assign(ed)?|deadline|due)\b/,

@@ -43,7 +43,6 @@ describe("sanitisedUserPatch", () => {
       id: "the row itself: authorship and audit references point at it",
       inviteCode: "lineage: who invited whom stays on the family tree",
       isSystem: "always false for a person",
-      membershipTier: "camp accounting, not identity",
       duesPaid: "camp accounting, not identity",
       duesPaidAt: "camp accounting, not identity",
       refCode: "camp accounting: the ledger's payment references quote it",

@@ -11,7 +11,7 @@ Status (checked 2026-09-29): out of date in places. [CORRECTION 2026-09-29] The 
 ## Goal
 
 Give captains one screen to triage the whole camp at a glance. It is an
-explicitly **growing** surface — new columns (dues, membership tier, arrival
+explicitly **growing** surface — new columns (dues, arrival
 windows, …) slot onto the existing flat row shape without reshaping callers.
 
 ## Access model — locked, not redirected
@@ -77,7 +77,7 @@ heavy questionnaire catalogue and raw answers never ship to the client until a
 captain asks for them.
 
 The modal footer is an **Actions** bar — reserved for things the captain needs
-to *do*, not for editing the member's account data:
+to _do_, not for editing the member's account data:
 
 - **Reject** (destructive) and **Approve** (green) appear together only while a
   decision is outstanding (`approval_status = 'pending'`); once a decision is

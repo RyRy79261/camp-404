@@ -5,7 +5,6 @@ import {
   getCampManagementRoster as dbGetCampManagementRoster,
   type CampHeadcount,
   getCampMemberDetail as dbGetCampMemberDetail,
-  setMembershipTier as dbSetMembershipTier,
   type CampManagementMember,
   type CampManagementRosterOptions,
   type CampMemberDetail,
@@ -30,7 +29,6 @@ import {
   listMemberNotes as dbListMemberNotes,
   type MemberNote,
 } from "@camp404/db/member-notes";
-import type { MembershipTier } from "@camp404/types";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 
@@ -68,15 +66,6 @@ interface RosterBackend {
     input: TeamWriteInput,
   ): Promise<{ removed: boolean; cycle: number }>;
   setLead(input: TeamWriteInput & { isLead: boolean }): Promise<SetLeadResult>;
-  setMembershipTier(input: SetMembershipTierInput): Promise<boolean>;
-}
-
-export interface SetMembershipTierInput {
-  userId: string;
-  /** The value the captain saw; null when not set. */
-  from: MembershipTier | null;
-  to: MembershipTier;
-  actorId: string;
 }
 
 // Each entry calls through at CALL time, so a unit test's vi.mock of the db
@@ -95,7 +84,6 @@ const realBackend: RosterBackend = {
   assignTeam: (input) => dbAssignTeam(input),
   removeTeam: (input) => dbRemoveTeam(input),
   setLead: (input) => dbSetLead(input),
-  setMembershipTier: (input) => dbSetMembershipTier(input),
 };
 
 const testBackend: RosterBackend = {
@@ -133,9 +121,6 @@ const testBackend: RosterBackend = {
   },
   async setLead({ userId, team, isLead }) {
     return testStore.setLead({ userId, team, isLead });
-  },
-  async setMembershipTier({ userId, from, to }) {
-    return testStore.setMembershipTier({ userId, from, to });
   },
 };
 
@@ -231,14 +216,4 @@ export function setLead(
   input: TeamWriteInput & { isLead: boolean },
 ): Promise<SetLeadResult> {
   return backend().setLead(input);
-}
-
-/**
- * A captain sets how long a member stays: a compare-and-set on `from`, false
- * when the value changed under them. The action gates it to captains.
- */
-export function setMembershipTier(
-  input: SetMembershipTierInput,
-): Promise<boolean> {
-  return backend().setMembershipTier(input);
 }

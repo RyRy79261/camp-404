@@ -1,12 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import type {
-  MembershipTier,
-  ParticipationIntent,
-  ParticipationStatus,
-} from "@camp404/types";
-import { writeAuditEvent } from "./audit";
-import { createHttpDb, withTransaction } from "./index";
+import type { ParticipationIntent, ParticipationStatus } from "@camp404/types";
+import { createHttpDb } from "./index";
 import { duesSettledSql } from "./payments";
 import * as schema from "./schema";
 import { currentCycleNumber } from "./cycles";
@@ -33,7 +28,6 @@ export interface CampManagementMember {
   /** Teams the member belongs to, for context. */
   teams: string[];
   duesPaid: boolean;
-  membershipTier: "full" | "build_week_only" | null;
   /** Burner-profile onboarding questionnaire finished. */
   onboardingComplete: boolean;
   /** Outstanding blocking required_actions (0 = all caught up). */
@@ -109,7 +103,6 @@ export async function getCampManagementRoster(
       approvalStatus: schema.users.approvalStatus,
       // From the payments ledger for this year, not users.dues_paid.
       duesPaid: duesSettledSql(schema.users.id, cycle),
-      membershipTier: schema.users.membershipTier,
       onboardingCompletedAt: schema.burnerProfiles.completedAt,
       country: sql<
         string | null
@@ -192,7 +185,6 @@ export async function getCampManagementRoster(
     isLead: r.isLead,
     teams: r.teams ?? [],
     duesPaid: r.duesPaid,
-    membershipTier: r.membershipTier,
     onboardingComplete: r.onboardingCompletedAt != null,
     pendingRequiredActions: r.pendingRequiredActions ?? 0,
     pendingRequiredActionItems: r.pendingRequiredActionItems ?? [],
@@ -417,41 +409,4 @@ export async function isTeamLead(userId: string): Promise<boolean> {
     )
     .limit(1);
   return rows.length > 0;
-}
-
-/**
- * A captain sets how long a member stays (`users.membership_tier`, #129). A
- * compare-and-set on the value the captain saw (`from`, null when not set), so
- * a member who changed it themselves (the Claude connector's
- * `set_my_membership_tier`), or another captain, is not overwritten: the
- * caller gets false and says so. The audit row commits in the same
- * transaction. An erased account is never written.
- */
-export async function setMembershipTier(input: {
-  userId: string;
-  from: MembershipTier | null;
-  to: MembershipTier;
-  actorId: string;
-}): Promise<boolean> {
-  return withTransaction(async (tx) => {
-    const rows = await tx
-      .update(schema.users)
-      .set({ membershipTier: input.to, updatedAt: new Date() })
-      .where(
-        and(
-          eq(schema.users.id, input.userId),
-          eq(schema.users.sanitised, false),
-          sql`${schema.users.membershipTier} is not distinct from ${input.from}::membership_tier`,
-        ),
-      )
-      .returning({ id: schema.users.id });
-    if (rows.length === 0) return false;
-    await writeAuditEvent(tx, {
-      actorId: input.actorId,
-      action: "member.membership_tier_set",
-      target: input.userId,
-      metadata: { from: input.from, to: input.to },
-    });
-    return true;
-  });
 }
