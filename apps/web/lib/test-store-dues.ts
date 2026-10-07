@@ -197,6 +197,36 @@ export function refundStatusOf(
 }
 
 /**
+ * The founding twin's half for dues: the year's settings, tiers, accounts,
+ * charges, instalments and refunds written before the camp had a year move
+ * into it with the payments (mirrors setFoundingYear).
+ */
+export function adoptDuesChargesInStore(
+  fromCycle: number,
+  toCycle: number,
+): void {
+  const d = state();
+  for (const rows of [d.tiers, d.charges, d.instalments, d.refunds]) {
+    for (const row of rows) {
+      if (row.cycle === fromCycle) row.cycle = toCycle;
+    }
+  }
+  for (const [key, account] of [...d.accounts]) {
+    if (account.cycle !== fromCycle) continue;
+    d.accounts.delete(key);
+    d.accounts.set(accountKey(account.userId, toCycle), {
+      ...account,
+      cycle: toCycle,
+    });
+  }
+  const year = d.years.get(fromCycle);
+  if (year && !d.years.has(toCycle)) {
+    d.years.delete(fromCycle);
+    d.years.set(toCycle, { ...year, cycle: toCycle });
+  }
+}
+
+/**
  * A confirmed gear order's charge (#241), the twin of the insert inside
  * confirmRentalOrder. The rental store has already checked who is acting.
  */

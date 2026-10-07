@@ -178,7 +178,7 @@ describe("drainQueuedPush", () => {
     expect([...after.values()].every((s) => s === "queued")).toBe(true);
   });
 
-  it("counts a send that never answers as a failure, and stops after three", async () => {
+  it("marks a send that never answers failed (it may have gone out), and stops after three", async () => {
     const db = h.db();
     const member = await makeUser(db);
     await db
@@ -190,12 +190,13 @@ describe("drainQueuedPush", () => {
     const send = vi.fn<PushSend>(() => new Promise(() => {}));
     expect(await drainQueuedPush(send, { sendTimeoutMs: 20 })).toEqual({
       sent: 0,
-      failed: 0,
+      failed: 3,
       skipped: 0,
       pruned: 0,
     });
     expect(send).toHaveBeenCalledTimes(3);
-    const after = await pushStatuses(db);
-    expect([...after.values()].every((s) => s === "queued")).toBe(true);
+    // Not retried by the next run: a late answer may already be on the phone.
+    const statuses = [...(await pushStatuses(db)).values()].sort();
+    expect(statuses).toEqual(["failed", "failed", "failed", "queued"]);
   });
 });

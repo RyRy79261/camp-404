@@ -525,6 +525,33 @@ describe("lift requests", () => {
     expect(audit).toEqual([{ actorId: transportLead.id, target: bea.id }]);
   });
 
+  it("gives a renewed request a later time, even inside the same millisecond", async () => {
+    const db = h.db();
+    const ada = await driver(db, "Ada");
+    const bea = await approved(db, "Bea");
+    await requestLift({ actorId: bea.id, driverUserId: ada.id });
+    // The clock can't be stopped, so put the stored time ahead of it: a
+    // renewal stamped with "now" would then repeat or go back in time.
+    const ahead = new Date(Date.now() + 60 * 60 * 1000);
+    await db
+      .update(schema.liftRequests)
+      .set({ createdAt: ahead })
+      .where(eq(schema.liftRequests.userId, bea.id));
+    const stale = await seen(bea.id);
+
+    await requestLift({ actorId: bea.id, driverUserId: null });
+
+    expect(new Date(await seen(bea.id)).getTime()).toBe(ahead.getTime() + 1);
+    expect(
+      await answerLiftRequest({
+        actorId: ada.id,
+        memberUserId: bea.id,
+        accept: false,
+        requestedAt: stale,
+      }),
+    ).toEqual({ ok: false, error: REQUEST_CHANGED });
+  });
+
   it("lets a member withdraw their own request", async () => {
     const db = h.db();
     const bea = await approved(db, "Bea");

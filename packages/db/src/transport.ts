@@ -58,7 +58,7 @@ export const SEATS_BELOW_RIDERS =
 export const REQUEST_GONE =
   "That lift request isn't there any more. Reload the page.";
 export const REQUEST_CHANGED =
-  "They changed their lift request since you looked. The list is up to date now.";
+  "They changed their lift request since you looked. Reload the page to see it.";
 export const YOU_ARE_DRIVING =
   "You're driving this year, so you don't need a lift.";
 export const YOU_HAVE_A_SEAT = "You already have a seat in a car this year.";
@@ -689,7 +689,18 @@ export async function requestLift(input: {
       })
       .onConflictDoUpdate({
         target: [schema.liftRequests.userId, schema.liftRequests.cycle],
-        set: { driverUserId: input.driverUserId, createdAt: new Date() },
+        // A renewal is a new request, and its time is what an answer is
+        // checked against, so it always moves forward by at least a
+        // millisecond, even for two asks inside the same one.
+        set: {
+          driverUserId: input.driverUserId,
+          // The app's clock, written as drizzle writes a timestamp (UTC wall
+          // time), not the database's now(), which follows the session zone.
+          createdAt: sql`greatest(
+            ${new Date().toISOString()}::timestamp,
+            date_trunc('milliseconds', ${schema.liftRequests.createdAt}) + interval '1 millisecond'
+          )`,
+        },
       });
     return {};
   });

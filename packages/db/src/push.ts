@@ -168,13 +168,16 @@ export const PUSH_MAX_THROWS_IN_A_ROW = 3;
  */
 export const PUSH_SEND_TIMEOUT_MS = 10_000;
 
-/** `send`, refused with an error if it has not answered within `ms`. */
+/** A send that did not answer in time. It may still have gone out. */
+class PushSendTimeout extends Error {}
+
+/** `send`, refused with PushSendTimeout if it has not answered within `ms`. */
 function withTimeout(send: PushSend, ms: number): PushSend {
   return (tokens, notification, data) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const late = new Promise<never>((_, reject) => {
       timer = setTimeout(
-        () => reject(new Error(`push send timed out after ${ms} ms`)),
+        () => reject(new PushSendTimeout(`push send timed out after ${ms} ms`)),
         ms,
       );
     });
@@ -192,14 +195,17 @@ function withTimeout(send: PushSend, ms: number): PushSend {
  *
  * One pooled connection for the whole run, and one transaction on it per
  * delivery: claim it (FOR UPDATE SKIP LOCKED, so an overlapping drain skips it
- * and no phone buzzes twice), send it, write its status and commit. A push that went out stays marked sent whatever happens
- * to the ones after it, so a later failure, or the function being stopped,
- * can never put it back in the queue to be sent again.
+ * and no phone buzzes twice), send it, write its status and commit. A push
+ * that went out stays marked sent whatever happens to the ones after it, so a
+ * later failure, or the function being stopped, can never put it back in the
+ * queue to be sent again.
  *
  * A send that throws is not FCM's answer about this push (the service down,
- * no answer within PUSH_SEND_TIMEOUT_MS, bad credentials): the delivery stays
- * queued for a later run and this run moves on, stopping after
- * PUSH_MAX_THROWS_IN_A_ROW in a row.
+ * bad credentials): the delivery stays queued for a later run and this run
+ * moves on. A send with no answer within PUSH_SEND_TIMEOUT_MS is marked
+ * `failed` instead: the race only stops waiting, it does not cancel the
+ * request, so the push may still arrive, and retrying could send it twice.
+ * Either way the run stops after PUSH_MAX_THROWS_IN_A_ROW in a row.
  */
 export async function drainQueuedPush(
   sendPush: PushSend,
@@ -274,8 +280,15 @@ async function drainOn(
           new Map([[claimed.userId, tokens]]),
           send,
         );
-      } catch {
-        return { kind: "threw" as const, id: claimed.id };
+      } catch (err) {
+        if (!(err instanceof PushSendTimeout)) {
+          return { kind: "threw" as const, id: claimed.id };
+        }
+        await tx
+          .update(schema.notificationDeliveries)
+          .set({ pushStatus: "failed" })
+          .where(eq(schema.notificationDeliveries.id, claimed.id));
+        return { kind: "timedOut" as const };
       }
       const status = plan.statusById.get(claimed.id) ?? "skipped";
       await tx
@@ -295,8 +308,9 @@ async function drainOn(
     });
 
     if (outcome.kind === "empty") break;
-    if (outcome.kind === "threw") {
-      passed.push(outcome.id);
+    if (outcome.kind === "threw" || outcome.kind === "timedOut") {
+      if (outcome.kind === "threw") passed.push(outcome.id);
+      else result.failed += 1;
       throwsInARow += 1;
       if (throwsInARow >= PUSH_MAX_THROWS_IN_A_ROW) break;
       continue;

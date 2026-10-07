@@ -91,6 +91,7 @@ import {
 import type { PaymentMethod, PaymentSource, ViewerRank } from "@camp404/types";
 import type { SearchEntryRow } from "@camp404/db/search";
 import {
+  adoptDuesChargesInStore,
   chargeFeeOnAccept,
   duesSettledInStore,
   isMoneyKeeperInStore,
@@ -2915,6 +2916,7 @@ export const testStore = {
     const trailersStamped = adopt(transportTrailers);
     const liftRequestsStamped = adopt(liftRequests);
     adopt(payments);
+    adoptDuesChargesInStore(UNSET_CYCLE, year);
     for (const [key, row] of [...logisticsPhases]) {
       if (row.cycle !== UNSET_CYCLE) continue;
       logisticsPhases.delete(key);
@@ -7189,7 +7191,10 @@ export const testStore = {
     );
     if (existing) {
       existing.driverUserId = input.driverUserId;
-      existing.createdAt = new Date();
+      // Always later than the request it renews (mirrors requestLift).
+      existing.createdAt = new Date(
+        Math.max(Date.now(), existing.createdAt.getTime() + 1),
+      );
     } else {
       liftRequests.push({
         userId: input.actorId,
