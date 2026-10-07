@@ -82,20 +82,8 @@ export const RENTAL_SOURCE_LABELS: Readonly<Record<RentalSource, string>> = {
   supplier: "Supplier",
 };
 
-export const RENTAL_CHOICE_LABELS: Readonly<Record<RentalChoice, string>> = {
-  own: "I have my own",
-  need: "I need one",
-};
-
 /** An order's state as people read it. Charged is a confirmed order on the dues. */
 export type RentalOrderState = RentalOrderStatus | "charged";
-
-export const RENTAL_STATE_LABELS: Readonly<Record<RentalOrderState, string>> = {
-  draft: "Draft",
-  submitted: "Sent",
-  confirmed: "Confirmed",
-  charged: "Charged",
-};
 
 /**
  * The state an order shows: draft, sent, confirmed (nothing to pay), or

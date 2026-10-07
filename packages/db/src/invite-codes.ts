@@ -189,8 +189,8 @@ export async function listInviteCodes(
  * same transaction. Returns false when there is no such code, it was already
  * revoked, or `createdByUserId` is given and the code is someone else's.
  *
- * A member may revoke only codes they made (pass their id); a captain, or the
- * admin CLI, may revoke any code (leave it out).
+ * A member may revoke only codes they made (pass their id); a captain may
+ * revoke any code (leave it out).
  */
 export async function revokeInviteCode(input: {
   code: string;

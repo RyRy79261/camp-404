@@ -129,11 +129,6 @@ export const ATTENDANCE_PHASES = ["pack", "build", "strike", "unpack"] as const;
 export const AttendancePhase = z.enum(ATTENDANCE_PHASES);
 export type AttendancePhase = z.infer<typeof AttendancePhase>;
 
-/** Whether a logistics phase is one members say they can help with. */
-export function isAttendancePhase(phase: string): phase is AttendancePhase {
-  return (ATTENDANCE_PHASES as readonly string[]).includes(phase);
-}
-
 /** A member's answer for one phase. Maybe is a real answer. */
 export const ATTENDANCE_ANSWERS = ["going", "maybe", "cant"] as const;
 export const AttendanceAnswer = z.enum(ATTENDANCE_ANSWERS);

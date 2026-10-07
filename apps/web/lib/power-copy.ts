@@ -72,12 +72,10 @@ export const GRID_KIND_LABELS: Record<GridNodeKind, string> = {
 };
 
 /**
- * The name people read for the start-up surge, and the one sentence that
- * explains it (owner, 2026-09-24: "surge" meant nothing to them).
+ * The name people read for the start-up surge (owner, 2026-09-24: "surge"
+ * meant nothing to them).
  */
 export const START_UP_SPIKE = "Start-up spike";
-export const START_UP_SPIKE_HELP =
-  "Fridges and freezers draw a short burst when their motor starts, about 3 times their normal draw. This checks the generator can take it.";
 
 export const CATEGORY_LABELS: Record<LoadCategory, string> = {
   refrigeration: "Refrigeration",
@@ -128,12 +126,6 @@ export function areaName(area: string): string {
 /** "18:00", from a whole hour. */
 export function hourText(hour: number): string {
   return `${String(hour).padStart(2, "0")}:00`;
-}
-
-/** A generator's daily schedule: "24 h" or "18:00–06:00". */
-export function runText(fromHour: number | null, toHour: number | null) {
-  if (fromHour === null || toHour === null) return "24 h";
-  return `${hourText(fromHour)}–${hourText(toHour)}`;
 }
 
 /** "24 h", "6 h a day", or the windows: "18:00–02:00, 06:00–08:00". */

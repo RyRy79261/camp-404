@@ -34,11 +34,6 @@ export function shiftsAskedText(asked: number, notified: number): string {
     : `Asked ${people}. ${quiet} already had the ask unread and got no second notice.`;
 }
 
-/** "2 of 4 places" */
-export function placesText(taken: number, places: number): string {
-  return `${taken} of ${places} ${places === 1 ? "place" : "places"}`;
-}
-
 /** Hours and minutes typed as "08:30" into minutes after midnight. */
 export function minutesFromClock(value: string): number | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim());

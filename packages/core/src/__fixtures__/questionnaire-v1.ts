@@ -136,28 +136,3 @@ export const V1_MULTIPAGE_QUESTIONNAIRE: unknown = {
     },
   ],
 };
-
-/** Responses collected against `V1_CAMP_QUESTIONNAIRE` before Builder v2 —
- * stored jsonb, flat map keyed by question id. */
-export const V1_STORED_RESPONSES: readonly Record<string, unknown>[] = [
-  {
-    arrival_day: "sunday",
-    skills: ["build", "moop"],
-    vehicle: "CA 123-456",
-    notes: "Bringing the big shade structure.",
-    consent: true,
-  },
-  {
-    arrival_day: "monday",
-    skills: ["kitchen"],
-    vehicle: "CJ 998-112",
-    consent: false,
-  },
-  {
-    arrival_day: "sunday",
-    skills: [],
-    vehicle: "CY 400-001",
-    notes: "",
-    consent: true,
-  },
-];

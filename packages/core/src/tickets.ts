@@ -2,7 +2,6 @@ import type {
   DdtStatus,
   WapStatus,
   ParticipationStatus,
-  TicketPass,
   TicketStatus,
 } from "@camp404/types";
 
@@ -78,13 +77,6 @@ export function ddtRequestMet(ticket: TicketFacts): boolean {
     ticket.ticketStatus === "needs_directed_ticket" && ticket.ddt !== "none"
   );
 }
-
-/** What each captain-only pass is called. */
-export const TICKET_PASS_LABEL: Readonly<Record<TicketPass, string>> = {
-  ticket: "Ticket",
-  ddt: "DDT",
-  wap: "WAP",
-};
 
 /**
  * Whether a ticket status may be recorded for a member, by them or by a
