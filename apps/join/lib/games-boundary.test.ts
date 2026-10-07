@@ -14,21 +14,39 @@ const ALLOWED = new Set([
   "@camp404/games/inkblot/art",
 ]);
 
+// Walk only Join's own source. `readdirSync(ROOT, { recursive: true })` went
+// into node_modules too (pnpm's symlinks, ~35 000 entries, and .next after a
+// build) and filtered it out afterwards, which ran past the 5 s test timeout
+// on a busy CI runner. Skipped folders are never opened.
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".next",
+  ".turbo",
+  "coverage",
+  "test-results",
+  "playwright-report",
+]);
+
+function walk(dir: string, out: string[]): string[] {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      if (!SKIP_DIRS.has(e.name)) walk(full, out);
+    } else if (
+      e.isFile() &&
+      /\.(ts|tsx|mts|js|mjs)$/.test(e.name) &&
+      !/\.test\.ts$/.test(e.name)
+    ) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+let cached: string[] | undefined;
 function sourceFiles(): string[] {
-  return readdirSync(ROOT, { recursive: true, withFileTypes: true })
-    .filter(
-      (e) =>
-        e.isFile() &&
-        /\.(ts|tsx|mts|js|mjs)$/.test(e.name) &&
-        !/\.test\.ts$/.test(e.name) &&
-        !path
-          .join(e.parentPath, e.name)
-          .includes(`${path.sep}node_modules${path.sep}`) &&
-        !path
-          .join(e.parentPath, e.name)
-          .includes(`${path.sep}.next${path.sep}`),
-    )
-    .map((e) => path.join(e.parentPath, e.name));
+  cached ??= walk(ROOT, []);
+  return cached;
 }
 
 /** Every "@camp404/games…" specifier a file imports, statically or lazily. */
