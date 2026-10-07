@@ -6209,6 +6209,12 @@ export const testStore = {
       stage: isStoreRunStage(run.stage) ? run.stage : null,
       questions: run.outcome === "succeeded" ? readQuestions(run.result) : null,
       error: run.error,
+      openSince:
+        run.outcome === "running"
+          ? run.startedAt
+          : run.outcome === "queued"
+            ? run.requestedAt
+            : null,
     };
   },
 

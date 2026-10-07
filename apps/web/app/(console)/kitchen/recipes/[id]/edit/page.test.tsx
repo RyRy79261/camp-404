@@ -114,6 +114,7 @@ function progress(
     stage: "reading",
     questions: null,
     error: null,
+    openSince: null,
     ...overrides,
   };
 }

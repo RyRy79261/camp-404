@@ -22,7 +22,7 @@ import { getKitchenMenu, type KitchenMenu } from "@/lib/kitchen-menu";
 import { getMealPlan } from "@/lib/meal-plan";
 import { RECIPES_PATH } from "@/lib/recipe-copy";
 import { platesLabel } from "@/lib/recipe-labels";
-import { getPlateCount, getRecipeDetail } from "@/lib/recipes";
+import { getAcceptedVersion, getPlateCount } from "@/lib/recipes";
 
 export const dynamic = "force-dynamic";
 
@@ -90,16 +90,17 @@ export default async function RecipeBookPrintPage() {
     ),
   });
 
-  // Each recipe once, then each page's count of its book version, all at once.
+  // Each recipe's accepted version once (only that: the book needs no older
+  // versions or history), then each page's count of it, all at once.
   const recipeIds = [...new Set(book.pages.map((p) => p.recipeId))];
-  const details = new Map(
+  const versions = new Map(
     await Promise.all(
-      recipeIds.map(async (id) => [id, await getRecipeDetail(id)] as const),
+      recipeIds.map(async (id) => [id, await getAcceptedVersion(id)] as const),
     ),
   );
   const counts = await Promise.all(
     book.pages.map((p) => {
-      const version = details.get(p.recipeId)?.currentVersion;
+      const version = versions.get(p.recipeId);
       return version ? getPlateCount(version.id, p.plates) : null;
     }),
   );
@@ -217,7 +218,7 @@ export default async function RecipeBookPrintPage() {
         <RecipePage
           key={page.page}
           page={page}
-          detail={details.get(page.recipeId) ?? null}
+          version={versions.get(page.recipeId) ?? null}
           count={counts[i] ?? null}
           facts={menu.recipes[page.recipeId]}
           footerEnd={footerEnd(page.page)}
@@ -229,18 +230,17 @@ export default async function RecipeBookPrintPage() {
 
 function RecipePage({
   page,
-  detail,
+  version,
   count,
   facts,
   footerEnd,
 }: {
   page: BookPage;
-  detail: Awaited<ReturnType<typeof getRecipeDetail>>;
+  version: Awaited<ReturnType<typeof getAcceptedVersion>>;
   count: Awaited<ReturnType<typeof getPlateCount>>;
   facts: MenuRecipe | undefined;
   footerEnd: string;
 }) {
-  const version = detail?.currentVersion ?? null;
   const served = servedText(page.meals);
   const subtitle = (
     <>
