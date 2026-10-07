@@ -3,7 +3,6 @@ import type {
   LoungeBand,
   LoungeNeed,
   LoungeOfferKind,
-  LoungeOfferStatus,
 } from "@camp404/types";
 
 // The lounge screens' fixed sentences, paths and labels (#269). A plain
@@ -26,13 +25,6 @@ export const KIND_LABELS: Record<LoungeOfferKind, string> = {
   dj_set: "DJ set",
   workshop: "Workshop",
   other: "Other",
-};
-
-export const STATUS_LABELS: Record<LoungeOfferStatus, string> = {
-  offered: "Waiting for a decision",
-  accepted: "Accepted",
-  declined: "Declined",
-  needs_changes: "Changes asked for",
 };
 
 export const NEED_LABELS: Record<LoungeNeed, string> = {
@@ -79,9 +71,4 @@ export function printName(name: string): string {
   return last
     ? `${first} ${last[0]!.toUpperCase()}.`
     : (first ?? "Camp member");
-}
-
-/** The band names only, for a compact line: "Morning, Sunset". */
-export function bandsText(bands: readonly LoungeBand[]): string {
-  return bands.map((b) => BAND_NAMES[b]).join(", ");
 }

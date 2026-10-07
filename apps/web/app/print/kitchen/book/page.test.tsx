@@ -12,7 +12,7 @@ vi.mock("@/lib/camp-config", () => ({ getCurrentCycle: vi.fn() }));
 vi.mock("@/lib/kitchen-menu", () => ({ getKitchenMenu: vi.fn() }));
 vi.mock("@/lib/meal-plan", () => ({ getMealPlan: vi.fn() }));
 vi.mock("@/lib/recipes", () => ({
-  getRecipeDetail: vi.fn(),
+  getAcceptedVersion: vi.fn(),
   getPlateCount: vi.fn(),
 }));
 
@@ -21,7 +21,7 @@ import { getCurrentCycle } from "@/lib/camp-config";
 import { getKitchenMenu } from "@/lib/kitchen-menu";
 import { getMealPlan } from "@/lib/meal-plan";
 import { PRINT_SHEET_ATTR } from "@/lib/print";
-import { getPlateCount, getRecipeDetail } from "@/lib/recipes";
+import { getAcceptedVersion, getPlateCount } from "@/lib/recipes";
 import RecipeBookPrintPage from "./page";
 
 const recipe = (title: string, lines: [string, number][]) =>
@@ -89,19 +89,16 @@ beforeEach(() => {
       salad: facts("Green salad", [20], [], false),
     },
   } as never);
-  vi.mocked(getRecipeDetail).mockImplementation(
+  vi.mocked(getAcceptedVersion).mockImplementation(
     async (id) =>
       ({
-        id,
-        currentVersion: {
-          id: `v-${id}`,
-          version: id === "shak" ? 3 : 1,
-          plates: 60,
-          recipe:
-            id === "shak"
-              ? recipe("Shakshuka", [["Tomatoes", 2.5]])
-              : recipe("Camp dal", [["Red lentils", 1.8]]),
-        },
+        id: `v-${id}`,
+        version: id === "shak" ? 3 : 1,
+        plates: 60,
+        recipe:
+          id === "shak"
+            ? recipe("Shakshuka", [["Tomatoes", 2.5]])
+            : recipe("Camp dal", [["Red lentils", 1.8]]),
       }) as never,
   );
   vi.mocked(getPlateCount).mockImplementation(async (_v, plates) => ({
@@ -172,8 +169,8 @@ describe("the recipe book print", () => {
     const dal50 = screen.getByRole("region", { name: "Camp dal, 50 plates" });
     expect(dal50.textContent).toContain("page 4 of 4");
     expect(getPlateCount).toHaveBeenCalledWith("v-dal", 50);
-    // Each recipe is read once.
-    expect(getRecipeDetail).toHaveBeenCalledTimes(2);
+    // Each recipe's accepted version is read once.
+    expect(getAcceptedVersion).toHaveBeenCalledTimes(2);
   });
 
   it("says when the menu is empty", async () => {
@@ -184,6 +181,6 @@ describe("the recipe book print", () => {
     } as never);
     render(await RecipeBookPrintPage());
     expect(screen.getByText(/Nothing is on the menu yet/)).toBeTruthy();
-    expect(getRecipeDetail).not.toHaveBeenCalled();
+    expect(getAcceptedVersion).not.toHaveBeenCalled();
   });
 });

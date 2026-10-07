@@ -187,7 +187,6 @@ export function errorContent(message: string): CallToolResult {
 // ---------------------------------------------------------------------------
 
 export const MAX_LIST_ROWS = 5000;
-export const MAX_DATE_RANGE_DAYS = 365;
 
 /** Truncates an array to MAX_LIST_ROWS and tags the result. */
 export function truncateList<T>(rows: T[]): {

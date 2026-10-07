@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import type { AuditAction } from "@camp404/core";
@@ -52,8 +53,11 @@ import {
   failRun,
   failedPlateCounts,
   forRecipe,
+  getAcceptedVersion,
   getPlateCount,
   getProofreadProgress,
+  progressIsStale,
+  STALE_RUN_AFTER_MS,
   getRecipeDetail,
   getRecipeSource,
   isOpenPlateRunConflict,
@@ -294,6 +298,8 @@ describe("recipes", () => {
       metadata: { runId, plates: 40, promptVersion: PROMPT, model: MODEL },
     });
     expect(await statusOf(id)).toBe("proofread");
+    // Nothing accepted yet: the book has no version to print.
+    expect(await getAcceptedVersion(id)).toBeNull();
 
     const accepted = await acceptProofread({
       recipeId: id,
@@ -321,6 +327,9 @@ describe("recipes", () => {
     ]);
     const detail = await getRecipeDetail(id);
     expect(detail?.currentVersion?.recipe).toEqual(recipe());
+    // The print book's narrow read gives the same version.
+    expect(await getAcceptedVersion(id)).toEqual(detail?.currentVersion);
+    expect(await getAcceptedVersion(randomUUID())).toBeNull();
     expect(detail?.currentVersion?.plates).toBe(40);
     // The report is the run's own.
     expect(detail?.currentVersion?.report).toEqual(draft().report);
@@ -2392,16 +2401,22 @@ describe("recipes", () => {
       await claimSourceRun(sent.runId);
       expect(await setRunStage(sent.runId, "reading")).toBe(true);
       expect(await setRunStage(sent.runId, "checking")).toBe(true);
-      expect(await getProofreadProgress(id)).toEqual({
+      const running = await getProofreadProgress(id);
+      expect(running).toEqual({
         runId: sent.runId,
         kind: "source",
         outcome: "running",
         stage: "checking",
         questions: null,
         error: null,
+        // A running run counts from when it started, as resetStaleRuns does.
+        openSince: (await runRow(sent.runId))?.startedAt,
       });
+      expect(running?.openSince).toBeInstanceOf(Date);
       expect((await getRecipeDetail(id))?.latestRun?.stage).toBe("checking");
       await failRun({ runId: sent.runId, error: "Timed out." });
+      // Settled: nothing left for a poll to reset.
+      expect((await getProofreadProgress(id))?.openSince).toBeNull();
       expect(await setRunStage(sent.runId, "saving")).toBe(false);
       expect((await runRow(sent.runId))?.stage).toBe("checking");
       // A stage the panel does not know is refused before it is written.
@@ -3006,5 +3021,17 @@ describe("recipes", () => {
         expect(reason.length).toBeLessThan(200);
       });
     });
+  });
+});
+
+describe("progressIsStale", () => {
+  const now = new Date("2026-10-07T12:00:00Z");
+  const ago = (ms: number) => ({ openSince: new Date(now.getTime() - ms) });
+  it("is true only for an open run past STALE_RUN_AFTER_MS", () => {
+    expect(progressIsStale(ago(STALE_RUN_AFTER_MS + 1), now)).toBe(true);
+    expect(progressIsStale(ago(STALE_RUN_AFTER_MS), now)).toBe(false);
+    expect(progressIsStale(ago(1_000), now)).toBe(false);
+    expect(progressIsStale({ openSince: null }, now)).toBe(false);
+    expect(progressIsStale(null, now)).toBe(false);
   });
 });

@@ -7,9 +7,6 @@ import { getMessagingIfSupported, VAPID_KEY } from "@/lib/firebase-client";
 
 export const PUSH_SW_PATH = "/firebase-messaging-sw.js";
 
-/** How long sign-out waits for the token cleanup before it goes anyway. */
-export const FORGET_TOKEN_TIMEOUT_MS = 2000;
-
 /**
  * Get this device's FCM token and store it for the signed-in member. True only
  * when the server stored it: a token the server never saw would read as

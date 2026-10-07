@@ -23,8 +23,4 @@ export const SECRET_APP_IDS = ["inkblot"] as const;
 
 export type AppId = (typeof APP_IDS)[number] | (typeof SECRET_APP_IDS)[number];
 
-export function isAppId(value: string): value is AppId {
-  return (APP_IDS as readonly string[]).includes(value);
-}
-
 export type JoinWindow = OsWindow<AppId>;

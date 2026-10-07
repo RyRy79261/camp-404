@@ -78,6 +78,7 @@ flowchart TB
     direction LR
     web["apps/web<br/>the console, camp-404.com"]
     join["apps/join<br/>join.camp-404.com"]
+    guide["apps/guide<br/>survival-guide.camp-404.com"]
   end
   subgraph packages["packages (apps/web imports all of them)"]
     direction TB
@@ -87,7 +88,8 @@ flowchart TB
     types["types"]
   end
   web --> packages
-  join --> os & games & db & types
+  join --> os & games & db & core & types
+  guide --> ui & db & core & types
   games -. CSS order only .-> os
   ui --> core
   auth --> db

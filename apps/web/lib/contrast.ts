@@ -15,10 +15,6 @@ function srgbToLinear(v: number): number {
   return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
 }
 
-function linearToSrgb(v: number): number {
-  return v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055;
-}
-
 function oklabToLinear(L: number, a: number, b: number): LinearRgb {
   const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
   const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
@@ -65,17 +61,6 @@ export function parseColour(value: string): LinearRgb {
     return oklabToLinear(L, C * Math.cos(h), C * Math.sin(h));
   }
   throw new Error(`Not a colour this check reads: ${value}`);
-}
-
-/** The colour as `#rrggbb` (for messages and screenshots' notes). */
-export function toHex(value: string): string {
-  return `#${parseColour(value)
-    .map((c) =>
-      Math.round(clip(linearToSrgb(c)) * 255)
-        .toString(16)
-        .padStart(2, "0"),
-    )
-    .join("")}`;
 }
 
 /** WCAG relative luminance. */

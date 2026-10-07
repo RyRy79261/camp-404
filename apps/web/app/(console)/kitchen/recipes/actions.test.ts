@@ -73,6 +73,7 @@ vi.mock("@/lib/recipes", () => ({
     stage: "checking",
     questions: null,
     error: null,
+    openSince: new Date(),
   })),
 }));
 
@@ -969,15 +970,47 @@ describe("proofreadProgressAction", () => {
     expect(getProofreadProgress).toHaveBeenCalledWith(RECIPE_A, undefined);
   });
 
-  it("reads the run the editor started, after handing back runs that will never finish", async () => {
+  it("reads the run the editor started, writing nothing while it is healthy", async () => {
     const RUN = "9b2f3c1e-4d5a-4e6b-8c7d-0e1f2a3b4c5d";
     await proofreadProgressAction({ recipeId: RECIPE_A, runId: RUN });
     expect(getProofreadProgress).toHaveBeenCalledWith(RECIPE_A, RUN);
-    // No cron: the poll resets a stuck run first, so it can read as failed.
+    expect(resetStaleRuns).not.toHaveBeenCalled();
+  });
+
+  it("hands back a run stuck past the limit, then reads it again as failed", async () => {
+    const RUN = "9b2f3c1e-4d5a-4e6b-8c7d-0e1f2a3b4c5d";
+    const stuck = {
+      runId: RUN,
+      kind: "source",
+      outcome: "running" as const,
+      stage: "reading" as const,
+      questions: null,
+      error: null,
+      openSince: new Date(Date.now() - 11 * 60_000),
+    };
+    vi.mocked(getProofreadProgress)
+      .mockResolvedValueOnce(stuck)
+      .mockResolvedValueOnce({
+        ...stuck,
+        outcome: "failed",
+        error: "stuck",
+        openSince: null,
+      });
+    // No cron: the poll resets a stuck run, so it can read as failed.
+    expect(
+      await proofreadProgressAction({ recipeId: RECIPE_A, runId: RUN }),
+    ).toEqual({
+      ok: true,
+      data: { stage: "reading", outcome: "failed", questions: null, error: "stuck" },
+    });
     expect(resetStaleRuns).toHaveBeenCalledTimes(1);
     expect(vi.mocked(resetStaleRuns).mock.invocationCallOrder[0]!).toBeLessThan(
-      vi.mocked(getProofreadProgress).mock.invocationCallOrder[0]!,
+      vi.mocked(getProofreadProgress).mock.invocationCallOrder[1]!,
     );
+    expect(getProofreadProgress).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses a bad run id", async () => {
     expect(
       (await proofreadProgressAction({ recipeId: RECIPE_A, runId: "nope" })).ok,
     ).toBe(false);

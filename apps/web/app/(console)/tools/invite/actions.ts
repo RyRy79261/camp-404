@@ -48,9 +48,10 @@ const MAX_USES_LIMIT = 100;
  * Mint an invite code from inside the app.
  *
  * Auth-gated to any signed-in camp member (anyone past the invite gate).
- * Always sets `assigned_rank = NULL` — captain-tier codes can ONLY be minted
- * from the CLI. The current user is recorded as the inviter, so the
- * family-tree page can attribute the relationship.
+ * Always sets `assigned_rank = NULL`: this path never mints a captain-tier
+ * code (captains are made through the promotion flow). The current user is
+ * recorded as the inviter, so the family-tree page can attribute the
+ * relationship.
  *
  * Captain vetting:
  *   - A non-captain's codes ALWAYS require captain approval (the redeemer

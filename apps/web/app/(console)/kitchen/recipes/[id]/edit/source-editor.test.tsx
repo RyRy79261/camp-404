@@ -172,6 +172,35 @@ describe("source editor", () => {
     );
   });
 
+  it("does not poll while the tab is hidden, and asks at once when it is shown", async () => {
+    serverSays(progress({ outcome: "running", stage: "reading" }));
+    renderEditor();
+    await pressSend();
+    let visibility: DocumentVisibilityState = "hidden";
+    const spy = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockImplementation(() => visibility);
+    try {
+      // The tick already scheduled runs once, then the poll waits.
+      await poll();
+      const asked = vi.mocked(proofreadProgressAction).mock.calls.length;
+      expect(asked).toBe(1);
+      await poll();
+      await poll();
+      expect(proofreadProgressAction).toHaveBeenCalledTimes(asked);
+
+      visibility = "visible";
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      expect(proofreadProgressAction).toHaveBeenCalledTimes(asked + 1);
+      await poll();
+      expect(proofreadProgressAction).toHaveBeenCalledTimes(asked + 2);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("opens the questions, keeps them on the page after Close, and sends the answer", async () => {
     serverSays(
       progress({ outcome: "running", stage: "reading" }),

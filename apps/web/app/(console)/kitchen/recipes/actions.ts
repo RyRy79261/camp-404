@@ -10,6 +10,7 @@ import {
   defaultPlates,
   mealPlanPeaks,
 } from "@camp404/core";
+import { progressIsStale } from "@camp404/db/recipes";
 import {
   AcceptProofreadInput,
   AddLessonInput,
@@ -520,11 +521,14 @@ export async function proofreadProgressAction(
     if (!gate.ok) return gate;
     const parsed = ProgressInput.safeParse(input);
     if (!parsed.success) return { ok: false, error: CHECK_RECIPE };
-    await resetStaleRuns(new Date());
-    const progress = await getProofreadProgress(
-      parsed.data.recipeId,
-      parsed.data.runId,
-    );
+    const { recipeId, runId } = parsed.data;
+    let progress = await getProofreadProgress(recipeId, runId);
+    // No cron: a run stuck past the limit is handed back here, so it reads as
+    // failed. Only then: every tick of a healthy run is a read, not a write.
+    if (progressIsStale(progress, new Date())) {
+      await resetStaleRuns(new Date());
+      progress = await getProofreadProgress(recipeId, runId);
+    }
     if (!progress) return { ok: true, data: null };
     const { stage, outcome, questions, error } = progress;
     return { ok: true, data: { stage, outcome, questions, error } };

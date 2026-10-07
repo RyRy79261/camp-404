@@ -53,10 +53,6 @@ export const SEARCH_KINDS = [
 ] as const;
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
-export function isSearchKind(value: string): value is SearchKind {
-  return (SEARCH_KINDS as readonly string[]).includes(value);
-}
-
 /** Who is searching: the inputs every page rule below needs. */
 export interface SearchViewer {
   /** The camp user's id (users.id). */

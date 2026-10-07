@@ -2,6 +2,7 @@
 
 import type { ComponentProps, MouseEvent } from "react";
 import { forgetAllWindows } from "@/components/os/window-storage";
+import { loadDeviceToken } from "@/components/push/load-device-token";
 
 export const SIGN_OUT_HREF = "/auth/sign-out";
 
@@ -12,16 +13,24 @@ export const SIGN_OUT_HREF = "/auth/sign-out";
  * that page without this link.
  *
  * A plain link underneath (it works with Button asChild), and without
- * JavaScript it is just the sign-out link.
+ * JavaScript it is just the sign-out link. Pointing at it, focusing it or
+ * clicking it starts downloading the push-token cleanup, so the sign-out page
+ * finds it in the browser's cache and its time goes to the DELETE.
  */
 export function SignOutLink({
   href = SIGN_OUT_HREF,
   onClick,
+  onPointerEnter,
+  onFocus,
   children = "Sign out",
   ...props
 }: ComponentProps<"a">) {
+  const preload = () => {
+    loadDeviceToken().catch(() => {});
+  };
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
+    preload();
     if (
       event.defaultPrevented ||
       event.button !== 0 ||
@@ -39,7 +48,19 @@ export function SignOutLink({
   };
 
   return (
-    <a href={href} onClick={handleClick} {...props}>
+    <a
+      href={href}
+      onClick={handleClick}
+      onPointerEnter={(event) => {
+        onPointerEnter?.(event);
+        preload();
+      }}
+      onFocus={(event) => {
+        onFocus?.(event);
+        preload();
+      }}
+      {...props}
+    >
       {children}
     </a>
   );

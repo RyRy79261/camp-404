@@ -307,6 +307,15 @@ export async function getRecipeDetail(
     : db.getRecipeDetail(recipeId);
 }
 
+/** Only the recipe's accepted version: for pages that print many recipes. */
+export async function getAcceptedVersion(
+  recipeId: string,
+): Promise<RecipeVersionDetail | null> {
+  return usesTestStore()
+    ? (testStore.getRecipeDetail(recipeId)?.currentVersion ?? null)
+    : db.getAcceptedVersion(recipeId);
+}
+
 /** A version's recipe for one plate count, or null when it has none yet. */
 export async function getPlateCount(
   versionId: string,

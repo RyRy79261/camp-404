@@ -1,8 +1,9 @@
 # @camp404/ai-prompts
 
 The prompt templates the app sends to Claude, each with a version:
-plate counts, source proofreading and revision, recipe adjustment and manual
-generation. The unused Phase-0 prompts (recipe import, normalisation, voice
+plate counts, source proofreading and revision, recipe adjustment, manual
+generation, and voice commands (`voiceCommandPrompt` and `VOICE_REPLY_TOOLS`,
+which turn a captain's words into connector tool calls). The unused Phase-0 prompts (recipe import, normalisation, voice
 intent) were deleted on 2026-10-05 and live on in git history (#356).
 
 - **Exports:** one function per prompt and `PROMPT_VERSIONS` from

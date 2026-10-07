@@ -1844,6 +1844,27 @@ export interface ProofreadProgress {
   /** Claude's questions, when the run asked instead of writing. */
   questions: string[] | null;
   error: string | null;
+  /**
+   * When an open run's clock started (`startedAt` once running, else
+   * `requestedAt`), so a poll can tell a stuck run apart; null once settled.
+   */
+  openSince: Date | null;
+}
+
+/**
+ * Whether a polled run has been open long enough for `resetStaleRuns` to fail
+ * it. The poll resets only then, so a healthy run costs a read per tick, not a
+ * write transaction.
+ */
+export function progressIsStale(
+  progress: Pick<ProofreadProgress, "openSince"> | null,
+  now: Date,
+  staleAfterMs: number = STALE_RUN_AFTER_MS,
+): boolean {
+  return (
+    progress?.openSince != null &&
+    progress.openSince.getTime() < now.getTime() - staleAfterMs
+  );
 }
 
 /**
@@ -1866,6 +1887,8 @@ export async function getProofreadProgress(
       stage: schema.recipeProofreadRuns.stage,
       result: schema.recipeProofreadRuns.result,
       error: schema.recipeProofreadRuns.error,
+      requestedAt: schema.recipeProofreadRuns.requestedAt,
+      startedAt: schema.recipeProofreadRuns.startedAt,
     })
     .from(schema.recipes)
     .innerJoin(
@@ -1886,7 +1909,19 @@ export async function getProofreadProgress(
     stage: isRunStage(row.stage) ? row.stage : null,
     questions: row.outcome === "succeeded" ? readQuestions(row.result) : null,
     error: row.error,
+    openSince: openSince(row),
   };
+}
+
+/** The time a stale check counts from, matching `resetStaleRuns`. */
+function openSince(run: {
+  outcome: RunOutcome;
+  requestedAt: Date;
+  startedAt: Date | null;
+}): Date | null {
+  if (run.outcome === "running") return run.startedAt;
+  if (run.outcome === "queued") return run.requestedAt;
+  return null;
 }
 
 /**
@@ -3236,6 +3271,59 @@ export async function getRecipeDetail(
     })),
     lessons: lessonRows,
     history: historyRows,
+  };
+}
+
+/**
+ * Only a recipe's accepted version, or null when it has none (or no such
+ * recipe). For a page that prints many recipes: `getRecipeDetail` also reads
+ * every version, the lessons, the history and the plate runs.
+ */
+export async function getAcceptedVersion(
+  recipeId: string,
+): Promise<RecipeVersionDetail | null> {
+  if (!UUID.test(recipeId)) return null;
+  const db = createHttpDb();
+  const author = alias(schema.users, "author");
+  const [row] = await db
+    .select({
+      title: schema.recipes.title,
+      id: schema.recipeVersions.id,
+      version: schema.recipeVersions.version,
+      servingsBasis: schema.recipeVersions.servingsBasis,
+      body: schema.recipeVersions.body,
+      report: schema.recipeVersions.report,
+      scalingNotes: schema.recipeVersions.scalingNotes,
+      runId: schema.recipeVersions.runId,
+      reason: schema.recipeVersions.reason,
+      authorName: author.displayName,
+      createdAt: schema.recipeVersions.createdAt,
+    })
+    .from(schema.recipes)
+    .innerJoin(
+      schema.recipeVersions,
+      and(
+        eq(schema.recipeVersions.id, schema.recipes.acceptedVersionId),
+        eq(schema.recipeVersions.recipeId, schema.recipes.id),
+      ),
+    )
+    .leftJoin(author, eq(author.id, schema.recipeVersions.authorId))
+    .where(eq(schema.recipes.id, recipeId));
+  if (!row) return null;
+  return {
+    id: row.id,
+    version: row.version,
+    plates: row.servingsBasis,
+    recipe: versionRecipe(row.body, {
+      title: row.title ?? UNTITLED_RECIPE,
+      plates: row.servingsBasis,
+    }),
+    report: readReport(row.report),
+    scalingNotes: row.scalingNotes,
+    runId: row.runId,
+    reason: row.reason,
+    authorName: row.authorName,
+    createdAt: row.createdAt,
   };
 }
 

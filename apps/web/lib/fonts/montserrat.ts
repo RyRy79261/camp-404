@@ -32,4 +32,10 @@ export const montserratFont = localFont({
   ],
   variable: "--font-brand",
   display: "swap",
+  // Not preloaded: the root layout would preload all four files on every
+  // route, and the console and the gate screens wear the 404 OS skin (Inter
+  // and Silkscreen). Only pages outside the skin (sign-in and the legal
+  // pages, for example) draw Montserrat, and `swap` shows them text while it
+  // loads.
+  preload: false,
 });

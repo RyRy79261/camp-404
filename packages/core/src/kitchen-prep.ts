@@ -91,12 +91,6 @@ export function shortDay(iso: string): string {
   return `${part("weekday")} ${part("day")} ${part("month")}`;
 }
 
-export const PREP_WHEN_WORDS: Record<PrepTiming, string> = {
-  day_before: "the day before",
-  same_day: "the same day",
-  before_leaving: "before we leave",
-};
-
 /** "Soak the oats" as the board's title: "Overnight oats ×60: soak the oats". */
 export function prepTaskTitle(
   recipeTitle: string,

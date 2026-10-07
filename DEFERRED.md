@@ -119,7 +119,9 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > lead, for a team they lead) send a questionnaire from its Send page
   > (`/captains/questionnaires/[key]/send`). Captain-initiated erasure is
   > still not built.
-- **Native push** — `@capacitor-firebase/messaging` client POSTing to the existing `/api/push/tokens` (no server change). Needs the mobile build (broken/deferred, Phase 7), the deployed API base URL, and an APNs key. **[D]**
+- **Native push** — `@capacitor-firebase/messaging` client POSTing to the existing `/api/push/tokens` (no server change). Needs the deployed API base URL and an APNs key. **[D]**
+
+  > **[CORRECTION 2026-10-07]** There is no native app to put it in: the Capacitor shell was removed (#367). Native push waits for the phone app redo planned in #354; phones get web push today.
 - **Scope-aware test-store publish** — if scoped-broadcast E2E is added, extend `test-store.publishBroadcast` to resolve the audience by scope (today it only models `scope='everyone'` announcements). **[C]**
 
   > **[CORRECTION 2026-09-29]** Done: `announcementRecipients` in

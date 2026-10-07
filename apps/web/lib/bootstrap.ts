@@ -11,9 +11,8 @@ import { usesTestStore } from "./test-mode";
 import { seedBurnerProfileAction } from "./users";
 import type { AuthenticatedUser } from "./auth";
 
-// The fixed root invite code minted for the founding captain (matches the
-// admin-CLI `bootstrap-founder` slug). It lives in core so pure code can
-// name the founder too.
+// The fixed root invite code minted for the founding captain. It lives in
+// core so pure code can name the founder too.
 export { FOUNDER_CODE } from "@camp404/core";
 import { errorLogText, FOUNDER_CODE } from "@camp404/core";
 

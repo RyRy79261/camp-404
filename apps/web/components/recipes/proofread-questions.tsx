@@ -22,11 +22,11 @@ import { UNREACHABLE } from "@/lib/recipe-copy";
 
 // What the source editor, the recipe page and "Adjust with Claude" share
 // about a run sent to Claude (#243, Kitchen): the run as the page read it on
-// the server, the poll that follows it once a second until it settles, the
-// loading panel with the stages the worker writes, and the dialog with
-// Claude's questions, whose answer queues the next round. Both pages read the
-// run on load, so questions left unanswered are still there after leaving and
-// coming back.
+// the server, the poll that follows it once a second until it settles (not
+// while the tab is hidden), the loading panel with the stages the worker
+// writes, and the dialog with Claude's questions, whose answer queues the
+// next round. Both pages read the run on load, so questions left unanswered
+// are still there after leaving and coming back.
 
 /** How often a page asks where its run is. */
 export const POLL_MS = 1_000;
@@ -66,7 +66,8 @@ export function pendingQuestions(run: OpenRun | null): string[] | null {
 /**
  * Poll the run in `runIdRef` (the recipe's newest when it is empty) while
  * `active`, one request at a time, and stop as soon as it settles. A dropped
- * request is asked again on the next tick.
+ * request is asked again on the next tick. A hidden tab does not poll: the
+ * next tick waits until the page is shown again, then asks at once.
  */
 export function useRunPoll({
   recipeId,
@@ -90,7 +91,21 @@ export function useRunPoll({
   useEffect(() => {
     if (!active) return;
     let stopped = false;
+    let paused = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const next = () => {
+      if (stopped) return;
+      if (document.visibilityState === "hidden") {
+        paused = true;
+        return;
+      }
+      timer = setTimeout(tick, POLL_MS);
+    };
+    const onVisibility = () => {
+      if (stopped || !paused || document.visibilityState === "hidden") return;
+      paused = false;
+      void tick();
+    };
     const settle = (settled: Settled) => {
       stopped = true;
       handlers.current.onSettled(settled);
@@ -105,7 +120,7 @@ export function useRunPoll({
           ...(runIdRef.current ? { runId: runIdRef.current } : {}),
         });
       } catch {
-        if (!stopped) timer = setTimeout(tick, POLL_MS);
+        next();
         return;
       }
       if (stopped) return;
@@ -117,7 +132,7 @@ export function useRunPoll({
         progress.outcome === "running"
       ) {
         if (progress) handlers.current.onStage(progress.stage);
-        timer = setTimeout(tick, POLL_MS);
+        next();
         return;
       }
       if (progress.outcome === "failed") {
@@ -131,10 +146,12 @@ export function useRunPoll({
       }
       settle({ kind: "written" });
     };
-    timer = setTimeout(tick, POLL_MS);
+    document.addEventListener("visibilitychange", onVisibility);
+    next();
     return () => {
       stopped = true;
       clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [active, recipeId, runIdRef]);
 }

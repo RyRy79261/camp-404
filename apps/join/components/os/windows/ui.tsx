@@ -10,14 +10,6 @@ export function WinBody({ children }: { children: ReactNode }) {
   );
 }
 
-export function WinHeading({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="os-glow font-pixel text-lg uppercase leading-tight">
-      {children}
-    </h3>
-  );
-}
-
 export function Eyebrow({
   id,
   children,

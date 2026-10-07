@@ -103,6 +103,8 @@ The native shell is also open: [UNRESOLVED 2026-09-25] the owner ruled a thin
 Capacitor WebView (2026-09-16), but `apps/mobile/capacitor.config.ts` still
 sets `webDir` and no `server.url`. The owner picks: switch it to `server.url`
 in this work, or leave native out. No PR here depends on it.
+[CORRECTION 2026-10-07] Settled differently: `apps/mobile` was removed (#367),
+so there is no native shell today. A phone app redo is planned in #354.
 
 ## 1. Shape of the delivery
 

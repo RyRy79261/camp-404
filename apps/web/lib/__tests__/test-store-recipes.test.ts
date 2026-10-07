@@ -857,6 +857,7 @@ describe("recipe twins", () => {
         stage: null,
         questions: null,
         error: null,
+        openSince: expect.any(Date),
       });
     });
 

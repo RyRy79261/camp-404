@@ -3,11 +3,37 @@
 import { useEffect, useState } from "react";
 import { Button } from "@camp404/ui/components/button";
 import { forgetAllWindows } from "@/components/os/window-storage";
-import {
-  FORGET_TOKEN_TIMEOUT_MS,
-  forgetDeviceToken,
-} from "@/components/push/device-token";
+import { loadDeviceToken } from "@/components/push/load-device-token";
 import { authClient } from "@/lib/auth-client";
+
+/**
+ * How long sign-out waits for the token cleanup itself, counted from when its
+ * code has loaded, so a slow download never eats the DELETE's time.
+ */
+export const FORGET_TOKEN_TIMEOUT_MS = 2000;
+
+/** How long sign-out waits for the cleanup's code to download at all. */
+export const LOAD_CLEANUP_TIMEOUT_MS = 10_000;
+
+function wait(ms: number): Promise<null> {
+  return new Promise((resolve) => setTimeout(() => resolve(null), ms));
+}
+
+/**
+ * Load the push-token cleanup (a separate chunk: see load-device-token.ts),
+ * then give the cleanup its own two seconds. A download that fails or takes
+ * longer than LOAD_CLEANUP_TIMEOUT_MS is no reason to stay signed in.
+ */
+function forgetDeviceTokenInTime(): Promise<void> {
+  return Promise.race([loadDeviceToken(), wait(LOAD_CLEANUP_TIMEOUT_MS)])
+    .then((m) =>
+      m
+        ? Promise.race([m.forgetDeviceToken(), wait(FORGET_TOKEN_TIMEOUT_MS)])
+        : null,
+    )
+    .then(() => undefined)
+    .catch(() => undefined);
+}
 
 /**
  * /auth/sign-out: end the session, then go to sign-in. Every "Sign out" in the
@@ -25,8 +51,9 @@ import { authClient } from "@/lib/auth-client";
  *
  * Then it forgets this device's push token, while the session still exists to
  * authorise the DELETE, so the next person on this phone does not get the last
- * member's notifications. That gets two seconds; a slow network never holds a
- * member on a page they chose to leave. After erasure the session is already
+ * member's notifications. That gets two seconds once its code has loaded (the
+ * download, started on mount and already on "Sign out", gets up to ten); a
+ * slow network never holds a member on a page they chose to leave. After erasure the session is already
  * gone and the DELETE is refused, but erasure deleted the tokens on the server,
  * and the Firebase side is still dropped here.
  */
@@ -40,10 +67,7 @@ export function SignOutView() {
     } catch {
       // Storage refused (a private window): nothing was kept there.
     }
-    Promise.race([
-      forgetDeviceToken(),
-      new Promise((resolve) => setTimeout(resolve, FORGET_TOKEN_TIMEOUT_MS)),
-    ])
+    forgetDeviceTokenInTime()
       .then(() => authClient.signOut())
       .then((result) => {
         if (cancelled) return;

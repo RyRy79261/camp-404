@@ -257,6 +257,7 @@ function progress(overrides: Partial<ProofreadProgress>): ProofreadProgress {
     stage: "saving",
     questions: null,
     error: null,
+    openSince: null,
     ...overrides,
   };
 }

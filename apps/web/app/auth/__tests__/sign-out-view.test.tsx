@@ -14,13 +14,22 @@ const signOut = vi.hoisted(() => vi.fn(() => new Promise(() => {})));
 vi.mock("@/lib/auth-client", () => ({ authClient: { signOut } }));
 
 const forgetDeviceToken = vi.hoisted(() => vi.fn());
-vi.mock("@/components/push/device-token", () => ({
-  FORGET_TOKEN_TIMEOUT_MS: 2000,
-  forgetDeviceToken,
-}));
+const loadDeviceToken = vi.hoisted(() => vi.fn());
+vi.mock("@/components/push/load-device-token", () => ({ loadDeviceToken }));
+
+/** The cleanup's code arrives after `ms` (fake timers). */
+function codeArrivesAfter(ms: number) {
+  loadDeviceToken.mockImplementation(
+    () =>
+      new Promise((resolve) =>
+        setTimeout(() => resolve({ forgetDeviceToken }), ms),
+      ),
+  );
+}
 
 beforeEach(() => {
   forgetDeviceToken.mockReset().mockResolvedValue(undefined);
+  loadDeviceToken.mockReset().mockResolvedValue({ forgetDeviceToken });
   signOut.mockClear();
 });
 afterEach(() => {
@@ -57,11 +66,64 @@ describe("SignOutView", () => {
       new Promise<void>((resolve) => (finish = resolve)),
     );
     render(<SignOutView />);
+    // Loaded on sign-out only, so Firebase stays out of the sign-in bundle.
+    await act(async () => {});
     expect(forgetDeviceToken).toHaveBeenCalledTimes(1);
     // The DELETE needs the session: sign-out waits for it.
-    await act(async () => {});
     expect(signOut).not.toHaveBeenCalled();
     await act(async () => finish());
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("signs out anyway when the token cleanup fails", async () => {
+    forgetDeviceToken.mockRejectedValue(new Error("FCM said no"));
+    render(<SignOutView />);
+    await act(async () => {});
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("signs out anyway when the cleanup's code fails to load", async () => {
+    loadDeviceToken.mockRejectedValue(new Error("chunk failed"));
+    render(<SignOutView />);
+    await act(async () => {});
+    expect(forgetDeviceToken).not.toHaveBeenCalled();
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the cleanup its full two seconds after a slow download", async () => {
+    vi.useFakeTimers();
+    codeArrivesAfter(3000);
+    forgetDeviceToken.mockReturnValue(new Promise<void>(() => {}));
+    render(<SignOutView />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    // The download took longer than the cleanup's own limit, and the DELETE
+    // still gets its turn.
+    expect(forgetDeviceToken).toHaveBeenCalledTimes(1);
+    expect(signOut).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1999);
+    });
+    expect(signOut).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("signs out anyway when the download never finishes", async () => {
+    vi.useFakeTimers();
+    loadDeviceToken.mockReturnValue(new Promise(() => {}));
+    render(<SignOutView />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9999);
+    });
+    expect(signOut).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(forgetDeviceToken).not.toHaveBeenCalled();
     expect(signOut).toHaveBeenCalledTimes(1);
   });
 
