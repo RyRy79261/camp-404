@@ -281,6 +281,14 @@ describe("errorLogText", () => {
     expect(errorLogText(new APIError(), {})).toBe("APIError (status 529)");
   });
 
+  it("falls back to the name when the class has none", () => {
+    const Anonymous = (() => class extends Error {})();
+    expect(errorLogText(new Anonymous("peanuts"), {})).toBe("Error");
+    const bare = new Error("peanuts");
+    Object.defineProperty(bare, "constructor", { value: undefined });
+    expect(errorLogText(bare, {})).toBe("Error");
+  });
+
   it("says a non-error was thrown, without printing it", () => {
     expect(errorLogText("peanuts", {})).toBe("Thrown non-error");
     expect(errorLogText(new Error("peanuts"), {})).toBe("Error");
