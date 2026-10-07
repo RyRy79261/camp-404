@@ -842,6 +842,9 @@ phone home screen, not a shrunk desktop.
   as part of this work, or leave native out of this work. The static export
   stays deferred either way (a server-rendered desktop cannot be exported).
   Until then, nothing here assumes either.
+  [CORRECTION 2026-10-07] Settled differently: `apps/mobile` and the static
+  export were removed (#367), so there is no native shell today. A phone app
+  redo is planned in #354.
 - **Chrome budget.** At 360x640 a fixed bottom bar (about 48px), a pinned
   strip (about 32px) and a 48px title bar leave little for the page, before
   the browser's own bars. So on phones:

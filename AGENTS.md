@@ -6,9 +6,11 @@ product vision.
 
 ## Project
 
-Camp 404 is a cross-platform camp-management app (web + iOS + Android from
-one Next.js codebase) for an Afrikaburn theme camp. It is an internal
-operations tool for ~30–80 people, not a social network.
+Camp 404 is a camp-management web app for an Afrikaburn theme camp, used in
+the browser on desktops and phones. It is an internal operations tool for
+~30–80 people, not a social network. [CORRECTION 2026-10-07] There is no
+native iOS or Android app today: the Capacitor shell was removed (#367), and
+a phone app redo is planned in #354.
 
 ## Workspace layout
 
@@ -851,37 +853,36 @@ invalidate when the var changes, causing stale builds.
 
 ## Mobile builds
 
-[CORRECTION 2026-10-06] There is no native app build: `apps/mobile` (the
+[CORRECTION 2026-10-07] There is no native app build. `apps/mobile` (the
 Capacitor shell), its `@capacitor/*` packages, `build:mobile` and the
-`MOBILE_BUILD` static-export switch were removed until the phone app is
-redone (#354). The critical advisory GHSA-rvm3-566m-v7fv reached only that
-unshipped shell; the 8.0.0 to 8.3.4 line it pinned has no fix, and patched
-releases exist (8.4.3 and later, 8.5.1, 7.6.9, 6.2.2). The owner chose to
-remove the shell rather than upgrade it; #354 starts from a patched release.
-Phones use the web app. The notes below are what the shell met, for #354.
-
-The web app was statically exported and wrapped by Capacitor (`build:mobile`,
-`MOBILE_BUILD`). Server-only features — route handlers, server actions —
-do not exist in such a build. Anything a native screen depends on must
-work client-side or call a separately deployed API.
-
-**Status before removal: `pnpm --filter @camp404/web build:mobile` was broken
-and deferred to Phase 7.** Next 16 tightened `output: "export"` so every
-route handler / dynamic page in the bundle has to be statically
-pre-renderable. Every page in this repo today reads cookies via
-`getAuthenticatedUser()` and every `/api/*` route is server-only —
-so even the planned fix (a `pageExtensions` gate that excludes
-`*.server.{ts,tsx}` from the mobile build) would just produce an empty
-shell at this point. Revisit once there's a client-side mobile screen
-that actually has something to ship.
+`MOBILE_BUILD` static-export switch were removed (#367): the critical advisory
+GHSA-rvm3-566m-v7fv reached only that unshipped shell, and the owner chose to
+remove it rather than upgrade it. Phones use the web app. A phone app redo is
+planned in #354, starting from a patched Capacitor release. What the old shell
+met, for #354: Next 16's `output: "export"` needs every route statically
+pre-renderable, and every page here reads cookies and every `/api/*` route is
+server-only, so a static export holds nothing useful. The owner's earlier
+ruling (2026-09-16) was a thin WebView shell pointed at the deployed site
+(`server.url`).
 
 ## AI providers
 
-Model IDs (Claude Opus 4.8, Haiku 4.5, Sonnet 5.5, Groq Whisper Large v3
-Turbo) and the prompt templates in `@camp404/ai-prompts` are pinned and
+Model IDs and the prompt templates in `@camp404/ai-prompts` are pinned and
 versioned deliberately. Do not swap models or edit a prompt in place — bump the
-version instead. Sonnet 5.5 (`claude-sonnet-5-5`, owner 2026-10-06) is voice's
-model only (#356): it turns a captain's words into connector tool calls
+version instead. [CORRECTION 2026-10-07] What each pinned model does today
+(`MODELS` in `apps/web/lib/anthropic.ts`, `apps/web/lib/groq.ts`):
+
+- Claude Opus 4.8 (`claude-opus-4-8`): the Kitchen's recipe proofreading and
+  writing (`lib/recipe-proofread.ts`, `kitchen/recipes/actions.ts`).
+- Claude Haiku 4.5 (`claude-haiku-4-5-20251001`): the optional "Improve with
+  AI" pass on a bug or feature report (`lib/feedback-ai.ts`).
+- Claude Sonnet 5.5 (`claude-sonnet-5-5`): voice commands.
+- Groq Whisper Large v3 Turbo (`whisper-large-v3-turbo`): voice transcription.
+
+Every Anthropic client sets `maxRetries: 0` (`lib/anthropic.ts`, and voice's
+own in `lib/voice/service.ts`).
+
+Sonnet 5.5 (owner 2026-10-06) is voice's model only (#356): it turns a captain's words into connector tool calls
 (`voiceCommandPrompt`). A change to that prompt or model needs a new version
 and three passing real-model runs of `pnpm --filter @camp404/web eval:voice`
 (zero wrong actions; `VOICE_EVAL_LIMIT=10` first, to see the cost); there is

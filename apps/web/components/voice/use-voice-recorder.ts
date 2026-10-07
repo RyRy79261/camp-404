@@ -82,9 +82,8 @@ export function useVoiceSupported(): boolean {
  * Cross-browser MediaRecorder wrapper. Records on `start()`, transcribes
  * via `/api/voice/transcribe` on `stop()`, and calls `onTranscript` with
  * the result. While recording, exposes an `AnalyserNode` consumers can
- * read to draw a live waveform. On native Capacitor builds the start/stop
- * calls should route through `@capgo/capacitor-voice-recorder` instead —
- * see the //TODO inside start().
+ * read to draw a live waveform. There is no native app today (the phone
+ * app redo is #354), so this is the only recording path.
  */
 export function useVoiceRecorder({
   onTranscript,
@@ -150,9 +149,6 @@ export function useVoiceRecorder({
     setStoppedAtLimit(false);
     safeSet(setState, "requesting");
 
-    // TODO(capacitor): when running natively, swap MediaRecorder for the
-    // capacitor-voice-recorder plugin (returns base64 m4a). Detect via
-    // `Capacitor.isNativePlatform()`.
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {

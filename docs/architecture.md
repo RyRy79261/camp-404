@@ -7,9 +7,10 @@ this page.
 
 ## Request flow
 
-Both apps run on Vercel in `fra1` (Frankfurt), beside the Neon database
-(`apps/web/vercel.json`, `apps/join/vercel.json`). A console page is a server
-component; a change is a server action; files, voice and webhooks come in
+The three apps (web, join and guide) run on Vercel in `fra1` (Frankfurt),
+beside the Neon database (`apps/web/vercel.json`, `apps/join/vercel.json`,
+`apps/guide/vercel.json`); join and guide are public and need no sign-in. A
+console page is a server component; a change is a server action; files, voice and webhooks come in
 through route handlers under `apps/web/app/api/`. One page outside the console
 needs no sign-in: the neighbour page, `app/neighbours/[token]`, which a captain
 turns on to show other camps the site plan (see Camp layout below).
@@ -39,16 +40,16 @@ flowchart TB
   pages & after & routes --> outside
 ```
 
-| Service         | Used for                                            | Where                                                          |
-| --------------- | --------------------------------------------------- | -------------------------------------------------------------- |
-| Google Calendar | The camp calendar, meeting events, Today            | `apps/web/lib/google-calendar.ts`, `lib/camp-calendar.ts`      |
-| Anthropic       | Recipe proofreading; turning a report into an issue | `lib/recipe-proofread.ts`, `lib/feedback-ai.ts`                |
-| Groq            | Voice to text                                       | `lib/groq.ts`, `app/api/voice/transcribe`                      |
-| Vercel Blob     | Profile photos, proof of payment, form images       | `app/api/uploads/*`, `app/api/avatar`, `app/api/payment-proof` |
-| Firebase        | Push notifications                                  | `lib/firebase-admin.ts`                                        |
-| Resend          | Notice emails and sign-in emails                    | `lib/email.ts`, `packages/auth/src/email.ts`                   |
-| GitHub          | "Report a problem" files an issue                   | `app/feedback/actions.ts`                                      |
-| Telegram        | Inbound webhook only; outbound is built but off     | `app/api/telegram/webhook`, `@camp404/telegram`                |
+| Service         | Used for                                                            | Where                                                                   |
+| --------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Google Calendar | The camp calendar, meeting events, Today                            | `apps/web/lib/google-calendar.ts`, `lib/camp-calendar.ts`               |
+| Anthropic       | Recipe proofreading; turning a report into an issue; voice commands | `lib/recipe-proofread.ts`, `lib/feedback-ai.ts`, `lib/voice/service.ts` |
+| Groq            | Voice to text                                                       | `lib/groq.ts`, `app/api/voice/transcribe`, `app/api/voice/command`      |
+| Vercel Blob     | Profile photos, proof of payment, form images                       | `app/api/uploads/*`, `app/api/avatar`, `app/api/payment-proof`          |
+| Firebase        | Push notifications                                                  | `lib/firebase-admin.ts`                                                 |
+| Resend          | Notice emails and sign-in emails                                    | `lib/email.ts`, `packages/auth/src/email.ts`                            |
+| GitHub          | "Report a problem" files an issue                                   | `app/feedback/actions.ts`                                               |
+| Telegram        | Inbound webhook only; outbound is built but off                     | `app/api/telegram/webhook`, `@camp404/telegram`                         |
 
 Each one turns itself off when its keys are missing; the captains' System
 status page (`/captains/system`) shows which are on.

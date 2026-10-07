@@ -986,6 +986,9 @@ phone it is a home screen, not a shrunk desktop:
   assumes either. The static export (`isMobileBuild`,
   `apps/web/next.config.ts:3`) stays deferred either way; a server-rendered
   desktop cannot be statically exported.
+  [CORRECTION 2026-10-07] Settled differently: `apps/mobile` and the static
+  export were removed (#367), so there is no native shell today. A phone app
+  redo is planned in #354.
 
 ### 6. Keyboard and accessibility
 
