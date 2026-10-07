@@ -28,6 +28,8 @@ export interface VoiceRow {
   tool: string;
   sentence: string;
   facts: string;
+  /** What a whole-field write leaves there, a line per field (Preview.change). */
+  change: string[];
   path: string | null;
   /** Runs only if this earlier row (its index) worked. */
   dependsOn: number | null;
@@ -309,10 +311,11 @@ async function buildList(
     list: {
       token,
       expiresAt: body.exp,
-      rows: sealed.map((s) => ({
+      rows: sealed.map((s, i) => ({
         tool: s.tool,
         sentence: s.sentence,
         facts: s.facts,
+        change: previews[i]!.change ?? [],
         path: s.path,
         dependsOn: s.dependsOn,
         blocked: s.blocked ?? null,

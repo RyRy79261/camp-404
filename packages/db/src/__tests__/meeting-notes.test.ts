@@ -294,7 +294,8 @@ describe("meeting notes", () => {
           version: 1,
           ...fields({ title: "Kickoff, renamed", notes: "We met." }),
         }),
-      ).toEqual({ ok: true });
+        // The version this save made, from its own UPDATE.
+      ).toEqual({ ok: true, version: 2 });
       expect(
         await editMeetingNote({
           actorId: member.id,
@@ -360,7 +361,7 @@ describe("meeting notes", () => {
             ],
           }),
         }),
-      ).toEqual({ ok: true });
+      ).toEqual({ ok: true, version: 2 });
       const after = await getMeetingNote(id);
       expect(after?.actionItems.map((i) => i.text)).toEqual([
         "Buy the gas",

@@ -478,7 +478,7 @@ export async function editMeetingNote(
     noteId: string;
     version: number;
   },
-): Promise<MeetingNoteWriteResult> {
+): Promise<MeetingNoteWriteResult<{ version: number }>> {
   if (!UUID.test(input.noteId)) return { ok: false, error: NOTE_GONE };
   return refusing(() =>
     withTransaction(async (tx) => {
@@ -541,7 +541,7 @@ export async function editMeetingNote(
         refuse(ASSIGNEE_NOT_A_MEMBER);
       }
 
-      await tx
+      const [written] = await tx
         .update(schema.meetingNotes)
         .set({
           title: input.title,
@@ -554,7 +554,9 @@ export async function editMeetingNote(
           updatedAt: new Date(),
           version: sql`${schema.meetingNotes.version} + 1`,
         })
-        .where(eq(schema.meetingNotes.id, input.noteId));
+        .where(eq(schema.meetingNotes.id, input.noteId))
+        .returning({ version: schema.meetingNotes.version });
+      if (!written) refuse(NOTE_GONE);
       await writeLists(tx, input.noteId, input);
 
       // The action items: kept, changed, added or removed, in the order sent.
@@ -602,7 +604,9 @@ export async function editMeetingNote(
             .where(eq(schema.meetingNoteActionItems.id, item.id));
         }
       }
-      return { ok: true as const };
+      // The version THIS save made, from its own UPDATE: a caller that
+      // carries it on (voice's list) must never pick up a later save's.
+      return { ok: true as const, version: written.version };
     }),
   );
 }

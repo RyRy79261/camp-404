@@ -6,16 +6,17 @@ import { BUDGET_LINES } from "@/lib/content";
 import {
   feeFromBudget,
   formatRands,
+  formatRandsMinor,
   formatUsdLabel as usd,
-  parseRands,
+  readAmount,
   tierFor,
 } from "@/lib/fee";
 import { useJoinData } from "../join-data";
 import { FeeScale } from "./fee-scale";
 import { Eyebrow, WinBody } from "./ui";
 
-function verdict(fee: number, FEE: JoinSiteContent["fee"]): string {
-  const tier = tierFor(fee, FEE.tiers);
+function verdict(feeMinor: number, FEE: JoinSiteContent["fee"]): string {
+  const tier = tierFor(feeMinor, FEE.tiers);
   if (!tier) return FEE.subsidy.note;
   return tier.note ? `${tier.name}. ${tier.note}` : `${tier.name}.`;
 }
@@ -25,15 +26,18 @@ function verdict(fee: number, FEE: JoinSiteContent["fee"]): string {
 export function FeeWindow() {
   const id = useId();
   const FEE = useJoinData().content.fee;
-  const formatUsdLabel = (rands: number) =>
-    usd(rands, FEE.usdRate.randsPerDollar);
+  const formatUsdLabel = (minor: number) =>
+    usd(minor, FEE.usdRate.randsPerDollar);
   const SPEND_MAX = Math.max(1, ...FEE.spend.map((s) => s.rands));
   const [budget, setBudget] = useState("");
   const [costs, setCosts] = useState<Record<string, string>>({});
+  const budgetRead = readAmount(budget);
+  const costsRead = BUDGET_LINES.map((l) => readAmount(costs[l.key] ?? ""));
   const fee = feeFromBudget(
-    parseRands(budget),
-    BUDGET_LINES.map((l) => parseRands(costs[l.key] ?? "")),
+    budgetRead.minor,
+    costsRead.map((c) => c.minor),
   );
+  const unread = budgetRead.unread || costsRead.some((c) => c.unread);
 
   const field =
     "w-full border-b border-os-line bg-transparent px-1 py-1 font-mono text-sm text-os-fg outline-none placeholder:text-os-muted/50 focus:border-os-primary focus-visible:outline-none";
@@ -56,22 +60,24 @@ export function FeeWindow() {
             My whole Burn budget (R)
           </span>
           <input
-            inputMode="numeric"
+            inputMode="decimal"
             value={budget}
+            aria-invalid={budgetRead.unread || undefined}
             onChange={(e) => setBudget(e.target.value)}
             placeholder="10000"
             className={field}
           />
         </label>
         <div className="grid grid-cols-2 gap-3">
-          {BUDGET_LINES.map((l) => (
+          {BUDGET_LINES.map((l, i) => (
             <label key={l.key} className="block space-y-1">
               <span className="font-mono text-[11px] uppercase text-os-fg">
                 − {l.label}
               </span>
               <input
-                inputMode="numeric"
+                inputMode="decimal"
                 value={costs[l.key] ?? ""}
+                aria-invalid={costsRead[i]!.unread || undefined}
                 onChange={(e) =>
                   setCosts((c) => ({ ...c, [l.key]: e.target.value }))
                 }
@@ -96,12 +102,19 @@ export function FeeWindow() {
             Left for your camp fee
           </span>
           <span className="block font-pixel text-3xl text-os-fg">
-            {formatRands(fee)}{" "}
+            {formatRandsMinor(fee)}{" "}
             <span className="font-mono text-sm text-os-muted">
               {formatUsdLabel(fee)}
             </span>
           </span>
           <span className="block text-os-primary">{verdict(fee, FEE)}</span>
+          {unread && (
+            <span className="block text-xs text-os-muted">
+              A box with something other than rands counts as R&nbsp;0. Type
+              amounts like <span className="whitespace-nowrap">15000</span> or{" "}
+              <span className="whitespace-nowrap">15 000,50</span>.
+            </span>
+          )}
         </output>
       </section>
 

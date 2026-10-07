@@ -15,11 +15,11 @@ vi.mock("next/server", () => ({ after: () => undefined }));
 
 import { getMcpScope } from "@/lib/mcp/scope";
 import { rateLimiter } from "@/lib/rate-limit";
+import { voiceRunDeps as runDeps } from "../run-deps";
 import { lastResults, scriptedClaude, toolUse } from "../claude-fake";
 import type { ClaudeClient } from "../command";
 import { SAY_AGAIN, type VoiceOutcome } from "../resolve";
 import { runSealedList } from "../run";
-import { PROPOSAL_TTL_MS, sealKey } from "../seal";
 import { runVoiceCommand } from "../service";
 import { callTool, toolsFor, VOICE_CLIENT_ID } from "../tools";
 import { PEOPLE, SPEAKER, TASKS, seedEvalCamp, slot } from "../__eval__/camp";
@@ -57,23 +57,6 @@ async function command(
       claude: c,
     })
   ).outcome;
-}
-
-function runDeps(who: { userId: string; sessionId: string }) {
-  return {
-    key: sealKey(),
-    who,
-    stillCaptain: async () =>
-      (await getMcpScope(who.userId))?.isCaptain === true,
-    spend: async (id: string) =>
-      (
-        await rateLimiter.limit(`voice-proposal:${id}`, {
-          limit: 1,
-          windowMs: PROPOSAL_TTL_MS * 2,
-        })
-      ).ok,
-    call: callTool,
-  };
 }
 
 async function auditRows() {

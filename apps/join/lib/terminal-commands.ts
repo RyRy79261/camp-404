@@ -12,7 +12,7 @@ import {
   type TermLine,
   type TermResult,
 } from "@camp404/os/terminal";
-import { formatRands, formatUsdLabel } from "./fee";
+import { formatRands, formatUsdLabel, randsToMinor } from "./fee";
 import { APP_LABELS, INKBLOT, SIGNUP_URL } from "./content";
 import type { JoinData } from "./join-data";
 import { teamFile } from "./teams";
@@ -168,7 +168,7 @@ export const JOIN_COMMANDS: CommandTable<AppId, JoinData> = {
         hi("Camp fee: a floating scale, not a fixed fee."),
         ...fee.tiers.map((t) =>
           out(
-            `${t.name.padEnd(14)} ${formatRands(t.rands).padStart(8)}  ${formatUsdLabel(t.rands, fee.usdRate.randsPerDollar)}`,
+            `${t.name.padEnd(14)} ${formatRands(t.rands).padStart(8)}  ${formatUsdLabel(randsToMinor(t.rands), fee.usdRate.randsPerDollar)}`,
           ),
         ),
         out(fee.subsidy.note),

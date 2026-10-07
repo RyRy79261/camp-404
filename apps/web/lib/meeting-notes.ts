@@ -50,7 +50,7 @@ export async function createMeetingNote(
 
 export async function editMeetingNote(
   input: Parameters<typeof dbEditMeetingNote>[0],
-): Promise<MeetingNoteWriteResult> {
+): Promise<MeetingNoteWriteResult<{ version: number }>> {
   return usesTestStore()
     ? testStore.editMeetingNote(input)
     : dbEditMeetingNote(input);

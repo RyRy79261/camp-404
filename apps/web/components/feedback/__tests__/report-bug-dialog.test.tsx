@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import type * as ImageLib from "@/lib/image";
 
 vi.mock("@/app/feedback/actions", () => ({ submitFeedbackAction: vi.fn() }));
+vi.mock("@/lib/image", async (importOriginal) => ({
+  ...(await importOriginal<typeof ImageLib>()),
+  downscaleForUpload: vi.fn(),
+}));
 
 import { ReportBugDialog } from "@/components/feedback/report-bug-dialog";
 import { submitFeedbackAction } from "@/app/feedback/actions";
+import { SCREENSHOT_UPLOAD, downscaleForUpload } from "@/lib/image";
 
 function fillAndSend(text = "It broke") {
   fireEvent.change(screen.getByLabelText(/what went wrong/i), {
@@ -143,13 +149,56 @@ describe("ReportBugDialog", () => {
       expect(screen.queryByRole("img", { name: "Your screenshot" })).toBeNull();
     });
 
-    it("refuses a picture over 5 MB", () => {
+    it("makes a picture over 4 MB smaller before it is sent", async () => {
+      URL.createObjectURL = vi.fn(() => "blob:local-preview");
+      const small = new File([PNG], "big.webp", { type: "image/webp" });
+      vi.mocked(downscaleForUpload).mockResolvedValueOnce(small);
       render(<ReportBugDialog open onOpenChange={() => {}} />);
-      const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.png", {
+      const big = new File([new Uint8Array(6 * 1024 * 1024)], "big.png", {
         type: "image/png",
       });
       attach(big);
-      expect(screen.getByRole("alert").textContent).toMatch(/over 5 MB/);
+      await waitFor(() =>
+        expect(
+          screen.getByRole("img", { name: "Your screenshot" }),
+        ).toBeTruthy(),
+      );
+      expect(downscaleForUpload).toHaveBeenCalledWith(big, SCREENSHOT_UPLOAD);
+      expect(screen.getByText("big.webp")).toBeTruthy();
+    });
+
+    it("refuses a picture still over 4 MB once made smaller", async () => {
+      const big = new File([new Uint8Array(4 * 1024 * 1024 + 1)], "big.png", {
+        type: "image/png",
+      });
+      vi.mocked(downscaleForUpload).mockResolvedValueOnce(big);
+      render(<ReportBugDialog open onOpenChange={() => {}} />);
+      attach(big);
+      await waitFor(() =>
+        expect(screen.getByRole("alert").textContent).toMatch(/over 4 MB/),
+      );
+      expect(screen.queryByRole("img", { name: "Your screenshot" })).toBeNull();
+    });
+
+    it("says the picture is too big when Vercel refuses the upload", async () => {
+      URL.createObjectURL = vi.fn(() => "blob:local-preview");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({
+          ok: false,
+          status: 413,
+          json: async () => {
+            throw new SyntaxError("not JSON");
+          },
+        })),
+      );
+      render(<ReportBugDialog open onOpenChange={() => {}} />);
+      attach(new File([PNG], "Screenshot.png", { type: "image/png" }));
+      fillAndSend();
+      await waitFor(() =>
+        expect(screen.getByRole("alert").textContent).toMatch(/over 4 MB/),
+      );
+      vi.unstubAllGlobals();
     });
 
     it("shows the picture as private, uploads it, then names it in the report", async () => {

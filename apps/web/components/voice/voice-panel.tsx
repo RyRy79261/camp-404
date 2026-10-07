@@ -171,6 +171,15 @@ function ActionRow({
         <span className="block text-[14.5px] font-semibold leading-snug text-foreground">
           {row.sentence}
         </span>
+        {row.change.length > 0 && (
+          <span className="mt-1 block border-l-2 border-primary/60 pl-2 text-[13px] leading-snug text-foreground">
+            {row.change.map((line, i) => (
+              <span key={i} className="block break-words">
+                {line}
+              </span>
+            ))}
+          </span>
+        )}
         <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
           {row.facts}
           {row.dependsOn !== null && (

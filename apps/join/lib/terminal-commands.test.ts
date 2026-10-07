@@ -38,7 +38,7 @@ describe("runCommand", () => {
   it("fee shows the sliding scale in rands with dollar labels", () => {
     const r = runCommand("fee");
     expect(r.open).toBe("fee");
-    expect(text("fee")).toMatch(/Ideal\s+R8,000\s+≈ \$500/);
+    expect(text("fee")).toMatch(/Ideal\s+R\s8\s000\s+≈ US\$500/);
     expect(text("fee")).toContain("Perfect World");
   });
 

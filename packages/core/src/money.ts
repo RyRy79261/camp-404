@@ -198,15 +198,16 @@ export interface ForeignEquivalentInput {
 }
 
 /**
- * A rand amount with what it comes to in dollars or euros, at a rate a captain
- * typed: `R6 300 ≈ US$350 at R18.00 on 24 Sep 2026`. A label only: the rand
- * amount is the money, and the foreign figure is rounded to the cent. The app
- * never fetches a rate. Throws for a currency other than USD or EUR, an amount
- * that is not whole non-negative cents, a rate that is not a positive number,
- * or a date that is not a YYYY-MM-DD day.
+ * What a rand amount comes to in dollars or euros at a rate a captain typed,
+ * on its own: `US$350`. A label only, rounded to the cent, for a screen that
+ * shows the rand amount and says the rate and its day once beside it (the
+ * join site's fee scale). Anything else uses formatForeignEquivalent, which
+ * says all three. Throws as formatForeignEquivalent does.
  */
-export function formatForeignEquivalent(input: ForeignEquivalentInput): string {
-  const { amountZarMinor, currency, ratePerUnit, rateDate } = input;
+export function formatForeignAmount(
+  input: Omit<ForeignEquivalentInput, "rateDate">,
+): string {
+  const { amountZarMinor, currency, ratePerUnit } = input;
   if (!(FOREIGN_CURRENCIES as readonly string[]).includes(currency)) {
     throw new UnknownCurrencyError(currency);
   }
@@ -221,10 +222,23 @@ export function formatForeignEquivalent(input: ForeignEquivalentInput): string {
     );
   }
   const foreignMinor = Math.round(amountZarMinor / ratePerUnit);
+  return `${FOREIGN_SYMBOLS[currency]}${shortAmount(foreignMinor)}`;
+}
+
+/**
+ * A rand amount with what it comes to in dollars or euros, at a rate a captain
+ * typed: `R6 300 ≈ US$350 at R18.00 on 24 Sep 2026`. A label only: the rand
+ * amount is the money, and the foreign figure is rounded to the cent. The app
+ * never fetches a rate. Throws for a currency other than USD or EUR, an amount
+ * that is not whole non-negative cents, a rate that is not a positive number,
+ * or a date that is not a YYYY-MM-DD day.
+ */
+export function formatForeignEquivalent(input: ForeignEquivalentInput): string {
+  const { amountZarMinor, ratePerUnit, rateDate } = input;
+  const foreign = formatForeignAmount(input);
   const rate = grouped(ratePerUnit, 2, 4);
   return (
-    `R${shortAmount(amountZarMinor)} ≈ ` +
-    `${FOREIGN_SYMBOLS[currency]}${shortAmount(foreignMinor)} ` +
+    `R${shortAmount(amountZarMinor)} ≈ ${foreign} ` +
     `at R${rate} on ${rateDay(rateDate)}`
   );
 }

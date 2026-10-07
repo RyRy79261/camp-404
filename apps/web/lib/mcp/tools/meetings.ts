@@ -227,9 +227,15 @@ export function registerMeetingTools(server: McpServer): void {
           });
           if (!result.ok) throw new ToolError(result.error);
           const saved = await getMeetingNote(note.id);
+          // `version` is the one THIS save made (its own UPDATE ... RETURNING),
+          // never the re-read's: someone saving in between must not hand a
+          // later row on a voice list their version to pass its check with.
           return saved
-            ? presentNote(saved, scope, await labelsOf())
-            : { id: note.id };
+            ? {
+                ...presentNote(saved, scope, await labelsOf()),
+                version: result.version,
+              }
+            : { id: note.id, version: result.version };
         },
       }),
   );

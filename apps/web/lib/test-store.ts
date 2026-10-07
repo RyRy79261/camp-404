@@ -3739,7 +3739,7 @@ export const testStore = {
       noteId: string;
       version: number;
     },
-  ): MeetingNoteWriteResult {
+  ): MeetingNoteWriteResult<{ version: number }> {
     const note = meetingNotes.find((n) => n.id === input.noteId);
     if (!note) return { ok: false, error: NOTE_GONE };
     const refusal = meetingNoteRefusal(
@@ -3821,7 +3821,7 @@ export const testStore = {
       })),
       actionItems: items,
     });
-    return { ok: true };
+    return { ok: true, version: note.version };
   },
 
   turnActionItemIntoTask(input: {

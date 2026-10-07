@@ -185,6 +185,53 @@ describe("buildHome", () => {
     });
   });
 
+  it("says when an event already under way started, and lists it first, never 'days ago'", () => {
+    const home = buildHome(
+      member({
+        calendar: {
+          status: "ok",
+          events: [
+            {
+              id: "later",
+              title: "Camp meeting",
+              start: "2026-09-23T15:00:00Z",
+              allDay: false,
+              location: null,
+              teamTag: null,
+            },
+            {
+              id: "build",
+              title: "Build week",
+              start: "2026-09-20",
+              allDay: true,
+              location: null,
+              teamTag: null,
+            },
+            {
+              id: "running",
+              title: "Fundraiser",
+              start: "2026-09-22T16:00:00Z",
+              allDay: false,
+              location: null,
+              teamTag: null,
+            },
+          ],
+        },
+      }),
+    );
+    expect(home.upcoming.map((u) => [u.title, u.relative])).toEqual([
+      ["Build week", "Started Sun 20 Sept"],
+      ["Fundraiser", "Started Tue 22 Sept"],
+      ["Camp meeting", "Today"],
+    ]);
+    // Its date tile is today's.
+    expect(home.upcoming.map((u) => u.sortKey.slice(0, 10))).toEqual([
+      "2026-09-23",
+      "2026-09-23",
+      "2026-09-23",
+    ]);
+  });
+
   describe("whose event", () => {
     function event(id: string, title: string, teamTag: string | null) {
       return {

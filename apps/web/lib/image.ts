@@ -83,6 +83,14 @@ export const RECEIPT_UPLOAD: DownscaleOptions = {
   quality: 0.85,
 };
 
+/** A bug report's screenshot over the upload limit: up to 2560 px (a laptop
+ * screen at full size, its words still readable), WebP. */
+export const SCREENSHOT_UPLOAD: DownscaleOptions = {
+  maxEdge: 2560,
+  type: "image/webp",
+  quality: 0.85,
+};
+
 const REENCODABLE = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 /**

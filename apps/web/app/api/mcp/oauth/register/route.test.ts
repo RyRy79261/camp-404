@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as OAuth from "@/lib/mcp/oauth";
+import type * as RateLimit from "@/lib/rate-limit";
 
 // Client registration is open to anyone (RFC 7591), so its input is bounded
 // and its rate is limited: an oversized or malformed request stores nothing,
@@ -8,7 +9,8 @@ import type * as OAuth from "@/lib/mcp/oauth";
 // oldest, so nobody is locked out.
 
 const clientIp = vi.hoisted(() => ({ value: "203.0.113.9" }));
-vi.mock("@/lib/rate-limit", () => ({
+vi.mock("@/lib/rate-limit", async (importOriginal) => ({
+  ...(await importOriginal<typeof RateLimit>()),
   rateLimiter: { limit: vi.fn() },
   getClientIp: () => clientIp.value,
 }));
@@ -144,6 +146,24 @@ describe("POST /api/mcp/oauth/register", () => {
     expect(new Set(keys)).toEqual(
       new Set(["mcp-register:2001:db8:abcd:12::/64"]),
     );
+  });
+
+  it("counts an IPv4-mapped address as its IPv4 address in any spelling, as every other limit does", async () => {
+    for (const ip of [
+      "203.0.113.9",
+      "::ffff:203.0.113.9",
+      "::FFFF:203.0.113.9",
+      "::ffff:cb00:7109",
+      "0:0:0:0:0:ffff:203.0.113.9",
+    ]) {
+      clientIp.value = ip;
+      await POST(register(valid));
+    }
+    const keys = vi
+      .mocked(rateLimiter.limit)
+      .mock.calls.map(([key]) => key)
+      .filter((key) => key.startsWith("mcp-register:"));
+    expect(new Set(keys)).toEqual(new Set(["mcp-register:203.0.113.9"]));
   });
 
   it("makes room among clients nobody authorized instead of refusing a newcomer", async () => {

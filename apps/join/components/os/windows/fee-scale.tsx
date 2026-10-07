@@ -1,7 +1,12 @@
 "use client";
 
 import { useId, useState } from "react";
-import { formatRands, formatUsdLabel as usd, tierFor } from "@/lib/fee";
+import {
+  formatRands,
+  formatUsdLabel as usd,
+  randsToMinor,
+  tierFor,
+} from "@/lib/fee";
 import { useJoinData } from "../join-data";
 
 // The camp fee as a floating scale: a subsidy zone, four marked tiers and a
@@ -10,7 +15,8 @@ export function FeeScale() {
   const id = useId();
   const FEE = useJoinData().content.fee;
   const rate = FEE.usdRate.randsPerDollar;
-  const formatUsdLabel = (rands: number) => usd(rands, rate);
+  // The scale moves in whole rands; the label is worked out in cents.
+  const formatUsdLabel = (rands: number) => usd(randsToMinor(rands), rate);
   const PERFECT = FEE.tiers[FEE.tiers.length - 1]!.rands;
   const ESSENTIAL = FEE.tiers[0]!.rands;
   // Room past the top tier, so its marker is not on the very edge.
@@ -22,7 +28,7 @@ export function FeeScale() {
   ).rands;
   const pct = (rands: number) => `${(rands / SCALE_MAX) * 100}%`;
   const [amount, setAmount] = useState(IDEAL);
-  const tier = tierFor(amount, FEE.tiers);
+  const tier = tierFor(randsToMinor(amount), FEE.tiers);
   const label = tier?.name ?? FEE.subsidy.name;
   const note = tier ? tier.note : FEE.subsidy.note;
 
@@ -154,7 +160,7 @@ export function FeeScale() {
         ))}
       </ul>
       <p className="font-mono text-[10px] uppercase text-os-muted">
-        Dollar figures are a guide at R{FEE.usdRate.randsPerDollar} = $1 (
+        Dollar figures are a guide at R{FEE.usdRate.randsPerDollar} = US$1 (
         {FEE.usdRate.asOf}). We pay in rands.
       </p>
     </section>

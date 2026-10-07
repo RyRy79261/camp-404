@@ -45,6 +45,12 @@ export async function consumeRateLimit(input: {
   windowMs: number;
   /** Tests only: a fixed clock instead of the database's. */
   now?: Date;
+  /**
+   * What a statement that returned no row means. Other limits let it through
+   * ("allow", the default). A single-use claim (voice's sealed list) must not:
+   * "unknown" answers null, so the caller runs nothing.
+   */
+  noRow?: "allow" | "unknown";
 }): Promise<RateLimitVerdict | null> {
   const { key, limit, windowMs } = input;
   if (!Number.isInteger(limit) || limit < 1) {
@@ -98,7 +104,7 @@ export async function consumeRateLimit(input: {
     // The Neon HTTP driver and PGlite both return { rows }; other drivers
     // return the array itself.
     const row = Array.isArray(result) ? result[0] : result.rows?.[0];
-    if (!row) return ALLOWED;
+    if (!row) return input.noRow === "unknown" ? null : ALLOWED;
 
     // bigint can arrive as a string.
     if (Number(row.count) <= limit) return ALLOWED;

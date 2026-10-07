@@ -5,9 +5,8 @@ import {
   isAllowedRedirectUri,
   isAllowedScope,
   registerBoundedClient,
-  registrationAddressKey,
 } from "@/lib/mcp/oauth";
-import { rateLimiter, getClientIp } from "@/lib/rate-limit";
+import { clientAddressKey, getClientIp, rateLimiter } from "@/lib/rate-limit";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -52,7 +51,7 @@ const RegisterRequest = z.object({
 // Hardening: redirect URIs must be on a known MCP-client domain (loopback,
 // claude.ai, anthropic.com) — see briefing gotcha — otherwise reject 400.
 export async function POST(req: Request) {
-  const ip = registrationAddressKey(getClientIp(req.headers));
+  const ip = clientAddressKey(getClientIp(req.headers));
   for (const [key, limit, windowMs] of [
     [`mcp-register:${ip}`, REGISTER_LIMITS.perAddressPerMinute, 60_000],
     [`mcp-register-day:${ip}`, REGISTER_LIMITS.perAddressPerDay, DAY_MS],

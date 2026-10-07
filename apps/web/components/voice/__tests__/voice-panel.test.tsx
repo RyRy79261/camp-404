@@ -35,6 +35,7 @@ const row = (sentence: string, over: Partial<VoiceRow> = {}): VoiceRow => ({
   tool: "x",
   sentence,
   facts: "Facts",
+  change: [],
   path: "/x",
   dependsOn: null,
   blocked: null,
@@ -120,6 +121,30 @@ describe("the Voice panel", () => {
     fireEvent.click(screen.getByRole("button", { name: /Do 2 actions/ }));
     expect(v.run).toHaveBeenCalled();
     expect(screen.getByText(/Nothing saved yet · expires/)).toBeTruthy();
+  });
+
+  it("shows the new value of a write that replaces a whole field, under its sentence", () => {
+    const rows = [
+      row("Replace your emergency contacts with 1 contact", {
+        change: ["Contacts: Sam Botha, sister, +27 82 555 0101"],
+      }),
+    ];
+    const v = voice({
+      outcome: {
+        kind: "list",
+        answers: [],
+        note: null,
+        rows,
+        token: "t",
+        expiresAt: Date.now() + 300_000,
+      },
+      shown: { rows, token: "t", expiresAt: Date.now() + 300_000 },
+      ticked: new Set([0]),
+    });
+    render(<VoiceBody voice={v} onClose={vi.fn()} />);
+    expect(
+      screen.getByText("Contacts: Sam Botha, sister, +27 82 555 0101"),
+    ).toBeTruthy();
   });
 
   it("asks one question with two options, shows what waits, and offers to cancel all", () => {

@@ -5,13 +5,31 @@ import { listReimbursementsForReview } from "@camp404/db/reimbursements";
 import { listBudgetTotals } from "@camp404/db/team-budgets";
 import { getTeamMemberships } from "@camp404/db/team-memberships";
 import {
+  ALLERGEN_LABELS,
   ATTENDANCE_ANSWER_LABELS,
+  DIET_LABELS,
+  FOOD_REACTION_LABELS,
+  GUIDE_CATEGORY_LABELS,
   LOGISTICS_PHASE_LABELS,
+  flattenQuestions,
+  questionLabel,
   type AttendanceAnswer,
   type AttendancePhase,
+  type Diet,
+  type FoodReaction,
+  type GuideCategory,
+  type InventoryCondition,
+  type InventoryLocation,
+  type KitchenAllergen,
   type LogisticsPhase,
+  type Questionnaire,
 } from "@camp404/types";
+import { getInventoryItem } from "../inventory";
+import { CONDITION_LABELS, LOCATION_LABELS } from "../inventory-copy";
 import { getMeetingNote } from "../meeting-notes";
+import { getQuestionnaireForPicker } from "../questionnaire-config";
+import { recipePath } from "../recipe-copy";
+import { getRecipeDetail } from "../recipes";
 import { getAttendanceView, listLogisticsPhases } from "../logistics";
 import type { McpScope } from "../mcp/scope";
 import { ledgerCycle } from "../payments";
@@ -35,6 +53,12 @@ import { readNames, readTeamLabels, readTeamPeople } from "./reads";
 export interface Preview {
   sentence: string;
   facts: string;
+  /**
+   * What a write that replaces a whole field will leave there, one line per
+   * field ("Text: …"), so the captain reads the new value before Do (owner,
+   * audit 2 voice-mcp-2). Shown, never sealed: Do runs the sealed arguments.
+   */
+  change?: string[];
   path: string | null;
   /** The arguments to run with, compare-and-set values filled in. */
   args: Record<string, unknown>;
@@ -74,6 +98,34 @@ function dayRange(start: string | null, end: string | null): string {
   return start === end || !end
     ? dayLabel(start)
     : `${dayLabel(start)} – ${dayLabel(end)}`;
+}
+
+/** The longest a value is shown in a row before it is cut. */
+const SHOWN_MAX = 300;
+
+/**
+ * A value as the row shows it: one line, quoted when it is words, cut after
+ * SHOWN_MAX characters with how much more there is.
+ */
+function shown(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "(empty)";
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value)) {
+    return value.length === 0
+      ? "(none)"
+      : value.map((v) => (typeof v === "string" ? v : shown(v))).join(", ");
+  }
+  if (typeof value === "object") return JSON.stringify(value);
+  const text = String(value).replace(/\s+/g, " ").trim();
+  if (text.length <= SHOWN_MAX) return quote(text);
+  const more = text.length - SHOWN_MAX;
+  return `${quote(`${text.slice(0, SHOWN_MAX).trimEnd()}…`)} (${more} more character${more === 1 ? "" : "s"})`;
+}
+
+/** A list as the row shows it, each item on its own after a bullet. */
+function listed(items: readonly string[]): string {
+  return items.length === 0 ? "(none)" : items.join(" · ");
 }
 
 async function personName(id: unknown): Promise<string> {
@@ -269,6 +321,9 @@ const logisticsPreviews: Record<string, PreviewFn> = {
     return {
       sentence: `Set ${label} to ${dayRange(str(args.startDate), str(args.endDate))}${place ? ` at ${place}` : ""}`,
       facts: `Logistics · now ${dayRange(row?.startDate ?? null, row?.endDate ?? null)} · This moves the camp calendar and the meal plan's prep`,
+      ...(args.note !== undefined
+        ? { change: [`Note: ${shown(args.note)}`] }
+        : {}),
       path: "/logistics",
       args: { ...args, expectedVersion: row?.version ?? 0 },
       keys: [`days:${phase}`],
@@ -443,6 +498,24 @@ const teamPreviews: Record<string, PreviewFn> = {
   },
 };
 
+/** A duty card's parts, as the rows show a card that replaces the old one. */
+function cardLines(card: Args): string[] {
+  const lines = (v: unknown) =>
+    Array.isArray(v) ? listed(v.map((x) => shown(x))) : "(none)";
+  const roles = Array.isArray(card.subRoles)
+    ? (card.subRoles as Args[]).map(
+        (r) => `${str(r.name)} (${String(r.min)}–${String(r.max)})`,
+      )
+    : [];
+  return [
+    `Card roles: ${listed(roles)}`,
+    `Card steps: ${lines(card.steps)}`,
+    `Card hard rules: ${lines(card.hardRules)}`,
+    `Card checklist: ${lines(card.checklist)}`,
+    `Card ask: ${shown(card.askRole)}`,
+  ];
+}
+
 // --- Everything else: plain sentences from the arguments ------------------------
 
 const otherPreviews: Record<string, PreviewFn> = {
@@ -458,18 +531,40 @@ const otherPreviews: Record<string, PreviewFn> = {
     };
   },
   async propose_inventory_change(args) {
+    const item = await getInventoryItem(str(args.itemId));
+    if (!item) {
+      return blocked(
+        "Suggest a change to a gear item",
+        "That gear item isn't in the inventory.",
+        args,
+        "/inventory",
+      );
+    }
+    const condition = str(args.condition) as InventoryCondition;
+    const location = str(args.location) as InventoryLocation;
+    const unit = item.unit ? ` ${item.unit}` : "";
+    const custodian =
+      location === "custodian_home" && args.custodianUserId
+        ? await personName(args.custodianUserId)
+        : null;
     const parts = [
-      args.quantity != null ? `count ${args.quantity}` : null,
-      str(args.condition) || null,
-      str(args.location) || null,
+      typeof args.quantity === "number"
+        ? `count ${args.quantity}${unit}`
+        : null,
+      CONDITION_LABELS[condition]?.toLowerCase() ?? null,
+      custodian
+        ? `at ${custodian}'s home`
+        : (LOCATION_LABELS[location]?.toLowerCase() ?? null),
+      str(args.storageLocation) || null,
+      args.maintenanceDone === true ? "maintenance done" : null,
     ].filter(Boolean);
     return {
-      sentence: `Suggest a change to a gear item: ${parts.join(", ") || "no change given"}`,
-      facts:
-        "Inventory · a lead of its team or a captain approves it on the page",
+      sentence: `Suggest a change to ${quote(item.name)}: ${parts.join(", ") || "no change given"}`,
+      facts: `Inventory · now ${item.quantity}${unit}, ${CONDITION_LABELS[item.condition].toLowerCase()}, ${LOCATION_LABELS[item.location].toLowerCase()} · a lead of its team or a captain approves it on the page`,
+      ...(args.note ? { change: [`Note: ${shown(args.note)}`] } : {}),
       path: "/inventory",
       args,
-      keys: [`item:${str(args.itemId)}`],
+      keys: [`item:${item.id}`],
     };
   },
   async revoke_invite_code(args) {
@@ -577,9 +672,20 @@ const otherPreviews: Record<string, PreviewFn> = {
     const fields = ["title", "agenda", "notes", "decisions"].filter(
       (k) => args[k] !== undefined,
     );
+    const label: Record<string, string> = {
+      title: "Title",
+      agenda: "Agenda",
+      notes: "Notes",
+      decisions: "Decisions (the whole list)",
+    };
     return {
       sentence: `Change the ${fields.join(", ") || "notes"} of ${quote(note.title)}`,
       facts: `Meetings · ${dayLabel(note.heldAt.toISOString().slice(0, 10))} · as you read it`,
+      change: fields.map((k) =>
+        k === "decisions" && Array.isArray(args.decisions)
+          ? `${label[k]}: ${listed(args.decisions.map((d) => shown(d)))}`
+          : `${label[k]}: ${shown(args[k])}`,
+      ),
       path: `/meetings/${note.id}`,
       args: { ...args, expectedVersion: note.version },
       keys: [`meeting:${note.id}`],
@@ -605,9 +711,28 @@ const otherPreviews: Record<string, PreviewFn> = {
         args,
         "/guide",
       );
+    const labels = await readTeamLabels();
+    const change: string[] = [];
+    if (args.title !== undefined) change.push(`Title: ${shown(args.title)}`);
+    if (args.category !== undefined) {
+      const category = str(args.category) as GuideCategory;
+      change.push(`Topic: ${GUIDE_CATEGORY_LABELS[category] ?? category}`);
+    }
+    if (args.team !== undefined) {
+      change.push(
+        `Team: ${args.team === null ? "no team" : (labels[str(args.team)] ?? str(args.team))}`,
+      );
+    }
+    if (args.markdown !== undefined) {
+      change.push(`Text (the whole chapter): ${shown(args.markdown)}`);
+    }
+    if (args.card && typeof args.card === "object") {
+      change.push(...cardLines(args.card as Args));
+    }
     return {
       sentence: `Change the draft of ${quote(doc?.title ?? str(args.slug))}`,
       facts: "Survival Guide · as you read it",
+      change,
       path: "/guide",
       args: { ...args, expectedVersion: doc?.version ?? args.expectedVersion },
       keys: [`doc:${str(args.slug)}`],
@@ -647,9 +772,23 @@ const otherPreviews: Record<string, PreviewFn> = {
     };
   },
   async update_questionnaire_draft(args) {
+    const definition = args.definition as Questionnaire | undefined;
+    let questions: string[];
+    try {
+      questions = definition
+        ? flattenQuestions(definition).map((q) => questionLabel(q))
+        : [];
+    } catch {
+      // Not a definition the tool would take: the tool refuses it on Do.
+      questions = [];
+    }
     return {
       sentence: `Replace the questions of the draft ${quote(str(args.key))}`,
       facts: "Questionnaires · a draft: sending it stays on the page",
+      change: [
+        `Title: ${shown(definition?.title)}`,
+        `Questions (${questions.length}): ${listed(questions.map((q) => shown(q)))}`,
+      ],
       path: "/captains/questionnaires",
       args,
       keys: [`questionnaire:${str(args.key)}`],
@@ -665,19 +804,43 @@ const otherPreviews: Record<string, PreviewFn> = {
     };
   },
   async add_recipe_lesson(args) {
-    return {
-      sentence: `Add a cook's note to a recipe: ${quote(str(args.body))}`,
+    const recipe = await getRecipeDetail(str(args.recipeId));
+    if (!recipe) {
+      return blocked(
+        "Add a cook's note to a recipe",
+        "That recipe isn't in the book.",
+        args,
+        "/kitchen/recipes",
+      );
+    }
+    const preview: Preview = {
+      sentence: `Add a cook's note to ${quote(recipe.title)}: ${quote(str(args.body))}`,
       facts: "Kitchen",
-      path: "/kitchen/recipes",
+      path: recipePath(recipe.id),
       args,
       keys: [],
     };
+    return recipe.acceptedVersionId
+      ? preview
+      : {
+          ...preview,
+          blocked: "It is not in the book yet, so it has no version to note.",
+        };
   },
   async update_my_burner_profile(args) {
-    const keys = Object.keys((args.responses as Args) ?? {});
+    const responses = (args.responses as Args) ?? {};
+    const keys = Object.keys(responses);
+    const questions = new Map(
+      flattenQuestions(await getQuestionnaireForPicker()).map((q) => [
+        q.id,
+        questionLabel(q),
+      ]),
+    );
+    const name = (key: string) => questions.get(key) ?? key;
     return {
-      sentence: `Change your burner profile: ${keys.join(", ")}`,
+      sentence: `Change your burner profile: ${keys.map(name).join(", ")}`,
       facts: "Your profile",
+      change: keys.map((k) => `${name(k)}: ${shown(responses[k])}`),
       path: "/profile",
       args,
       keys: ["me:burner"],
@@ -686,9 +849,23 @@ const otherPreviews: Record<string, PreviewFn> = {
   async update_my_dietary_requirements(args) {
     const foods = Array.isArray(args.foods) ? args.foods.length : 0;
     const diets = Array.isArray(args.diets) ? args.diets.join(", ") : "";
+    const picked = Array.isArray(args.foods)
+      ? (args.foods as { food?: string; reaction?: string }[]).map(
+          (f) =>
+            `${ALLERGEN_LABELS[f.food as KitchenAllergen] ?? f.food} (${(
+              FOOD_REACTION_LABELS[f.reaction as FoodReaction] ??
+              f.reaction ??
+              ""
+            ).toLowerCase()})`,
+        )
+      : [];
+    const dietNames = Array.isArray(args.diets)
+      ? (args.diets as string[]).map((d) => DIET_LABELS[d as Diet] ?? d)
+      : [];
     return {
       sentence: `Replace your dietary pick-list: ${foods} food${foods === 1 ? "" : "s"}${diets ? `, diets ${diets}` : ""}`,
       facts: "Your profile · the Kitchen's allergy check reads it",
+      change: [`Foods: ${listed(picked)}`, `Diets: ${listed(dietNames)}`],
       path: "/profile",
       args,
       keys: ["me:dietary"],
@@ -707,9 +884,15 @@ const otherPreviews: Record<string, PreviewFn> = {
   },
   async update_my_emergency_contacts(args) {
     const n = Array.isArray(args.contacts) ? args.contacts.length : 0;
+    const contacts = Array.isArray(args.contacts)
+      ? (args.contacts as Args[]).map(
+          (c) => `${str(c.name)}, ${str(c.relationship)}, ${str(c.phone)}`,
+        )
+      : [];
     return {
       sentence: `Replace your emergency contacts with ${n} contact${n === 1 ? "" : "s"}`,
       facts: "Your profile",
+      change: [`Contacts: ${listed(contacts)}`],
       path: "/profile",
       args,
       keys: ["me:contacts"],
@@ -728,10 +911,18 @@ const otherPreviews: Record<string, PreviewFn> = {
     };
   },
   async update_my_history(args) {
-    const parts = Object.keys(args).join(", ");
+    const label: Record<string, string> = {
+      skills: "Skills (the whole list)",
+      previousAfrikaburns: "AfrikaBurns before",
+      previousBurningMans: "Burning Mans before",
+      firstTime: "First time",
+    };
+    const keys = Object.keys(args).filter((k) => args[k] !== undefined);
+    const parts = keys.join(", ");
     return {
       sentence: `Change your burn history: ${parts}`,
       facts: "Your profile",
+      change: keys.map((k) => `${label[k] ?? k}: ${shown(args[k])}`),
       path: "/profile",
       args,
       keys: ["me:history"],
