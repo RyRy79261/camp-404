@@ -4,6 +4,7 @@ import * as React from "react";
 import { ImageIcon, Lock } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { cn } from "@camp404/ui/lib/utils";
+import { SCREENSHOT_UPLOAD, downscaleForUpload } from "@/lib/image";
 import {
   SCREENSHOT_MAX_BYTES,
   SCREENSHOT_TOO_BIG,
@@ -29,6 +30,16 @@ export function screenshotProblem(file: File): string | null {
   if (!Object.hasOwn(SCREENSHOT_TYPES, file.type)) return SCREENSHOT_WRONG_TYPE;
   if (file.size > SCREENSHOT_MAX_BYTES) return SCREENSHOT_TOO_BIG;
   return null;
+}
+
+/**
+ * A picture over the upload limit made smaller in the browser (a 4K or
+ * phone screenshot is often 6 to 10 MB as a PNG), so it fits under Vercel's
+ * request limit. One under the limit is sent as it is.
+ */
+export async function fitScreenshot(file: File): Promise<File> {
+  if (file.size <= SCREENSHOT_MAX_BYTES) return file;
+  return downscaleForUpload(file, SCREENSHOT_UPLOAD);
 }
 
 /** "412 KB", "1.4 MB". */
@@ -60,13 +71,30 @@ export function ReportScreenshotField({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [problem, setProblem] = React.useState<string | null>(null);
   const [dragging, setDragging] = React.useState(false);
+  const [shrinking, setShrinking] = React.useState(false);
 
-  function take(file: File | null) {
-    if (!file || disabled) return;
+  function accept(file: File) {
     const why = screenshotProblem(file);
     setProblem(why);
     if (why) return;
     onChange({ file, previewUrl: URL.createObjectURL(file) });
+  }
+
+  function take(file: File | null) {
+    if (!file || disabled || shrinking) return;
+    if (!Object.hasOwn(SCREENSHOT_TYPES, file.type)) {
+      setProblem(SCREENSHOT_WRONG_TYPE);
+      return;
+    }
+    if (file.size <= SCREENSHOT_MAX_BYTES) {
+      accept(file);
+      return;
+    }
+    setProblem(null);
+    setShrinking(true);
+    void fitScreenshot(file)
+      .then(accept, () => setProblem(SCREENSHOT_TOO_BIG))
+      .finally(() => setShrinking(false));
   }
 
   function remove() {
@@ -188,6 +216,12 @@ export function ReportScreenshotField({
             or paste one here (Ctrl+V), or drop the file here
           </p>
         </>
+      )}
+
+      {shrinking && (
+        <p role="status" className="text-xs text-muted-foreground">
+          Making the picture smaller…
+        </p>
       )}
 
       {problem && (

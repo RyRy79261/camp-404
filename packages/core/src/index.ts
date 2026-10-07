@@ -54,7 +54,8 @@
 //     statement import (parseStatement, proposeStatementMatches) (./dues)
 //   - money: CURRENCIES, DEFAULT_CURRENCY, isCurrency, UnknownCurrencyError,
 //     formatMoney, parseMoneyToMinor, decimalToMinor, sumMinor — money is in
-//     rands (ZAR) only, with one formatter; formatForeignEquivalent and
+//     rands (ZAR) only, with one formatter; formatForeignEquivalent (and
+//     formatForeignAmount, its foreign figure alone) and
 //     FOREIGN_CURRENCIES label a rand amount in USD or EUR at a rate a captain
 //     typed, and store nothing (./money)
 //   - CSV: escapeCsvCell, toCsv/toCsvFile, CSV_BOM/CSV_EOL/CSV_MIME,

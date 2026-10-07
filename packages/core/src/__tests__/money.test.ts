@@ -4,6 +4,7 @@ import {
   DEFAULT_CURRENCY,
   decimalToMinor,
   FOREIGN_CURRENCIES,
+  formatForeignAmount,
   formatForeignEquivalent,
   formatMoney,
   isCurrency,
@@ -134,6 +135,56 @@ describe("sumMinor", () => {
 
   it("refuses a total that is no longer a safe integer", () => {
     expect(() => sumMinor([Number.MAX_SAFE_INTEGER, 1])).toThrow(RangeError);
+  });
+});
+
+describe("formatForeignAmount", () => {
+  it("says the foreign figure alone, by the same rule as the full label", () => {
+    expect(
+      formatForeignAmount({
+        amountZarMinor: 630000,
+        currency: "USD",
+        ratePerUnit: 18,
+      }),
+    ).toBe("US$350");
+    expect(
+      formatForeignAmount({
+        amountZarMinor: 350000,
+        currency: "USD",
+        ratePerUnit: 16,
+      }),
+    ).toBe("US$218.75");
+    expect(
+      formatForeignAmount({
+        amountZarMinor: 3200000,
+        currency: "EUR",
+        ratePerUnit: 16,
+      }),
+    ).toBe("€2\u00a0000");
+  });
+
+  it("refuses what the full label refuses", () => {
+    expect(() =>
+      formatForeignAmount({
+        amountZarMinor: 999,
+        currency: "ZAR" as never,
+        ratePerUnit: 18,
+      }),
+    ).toThrow(UnknownCurrencyError);
+    expect(() =>
+      formatForeignAmount({
+        amountZarMinor: 12.5,
+        currency: "USD",
+        ratePerUnit: 18,
+      }),
+    ).toThrow(RangeError);
+    expect(() =>
+      formatForeignAmount({
+        amountZarMinor: 999,
+        currency: "USD",
+        ratePerUnit: 0,
+      }),
+    ).toThrow(RangeError);
   });
 });
 

@@ -10,6 +10,7 @@ import type {
   JoinScheduleEntry,
   JoinSiteContent,
 } from "@camp404/types";
+import { formatMoney } from "@camp404/core";
 import { GIFT_ICONS } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { Input } from "@camp404/ui/components/input";
@@ -906,7 +907,7 @@ export function FeeSection({
           rowName={(_row, i) => `Level ${i + 1}`}
           phoneLine={(row) => ({
             main: row.name,
-            sub: `R ${String(row.rands ?? "").replace(/\B(?=(\d{3})+(?!\d))/g, " ")}${row.note ? ` · ${row.note}` : ""}`,
+            sub: `${Number.isSafeInteger(row.rands) ? formatMoney(row.rands * 100, "ZAR", { wholeRands: true }) : "R —"}${row.note ? ` · ${row.note}` : ""}`,
           })}
           groups={[
             {

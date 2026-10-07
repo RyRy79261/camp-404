@@ -43,6 +43,7 @@ import {
   type ReportDiagnostics,
 } from "@/lib/github-feedback";
 import { collectDiagnostics } from "@/lib/client-errors";
+import { SCREENSHOT_TOO_BIG } from "@/lib/report-screenshot-copy";
 
 interface ReportBugDialogProps {
   open: boolean;
@@ -482,7 +483,13 @@ async function uploadScreenshot(
       return { ok: true, id: data.screenshotId };
     return {
       ok: false,
-      error: data?.error ?? "Your screenshot didn't upload. Try again.",
+      // A body over Vercel's limit is refused before the route answers, so
+      // the 413 carries no sentence of ours.
+      error:
+        data?.error ??
+        (res.status === 413
+          ? SCREENSHOT_TOO_BIG
+          : "Your screenshot didn't upload. Try again."),
     };
   } catch {
     return { ok: false, error: "Your screenshot didn't upload. Try again." };

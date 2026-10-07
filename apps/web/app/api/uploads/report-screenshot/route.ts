@@ -20,7 +20,7 @@ export const runtime = "nodejs";
 // BEFORE the report is filed, so the public issue can truthfully say one
 // exists; the report then names the id this returns. The picture is checked
 // by its first bytes (PNG, JPEG or WebP, never anything that could run),
-// capped at 5 MB, and kept as a PRIVATE blob in the member's own folder
+// capped at 4 MB (under Vercel's 4.5 MB request limit), and kept as a PRIVATE blob in the member's own folder
 // (lib/report-screenshots.ts). It never goes to GitHub. Captains alone see it.
 //
 // Camp members only: sign-up is open, and a picture nobody can erase (no camp

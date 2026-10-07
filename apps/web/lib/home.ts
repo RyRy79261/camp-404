@@ -152,6 +152,25 @@ function tidy(text: string): string {
   return text.replace(",", "");
 }
 
+/**
+ * When a calendar event sits in Coming up. One already under way (it started
+ * on an earlier day: a long all-day event, or one running now) says when it
+ * started and leads today, as the calendar lists it (lib/calendar-view.ts),
+ * never "3 days ago" (audit 2 logic-3).
+ */
+function timing(
+  day: string,
+  today: string,
+  date: string,
+  clock: string,
+): { relative: string; sortKey: string } {
+  if (day < today) return { relative: `Started ${date}`, sortKey: `${today}T` };
+  return {
+    relative: relativeDay(daysBetween(today, day)),
+    sortKey: `${day}T${clock}`,
+  };
+}
+
 function upcomingFromCalendar(
   calendar: CalendarResult | null,
   today: string,
@@ -176,27 +195,27 @@ function upcomingFromCalendar(
       // An all-day event is a date, not an instant: shown as that date in
       // every time zone.
       const day = event.start.slice(0, 10);
+      const date = tidy(DATE_UTC.format(new Date(`${day}T00:00:00Z`)));
       return {
         id: `event:${event.id}`,
         title,
-        when: tidy(DATE_UTC.format(new Date(`${day}T00:00:00Z`))),
-        relative: relativeDay(daysBetween(today, day)),
+        when: date,
+        ...timing(day, today, date, "00:00"),
         location: event.location,
         kind: "event" as const,
-        sortKey: `${day}T00:00`,
         team,
       };
     }
     const at = new Date(event.start);
     const day = campDayKey(at);
+    const date = tidy(DATE.format(at));
     return {
       id: `event:${event.id}`,
       title,
-      when: `${tidy(DATE.format(at))} · ${TIME.format(at)}`,
-      relative: relativeDay(daysBetween(today, day)),
+      when: `${date} · ${TIME.format(at)}`,
+      ...timing(day, today, date, TIME.format(at)),
       location: event.location,
       kind: "event" as const,
-      sortKey: `${day}T${TIME.format(at)}`,
       team,
     };
   });
