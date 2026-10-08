@@ -34,7 +34,7 @@ export function TeamAboutCard({
         {description ? (
           <p
             data-testid="team-description"
-            className="whitespace-pre-line text-sm"
+            className="max-w-[65ch] whitespace-pre-line text-sm"
           >
             {description}
           </p>

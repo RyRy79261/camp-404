@@ -42,8 +42,10 @@ export default async function CampSheetPage() {
     label: t.label,
   }));
 
+  // The sheet fills its window down to the bottom and scrolls inside its own
+  // frame (data-fills-window: the window's body gives the page its height).
   return (
-    <div className="flex flex-col">
+    <div data-fills-window className="flex min-h-0 flex-1 flex-col">
       <PageHeading
         eyebrow="Captains / Camp sheet"
         title="Camp sheet"

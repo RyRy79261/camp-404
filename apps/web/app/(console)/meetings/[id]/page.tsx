@@ -104,7 +104,7 @@ export default async function MeetingNotePage({
     rank === "captain" || (note.team !== null && leadTeams.includes(note.team));
 
   return (
-    <div className="flex flex-col">
+    <div className="mx-auto flex w-full max-w-[63.5rem] flex-col">
       <PageHeading
         eyebrow="Camp / Meetings"
         title={note.title}
@@ -138,8 +138,10 @@ export default async function MeetingNotePage({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 page-lg:grid-cols-3">
-        <div className="flex flex-col gap-6 page-lg:col-span-2">
+      {/* The agenda and notes keep a reading measure (about 80 characters a
+          line) in any window, the meeting's facts beside them. */}
+      <div className="grid grid-cols-[minmax(0,40rem)] gap-6 page-lg:grid-cols-[minmax(0,40rem)_minmax(16rem,22rem)]">
+        <div className="flex flex-col gap-6">
           <Section title="Agenda" icon={ClipboardList}>
             {note.agenda ? (
               <MarkdownBody className="text-sm text-foreground">

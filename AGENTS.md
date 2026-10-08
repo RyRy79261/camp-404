@@ -252,7 +252,15 @@ keyboard's way to them is the Terminal.
   page's own scaffolding (the heading row, its column split, a table's switch
   to cards). They measure the window's body (`data-page-container`) and fall
   back to the screen outside one. Plain `sm:`…`xl:` still ask the screen;
-  a dialog or popover (portalled to `<body>`) keeps them. The E2E helper
+  a dialog or popover (portalled to `<body>`) keeps them.
+  [2026-10-08] The window body has no width cap: a page takes its window's
+  width (owner: "use the room the window has"). A page of long prose keeps
+  its own reading measure, about 80 characters a line (the Guide's chapters,
+  an announcement, About, a meeting), and centres it; a one-column form keeps
+  its own `max-w-*`. A page that should reach the window's bottom (the Camp
+  sheet, the Camp layout) puts `data-fills-window` on its root, which makes
+  the body give it the window's height. A wide program's opening size grows
+  with the screen (`grow` in `PAGE_SIZE`, `desktop-shell.tsx`). The E2E helper
   `tests/e2e/lib/console-nav.ts` drives the Start menu and folder windows on
   a desktop and the home screen and folder sheets on a phone
   (`openConsoleNav(page, "Captains")` opens the Captains folder; on a

@@ -70,20 +70,15 @@ const ARROWS: Readonly<Record<string, [number, number]>> = {
 };
 
 /**
- * The plan, the key and the rail share one height: the mock-up's 564 px, cut
- * to what the window leaves under its heading, so the whole plot is in view
- * at once on a laptop. The window opens at 1120 x 800, cut to the screen
- * (desktop-shell.tsx): its body ends 108 px above the screen's foot, and the
- * heading takes 202 px of it (with the toolbar 246 px, with an older
- * version's banner 262 px). The caps keep the body inside an 800 px window.
+ * The plan, the key and the rail share one height: the room the window leaves
+ * under its heading (and the toolbar or an older version's banner), so the
+ * whole plot is in view at once and grows with the window (owner, 2026-10-08:
+ * every program uses the room its window has). The page fills its window
+ * (data-fills-window on the page), the workspace takes the rest of it, and the
+ * row never drops under 24rem; past that the window scrolls.
  */
-const BODY_HEIGHT = "page-md:h-[clamp(24rem,calc(100svh-19.375rem),35.25rem)]";
-/** An editor's toolbar takes a row of that room. */
-const BODY_HEIGHT_EDITING =
-  "page-md:h-[clamp(24rem,calc(100svh-22.125rem),34.625rem)]";
-/** An older version's banner takes a taller row. */
-const BODY_HEIGHT_BANNER =
-  "page-md:h-[clamp(24rem,calc(100svh-23.125rem),33.625rem)]";
+const BODY_ROW =
+  "page-md:min-h-[24rem] page-md:flex-1 page-md:grid-rows-[minmax(0,1fr)]";
 
 /** The rail's soft button: the window's choice colour, 32 px tall. */
 const RAIL_BUTTON = "h-8 px-3 text-[13px] font-semibold";
@@ -158,11 +153,6 @@ export function LayoutWorkspace({
     "arrivals",
     ...(share ? (["share"] as const) : []),
   ];
-  const bodyHeight = underBanner
-    ? BODY_HEIGHT_BANNER
-    : editing
-      ? BODY_HEIGHT_EDITING
-      : BODY_HEIGHT;
   const tab =
     chosenTab && tabs.includes(chosenTab) ? chosenTab : (tabs[0] as RailTab);
 
@@ -354,7 +344,7 @@ export function LayoutWorkspace({
     : undefined;
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col page-md:min-h-0 page-md:flex-1">
       {editing ? (
         <div
           role="toolbar"
@@ -410,6 +400,7 @@ export function LayoutWorkspace({
       <div
         className={cn(
           "grid grid-cols-1 gap-4",
+          BODY_ROW,
           "page-md:grid-cols-[auto_minmax(0,1fr)_17.5rem] page-lg:grid-cols-[auto_minmax(0,1fr)_18.25rem] page-xl:grid-cols-[auto_minmax(0,1fr)_20rem]",
         )}
       >
@@ -417,8 +408,7 @@ export function LayoutWorkspace({
         <Card
           ref={svgWrap}
           className={cn(
-            "flex items-center justify-center bg-[var(--plan-card)] p-2 page-md:max-w-[40cqw] page-md:p-3",
-            bodyHeight,
+            "flex items-center justify-center bg-[var(--plan-card)] p-2 page-md:min-h-0 page-md:max-w-[40cqw] page-md:p-3",
           )}
         >
           <LayoutPlan
@@ -434,7 +424,7 @@ export function LayoutWorkspace({
           />
         </Card>
 
-        <Card className={cn("p-4 page-md:overflow-auto", bodyHeight)}>
+        <Card className="p-4 page-md:min-h-0 page-md:overflow-auto">
           <LayoutKey
             pieces={layout.pieces}
             keys={keys}
@@ -447,7 +437,7 @@ export function LayoutWorkspace({
           />
         </Card>
 
-        <Card className={cn("flex flex-col p-0", bodyHeight)}>
+        <Card className="flex flex-col p-0 page-md:min-h-0">
           <div
             role="tablist"
             aria-label="About the plan"

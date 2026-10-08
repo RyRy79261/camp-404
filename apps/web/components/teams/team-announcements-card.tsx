@@ -60,7 +60,7 @@ export function TeamAnnouncementsCard({
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
-                <p className="line-clamp-3 whitespace-pre-line text-sm text-muted-foreground">
+                <p className="line-clamp-3 max-w-[65ch] whitespace-pre-line text-sm text-muted-foreground">
                   {a.body}
                 </p>
               </li>

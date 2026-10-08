@@ -178,22 +178,33 @@ function folderSize(key: string): { w: number; h: number } {
   return CAMP_FOLDER_SIZE[key] ?? FOLDER_SIZE;
 }
 /**
- * Pages drawn for a wide screen open larger, as the prototype sizes them
- * (its XL and L): still a window right of the icons, never full screen
- * (owner's approval of the prototype, 2026-09-26). Each is cut to the room
- * the screen has, and its page reflows to the window (the page-* variants).
+ * A page's opening size: `w` and `h` are the prototype's, the size it opens at
+ * on the 1280 px screen it was drawn for. A page whose UI is a table, a board
+ * or two columns side by side also `grow`s with a bigger screen (owner,
+ * 2026-10-08: "there are a few apps that open smaller than their UI even
+ * though there's ample space"): it takes that share of the room right of the
+ * icons, never less than its own size. Still a window right of the icons,
+ * never full screen (owner's approval of the prototype, 2026-09-26). Each is
+ * cut to the room the screen has, and its page reflows to the window (the
+ * page-* variants).
  */
-const XL_SIZE = { w: 1040, h: 660 };
-const L_SIZE = { w: 880, h: 600 };
-const S_SIZE = { w: 520, h: 440 };
-const WRITE_SIZE = { w: 1120, h: 800 };
-const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
+type OpeningSize = { w: number; h: number; grow?: number };
+/** The share of the room's height a growing page takes. */
+const GROW_HEIGHT = 0.9;
+const XL_SIZE: OpeningSize = { w: 1040, h: 660, grow: 0.8 };
+/** A page that reads or fills in one column: it keeps its size. */
+const L_SIZE: OpeningSize = { w: 880, h: 600 };
+/** A table, a board or two columns at L: it grows like XL, less far. */
+const L_WIDE: OpeningSize = { w: 880, h: 600, grow: 0.7 };
+const S_SIZE: OpeningSize = { w: 520, h: 440 };
+const WRITE_SIZE: OpeningSize = { w: 1120, h: 800, grow: 0.9 };
+const PAGE_SIZE: Partial<Record<ProgramId, OpeningSize>> = {
   // A team's page opens wide enough for its cards and its people side by side
   // (audit, 2026-10-01: at M it was seven cards in one column).
   team: XL_SIZE,
   // The meeting editor writes its agenda and notes beside their previews.
-  "new-meeting": L_SIZE,
-  "edit-meeting": L_SIZE,
+  "new-meeting": L_WIDE,
+  "edit-meeting": L_WIDE,
   tasks: XL_SIZE,
   roster: XL_SIZE,
   payments: XL_SIZE,
@@ -209,10 +220,10 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   "edit-recipe": XL_SIZE,
   results: XL_SIZE,
   "respondent-answers": XL_SIZE,
-  calendar: L_SIZE,
-  power: L_SIZE,
-  logistics: L_SIZE,
-  shifts: L_SIZE,
+  calendar: L_WIDE,
+  power: L_WIDE,
+  logistics: L_WIDE,
+  shifts: L_WIDE,
   "my-shifts": L_SIZE,
   guide: L_SIZE,
   "guide-chapter": L_SIZE,
@@ -224,28 +235,28 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   // The site plan opens wide enough for the plan, its key and the rail side
   // by side, the whole plot in view (the approved redesign, 2026-10-01).
   "camp-layout": WRITE_SIZE,
-  transport: L_SIZE,
+  transport: L_WIDE,
   "my-dues": L_SIZE,
   "my-gear": L_SIZE,
   "gear-rental": XL_SIZE,
-  "my-claims": L_SIZE,
-  "claim-approvals": L_SIZE,
-  budgets: L_SIZE,
-  recipes: L_SIZE,
+  "my-claims": L_WIDE,
+  "claim-approvals": L_WIDE,
+  budgets: L_WIDE,
+  recipes: L_WIDE,
   recipe: L_SIZE,
   "meal-plan": XL_SIZE,
-  "shopping-list": L_SIZE,
-  "recipe-review": L_SIZE,
-  overview: L_SIZE,
-  questionnaires: L_SIZE,
-  announcements: L_SIZE,
+  "shopping-list": L_WIDE,
+  "recipe-review": L_WIDE,
+  overview: L_WIDE,
+  questionnaires: L_WIDE,
+  announcements: L_WIDE,
   // About reads in three columns, and the Join site editor shows its section
   // list beside the open section, Write beside Preview (approved redesign,
   // 2026-10-01; audit: at 720 wide About was one column 13 screens long).
   about: { w: 1040, h: 800 },
   "join-site": WRITE_SIZE,
-  audit: L_SIZE,
-  "report-screenshots": L_SIZE,
+  audit: L_WIDE,
+  "report-screenshots": L_WIDE,
   "new-event": S_SIZE,
   terminal: { w: 640, h: 420 },
   inkblot: { w: 700, h: 440 },
@@ -334,7 +345,7 @@ function tidy(state: WmState<string>, vp: Viewport): WmState<string> {
     .sort((a, b) => a.z - b.z);
   const place = new Map<string, OsWindow<string>>();
   shown.forEach((w, i) => {
-    const size = w.lastUrl ? pageSize(w.program) : folderSize(w.id);
+    const size = w.lastUrl ? pageSize(w.program, vp) : folderSize(w.id);
     place.set(w.id, { ...w, ...placeAt(i, size, vp), maximized: false });
   });
   if (place.size === 0) return state;
@@ -344,9 +355,26 @@ function tidy(state: WmState<string>, vp: Viewport): WmState<string> {
   };
 }
 
-/** A page's opening size: its own, else the default. */
-function pageSize(program: string | undefined): { w: number; h: number } {
-  return (program && PAGE_SIZE[program as ProgramId]) || DEFAULT_SIZE;
+/**
+ * A page's opening size on this screen: its own, else the default, grown to
+ * its share of the room right of the icons when it grows.
+ */
+export function pageSize(
+  program: string | undefined,
+  vp: Viewport,
+): { w: number; h: number } {
+  const size: OpeningSize =
+    (program && PAGE_SIZE[program as ProgramId]) || DEFAULT_SIZE;
+  const grow = size.grow;
+  if (!grow) return { w: size.w, h: size.h };
+  const room = {
+    w: vp.width - ICONS_EDGE - TODAY_ROOM,
+    h: vp.height - 24,
+  };
+  return {
+    w: Math.max(size.w, Math.round(room.w * grow)),
+    h: Math.max(size.h, Math.round(room.h * GROW_HEIGHT)),
+  };
 }
 
 /** A window that has just opened goes where the prototype puts it. */
@@ -689,7 +717,7 @@ function DesktopInner({
             id: page.instanceKey,
             url,
             program: windowProgram(page.programId, page.instanceKey),
-            size: pageSize(page.programId),
+            size: pageSize(page.programId, vp),
             viewport: vp,
           }
         : null,
@@ -864,7 +892,7 @@ function DesktopInner({
           id: key,
           url: to,
           program: windowProgram(m.programId, key),
-          size: pageSize(m.programId),
+          size: pageSize(m.programId, viewport),
           viewport,
         });
       }
@@ -1235,7 +1263,7 @@ function DesktopInner({
       saved,
       liveKey,
       viewport: vp,
-      size: page ? pageSize(page.programId) : undefined,
+      size: page ? pageSize(page.programId, vp) : undefined,
     });
     dispatch({
       type: "pruneTo",
@@ -1987,7 +2015,12 @@ function DesktopInner({
                   id="os-window-content"
                   tabIndex={-1}
                   hidden={checking}
-                  className="mx-auto w-full max-w-6xl px-4 py-6 outline-none page-sm:px-6"
+                  // The page takes the window's width (no column of its
+                  // own: a reading page keeps its own measure). Maximised on
+                  // a desktop, it keeps clear of the Today handle and the
+                  // Voice button over the window's right edge. A page that
+                  // fills its window (data-fills-window) gets its height.
+                  className={`w-full px-4 py-6 outline-none page-sm:px-6 has-[[data-fills-window]]:flex has-[[data-fills-window]]:h-full has-[[data-fills-window]]:flex-col ${w.maximized ? "md:pr-[60px]!" : ""}`}
                 >
                   {children}
                 </div>
