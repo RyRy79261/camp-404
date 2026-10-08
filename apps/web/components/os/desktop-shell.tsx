@@ -1511,6 +1511,70 @@ function DesktopInner({
     return () => window.clearTimeout(id);
   }, [captureLive, held, liveKey, router, url]);
 
+  // --- Access changed elsewhere (an approval, a promotion) ----------------------------
+  // The layout is drawn once and kept while the member moves between pages,
+  // so a captain approving or promoting them would not change the desktop
+  // until a reload. Ask the server for the manifest's version on each new
+  // page and when the tab comes back (events, not a timer), and refresh when
+  // it is not the one drawn. A demotion is caught here too, before the
+  // member meets a refused page.
+  const drawnVersion = useRef(manifest.version);
+  useEffect(() => {
+    drawnVersion.current = manifest.version;
+  });
+  // One check at a time; a call while one is out runs once more after it,
+  // so a change that lands on the server mid-check is not missed.
+  const checkingAccess = useRef(false);
+  const recheckAccess = useRef(false);
+  const checkAccess = useCallback(() => {
+    const run = () => {
+      if (heldNow.current) return;
+      if (checkingAccess.current) {
+        recheckAccess.current = true;
+        return;
+      }
+      checkingAccess.current = true;
+      const settle = () => {
+        checkingAccess.current = false;
+        if (recheckAccess.current) {
+          recheckAccess.current = false;
+          run();
+        }
+      };
+      fetch("/api/desktop/access", { cache: "no-store" })
+        .then((res) => {
+          if (!res.ok) throw new Error(`access check: ${res.status}`);
+          return res.json() as Promise<{ version: string | null }>;
+        })
+        .then(
+          ({ version: now }) => {
+            if (now !== drawnVersion.current) router.refresh();
+            settle();
+          },
+          // Offline or a failed check: the desktop keeps what it drew.
+          settle,
+        );
+    };
+    run();
+  }, [router]);
+  const checkedFor = useRef(pathname);
+  useEffect(() => {
+    if (checkedFor.current === pathname) return;
+    checkedFor.current = pathname;
+    checkAccess();
+  }, [checkAccess, pathname]);
+  useEffect(() => {
+    const onBack = () => {
+      if (document.visibilityState === "visible") checkAccess();
+    };
+    window.addEventListener("focus", onBack);
+    document.addEventListener("visibilitychange", onBack);
+    return () => {
+      window.removeEventListener("focus", onBack);
+      document.removeEventListener("visibilitychange", onBack);
+    };
+  }, [checkAccess]);
+
   // A click on a link in the live window: ask first if it has unsaved input
   // and the link goes to another page, and copy it before it goes.
   useEffect(() => {

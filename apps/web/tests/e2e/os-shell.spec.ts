@@ -1103,6 +1103,63 @@ test.describe("404 OS desktop (test-mode)", () => {
     ).toBeVisible();
   });
 
+  test("an applicant approved and made captain while signed in gets the captain desktop without a reload", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "the icons are the desktop's");
+    await request.post("/api/test/seed-invite", {
+      data: { code: "LATE-CAPTAIN", maxUses: 1, requiresApproval: true },
+    });
+    await login(page, {
+      id: "late-captain",
+      email: "late-captain@example.com",
+      displayName: "Late",
+    });
+    await redeemInviteAtGate(page, "LATE-CAPTAIN");
+    await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
+    await completeOnboarding(request, "late-captain");
+    await page.goto("/");
+    await expectDesktop(page);
+    expect(await iconNames(page)).toEqual(["Inbox"]);
+
+    // A captain approves them and makes them captain, elsewhere.
+    await request.post("/api/test/set-approval", {
+      data: { authUserId: "late-captain", status: "approved" },
+    });
+    await setRank(request, "late-captain", "captain");
+
+    // The tab coming back is enough: no page change, no reload.
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    const roster = desktopIcon(page, "Roster");
+    await expect(roster).toBeVisible();
+    await roster.dblclick();
+    await expect(page).toHaveURL("/captains/camp-management");
+    await expect(
+      osWindow(page, "Roster").getByRole("heading", {
+        level: 1,
+        name: "Camp management",
+      }),
+    ).toBeVisible();
+  });
+
+  test("a member made captain while signed in gets the captain icons on their next page", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "the icons are the desktop's");
+    await asRank(page, request, "next-page-captain", "member");
+    await page.goto("/");
+    await expectDesktop(page);
+    await expect(desktopIcon(page, "Inbox")).toBeVisible();
+    await expect(desktopIcon(page, "Captains")).toHaveCount(0);
+
+    await setRank(request, "next-page-captain", "captain");
+    await desktopIcon(page, "Inbox").dblclick();
+    await expect(page).toHaveURL("/notifications");
+    await expect(desktopIcon(page, "Captains")).toBeVisible();
+  });
+
   test("a rejected applicant gets no desktop", async ({ page, request }) => {
     await request.post("/api/test/seed-invite", {
       data: { code: "NO-DESK", maxUses: 1, requiresApproval: true },

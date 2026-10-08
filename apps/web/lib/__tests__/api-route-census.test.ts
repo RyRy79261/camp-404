@@ -38,6 +38,8 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   avatar: "camp-access",
   // A liveness probe: says the app is up and nothing else.
   health: "public",
+  // The desktop's access check: a hash of the caller's own manifest only.
+  "desktop/access": "session",
   "mcp/[transport]": "bearer-mcp",
   // Consent: the code-issuing POST checks camp access and approval.
   "mcp/oauth/authorize": "camp-access",

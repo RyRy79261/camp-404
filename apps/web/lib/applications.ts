@@ -62,8 +62,10 @@ export function applicationRows(
  * "This year" is the member's answer and the captains' decision, one stored
  * status each (STANDING_LABEL: "Coming, not decided", "Accepted", …) or no
  * answer; "Ticket" (captains only) is where their ticket, DDT or WAP stands.
+ * "coming" is the member's answer alone: everyone who said Yes, whatever the
+ * captains decided (the owner asked for it, 2026-10-08).
  */
-export type YearFilter = "all" | ParticipationStatus | "none";
+export type YearFilter = "all" | "coming" | ParticipationStatus | "none";
 
 export type TicketFilter =
   | "any"
@@ -91,6 +93,7 @@ export function matchesYearFilter(
 ): boolean {
   if (year === "all") return true;
   if (year === "none") return row.thisYear === null;
+  if (year === "coming") return row.says === "yes";
   return row.thisYear === year;
 }
 
