@@ -1522,25 +1522,40 @@ function DesktopInner({
   useEffect(() => {
     drawnVersion.current = manifest.version;
   });
+  // One check at a time; a call while one is out runs once more after it,
+  // so a change that lands on the server mid-check is not missed.
   const checkingAccess = useRef(false);
+  const recheckAccess = useRef(false);
   const checkAccess = useCallback(() => {
-    if (heldNow.current || checkingAccess.current) return;
-    checkingAccess.current = true;
-    fetch("/api/desktop/access", { cache: "no-store" })
-      .then((res) => {
-        if (!res.ok) throw new Error(`access check: ${res.status}`);
-        return res.json() as Promise<{ version: string | null }>;
-      })
-      .then(
-        ({ version: now }) => {
-          checkingAccess.current = false;
-          if (now !== drawnVersion.current) router.refresh();
-        },
-        () => {
+    const run = () => {
+      if (heldNow.current) return;
+      if (checkingAccess.current) {
+        recheckAccess.current = true;
+        return;
+      }
+      checkingAccess.current = true;
+      const settle = () => {
+        checkingAccess.current = false;
+        if (recheckAccess.current) {
+          recheckAccess.current = false;
+          run();
+        }
+      };
+      fetch("/api/desktop/access", { cache: "no-store" })
+        .then((res) => {
+          if (!res.ok) throw new Error(`access check: ${res.status}`);
+          return res.json() as Promise<{ version: string | null }>;
+        })
+        .then(
+          ({ version: now }) => {
+            if (now !== drawnVersion.current) router.refresh();
+            settle();
+          },
           // Offline or a failed check: the desktop keeps what it drew.
-          checkingAccess.current = false;
-        },
-      );
+          settle,
+        );
+    };
+    run();
   }, [router]);
   const checkedFor = useRef(pathname);
   useEffect(() => {
