@@ -39,6 +39,14 @@ describe("auditDetail", () => {
     expect(auditDetail("logistics.phase_set", { phase: "party" })).toBeNull();
   });
 
+  it("counts the members on an export and on an opened camp sheet", () => {
+    expect(auditActionLabel("member.sheet_viewed")).toBe(
+      "Opened the camp sheet",
+    );
+    expect(auditDetail("member.sheet_viewed", { rows: 12 })).toBe("12 members");
+    expect(auditDetail("member.export", { rows: 1 })).toBe("1 member");
+  });
+
   it("says where a member's allergies were read", () => {
     expect(auditDetail("safety.allergies.view", { via: "daily_sheet" })).toBe(
       "On the daily site sheet",

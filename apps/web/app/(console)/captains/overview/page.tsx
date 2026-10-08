@@ -7,6 +7,7 @@ import {
   Megaphone,
   ScrollText,
   Settings,
+  Sheet,
   UserPlus,
   Users,
   Wallet,
@@ -43,6 +44,12 @@ const SECTIONS: {
     icon: Users,
     title: "Roster",
     desc: "Who's coming, their teams and statuses",
+  },
+  {
+    href: "/captains/camp-sheet",
+    icon: Sheet,
+    title: "Camp sheet",
+    desc: "Everyone and everything we hold on them, on one screen",
   },
   {
     href: "/captains/questionnaires",

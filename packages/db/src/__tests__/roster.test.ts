@@ -200,6 +200,13 @@ describe("getCampManagementRoster is asked of the camp's current year", () => {
       isLead: true,
       cycle: 2026,
     });
+    // On a second team this year, without leading it.
+    await makeMembership(db, {
+      userId: driver.id,
+      team: "structures",
+      isLead: false,
+      cycle: 2026,
+    });
     await makeDriverProfile(db, {
       userId: driver.id,
       cycle: 2026,
@@ -220,7 +227,12 @@ describe("getCampManagementRoster is asked of the camp's current year", () => {
     });
     expect(teamsOf(before.find((m) => m.id === driver.id)!)).toEqual([
       "kitchen",
+      "structures",
     ]);
+    // Only the team they lead is a lead team.
+    expect(
+      teamsOf({ teams: before.find((m) => m.id === driver.id)!.leadTeams }),
+    ).toEqual(["kitchen"]);
 
     await foundedAt(db, 2027);
     const after = await getCampManagementRoster();
@@ -233,6 +245,7 @@ describe("getCampManagementRoster is asked of the camp's current year", () => {
       driverProfileComplete: false,
     });
     expect(teamsOf(after.find((m) => m.id === driver.id)!)).toEqual([]);
+    expect(after.find((m) => m.id === driver.id)!.leadTeams).toEqual([]);
 
     // The car seat and the driver profile are both still on file for 2026.
     expect(await db.select().from(schema.carMembers)).toHaveLength(1);

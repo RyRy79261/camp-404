@@ -64,6 +64,7 @@ function member(
     approvalStatus: "pending",
     isLead: false,
     teams: ["kitchen"],
+    leadTeams: [],
     duesPaid: false,
     onboardingComplete: false,
     pendingRequiredActions: 3,

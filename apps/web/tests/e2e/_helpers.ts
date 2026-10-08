@@ -62,9 +62,20 @@ export async function resetTestState(
 export async function completeOnboarding(
   request: APIRequestContext,
   authUserId: string,
+  /** Optional profile facts to save with it (the Camp sheet's spec). */
+  extra: {
+    country?: string;
+    emergencyContacts?: {
+      name: string;
+      phone: string;
+      relationship?: string;
+    }[];
+    idType?: "sa_id" | "passport";
+    idNumber?: string;
+  } = {},
 ): Promise<void> {
   const res = await request.post("/api/test/complete-onboarding", {
-    data: { authUserId },
+    data: { authUserId, ...extra },
   });
   if (!res.ok()) {
     throw new Error(`completeOnboarding failed: ${res.status()}`);
