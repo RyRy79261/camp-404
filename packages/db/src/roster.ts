@@ -27,6 +27,8 @@ export interface CampManagementMember {
   isLead: boolean;
   /** Teams the member belongs to, for context. */
   teams: string[];
+  /** The teams among `teams` the member leads this year, in the same order. */
+  leadTeams: string[];
   duesPaid: boolean;
   /** Burner-profile onboarding questionnaire finished. */
   onboardingComplete: boolean;
@@ -122,6 +124,9 @@ export async function getCampManagementRoster(
       teams: sql<
         string[]
       >`coalesce((select array_agg(tm.team::text order by tm.team) from team_memberships tm where tm.user_id = ${schema.users.id} and tm.cycle = ${cycle}), '{}'::text[])`,
+      leadTeams: sql<
+        string[]
+      >`coalesce((select array_agg(tm.team::text order by tm.team) from team_memberships tm where tm.user_id = ${schema.users.id} and tm.cycle = ${cycle} and tm.is_lead = true), '{}'::text[])`,
       pendingRequiredActions: sql<number>`(
         select count(*)::int from required_actions ra
         where ra.user_id = ${schema.users.id}
@@ -184,6 +189,7 @@ export async function getCampManagementRoster(
     approvalStatus: r.approvalStatus,
     isLead: r.isLead,
     teams: r.teams ?? [],
+    leadTeams: r.leadTeams ?? [],
     duesPaid: r.duesPaid,
     onboardingComplete: r.onboardingCompletedAt != null,
     pendingRequiredActions: r.pendingRequiredActions ?? 0,

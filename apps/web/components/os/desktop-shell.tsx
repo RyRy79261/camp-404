@@ -202,6 +202,9 @@ const PAGE_SIZE: Partial<Record<ProgramId, { w: number; h: number }>> = {
   // 2026-10-01) are drawn for a wide window.
   lounge: XL_SIZE,
   applications: XL_SIZE,
+  // A spreadsheet: as wide as the screen allows, and it scrolls sideways
+  // inside its own frame past that.
+  "camp-sheet": WRITE_SIZE,
   "edit-questionnaire": XL_SIZE,
   "edit-recipe": XL_SIZE,
   results: XL_SIZE,

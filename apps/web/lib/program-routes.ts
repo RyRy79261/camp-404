@@ -70,6 +70,7 @@ export type ProgramId =
   | "announcements"
   | "new-event"
   | "overview"
+  | "camp-sheet"
   | "applications"
   | "claim-approvals"
   | "payments"
@@ -154,6 +155,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "camp-settings": "Camp settings",
   "join-site": "Join site",
   audit: "Audit log",
+  "camp-sheet": "Camp sheet",
   "report-screenshots": "Report screenshots",
   system: "System status",
   terminal: "Terminal",
@@ -365,6 +367,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/captains/announcements", "announcements", "BROADCAST.EXE"),
   route("/captains/calendar", "new-event", "NEWEVENT.EXE"),
   route("/captains/overview", "overview", "CAMPSTAT.EXE"),
+  route("/captains/camp-sheet", "camp-sheet", "CAMP_SHEET.XLS"),
   route("/captains/applications", "applications", "INTAKE.DB"),
   route("/captains/claims", "claim-approvals", "APPROVE.EXE"),
   route("/captains/payments", "payments", "LEDGER.DB"),

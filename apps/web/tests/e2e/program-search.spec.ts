@@ -147,7 +147,9 @@ test.describe("Ctrl+K program search (test-mode)", () => {
     await page.keyboard.press("Escape");
     await asRank(page, request, "search-captain", "captain");
     await pressCtrlK(page);
-    await searchBox(page).getByRole("combobox").fill("camp");
+    // A captain has more Camp programs than a group shows at once, so the
+    // query names the one this checks.
+    await searchBox(page).getByRole("combobox").fill("camp settings");
     await expect(result(page, /^Camp settings,/)).toBeVisible();
     await expect(
       result(page, "Camp settings, Program, Captains"),

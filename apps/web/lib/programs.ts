@@ -492,6 +492,18 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "captain",
   },
+  // Every member and everything the camp holds on them, on one screen, like
+  // the previous captain's spreadsheet. It shows ID numbers: captains only.
+  {
+    id: "camp-sheet",
+    label: "Camp sheet",
+    keywords: ["Spreadsheet", "Everyone", "Emergency contacts", "Allergies"],
+    fileName: "CAMP_SHEET.XLS",
+    href: "/captains/camp-sheet",
+    icon: "camp-sheet",
+    place: CAPTAINS,
+    rank: "captain",
+  },
   // Who is coming this year, with tickets and WAP for captains
   // (#238). A team lead reads the statuses only, so the bar is team_lead.
   {

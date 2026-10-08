@@ -90,6 +90,7 @@ describe("every console component that renders private data is marked", () => {
         "app/(console)/captains/report-screenshots/report-screenshots-list.tsx",
         "components/feedback/report-screenshot-field.tsx",
         "app/(console)/tools/forms/dietary/dietary-form.tsx",
+        "app/(console)/captains/camp-sheet/camp-sheet-grid.tsx",
       ]),
     );
   });

@@ -371,6 +371,7 @@ describe("buildProgramManifest: the personas", () => {
     // The prototype's order: Camp overview first.
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
       "overview",
+      "camp-sheet",
       "applications",
       "questionnaires",
       "announcements",

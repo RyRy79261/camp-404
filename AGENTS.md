@@ -293,6 +293,10 @@ building block in `packages/ui`:
   sight. Text columns wrap (or `truncate` with the full text as a tooltip);
   the `role: "actions"` column keeps its own width on the right. Pass
   `framed` for the card frame; do not wrap it in a `page-md:` frame.
+  One exception: the captains' Camp sheet (`/captains/camp-sheet`) scrolls
+  sideways inside its own frame on purpose, because it is a read-only
+  spreadsheet with no buttons in it and the point is every column of a person
+  on one line.
 - **Read-only is content, not a disabled form.** A viewer who cannot edit sees
   the values, never greyed inputs, a greyed Add button or dead row icons:
   render no control at all, show a read-only form as a `FieldList` (label over
@@ -1061,7 +1065,9 @@ never measured.
   (`packages/core/src/privacy.ts`), never only in the UI:
   - `ALWAYS_PRIVATE`: ID and passport numbers, bank details. Never shown to
     another member. Captains read an ID only through audited paths: the
-    member panel in camp-management and the member export.
+    member panel in camp-management, the member export and the Camp sheet
+    (`/captains/camp-sheet`, which writes its `member.sheet_viewed` row before
+    it is drawn and fails closed).
   - `SAFETY_VISIBLE`: emergency contacts, allergies, anaphylaxis. Private,
     but readable by the member, captains and any team lead (owner's call,
     2026-09-16), because withholding them in an emergency is the worse
@@ -1075,7 +1081,8 @@ never measured.
   response (`auditReadAfterResponse`: never blocks the read, logs if it
   fails). An allergy answer on a questionnaire's results is a
   `safety.allergies.view` read too (`allergyReadEvents`). A member export and
-  a questionnaire's CSV write their rows BEFORE the file and fail closed.
+  a questionnaire's CSV write their rows BEFORE the file and fail closed, and
+  so does the Camp sheet before it is drawn (one row for the whole sheet).
 - **No member value in a server log.** A failed query's message holds the
   values it was saving (drizzle writes its params into it), and a log
   outlives erasure. Log a caught error as `errorLogText(err, process.env)`

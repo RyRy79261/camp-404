@@ -5,12 +5,14 @@ import {
   hasClearance,
   memberExportColumnsFor,
   toCsvFile,
+  type MemberExportColumn,
 } from "@camp404/core";
 import { appendAuditEvent } from "@camp404/db/audit";
 import { decryptField } from "@camp404/db/crypto";
 import {
   getMemberExportExtras,
   type MemberExportExtras,
+  type MemberExportOptions,
 } from "@camp404/db/member-export";
 import {
   flattenQuestions,
@@ -21,13 +23,16 @@ import { getTeamsConfig, teamLabelMap } from "./camp-config";
 import { membersVisibleTo } from "./camp-roster";
 import {
   UNREADABLE_ID,
-  memberExportCells,
+  memberCellRows,
   memberExportFilename,
+  type MemberCellOptions,
   type MemberExportExtra,
 } from "./member-export-csv";
 import { getQuestionnaireForResponses } from "./questionnaire-config";
-import { getCampManagementRoster } from "./roster";
+import { getCampManagementRoster, type CampManagementMember } from "./roster";
 import { usesTestStore } from "./test-mode";
+import { testStore } from "./test-store";
+import { dietaryTestStore } from "./test-store-dietary";
 
 // The member export (owner's ruling, 2026-09-16): one button for every rank,
 // and the file holds exactly what the viewer's read level allows. The columns
@@ -101,34 +106,88 @@ function toExtra(
   };
 }
 
-/**
- * Build the member export for one viewer. `rank` must be the viewer's exact
- * rank, team-lead flag included (captainPageGate below the captain bar).
- */
-export async function buildMemberExport(viewer: {
-  userId: string;
-  rank: ViewerRank;
-}): Promise<MemberExportFile> {
-  const columns = memberExportColumnsFor(viewer.rank);
-  const keys = columns.map((c) => c.key);
-  const has = (key: string) => keys.includes(key);
+/** The data beyond the roster row, by member id. */
+async function loadExtras(
+  options: MemberExportOptions,
+): Promise<Map<string, MemberExportExtra>> {
+  if (!options.safety && !options.captain) return new Map();
+  if (usesTestStore()) return testStoreExtras(options);
+  const [rows, questionnaire] = await Promise.all([
+    getMemberExportExtras(options),
+    getQuestionnaireForResponses(),
+  ]);
+  const questions = flattenQuestions(questionnaire);
+  const labels = {
+    allergies: optionLabels(questions, "dietary.allergies"),
+    dislikes: optionLabels(questions, "dietary.dislikes"),
+  };
+  return new Map(rows.map((row) => [row.userId, toExtra(row, labels)]));
+}
 
-  const safety = has("emergency_contact_1") || has("allergies");
-  const captain = has("id_number") || has("arrival");
-  const [everyone, config, questionnaire, extraRows] = await Promise.all([
+/**
+ * The E2E store's twin of the extras: the emergency contacts and ID a test
+ * member gave, and the old dietary form's words (/api/test/seed-allergy). The
+ * store keeps no burner profile dietary answers and no arrival.
+ */
+function testStoreExtras(
+  options: MemberExportOptions,
+): Map<string, MemberExportExtra> {
+  const dietary = new Map(dietaryTestStore.rows());
+  return new Map(
+    testStore.getCampManagementRoster().map((m) => {
+      const diet = options.safety ? dietary.get(m.id) : undefined;
+      const id = options.captain ? testStore.getIdDocuments(m.id) : null;
+      const idType =
+        id?.idType === "passport" || id?.idType === "sa_id" ? id.idType : null;
+      return [
+        m.id,
+        {
+          emergencyContacts: options.safety
+            ? testStore.getEmergencyContacts(m.id)
+            : null,
+          allergies: diet?.allergies ? [diet.allergies] : [],
+          anaphylactic: diet ? diet.isAnaphylactic : null,
+          dislikes: [],
+          dietaryNotes: diet?.notes ? [diet.notes] : [],
+          idType,
+          idNumber: idType ? (id?.idNumber ?? null) : null,
+          arrivalAt: null,
+        },
+      ];
+    }),
+  );
+}
+
+/** The columns a viewer gets, the people listed, and one row of words each. */
+export interface MemberTable {
+  columns: MemberExportColumn[];
+  members: CampManagementMember[];
+  rows: string[][];
+}
+
+/**
+ * The member table one viewer may read: the export's columns for their rank
+ * and the people their roster lists, as words. The CSV export and the
+ * captains' Camp sheet both read it; neither writes its audit row here.
+ * `rank` must be the viewer's exact rank, team-lead flag included.
+ */
+export async function loadMemberTable(
+  viewer: { rank: ViewerRank },
+  options: MemberCellOptions = {},
+): Promise<MemberTable> {
+  const columns = memberExportColumnsFor(viewer.rank);
+  const has = (key: string) => columns.some((c) => c.key === key);
+
+  const [everyone, config, extras] = await Promise.all([
     getCampManagementRoster({ includeEmail: has("email") }),
     getTeamsConfig(),
-    getQuestionnaireForResponses(),
-    // The E2E store keeps none of this data, so a test export has roster
-    // columns only.
-    safety || captain
-      ? usesTestStore()
-        ? Promise.resolve([])
-        : getMemberExportExtras({ safety, captain })
-      : Promise.resolve([]),
+    loadExtras({
+      safety: has("emergency_contact_1") || has("allergies"),
+      captain: has("id_number") || has("arrival"),
+    }),
   ]);
 
-  // The file lists the people the SCREEN lists: a non-captain's roster leaves
+  // The table lists the people the SCREEN lists: a non-captain's roster leaves
   // out declined sign-ups (MEMBERS_SEE_REJECTED), so their export does too —
   // otherwise the Approval column, now member-readable, would hand a member the
   // rejections the roster deliberately withholds.
@@ -137,29 +196,36 @@ export async function buildMemberExport(viewer: {
     hasClearance(viewer.rank, "captain"),
   );
 
-  const questions = flattenQuestions(questionnaire);
-  const labels = {
-    allergies: optionLabels(questions, "dietary.allergies"),
-    dislikes: optionLabels(questions, "dietary.dislikes"),
+  return {
+    columns,
+    members,
+    rows: memberCellRows(
+      { columns, members, extras, teamLabels: teamLabelMap(config) },
+      options,
+    ),
   };
-  const extras = new Map(
-    extraRows.map((row) => [row.userId, toExtra(row, labels)]),
-  );
+}
 
-  const content = toCsvFile(
-    memberExportCells({
-      columns,
-      members,
-      extras,
-      teamLabels: teamLabelMap(config),
-    }),
-  );
+/**
+ * Build the member export for one viewer. `rank` must be the viewer's exact
+ * rank, team-lead flag included (captainPageGate below the captain bar).
+ */
+export async function buildMemberExport(viewer: {
+  userId: string;
+  rank: ViewerRank;
+}): Promise<MemberExportFile> {
+  const { columns, members, rows } = await loadMemberTable(viewer);
+  const content = toCsvFile([columns.map((c) => c.header), ...rows]);
 
   if (!usesTestStore()) {
     await appendAuditEvent({
       actorId: viewer.userId,
       action: "member.export",
-      metadata: { rank: viewer.rank, columns: keys, rows: members.length },
+      metadata: {
+        rank: viewer.rank,
+        columns: columns.map((c) => c.key),
+        rows: members.length,
+      },
     });
   }
 

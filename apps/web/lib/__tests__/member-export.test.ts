@@ -40,6 +40,7 @@ const MEMBER = {
   approvalStatus: "approved",
   isLead: false,
   teams: [],
+  leadTeams: [],
   duesPaid: false,
   onboardingComplete: true,
   pendingRequiredActions: 0,
@@ -47,6 +48,8 @@ const MEMBER = {
   intendsToDrive: false,
   driverProfileComplete: false,
   country: null,
+  participation: "accepted",
+  participationIntent: "yes",
   createdAt: new Date("2026-03-01T10:00:00Z"),
   email: "nova@example.com",
 };
@@ -150,6 +153,9 @@ describe("buildMemberExport", () => {
     });
     expect(file.content).toContain("nova@example.com");
     expect(file.content).toContain("Passport,unreadable");
+    // This year's standing is in a captain's file, after Approval.
+    expect(file.content.split("\r\n")[0]).toContain("Approval,This year,");
+    expect(file.content).toContain("Approved,Accepted,");
     expect(order).toEqual(["audit", "returned"]);
     expect(appendAuditEvent).toHaveBeenCalledWith({
       actorId: "cap-1",

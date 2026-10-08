@@ -3391,6 +3391,10 @@ export const testStore = {
           approvalStatus: u.approvalStatus,
           isLead: mine.some((m) => m.isLead),
           teams: mine.map((m) => m.team).sort((a, b) => a.localeCompare(b)),
+          leadTeams: mine
+            .filter((m) => m.isLead)
+            .map((m) => m.team)
+            .sort((a, b) => a.localeCompare(b)),
           duesPaid: settled.has(u.id),
           onboardingComplete: profile?.completedAt != null,
           pendingRequiredActions: owed.length,

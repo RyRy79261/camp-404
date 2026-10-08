@@ -93,6 +93,7 @@ export const AUDIT_ACTION_LABELS = {
   "member.note_added": "Added a captain note",
   "member.notes.viewed": "Read captain notes",
   "member.rank_changed": "Changed a rank",
+  "member.sheet_viewed": "Opened the camp sheet",
   "member.team_assigned": "Added a member to a team",
   "member.team_lead_set": "Changed a team lead",
   "member.team_removed": "Took a member off a team",
@@ -675,7 +676,8 @@ export function auditDetail(
       }
       return null;
     }
-    case "member.export": {
+    case "member.export":
+    case "member.sheet_viewed": {
       const rows = count(metadata, "rows");
       return rows === null
         ? null

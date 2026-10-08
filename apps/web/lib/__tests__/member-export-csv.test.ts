@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { memberExportColumnsFor } from "@camp404/core";
 import type { CampManagementMember } from "@camp404/db/roster";
 import {
+  memberCellRows,
   memberExportCells,
   memberExportFilename,
   type MemberExportExtra,
@@ -21,6 +22,7 @@ function member(
     approvalStatus: "approved",
     isLead: true,
     teams: ["kitchen", "structures"],
+    leadTeams: ["kitchen"],
     duesPaid: true,
     onboardingComplete: true,
     pendingRequiredActions: 0,
@@ -102,6 +104,45 @@ describe("memberExportCells", () => {
       expect(wordFor("approved")).toBe("Approved");
     },
   );
+
+  it("says where a member stands this year, in the roster's words", () => {
+    const wordFor = (
+      participation: CampManagementMember["participation"],
+    ): string => {
+      const [header, row] = memberExportCells({
+        columns: memberExportColumnsFor("team_lead"),
+        members: [member({ participation })],
+        extras: new Map(),
+        teamLabels,
+      });
+      return row![header!.indexOf("This year")] as string;
+    };
+    expect(wordFor("accepted")).toBe("Accepted");
+    expect(wordFor("applied")).toBe("Coming, not decided");
+    expect(wordFor("waitlisted")).toBe("Waiting list");
+    expect(wordFor(null)).toBe("No answer yet");
+  });
+
+  it("puts This year right after Approval", () => {
+    const [header] = fileFor("captain");
+    expect(header!.indexOf("This year")).toBe(header!.indexOf("Approval") + 1);
+  });
+
+  it("marks the teams a member leads only when asked (the Camp sheet), never in the CSV", () => {
+    const input = {
+      columns: memberExportColumnsFor("captain"),
+      members: [member()],
+      extras: new Map([["m1", EXTRA]]),
+      teamLabels,
+    };
+    const at = input.columns.findIndex((c) => c.key === "teams");
+    expect(memberCellRows(input)[0]![at]).toBe("Cuisine; Structures");
+    expect(memberCellRows(input, { markLeads: true })[0]![at]).toBe(
+      "Cuisine (lead); Structures",
+    );
+    // The CSV's rows are the unmarked ones.
+    expect(memberExportCells(input)[1]).toEqual(memberCellRows(input)[0]);
+  });
 
   it("writes a team lead's safety columns as a person reads them", () => {
     const [header, row] = fileFor("team_lead");

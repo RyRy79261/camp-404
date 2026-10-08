@@ -1,5 +1,7 @@
 import {
   CAMP_TIME_ZONE,
+  NO_ANSWER_LABEL,
+  STANDING_LABEL,
   csvFilenamePart,
   type CsvCell,
   type MemberExportColumn,
@@ -10,7 +12,8 @@ import { toPublicRosterRow } from "./camp-roster";
 
 // The member export's cells, pure: which columns a viewer gets is decided
 // before this runs (memberExportColumnsFor), and so is which data was fetched.
-// This only turns rows into words a spreadsheet shows.
+// This only turns rows into words a spreadsheet shows. The captains' Camp
+// sheet shows the same words on screen.
 
 /** Everything beyond the roster row, already decrypted and labelled. */
 export interface MemberExportExtra {
@@ -53,12 +56,37 @@ const APPROVAL: Record<CampManagementMember["approvalStatus"], string> = {
   rejected: "Rejected",
 };
 
+export interface MemberCellOptions {
+  /**
+   * Write "(lead)" after each team the member leads ("Kitchen (lead)"). The
+   * Camp sheet does; the CSV keeps its plain team names.
+   */
+  markLeads?: boolean;
+}
+
+function teamsCell(
+  member: CampManagementMember,
+  teams: readonly string[],
+  teamLabels: Record<string, string>,
+  markLeads: boolean,
+): string {
+  return teams
+    .map((t) => {
+      const label = teamLabels[t] ?? t;
+      return markLeads && member.leadTeams.includes(t)
+        ? `${label} (lead)`
+        : label;
+    })
+    .join("; ");
+}
+
 function cell(
   key: string,
   member: CampManagementMember,
   extra: MemberExportExtra | undefined,
   teamLabels: Record<string, string>,
-): CsvCell {
+  { markLeads = false }: MemberCellOptions,
+): string {
   const row = toPublicRosterRow(member);
   switch (key) {
     case "name":
@@ -68,7 +96,7 @@ function cell(
     case "rank":
       return row.rankLabel;
     case "teams":
-      return row.teams.map((t) => teamLabels[t] ?? t).join("; ");
+      return teamsCell(member, row.teams, teamLabels, markLeads);
     case "country":
       return row.country ?? "";
     case "emergency_contact_1":
@@ -103,6 +131,10 @@ function cell(
       return member.duesPaid ? "Yes" : "No";
     case "approval":
       return APPROVAL[member.approvalStatus];
+    case "this_year":
+      return member.participation
+        ? STANDING_LABEL[member.participation]
+        : NO_ANSWER_LABEL;
     case "joined":
       return dateFmt.format(member.createdAt);
     default:
@@ -112,21 +144,34 @@ function cell(
   }
 }
 
-/** The header row, then one row per member, in roster order. */
-export function memberExportCells(input: {
+export interface MemberCellsInput {
   columns: readonly MemberExportColumn[];
   members: readonly CampManagementMember[];
   extras: ReadonlyMap<string, MemberExportExtra>;
   teamLabels: Record<string, string>;
-}): CsvCell[][] {
-  return [
-    input.columns.map((c) => c.header),
-    ...input.members.map((member) =>
-      input.columns.map((c) =>
-        cell(c.key, member, input.extras.get(member.id), input.teamLabels),
+}
+
+/** One row of words per member, in roster order, with no header. */
+export function memberCellRows(
+  input: MemberCellsInput,
+  options: MemberCellOptions = {},
+): string[][] {
+  return input.members.map((member) =>
+    input.columns.map((c) =>
+      cell(
+        c.key,
+        member,
+        input.extras.get(member.id),
+        input.teamLabels,
+        options,
       ),
     ),
-  ];
+  );
+}
+
+/** The header row, then one row per member, in roster order. */
+export function memberExportCells(input: MemberCellsInput): CsvCell[][] {
+  return [input.columns.map((c) => c.header), ...memberCellRows(input)];
 }
 
 /** `camp-404-members-2026-09-16.csv`, dated in camp time. */

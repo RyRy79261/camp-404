@@ -31,6 +31,7 @@ function pendingMember(): CampManagementMember {
     approvalStatus: "pending",
     isLead: false,
     teams: [],
+    leadTeams: [],
     duesPaid: false,
     onboardingComplete: false,
     pendingRequiredActions: 3,

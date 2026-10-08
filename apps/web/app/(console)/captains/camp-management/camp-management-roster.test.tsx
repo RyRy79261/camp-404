@@ -50,6 +50,7 @@ function member(
     approvalStatus,
     isLead: false,
     teams: [],
+    leadTeams: [],
     duesPaid: false,
     onboardingComplete: true,
     pendingRequiredActions: 0,

@@ -58,6 +58,7 @@ const LINE: Readonly<Record<string, IconKey>> = {
   announcement: "broadcast",
   "new-event": "newevent",
   overview: "campstat",
+  "camp-sheet": "ledger",
   applications: "tickets",
   payments: "ledger",
   "my-dues": "ledger",

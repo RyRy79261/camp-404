@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { isE2ETestMode } from "@/lib/test-mode";
+import type { EmergencyContact } from "@camp404/types";
 import {
   findCampUserByAuthId,
   satisfyBurnerProfileAction,
+  setEmergencyContacts,
   setIdDocuments,
   upsertBurnerProfile,
 } from "@/lib/users";
@@ -22,6 +24,10 @@ interface Body {
   /** Optional ID document, stored encrypted as the real profile save does. */
   idType?: "sa_id" | "passport";
   idNumber?: string;
+  /** Optional emergency contacts, as the profile's safety page saves them. */
+  emergencyContacts?: EmergencyContact[];
+  /** Optional country answer (ISO alpha-2), for the roster's Country. */
+  country?: string;
 }
 
 export async function POST(req: Request) {
@@ -45,7 +51,7 @@ export async function POST(req: Request) {
   await upsertBurnerProfile({
     userId: user.id,
     version: "e2e-test",
-    responses: {},
+    responses: body.country ? { country: body.country } : {},
     markComplete: true,
   });
   if (body.idType && body.idNumber) {
@@ -53,6 +59,9 @@ export async function POST(req: Request) {
       idType: body.idType,
       idNumber: body.idNumber,
     });
+  }
+  if (body.emergencyContacts?.length) {
+    await setEmergencyContacts(user.id, body.emergencyContacts);
   }
   // Finishing the profile satisfies its gate, as the real save does.
   await satisfyBurnerProfileAction(user.id);
