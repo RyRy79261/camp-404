@@ -122,6 +122,29 @@ describe("filterApplicationRows", () => {
     expect(ids({ year: "none" })).toEqual(["n"]);
   });
 
+  it("Coming is everyone who said Yes, decided or not", () => {
+    const more = applicationRows(
+      [
+        ...members,
+        {
+          id: "c",
+          displayName: "Cat",
+          approvalStatus: "approved",
+          participation: "accepted",
+          participationIntent: "yes",
+        },
+      ],
+      tickets,
+    );
+    const coming = filterApplicationRows(more, {
+      ...NO_FILTERS,
+      year: "coming",
+    }).map((r) => r.id);
+    // Ada said Yes, not decided; Cat said Yes, accepted. Ben said Maybe and
+    // was accepted: not Coming.
+    expect(coming).toEqual(["a", "c"]);
+  });
+
   it("filters by ticket, apart from the year", () => {
     expect(ids({ ticket: "needs_ticket" })).toEqual(["b"]);
     expect(ids({ ticket: "wap_requested" })).toEqual([]);

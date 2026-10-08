@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, Loader2 } from "lucide-react";
 import {
   DDT_LABEL,
+  INTENT_LABEL,
   NO_ANSWER_LABEL,
   STANDING_LABEL,
   WAP_LABEL,
@@ -65,6 +66,8 @@ import { DecisionToggle } from "./decision-toggle";
 /** "This year": the member's answer and the captains' decision, one each. */
 const YEAR_OPTIONS: { value: YearFilter; label: string }[] = [
   { value: "all", label: "Everyone" },
+  // What the member said, whatever the captains decided.
+  { value: "coming", label: INTENT_LABEL.yes },
   ...PARTICIPATION_STATUSES.map((value) => ({
     value,
     label: STANDING_LABEL[value],
