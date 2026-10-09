@@ -790,3 +790,142 @@ describe("you: the burner profile, saved the way My forms saves it", () => {
     expect((await profileOf(member.id)).responses).toEqual(ANSWERS);
   });
 });
+
+describe("teams: a team's description, saved the way its page saves it", () => {
+  async function leadOf(team: "kitchen" | "structures") {
+    const lead = await approved();
+    await makeMembership(h.db(), { userId: lead.id, team, isLead: true });
+    return lead;
+  }
+
+  async function programOf(team: string) {
+    const [row] = await h
+      .db()
+      .select()
+      .from(schema.teamPrograms)
+      .where(eq(schema.teamPrograms.team, team as "kitchen"));
+    return row ?? null;
+  }
+
+  it("lets a captain and a lead of that team change it, on the version they read, with the page's audit row", async () => {
+    const captain = await approved({ rank: "captain" });
+    const lead = await leadOf("kitchen");
+
+    const read = await call(
+      "get_team_description",
+      { team: "kitchen" },
+      lead.id,
+    );
+    expect(read.data).toMatchObject({
+      team: "kitchen",
+      description: "",
+      version: 0,
+      canEdit: true,
+      url: expect.stringMatching(/\/teams\/kitchen$/),
+    });
+
+    const byLead = await call(
+      "update_team_description",
+      {
+        team: "kitchen",
+        description: "  We feed the camp.  ",
+        expectedVersion: 0,
+      },
+      lead.id,
+    );
+    expect(byLead.data).toMatchObject({
+      description: "We feed the camp.",
+      version: 1,
+    });
+    const byCaptain = await call(
+      "update_team_description",
+      {
+        team: "kitchen",
+        description: "Breakfast and dinner.",
+        expectedVersion: 1,
+      },
+      captain.id,
+    );
+    expect(byCaptain.data).toMatchObject({ version: 2 });
+    expect(await programOf("kitchen")).toMatchObject({
+      description: "Breakfast and dinner.",
+      version: 2,
+    });
+    // The page's own audit row (saveTeamProgram), one per save.
+    const audits = await auditRows("team.program_changed");
+    expect(audits.map((a) => [a.actorId, a.target, a.metadata])).toEqual([
+      [
+        lead.id,
+        "kitchen",
+        { team: "kitchen", version: 1, description: "We feed the camp." },
+      ],
+      [
+        captain.id,
+        "kitchen",
+        { team: "kitchen", version: 2, description: "Breakfast and dinner." },
+      ],
+    ]);
+    // The connector's log says a description was given, never its words.
+    const logs = await h
+      .db()
+      .select()
+      .from(schema.mcpAuditLog)
+      .where(eq(schema.mcpAuditLog.tool, "update_team_description"));
+    expect(logs).toHaveLength(2);
+    for (const log of logs) {
+      expect(log.outcome).toBe("success");
+      expect(JSON.stringify(log.argsJson)).not.toMatch(/feed|Breakfast/);
+      expect(log.argsJson).toMatchObject({ fields: ["description"] });
+    }
+  });
+
+  it("refuses a lead of another team and a member, writing nothing", async () => {
+    const structures = await leadOf("structures");
+    const member = await approved();
+    for (const who of [structures, member]) {
+      const result = await call(
+        "update_team_description",
+        { team: "kitchen", description: "Not mine.", expectedVersion: 0 },
+        who.id,
+      );
+      expect(result.error).toMatch(
+        /^Only captains and this team's leads can change what its program says\./,
+      );
+    }
+    expect(
+      (await call("get_team_description", { team: "kitchen" }, structures.id))
+        .data,
+    ).toMatchObject({ canEdit: false });
+    expect(await programOf("kitchen")).toBeNull();
+    expect(await auditRows("team.program_changed")).toEqual([]);
+  });
+
+  it("refuses a save on a version someone else moved on, and a description over the page's limit", async () => {
+    const lead = await leadOf("kitchen");
+    const captain = await approved({ rank: "captain" });
+    await call(
+      "update_team_description",
+      { team: "kitchen", description: "First.", expectedVersion: 0 },
+      captain.id,
+    );
+    const late = await call(
+      "update_team_description",
+      { team: "kitchen", description: "Second.", expectedVersion: 0 },
+      lead.id,
+    );
+    expect(late.error).toMatch(
+      /^Someone changed this team's description first/,
+    );
+    const long = await call(
+      "update_team_description",
+      { team: "kitchen", description: "x".repeat(301), expectedVersion: 1 },
+      lead.id,
+    );
+    expect(long.error).toBe("Keep the description under 300 characters.");
+    expect(await programOf("kitchen")).toMatchObject({
+      description: "First.",
+      version: 1,
+    });
+    expect(await auditRows("team.program_changed")).toHaveLength(1);
+  });
+});

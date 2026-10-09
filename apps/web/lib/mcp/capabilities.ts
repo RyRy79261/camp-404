@@ -9,6 +9,7 @@ import {
 } from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
 import { LOGISTICS_REFUSAL } from "../logistics-copy";
+import { TEAM_PROGRAM_REFUSAL } from "../team-program-copy";
 import { SITE_URL } from "../site";
 import type { McpScope } from "./scope";
 
@@ -101,6 +102,14 @@ export const GATES = {
     refusal:
       "Only a captain or a lead of the item's team can add gear. Any member can suggest a change to an item instead.",
   },
+  // A team program's Save (canEditTeamProgram): any lead may reach it, and
+  // which team's is the tool's own check (a lead of THAT team, or a captain),
+  // made again by the write.
+  teamProgramEditor: {
+    who: "Captains, and team leads for their own team",
+    allows: atLeast("team_lead"),
+    refusal: TEAM_PROGRAM_REFUSAL,
+  },
 } as const satisfies Record<string, Gate>;
 
 /** The areas the website and the tools are grouped by. */
@@ -113,6 +122,7 @@ export const AREAS = [
   "Meetings",
   "Shifts",
   "People",
+  "Teams",
   "Claims and budgets",
   "Survival Guide",
   "Questionnaires",
@@ -365,6 +375,20 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     area: "People",
     gate: GATES.member,
     does: "One person, with the columns your rank may read (team leads and captains also get emergency contacts; each read is recorded). Never ID numbers or bank details.",
+  },
+  // Teams. No `page`: each team has its own (/teams/<key>), so the tools
+  // return it and a refusal names it.
+  get_team_description: {
+    kind: "read",
+    area: "Teams",
+    gate: GATES.member,
+    does: "What a team's program says about the team, and its version.",
+  },
+  update_team_description: {
+    kind: "write",
+    area: "Teams",
+    gate: GATES.teamProgramEditor,
+    does: "Change a team's description, on the version you read (captains: any team; team leads: a team they lead).",
   },
   // Claims and budgets
   get_team_budget: {

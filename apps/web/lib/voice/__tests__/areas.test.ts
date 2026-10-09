@@ -55,6 +55,14 @@ describe("picking the areas a command touches", () => {
     expect(areas).not.toContain("Questionnaires");
   });
 
+  it("sends the team description tool for a description", () => {
+    const { areas, fallback } = pickAreas(
+      "Set the Kitchen team's description to we feed the camp",
+    );
+    expect(fallback).toBe(false);
+    expect(areas).toContain(TOOL_CAPABILITIES.update_team_description!.area);
+  });
+
   it("adds every area a multi-part command names", () => {
     const { areas } = pickAreas(
       "Approve Sipho's claim, mark the shower pump task done, and ask for a lift",

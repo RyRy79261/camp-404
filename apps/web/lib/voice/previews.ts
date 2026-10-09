@@ -36,6 +36,8 @@ import { ledgerCycle } from "../payments";
 import { getShiftsView } from "../shifts";
 import { TASK_COLUMN_LABEL, presentTask } from "../task-board";
 import { listBoardTasks } from "../tasks";
+import { teamProgramPath } from "../team-program-copy";
+import { getTeamProgram } from "../team-programs";
 import { usesTestStore } from "../test-mode";
 import { readNames, readTeamLabels, readTeamPeople } from "./reads";
 
@@ -495,6 +497,22 @@ const teamPreviews: Record<string, PreviewFn> = {
       };
     }
     return base;
+  },
+  async update_team_description(args) {
+    const team = str(args.team);
+    const [labels, program] = await Promise.all([
+      readTeamLabels(),
+      getTeamProgram(team as never),
+    ]);
+    const label = labels[team] ?? team;
+    return {
+      sentence: `Change what ${label}'s program says about the team`,
+      facts: `${label} · every member reads it · as you read it`,
+      change: [`Description: ${shown(args.description)}`],
+      path: teamProgramPath(team),
+      args: { ...args, expectedVersion: program.version },
+      keys: [`team-program:${team}`],
+    };
   },
 };
 

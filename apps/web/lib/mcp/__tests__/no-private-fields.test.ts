@@ -212,6 +212,12 @@ describe("no tool returns ID numbers or bank details", () => {
       update_my_history: { skills: ["welding"] },
       list_users: {},
       get_user: { userId: member.id },
+      get_team_description: { team: "kitchen" },
+      update_team_description: {
+        team: "kitchen",
+        description: "We feed the camp.",
+        expectedVersion: 0,
+      },
       get_team_budget: { team: "kitchen" },
       list_team_budgets: {},
       list_my_reimbursements: {},
