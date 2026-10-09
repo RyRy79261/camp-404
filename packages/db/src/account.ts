@@ -316,6 +316,16 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .delete(schema.volunteerShifts)
       .where(eq(schema.volunteerShifts.userId, userId));
 
+    // Help wanted: they leave every team role and their "I'm keen" flags
+    // go. Both are about them alone; the lead flag goes with their
+    // memberships.
+    await tx
+      .delete(schema.teamRoleHolders)
+      .where(eq(schema.teamRoleHolders.userId, userId));
+    await tx
+      .delete(schema.teamRoleKeen)
+      .where(eq(schema.teamRoleKeen.userId, userId));
+
     // Gear rental (#241): their orders go (the lines and sharers cascade),
     // and they leave every tent another member put them in. The rental charge
     // stays on the dues ledger for accounting, like the rest of it.

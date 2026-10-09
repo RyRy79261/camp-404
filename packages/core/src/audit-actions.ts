@@ -154,6 +154,13 @@ export const AUDIT_ACTION_LABELS = {
   "shifts.type_changed": "Changed a shift",
   "shifts.type_removed": "Removed a shift",
   "team.program_changed": "Changed a team's description or links",
+  "team.role_added": "Added a role to a team",
+  "team.role_changed": "Changed a team's role",
+  "team.role_removed": "Removed a team's role",
+  "team.roles_copied": "Copied last year's roles to a team",
+  "team.lead_places_set": "Changed how many leads a team wants",
+  "team.role_given": "Gave a member a role in a team",
+  "team.role_taken": "Took a member out of a team's role",
   "team_budget.set": "Set a team budget",
   "ticket.pass_changed": "Changed a member's ticket, DDT or WAP",
 } as const;
@@ -504,6 +511,28 @@ export function auditDetail(
     case "team.program_changed": {
       const team = text(metadata, "team");
       return team ? teamLabel(team) : null;
+    }
+    case "team.role_added":
+    case "team.role_changed":
+    case "team.role_removed":
+    case "team.role_given":
+    case "team.role_taken": {
+      const team = text(metadata, "team");
+      const name = text(metadata, "name");
+      if (!team || !name) return null;
+      return `${teamLabel(team)}: ${name}`;
+    }
+    case "team.roles_copied": {
+      const team = text(metadata, "team");
+      const copied = count(metadata, "copied");
+      if (!team || copied === null) return null;
+      return `${teamLabel(team)}: ${copied} ${copied === 1 ? "role" : "roles"}`;
+    }
+    case "team.lead_places_set": {
+      const team = text(metadata, "team");
+      const places = count(metadata, "places");
+      if (!team || places === null) return null;
+      return `${teamLabel(team)}: ${places} ${places === 1 ? "lead" : "leads"}`;
     }
     case "team_budget.set": {
       const team = text(metadata, "team");

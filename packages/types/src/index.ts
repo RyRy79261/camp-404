@@ -34,6 +34,7 @@ export * from "./join-inline";
 export * from "./desktop-layout";
 export * from "./desktop-preferences";
 export * from "./team-program";
+export * from "./team-roles";
 export * from "./inkblot";
 export * from "./lounge";
 export * from "./claims";

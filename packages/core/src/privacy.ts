@@ -330,6 +330,24 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "shiftSignups.addedByUserId": "team_lead",
   "shiftSignups.createdAt": "captain",
 
+  // team_role_holders — who fills which team role this year (Help wanted).
+  // Every member reads who does what, as they read who is on a team. Who
+  // gave it is for the leads and captains who give roles.
+  "teamRoleHolders.roleId": "camp_member",
+  "teamRoleHolders.userId": "camp_member",
+  "teamRoleHolders.addedByUserId": "team_lead",
+  "teamRoleHolders.createdAt": "captain",
+
+  // team_role_keen — a member's "I'm keen" on a role. They read their own;
+  // captains and THAT team's leads read who is keen (the server filters by
+  // team, canManageTeamRoles), so the lowest rank is team_lead.
+  "teamRoleKeen.id": "captain",
+  "teamRoleKeen.cycle": "team_lead",
+  "teamRoleKeen.team": "team_lead",
+  "teamRoleKeen.roleId": "team_lead",
+  "teamRoleKeen.userId": "team_lead",
+  "teamRoleKeen.createdAt": "captain",
+
   // volunteer_shifts — a member's own AfrikaBurn volunteer shifts, kept only
   // so their camp shifts can warn about a clash (#248). Nobody else reads
   // them.

@@ -177,6 +177,9 @@
 //     (cutSnippet, findTextMatch) (./search-text)
 //   - team programs: canEditTeamProgram (a captain, or a lead of that team;
 //     fails closed on an unknown rank or team) (./team-programs)
+//   - Help wanted: canManageTeamRoles (a captain, or a lead of that team),
+//     canPickTeamLead (a captain), the board's counts, filters and the
+//     picker's groups (./team-roles)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -250,5 +253,6 @@ export * from "./search-text";
 export * from "./lounge";
 export * from "./transport";
 export * from "./team-programs";
+export * from "./team-roles";
 export * from "./claims";
 export * from "./daily-sheet";
