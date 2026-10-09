@@ -210,7 +210,7 @@ export default async function AboutPage() {
 
       <AboutToc items={[...MAIN, ...FACTS]} variant="row" />
 
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 @min-[48rem]/page:grid-cols-[minmax(0,1fr)_15rem] @min-[54rem]/page:grid-cols-[10rem_minmax(0,40rem)_17rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 @min-[48rem]/page:grid-cols-[minmax(0,1fr)_15rem] @min-[60rem]/page:grid-cols-[10rem_minmax(0,40rem)_17rem]">
         <AboutToc items={MAIN} variant="column" />
 
         <div className="flex min-w-0 flex-col gap-4">
