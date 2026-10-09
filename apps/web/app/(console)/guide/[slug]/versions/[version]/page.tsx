@@ -56,7 +56,7 @@ export default async function GuideVersionPage({
   const back = live !== null ? guideChapterPath(slug) : guideEditPath(slug);
 
   return (
-    <div className="flex flex-col">
+    <div className="mx-auto flex w-full max-w-[67.5rem] flex-col">
       <PageHeading
         eyebrow={`Survival Guide / ${guideCategoryLabel(version.category)}`}
         title={version.title}
@@ -81,8 +81,9 @@ export default async function GuideVersionPage({
         </Badge>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 page-lg:grid-cols-3">
-        <div className="page-lg:col-span-2">
+      {/* A reading measure, as the chapter's own page keeps it. */}
+      <div className="grid grid-cols-[minmax(0,44rem)] gap-6 page-lg:grid-cols-[minmax(0,44rem)_minmax(16rem,22rem)]">
+        <div>
           <ChapterView
             kind={version.kind}
             card={version.card}

@@ -238,7 +238,7 @@ export function CampSheetGrid({
         : { maxWidth: width(key) };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full page-sm:w-64">
           <Search
@@ -290,7 +290,7 @@ export function CampSheetGrid({
         </p>
       </div>
 
-      <div className="flex flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         {/* The formula bar: the whole of the selected cell. */}
         <div
           role="region"
@@ -315,7 +315,7 @@ export function CampSheetGrid({
 
         <div
           className={cn(
-            "max-h-[70vh] scroll-pt-12 overflow-auto border border-border",
+            "min-h-72 flex-1 scroll-pt-12 overflow-auto border border-border",
             PINNED_SCROLL_PADDING,
           )}
         >

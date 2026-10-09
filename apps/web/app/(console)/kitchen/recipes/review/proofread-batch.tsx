@@ -203,7 +203,7 @@ export function ProofreadBatch({
         <CardTitle id="ready-for-claude" className="text-base">
           Ready for Claude
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="max-w-[65ch]">
           Claude reads each recipe&apos;s source and writes it as a recipe for a
           number of plates: ingredients by category, steps with what each one
           uses, and practical notes. It goes straight into the book. Each run

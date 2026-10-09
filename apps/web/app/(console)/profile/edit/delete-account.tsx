@@ -16,7 +16,7 @@ export function DeleteAccountForm() {
 
   return (
     <form action={action} className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">
+      <p className="max-w-[65ch] text-sm text-muted-foreground">
         This permanently erases your personal data and removes you from camp
         rosters. Your account becomes an anonymous &ldquo;Lost Cat&rdquo; stub
         so the family tree stays intact — it can&rsquo;t be undone. Type{" "}

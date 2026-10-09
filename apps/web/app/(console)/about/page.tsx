@@ -186,7 +186,7 @@ export default async function AboutPage() {
     formatMoney(n * 100, content.fee.currency, { wholeRands: true });
 
   return (
-    <div className="flex flex-col">
+    <div className="mx-auto flex w-full max-w-[70rem] flex-col">
       <PageHeading
         eyebrow="Camp / About"
         title="About Camp 404"
@@ -210,7 +210,7 @@ export default async function AboutPage() {
 
       <AboutToc items={[...MAIN, ...FACTS]} variant="row" />
 
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 @min-[48rem]/page:grid-cols-[minmax(0,1fr)_15rem] @min-[54rem]/page:grid-cols-[10rem_minmax(0,1fr)_17rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 @min-[48rem]/page:grid-cols-[minmax(0,1fr)_15rem] @min-[60rem]/page:grid-cols-[10rem_minmax(0,40rem)_17rem]">
         <AboutToc items={MAIN} variant="column" />
 
         <div className="flex min-w-0 flex-col gap-4">

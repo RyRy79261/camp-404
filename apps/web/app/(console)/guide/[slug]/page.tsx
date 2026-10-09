@@ -96,7 +96,7 @@ export default async function GuideChapterPage({
   const reviewDue = canEdit && guideReviewDue(chapter.cycleReviewed, year);
 
   return (
-    <div className="flex flex-col">
+    <div className="mx-auto flex w-full max-w-[67.5rem] flex-col">
       <PageHeading
         eyebrow={`Survival Guide / ${guideCategoryLabel(chapter.category)}`}
         title={chapter.title}
@@ -155,8 +155,11 @@ export default async function GuideChapterPage({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 page-lg:grid-cols-3">
-        <div className="flex flex-col gap-6 page-lg:col-span-2">
+      {/* The chapter keeps a reading measure (about 80 characters a line) in
+          any window; the versions sit beside it, and a wider window leaves
+          the room after them. */}
+      <div className="grid grid-cols-[minmax(0,44rem)] gap-6 page-lg:grid-cols-[minmax(0,44rem)_minmax(16rem,22rem)]">
+        <div className="flex flex-col gap-6">
           {dutyShifts ? (
             <DutyCardShifts shifts={dutyShifts} shiftsHref={SHIFTS_PATH} />
           ) : null}

@@ -45,7 +45,7 @@ export default async function AnnouncementPage({
   await markRead(campUser.id, [announcement.deliveryId]);
 
   return (
-    <article className="flex w-full max-w-3xl flex-col gap-5">
+    <article className="mx-auto flex w-full max-w-[44rem] flex-col gap-5">
       <Link
         href="/notifications"
         className="inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground transition-colors hover:text-foreground"

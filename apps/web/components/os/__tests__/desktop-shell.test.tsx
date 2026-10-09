@@ -42,7 +42,7 @@ vi.mock("@/components/push/device-token", () => ({
   forgetDeviceToken: vi.fn(),
 }));
 
-import { Desktop, type DesktopProps } from "../desktop-shell";
+import { Desktop, pageSize, type DesktopProps } from "../desktop-shell";
 import { HeldScreen } from "../held-screen";
 import { windowStorageKey } from "../window-storage";
 
@@ -171,6 +171,73 @@ describe("where the page's window opens", () => {
     // Right of the icons (308 px), leaving the Today handle its 52 px.
     expect(win.style.getPropertyValue("--win-w")).toBe("1080px");
     expect(win.style.getPropertyValue("--win-h")).toBe("792px");
+    measure.mockRestore();
+  });
+});
+
+describe("how big a page's window opens", () => {
+  // The desktop under the bars (84 px of a screen's height): what the shell
+  // measures and passes in.
+  const HD = { width: 1920, height: 996 }; // a 1920 x 1080 screen
+  const QHD = { width: 2560, height: 1356 }; // a 2560 x 1440 screen
+  const SMALL = { width: 1280, height: 636 }; // a 1280 x 720 screen
+
+  it("grows a wide program with a big screen, right of the icons", () => {
+    // The room right of the icons: 1920 - 308 - 52 = 1560 wide, 972 tall.
+    expect(pageSize("camp-sheet", HD)).toEqual({ w: 1404, h: 875 });
+    expect(pageSize("roster", HD)).toEqual({ w: 1248, h: 875 });
+    expect(pageSize("audit", HD)).toEqual({ w: 1092, h: 875 });
+    // 2560 - 308 - 52 = 2200 wide, 1332 tall.
+    expect(pageSize("camp-sheet", QHD)).toEqual({ w: 1980, h: 1199 });
+    expect(pageSize("roster", QHD)).toEqual({ w: 1760, h: 1199 });
+    expect(pageSize("audit", QHD)).toEqual({ w: 1540, h: 1199 });
+  });
+
+  it("never opens a wide program smaller than its own size", () => {
+    expect(pageSize("camp-sheet", SMALL)).toEqual({ w: 1120, h: 800 });
+    expect(pageSize("roster", SMALL)).toEqual({ w: 1040, h: 660 });
+    expect(pageSize("audit", SMALL)).toEqual({ w: 880, h: 600 });
+  });
+
+  it("keeps small programs and reading pages at their own size", () => {
+    for (const vp of [SMALL, HD, QHD]) {
+      expect(pageSize("new-event", vp)).toEqual({ w: 520, h: 440 });
+      expect(pageSize("terminal", vp)).toEqual({ w: 640, h: 420 });
+      expect(pageSize("inkblot", vp)).toEqual({ w: 700, h: 440 });
+      expect(pageSize("guide-chapter", vp)).toEqual({ w: 880, h: 600 });
+      expect(pageSize("inbox", vp)).toEqual({ w: 720, h: 520 });
+      expect(pageSize(undefined, vp)).toEqual({ w: 720, h: 520 });
+    }
+  });
+
+  it("opens the Camp sheet at its grown size on a 1920 x 1080 screen", () => {
+    const measure = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: HD.width,
+        bottom: HD.height,
+        ...HD,
+        toJSON: () => ({}),
+      });
+    nav.pathname = "/captains/camp-sheet";
+    render(
+      <Desktop
+        {...props({
+          manifest: buildProgramManifest(
+            facts({ rank: ViewerRank.enum.captain }),
+          ),
+        })}
+      />,
+    );
+    const win = document.querySelector<HTMLElement>(
+      '[data-window="camp-sheet"]',
+    )!;
+    expect(win.style.getPropertyValue("--win-w")).toBe("1404px");
+    expect(win.style.getPropertyValue("--win-h")).toBe("875px");
     measure.mockRestore();
   });
 });

@@ -119,8 +119,13 @@ export default async function CampLayoutPage({
           .filter(Boolean)
           .join(" · ");
 
+  // The plan fills its window down to the bottom (data-fills-window: the
+  // window's body gives the page its height; layout-editor.tsx).
   return (
-    <div className="flex flex-col">
+    <div
+      data-fills-window
+      className="flex flex-col page-md:min-h-0 page-md:flex-1"
+    >
       <PageHeading
         eyebrow={year ? `Camp · ${year}` : "Camp"}
         title="Camp layout"

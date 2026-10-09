@@ -1003,7 +1003,7 @@ const ClampedBody = memo(function ClampedBody({ body }: { body: string }) {
       <p
         ref={ref}
         className={cn(
-          "whitespace-pre-wrap text-sm text-muted-foreground [overflow-wrap:anywhere]",
+          "max-w-[65ch] whitespace-pre-wrap text-sm text-muted-foreground [overflow-wrap:anywhere]",
           !expanded && "line-clamp-3",
         )}
       >

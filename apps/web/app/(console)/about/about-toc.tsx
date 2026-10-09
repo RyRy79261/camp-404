@@ -51,7 +51,7 @@ export function AboutToc({
     return (
       <nav
         aria-label="On this page"
-        className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 @min-[54rem]/page:hidden"
+        className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 @min-[60rem]/page:hidden"
       >
         {items.map((i) => (
           <button
@@ -70,7 +70,7 @@ export function AboutToc({
   return (
     <nav
       aria-label="On this page"
-      className="sticky top-6 hidden flex-col @min-[54rem]/page:flex"
+      className="sticky top-6 hidden flex-col @min-[60rem]/page:flex"
     >
       <p className="pb-2 font-pixel text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
         On this page
