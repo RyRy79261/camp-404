@@ -23,7 +23,7 @@ const WORDS: Partial<Record<Area, RegExp>> = {
     /\b(teams?|leads?|leader|leading|captain|member|members|roster|who|kitchen|structures|power|lighting|sanitation|safety|art|activities|memes|vibes|finance|transport|logistics|comms|put \w+( \w+)? on|take \w+( \w+)? off|add \w+( \w+)? to|move \w+( \w+)? from)\b/,
   // A team's description (what its program says about the team).
   Teams:
-    /\b(descriptions?|describes?|blurb|about (the|this) team|what (the|this|a) team does|team program)\b/,
+    /\b(descriptions?|describes?|blurb|about (the|this) team|what (the|this|a) team does|programs?)\b/,
   You: /\b(my profile|profile|dietary|diet|allerg\w*|vegan|vegetarian|emergency|contact|skills?|burns? (i'?ve|i have)|first burn|history|dues|owe|gear order|my forms|required|driver profile|my car)\b/,
   Inbox: /\b(notifications?|inbox|unread|mark .* read|messages?)\b/,
   Tasks:
