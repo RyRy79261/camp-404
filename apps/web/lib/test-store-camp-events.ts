@@ -74,6 +74,11 @@ export const campEventsTestStore = {
     return row ? copy(row) : null;
   },
 
+  getCampEventRow(id: string): CampEventRow | null {
+    const row = rows().find((r) => r.id === id);
+    return row ? copy(row) : null;
+  },
+
   listCampEventsToSync(): CampEventRow[] {
     return rows()
       .filter((r) => r.calendarSyncedVersion !== r.version)

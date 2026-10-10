@@ -163,6 +163,22 @@ export async function getCampEvent(
 }
 
 /**
+ * One row by its own id, removed or not, whatever its sync state: the
+ * mirror's follow-up after a newer save. Null only once the row is gone
+ * (its removal confirmed by Google).
+ */
+export async function getCampEventRow(
+  id: string,
+): Promise<CampEventRow | null> {
+  if (!UUID.test(id)) return null;
+  const [row] = await createHttpDb()
+    .select(COLUMNS)
+    .from(e)
+    .where(eq(e.id, id));
+  return row ?? null;
+}
+
+/**
  * Every event the camp calendar may not match yet: a save Google did not take,
  * a removal that did not reach it, and the meetings 0108 made from old notes.
  */

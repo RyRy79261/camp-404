@@ -123,8 +123,13 @@ function target(
         ? campEventsTestStore.markCampEventCalendarSynced(args)
         : db.markCampEventCalendarSynced(args);
     },
+    // The row as it stands, synced or not, removed or not: a newer save that
+    // another step already put on Google is put again (the mark matches it),
+    // never mistaken for a row that is gone.
     latest: async () => {
-      const now = (await listCampEventsToSync()).find((r) => r.id === row.id);
+      const now = usesTestStore()
+        ? campEventsTestStore.getCampEventRow(row.id)
+        : await db.getCampEventRow(row.id);
       return now ? target(now, labels) : undefined;
     },
   };

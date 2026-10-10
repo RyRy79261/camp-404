@@ -13,6 +13,7 @@ import {
   createCampEvent,
   editCampEvent,
   getCampEvent,
+  getCampEventRow,
   listCampEvents,
   listCampEventsToSync,
   markCampEventCalendarSynced,
@@ -305,7 +306,9 @@ describe("camp events", () => {
       expect(await getCampEvent(gone)).toBeNull();
       expect(await audits("calendar.event_removed")).toHaveLength(1);
 
-      // The row waits for Google; the mark takes it away.
+      // The row waits for Google (the mirror still reads it by id); the mark
+      // takes it away.
+      expect((await getCampEventRow(removed.row.id))?.removedAt).not.toBeNull();
       expect(
         (await listCampEventsToSync()).some((r) => r.calendarEventId === gone),
       ).toBe(true);
@@ -316,6 +319,7 @@ describe("camp events", () => {
           removed: true,
         }),
       ).toBe(true);
+      expect(await getCampEventRow(removed.row.id)).toBeNull();
       expect(
         await listCampEvents({
           from: "2026-10-01",

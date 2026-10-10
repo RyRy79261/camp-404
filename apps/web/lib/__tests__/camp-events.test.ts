@@ -25,6 +25,7 @@ vi.mock("@camp404/db/camp-events", async (importOriginal) => ({
   editCampEvent: vi.fn(),
   removeCampEvent: vi.fn(),
   listCampEventsToSync: vi.fn(async () => []),
+  getCampEventRow: vi.fn(async () => null),
   markCampEventCalendarSynced: vi.fn(async () => true),
 }));
 vi.mock("@camp404/db/logistics", async (importOriginal) => ({
@@ -184,6 +185,36 @@ describe("the Calendar's events on Google", () => {
     expect(db.markCampEventCalendarSynced).toHaveBeenCalledWith({
       id: row().id,
       version: 1,
+      removed: false,
+    });
+  });
+
+  it("puts the newer save when a newer one landed and was already synced, never deleting the event", async () => {
+    vi.mocked(db.createCampEvent).mockResolvedValue({
+      ok: true,
+      row: row(),
+      noteId: null,
+    });
+    // Version 1's mark misses: a save made version 2, already synced.
+    vi.mocked(db.markCampEventCalendarSynced)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    vi.mocked(db.getCampEventRow).mockResolvedValue(
+      row({ version: 2, calendarSyncedVersion: 2, title: "Planning, moved" }),
+    );
+    expect(await createCampEvent("user-1", NEW)).toMatchObject({
+      ok: true,
+      calendar: "synced",
+    });
+    expect(deleteCalendarEvent).not.toHaveBeenCalled();
+    expect(putCalendarEvent).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "claimedevent0001",
+      expect.objectContaining({ summary: "Kitchen Team - Planning, moved" }),
+    );
+    expect(db.markCampEventCalendarSynced).toHaveBeenLastCalledWith({
+      id: row().id,
+      version: 2,
       removed: false,
     });
   });
