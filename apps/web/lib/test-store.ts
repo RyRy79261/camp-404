@@ -42,7 +42,6 @@ import {
   sameSections,
   sourceFromText,
   sourceText,
-  teamEventTitle,
   type AuditAction,
   announcementTextParts,
   meetingTextParts,
@@ -114,6 +113,7 @@ import {
   resetLogisticsStore,
 } from "./test-store-logistics";
 import { dropMemberShifts, resetShiftsStore } from "./test-store-shifts";
+import { resetCampEventsStore } from "./test-store-camp-events";
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
 import {
@@ -150,6 +150,7 @@ import {
   ATTENDEE_NOT_A_MEMBER,
   EVENT_NOT_ON_CALENDAR,
   ITEM_GONE,
+  MINUTES_STARTED,
   NOTE_EDITED,
   NOTE_GONE,
   meetingNoteRefusal,
@@ -328,10 +329,6 @@ import {
   type MenuRecipeFacts,
 } from "@camp404/db/kitchen-menu";
 import {
-  calendarEventRefusal,
-  type AddCalendarEventResult,
-} from "@camp404/db/calendar-events";
-import {
   DesktopLayoutInvalidError,
   DesktopPreferencesInvalidError,
 } from "@camp404/db/desktop-layouts";
@@ -415,7 +412,9 @@ import type {
 import {
   CALENDAR_MAX_EVENTS,
   CALENDAR_WINDOW_DAYS,
+  TEAM_PROPERTY,
   type CalendarEvent,
+  type CalendarEventBody,
   type CalendarRange,
 } from "./google-calendar";
 
@@ -1110,6 +1109,20 @@ function currentCycleNumber(): number {
   return (
     currentCycle(resolveCycles(globalState().teamsConfig))?.year ?? UNSET_CYCLE
   );
+}
+
+/** A store event as Google would return it: no store-only fields. */
+function publicCalendarEvent(e: TestCalendarEvent): CalendarEvent {
+  return {
+    id: e.id,
+    title: e.title,
+    start: e.start,
+    end: e.end ?? null,
+    allDay: e.allDay,
+    location: e.location,
+    teamTag: e.teamTag,
+    origin: e.origin ?? null,
+  };
 }
 
 function findUserById(userId: string): TestUser | null {
@@ -3600,8 +3613,18 @@ export const testStore = {
   },
 
   listMeetingNotes(
-    input: { team?: Team | "camp"; limit?: number } = {},
+    input: {
+      team?: Team | "camp";
+      limit?: number;
+      eventIds?: readonly string[];
+      heldFrom?: Date;
+      heldTo?: Date;
+    } = {},
   ): MeetingNoteSummary[] {
+    const narrowed =
+      input.eventIds !== undefined ||
+      input.heldFrom !== undefined ||
+      input.heldTo !== undefined;
     const rows = meetingNotes
       .filter((n) =>
         input.team === undefined
@@ -3609,6 +3632,16 @@ export const testStore = {
           : input.team === "camp"
             ? n.team === null
             : n.team === input.team,
+      )
+      .filter(
+        (n) =>
+          !narrowed ||
+          (n.calendarEventId !== null &&
+            (input.eventIds ?? []).includes(n.calendarEventId)) ||
+          (input.heldFrom !== undefined &&
+            input.heldTo !== undefined &&
+            n.heldAt >= input.heldFrom &&
+            n.heldAt < input.heldTo),
       )
       .sort(
         (a, b) =>
@@ -3620,12 +3653,89 @@ export const testStore = {
         team: n.team,
         title: n.title,
         heldAt: n.heldAt,
+        calendarEventId: n.calendarEventId,
+        notesWritten: n.notes.trim().length > 0,
+        openActionItems: n.actionItems.filter((i) => {
+          const task = i.taskId ? tasks.find((t) => t.id === i.taskId) : null;
+          return !task || task.status === "open" || task.status === "in_progress";
+        }).length,
         decisions: n.decisions.length,
         actionItems: n.actionItems.length,
         attendees: n.attendeeIds.length,
         firstDecision: n.decisions[0]?.text ?? null,
       }));
     return input.limit ? rows.slice(0, input.limit) : rows;
+  },
+
+  /** Twin of getMeetingNoteByEvent. */
+  getMeetingNoteByEvent(calendarEventId: string): MeetingNote | null {
+    const n = meetingNotes.find((x) => x.calendarEventId === calendarEventId);
+    return n ? testStore.getMeetingNote(n.id) : null;
+  },
+
+  /**
+   * The camp events twin's hold on a meeting's note (test-store-camp-events):
+   * make it with the meeting, keep its title, team and time in step, read
+   * whether it holds minutes, and drop it with the meeting.
+   */
+  meetingNoteForEvent: {
+    add(input: {
+      calendarEventId: string;
+      team: Team | null;
+      title: string;
+      heldAt: Date;
+      agenda: string;
+      actorId: string;
+    }): string {
+      const now = new Date();
+      const id = crypto.randomUUID();
+      meetingNotes.push({
+        id,
+        cycle: currentCycleNumber(),
+        team: input.team,
+        title: input.title,
+        heldAt: input.heldAt,
+        calendarEventId: input.calendarEventId,
+        calendarEventTitle: input.title,
+        agenda: input.agenda,
+        notes: "",
+        createdById: input.actorId,
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        attendeeIds: [],
+        decisions: [],
+        actionItems: [],
+      });
+      return id;
+    },
+    follow(
+      calendarEventId: string,
+      fields: { team: Team | null; title: string; heldAt: Date },
+    ): void {
+      const n = meetingNotes.find((x) => x.calendarEventId === calendarEventId);
+      if (!n) return;
+      Object.assign(n, { ...fields, calendarEventTitle: fields.title });
+    },
+    minutes(
+      calendarEventId: string,
+    ): { notes: string; decisions: number; actionItems: number; attendees: number } | null {
+      const n = meetingNotes.find((x) => x.calendarEventId === calendarEventId);
+      return n
+        ? {
+            notes: n.notes,
+            decisions: n.decisions.length,
+            actionItems: n.actionItems.length,
+            attendees: n.attendeeIds.length,
+          }
+        : null;
+    },
+    drop(calendarEventId: string): void {
+      const at = meetingNotes.findIndex(
+        (x) => x.calendarEventId === calendarEventId,
+      );
+      if (at !== -1) meetingNotes.splice(at, 1);
+    },
   },
 
   getMeetingNote(noteId: string): MeetingNote | null {
@@ -3672,6 +3782,13 @@ export const testStore = {
     if (refusal || !work) return { ok: false, error: refusal ?? NOTE_GONE };
     if (input.calendarEvent && input.calendarEvent.title === null) {
       return { ok: false, error: EVENT_NOT_ON_CALENDAR };
+    }
+    // One note per calendar event, as meeting_notes_calendar_event_uniq.
+    if (
+      input.calendarEvent &&
+      meetingNotes.some((n) => n.calendarEventId === input.calendarEvent?.id)
+    ) {
+      return { ok: false, error: MINUTES_STARTED };
     }
     const approved = (id: string) =>
       findUserById(id)?.approvalStatus === "approved";
@@ -4081,51 +4198,37 @@ export const testStore = {
       })
       .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
       .slice(0, range.max)
-      .map((e) => ({
-        id: e.id,
-        title: e.title,
-        start: e.start,
-        allDay: e.allDay,
-        location: e.location,
-        teamTag: e.teamTag,
-      }));
+      .map(publicCalendarEvent);
     return { status: "ok", events };
   },
 
-  /**
-   * Twin of addCampCalendarEvent: the same reach rule, then the event, titled
-   * as Google would hold it ("Kitchen Team - Briefing") with its team key as
-   * the private property.
-   */
-  addCalendarEvent(input: {
-    actorId: string;
-    team: Team | null;
-    teamLabel: string | null;
-    title: string;
-    date: string;
-    allDay: boolean;
-    start?: string;
-  }): AddCalendarEventResult {
-    const refusal = calendarEventRefusal(
-      testStore.senderReach(input.actorId),
-      input.team,
-    );
-    if (refusal) return { ok: false, error: refusal };
-    const id = `test-event-${S.nextSerial++}`;
-    const start = input.allDay
-      ? input.date
-      : `${input.date}T${input.start ?? "00:00"}:00+02:00`;
-    calendarEvents.push({
-      id,
-      title: teamEventTitle(input.teamLabel, input.title),
-      start,
-      allDay: input.allDay,
-      location: null,
-      teamTag: input.team,
-      startsAt: input.allDay ? campDayStart(input.date) : new Date(start),
-      createdById: input.actorId,
-    });
-    return { ok: true, eventId: id };
+  /** Twin of readCalendarRange: every event touching the camp days. */
+  listCalendarRange(range: { from: string; to: string }): {
+    status: "ok";
+    events: CalendarEvent[];
+  } {
+    const from = campDayStart(range.from).getTime();
+    const until = campDayStart(nextCampDay(range.to)).getTime();
+    const events = calendarEvents
+      .filter((e) => {
+        const ends = e.end
+          ? e.allDay
+            ? campDayStart(e.end).getTime()
+            : new Date(e.end).getTime()
+          : e.allDay
+            ? campDayStart(nextCampDay(e.start)).getTime()
+            : e.startsAt.getTime() + 1;
+        return ends > from && e.startsAt.getTime() < until;
+      })
+      .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+      .map(publicCalendarEvent);
+    return { status: "ok", events };
+  },
+
+  /** Twin of readCalendarEvent. */
+  getCalendarEvent(id: string): CalendarEvent | null {
+    const event = calendarEvents.find((e) => e.id === id);
+    return event ? publicCalendarEvent(event) : null;
   },
 
   // --- Logistics calendar (#247): twins of @camp404/db/logistics ----------
@@ -4228,24 +4331,32 @@ export const testStore = {
 
   /**
    * Twin of putCalendarEvent: the event with this id, replaced if the store's
-   * calendar has it, added if not. Never two with one id.
+   * calendar has it, added if not. Never two with one id. Takes the body
+   * Google would get, so a timed event keeps its times.
    */
   putCalendarEvent(input: {
     id: string;
-    title: string;
-    date: string;
-    location: string | null;
-    teamTag: string | null;
+    body: CalendarEventBody;
     actorId: string;
   }): void {
+    const { body } = input;
+    const allDay = "date" in body.start;
+    const start = "date" in body.start ? body.start.date : body.start.dateTime;
+    const end = "date" in body.end ? body.end.date : body.end.dateTime;
     const event: TestCalendarEvent = {
       id: input.id,
-      title: input.title,
-      start: input.date,
-      allDay: true,
-      location: input.location,
-      teamTag: input.teamTag,
-      startsAt: campDayStart(input.date),
+      title: body.summary,
+      start,
+      end,
+      allDay,
+      location: body.location ?? null,
+      teamTag: body.extendedProperties?.private[TEAM_PROPERTY] ?? null,
+      origin: body.extendedProperties?.private.camp404Logistics
+        ? "logistics"
+        : body.extendedProperties?.private.camp404Deadline
+          ? "deadline"
+          : null,
+      startsAt: allDay ? campDayStart(start) : new Date(start),
       createdById: input.actorId,
     };
     const at = calendarEvents.findIndex((e) => e.id === input.id);
@@ -6638,6 +6749,7 @@ export const testStore = {
     resetDuesStore();
     resetRentalStore();
     resetLogisticsStore();
+    resetCampEventsStore();
     resetGuideStore();
     resetShiftsStore();
     resetDailySheetStore();

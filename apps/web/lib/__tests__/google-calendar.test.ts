@@ -12,6 +12,8 @@ import {
   forgetCalendarCache,
   getUpcomingEvents,
   putCalendarEvent,
+  readCalendarEvent,
+  readCalendarRange,
   CALENDAR_PAGE_RANGE,
   signAssertion,
   toCalendarEvents,
@@ -75,6 +77,8 @@ describe("toCalendarEvents", () => {
         allDay: true,
         location: "Tankwa",
         teamTag: null,
+        end: null,
+        origin: null,
       },
       {
         id: "b",
@@ -83,6 +87,8 @@ describe("toCalendarEvents", () => {
         allDay: false,
         location: null,
         teamTag: null,
+        end: null,
+        origin: null,
       },
       {
         id: "f",
@@ -91,6 +97,8 @@ describe("toCalendarEvents", () => {
         allDay: true,
         location: null,
         teamTag: null,
+        end: null,
+        origin: null,
       },
     ]);
   });
@@ -188,6 +196,8 @@ describe("getUpcomingEvents", () => {
           allDay: true,
           location: null,
           teamTag: null,
+          end: null,
+          origin: null,
         },
       ],
     });
@@ -336,7 +346,7 @@ describe("whose event", () => {
     await getUpcomingEvents(ENV, new Date("2026-09-23T08:00:00Z"));
     vi.unstubAllGlobals();
     expect(fields).toBe(
-      "items(id,summary,status,visibility,location,start,extendedProperties/private)",
+      "items(id,summary,status,visibility,location,start,end,extendedProperties/private)",
     );
     expect(fields).not.toMatch(/description|attendees/);
   });
@@ -657,5 +667,134 @@ describe("putCalendarEvent", () => {
       "calendar not configured",
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("readCalendarRange and readCalendarEvent (the Calendar's month and list)", () => {
+  beforeEach(() => {
+    forgetCalendarCache();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("asks for the camp days given, the past included, and reads each event's end and where it was made", async () => {
+    const asked: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) => {
+        if (String(url).includes("oauth2")) {
+          return Response.json({ access_token: "tok" });
+        }
+        asked.push(new URL(String(url)));
+        return Response.json({
+          items: [
+            {
+              id: "build",
+              summary: "Build",
+              start: { date: "2027-04-21" },
+              end: { date: "2027-04-26" },
+              extendedProperties: { private: { camp404Logistics: "build" } },
+            },
+            {
+              id: "meet",
+              summary: "Kitchen Team - Planning",
+              start: { dateTime: "2026-10-01T19:00:00+02:00" },
+              end: { dateTime: "2026-10-01T20:30:00+02:00" },
+            },
+          ],
+        });
+      }),
+    );
+    const read = await readCalendarRange(
+      { from: "2026-09-28", to: "2026-11-01" },
+      ENV,
+      new Date("2026-10-10T08:00:00Z"),
+    );
+    // Camp days start at 00:00 in Johannesburg (UTC+2).
+    expect(asked[0]!.searchParams.get("timeMin")).toBe(
+      "2026-09-27T22:00:00.000Z",
+    );
+    expect(asked[0]!.searchParams.get("timeMax")).toBe(
+      "2026-11-01T22:00:00.000Z",
+    );
+    expect(asked[0]!.searchParams.get("fields")).not.toMatch(
+      /description|attendees/,
+    );
+    expect(read).toEqual({
+      status: "ok",
+      events: [
+        expect.objectContaining({
+          id: "build",
+          end: "2027-04-26",
+          origin: "logistics",
+        }),
+        expect.objectContaining({
+          id: "meet",
+          end: "2026-10-01T20:30:00+02:00",
+          origin: null,
+        }),
+      ],
+    });
+    // The same range is read once per five minutes; another range is not.
+    await readCalendarRange(
+      { from: "2026-09-28", to: "2026-11-01" },
+      ENV,
+      new Date("2026-10-10T08:01:00Z"),
+    );
+    expect(asked).toHaveLength(1);
+    await readCalendarRange(
+      { from: "2026-11-01", to: "2026-12-06" },
+      ENV,
+      new Date("2026-10-10T08:01:00Z"),
+    );
+    expect(asked).toHaveLength(2);
+  });
+
+  it("says not connected without a calendar, and unavailable when Google fails", async () => {
+    expect(
+      await readCalendarRange({ from: "2026-10-01", to: "2026-10-31" }, {}),
+    ).toEqual({ status: "not_configured" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("no", { status: 500 })),
+    );
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(
+      await readCalendarRange({ from: "2026-10-01", to: "2026-10-31" }, ENV),
+    ).toEqual({ status: "unavailable" });
+    expect(await readCalendarEvent("x", ENV)).toBe("unavailable");
+    spy.mockRestore();
+  });
+
+  it("reads one event by its id, and nothing for one Google no longer has or keeps private", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) => {
+        if (String(url).includes("oauth2")) {
+          return Response.json({ access_token: "tok" });
+        }
+        const path = new URL(String(url)).pathname;
+        if (path.endsWith("/gone")) return new Response("", { status: 404 });
+        if (path.endsWith("/secret")) {
+          return Response.json({
+            id: "secret",
+            visibility: "private",
+            start: { date: "2026-10-01" },
+          });
+        }
+        return Response.json({
+          id: "one",
+          summary: "Dome rehearsal",
+          start: { date: "2026-10-10" },
+        });
+      }),
+    );
+    expect(await readCalendarEvent("one", ENV)).toMatchObject({
+      id: "one",
+      title: "Dome rehearsal",
+    });
+    expect(await readCalendarEvent("gone", ENV)).toBeNull();
+    expect(await readCalendarEvent("secret", ENV)).toBeNull();
   });
 });

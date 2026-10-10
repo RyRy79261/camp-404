@@ -377,30 +377,23 @@ test.describe("windows fit their own width (test-mode)", () => {
     await expectBeside(todo, doing);
   });
 
-  test("New event, a new meeting and System", async ({ page, request }) => {
+  test("the Calendar's New event form and System", async ({ page, request }) => {
     await captain(page, request, "fit-misc-cap");
 
-    // New event: the preview under the form, then beside it.
-    let win = await openWindow(page, "/captains/calendar", "Add an event");
-    const title = win.getByLabel("Title");
-    const preview = win.getByText("Preview — how Home shows it");
+    // The Calendar: the form above the month in a narrow window, beside it
+    // in a wide one.
+    let win = await openWindow(
+      page,
+      "/calendar?view=month&month=2026-10&new=2026-10-15",
+      "Calendar",
+    );
+    const form = win.getByRole("form", { name: "New event" });
     await resizeWindowTo(page, win, NARROW);
     await expectFits(win);
-    await expectStacked(title, preview);
+    await expectStacked(form, win.locator("[data-phone-month]"));
     await resizeWindowTo(page, win, WIDEST);
     await expectFits(win);
-    await expectBeside(title, preview);
-
-    // A new meeting: its first two fields, one per row, then a pair.
-    win = await openWindow(page, "/meetings/new", "New meeting");
-    const team = win.locator("#meeting-team");
-    const event = win.locator("#meeting-event");
-    await resizeWindowTo(page, win, NARROW);
-    await expectFits(win);
-    await expectStacked(team, event);
-    await resizeWindowTo(page, win, WIDE);
-    await expectFits(win);
-    await expectBeside(team, event);
+    await expectBeside(win.locator("[data-month-grid]"), form);
 
     // System: each check's name above its detail, then beside it.
     win = await openWindow(page, "/captains/system", "System status");

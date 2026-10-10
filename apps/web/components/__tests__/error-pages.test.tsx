@@ -91,13 +91,13 @@ describe("console error boundaries (inside a desktop window)", () => {
     ).toBe("/");
     unmount();
     // A document's title never comes from its data.
-    pathname.value = "/meetings/the-secret-meeting";
+    pathname.value = "/calendar/the-secret-meeting/minutes";
     render(
       <QuestionnaireError error={new Error("boom")} reset={() => {}} />,
       onDesktop,
     );
     expect(
-      screen.getByRole("heading", { name: "Meeting stopped responding" }),
+      screen.getByRole("heading", { name: "Minutes stopped responding" }),
     ).toBeTruthy();
   });
 

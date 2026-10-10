@@ -174,7 +174,6 @@ test.describe("404 OS desktop (test-mode)", () => {
       "Tasks",
       "Calendar",
       "Roster",
-      "Meetings",
       "Family tree",
       "Power",
       "Teams",
@@ -187,6 +186,8 @@ test.describe("404 OS desktop (test-mode)", () => {
     // Captains folder, so the folder is what a member must not have.
     expect(member).not.toContain("Captains");
     expect(member).not.toContain("My lift");
+    // Meetings are in the Calendar (owner, 2026-10-10): no program of their own.
+    expect(member).not.toContain("Meetings");
 
     // A team lead: the Captains folder holds a lead's tools only.
     await asRank(page, request, "icons-lead", "member");
@@ -628,15 +629,15 @@ test.describe("404 OS desktop (test-mode)", () => {
     await openIcon(page, "Family tree");
     await expect(page).toHaveURL("/family-tree");
     await openConsoleNav(page, "Camp");
-    await startMenu(page).getByRole("menuitem", { name: "Meetings" }).click();
-    await expect(page).toHaveURL("/meetings");
+    await startMenu(page).getByRole("menuitem", { name: "Logistics" }).click();
+    await expect(page).toHaveURL("/logistics");
     await expect(
-      page.getByRole("heading", { level: 1, name: "Meetings" }),
+      page.getByRole("heading", { level: 1, name: "Logistics" }),
     ).toBeVisible();
 
     await page.reload();
     await expect(
-      page.getByRole("heading", { level: 1, name: "Meetings" }),
+      page.getByRole("heading", { level: 1, name: "Logistics" }),
     ).toBeVisible();
     // The Family tree is still open, as its name and icon (no copy survives
     // a reload: copies are memory only).
@@ -644,7 +645,7 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(tree).toBeVisible();
     await expect(tree.getByText("Click to open.")).toBeVisible();
     await expect(taskbarWindow(page, "Family tree")).toBeVisible();
-    await expect(taskbarWindow(page, "Meetings")).toHaveAttribute(
+    await expect(taskbarWindow(page, "Logistics")).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -728,9 +729,10 @@ test.describe("404 OS desktop (test-mode)", () => {
     request,
   }) => {
     await asRank(page, request, "esc-select", "captain");
-    await page.goto("/captains/calendar");
+    const url = "/calendar?view=month&month=2026-10&new=2026-10-15";
+    await page.goto(url);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Add an event" }),
+      page.getByRole("heading", { level: 1, name: "Calendar" }),
     ).toBeVisible();
     // The Select's list, not the desktop's icon grid (also a listbox).
     const list = page
@@ -740,11 +742,9 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(list).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(list).toHaveCount(0);
-    await expect(page).toHaveURL("/captains/calendar");
-    await expect(osWindow(page, "New event")).toBeVisible();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Add an event" }),
-    ).toBeVisible();
+    await expect(page).toHaveURL(url);
+    await expect(osWindow(page, "Calendar")).toBeVisible();
+    await expect(page.getByRole("form", { name: "New event" })).toBeVisible();
   });
 
   test("a page that calls notFound() answers 404 inside its window", async ({
@@ -752,11 +752,9 @@ test.describe("404 OS desktop (test-mode)", () => {
     request,
   }) => {
     await asRank(page, request, "not-found", "member");
-    const res = await page.goto(
-      "/meetings/00000000-0000-4000-8000-000000000000",
-    );
+    const res = await page.goto("/calendar/nosuchevent/minutes");
     expect(res?.status()).toBe(404);
-    const win = osWindow(page, "Meeting");
+    const win = osWindow(page, "Minutes");
     await expect(win).toBeVisible();
     await expect(
       win.getByRole("heading", { level: 1, name: "Page not found" }),
@@ -1031,11 +1029,11 @@ test.describe("404 OS desktop (test-mode)", () => {
     expect(k.y).toBeLessThan(s.y);
     expect(k.x).toBeGreaterThan(me.x + 5 * CELL);
 
-    // The folder holds the team's page, then its own meetings and tasks.
+    // The folder holds the team's page, then its own calendar and tasks.
     await kitchen.dblclick();
     const folder = osWindow(page, "Kitchen team");
     await expect(folder).toBeVisible();
-    for (const name of ["Kitchen page", "Kitchen meetings", "Kitchen tasks"]) {
+    for (const name of ["Kitchen page", "Kitchen calendar", "Kitchen tasks"]) {
       await expect(
         folder.getByRole("button", { name: `Open ${name}` }),
       ).toBeVisible();
@@ -1346,7 +1344,7 @@ test.describe("404 OS desktop (test-mode)", () => {
     // A slow server: the page's own data (the router's RSC request, never a
     // prefetch) waits two seconds before it goes out.
     await page.route(
-      (url) => url.pathname === "/tasks" || url.pathname === "/meetings",
+      (url) => url.pathname === "/tasks" || url.pathname === "/logistics",
       async (route) => {
         const headers = route.request().headers();
         if (headers["rsc"] === "1" && !headers["next-router-prefetch"]) {
@@ -1400,11 +1398,11 @@ test.describe("404 OS desktop (test-mode)", () => {
 
     await openConsoleNav(page, "Camp");
     const fromStart = watch();
-    await startMenu(page).getByRole("menuitem", { name: "Meetings" }).click();
+    await startMenu(page).getByRole("menuitem", { name: "Logistics" }).click();
     const startMs = await fromStart;
-    await expect(taskbarWindow(page, "Meetings")).toBeVisible();
+    await expect(taskbarWindow(page, "Logistics")).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 1, name: "Meetings" }),
+      page.getByRole("heading", { level: 1, name: "Logistics" }),
     ).toBeVisible();
 
     testInfo.annotations.push({
@@ -1493,9 +1491,9 @@ test.describe("404 OS desktop (test-mode)", () => {
       page.getByRole("heading", { level: 1, name: "Family tree" }),
     ).toBeVisible();
     await openConsoleNav(page, "Camp");
-    await startMenu(page).getByRole("menuitem", { name: "Meetings" }).click();
+    await startMenu(page).getByRole("menuitem", { name: "Logistics" }).click();
     await expect(
-      page.getByRole("heading", { level: 1, name: "Meetings" }),
+      page.getByRole("heading", { level: 1, name: "Logistics" }),
     ).toBeVisible();
     // Let the page settle (the idle copy, fonts), then measure.
     await page.mouse.move(2, 2);

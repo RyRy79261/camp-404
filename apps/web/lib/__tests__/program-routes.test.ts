@@ -70,23 +70,37 @@ describe("matchProgram", () => {
   });
 
   it("gives each document its own window", () => {
-    expect(matchProgram("/meetings/m-1")).toEqual({
-      programId: "meeting",
-      instanceKey: "meeting:m-1",
-      genericTitle: "MEETING.TXT",
+    expect(matchProgram("/calendar/evt1/minutes")).toEqual({
+      programId: "minutes",
+      instanceKey: "minutes:evt1",
+      genericTitle: "MINUTES.TXT",
     });
-    expect(matchProgram("/meetings/m-2")?.instanceKey).toBe("meeting:m-2");
+    expect(matchProgram("/calendar/evt2/minutes")?.instanceKey).toBe(
+      "minutes:evt2",
+    );
     expect(matchProgram("/kitchen/recipes/r-1/versions/3")?.instanceKey).toBe(
       "recipe-version:r-1:3",
     );
   });
 
   it("prefers a static segment over the dynamic one beside it", () => {
-    expect(matchProgram("/meetings/new")?.programId).toBe("new-meeting");
+    expect(matchProgram("/guide/new")?.programId).toBe("new-guide-chapter");
     expect(matchProgram("/kitchen/recipes/new")?.programId).toBe("new-recipe");
     expect(matchProgram("/kitchen/recipes/review")?.programId).toBe(
       "recipe-review",
     );
+  });
+
+  it("opens the old Meetings and Add an event addresses in the Calendar's window", () => {
+    for (const p of [
+      "/meetings",
+      "/meetings/new",
+      "/meetings/m-1",
+      "/meetings/m-1/edit",
+      "/captains/calendar",
+    ]) {
+      expect(matchProgram(p), p).toEqual(matchProgram("/calendar"));
+    }
   });
 
   it("reads a trailing slash as the same page", () => {

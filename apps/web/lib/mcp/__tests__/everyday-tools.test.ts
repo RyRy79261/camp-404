@@ -30,10 +30,11 @@ vi.mock("next/server", () => ({ after: () => undefined }));
 // The camp calendar is Google's: stubbed so a case can give it events.
 vi.mock("@/lib/camp-calendar", async (importOriginal) => ({
   ...(await importOriginal<typeof CampCalendar>()),
+  getCalendarRange: vi.fn(async () => ({ status: "not_configured" })),
   getUpcomingEvents: vi.fn(async () => ({ status: "not_configured" })),
 }));
 
-import { getUpcomingEvents } from "@/lib/camp-calendar";
+import { getCalendarRange, getUpcomingEvents } from "@/lib/camp-calendar";
 import { registerCampMcpTools } from "../server";
 
 type Handler = (args: unknown, extra: unknown) => Promise<CallToolResult>;
@@ -82,6 +83,7 @@ async function camp() {
 
 beforeEach(() => {
   vi.mocked(getUpcomingEvents).mockResolvedValue({ status: "not_configured" });
+  vi.mocked(getCalendarRange).mockResolvedValue({ status: "not_configured" });
 });
 
 describe("inbox", () => {
@@ -295,9 +297,9 @@ describe("calendar", () => {
     ).toMatchObject({ status: "not_configured", days: [] });
   });
 
-  it("groups the events by camp day, narrows them by dates and team", async () => {
-    const { cook } = await camp();
-    vi.mocked(getUpcomingEvents).mockResolvedValue({
+  it("groups the events by camp day, the past too, and narrows them by dates, team and type", async () => {
+    const { cook, captain } = await camp();
+    vi.mocked(getCalendarRange).mockResolvedValue({
       status: "ok",
       events: [
         {
@@ -318,27 +320,79 @@ describe("calendar", () => {
         },
       ],
     });
-    const all = (await call("list_calendar_events", {}, cook.id)).data;
+    // A meeting made in the Calendar, kept in the app: listed as a meeting.
+    const [made] = await h
+      .db()
+      .insert(schema.campEvents)
+      .values({
+        cycle: 1,
+        kind: "meeting",
+        team: "kitchen",
+        title: "Kitchen planning",
+        allDay: false,
+        startDate: "2099-03-04",
+        endDate: "2099-03-04",
+        startTime: "19:00",
+        endTime: "20:00",
+        calendarEventId: "appmeeting1",
+        createdByUserId: captain.id,
+      })
+      .returning();
+    await h.db().insert(schema.meetingNotes).values({
+      cycle: 1,
+      team: "kitchen",
+      title: "Kitchen planning",
+      heldAt: new Date("2099-03-04T17:00:00Z"),
+      calendarEventId: made!.calendarEventId,
+      notes: "We met.",
+    });
+    const MARCH = { from: "2099-03-01", to: "2099-03-31" };
+    const all = (await call("list_calendar_events", MARCH, cook.id)).data;
     expect(all.days.map((d: { day: string }) => d.day)).toEqual([
       "2099-03-02",
+      "2099-03-04",
       "2099-03-05",
     ]);
     expect(all.days[0].events[0]).toMatchObject({
       id: "e1",
+      type: "event",
       team: { key: "kitchen", mine: true },
+      madeIn: "Google Calendar",
     });
+    expect(all.days[1].events[0]).toMatchObject({
+      id: "appmeeting1",
+      type: "meeting",
+      madeIn: "the Calendar",
+      minutes: { written: true },
+    });
+    expect(all.days[1].events[0].url).toContain("event=appmeeting1");
     const later = (
-      await call("list_calendar_events", { from: "2099-03-03" }, cook.id)
+      await call(
+        "list_calendar_events",
+        { from: "2099-03-05", to: "2099-03-31" },
+        cook.id,
+      )
     ).data;
     expect(later.days.map((d: { day: string }) => d.day)).toEqual([
       "2099-03-05",
     ]);
-    const kitchen = (
-      await call("list_calendar_events", { team: "kitchen" }, cook.id)
+    const kitchenMeetings = (
+      await call(
+        "list_calendar_events",
+        { ...MARCH, team: "kitchen", type: "meetings" },
+        cook.id,
+      )
     ).data;
-    expect(kitchen.days.map((d: { day: string }) => d.day)).toEqual([
-      "2099-03-02",
+    expect(kitchenMeetings.days.map((d: { day: string }) => d.day)).toEqual([
+      "2099-03-04",
     ]);
+    expect(
+      await call(
+        "list_calendar_events",
+        { from: "2099-01-01", to: "2100-12-31" },
+        cook.id,
+      ),
+    ).toEqual({ error: "Ask for at most 400 days at a time." });
   });
 });
 
@@ -419,6 +473,7 @@ describe("meetings", () => {
     expect(saved.data).toMatchObject({
       notes: "Oats, then eggs.",
       agenda: "Menus",
+      // The title is the meeting's event's: the tool never changes it.
       title: "Menu planning",
       decisions: ["Oats on day one", "Eggs on day two"],
       version: 2,

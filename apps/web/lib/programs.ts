@@ -5,11 +5,9 @@ import {
   canEditAnyGuideChapter,
   canManageMoney,
   canManageRental,
-  canWorkInTeam,
   hasClearance,
 } from "@camp404/core";
 import { Team, type ViewerRank } from "@camp404/types";
-import { meetingsHref } from "./meeting-notes-view";
 import type { ProgramId } from "./program-routes";
 import { tasksHref } from "./task-board";
 
@@ -85,7 +83,7 @@ export interface ProgramContext {
   memberTeams: readonly string[];
   /**
    * The keys of the camp's active (not archived) teams that a team page can
-   * open: the teams the console offers anywhere (meetings/new/page.tsx).
+   * open: the teams the console offers anywhere.
    */
   activeTeams: readonly string[];
   hasLift: boolean;
@@ -149,8 +147,9 @@ const reviewsRecipes = (ctx: ProgramContext) =>
 export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   // --- Me ------------------------------------------------------------------
   // In the approved prototype's order (owner, 2026-09-26): Tasks and Calendar
-  // sit with the member's own things, then Camp is Roster, Teams, Meetings,
-  // Kitchen, Power, Family tree (the folders' `after` places them).
+  // sit with the member's own things, then Camp is Roster, Teams, Kitchen,
+  // Power, Family tree (the folders' `after` places them). Meetings are in
+  // the Calendar since 2026-10-10.
   {
     id: "inbox",
     label: "Inbox",
@@ -175,7 +174,16 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
   {
     id: "calendar",
     label: "Calendar",
-    keywords: ["Events", "Coming up"],
+    keywords: [
+      "Events",
+      "Coming up",
+      "Meetings",
+      "Minutes",
+      "Agenda",
+      "Decisions",
+      "Action items",
+      "New event",
+    ],
     fileName: "CALENDAR.EXE",
     href: "/calendar",
     icon: "calendar",
@@ -284,16 +292,6 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     fileName: "ROSTER.DB",
     href: "/captains/camp-management",
     icon: "roster",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  {
-    id: "meetings",
-    label: "Meetings",
-    keywords: ["Agenda", "Decisions", "Action items", "Attendees"],
-    fileName: "MINUTES.EXE",
-    href: "/meetings",
-    icon: "meetings",
     place: CAMP,
     rank: "camp_member",
   },
@@ -536,16 +534,6 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAPTAINS,
     rank: "team_lead",
   },
-  {
-    id: "new-event",
-    label: "New event",
-    keywords: ["Add an event", "All day"],
-    fileName: "NEWEVENT.EXE",
-    href: "/captains/calendar",
-    icon: "new-event",
-    place: CAPTAINS,
-    rank: "team_lead",
-  },
   // Claims waiting for a team's yes (#242): every lead (the page shows only
   // the teams they lead, canApproveClaim) and captains (every team).
   {
@@ -689,39 +677,14 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: null,
     rank: "camp_member",
   },
-  // New meeting opens for every member but offers only ACTIVE teams they work
-  // in, and locks with none (meetings/new/page.tsx), so it is offered only when
-  // it would not lock: a member whose only team this year is archived is not
-  // offered it.
+  // A meeting's minutes, opened from the Calendar: every member reads the
+  // meeting there; the page locks for anyone not on its team (canWorkInTeam).
   {
-    id: "new-meeting",
-    label: "New meeting",
-    fileName: "NEWMEET.TXT",
+    id: "minutes",
+    label: "Minutes",
+    fileName: "MINUTES.TXT",
     href: null,
-    icon: "meetings",
-    place: null,
-    rank: "camp_member",
-    requires: (ctx) =>
-      canWorkInTeam(ctx.rank, ctx.memberTeams, null) ||
-      ctx.activeTeams.some((team) =>
-        canWorkInTeam(ctx.rank, ctx.memberTeams, team),
-      ),
-  },
-  {
-    id: "meeting",
-    label: "Meeting",
-    fileName: "MEETING.TXT",
-    href: null,
-    icon: "meetings",
-    place: null,
-    rank: "camp_member",
-  },
-  {
-    id: "edit-meeting",
-    label: "Edit meeting",
-    fileName: "MEETING.TXT",
-    href: null,
-    icon: "meetings",
+    icon: "minutes",
     place: null,
     rank: "camp_member",
   },
@@ -900,7 +863,7 @@ const FOLDERS: readonly {
     label: "Kitchen",
     icon: "folder",
     group: "camp",
-    after: "meetings",
+    after: "roster",
   },
   { id: "captains", label: "Captains", icon: "folder", group: "captains" },
 ];
@@ -929,7 +892,7 @@ export const TEAM_TOOLS: Readonly<Partial<Record<Team, readonly ProgramId[]>>> =
   };
 
 /**
- * After a team folder's page: the team's own meetings and tasks, each the
+ * After a team folder's page: the team's own calendar and tasks, each the
  * shared program filtered to the team (audit, 2026-10-01: the folder had no
  * way to the things its members work in). Listed only when the member's
  * manifest holds the program; the id is `<program>:<team>`.
@@ -940,9 +903,9 @@ const TEAM_FOLDER_SHORTCUTS: readonly {
   href: (team: string) => string;
 }[] = [
   {
-    id: "meetings",
-    noun: "meetings",
-    href: (team) => meetingsHref(team),
+    id: "calendar",
+    noun: "calendar",
+    href: (team) => `/calendar?team=${encodeURIComponent(team)}`,
   },
   {
     id: "tasks",
@@ -1300,7 +1263,7 @@ export function buildProgramManifest(
             const tools = (TEAM_TOOLS[m.team as Team] ?? [])
               .map((id) => byId.get(id))
               .filter((p): p is ClientProgram => p !== undefined);
-            // The team's own meetings and tasks, filtered to it: what its
+            // The team's own calendar and tasks, filtered to it: what its
             // members work in. Shortcuts to programs the member already has.
             const filtered = TEAM_FOLDER_SHORTCUTS.flatMap(
               ({ id, noun, href }) => {

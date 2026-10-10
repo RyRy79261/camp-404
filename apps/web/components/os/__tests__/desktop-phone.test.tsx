@@ -368,8 +368,8 @@ describe("Back on a phone", () => {
   it("closes the window it left, without asking, and never loses a draft", () => {
     phoneScreen();
     const confirm = vi.spyOn(window, "confirm");
-    nav.pathname = "/meetings/new";
-    window.history.replaceState(null, "", "/meetings/new");
+    nav.pathname = "/calendar/m-1/minutes";
+    window.history.replaceState(null, "", "/calendar/m-1/minutes");
     const view = render(
       <Desktop {...props()}>
         <Note />
@@ -390,11 +390,11 @@ describe("Back on a phone", () => {
       </Desktop>,
     );
     expect(confirm).not.toHaveBeenCalled();
-    expect(frame("new-meeting")).toBeNull();
+    expect(frame("minutes:m-1")).toBeNull();
     expect(frame("tasks")).not.toBeNull();
 
     // Opened again in the same session: the draft is back.
-    nav.pathname = "/meetings/new";
+    nav.pathname = "/calendar/m-1/minutes";
     view.rerender(
       <Desktop {...props()}>
         <Note />

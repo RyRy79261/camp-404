@@ -36,9 +36,9 @@ describe("serializeWindows", () => {
   it("writes layout only, never a title", () => {
     const windows: OsWindow<string>[] = [
       {
-        id: "meeting:m-1",
-        program: "meeting",
-        lastUrl: "/meetings/m-1",
+        id: "minutes:m-1",
+        program: "minutes",
+        lastUrl: "/calendar/m-1/minutes",
         title: "Secret plans with Ada",
         ...RECT,
         z: 2,
@@ -47,7 +47,7 @@ describe("serializeWindows", () => {
     const text = serializeWindows(
       windows,
       "full",
-      new Map([["meeting:m-1", 80]]),
+      new Map([["minutes:m-1", 80]]),
     );
     expect(text).not.toContain("Secret plans");
     expect(text).not.toContain("title");
@@ -55,9 +55,9 @@ describe("serializeWindows", () => {
       mode: "full",
       windows: [
         {
-          key: "meeting:m-1",
-          programId: "meeting",
-          lastUrl: "/meetings/m-1",
+          key: "minutes:m-1",
+          programId: "minutes",
+          lastUrl: "/calendar/m-1/minutes",
           rect: RECT,
           z: 2,
           minimized: false,
@@ -72,20 +72,20 @@ describe("serializeWindows", () => {
 describe("parseWindows", () => {
   it("keeps a console page's window and works its program out from the address", () => {
     const { windows, scrollTops } = parseWindows(
-      stored([page("meeting:m-1", "/meetings/m-1", { scrollTop: 120 })]),
+      stored([page("minutes:m-1", "/calendar/m-1/minutes", { scrollTop: 120 })]),
       "full",
       noFolders,
     );
     expect(windows).toEqual([
       {
-        id: "meeting:m-1",
-        program: "meeting",
-        lastUrl: "/meetings/m-1",
+        id: "minutes:m-1",
+        program: "minutes",
+        lastUrl: "/calendar/m-1/minutes",
         ...RECT,
         z: 1,
       },
     ]);
-    expect(scrollTops.get("meeting:m-1")).toBe(120);
+    expect(scrollTops.get("minutes:m-1")).toBe(120);
   });
 
   it("prunes a team page by the team's own program id", () => {

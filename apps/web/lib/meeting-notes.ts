@@ -4,6 +4,7 @@ import {
   createMeetingNote as dbCreateMeetingNote,
   editMeetingNote as dbEditMeetingNote,
   getMeetingNote as dbGetMeetingNote,
+  getMeetingNoteByEvent as dbGetMeetingNoteByEvent,
   listMeetingNotes as dbListMeetingNotes,
   turnActionItemIntoTask as dbTurnActionItemIntoTask,
   type MeetingNote,
@@ -38,6 +39,15 @@ export async function getMeetingNote(
   return usesTestStore()
     ? testStore.getMeetingNote(noteId)
     : dbGetMeetingNote(noteId);
+}
+
+/** The note of the meeting whose calendar event is `calendarEventId`. */
+export async function getMeetingNoteByEvent(
+  calendarEventId: string,
+): Promise<MeetingNote | null> {
+  return usesTestStore()
+    ? testStore.getMeetingNoteByEvent(calendarEventId)
+    : dbGetMeetingNoteByEvent(calendarEventId);
 }
 
 export async function createMeetingNote(

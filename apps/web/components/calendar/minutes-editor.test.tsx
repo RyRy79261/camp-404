@@ -7,10 +7,12 @@ import {
   waitFor,
 } from "@testing-library/react";
 
-// The editor's own behaviour: someone on the note who is no longer an
+// The minutes editor's own behaviour: someone on the note who is no longer an
 // approved member can still be unticked, and the save leaves them off; an
 // action item already on the task board is shown, not editable, and is still
-// sent so the note keeps it in place.
+// sent so the note keeps it in place; the meeting's title, team and time are
+// the calendar event's, never fields here; and the unsaved draft is kept and
+// thrown away as the other long-text editors' are.
 
 const push = vi.fn();
 const refresh = vi.fn();
@@ -18,15 +20,14 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
 vi.mock("@camp404/ui/components/toast", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
-vi.mock("./actions", () => ({
-  createMeetingNoteAction: vi.fn(),
-  editMeetingNoteAction: vi.fn(async () => ({ ok: true })),
+vi.mock("@/app/(console)/calendar/actions", () => ({
+  saveMinutesAction: vi.fn(async () => ({ ok: true, data: { version: 3 } })),
 }));
 
+import { saveMinutesAction } from "@/app/(console)/calendar/actions";
 import { draftStorageKey } from "@/components/os/window-storage";
 import { DRAFT_OWNER, DraftWindow } from "@/tests/draft-window";
-import { editMeetingNoteAction } from "./actions";
-import { MeetingEditor } from "./meeting-editor";
+import { MinutesEditor } from "./minutes-editor";
 
 afterEach(() => {
   cleanup();
@@ -34,16 +35,20 @@ afterEach(() => {
   window.sessionStorage.clear();
 });
 
-function editor(inWindow = false) {
+const RETURN = "/calendar?view=month&month=2026-10&event=evt1";
+
+function editor(inWindow = false, version: number | null = 2) {
   const ui = (
-    <MeetingEditor
-      mode={{ kind: "edit", noteId: "note-1", version: 2, team: "kitchen" }}
+    <MinutesEditor
+      target={{
+        eventId: "evt1",
+        version,
+        team: "kitchen",
+        teamLabel: "Kitchen",
+        returnHref: RETURN,
+      }}
       initial={{
-        title: "Kickoff",
-        date: "2026-10-02",
-        time: "18:30",
-        calendarEventId: null,
-        agenda: "",
+        agenda: "1. Menu",
         notes: "",
         attendeeIds: ["crew", "gone"],
         decisions: [],
@@ -58,43 +63,42 @@ function editor(inWindow = false) {
         ],
       }}
       members={[{ id: "crew", displayName: "Kitchen Crew" }]}
-      teamPeople={{ kitchen: ["crew"] }}
-      teamLabels={{ kitchen: "Kitchen" }}
-      events={[]}
+      teamPeople={["crew"]}
       formerAttendees={[{ id: "gone", displayName: "Left Camp" }]}
     />
   );
   render(
     inWindow ? (
-      <DraftWindow windowKey="edit-meeting:note-1">{ui}</DraftWindow>
+      <DraftWindow windowKey="minutes:evt1">{ui}</DraftWindow>
     ) : (
       ui
     ),
   );
 }
 
-describe("MeetingEditor's unsaved draft", () => {
-  const KEY = draftStorageKey(DRAFT_OWNER, "edit-meeting:note-1", "meeting");
-  const title = () =>
-    (screen.getByLabelText(/^Title/) as HTMLInputElement).value;
+describe("MinutesEditor's unsaved draft", () => {
+  const KEY = draftStorageKey(DRAFT_OWNER, "minutes:evt1", "meeting");
 
   it("keeps it for this tab when the window goes, and restores it with Discard", () => {
     editor(true);
-    fireEvent.change(screen.getByLabelText(/^Title/), {
-      target: { value: "Kickoff, take two" },
+    fireEvent.click(screen.getByRole("button", { name: "Add decision" }));
+    fireEvent.change(screen.getByLabelText("Decision 1"), {
+      target: { value: "Dinner at 19:00" },
     });
-    // The window goes (a Back): the draft is written as it stood.
     cleanup();
     expect(JSON.parse(window.sessionStorage.getItem(KEY)!)).toMatchObject({
+      eventId: "evt1",
       version: 2,
-      title: "Kickoff, take two",
+      decisions: ["Dinner at 19:00"],
     });
 
     editor(true);
-    expect(title()).toBe("Kickoff, take two");
+    expect(
+      (screen.getByLabelText("Decision 1") as HTMLInputElement).value,
+    ).toBe("Dinner at 19:00");
     expect(screen.getByText("Unsaved changes restored.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
-    expect(title()).toBe("Kickoff");
+    expect(screen.queryByLabelText("Decision 1")).toBeNull();
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
   });
 
@@ -102,49 +106,48 @@ describe("MeetingEditor's unsaved draft", () => {
     window.sessionStorage.setItem(
       KEY,
       JSON.stringify({
+        eventId: "evt1",
         version: 1,
-        team: "kitchen",
-        title: "Stale",
-        date: "2026-10-02",
-        time: "18:30",
-        calendarEventId: null,
-        agenda: "",
+        agenda: "Stale",
         notes: "",
         attendeeIds: [],
-        decisions: [],
+        decisions: ["Stale decision"],
         actionItems: [],
       }),
     );
     editor(true);
-    expect(title()).toBe("Kickoff");
+    expect(screen.queryByLabelText("Decision 1")).toBeNull();
     expect(screen.queryByText("Unsaved changes restored.")).toBeNull();
   });
 
-  it("forgets it once the note is saved", async () => {
+  it("forgets it once the minutes are saved, and goes back to the meeting", async () => {
     editor(true);
-    fireEvent.change(screen.getByLabelText(/^Title/), {
-      target: { value: "Kickoff, saved" },
+    fireEvent.click(screen.getByRole("button", { name: "Add decision" }));
+    fireEvent.change(screen.getByLabelText("Decision 1"), {
+      target: { value: "Saved" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save meeting" }));
-    await waitFor(() => expect(push).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Save minutes" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith(RETURN));
     cleanup();
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
   });
 });
 
-describe("MeetingEditor", () => {
-  it("lets an attendee who is no longer approved be unticked", async () => {
+describe("MinutesEditor", () => {
+  it("lets an attendee who is no longer approved be unticked, and sends the meeting and its version", async () => {
     editor();
     const box = screen.getByRole("checkbox", { name: "Left Camp" });
     expect(box.getAttribute("data-state")).toBe("checked");
     fireEvent.click(box);
-    fireEvent.click(screen.getByRole("button", { name: "Save meeting" }));
-    await waitFor(() => expect(editMeetingNoteAction).toHaveBeenCalled());
-    const sent = vi.mocked(editMeetingNoteAction).mock.calls[0]![0] as {
+    fireEvent.click(screen.getByRole("button", { name: "Save minutes" }));
+    await waitFor(() => expect(saveMinutesAction).toHaveBeenCalled());
+    const sent = vi.mocked(saveMinutesAction).mock.calls[0]![0] as {
+      eventId: string;
       attendeeIds: string[];
       actionItems: { id: string | null }[];
-      version: number;
+      version: number | null;
     };
+    expect(sent.eventId).toBe("evt1");
     expect(sent.attendeeIds).toEqual(["crew"]);
     expect(sent.version).toBe(2);
     expect(sent.actionItems.map((i) => i.id)).toEqual(["item-1"]);
@@ -152,6 +155,16 @@ describe("MeetingEditor", () => {
       screen.getByText("On the task board: change it there."),
     ).toBeTruthy();
     expect(screen.queryByDisplayValue("Buy the gas")).toBeNull();
+  });
+
+  it("sends no version for a meeting's first minutes", async () => {
+    editor(false, null);
+    fireEvent.click(screen.getByRole("button", { name: "Save minutes" }));
+    await waitFor(() => expect(saveMinutesAction).toHaveBeenCalled());
+    expect(
+      (vi.mocked(saveMinutesAction).mock.calls[0]![0] as { version: unknown })
+        .version,
+    ).toBeNull();
   });
 
   it("numbers every action item, the one already on the board too", () => {
@@ -164,23 +177,16 @@ describe("MeetingEditor", () => {
   it("writes the agenda and notes in the WYSIWYG editor, never a raw textarea", () => {
     editor();
     expect(document.querySelector("textarea")).toBeNull();
-    expect(screen.queryByText(/Markdown works/)).toBeNull();
     expect(
       screen.getAllByText("Preview: as members read it").length,
     ).toBeGreaterThan(0);
   });
 
-  it("names an edited note's team only in the page, not as a field", () => {
+  it("has no title, team, date or time fields: those are the event's", () => {
     editor();
+    expect(screen.queryByLabelText(/^Title/)).toBeNull();
     expect(screen.queryByText("Team")).toBeNull();
-    expect(screen.queryByText("A note keeps its team.")).toBeNull();
-  });
-
-  it("says the picked day in words and the time on the 24-hour clock", () => {
-    editor();
-    expect(screen.getByText("Fri 2 Oct 2026")).toBeTruthy();
-    expect(
-      screen.getByText("18:30 camp time, on the 24-hour clock."),
-    ).toBeTruthy();
+    expect(screen.queryByLabelText(/^Time/)).toBeNull();
+    expect(screen.queryByText("On the calendar")).toBeNull();
   });
 });

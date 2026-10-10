@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Info, ListChecks, Plus, Save, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { MEETING_NOTE_PRIVACY_REMINDER } from "@camp404/core";
-import { NewMeetingNoteInput } from "@camp404/types";
+import { MeetingMinutesInput } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
   Card,
@@ -32,25 +32,19 @@ import {
   useEditorDraft,
   type EditorDraft,
 } from "@/components/os/editor-draft";
+import { saveMinutesAction } from "@/app/(console)/calendar/actions";
 import { MarkdownField } from "@/components/markdown/markdown-field";
-import {
-  campDayLabel,
-  type MeetingEventOption,
-} from "@/lib/meeting-notes-view";
-import { createMeetingNoteAction, editMeetingNoteAction } from "./actions";
 
-// The meeting-note editor (#268), laid out like the add-event form: the
-// fields in cards, the privacy reminder in the accent box, then the footer
-// with the one button, kept in sight at the bottom of the window (a long note
-// on a phone is four screens). The agenda and the notes are written in the
-// WYSIWYG Markdown editor with a live preview (owner, 2026-10-01: never a raw
-// Markdown textarea). The form's own check (the Zod shape) is a convenience;
-// the action checks the shape, the team and the writer again.
-
-export interface MeetingTeamOption {
-  value: string;
-  label: string;
-}
+// A meeting's agenda and minutes (#268; owner, 2026-10-10: a meeting is an
+// event on the calendar, with an agenda before and minutes after). The
+// meeting's title, team and time are its calendar event's, said in the page's
+// heading, never fields here. The fields in cards, the privacy reminder in
+// the accent box, then the footer with the one button, kept in sight at the
+// bottom of the window (long minutes on a phone are four screens). The agenda
+// and the notes are written in the WYSIWYG Markdown editor with a live
+// preview (owner, 2026-10-01: never a raw Markdown textarea). The form's own
+// check (the Zod shape) is a convenience; the action checks the shape, the
+// meeting and the writer again.
 
 export interface MeetingPerson {
   id: string;
@@ -68,10 +62,6 @@ export interface MeetingEditorItem {
 }
 
 export interface MeetingEditorValues {
-  title: string;
-  date: string;
-  time: string;
-  calendarEventId: string | null;
   agenda: string;
   notes: string;
   attendeeIds: string[];
@@ -79,22 +69,21 @@ export interface MeetingEditorValues {
   actionItems: MeetingEditorItem[];
 }
 
-export type MeetingEditorMode =
-  | {
-      kind: "new";
-      /** The teams this writer may pick; `WHOLE_CAMP` when they may. */
-      teams: MeetingTeamOption[];
-      canPickWholeCamp: boolean;
-      team: string;
-    }
-  | { kind: "edit"; noteId: string; version: number; team: string };
+/** Which meeting: its calendar event, its team, and the note's version. */
+export interface MinutesTarget {
+  eventId: string;
+  /** The note's version the editor opened; null for a meeting with none yet. */
+  version: number | null;
+  /** The meeting's team key; null for a whole-camp meeting. */
+  team: string | null;
+  teamLabel: string;
+  /** Where Save goes back to: the meeting open in the Calendar. */
+  returnHref: string;
+}
 
-/** The Select value for "no team" and for "not on the calendar". */
-export const WHOLE_CAMP = "__camp__";
-const NO_EVENT = "__none__";
 const NOBODY = "__nobody__";
 
-type FieldName = "title" | "date" | "time" | "agenda" | "notes";
+type FieldName = "agenda" | "notes";
 
 // A row's key (and its fields' ids). The rows the form opens with are keyed
 // by their place, the same on the server and in the browser (a module counter
@@ -105,17 +94,13 @@ const nextKey = () => `row-new-${++keySerial}`;
 
 /**
  * Everything the form holds, as its unsaved draft (editor-draft.tsx): kept in
- * memory across a Back and in this tab's storage across a reload. An edit's
- * draft names the version it was typed over, and is thrown away once the
- * note has moved on.
+ * memory across a Back and in this tab's storage across a reload. A draft
+ * names the meeting and the version it was typed over, and is thrown away
+ * once the note has moved on.
  */
 const MeetingDraft = z.object({
+  eventId: z.string().max(200),
   version: z.number().int().nullable(),
-  team: z.string().max(100),
-  title: z.string().max(1_000),
-  date: z.string().max(40),
-  time: z.string().max(40),
-  calendarEventId: z.string().max(200).nullable(),
   agenda: z.string().max(20_000),
   notes: z.string().max(40_000),
   attendeeIds: z.array(z.string().max(200)).max(1_000),
@@ -136,17 +121,12 @@ type MeetingDraft = z.infer<typeof MeetingDraft>;
 
 /** The editor's values as a draft; attendees in one order, so equal is equal. */
 function meetingDraft(
-  version: number | null,
-  team: string,
+  target: MinutesTarget,
   values: MeetingEditorValues,
 ): MeetingDraft {
   return {
-    version,
-    team,
-    title: values.title,
-    date: values.date,
-    time: values.time,
-    calendarEventId: values.calendarEventId,
+    eventId: target.eventId,
+    version: target.version,
     agenda: values.agenda,
     notes: values.notes,
     attendeeIds: [...values.attendeeIds].sort(),
@@ -161,34 +141,26 @@ function meetingDraft(
   };
 }
 
-/** A draft read back, if it still fits this page: its team, its version. */
+/** A draft read back, if it still fits this meeting and its version. */
 function parseMeetingDraft(
   raw: unknown,
-  mode: MeetingEditorMode,
+  target: MinutesTarget,
 ): MeetingDraft | null {
   const parsed = MeetingDraft.safeParse(raw);
   if (!parsed.success) return null;
   const draft = parsed.data;
-  if (mode.kind === "edit") {
-    return draft.version === mode.version && draft.team === mode.team
-      ? draft
-      : null;
-  }
-  const teams = new Set(mode.teams.map((t) => t.value));
-  if (mode.canPickWholeCamp) teams.add(WHOLE_CAMP);
-  return draft.version === null && teams.has(draft.team) ? draft : null;
+  return draft.eventId === target.eventId && draft.version === target.version
+    ? draft
+    : null;
 }
 
 type MeetingEditorProps = {
-  mode: MeetingEditorMode;
+  target: MinutesTarget;
   initial: MeetingEditorValues;
   /** Everyone who may be ticked or given an action item: approved members. */
   members: MeetingPerson[];
-  /** Each team's people this year, by team key: ticked from first. */
-  teamPeople: Record<string, string[]>;
-  teamLabels: Record<string, string>;
-  /** Upcoming events on the camp calendar, to link the meeting to. */
-  events: MeetingEventOption[];
+  /** The meeting's team's people this year: ticked from first. */
+  teamPeople: string[];
   /** People on the note who are no longer approved members, by name. */
   formerAttendees?: MeetingPerson[];
 };
@@ -198,27 +170,20 @@ type MeetingEditorProps = {
  * Back and a reload in this tab, and comes back with "Unsaved changes
  * restored" and Discard.
  */
-export function MeetingEditor(props: MeetingEditorProps) {
-  const { mode, initial } = props;
+export function MinutesEditor(props: MeetingEditorProps) {
+  const { target, initial } = props;
   const draft = useEditorDraft({
     editor: "meeting",
-    baseline: meetingDraft(
-      mode.kind === "edit" ? mode.version : null,
-      mode.team,
-      initial,
-    ),
-    parse: (raw) => parseMeetingDraft(raw, mode),
+    baseline: meetingDraft(target, initial),
+    parse: (raw) => parseMeetingDraft(raw, target),
   });
   return <MeetingEditorForm key={draft.generation} {...props} draft={draft} />;
 }
 
 function MeetingEditorForm({
-  mode,
-  initial: saved,
+  target,
   members,
   teamPeople,
-  teamLabels,
-  events,
   formerAttendees = [],
   draft,
 }: MeetingEditorProps & { draft: EditorDraft<MeetingDraft> }) {
@@ -226,13 +191,6 @@ function MeetingEditorForm({
   // Where the form starts: the saved note, or the draft the member left.
   const initial: MeetingEditorValues = draft.start;
   const [pending, startTransition] = React.useTransition();
-  const [team, setTeam] = React.useState(draft.start.team);
-  const [title, setTitle] = React.useState(initial.title);
-  const [date, setDate] = React.useState(initial.date);
-  const [time, setTime] = React.useState(initial.time);
-  const [eventId, setEventId] = React.useState(
-    initial.calendarEventId ?? NO_EVENT,
-  );
   const [agenda, setAgenda] = React.useState(initial.agenda);
   const [notes, setNotes] = React.useState(initial.notes);
   const [attendees, setAttendees] = React.useState(
@@ -253,11 +211,7 @@ function MeetingEditorForm({
   // this tab's autosave (editor-draft.tsx).
   const { saved: markSaved } = useDraftAutosave(
     draft,
-    meetingDraft(mode.kind === "edit" ? mode.version : null, team, {
-      title,
-      date,
-      time,
-      calendarEventId: eventId === NO_EVENT ? null : eventId,
+    meetingDraft(target, {
       agenda,
       notes,
       attendeeIds: [...attendees],
@@ -266,34 +220,18 @@ function MeetingEditorForm({
     }),
   );
 
-  const teamKey = team === WHOLE_CAMP ? null : team;
-  const teamLabel = teamKey ? (teamLabels[teamKey] ?? teamKey) : "Whole camp";
+  const teamKey = target.team;
+  const teamLabel = target.teamLabel;
 
   // The team's people first, then everyone else; someone on the note who is no
   // longer on the approved list shows in a group of their own, so they can be
   // unticked.
   const known = new Map(members.map((m) => [m.id, m]));
-  const onTeam = new Set(teamKey ? (teamPeople[teamKey] ?? []) : []);
+  const onTeam = new Set(teamKey ? teamPeople : []);
   const teamRows = members.filter((m) => onTeam.has(m.id));
   const otherRows = members.filter((m) => !onTeam.has(m.id));
   const gone = formerAttendees.filter((p) => !known.has(p.id));
   const othersTicked = otherRows.filter((m) => attendees.has(m.id)).length;
-
-  // The calendar's events for this team (or the whole camp's), plus the one
-  // the note already names even if it has passed.
-  const eventOptions = events.filter((e) => e.team === teamKey);
-  const linkedGone =
-    saved.calendarEventId !== null &&
-    !eventOptions.some((e) => e.id === saved.calendarEventId);
-
-  function pickEvent(next: string) {
-    setEventId(next);
-    const event = events.find((e) => e.id === next);
-    if (!event) return;
-    if (!title.trim()) setTitle(event.title);
-    setDate(event.date);
-    if (event.time) setTime(event.time);
-  }
 
   function toggle(id: string, on: boolean) {
     setAttendees((before) => {
@@ -308,10 +246,8 @@ function MeetingEditorForm({
     e.preventDefault();
     setError(null);
     const body = {
-      title,
-      date,
-      time,
-      calendarEventId: eventId === NO_EVENT ? null : eventId,
+      eventId: target.eventId,
+      version: target.version,
       agenda,
       notes,
       attendeeIds: [...attendees],
@@ -325,15 +261,14 @@ function MeetingEditorForm({
           due: i.due || null,
         })),
     };
-    const fields = { team: teamKey, ...body };
-    const parsed = NewMeetingNoteInput.safeParse(fields);
+    const parsed = MeetingMinutesInput.safeParse(body);
     if (!parsed.success) {
       const next: Partial<Record<FieldName, string>> = {};
       let other: string | null = null;
       for (const issue of parsed.error.issues) {
         const key = issue.path[0] as string;
-        if (["title", "date", "time", "agenda", "notes"].includes(key)) {
-          next[key as FieldName] ??= issue.message;
+        if (key === "agenda" || key === "notes") {
+          next[key] ??= issue.message;
         } else {
           other ??= issue.message;
         }
@@ -344,29 +279,14 @@ function MeetingEditorForm({
     }
     setFieldErrors({});
     startTransition(async () => {
-      if (mode.kind === "new") {
-        const result = await createMeetingNoteAction(fields);
-        if (!result.ok) {
-          setError(result.error);
-          return;
-        }
-        markSaved();
-        toast.success("Meeting saved");
-        router.push(`/meetings/${result.data.id}`);
-      } else {
-        const result = await editMeetingNoteAction({
-          ...body,
-          noteId: mode.noteId,
-          version: mode.version,
-        });
-        if (!result.ok) {
-          setError(result.error);
-          return;
-        }
-        markSaved();
-        toast.success("Meeting saved");
-        router.push(`/meetings/${mode.noteId}`);
+      const result = await saveMinutesAction(body);
+      if (!result.ok) {
+        setError(result.error);
+        return;
       }
+      markSaved();
+      toast.success("Minutes saved");
+      router.push(target.returnHref);
       router.refresh();
     });
   }
@@ -383,138 +303,6 @@ function MeetingEditorForm({
 
       <Card>
         <CardContent className="flex flex-col gap-5 p-5">
-          <div
-            className={
-              mode.kind === "new" ? "grid gap-5 page-sm:grid-cols-2" : "grid"
-            }
-          >
-            {/* An edit keeps its team; the page's subtitle names it. */}
-            {mode.kind === "new" ? (
-              <Field
-                label="Team"
-                htmlFor="meeting-team"
-                required
-                help={
-                  mode.canPickWholeCamp
-                    ? "A whole-camp meeting is a captain's to write up."
-                    : "A team you're on this year."
-                }
-              >
-                <Select
-                  value={team}
-                  onValueChange={(next) => {
-                    setTeam(next);
-                    setEventId(NO_EVENT);
-                  }}
-                  disabled={pending}
-                >
-                  <SelectTrigger id="meeting-team">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mode.canPickWholeCamp ? (
-                      <SelectItem value={WHOLE_CAMP}>Whole camp</SelectItem>
-                    ) : null}
-                    {mode.teams.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            ) : null}
-            <Field
-              label="On the calendar"
-              htmlFor="meeting-event"
-              help={
-                eventOptions.length === 0 && !linkedGone
-                  ? teamKey
-                    ? "Nothing coming up on the camp calendar for this team."
-                    : "No whole-camp events coming up on the calendar."
-                  : "Picking an event fills in its date and time."
-              }
-            >
-              <Select
-                value={eventId}
-                onValueChange={pickEvent}
-                disabled={pending}
-              >
-                <SelectTrigger id="meeting-event">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_EVENT}>Not on the calendar</SelectItem>
-                  {linkedGone && saved.calendarEventId ? (
-                    <SelectItem value={saved.calendarEventId}>
-                      The event it names now
-                    </SelectItem>
-                  ) : null}
-                  {eventOptions.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-
-          <Field
-            label="Title"
-            htmlFor="meeting-title"
-            required
-            error={fieldErrors.title}
-          >
-            <Input
-              id="meeting-title"
-              value={title}
-              maxLength={120}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Kitchen kickoff"
-              disabled={pending}
-              required
-            />
-          </Field>
-
-          <div className="grid gap-5 page-sm:grid-cols-2">
-            <Field
-              label="Date"
-              htmlFor="meeting-date"
-              required
-              help={campDayLabel(date) ?? undefined}
-              error={fieldErrors.date}
-            >
-              <DateControl
-                id="meeting-date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                disabled={pending}
-                required
-              />
-            </Field>
-            <Field
-              label="Time"
-              htmlFor="meeting-time"
-              required
-              help={
-                /^\d{2}:\d{2}$/.test(time)
-                  ? `${time} camp time, on the 24-hour clock.`
-                  : "Camp time, on the 24-hour clock."
-              }
-              error={fieldErrors.time}
-            >
-              <Input
-                id="meeting-time"
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                disabled={pending}
-                required
-              />
-            </Field>
-          </div>
-
           <Field label="Agenda" error={fieldErrors.agenda}>
             <MarkdownField
               label="Agenda"
@@ -838,12 +626,12 @@ function MeetingEditorForm({
       >
         <p className="text-xs text-muted-foreground">
           {teamKey
-            ? `Every member can read it under Meetings and on the ${teamLabel} page.`
-            : "Every member can read it under Meetings."}
+            ? `Every member can read it on the Calendar and on the ${teamLabel} page.`
+            : "Every member can read it on the Calendar."}
         </p>
         <Button type="submit" disabled={pending} className="shrink-0">
           <Save aria-hidden />
-          {pending ? "Saving…" : "Save meeting"}
+          {pending ? "Saving…" : "Save minutes"}
         </Button>
       </div>
     </form>
