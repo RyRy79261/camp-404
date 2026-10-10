@@ -251,7 +251,8 @@ export function toCalendarEvents(
 }
 
 /** The fields one event is read with: never the description or the guests. */
-const EVENT_FIELDS = "id,summary,status,visibility,location,start,end,extendedProperties/private";
+const EVENT_FIELDS =
+  "id,summary,status,visibility,location,start,end,extendedProperties/private";
 const EVENT_FIELDS_LIST = `items(${EVENT_FIELDS})`;
 
 /** One cached read per range ("60:6", "365:250", "range:<from>:<to>"). */
@@ -301,10 +302,7 @@ export async function getUpcomingEvents(
     // Twice what is shown, up to Google's page size: cancelled and private
     // events come back too and are dropped below.
     url.searchParams.set("maxResults", String(Math.min(range.max * 2, 2500)));
-    url.searchParams.set(
-      "fields",
-      EVENT_FIELDS_LIST,
-    );
+    url.searchParams.set("fields", EVENT_FIELDS_LIST);
     const eventsRes = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(timeoutMs),

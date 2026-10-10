@@ -54,7 +54,10 @@ const eventFields = {
     .trim()
     .min(1, "Give the event a title.")
     .max(120, "Keep the title under 120 characters."),
-  description: optionalText(2000, "Keep the description under 2000 characters."),
+  description: optionalText(
+    2000,
+    "Keep the description under 2000 characters.",
+  ),
   place: optionalText(200, "Keep the place under 200 characters."),
   team: Team.nullable(),
   date: day("Pick a date for the event."),

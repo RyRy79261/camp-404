@@ -30,7 +30,13 @@ import { EventDetail } from "./event-detail";
 import { EventForm, type EventFormTeams } from "./event-form";
 import { MonthGrid } from "./month-grid";
 import { PhoneMonth } from "./phone-month";
-import { PIXEL_HEADING, QUIET_BUTTON, SMALL_BUTTON } from "./parts";
+import {
+  PANEL_FRAME,
+  PANEL_SCROLL,
+  PIXEL_HEADING,
+  QUIET_BUTTON,
+  SMALL_BUTTON,
+} from "./parts";
 
 // The Calendar program's body (owner, 2026-10-10, the approved mock-up
 // calendar-meetings.html): the toolbar, the month or the list, and the open
@@ -84,18 +90,27 @@ export function CalendarBoard(props: CalendarBoardProps) {
   // "+2 more" on a crowded day lists that day in the panel.
   const [dayPanel, setDayPanel] = React.useState<string | null>(null);
 
-  const go = React.useCallback(
-    (patch: Partial<CalendarState>) => {
-      setEditing(null);
-      setDayPanel(null);
-      startTransition(() => {
-        router.replace(calendarHref({ ...state, ...patch }), {
-          scroll: false,
-        });
-      });
-    },
-    [router, state],
-  );
+  // What the member asked for, ahead of the server's answer: two quick
+  // clicks (List, then Past) build on each other instead of the second
+  // replacing the first with the page's older state. Once nothing is pending,
+  // the server's state is the truth again.
+  const [wanted, setWanted] = React.useState(state);
+  const [seen, setSeen] = React.useState(() => calendarHref(state));
+  const href = calendarHref(state);
+  if (href !== seen && !pending) {
+    setSeen(href);
+    setWanted(state);
+  }
+
+  const go = (patch: Partial<CalendarState>) => {
+    setEditing(null);
+    setDayPanel(null);
+    const next = { ...wanted, ...patch };
+    setWanted(next);
+    startTransition(() => {
+      router.replace(calendarHref(next), { scroll: false });
+    });
+  };
 
   const openEvent = (id: string) => go({ event: id, newOn: null });
   const newOn = (day: string) =>
@@ -115,76 +130,86 @@ export function CalendarBoard(props: CalendarBoardProps) {
     { value: "events", label: "Events" },
   ];
 
-  const panel = editing && form && selected ? (
-    <EventForm
-      key={`edit-${editing.id}-${editing.version}`}
-      mode={{ kind: "edit", entry: editing }}
-      teams={form}
-      onClose={() => setEditing(null)}
-      onSaved={(saved) =>
-        go({ event: saved.eventId, month: saved.month, newOn: null })
-      }
-      onRemoved={() => go({ event: null, newOn: null })}
-    />
-  ) : state.newOn && form ? (
-    <EventForm
-      key={`new-${state.newOn}`}
-      mode={{ kind: "new", day: state.newOn }}
-      teams={form}
-      onClose={close}
-      onSaved={(saved) =>
-        go({ event: saved.eventId, month: saved.month, newOn: null })
-      }
-    />
-  ) : dayPanel ? (
-    <PanelFrame label={longDayLabel(dayPanel)} heading={longDayLabel(dayPanel)} onClose={close}>
-      <DayEntries
-        day={dayPanel}
-        entries={entries}
-        onOpen={openEvent}
-        onNew={form ? newOn : undefined}
+  const panel =
+    editing && form && selected ? (
+      <EventForm
+        key={`edit-${editing.id}-${editing.version}`}
+        mode={{ kind: "edit", entry: editing }}
+        teams={form}
+        onClose={() => setEditing(null)}
+        onSaved={(saved) =>
+          go({ event: saved.eventId, month: saved.month, newOn: null })
+        }
+        onRemoved={() => go({ event: null, newOn: null })}
       />
-    </PanelFrame>
-  ) : selected ? (
-    <PanelFrame
-      label={selected.entry.title}
-      heading={selected.entry.kind === "meeting" ? "Meeting" : "Event"}
-      onClose={close}
-      actions={
-        <>
-          <CopyLinkButton state={{ ...state, newOn: null }} />
-          {selected.canEditEvent && form ? (
+    ) : state.newOn && form ? (
+      <EventForm
+        key={`new-${state.newOn}`}
+        mode={{
+          kind: "new",
+          day: state.newOn,
+          team: state.team,
+          meeting: state.type === "meetings",
+        }}
+        teams={form}
+        onClose={close}
+        onSaved={(saved) =>
+          go({ event: saved.eventId, month: saved.month, newOn: null })
+        }
+      />
+    ) : dayPanel ? (
+      <PanelFrame
+        label={longDayLabel(dayPanel)}
+        heading={longDayLabel(dayPanel)}
+        onClose={close}
+      >
+        <DayEntries
+          day={dayPanel}
+          entries={entries}
+          onOpen={openEvent}
+          onNew={form ? newOn : undefined}
+        />
+      </PanelFrame>
+    ) : selected ? (
+      <PanelFrame
+        label={selected.entry.title}
+        heading={selected.entry.kind === "meeting" ? "Meeting" : "Event"}
+        onClose={close}
+        actions={
+          <>
+            <CopyLinkButton state={{ ...state, newOn: null }} />
+            {selected.canEditEvent && form ? (
+              <button
+                type="button"
+                className={cn(SMALL_BUTTON, "max-md:hidden")}
+                onClick={() => setEditing(selected.entry)}
+              >
+                Edit event
+              </button>
+            ) : null}
+          </>
+        }
+        footer={
+          selected.canEditEvent && form ? (
             <button
               type="button"
-              className={cn(SMALL_BUTTON, "max-md:hidden")}
+              className={cn(QUIET_BUTTON, "h-11 w-full")}
               onClick={() => setEditing(selected.entry)}
             >
               Edit event
             </button>
-          ) : null}
-        </>
-      }
-      footer={
-        selected.canEditEvent && form ? (
-          <button
-            type="button"
-            className={cn(QUIET_BUTTON, "h-11 w-full")}
-            onClick={() => setEditing(selected.entry)}
-          >
-            Edit event
-          </button>
-        ) : null
-      }
-    >
-      <EventDetail selected={selected} today={today} />
-    </PanelFrame>
-  ) : state.event && props.eventMissing ? (
-    <PanelFrame label="Event" heading="Event" onClose={close}>
-      <p className="border border-dashed border-border p-4 text-sm text-muted-foreground">
-        That event isn&apos;t on the calendar any more.
-      </p>
-    </PanelFrame>
-  ) : null;
+          ) : null
+        }
+      >
+        <EventDetail selected={selected} today={today} />
+      </PanelFrame>
+    ) : state.event && props.eventMissing ? (
+      <PanelFrame label="Event" heading="Event" onClose={close}>
+        <p className="border border-dashed border-border p-4 text-sm text-muted-foreground">
+          That event isn&apos;t on the calendar any more.
+        </p>
+      </PanelFrame>
+    ) : null;
 
   return (
     <div
@@ -193,7 +218,7 @@ export function CalendarBoard(props: CalendarBoardProps) {
       data-calendar-board
     >
       <Toolbar
-        state={state}
+        state={wanted}
         today={today}
         go={go}
         teamOptions={props.teamOptions}
@@ -281,7 +306,7 @@ function Toolbar({
         </button>
         <h2
           className={cn(
-            "text-center font-semibold",
+            "text-center font-sans font-semibold normal-case tracking-normal",
             wide ? "min-w-[9.5rem] text-lg" : "flex-1 text-base",
           )}
           aria-live="polite"
@@ -444,13 +469,14 @@ export function PanelFrame({
   children: React.ReactNode;
 }) {
   return (
-    <aside
-      aria-label={label}
-      data-calendar-panel
-      className="flex min-h-0 flex-col border border-border bg-card @min-[56rem]/page:order-last max-md:fixed max-md:inset-0 max-md:z-50 max-md:border-0 @min-[56rem]/page:w-[23.75rem] @min-[56rem]/page:shrink-0"
-    >
+    <aside aria-label={label} data-calendar-panel className={PANEL_FRAME}>
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border py-2.5 pl-4 pr-3 max-md:border-0 max-md:bg-primary max-md:text-primary-foreground">
-        <span className={cn(PIXEL_HEADING, "text-primary max-md:text-primary-foreground")}>
+        <span
+          className={cn(
+            PIXEL_HEADING,
+            "text-primary max-md:text-primary-foreground",
+          )}
+        >
           {heading}
         </span>
         <span className="flex items-center gap-1">
@@ -465,7 +491,7 @@ export function PanelFrame({
           </button>
         </span>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+      <div className={cn(PANEL_SCROLL, "p-4")}>{children}</div>
       {footer ? (
         <div className="shrink-0 border-t border-border px-4 py-3 md:hidden">
           {footer}
@@ -492,7 +518,10 @@ function CopyLinkButton({ state }: { state: CalendarState }) {
       onClick={copy}
       aria-label="Copy link"
       title="Copy link"
-      className={cn(SMALL_BUTTON, "w-[30px] px-0 max-md:border-primary-foreground/50 max-md:text-primary-foreground")}
+      className={cn(
+        SMALL_BUTTON,
+        "w-[30px] px-0 max-md:border-primary-foreground/50 max-md:text-primary-foreground",
+      )}
     >
       <Link2 className="h-3.5 w-3.5" aria-hidden />
     </button>

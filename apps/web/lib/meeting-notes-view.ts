@@ -14,7 +14,10 @@ export const WHOLE_CAMP_MEETINGS = "camp";
  * The meetings list (the Calendar's past meetings since 2026-10-10), for one
  * team, the whole camp, or everyone.
  */
-export function meetingsHref(team?: string | null, today = campDayKey(new Date())): string {
+export function meetingsHref(
+  team?: string | null,
+  today = campDayKey(new Date()),
+): string {
   return calendarHref({
     view: "list",
     month: today.slice(0, 7),
@@ -30,7 +33,10 @@ export function meetingsHref(team?: string | null, today = campDayKey(new Date()
  * Where "New meeting" goes: the Calendar's New event form on today, over one
  * team's (or the whole camp's) meetings.
  */
-export function newMeetingHref(team: string | null, today = campDayKey(new Date())): string {
+export function newMeetingHref(
+  team: string | null,
+  today = campDayKey(new Date()),
+): string {
   return calendarHref({
     view: "month",
     month: today.slice(0, 7),

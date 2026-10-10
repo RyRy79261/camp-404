@@ -28,7 +28,14 @@ import {
 import { MarkdownField } from "@/components/markdown/markdown-field";
 import type { CalendarEntry } from "@/lib/calendar-month";
 import { campDayLabel } from "@/lib/meeting-notes-view";
-import { PIXEL_HEADING, PRIMARY_BUTTON, QUIET_BUTTON } from "./parts";
+import {
+  PANEL_FILL,
+  PANEL_FRAME,
+  PANEL_SCROLL,
+  PIXEL_HEADING,
+  PRIMARY_BUTTON,
+  QUIET_BUTTON,
+} from "./parts";
 
 // The New event form, beside the month (the approved mock-up's form): the
 // type (an Event, or a Meeting with an agenda before and minutes after), the
@@ -46,7 +53,13 @@ export interface EventFormTeams {
 }
 
 type Mode =
-  | { kind: "new"; day: string }
+  | {
+      kind: "new";
+      day: string;
+      /** The Calendar's filters, as the form's start: a team, meetings. */
+      team?: string | null;
+      meeting?: boolean;
+    }
   | { kind: "edit"; entry: CalendarEntry };
 
 const WHOLE_CAMP = "__camp__";
@@ -83,11 +96,21 @@ export function EventForm({
   onRemoved?: () => void;
 }) {
   const editing = mode.kind === "edit" ? mode.entry : null;
+  // A new event starts on the team the Calendar is filtered to, when this
+  // person may add for it; else the whole camp for a captain, or the first
+  // team a lead leads.
+  const filtered = mode.kind === "new" ? mode.team : null;
   const firstTeam = editing
     ? (editing.team?.key ?? WHOLE_CAMP)
-    : (teams.teams[0]?.value ?? WHOLE_CAMP);
+    : filtered && teams.teams.some((t) => t.value === filtered)
+      ? filtered
+      : teams.canPickWholeCamp
+        ? WHOLE_CAMP
+        : (teams.teams[0]?.value ?? WHOLE_CAMP);
   const initial = {
-    kind: editing?.kind ?? ("event" as const),
+    kind:
+      editing?.kind ??
+      (mode.kind === "new" && mode.meeting ? "meeting" : "event"),
     team: firstTeam,
     title: editing?.title ?? "",
     date: editing?.startDay ?? (mode.kind === "new" ? mode.day : ""),
@@ -227,11 +250,7 @@ export function EventForm({
     : "A team you lead. Whole camp events are for captains.";
 
   return (
-    <aside
-      aria-label={heading}
-      data-calendar-panel
-      className="flex min-h-0 flex-col border border-border bg-card @min-[56rem]/page:order-last max-md:fixed max-md:inset-0 max-md:z-50 max-md:border-0 @min-[56rem]/page:w-[23.75rem] @min-[56rem]/page:shrink-0"
-    >
+    <aside aria-label={heading} data-calendar-panel className={PANEL_FRAME}>
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border py-2.5 pl-4 pr-3 max-md:border-0 max-md:bg-primary max-md:text-primary-foreground">
         <span
           className={cn(
@@ -256,10 +275,10 @@ export function EventForm({
       <form
         onSubmit={submit}
         noValidate
-        className="flex min-h-0 flex-1 flex-col"
+        className={cn("flex flex-col", PANEL_FILL)}
         aria-label={heading}
       >
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <div className={cn("flex flex-col gap-4 p-4", PANEL_SCROLL)}>
           <p className="border-l-2 border-accent bg-accent/10 px-2.5 py-2 text-xs leading-4 text-muted-foreground">
             Goes on the camp&apos;s Google Calendar. Every member sees it.
           </p>
@@ -292,7 +311,9 @@ export function EventForm({
                     )}
                   >
                     <b className="text-sm font-semibold">{label}</b>
-                    <span className="text-xs text-muted-foreground">{help}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {help}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -334,7 +355,9 @@ export function EventForm({
               value={title}
               maxLength={120}
               placeholder={
-                kind === "meeting" ? "e.g. Kitchen planning" : "e.g. Dome rehearsal"
+                kind === "meeting"
+                  ? "e.g. Kitchen planning"
+                  : "e.g. Dome rehearsal"
               }
               onChange={(e) => setTitle(e.target.value)}
               disabled={pending}

@@ -22,7 +22,13 @@ interface SeedMinutes {
   notes?: string;
   decisions?: string[];
   attendeeAuthUserIds?: string[];
-  actionItems?: { text: string; assigneeAuthUserId?: string; due?: string }[];
+  actionItems?: {
+    text: string;
+    assigneeAuthUserId?: string;
+    due?: string;
+    /** Put it on the task board, open or already done. */
+    task?: "open" | "done";
+  }[];
 }
 
 interface SeedEvent {
@@ -148,8 +154,28 @@ export async function POST(req: Request) {
             team: e.team && Team.safeParse(e.team).success ? e.team : null,
           });
       if (!saved.ok) return fail(saved.error);
-      noteIds[noteIds.length - 1] =
-        testStore.getMeetingNoteByEvent(eventId)?.id ?? null;
+      const note = testStore.getMeetingNoteByEvent(eventId);
+      noteIds[noteIds.length - 1] = note?.id ?? null;
+      // Action items on the board, through the board's own path.
+      for (const [i, item] of (m.actionItems ?? []).entries()) {
+        const saved = note?.actionItems[i];
+        if (!item.task || !saved) continue;
+        const task = testStore.turnActionItemIntoTask({
+          actorId: maker.id,
+          itemId: saved.id,
+          activeTeams: Team.options,
+        });
+        if (!task.ok) return fail(task.error);
+        if (item.task === "done") {
+          const moved = testStore.moveTask({
+            taskId: task.taskId,
+            actorId: maker.id,
+            from: "open",
+            to: "done",
+          });
+          if (!moved.ok) return fail(moved.error);
+        }
+      }
     }
   }
   return NextResponse.json({ ids, noteIds });

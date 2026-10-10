@@ -33,7 +33,8 @@ import {
 /** Where an event is kept and changed, said once under it. */
 const SOURCE_LINE = {
   app: "On the camp's Google Calendar.",
-  google: "On the camp's Google Calendar. It was made there, so change it there.",
+  google:
+    "On the camp's Google Calendar. It was made there, so change it there.",
   logistics: "One of the camp's days, set on Logistics.",
   deadline: "An AfrikaBurn date, set on the camp's year page.",
   note: "From its minutes: the camp's Google Calendar doesn't have this event any more.",
@@ -59,7 +60,9 @@ export function EventDetail({
         {entry.kind === "meeting" ? <MeetingBadge /> : null}
         <TeamBadge entry={entry} />
       </div>
-      <h2 className="my-2 text-xl font-semibold leading-7">{entry.title}</h2>
+      <h2 className="my-2 font-sans text-xl font-semibold normal-case leading-7 tracking-normal">
+        {entry.title}
+      </h2>
       <dl className="mb-3 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-2 gap-y-1.5 text-sm leading-5">
         <dt className="pt-0.5 text-muted-foreground">
           <Clock className="h-4 w-4" aria-label="When" />
@@ -120,19 +123,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section
-      className="mt-5 border-t border-border pt-4"
-      aria-label={title}
-    >
-      <h3
-        className={cn(
-          PIXEL_HEADING,
-          "mb-2.5 flex items-center justify-between gap-2",
-        )}
-      >
-        {title}
+    <section className="mt-5 border-t border-border pt-4" aria-label={title}>
+      <div className="mb-2.5 flex items-center justify-between gap-2">
+        <h3 className={PIXEL_HEADING}>{title}</h3>
         {action}
-      </h3>
+      </div>
       {children}
     </section>
   );
@@ -160,7 +155,9 @@ function Meeting({
     </Link>
   ) : null;
   const agenda = note?.agenda ? (
-    <MarkdownBody className="text-sm text-foreground">{note.agenda}</MarkdownBody>
+    <MarkdownBody className="text-sm text-foreground">
+      {note.agenda}
+    </MarkdownBody>
   ) : (
     <p className="text-sm text-muted-foreground">No agenda was written.</p>
   );

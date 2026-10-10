@@ -56,9 +56,9 @@ describe("NewCampEventInput", () => {
   });
 
   it("refuses a last day before the first, and a month-long event", () => {
-    expect(
-      firstError({ ...base, allDay: true, endDate: "2026-09-30" }),
-    ).toBe("The last day can't be before the first.");
+    expect(firstError({ ...base, allDay: true, endDate: "2026-09-30" })).toBe(
+      "The last day can't be before the first.",
+    );
     expect(firstError({ ...base, allDay: true, endDate: "2026-11-20" })).toBe(
       "An event can run 31 days at most.",
     );
@@ -108,9 +108,9 @@ describe("EditCampEventInput and RemoveCampEventInput", () => {
       version: 2,
     });
     expect(parsed.version).toBe(2);
-    expect(EditCampEventInput.safeParse({ ...fields, version: 2 }).success).toBe(
-      false,
-    );
+    expect(
+      EditCampEventInput.safeParse({ ...fields, version: 2 }).success,
+    ).toBe(false);
     expect(
       RemoveCampEventInput.safeParse({ eventId: "abc", version: 0 }).success,
     ).toBe(false);

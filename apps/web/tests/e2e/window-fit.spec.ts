@@ -377,7 +377,10 @@ test.describe("windows fit their own width (test-mode)", () => {
     await expectBeside(todo, doing);
   });
 
-  test("the Calendar's New event form and System", async ({ page, request }) => {
+  test("the Calendar's New event form and System", async ({
+    page,
+    request,
+  }) => {
     await captain(page, request, "fit-misc-cap");
 
     // The Calendar: the form above the month in a narrow window, beside it

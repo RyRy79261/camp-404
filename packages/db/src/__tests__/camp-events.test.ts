@@ -60,7 +60,11 @@ describe("camp events", () => {
     const db = h.db();
     const captain = await makeUser(db, { rank: "captain" });
     const lead = await makeUser(db, { displayName: "Kitchen Lead" });
-    await makeMembership(db, { userId: lead.id, team: "kitchen", isLead: true });
+    await makeMembership(db, {
+      userId: lead.id,
+      team: "kitchen",
+      isLead: true,
+    });
     const member = await makeUser(db, { displayName: "Kitchen Crew" });
     await makeMembership(db, { userId: member.id, team: "kitchen" });
     return { captain, lead, member };

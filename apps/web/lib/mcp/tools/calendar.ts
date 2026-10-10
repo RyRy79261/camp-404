@@ -107,9 +107,7 @@ export function registerCalendarTools(server: McpServer): void {
           const to = args.to ?? addDays(from, 365);
           if (to < from) throw new ToolError("`to` is before `from`.");
           if (daysBetween(from, to) > MAX_DAYS) {
-            throw new ToolError(
-              `Ask for at most ${MAX_DAYS} days at a time.`,
-            );
+            throw new ToolError(`Ask for at most ${MAX_DAYS} days at a time.`);
           }
           const config = await getTeamsConfig();
           const teams = config.teams.map((t) => ({
@@ -117,8 +115,7 @@ export function registerCalendarTools(server: McpServer): void {
             label: t.label,
           }));
           const knownTeam =
-            args.team === WHOLE_CAMP ||
-            teams.some((t) => t.key === args.team);
+            args.team === WHOLE_CAMP || teams.some((t) => t.key === args.team);
           const filter = {
             team: args.team && knownTeam ? args.team : null,
             type: args.type ?? ("all" as const),

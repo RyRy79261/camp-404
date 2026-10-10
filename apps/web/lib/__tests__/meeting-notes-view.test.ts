@@ -9,7 +9,6 @@ import {
   newMeetingHref,
 } from "../meeting-notes-view";
 
-
 describe("meeting notes' words", () => {
   it("says when a meeting was, in camp time", () => {
     expect(meetingWhen(new Date("2026-10-02T16:30:00Z"))).toBe(

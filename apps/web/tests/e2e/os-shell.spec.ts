@@ -197,7 +197,8 @@ test.describe("404 OS desktop (test-mode)", () => {
     const leadCaptains = await openConsoleNav(page, "Captains");
     await expect(navEntry(leadCaptains, "Questionnaires")).toBeVisible();
     await expect(navEntry(leadCaptains, "Announcements")).toBeVisible();
-    await expect(navEntry(leadCaptains, "New event")).toBeVisible();
+    // Events are added in the Calendar (owner, 2026-10-10).
+    await expect(navEntry(leadCaptains, "New event")).toHaveCount(0);
     await expect(navEntry(leadCaptains, "Payments")).toHaveCount(0);
     await expect(navEntry(leadCaptains, "Audit log")).toHaveCount(0);
 
@@ -210,7 +211,6 @@ test.describe("404 OS desktop (test-mode)", () => {
     for (const name of [
       "Questionnaires",
       "Announcements",
-      "New event",
       "Camp overview",
       "Payments",
       "Camp settings",

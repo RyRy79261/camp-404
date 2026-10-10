@@ -68,11 +68,7 @@ function editor(inWindow = false, version: number | null = 2) {
     />
   );
   render(
-    inWindow ? (
-      <DraftWindow windowKey="minutes:evt1">{ui}</DraftWindow>
-    ) : (
-      ui
-    ),
+    inWindow ? <DraftWindow windowKey="minutes:evt1">{ui}</DraftWindow> : ui,
   );
 }
 

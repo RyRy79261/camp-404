@@ -72,7 +72,9 @@ describe("serializeWindows", () => {
 describe("parseWindows", () => {
   it("keeps a console page's window and works its program out from the address", () => {
     const { windows, scrollTops } = parseWindows(
-      stored([page("minutes:m-1", "/calendar/m-1/minutes", { scrollTop: 120 })]),
+      stored([
+        page("minutes:m-1", "/calendar/m-1/minutes", { scrollTop: 120 }),
+      ]),
       "full",
       noFolders,
     );

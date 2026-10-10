@@ -17,7 +17,12 @@ import {
   navEntry,
   openConsoleNav,
   openToday,
+  usesPhoneLayout,
 } from "./lib/console-nav";
+import { desktopOnly } from "./lib/dom";
+
+/** The month's chips are the desktop grid's; a phone has its own test below. */
+const GRID = "a phone's month is the compact grid; it has its own test";
 
 // The Calendar (test-mode, where the store stands in for a connected Google
 // Calendar that starts empty). One program since 2026-10-10 (owner:
@@ -111,7 +116,8 @@ test.describe("the Calendar (test-mode)", () => {
   test("a captain adds an event and a meeting from the month; both show on it and on Home", async ({
     page,
     request,
-  }) => {
+  }, testInfo) => {
+    desktopOnly(testInfo, GRID);
     await approvedMember(page, request, "cal-crew", "Kitchen Crew");
     await seedTeam(request, "cal-crew", "kitchen");
     await captain(page, request, "cal-cap");
@@ -163,14 +169,17 @@ test.describe("the Calendar (test-mode)", () => {
     await page.goto("/");
     const today = await openToday(page);
     await expect(
-      today.getByRole("list", { name: "Coming up" }).getByText("Kitchen planning"),
+      today
+        .getByRole("list", { name: "Coming up" })
+        .getByText("Kitchen planning"),
     ).toBeVisible();
   });
 
   test("a plain member reads the calendar but adds nothing", async ({
     page,
     request,
-  }) => {
+  }, testInfo) => {
+    desktopOnly(testInfo, GRID);
     await captain(page, request, "cal-cap");
     await seedCalendar(request, "cal-cap", [
       {
@@ -191,7 +200,9 @@ test.describe("the Calendar (test-mode)", () => {
     await openCalendar(page);
     // Present first: the event. Then the absences.
     await expect(chip(page, "Dome rehearsal")).toBeVisible();
-    await expect(page.getByRole("button", { name: "New event" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "New event" })).toHaveCount(
+      0,
+    );
     await expect(
       page.getByRole("button", { name: /^New event on / }),
     ).toHaveCount(0);
@@ -224,7 +235,8 @@ test.describe("the Calendar (test-mode)", () => {
   test("last month's meeting opens with its minutes; a team member writes the minutes of another", async ({
     page,
     request,
-  }) => {
+  }, testInfo) => {
+    desktopOnly(testInfo, GRID);
     await approvedMember(page, request, "cal-cook", "Kitchen Crew");
     await seedTeam(request, "cal-cook", "kitchen");
     await approvedMember(page, request, "cal-money", "Finance Crew");
@@ -247,7 +259,9 @@ test.describe("the Calendar (test-mode)", () => {
           notes: "We agreed on a seven-day menu.",
           decisions: ["Seven dinners, two of them vegan"],
           attendeeAuthUserIds: ["cal-cook"],
-          actionItems: [{ text: "Price a chest freezer", assigneeAuthUserId: "cal-cook" }],
+          actionItems: [
+            { text: "Price a chest freezer", assigneeAuthUserId: "cal-cook" },
+          ],
         },
       },
       {
@@ -279,7 +293,9 @@ test.describe("the Calendar (test-mode)", () => {
     );
     await chip(page, "Kitchen planning").click();
     const planning = panel(page, "Kitchen planning");
-    await expect(planning.getByText("We agreed on a seven-day menu.")).toBeVisible();
+    await expect(
+      planning.getByText("We agreed on a seven-day menu."),
+    ).toBeVisible();
     await expect(
       planning
         .getByRole("list", { name: "Decisions" })
@@ -291,7 +307,9 @@ test.describe("the Calendar (test-mode)", () => {
         .getByText("Price a chest freezer"),
     ).toBeVisible();
     await expect(
-      planning.getByRole("list", { name: "Who came" }).getByText("Kitchen Crew"),
+      planning
+        .getByRole("list", { name: "Who came" })
+        .getByText("Kitchen Crew"),
     ).toBeVisible();
 
     // The other meeting has no minutes: the member writes them.
@@ -306,9 +324,11 @@ test.describe("the Calendar (test-mode)", () => {
     await page
       .getByRole("textbox", { name: "Notes", exact: true })
       .fill("The curry won.");
-    await page.getByText("Kitchen Crew", { exact: true }).click();
+    await page.getByRole("checkbox", { name: "Kitchen Crew" }).click();
     await page.getByRole("button", { name: "Add decision" }).click();
-    await page.getByLabel("Decision 1", { exact: true }).fill("Curry on night two");
+    await page
+      .getByLabel("Decision 1", { exact: true })
+      .fill("Curry on night two");
     await page.getByRole("button", { name: "Save minutes" }).click();
     await expect(page.getByText("Minutes saved")).toBeVisible();
     // Back on the meeting, in its month, with its minutes.
@@ -316,7 +336,9 @@ test.describe("the Calendar (test-mode)", () => {
     const saved = panel(page, "Kitchen menu tasting");
     await expect(saved.getByText("The curry won.")).toBeVisible();
     await expect(
-      saved.getByRole("list", { name: "Decisions" }).getByText("Curry on night two"),
+      saved
+        .getByRole("list", { name: "Decisions" })
+        .getByText("Curry on night two"),
     ).toBeVisible();
 
     // Someone on another team reads them, and gets no Edit.
@@ -366,9 +388,24 @@ test.describe("the Calendar (test-mode)", () => {
 
     // The list, Past, Meetings, the wrap-up open: from the toolbar...
     await openCalendar(page);
-    await page.getByRole("group", { name: "View" }).getByRole("button", { name: "List" }).click();
-    await page.getByRole("group", { name: "When" }).getByRole("button", { name: "Past" }).click();
-    await page.getByRole("group", { name: "Type" }).getByRole("button", { name: "Meetings" }).click();
+    await page
+      .getByRole("group", { name: "View" })
+      .getByRole("button", { name: "List" })
+      .click();
+    await page
+      .getByRole("group", { name: "When" })
+      .getByRole("button", { name: "Past" })
+      .click();
+    if (usesPhoneLayout(page)) {
+      // A narrow window picks the type from a list.
+      await page.getByRole("combobox", { name: "Type" }).click();
+      await page.getByRole("option", { name: "Meetings" }).click();
+    } else {
+      await page
+        .getByRole("group", { name: "Type" })
+        .getByRole("button", { name: "Meetings" })
+        .click();
+    }
     await page.getByRole("button", { name: /Year wrap-up/ }).click();
     await expect(panel(page, "Year wrap-up")).toBeVisible();
     await expect(page).toHaveURL(
@@ -377,16 +414,24 @@ test.describe("the Calendar (test-mode)", () => {
 
     // ...and the same link, opened fresh, shows exactly that.
     await page.goto("/");
-    await openCalendar(page, `/calendar?view=list&when=past&type=meetings&event=${id}`);
-    await expect(
-      page.getByRole("group", { name: "When" }).getByRole("button", { name: "Past" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    await expect(panel(page, "Year wrap-up").getByText("Mostly happy.")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Year wrap-up/ })).toHaveAttribute(
-      "aria-current",
-      "true",
+    await openCalendar(
+      page,
+      `/calendar?view=list&when=past&type=meetings&event=${id}`,
     );
-    await expect(page.getByRole("button", { name: /Not a meeting/ })).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("group", { name: "When" })
+        .getByRole("button", { name: "Past" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      panel(page, "Year wrap-up").getByText("Mostly happy."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Year wrap-up/ }),
+    ).toHaveAttribute("aria-current", "true");
+    await expect(
+      page.getByRole("button", { name: /Not a meeting/ }),
+    ).toHaveCount(0);
 
     // A link to an event with no month opens on the event's month.
     await openCalendar(page, `/calendar?event=${id}`);
@@ -422,7 +467,9 @@ test.describe("the Calendar (test-mode)", () => {
     await expect(page).toHaveURL(
       "/calendar?view=list&when=past&team=kitchen&type=meetings",
     );
-    await expect(page.getByRole("button", { name: /Kitchen kickoff/ })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Kitchen kickoff/ }),
+    ).toBeVisible();
 
     await page.goto("/meetings/new");
     await expect(page).toHaveURL(
@@ -447,5 +494,38 @@ test.describe("the Calendar (test-mode)", () => {
     // A note no one can find lands on the past meetings.
     await page.goto("/meetings/00000000-0000-4000-8000-000000000000");
     await expect(page).toHaveURL("/calendar?view=list&when=past&type=meetings");
+  });
+
+  test("on a phone: the compact month, a day's events, and the event as a sheet", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await captain(page, request, "cal-cap");
+    await seedCalendar(request, "cal-cap", [
+      {
+        event: {
+          kind: "meeting",
+          team: null,
+          title: "Captains' check-in",
+          date: TODAY,
+          allDay: false,
+          start: "19:00",
+          end: "20:00",
+          place: "Online",
+        },
+      },
+    ]);
+    await openCalendar(page);
+    // Today is picked: its events are listed under the month.
+    const day = page.getByRole("list", { name: "Events on this day" });
+    await expect(day.getByText("Captains' check-in")).toBeVisible();
+    await expect(day.getByText("Whole camp · Meeting")).toBeVisible();
+    await day.getByRole("button", { name: /Captains' check-in/ }).click();
+    const sheet = panel(page, "Captains' check-in");
+    await expect(sheet.getByText("19:00 to 20:00")).toBeVisible();
+    await sheet.getByRole("button", { name: "Close" }).click();
+    await expect(sheet).toHaveCount(0);
+    await expect(day.getByText("Captains' check-in")).toBeVisible();
   });
 });

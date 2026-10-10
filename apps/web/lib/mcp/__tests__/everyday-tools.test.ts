@@ -338,14 +338,17 @@ describe("calendar", () => {
         createdByUserId: captain.id,
       })
       .returning();
-    await h.db().insert(schema.meetingNotes).values({
-      cycle: 1,
-      team: "kitchen",
-      title: "Kitchen planning",
-      heldAt: new Date("2099-03-04T17:00:00Z"),
-      calendarEventId: made!.calendarEventId,
-      notes: "We met.",
-    });
+    await h
+      .db()
+      .insert(schema.meetingNotes)
+      .values({
+        cycle: 1,
+        team: "kitchen",
+        title: "Kitchen planning",
+        heldAt: new Date("2099-03-04T17:00:00Z"),
+        calendarEventId: made!.calendarEventId,
+        notes: "We met.",
+      });
     const MARCH = { from: "2099-03-01", to: "2099-03-31" };
     const all = (await call("list_calendar_events", MARCH, cook.id)).data;
     expect(all.days.map((d: { day: string }) => d.day)).toEqual([

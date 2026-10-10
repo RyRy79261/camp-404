@@ -316,7 +316,9 @@ function meetingOf(note: NoteLike | undefined): CalendarMeetingSummary {
 }
 
 /** A Google event's camp days and times. */
-function googleWhen(event: CalendarEvent): Pick<
+function googleWhen(
+  event: CalendarEvent,
+): Pick<
   CalendarEntry,
   "allDay" | "startDay" | "endDay" | "startTime" | "endTime"
 > {
@@ -434,7 +436,9 @@ export function mergeCalendar(input: {
   const seen = new Set<string>();
   for (const row of input.app) {
     seen.add(row.calendarEventId);
-    entries.push(appEntry(row, noteByEvent.get(row.calendarEventId), input.teams));
+    entries.push(
+      appEntry(row, noteByEvent.get(row.calendarEventId), input.teams),
+    );
   }
   for (const event of input.google) {
     if (seen.has(event.id)) continue;
@@ -467,7 +471,11 @@ export function filterEntries(
 ): CalendarEntry[] {
   return entries.filter((e) => {
     if (filter.team === WHOLE_CAMP && e.team !== null) return false;
-    if (filter.team && filter.team !== WHOLE_CAMP && e.team?.key !== filter.team)
+    if (
+      filter.team &&
+      filter.team !== WHOLE_CAMP &&
+      e.team?.key !== filter.team
+    )
       return false;
     if (filter.type === "meetings" && e.kind !== "meeting") return false;
     if (filter.type === "events" && e.kind !== "event") return false;
@@ -558,7 +566,9 @@ export function monthWeeks(
       };
     });
     const spanning = entries
-      .filter((e) => isMultiDay(e) && e.startDay <= sunday && e.endDay >= monday)
+      .filter(
+        (e) => isMultiDay(e) && e.startDay <= sunday && e.endDay >= monday,
+      )
       .sort(
         (a, b) =>
           a.startDay.localeCompare(b.startDay) ||
@@ -605,8 +615,12 @@ export function listGroups(
   today: string,
 ): ListGroup[] {
   const kept = entries
-    .filter((e) => (scope === "past" ? isPastEntry(e, today) : !isPastEntry(e, today)))
-    .sort((a, b) => (scope === "past" ? compareEntries(b, a) : compareEntries(a, b)));
+    .filter((e) =>
+      scope === "past" ? isPastEntry(e, today) : !isPastEntry(e, today),
+    )
+    .sort((a, b) =>
+      scope === "past" ? compareEntries(b, a) : compareEntries(a, b),
+    );
   const groups: ListGroup[] = [];
   for (const entry of kept) {
     const month = entry.startDay.slice(0, 7);

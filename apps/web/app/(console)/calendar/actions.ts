@@ -151,7 +151,8 @@ export async function saveMinutesAction(
     if (!parsed.success) {
       return {
         ok: false,
-        error: parsed.error.issues[0]?.message ?? "Check the minutes and try again.",
+        error:
+          parsed.error.issues[0]?.message ?? "Check the minutes and try again.",
       };
     }
     const minutes = parsed.data;
@@ -159,7 +160,10 @@ export async function saveMinutesAction(
     const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
     const found = await findCalendarEntry(minutes.eventId, teams);
     if (!found) {
-      return { ok: false, error: "That meeting isn't on the calendar any more." };
+      return {
+        ok: false,
+        error: "That meeting isn't on the calendar any more.",
+      };
     }
     const { entry, note } = found;
     if (
@@ -236,7 +240,10 @@ export async function actionItemToTaskAction(
     if (!gate.ok) return gate;
     const parsed = ActionItemToTaskInput.safeParse(input);
     if (!parsed.success) {
-      return { ok: false, error: "That action item isn't on the note any more." };
+      return {
+        ok: false,
+        error: "That action item isn't on the note any more.",
+      };
     }
     const result = await turnActionItemIntoTask({
       actorId: gate.campUser.id,

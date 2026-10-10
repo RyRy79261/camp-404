@@ -55,7 +55,7 @@ export default async function CalendarPage({
   const canCreate = canCreateCampEvents(rank, leadTeams);
 
   return (
-    <div className="flex min-h-0 flex-col" data-fills-window>
+    <div className="flex min-h-0 flex-1 flex-col" data-fills-window>
       <PageHeading
         eyebrow="Camp / Calendar"
         title="Calendar"
@@ -113,7 +113,9 @@ async function CalendarBody({
   let state: CalendarState = parseCalendarState(raw, today, teams);
 
   // A link to an event with no month opens on the event's month.
-  const found = state.event ? await findCalendarEntry(state.event, teams) : null;
+  const found = state.event
+    ? await findCalendarEntry(state.event, teams)
+    : null;
   if (found && state.view === "month" && !urlNamesMonth(raw)) {
     state = { ...state, month: found.entry.startDay.slice(0, 7) };
   }
@@ -130,8 +132,7 @@ async function CalendarBody({
           found.entry.source === "app" &&
           canManageCampEvent(rank, leadTeams, found.entry.team?.key ?? null),
         canWriteMinutes:
-          (found.entry.kind === "meeting" ||
-            found.entry.source === "google") &&
+          (found.entry.kind === "meeting" || found.entry.source === "google") &&
           canWorkInTeam(rank, memberTeams, found.entry.team?.key ?? null),
         canMakeTasks:
           rank === "captain" ||

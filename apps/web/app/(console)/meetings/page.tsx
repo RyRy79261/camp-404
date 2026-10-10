@@ -17,7 +17,10 @@ export default async function MeetingsPage({
   searchParams: Promise<{ team?: string }>;
 }) {
   await captainPageGate("camp_member");
-  const [{ team }, config] = await Promise.all([searchParams, getTeamsConfig()]);
+  const [{ team }, config] = await Promise.all([
+    searchParams,
+    getTeamsConfig(),
+  ]);
   const today = campDayKey(new Date());
   redirect(
     calendarHref({

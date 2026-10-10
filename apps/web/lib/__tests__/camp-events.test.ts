@@ -42,7 +42,11 @@ vi.mock("../google-calendar", async (importOriginal) => ({
 }));
 
 import * as db from "@camp404/db/camp-events";
-import { campEventBody, createCampEvent, removeCampEvent } from "../camp-events";
+import {
+  campEventBody,
+  createCampEvent,
+  removeCampEvent,
+} from "../camp-events";
 import { deleteCalendarEvent, putCalendarEvent } from "../google-calendar";
 import { catchUpCampCalendar } from "../logistics";
 
@@ -250,6 +254,8 @@ describe("campEventBody", () => {
   it("says a meeting's agenda and minutes are in the app, never what they say", () => {
     const body = campEventBody(row(), "Kitchen");
     expect(body.description).toContain("The week's menu.");
-    expect(body.description).toContain("agenda and minutes are in the Camp 404 app");
+    expect(body.description).toContain(
+      "agenda and minutes are in the Camp 404 app",
+    );
   });
 });

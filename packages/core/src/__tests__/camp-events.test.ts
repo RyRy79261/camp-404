@@ -19,9 +19,7 @@ describe("canManageCampEvent (owner 1A)", () => {
 
   it("lets a lead manage only a team they lead, never the whole camp", () => {
     expect(canManageCampEvent("team_lead", ["kitchen"], "kitchen")).toBe(true);
-    expect(canManageCampEvent("team_lead", ["kitchen"], "finance")).toBe(
-      false,
-    );
+    expect(canManageCampEvent("team_lead", ["kitchen"], "finance")).toBe(false);
     expect(canManageCampEvent("team_lead", ["kitchen"], null)).toBe(false);
   });
 
@@ -77,9 +75,9 @@ describe("hasMinutes", () => {
 
 describe("campEventCalendarStep", () => {
   it("puts a live event, removes a removed one, and does nothing without an id", () => {
-    expect(campEventCalendarStep({ removed: false, calendarEventId: "a" })).toBe(
-      "put",
-    );
+    expect(
+      campEventCalendarStep({ removed: false, calendarEventId: "a" }),
+    ).toBe("put");
     expect(campEventCalendarStep({ removed: true, calendarEventId: "a" })).toBe(
       "remove",
     );

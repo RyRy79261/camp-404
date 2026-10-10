@@ -86,8 +86,9 @@ describe("the Calendar's URL", () => {
     expect(calendarHref(state)).toBe(
       "/calendar?view=month&month=2026-09&team=kitchen&type=meetings&event=abc123",
     );
-    expect(parseCalendarState({ view: "list", when: "past" }, TODAY, TEAMS))
-      .toMatchObject({ view: "list", when: "past" });
+    expect(
+      parseCalendarState({ view: "list", when: "past" }, TODAY, TEAMS),
+    ).toMatchObject({ view: "list", when: "past" });
     expect(
       calendarHref(
         parseCalendarState({ view: "list", when: "past" }, TODAY, TEAMS),
@@ -119,7 +120,9 @@ describe("the Calendar's URL", () => {
       newOn: null,
     });
     // The whole camp is a filter of its own; an archived team's link still works.
-    expect(parseCalendarState({ team: "camp" }, TODAY, TEAMS).team).toBe("camp");
+    expect(parseCalendarState({ team: "camp" }, TODAY, TEAMS).team).toBe(
+      "camp",
+    );
     expect(urlNamesMonth({ month: "2026-04" })).toBe(true);
     expect(urlNamesMonth({})).toBe(false);
   });
@@ -218,7 +221,15 @@ describe("mergeCalendar", () => {
     const [entry] = mergeCalendar({
       app: [],
       google: [],
-      notes: [note({ calendarEventId: "gone1", notesWritten: false, decisions: 0, actionItems: 0, attendees: 0 })],
+      notes: [
+        note({
+          calendarEventId: "gone1",
+          notesWritten: false,
+          decisions: 0,
+          actionItems: 0,
+          attendees: 0,
+        }),
+      ],
       teams: TEAMS,
     });
     expect(entry).toMatchObject({
@@ -272,7 +283,11 @@ function entry(overrides: Partial<CalendarEntry>): CalendarEntry {
 describe("filterEntries", () => {
   const list = [
     entry({ id: "camp" }),
-    entry({ id: "kitchen-meeting", kind: "meeting", team: { key: "kitchen", label: "Kitchen" } }),
+    entry({
+      id: "kitchen-meeting",
+      kind: "meeting",
+      team: { key: "kitchen", label: "Kitchen" },
+    }),
     entry({ id: "kitchen-event", team: { key: "kitchen", label: "Kitchen" } }),
   ];
   it("keeps one team's, the whole camp's, meetings or events", () => {
@@ -299,32 +314,92 @@ describe("monthWeeks", () => {
     const weeks = monthWeeks(
       "2026-10",
       [
-        entry({ id: "clean", allDay: true, startDay: "2026-10-03", endDay: "2026-10-04", startTime: null, endTime: null }),
-        entry({ id: "build", allDay: true, startDay: "2026-10-23", endDay: "2026-10-27", startTime: null, endTime: null }),
-        entry({ id: "gen", startDay: "2026-10-24", endDay: "2026-10-24", startTime: "09:00" }),
-        entry({ id: "late", startDay: "2026-10-24", endDay: "2026-10-24", startTime: "18:00" }),
-        entry({ id: "allday", allDay: true, startDay: "2026-10-24", endDay: "2026-10-24", startTime: null, endTime: null }),
-        entry({ id: "overlap", allDay: true, startDay: "2026-10-24", endDay: "2026-10-25", startTime: null, endTime: null }),
+        entry({
+          id: "clean",
+          allDay: true,
+          startDay: "2026-10-03",
+          endDay: "2026-10-04",
+          startTime: null,
+          endTime: null,
+        }),
+        entry({
+          id: "build",
+          allDay: true,
+          startDay: "2026-10-23",
+          endDay: "2026-10-27",
+          startTime: null,
+          endTime: null,
+        }),
+        entry({
+          id: "gen",
+          startDay: "2026-10-24",
+          endDay: "2026-10-24",
+          startTime: "09:00",
+        }),
+        entry({
+          id: "late",
+          startDay: "2026-10-24",
+          endDay: "2026-10-24",
+          startTime: "18:00",
+        }),
+        entry({
+          id: "allday",
+          allDay: true,
+          startDay: "2026-10-24",
+          endDay: "2026-10-24",
+          startTime: null,
+          endTime: null,
+        }),
+        entry({
+          id: "overlap",
+          allDay: true,
+          startDay: "2026-10-24",
+          endDay: "2026-10-25",
+          startTime: null,
+          endTime: null,
+        }),
       ],
       TODAY,
     );
     expect(weeks).toHaveLength(5);
     expect(weeks[0]!.days[0]!.key).toBe("2026-09-28");
     expect(weeks[0]!.days[0]!.inMonth).toBe(false);
-    expect(weeks[1]!.days[5]).toMatchObject({ key: "2026-10-10", isToday: true });
+    expect(weeks[1]!.days[5]).toMatchObject({
+      key: "2026-10-10",
+      isToday: true,
+    });
     expect(weeks[1]!.days[4]!.isPast).toBe(true);
 
     // Sat 3 to Sun 4: columns 6 and 7.
     expect(weeks[0]!.bars).toEqual([
-      expect.objectContaining({ start: 6, end: 8, lane: 0, fromBefore: false, toAfter: false }),
+      expect.objectContaining({
+        start: 6,
+        end: 8,
+        lane: 0,
+        fromBefore: false,
+        toAfter: false,
+      }),
     ]);
     // The build runs Fri 23 to Tue 27: on into the next week, which it starts.
-    expect(weeks[3]!.bars.map((b) => [b.entry.id, b.start, b.end, b.lane, b.toAfter])).toEqual([
+    expect(
+      weeks[3]!.bars.map((b) => [
+        b.entry.id,
+        b.start,
+        b.end,
+        b.lane,
+        b.toAfter,
+      ]),
+    ).toEqual([
       ["build", 5, 8, 0, true],
       ["overlap", 6, 8, 1, false],
     ]);
     expect(weeks[3]!.lanes).toBe(2);
-    expect(weeks[4]!.bars[0]).toMatchObject({ start: 1, end: 3, lane: 0, fromBefore: true });
+    expect(weeks[4]!.bars[0]).toMatchObject({
+      start: 1,
+      end: 3,
+      lane: 0,
+      fromBefore: true,
+    });
     // Sat 24's chips: the one-day ones, all-day first, then by time.
     expect(weeks[3]!.days[5]!.entries.map((e) => e.id)).toEqual([
       "allday",
@@ -342,7 +417,12 @@ describe("listGroups", () => {
     entry({ id: "sep", startDay: "2026-09-27", endDay: "2026-09-27" }),
     entry({ id: "oct-past", startDay: "2026-10-06", endDay: "2026-10-06" }),
     entry({ id: "today", startDay: "2026-10-10", endDay: "2026-10-10" }),
-    entry({ id: "running", allDay: true, startDay: "2026-10-09", endDay: "2026-10-11" }),
+    entry({
+      id: "running",
+      allDay: true,
+      startDay: "2026-10-09",
+      endDay: "2026-10-11",
+    }),
     entry({ id: "nov", startDay: "2026-11-05", endDay: "2026-11-05" }),
   ];
   it("lists what has passed newest first, by month", () => {
@@ -382,15 +462,38 @@ describe("listGroups", () => {
 
 describe("entryWhen", () => {
   it("says a day and times, a day all day, or the days of a longer event", () => {
-    expect(entryWhen(entry({ startDay: "2026-10-06", endDay: "2026-10-06", startTime: "19:30", endTime: "21:00" }))).toBe(
-      "Tuesday 6 October 2026, 19:30 to 21:00",
-    );
-    expect(entryWhen(entry({ allDay: true, startTime: null, endTime: null, startDay: "2026-10-14", endDay: "2026-10-14" }))).toBe(
-      "Wednesday 14 October 2026, all day",
-    );
-    expect(entryWhen(entry({ allDay: true, startTime: null, endTime: null, startDay: "2026-10-03", endDay: "2026-10-04" }))).toBe(
-      "Sat 3 Oct to Sun 4 Oct, all day",
-    );
+    expect(
+      entryWhen(
+        entry({
+          startDay: "2026-10-06",
+          endDay: "2026-10-06",
+          startTime: "19:30",
+          endTime: "21:00",
+        }),
+      ),
+    ).toBe("Tuesday 6 October 2026, 19:30 to 21:00");
+    expect(
+      entryWhen(
+        entry({
+          allDay: true,
+          startTime: null,
+          endTime: null,
+          startDay: "2026-10-14",
+          endDay: "2026-10-14",
+        }),
+      ),
+    ).toBe("Wednesday 14 October 2026, all day");
+    expect(
+      entryWhen(
+        entry({
+          allDay: true,
+          startTime: null,
+          endTime: null,
+          startDay: "2026-10-03",
+          endDay: "2026-10-04",
+        }),
+      ),
+    ).toBe("Sat 3 Oct to Sun 4 Oct, all day");
   });
 });
 
@@ -409,6 +512,10 @@ describe("googleEntry", () => {
       undefined,
       TEAMS,
     );
-    expect(e).toMatchObject({ startDay: "2026-10-10", endDay: "2026-10-10", endTime: "00:00" });
+    expect(e).toMatchObject({
+      startDay: "2026-10-10",
+      endDay: "2026-10-10",
+      endTime: "00:00",
+    });
   });
 });

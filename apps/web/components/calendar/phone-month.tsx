@@ -38,7 +38,10 @@ export function PhoneMonth({
   const weeks = monthWeeks(month, entries, today);
   return (
     <div data-phone-month>
-      <div className="grid grid-cols-7 text-center text-[11px] font-semibold leading-5 text-muted-foreground" aria-hidden>
+      <div
+        className="grid grid-cols-7 text-center text-[11px] font-semibold leading-5 text-muted-foreground"
+        aria-hidden
+      >
         {DAY_LETTERS.map((d, i) => (
           <span key={i}>{d}</span>
         ))}
@@ -60,7 +63,8 @@ export function PhoneMonth({
                   !d.inMonth &&
                     "bg-[color-mix(in_oklab,var(--color-background)_70%,black)] text-muted-foreground/60",
                   d.inMonth && d.isPast && "text-muted-foreground",
-                  day === d.key && "shadow-[inset_0_0_0_2px_var(--color-foreground)]",
+                  day === d.key &&
+                    "shadow-[inset_0_0_0_2px_var(--color-foreground)]",
                 )}
               >
                 <span

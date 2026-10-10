@@ -19,7 +19,7 @@ import { entryColour, MeetingMark } from "./parts";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 /** How many rows of bars and chips a day shows before "+N more". */
-const ROWS_PER_DAY = 4;
+const ROWS_PER_DAY = 3;
 
 export function MonthGrid({
   month,
@@ -61,12 +61,14 @@ export function MonthGrid({
       </div>
       <div className="flex min-h-0 flex-1 flex-col border border-border">
         {weeks.map((week, w) => {
-          const fit = Math.max(1, ROWS_PER_DAY - week.lanes);
+          // A six-week month has shorter weeks: a row fewer each.
+          const rows = weeks.length > 5 ? ROWS_PER_DAY - 1 : ROWS_PER_DAY;
+          const fit = Math.max(1, rows - week.lanes);
           return (
             <div
               key={week.days[0]!.key}
               className={cn(
-                "relative grid min-h-[5.75rem] flex-1 grid-cols-7",
+                "relative grid min-h-[4.5rem] flex-1 grid-cols-7",
                 w > 0 && "border-t border-border",
               )}
               style={{
@@ -81,7 +83,8 @@ export function MonthGrid({
                     ? "bg-[color-mix(in_oklab,var(--color-background)_70%,black)]"
                     : day.isPast &&
                         "bg-[color-mix(in_oklab,var(--color-background)_88%,black)]",
-                  day.isToday && "shadow-[inset_0_0_0_2px_var(--color-primary)]",
+                  day.isToday &&
+                    "shadow-[inset_0_0_0_2px_var(--color-primary)]",
                   pickedDay === day.key &&
                     "bg-[color-mix(in_oklab,var(--color-primary)_12%,var(--color-background))]",
                 );

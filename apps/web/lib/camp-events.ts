@@ -70,7 +70,10 @@ export function campEventBody(
     .filter(Boolean)
     .join("\n\n");
   return {
-    summary: teamEventTitle(row.team ? (teamLabel ?? row.team) : null, row.title),
+    summary: teamEventTitle(
+      row.team ? (teamLabel ?? row.team) : null,
+      row.title,
+    ),
     description,
     ...(row.place ? { location: row.place } : {}),
     start: row.allDay
@@ -108,7 +111,12 @@ function target(
     eventId: row.calendarEventId,
     event: removed
       ? null
-      : { body: campEventBody(row, row.team ? labels[row.team] ?? null : null) },
+      : {
+          body: campEventBody(
+            row,
+            row.team ? (labels[row.team] ?? null) : null,
+          ),
+        },
     mark: (gone: boolean) => {
       const args = { id: row.id, version: row.version, removed: gone };
       return usesTestStore()

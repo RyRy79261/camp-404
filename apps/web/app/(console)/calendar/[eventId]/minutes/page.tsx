@@ -44,7 +44,8 @@ export default async function MinutesPage({
 
   const teamKey = entry.team?.key ?? null;
   const teamLabel = entry.team?.label ?? "Whole camp";
-  const title = entry.kind === "meeting" ? entry.title : `${entry.title}: minutes`;
+  const title =
+    entry.kind === "meeting" ? entry.title : `${entry.title}: minutes`;
   if (
     !canWorkInTeam(
       rank,

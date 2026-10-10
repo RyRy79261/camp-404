@@ -3657,7 +3657,9 @@ export const testStore = {
         notesWritten: n.notes.trim().length > 0,
         openActionItems: n.actionItems.filter((i) => {
           const task = i.taskId ? tasks.find((t) => t.id === i.taskId) : null;
-          return !task || task.status === "open" || task.status === "in_progress";
+          return (
+            !task || task.status === "open" || task.status === "in_progress"
+          );
         }).length,
         decisions: n.decisions.length,
         actionItems: n.actionItems.length,
@@ -3717,9 +3719,12 @@ export const testStore = {
       if (!n) return;
       Object.assign(n, { ...fields, calendarEventTitle: fields.title });
     },
-    minutes(
-      calendarEventId: string,
-    ): { notes: string; decisions: number; actionItems: number; attendees: number } | null {
+    minutes(calendarEventId: string): {
+      notes: string;
+      decisions: number;
+      actionItems: number;
+      attendees: number;
+    } | null {
       const n = meetingNotes.find((x) => x.calendarEventId === calendarEventId);
       return n
         ? {

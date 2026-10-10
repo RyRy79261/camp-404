@@ -7,6 +7,21 @@ import type { CalendarEntry } from "@/lib/calendar-month";
 // elements on purpose, as the Kitchen's, because the kit's Button turns every
 // label into pixel capitals and the mock-up draws these in sentence case.
 
+/**
+ * The panel's frame: its natural height above the calendar in a narrow
+ * window (the window scrolls), the calendar's height beside it in a wide one
+ * (the panel scrolls), the whole screen on a phone.
+ */
+export const PANEL_FRAME =
+  "flex shrink-0 flex-col border border-border bg-card @min-[56rem]/page:order-last @min-[56rem]/page:min-h-0 @min-[56rem]/page:w-[23.75rem] max-md:fixed max-md:inset-x-0 max-md:top-0 max-md:bottom-[var(--os-phone-bar,0px)] max-md:z-50 max-md:min-h-0 max-md:border-0";
+
+/** What fills the panel, where the panel has a height of its own. */
+export const PANEL_FILL =
+  "@min-[56rem]/page:min-h-0 @min-[56rem]/page:flex-1 max-md:min-h-0 max-md:flex-1";
+
+/** What scrolls inside the panel, where the panel has a height of its own. */
+export const PANEL_SCROLL = `${PANEL_FILL} @min-[56rem]/page:overflow-y-auto max-md:overflow-y-auto`;
+
 /** The pink main action (New event, Add to the calendar). */
 export const PRIMARY_BUTTON =
   "inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap border border-primary bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60";
