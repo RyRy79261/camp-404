@@ -697,6 +697,12 @@ describe("readCalendarRange and readCalendarEvent (the Calendar's month and list
               extendedProperties: { private: { camp404Logistics: "build" } },
             },
             {
+              id: "made",
+              summary: "Made in the app",
+              start: { date: "2026-10-05" },
+              extendedProperties: { private: { camp404Event: "row-1" } },
+            },
+            {
               id: "meet",
               summary: "Kitchen Team - Planning",
               start: { dateTime: "2026-10-01T19:00:00+02:00" },
@@ -729,6 +735,7 @@ describe("readCalendarRange and readCalendarEvent (the Calendar's month and list
           end: "2027-04-26",
           origin: "logistics",
         }),
+        expect.objectContaining({ id: "made", origin: "app" }),
         expect.objectContaining({
           id: "meet",
           end: "2026-10-01T20:30:00+02:00",

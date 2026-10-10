@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CalendarEventId } from "./calendar";
 
 // What a team member types to record a meeting (#268). Who may write for which
 // team is the server's rule (canWorkInTeam), not this shape's.
@@ -42,7 +43,7 @@ export type MeetingActionItemInput = z.infer<typeof MeetingActionItemInput>;
  */
 export const MeetingMinutesInput = z.object({
   /** The meeting's calendar event id. */
-  eventId: z.string().min(1).max(200),
+  eventId: CalendarEventId,
   version: z.number().int().min(1).nullable(),
   agenda: z
     .string()

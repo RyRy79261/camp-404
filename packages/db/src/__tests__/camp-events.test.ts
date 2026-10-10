@@ -14,6 +14,7 @@ import {
   editCampEvent,
   getCampEvent,
   getCampEventRow,
+  linkUnlinkedMeetingNotes,
   listCampEvents,
   listCampEventsToSync,
   markCampEventCalendarSynced,
@@ -330,6 +331,40 @@ describe("camp events", () => {
     });
   });
 
+  it("counts a decision alone, or who came alone, as minutes that keep the meeting", async () => {
+    const { captain, member } = await people();
+    for (const fill of ["decision", "attendee"] as const) {
+      const id = newId();
+      await createCampEvent({
+        actorId: captain.id,
+        kind: "meeting",
+        agenda: "",
+        newEventId: id,
+        ...fields(),
+      });
+      const note = await getMeetingNoteByEvent(id);
+      if (fill === "decision") {
+        await h
+          .db()
+          .insert(schema.meetingNoteDecisions)
+          .values({ noteId: note!.id, position: 0, text: "Oats" });
+      } else {
+        await h
+          .db()
+          .insert(schema.meetingNoteAttendees)
+          .values({ noteId: note!.id, userId: member.id });
+      }
+      expect(
+        await removeCampEvent({
+          actorId: captain.id,
+          calendarEventId: id,
+          expectedVersion: 1,
+        }),
+      ).toEqual({ ok: false, error: MEETING_HAS_MINUTES });
+      expect(await getMeetingNoteByEvent(id)).not.toBeNull();
+    }
+  });
+
   describe("the mirror and the reads", () => {
     it("marks only the version Google matched, and lists what touches a range", async () => {
       const { captain } = await people();
@@ -386,6 +421,67 @@ describe("camp events", () => {
       expect(
         await listCampEvents({ from: "2026-11-01", to: "2026-11-30" }),
       ).toHaveLength(0);
+    });
+  });
+
+  describe("linkUnlinkedMeetingNotes (the catch-up's first step)", () => {
+    it("gives a note written with no event its meeting event, once", async () => {
+      const { member } = await people();
+      // Written by the old Meetings pages during a deploy: no event.
+      const [old] = await h
+        .db()
+        .insert(schema.meetingNotes)
+        .values({
+          cycle: 2027,
+          team: "kitchen",
+          title: "Late kickoff",
+          heldAt: new Date("2026-10-02T16:30:00Z"),
+          createdByUserId: member.id,
+          notes: "We met.",
+        })
+        .returning();
+      // Already linked: left alone.
+      await h
+        .db()
+        .insert(schema.meetingNotes)
+        .values({
+          cycle: 2027,
+          team: "kitchen",
+          title: "Linked",
+          heldAt: new Date("2026-10-03T16:30:00Z"),
+          calendarEventId: "googleEvent9",
+        });
+
+      expect(await linkUnlinkedMeetingNotes()).toBe(1);
+      expect(await linkUnlinkedMeetingNotes()).toBe(0);
+
+      const note = await getMeetingNoteByEvent(
+        (
+          await h
+            .db()
+            .select({ id: schema.meetingNotes.calendarEventId })
+            .from(schema.meetingNotes)
+            .where(eq(schema.meetingNotes.id, old!.id))
+        )[0]!.id!,
+      );
+      expect(note?.id).toBe(old!.id);
+      const events = await h.db().select().from(schema.campEvents);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        kind: "meeting",
+        team: "kitchen",
+        title: "Late kickoff",
+        cycle: 2027,
+        startDate: "2026-10-02",
+        startTime: "18:30",
+        endTime: "19:30",
+        calendarSyncedVersion: null,
+        calendarEventId: note!.calendarEventId,
+      });
+      // So the catch-up puts it on Google.
+      expect(
+        (await listCampEventsToSync()).map((r) => r.calendarEventId),
+      ).toEqual([note!.calendarEventId]);
     });
   });
 

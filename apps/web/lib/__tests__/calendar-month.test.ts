@@ -217,6 +217,39 @@ describe("mergeCalendar", () => {
     });
   });
 
+  it("never shows Google's stale copy of an app event that was removed or moved off these days", () => {
+    const entries = mergeCalendar({
+      // The app row moved to the 20th; Google still has it on the 10th, and
+      // still has another the app removed.
+      app: [app({ startDate: "2026-10-20", endDate: "2026-10-20" })],
+      google: [
+        {
+          id: "app1",
+          title: "Dome rehearsal",
+          start: "2026-10-10T08:00:00Z",
+          allDay: false,
+          location: null,
+          teamTag: null,
+          origin: "app",
+        },
+        {
+          id: "removed1",
+          title: "Gone",
+          start: "2026-10-12T08:00:00Z",
+          allDay: false,
+          location: null,
+          teamTag: null,
+          origin: "app",
+        },
+      ],
+      notes: [],
+      teams: TEAMS,
+    });
+    expect(entries.map((e) => [e.id, e.source, e.startDay])).toEqual([
+      ["app1", "app", "2026-10-20"],
+    ]);
+  });
+
   it("still shows a meeting whose event Google no longer returns, from its note", () => {
     const [entry] = mergeCalendar({
       app: [],

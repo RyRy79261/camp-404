@@ -287,6 +287,24 @@ export async function createCampEvent(
   });
 }
 
+/** How much of a note is minutes, counted now (not from a snapshot). */
+async function minutesCounts(
+  tx: Tx,
+  noteId: string,
+): Promise<{ decisions: number; actionItems: number; attendees: number }> {
+  const count = async (table: string) => {
+    const result = await tx.execute<{ n: number }>(
+      sql`select count(*)::int as n from ${sql.identifier(table)} where note_id = ${noteId}`,
+    );
+    return Number(result.rows[0]?.n ?? 0);
+  };
+  return {
+    decisions: await count("meeting_note_decisions"),
+    actionItems: await count("meeting_note_action_items"),
+    attendees: await count("meeting_note_attendees"),
+  };
+}
+
 /** The row, locked for the write; refused when it is gone. */
 async function lockEvent(tx: Tx, calendarEventId: string) {
   const [row] = await tx
@@ -375,17 +393,22 @@ export async function removeCampEvent(input: {
     const before = await lockEvent(tx, input.calendarEventId);
     await assertManager(tx, input.actorId, before.team);
     if (before.version !== input.expectedVersion) refuse(EVENT_CHANGED);
-    const [note] = await tx
+    // The note first, locked: a minutes save holds the same lock
+    // (editMeetingNote), so one in flight commits first and is counted. The
+    // counts are read only AFTER the lock, each in a statement of its own: a
+    // subquery in the locking statement would read its snapshot from before
+    // the wait, and miss decisions or attendees just saved.
+    const [locked] = await tx
       .select({
         id: schema.meetingNotes.id,
         notes: schema.meetingNotes.notes,
-        decisions: sql<number>`(select count(*)::int from meeting_note_decisions d where d.note_id = meeting_notes.id)`,
-        actionItems: sql<number>`(select count(*)::int from meeting_note_action_items i where i.note_id = meeting_notes.id)`,
-        attendees: sql<number>`(select count(*)::int from meeting_note_attendees a where a.note_id = meeting_notes.id)`,
       })
       .from(schema.meetingNotes)
       .where(eq(schema.meetingNotes.calendarEventId, before.calendarEventId))
       .for("update");
+    const note = locked
+      ? { ...locked, ...(await minutesCounts(tx, locked.id)) }
+      : null;
     if (note && hasMinutes(note)) refuse(MEETING_HAS_MINUTES);
     if (note) {
       await tx
@@ -410,6 +433,51 @@ export async function removeCampEvent(input: {
       metadata: auditMetadata(row),
     });
     return { row };
+  });
+}
+
+/**
+ * Give every meeting note that names no calendar event a meeting event of its
+ * own, as migration 0108 did: on its day, at its camp time, an hour long (to
+ * 23:59 at most), with its team, title, year and writer, not yet on Google
+ * (the catch-up puts it there). A note written by the old Meetings pages while
+ * a deploy was rolling out is the case. Idempotent: a note is linked only
+ * while it still names nothing. Returns how many it linked.
+ */
+export async function linkUnlinkedMeetingNotes(): Promise<number> {
+  return withTransaction(async (tx) => {
+    const result = await tx.execute<{ event_id: string }>(sql`
+      with picked as (
+        select id,
+               replace(gen_random_uuid()::text, '-', '') as event_id,
+               least(held_at + interval '2 hours',
+                     date_trunc('day', held_at + interval '2 hours') + interval '23 hours 58 minutes') as local_at
+        from meeting_notes
+        where calendar_event_id is null
+        for update skip locked
+      ), linked as (
+        update meeting_notes n
+        set calendar_event_id = p.event_id
+        from picked p
+        where n.id = p.id and n.calendar_event_id is null
+        returning n.cycle, n.team, n.title, n.created_by_user_id,
+                  n.updated_by_user_id, p.event_id, p.local_at
+      )
+      insert into camp_events (
+        cycle, kind, team, title, all_day, start_date, end_date,
+        start_time, end_time, calendar_event_id, calendar_synced_version,
+        version, created_by_user_id, updated_by_user_id
+      )
+      select cycle, 'meeting', team, title, false,
+             local_at::date, local_at::date,
+             to_char(local_at, 'HH24:MI'),
+             to_char(least(local_at + interval '1 hour',
+                           date_trunc('day', local_at) + interval '23 hours 59 minutes'), 'HH24:MI'),
+             event_id, null, 1, created_by_user_id, updated_by_user_id
+      from linked
+      returning calendar_event_id as event_id
+    `);
+    return result.rows.length;
   });
 }
 

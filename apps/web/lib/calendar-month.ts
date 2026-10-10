@@ -4,6 +4,7 @@ import {
   readTeamEvent,
   type CalendarTeam,
 } from "@camp404/core";
+import { CALENDAR_EVENT_ID } from "@camp404/types";
 import type { CalendarEvent } from "./google-calendar";
 
 // The Calendar program (owner, 2026-10-10: one Calendar; meetings are a type
@@ -41,7 +42,7 @@ export const WHOLE_CAMP = "camp";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
-const EVENT_ID = /^[A-Za-z0-9_-]{1,200}$/;
+const EVENT_ID = CALENDAR_EVENT_ID;
 
 /** Whether a YYYY-MM-DD string is a real day. */
 export function isDayKey(value: string): boolean {
@@ -368,7 +369,10 @@ export function appEntry(
   };
 }
 
-/** The entry for an event made in Google (or a logistics day, a deadline). */
+/**
+ * The entry for an event made in Google (or a logistics day, a deadline).
+ * Never for Google's copy of an app event: the app's row is read instead.
+ */
 export function googleEntry(
   event: CalendarEvent,
   note: NoteLike | undefined,
@@ -383,7 +387,10 @@ export function googleEntry(
     ...googleWhen(event),
     place: event.location,
     description: null,
-    source: event.origin ?? "google",
+    source:
+      event.origin === "logistics" || event.origin === "deadline"
+        ? event.origin
+        : "google",
     version: null,
     meeting: note ? meetingOf(note) : null,
   };
@@ -442,6 +449,10 @@ export function mergeCalendar(input: {
   }
   for (const event of input.google) {
     if (seen.has(event.id)) continue;
+    // Google's copy of an event the app made, with no live row for these
+    // days: removed, or moved, and Google not caught up yet. The row is the
+    // truth, so the stale copy is not shown (nor given minutes).
+    if (event.origin === "app") continue;
     seen.add(event.id);
     entries.push(googleEntry(event, noteByEvent.get(event.id), input.teams));
   }

@@ -63,7 +63,9 @@ export async function findCalendarEntry(
   const summary = note ? noteSummary(note) : undefined;
   if (row) return { entry: appEntry(row, summary, teams), note };
   const google = await getCalendarEventById(id);
-  if (google && google !== "unavailable") {
+  // Google's copy of an app event whose row is gone: removed, not an event
+  // to show or to give minutes.
+  if (google && google !== "unavailable" && google.origin !== "app") {
     return { entry: googleEntry(google, summary, teams), note };
   }
   if (summary) {

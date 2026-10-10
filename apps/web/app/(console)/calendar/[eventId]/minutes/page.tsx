@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { canWorkInTeam } from "@camp404/core";
-import { Team } from "@camp404/types";
+import { CALENDAR_EVENT_ID, Team } from "@camp404/types";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { MinutesEditor } from "@/components/calendar/minutes-editor";
@@ -31,10 +31,12 @@ export default async function MinutesPage({
 }) {
   const { campUser, rank } = await captainPageGate("camp_member");
   const { eventId } = await params;
+  // The param is already decoded; an id that is not an event's is no page.
+  if (!CALENDAR_EVENT_ID.test(eventId)) notFound();
   const config = await getTeamsConfig();
   const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
   const [found, memberships] = await Promise.all([
-    findCalendarEntry(decodeURIComponent(eventId), teams),
+    findCalendarEntry(eventId, teams),
     getMyTeams(campUser.id),
   ]);
   if (!found) notFound();

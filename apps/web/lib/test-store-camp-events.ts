@@ -199,6 +199,45 @@ export const campEventsTestStore = {
     return { ok: true, row: copy(row) };
   },
 
+  /** Twin of linkUnlinkedMeetingNotes. */
+  linkUnlinkedMeetingNotes(): number {
+    let linked = 0;
+    for (const note of testStore.meetingNoteForEvent.unlinked()) {
+      const local = new Date(note.heldAt.getTime() + 2 * 3_600_000);
+      const day = local.toISOString().slice(0, 10);
+      const minutes = Math.min(
+        local.getUTCHours() * 60 + local.getUTCMinutes(),
+        23 * 60 + 58,
+      );
+      const hhmm = (m: number) =>
+        `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      const eventId = randomUUID().replaceAll("-", "");
+      rows().push({
+        id: randomUUID(),
+        cycle: note.cycle,
+        kind: "meeting",
+        team: note.team,
+        title: note.title,
+        allDay: false,
+        startDate: day,
+        endDate: day,
+        startTime: hhmm(minutes),
+        endTime: hhmm(Math.min(minutes + 60, 23 * 60 + 59)),
+        place: null,
+        description: null,
+        calendarEventId: eventId,
+        calendarSyncedVersion: null,
+        version: 1,
+        removedAt: null,
+        createdByUserId: note.createdById,
+        updatedAt: new Date(),
+      });
+      testStore.meetingNoteForEvent.link(note.id, eventId);
+      linked += 1;
+    }
+    return linked;
+  },
+
   markCampEventCalendarSynced(input: {
     id: string;
     version: number;

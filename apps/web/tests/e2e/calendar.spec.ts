@@ -491,6 +491,10 @@ test.describe("the Calendar (test-mode)", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Kitchen kickoff" }),
     ).toBeVisible();
+    // A minutes address that is no event's id is a plain 404, not a crash.
+    const stray = await page.goto("/calendar/a%25b/minutes");
+    expect(stray?.status()).toBe(404);
+
     // A note no one can find lands on the past meetings.
     await page.goto("/meetings/00000000-0000-4000-8000-000000000000");
     await expect(page).toHaveURL("/calendar?view=list&when=past&type=meetings");

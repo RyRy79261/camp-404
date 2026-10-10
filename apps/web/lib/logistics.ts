@@ -37,7 +37,11 @@ import {
   type CalendarMirrorOutcome,
   type MirrorTarget,
 } from "./calendar-mirror";
-import { campEventTargets, listCampEventsToSync } from "./camp-events";
+import {
+  campEventTargets,
+  linkUnlinkedMeetingNotes,
+  listCampEventsToSync,
+} from "./camp-events";
 import { newCalendarEventId, type CalendarEventBody } from "./google-calendar";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
@@ -224,6 +228,9 @@ export async function catchUpCampCalendar(): Promise<{
   tried: number;
   synced: number;
 }> {
+  // A meeting note that names no event gets one first (in the database, on
+  // every environment), so the Calendar shows it and Google gets it below.
+  await linkUnlinkedMeetingNotes();
   if (!isLogisticsCalendarConnected()) return { tried: 0, synced: 0 };
   const [phases, deadlines, events] = await Promise.all([
     listLogisticsPhases(),

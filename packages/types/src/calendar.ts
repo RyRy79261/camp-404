@@ -42,6 +42,18 @@ const optionalText = (max: number, message: string) =>
     .nullable()
     .transform((v) => (v ? v : null));
 
+/**
+ * A calendar event's id as links and forms carry it: Google's own ids and the
+ * app's (base32hex) are letters, digits, `_` and `-`. Anything else is no
+ * event.
+ */
+export const CALENDAR_EVENT_ID = /^[A-Za-z0-9_-]{1,200}$/;
+
+/** An event id from outside, checked against CALENDAR_EVENT_ID. */
+export const CalendarEventId = z
+  .string()
+  .regex(CALENDAR_EVENT_ID, "That event isn't on the calendar.");
+
 export const CAMP_EVENT_KIND_VALUES = ["event", "meeting"] as const;
 export const CampEventKindInput = z.enum(CAMP_EVENT_KIND_VALUES);
 
@@ -156,7 +168,7 @@ export type NewCampEventInput = z.infer<typeof NewCampEventInput>;
  */
 export const EditCampEventInput = z
   .object({
-    eventId: z.string().min(1).max(200),
+    eventId: CalendarEventId,
     version: z.number().int().min(1),
     ...eventFields,
   })
@@ -165,7 +177,7 @@ export type EditCampEventInput = z.infer<typeof EditCampEventInput>;
 
 /** Take an event the app made off the calendar. */
 export const RemoveCampEventInput = z.object({
-  eventId: z.string().min(1).max(200),
+  eventId: CalendarEventId,
   version: z.number().int().min(1),
 });
 export type RemoveCampEventInput = z.infer<typeof RemoveCampEventInput>;

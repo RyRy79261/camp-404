@@ -103,10 +103,11 @@ export interface CalendarEvent {
    */
   teamTag: string | null;
   /**
-   * An event the app keeps from another page: a logistics phase or an
-   * AfrikaBurn date. Changed there, never in the Calendar.
+   * An event the app keeps: one of the Calendar's own (`app`, its row is the
+   * truth), a logistics phase or an AfrikaBurn date (changed on their pages,
+   * never in the Calendar). Null: made in Google.
    */
-  origin?: "logistics" | "deadline" | null;
+  origin?: "app" | "logistics" | "deadline" | null;
 }
 
 export type CalendarResult =
@@ -240,11 +241,13 @@ export function toCalendarEvents(
       allDay,
       location: item.location?.trim() || null,
       teamTag: property || tag,
-      origin: properties.camp404Logistics
-        ? "logistics"
-        : properties.camp404Deadline
-          ? "deadline"
-          : null,
+      origin: properties.camp404Event
+        ? "app"
+        : properties.camp404Logistics
+          ? "logistics"
+          : properties.camp404Deadline
+            ? "deadline"
+            : null,
     });
   }
   return out;

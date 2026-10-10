@@ -40,6 +40,7 @@ vi.mock("@camp404/db/deadlines", async (importOriginal) => ({
 vi.mock("@camp404/db/camp-events", async (importOriginal) => ({
   ...(await importOriginal<typeof CampEventsDb>()),
   listCampEventsToSync: vi.fn(async () => []),
+  linkUnlinkedMeetingNotes: vi.fn(async () => 0),
 }));
 vi.mock("../google-calendar", async (importOriginal) => ({
   ...(await importOriginal<typeof GoogleCalendar>()),

@@ -25,6 +25,7 @@ vi.mock("@camp404/db/camp-events", async (importOriginal) => ({
   editCampEvent: vi.fn(),
   removeCampEvent: vi.fn(),
   listCampEventsToSync: vi.fn(async () => []),
+  linkUnlinkedMeetingNotes: vi.fn(async () => 0),
   getCampEventRow: vi.fn(async () => null),
   markCampEventCalendarSynced: vi.fn(async () => true),
 }));
@@ -217,6 +218,12 @@ describe("the Calendar's events on Google", () => {
       version: 2,
       removed: false,
     });
+  });
+
+  it("the catch-up first gives a note with no event its meeting event, off production too", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect(await catchUpCampCalendar()).toEqual({ tried: 0, synced: 0 });
+    expect(db.linkUnlinkedMeetingNotes).toHaveBeenCalledTimes(1);
   });
 
   it("deletes a removed event's Google copy and lets its row go", async () => {

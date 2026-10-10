@@ -165,6 +165,17 @@ export async function getCampEvent(
     : db.getCampEvent(calendarEventId);
 }
 
+/**
+ * Give every meeting note with no calendar event its own meeting event (as
+ * migration 0108 did), so a note written while a deploy rolled out still
+ * shows in the Calendar. The catch-up runs it first.
+ */
+export async function linkUnlinkedMeetingNotes(): Promise<number> {
+  return usesTestStore()
+    ? campEventsTestStore.linkUnlinkedMeetingNotes()
+    : db.linkUnlinkedMeetingNotes();
+}
+
 /** The events the camp calendar may not match yet, for the catch-up. */
 export async function listCampEventsToSync(): Promise<CampEventRow[]> {
   return usesTestStore()

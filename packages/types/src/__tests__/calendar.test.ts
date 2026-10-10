@@ -134,6 +134,26 @@ describe("MeetingMinutesInput", () => {
     expect(parsed.attendeeIds).toEqual(["a", "b"]);
   });
 
+  it("refuses an event id that is not one", () => {
+    const base = {
+      version: null,
+      agenda: "",
+      notes: "",
+      attendeeIds: [],
+      decisions: [],
+      actionItems: [],
+    };
+    for (const eventId of ["", "a%2Fb", "../x", "a b"]) {
+      expect(MeetingMinutesInput.safeParse({ ...base, eventId }).success).toBe(
+        false,
+      );
+    }
+    expect(
+      MeetingMinutesInput.safeParse({ ...base, eventId: "abc_DEF-123" })
+        .success,
+    ).toBe(true);
+  });
+
   it("refuses an empty decision and a bad deadline", () => {
     const base = {
       eventId: "evt1",

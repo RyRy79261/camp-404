@@ -3735,6 +3735,33 @@ export const testStore = {
           }
         : null;
     },
+    /** Notes that name no calendar event (the catch-up gives them one). */
+    unlinked(): {
+      id: string;
+      cycle: number;
+      team: Team | null;
+      title: string;
+      heldAt: Date;
+      createdById: string;
+    }[] {
+      return meetingNotes
+        .filter((n) => n.calendarEventId === null)
+        .map((n) => ({
+          id: n.id,
+          cycle: n.cycle,
+          team: n.team,
+          title: n.title,
+          heldAt: n.heldAt,
+          createdById: n.createdById,
+        }));
+    },
+    link(noteId: string, calendarEventId: string): void {
+      const n = meetingNotes.find((x) => x.id === noteId);
+      if (n && n.calendarEventId === null) {
+        n.calendarEventId = calendarEventId;
+        n.calendarEventTitle = n.title;
+      }
+    },
     drop(calendarEventId: string): void {
       const at = meetingNotes.findIndex(
         (x) => x.calendarEventId === calendarEventId,
@@ -4356,11 +4383,13 @@ export const testStore = {
       allDay,
       location: body.location ?? null,
       teamTag: body.extendedProperties?.private[TEAM_PROPERTY] ?? null,
-      origin: body.extendedProperties?.private.camp404Logistics
-        ? "logistics"
-        : body.extendedProperties?.private.camp404Deadline
-          ? "deadline"
-          : null,
+      origin: body.extendedProperties?.private.camp404Event
+        ? "app"
+        : body.extendedProperties?.private.camp404Logistics
+          ? "logistics"
+          : body.extendedProperties?.private.camp404Deadline
+            ? "deadline"
+            : null,
       startsAt: allDay ? campDayStart(start) : new Date(start),
       createdById: input.actorId,
     };
