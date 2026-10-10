@@ -251,6 +251,15 @@ only (#242, owner: one budget per team, set by Finance); a team's own lead
 reads it. `get_team_budget` and `list_team_budgets` return each team's
 budget, spent, waiting and left, in cents.
 
+[2026-10-09] `get_team_description(team)` (any member) and
+`update_team_description(team, description, expectedVersion)` (a captain, or
+a lead of THAT team: `canEditTeamProgram`) read and change what a team's
+program says about the team, through the page's own write
+(`saveTeamProgram`): the same 300-character shape, a compare-and-set on the
+version, re-checked inside the transaction, and the page's
+`team.program_changed` audit row. The connector's log records only that a
+description was given. For the Notion import (#239).
+
 ### Required actions (admin)
 
 | Tool                            | R/W | Tier             |

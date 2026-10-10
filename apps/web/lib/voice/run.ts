@@ -58,6 +58,7 @@ export interface RunDeps {
 const CARRIES_VERSION: Readonly<Record<string, readonly string[]>> = {
   update_document: ["update_document", "publish_document"],
   update_meeting_notes: ["update_meeting_notes"],
+  update_team_description: ["update_team_description"],
 };
 
 /** The version a done save returned, when it is one later rows carry. */

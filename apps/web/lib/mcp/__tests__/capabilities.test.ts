@@ -86,6 +86,12 @@ describe("capabilitiesFor", () => {
     expect(kitchen).toContain("create_document");
     expect(kitchen).toContain("approve_reimbursement");
     expect(kitchen).not.toContain("list_audit_log");
+    // Which team's description is the tool's own check (canEditTeamProgram).
+    expect(kitchen).toContain("update_team_description");
+    expect(toolsFor(scopeOf("member"))).not.toContain(
+      "update_team_description",
+    );
+    expect(toolsFor(scopeOf("member"))).toContain("get_team_description");
   });
 
   it("gives a captain every tool", () => {
