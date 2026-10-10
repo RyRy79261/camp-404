@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as DeadlinesDb from "@camp404/db/deadlines";
 import type * as LogisticsDb from "@camp404/db/logistics";
+import type * as CampEventsDb from "@camp404/db/camp-events";
 import type * as GoogleCalendar from "../google-calendar";
 
 vi.mock("server-only", () => ({}));
@@ -34,6 +35,12 @@ vi.mock("@camp404/db/deadlines", async (importOriginal) => ({
   removeDeadline: vi.fn(),
   listDeadlines: vi.fn(async () => []),
   markDeadlineCalendarSynced: vi.fn(async () => true),
+}));
+// The catch-up also reads the Calendar's own events; none here.
+vi.mock("@camp404/db/camp-events", async (importOriginal) => ({
+  ...(await importOriginal<typeof CampEventsDb>()),
+  listCampEventsToSync: vi.fn(async () => []),
+  linkUnlinkedMeetingNotes: vi.fn(async () => 0),
 }));
 vi.mock("../google-calendar", async (importOriginal) => ({
   ...(await importOriginal<typeof GoogleCalendar>()),

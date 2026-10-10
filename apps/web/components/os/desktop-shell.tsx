@@ -196,15 +196,13 @@ const XL_SIZE: OpeningSize = { w: 1040, h: 660, grow: 0.8 };
 const L_SIZE: OpeningSize = { w: 880, h: 600 };
 /** A table, a board or two columns at L: it grows like XL, less far. */
 const L_WIDE: OpeningSize = { w: 880, h: 600, grow: 0.7 };
-const S_SIZE: OpeningSize = { w: 520, h: 440 };
 const WRITE_SIZE: OpeningSize = { w: 1120, h: 800, grow: 0.9 };
 const PAGE_SIZE: Partial<Record<ProgramId, OpeningSize>> = {
   // A team's page opens wide enough for its cards and its people side by side
   // (audit, 2026-10-01: at M it was seven cards in one column).
   team: XL_SIZE,
-  // The meeting editor writes its agenda and notes beside their previews.
-  "new-meeting": L_WIDE,
-  "edit-meeting": L_WIDE,
+  // The minutes editor writes its agenda and notes beside their previews.
+  minutes: L_WIDE,
   tasks: XL_SIZE,
   roster: XL_SIZE,
   payments: XL_SIZE,
@@ -220,7 +218,8 @@ const PAGE_SIZE: Partial<Record<ProgramId, OpeningSize>> = {
   "edit-recipe": XL_SIZE,
   results: XL_SIZE,
   "respondent-answers": XL_SIZE,
-  calendar: L_WIDE,
+  // The month, with the open event beside it (the approved mock-up).
+  calendar: WRITE_SIZE,
   power: L_WIDE,
   logistics: L_WIDE,
   shifts: L_WIDE,
@@ -257,7 +256,6 @@ const PAGE_SIZE: Partial<Record<ProgramId, OpeningSize>> = {
   "join-site": WRITE_SIZE,
   audit: L_WIDE,
   "report-screenshots": L_WIDE,
-  "new-event": S_SIZE,
   terminal: { w: 640, h: 420 },
   inkblot: { w: 700, h: 440 },
 };

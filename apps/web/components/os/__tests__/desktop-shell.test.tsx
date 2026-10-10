@@ -127,9 +127,9 @@ describe("the URL is the focused window", () => {
         mode: "full",
         windows: [
           {
-            key: "meeting:m-1",
-            programId: "meeting",
-            lastUrl: "/meetings/m-1",
+            key: "minutes:m-1",
+            programId: "minutes",
+            lastUrl: "/calendar/m-1/minutes",
             rect: { x: 0, y: 0, w: 400, h: 300 },
             z: 1,
             minimized: false,
@@ -140,9 +140,9 @@ describe("the URL is the focused window", () => {
       }),
     );
     render(<Desktop {...props()} />);
-    expect(frames().sort()).toEqual(["meeting:m-1", "tasks"]);
+    expect(frames().sort()).toEqual(["minutes:m-1", "tasks"]);
     fireEvent.click(screen.getByRole("button", { name: "Close Tasks" }));
-    expect(nav.replace).toHaveBeenCalledWith("/meetings/m-1");
+    expect(nav.replace).toHaveBeenCalledWith("/calendar/m-1/minutes");
   });
 });
 
@@ -201,7 +201,6 @@ describe("how big a page's window opens", () => {
 
   it("keeps small programs and reading pages at their own size", () => {
     for (const vp of [SMALL, HD, QHD]) {
-      expect(pageSize("new-event", vp)).toEqual({ w: 520, h: 440 });
       expect(pageSize("terminal", vp)).toEqual({ w: 640, h: 420 });
       expect(pageSize("inkblot", vp)).toEqual({ w: 700, h: 440 });
       expect(pageSize("guide-chapter", vp)).toEqual({ w: 880, h: 600 });

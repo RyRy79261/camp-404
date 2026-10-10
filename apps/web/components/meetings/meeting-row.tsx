@@ -2,7 +2,11 @@ import Link from "next/link";
 import { ChevronRight, NotebookPen } from "lucide-react";
 import { Badge } from "@camp404/ui/components/badge";
 import type { MeetingNoteSummary } from "@/lib/meeting-notes";
-import { meetingCounts, meetingWhen } from "@/lib/meeting-notes-view";
+import {
+  meetingCounts,
+  meetingHref,
+  meetingWhen,
+} from "@/lib/meeting-notes-view";
 
 // One meeting note as a row, the way the team page draws an open task: an
 // icon, the title with when it was and who came beneath, the first thing it
@@ -21,7 +25,7 @@ export function MeetingRow({
   const counts = meetingCounts(note);
   return (
     <Link
-      href={`/meetings/${note.id}`}
+      href={meetingHref(note)}
       className="group grid grid-cols-[1rem_minmax(0,1fr)_1rem] items-center gap-x-3 gap-y-1.5 py-3 transition-colors hover:text-accent page-sm:grid-cols-[1rem_minmax(0,1fr)_auto_1rem]"
     >
       <NotebookPen className="h-4 w-4 text-muted-foreground" aria-hidden />

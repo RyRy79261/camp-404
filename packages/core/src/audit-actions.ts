@@ -16,6 +16,8 @@ export const AUDIT_ACTION_LABELS = {
   "announcement.pinned": "Pinned an announcement",
   "announcement.unpinned": "Unpinned an announcement",
   "calendar.event_created": "Added a calendar event",
+  "calendar.event_changed": "Changed a calendar event",
+  "calendar.event_removed": "Took an event off the calendar",
   "car.rider_added": "Put a member in a car",
   "car.rider_removed": "Took a member out of a car",
   "car.lift_request_declined": "Declined a member's lift request",
@@ -582,7 +584,9 @@ export function auditDetail(
     }
     // The event's title, and the team it is for; a whole-camp event names
     // no team.
-    case "calendar.event_created": {
+    case "calendar.event_created":
+    case "calendar.event_changed":
+    case "calendar.event_removed": {
       const title = text(metadata, "title");
       if (!title) return null;
       const team = text(metadata, "team");

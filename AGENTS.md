@@ -318,7 +318,7 @@ building block in `packages/ui`:
 - **Long text is never a raw Markdown textarea** (owner, 2026-10-01). Use
   `MarkdownField` (`apps/web/components/markdown`): the WYSIWYG Markdown
   editor with its preview beside it, Write | Preview tabs in a narrow window.
-  The meeting notes use it.
+  The meeting notes (the minutes editor) use it.
 
 ## Database — read this before touching the schema
 
@@ -723,6 +723,34 @@ Decisions baked into the schema — keep new code consistent with them:
   public answers the same 404 as one never used. The guide's e2e
   (`apps/guide/tests/e2e`) runs on fixtures through the same cut, with a
   canary that must be in no response.
+- **The Calendar, with meetings in it** (owner, 2026-10-10: "Meetings is a
+  type of calendar item, it shouldn't be a separate app, you make events in
+  the calendar app"). One program, `/calendar`: a Monday-first month or a
+  Coming up / Past list, team and type filters, the open event beside it (a
+  full-screen sheet on a phone). Every view is a link (`calendarHref` in
+  `lib/calendar-month.ts`: `view`, `month`, `when`, `team`, `type`, `event`,
+  `new`), and every change is a `router.replace` to it. The Meetings and New
+  event programs are gone; `/meetings/*` and `/captains/calendar` redirect
+  into the Calendar.
+  - Events made in the Calendar are `camp_events` rows (`@camp404/db/camp-events`):
+    an Event or a Meeting, one team or the whole camp. Captains, and leads of
+    the event's team, make, change and remove them (`canManageCampEvent`,
+    owner 1A; whole camp is captains'); a compare-and-set on `version`,
+    audited (`calendar.event_created` / `_changed` / `_removed`). Each row
+    claims ONE Google id when it is made and is mirrored like a logistics
+    phase (`lib/calendar-mirror.ts`, the same catch-up); only production
+    writes to Google.
+  - A meeting's agenda and minutes are its `meeting_notes` row, linked by the
+    Google id (`meeting_notes.calendar_event_id`, unique since 0109). Making a
+    Meeting writes its note in the same transaction; changing it keeps the
+    note's title, team and time in step; a meeting with minutes is never
+    removed. Minutes are written at `/calendar/<event id>/minutes` by the
+    team's members this year and captains (`canWorkInTeam`). An event made in
+    Google is read-only in the app, but writing minutes on it makes it a
+    meeting. Migration 0108 turned every note that named no event into a
+    meeting event of its own (the catch-up puts them on Google).
+  - Google's description of an event made in Google is still never read; the
+    Calendar shows the description only of events the app made.
 - **Logistics calendar (#247).** The year's pack, travel, build, burn, strike
   and unpack days are one row per (year, phase) in `logistics_phases`. A
   captain or a Transport and Logistics lead sets them (`canEditLogistics`), a

@@ -13,8 +13,8 @@ import {
 import {
   canApproveClaim,
   canEditTeamProgram,
+  canManageCampEvent,
   canManageMoney,
-  canWorkInTeam,
   errorLogText,
 } from "@camp404/core";
 import { Team } from "@camp404/types";
@@ -79,8 +79,9 @@ export async function generateMetadata({
 //
 // Who may change things (ruling 1): a captain or a lead of THIS team, by
 // canEditTeamProgram; only they get the Edit control, and the action checks
-// again. "New meeting" keeps the meeting notes' own rule (canWorkInTeam: the
-// team's members this year and captains). The team's budget (#242) follows
+// again. "New meeting" opens the Calendar's New event form, for those who put
+// the team's meetings on the calendar (canManageCampEvent: captains and the
+// team's leads); its members write the minutes there. The team's budget (#242) follows
 // its own panels: every member reads the totals (budget, spent, left), never
 // a claim.
 // The composition is Home's: the main cards on the left, the people beside.
@@ -207,10 +208,10 @@ export default async function TeamPage({
   });
 
   const calendarHref = `/calendar?team=${encodeURIComponent(key)}`;
-  // The team's members this year and captains write its meeting notes.
-  const canWriteNotes =
-    !entry.archived &&
-    canWorkInTeam(rank, page.viewer.onTeam ? [key] : [], key);
+  // Captains and the team's leads put its meetings on the calendar; its
+  // members write their minutes there.
+  const canAddMeeting =
+    !entry.archived && canManageCampEvent(rank, leadTeams, key);
 
   return (
     <div className="flex flex-col">
@@ -379,7 +380,7 @@ export default async function TeamPage({
                 <NotebookPen className="h-4 w-4 text-accent" aria-hidden />
                 Meetings
               </CardTitle>
-              {canWriteNotes ? (
+              {canAddMeeting ? (
                 <Button asChild variant="outline" size="sm">
                   <Link href={newMeetingHref(key)}>
                     <Plus aria-hidden />

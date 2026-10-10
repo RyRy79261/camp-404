@@ -27,6 +27,7 @@ import {
 import { getInventoryItem } from "../inventory";
 import { CONDITION_LABELS, LOCATION_LABELS } from "../inventory-copy";
 import { getMeetingNote } from "../meeting-notes";
+import { meetingHref } from "../meeting-notes-view";
 import { getQuestionnaireForPicker } from "../questionnaire-config";
 import { recipePath } from "../recipe-copy";
 import { getRecipeDetail } from "../recipes";
@@ -685,26 +686,25 @@ const otherPreviews: Record<string, PreviewFn> = {
         "Change a meeting's notes",
         "That meeting isn't there.",
         args,
-        "/meetings",
+        "/calendar",
       );
-    const fields = ["title", "agenda", "notes", "decisions"].filter(
+    const fields = ["agenda", "notes", "decisions"].filter(
       (k) => args[k] !== undefined,
     );
     const label: Record<string, string> = {
-      title: "Title",
       agenda: "Agenda",
       notes: "Notes",
       decisions: "Decisions (the whole list)",
     };
     return {
       sentence: `Change the ${fields.join(", ") || "notes"} of ${quote(note.title)}`,
-      facts: `Meetings · ${dayLabel(note.heldAt.toISOString().slice(0, 10))} · as you read it`,
+      facts: `Calendar · ${dayLabel(note.heldAt.toISOString().slice(0, 10))} · as you read it`,
       change: fields.map((k) =>
         k === "decisions" && Array.isArray(args.decisions)
           ? `${label[k]}: ${listed(args.decisions.map((d) => shown(d)))}`
           : `${label[k]}: ${shown(args[k])}`,
       ),
-      path: `/meetings/${note.id}`,
+      path: meetingHref(note),
       args: { ...args, expectedVersion: note.version },
       keys: [`meeting:${note.id}`],
     };

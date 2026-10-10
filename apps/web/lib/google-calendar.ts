@@ -3,6 +3,7 @@ import "server-only";
 import { createSign, randomUUID } from "node:crypto";
 import {
   CAMP_TIME_ZONE,
+  campDayStart,
   nextCampDay,
   parseTeamTag,
   redactSecrets,
@@ -29,6 +30,9 @@ import {
 //
 // WHAT IT SHOWS. Title, start, end, place and the team the event belongs to —
 // never the description, guests or attachments, and nothing marked private.
+// (An event the app made keeps its description in the app's own table, and
+// the Calendar shows it from there.) The Calendar reads any range of days,
+// the past included (readCalendarRange); Home reads the weeks ahead.
 // Recurring events arrive already expanded (singleEvents=true), so there is no
 // recurrence maths here.
 //
@@ -85,6 +89,11 @@ export interface CalendarEvent {
   title: string;
   /** All-day: the date as YYYY-MM-DD. Timed: an ISO instant. */
   start: string;
+  /**
+   * All-day: the day AFTER the last day, as Google keeps it (exclusive).
+   * Timed: an ISO instant. Absent when Google gave none.
+   */
+  end?: string | null;
   allDay: boolean;
   location: string | null;
   /**
@@ -93,6 +102,12 @@ export interface CalendarEvent {
    * matches it against the camp's teams.
    */
   teamTag: string | null;
+  /**
+   * An event the app keeps: one of the Calendar's own (`app`, its row is the
+   * truth), a logistics phase or an AfrikaBurn date (changed on their pages,
+   * never in the Calendar). Null: made in Google.
+   */
+  origin?: "app" | "logistics" | "deadline" | null;
 }
 
 export type CalendarResult =
@@ -190,6 +205,7 @@ interface GoogleEvent {
   visibility?: string;
   location?: string;
   start?: { date?: string; dateTime?: string };
+  end?: { date?: string; dateTime?: string };
   extendedProperties?: { private?: Record<string, string | undefined> };
 }
 
@@ -214,21 +230,48 @@ export function toCalendarEvents(
     const start = item.start?.date ?? item.start?.dateTime;
     if (!start) continue;
     const { tag } = parseTeamTag(item.summary);
-    const property = item.extendedProperties?.private?.[TEAM_PROPERTY]?.trim();
+    const properties = item.extendedProperties?.private ?? {};
+    const property = properties[TEAM_PROPERTY]?.trim();
+    const end = item.end?.date ?? item.end?.dateTime ?? null;
     out.push({
       id: item.id,
       title: item.summary?.trim() || "Untitled event",
       start,
+      end,
       allDay,
       location: item.location?.trim() || null,
       teamTag: property || tag,
+      origin: properties.camp404Event
+        ? "app"
+        : properties.camp404Logistics
+          ? "logistics"
+          : properties.camp404Deadline
+            ? "deadline"
+            : null,
     });
   }
   return out;
 }
 
-/** One cached read per range ("60:6", "365:250"). */
+/** The fields one event is read with: never the description or the guests. */
+const EVENT_FIELDS =
+  "id,summary,status,visibility,location,start,end,extendedProperties/private";
+const EVENT_FIELDS_LIST = `items(${EVENT_FIELDS})`;
+
+/** One cached read per range ("60:6", "365:250", "range:<from>:<to>"). */
 const cached = new Map<string, { at: number; result: CalendarResult }>();
+/** At most this many ranges are kept, the oldest dropped first. */
+const CACHE_ENTRIES = 40;
+
+function remember(key: string, at: number, result: CalendarResult): void {
+  cached.delete(key);
+  cached.set(key, { at, result });
+  while (cached.size > CACHE_ENTRIES) {
+    const oldest = cached.keys().next().value;
+    if (oldest === undefined) break;
+    cached.delete(oldest);
+  }
+}
 
 /**
  * The next events on the camp calendar, `range.days` ahead and at most
@@ -262,10 +305,7 @@ export async function getUpcomingEvents(
     // Twice what is shown, up to Google's page size: cancelled and private
     // events come back too and are dropped below.
     url.searchParams.set("maxResults", String(Math.min(range.max * 2, 2500)));
-    url.searchParams.set(
-      "fields",
-      "items(id,summary,status,visibility,location,start,extendedProperties/private)",
-    );
+    url.searchParams.set("fields", EVENT_FIELDS_LIST);
     const eventsRes = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(timeoutMs),
@@ -280,8 +320,88 @@ export async function getUpcomingEvents(
     console.error("camp calendar read failed", logSafe(error, env));
     result = { status: "unavailable" };
   }
-  cached.set(key, { at: now.getTime(), result });
+  remember(key, now.getTime(), result);
   return result;
+}
+
+/** How many events one range read keeps: Google's own page size. */
+export const RANGE_MAX_EVENTS = 2500;
+
+/**
+ * Every event on the camp calendar that touches the camp days `from` to `to`
+ * (YYYY-MM-DD, both counted), the past included, soonest first: what the
+ * Calendar's month and list read. Never throws, as getUpcomingEvents.
+ */
+export async function readCalendarRange(
+  range: { from: string; to: string },
+  env: EnvBag = process.env,
+  now: Date = new Date(),
+  timeoutMs: number = CALENDAR_TIMEOUT_MS,
+): Promise<CalendarResult> {
+  const config = calendarConfig(env);
+  if (!config) return { status: "not_configured" };
+  const key = `range:${range.from}:${range.to}`;
+  const hit = cached.get(key);
+  if (hit && now.getTime() - hit.at < CACHE_MS) return hit.result;
+
+  let result: CalendarResult;
+  try {
+    const token = await accessToken(config, READ_SCOPE, now, timeoutMs);
+    const url = eventsUrl(config.calendarId);
+    url.searchParams.set("singleEvents", "true");
+    url.searchParams.set("orderBy", "startTime");
+    // Camp days start at 00:00 in Johannesburg, UTC+2 all year.
+    url.searchParams.set("timeMin", campDayStart(range.from).toISOString());
+    url.searchParams.set(
+      "timeMax",
+      campDayStart(nextCampDay(range.to)).toISOString(),
+    );
+    url.searchParams.set("maxResults", String(RANGE_MAX_EVENTS));
+    url.searchParams.set("fields", EVENT_FIELDS_LIST);
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) throw new Error(`events ${res.status}`);
+    const body = (await res.json()) as { items?: GoogleEvent[] };
+    result = { status: "ok", events: toCalendarEvents(body.items ?? []) };
+  } catch (error) {
+    console.error("camp calendar read failed", logSafe(error, env));
+    result = { status: "unavailable" };
+  }
+  remember(key, now.getTime(), result);
+  return result;
+}
+
+/**
+ * One event on the camp calendar by its id, for a link to an event outside
+ * the days on screen. Null when Google has no such event, or it is cancelled
+ * or private; `unavailable` when it cannot be asked.
+ */
+export async function readCalendarEvent(
+  eventId: string,
+  env: EnvBag = process.env,
+  now: Date = new Date(),
+  timeoutMs: number = CALENDAR_TIMEOUT_MS,
+): Promise<CalendarEvent | null | "unavailable"> {
+  const config = calendarConfig(env);
+  if (!config) return null;
+  try {
+    const token = await accessToken(config, READ_SCOPE, now, timeoutMs);
+    const url = eventsUrl(config.calendarId, eventId);
+    url.searchParams.set("fields", EVENT_FIELDS);
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (res.status === 404 || res.status === 410) return null;
+    if (!res.ok) throw new Error(`event ${res.status}`);
+    const item = (await res.json()) as GoogleEvent;
+    return toCalendarEvents([item])[0] ?? null;
+  } catch (error) {
+    console.error("camp calendar read failed", logSafe(error, env));
+    return "unavailable";
+  }
 }
 
 /**

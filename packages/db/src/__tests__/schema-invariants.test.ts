@@ -346,6 +346,7 @@ describe("year-scoped tables", () => {
   const YEAR_SCOPED = [
     "adoptees",
     "afrikaburn_deadlines",
+    "camp_events",
     "camp_layout_versions",
     "camp_layouts",
     "camp_participations",
