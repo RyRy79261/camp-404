@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { CAMP_TIME_ZONE, campDayStart, canWorkInTeam } from "@camp404/core";
 import type { DbOrTx } from "./audit";
 import { currentCycleNumber } from "./cycles";
@@ -50,6 +50,8 @@ export const EVENT_NOT_ON_CALENDAR =
   "That event isn't on the camp calendar any more. Pick another, or none.";
 export const ITEM_GONE = "That action item isn't on the note any more.";
 export const ALREADY_A_TASK = "That action item is already on the task board.";
+export const MINUTES_STARTED =
+  "Someone started this meeting's minutes a moment ago. Open it again to see them.";
 
 /** A refusal thrown inside a transaction, so nothing it wrote is kept. */
 class Refusal extends Error {}
@@ -65,8 +67,23 @@ async function refusing<T extends object>(
     return await fn();
   } catch (error) {
     if (error instanceof Refusal) return { ok: false, error: error.message };
+    // One note per calendar event (meeting_notes_calendar_event_uniq): two
+    // people writing a meeting's first minutes at once, the second loses.
+    if (isUniqueViolation(error, "meeting_notes_calendar_event_uniq")) {
+      return { ok: false, error: MINUTES_STARTED };
+    }
     throw error;
   }
+}
+
+/** A unique violation on `constraint`; drizzle nests the PG error in .cause. */
+function isUniqueViolation(error: unknown, constraint: string): boolean {
+  for (let e: unknown = error, i = 0; e && i < 4; i++) {
+    const pg = e as { code?: string; constraint?: string; cause?: unknown };
+    if (pg.code === "23505" && pg.constraint === constraint) return true;
+    e = pg.cause;
+  }
+  return false;
 }
 
 // --- Reads ---------------------------------------------------------------
@@ -76,6 +93,12 @@ export interface MeetingNoteSummary {
   team: Team | null;
   title: string;
   heldAt: Date;
+  /** The meeting's calendar event (its Google id). */
+  calendarEventId: string | null;
+  /** Whether anything is written in the notes box. */
+  notesWritten: boolean;
+  /** Action items not yet done on the task board (or not on it yet). */
+  openActionItems: number;
   decisions: number;
   actionItems: number;
   /** How many people were ticked as there. */
@@ -86,25 +109,52 @@ export interface MeetingNoteSummary {
 
 /**
  * Meeting notes, newest meeting first: one team's (`team`), the whole camp's
- * (`"camp"`), or every note (undefined). At most `limit`.
+ * (`"camp"`), or every note (undefined). At most `limit`. The Calendar narrows
+ * it to the meetings it shows: those whose event is in `eventIds`, or held
+ * between `heldFrom` and `heldTo` (an event that has gone from Google).
  */
 export async function listMeetingNotes(
-  input: { team?: Team | "camp"; limit?: number } = {},
+  input: {
+    team?: Team | "camp";
+    limit?: number;
+    eventIds?: readonly string[];
+    heldFrom?: Date;
+    heldTo?: Date;
+  } = {},
 ): Promise<MeetingNoteSummary[]> {
   const db = createHttpDb();
   const n = schema.meetingNotes;
-  const where =
+  const teamWhere =
     input.team === undefined
       ? undefined
       : input.team === "camp"
         ? isNull(n.team)
         : eq(n.team, input.team);
+  const narrowed =
+    input.eventIds !== undefined ||
+    input.heldFrom !== undefined ||
+    input.heldTo !== undefined;
+  const scope = narrowed
+    ? or(
+        input.eventIds && input.eventIds.length > 0
+          ? inArray(n.calendarEventId, [...input.eventIds])
+          : undefined,
+        input.heldFrom && input.heldTo
+          ? and(gte(n.heldAt, input.heldFrom), lt(n.heldAt, input.heldTo))
+          : undefined,
+        sql`false`,
+      )
+    : undefined;
+  const where = and(teamWhere, scope);
   const query = db
     .select({
       id: n.id,
       team: n.team,
       title: n.title,
       heldAt: n.heldAt,
+      calendarEventId: n.calendarEventId,
+      notesWritten: sql<boolean>`length(btrim(${n.notes})) > 0`,
+      openActionItems: sql<number>`(select count(*)::int from meeting_note_action_items i left join tasks t on t.id = i.task_id where i.note_id = meeting_notes.id and (t.id is null or t.status in ('open', 'in_progress')))`,
       // Plain SQL names: inside a select, drizzle writes a column without its
       // table, which the subquery would read as its own row's id.
       decisions: sql<number>`(select count(*)::int from meeting_note_decisions d where d.note_id = meeting_notes.id)`,
@@ -158,6 +208,17 @@ export interface MeetingNote {
 }
 
 const displayName = (name: string | null) => name?.trim() || "Unnamed member";
+
+/** The note of the meeting whose calendar event is `calendarEventId`. */
+export async function getMeetingNoteByEvent(
+  calendarEventId: string,
+): Promise<MeetingNote | null> {
+  const [row] = await createHttpDb()
+    .select({ id: schema.meetingNotes.id })
+    .from(schema.meetingNotes)
+    .where(eq(schema.meetingNotes.calendarEventId, calendarEventId));
+  return row ? getMeetingNote(row.id) : null;
+}
 
 /** One note in full, or null when there is no such note. */
 export async function getMeetingNote(

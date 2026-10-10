@@ -152,6 +152,10 @@
 //     General meeting" convention), teamEventName, readTeamEvent (an event's
 //     team and bare title, either convention), parseTeamTag, teamForTag
 //     (./calendar-titles)
+//   - camp events (the Calendar's own events and meetings): canManageCampEvent
+//     (a captain, or a lead of the event's team; whole camp is captains'),
+//     canCreateCampEvents, campEventRefusal, hasMinutes,
+//     campEventCalendarStep (./camp-events)
 //   - meeting notes: canWorkInTeam (a team's members this year, or a
 //     captain; a whole-camp note is a captain's), meetingInstant,
 //     meetingTimeKey and MEETING_NOTE_PRIVACY_REMINDER (./meeting-notes)
@@ -239,6 +243,7 @@ export * from "./kitchen-prints";
 export * from "./recipe-source";
 export * from "./calendar-titles";
 export * from "./meeting-notes";
+export * from "./camp-events";
 export * from "./guide";
 export * from "./guide-public";
 export * from "./search-text";
