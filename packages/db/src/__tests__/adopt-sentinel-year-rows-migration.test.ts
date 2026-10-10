@@ -159,7 +159,12 @@ describe("0105_adopt_sentinel_year_rows", () => {
        WHERE table_schema = 'public' AND column_name = 'cycle'`,
     );
     expect(rows.length).toBeGreaterThan(40);
-    for (const { table_name } of rows) {
+    // Tables made after 0105 (frozen): setFoundingYear adopts their rows
+    // (YEAR_TABLES_ADOPTED_AS_IS), and no row could be stranded before them.
+    const madeLater = new Set(["camp_events"]);
+    for (const { table_name } of rows.filter(
+      (r) => !madeLater.has(r.table_name),
+    )) {
       expect({ table_name, named: SQL.includes(table_name) }).toEqual({
         table_name,
         named: true,
