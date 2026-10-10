@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "meeting_notes_calendar_event_uniq" ON "meeting_notes" USING btree ("calendar_event_id");

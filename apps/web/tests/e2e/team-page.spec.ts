@@ -81,14 +81,15 @@ test.describe("team page (test-mode)", () => {
     );
     await expect(page.locator("#announcement-audience")).toHaveText("Kitchen");
 
-    await page.goto("/captains/calendar");
+    // The lead adds a Kitchen event in the Calendar.
+    await page.goto(`/calendar?new=${NEXT_WEEK}`);
+    const form = page.getByRole("form", { name: "New event" });
     await pick(page, "#event-team", "Kitchen");
-    await page.getByLabel("Title").fill("Kitchen briefing");
-    await page.getByLabel("Date").fill(NEXT_WEEK);
-    await page.getByLabel("Starts").fill("18:00");
-    await page.getByLabel("Ends").fill("19:30");
-    await page.getByRole("button", { name: "Add event" }).click();
-    await expect(page.getByText("Event added")).toBeVisible();
+    await form.getByLabel("Title").fill("Kitchen briefing");
+    await form.getByLabel("Starts").fill("18:00");
+    await form.getByLabel("Ends").fill("19:30");
+    await form.getByRole("button", { name: "Add to the calendar" }).click();
+    await expect(page.getByText("Added to the calendar")).toBeVisible();
 
     // Someone from another team opens the Kitchen's page.
     await login(page, { id: "team-money", email: "team-money@example.com" });

@@ -309,7 +309,7 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     kind: "read",
     area: "Calendar",
     gate: GATES.member,
-    does: "The camp calendar from today to a year ahead, by day, by team.",
+    does: "The camp calendar's events and meetings by day, the past included, by team and type, with how each meeting's minutes stand.",
     page: "/calendar",
   },
   // Meetings
@@ -317,22 +317,22 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     kind: "read",
     area: "Meetings",
     gate: GATES.member,
-    does: "Meeting notes, newest first, by team or whole camp.",
-    page: "/meetings",
+    does: "Meetings with notes, newest first, by team or whole camp.",
+    page: "/calendar",
   },
   get_meeting: {
     kind: "read",
     area: "Meetings",
     gate: GATES.member,
     does: "One meeting's agenda, notes, decisions and action items.",
-    page: "/meetings",
+    page: "/calendar",
   },
   update_meeting_notes: {
     kind: "write",
     area: "Meetings",
     gate: GATES.member,
-    does: "Change a meeting's title, agenda, notes or decisions, on the version you read (its team's members this year, and captains).",
-    page: "/meetings",
+    does: "Change a meeting's agenda, notes or decisions, on the version you read (its team's members this year, and captains).",
+    page: "/calendar",
   },
   // Shifts
   list_shifts: {
@@ -897,16 +897,16 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
   },
   {
     area: "Calendar",
-    what: "Add an event to the camp calendar (team leads: for a team they lead)",
+    what: "Add, change or remove an event or a meeting on the camp calendar (team leads: for a team they lead)",
     why: WIDE,
-    path: "/captains/calendar",
+    path: "/calendar",
     gate: GATES.teamLead,
   },
   {
     area: "Meetings",
-    what: "Write a new meeting note, tick who was there, change action items or put one on the task board",
-    why: "These live on the Meetings pages; the connector has no tool for them yet.",
-    path: "/meetings",
+    what: "Write the first minutes of a meeting, tick who was there, change action items or put one on the task board",
+    why: "These live on the Calendar; the connector has no tool for them yet.",
+    path: "/calendar",
     gate: GATES.member,
   },
   {

@@ -26,6 +26,10 @@ vi.mock("@/lib/camp-calendar", async (importOriginal) => ({
     status: "ok",
     events: (await import("./camp")).CALENDAR_EVENTS,
   })),
+  getCalendarRange: vi.fn(async () => ({
+    status: "ok",
+    events: (await import("./camp")).CALENDAR_EVENTS,
+  })),
 }));
 
 import { getMcpScope } from "@/lib/mcp/scope";

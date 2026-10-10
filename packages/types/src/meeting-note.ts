@@ -1,11 +1,10 @@
 import { z } from "zod";
-import { Team } from "./roles";
+import { CalendarEventId } from "./calendar";
 
 // What a team member types to record a meeting (#268). Who may write for which
 // team is the server's rule (canWorkInTeam), not this shape's.
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const day = (message: string) =>
   z
@@ -34,16 +33,18 @@ export const MeetingActionItemInput = z.object({
 });
 export type MeetingActionItemInput = z.infer<typeof MeetingActionItemInput>;
 
-const meetingFields = {
-  title: z
-    .string()
-    .trim()
-    .min(1, "Give the meeting a title.")
-    .max(120, "Keep the title under 120 characters."),
-  date: day("Pick the meeting's date."),
-  time: z.string().regex(TIME, "Use a time like 18:30."),
-  /** A Google Calendar event id, when the meeting is on the camp calendar. */
-  calendarEventId: z.string().min(1).max(200).nullable(),
+/**
+ * A meeting's agenda and minutes, as the minutes editor sends them (owner,
+ * 2026-10-10: a meeting is an event on the calendar, with an agenda before and
+ * minutes after). The meeting's title, team and time are its calendar
+ * event's, never the editor's. `version` is the note's version the editor
+ * opened, or null when the meeting has no note yet (an event made in Google,
+ * given minutes for the first time).
+ */
+export const MeetingMinutesInput = z.object({
+  /** The meeting's calendar event id. */
+  eventId: CalendarEventId,
+  version: z.number().int().min(1).nullable(),
   agenda: z
     .string()
     .trim()
@@ -68,25 +69,8 @@ const meetingFields = {
   actionItems: z
     .array(MeetingActionItemInput)
     .max(MEETING_NOTE_LIST_MAX, "That's a lot of action items: at most 50."),
-};
-
-/** A new meeting note: a team's, or the whole camp's when `team` is null. */
-export const NewMeetingNoteInput = z.object({
-  team: Team.nullable(),
-  ...meetingFields,
 });
-export type NewMeetingNoteInput = z.infer<typeof NewMeetingNoteInput>;
-
-/**
- * An edit carries the note and the version the editor opened, so a second
- * editor cannot silently overwrite the first. A note keeps its team.
- */
-export const EditMeetingNoteInput = z.object({
-  noteId: z.string().min(1).max(100),
-  version: z.number().int().min(1),
-  ...meetingFields,
-});
-export type EditMeetingNoteInput = z.infer<typeof EditMeetingNoteInput>;
+export type MeetingMinutesInput = z.infer<typeof MeetingMinutesInput>;
 
 /** Turn one action item into a task on the board. */
 export const ActionItemToTaskInput = z.object({

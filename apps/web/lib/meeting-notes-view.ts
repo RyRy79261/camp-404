@@ -1,11 +1,5 @@
-import {
-  CAMP_TIME_ZONE,
-  campDayKey,
-  meetingTimeKey,
-  readTeamEvent,
-  type CalendarTeam,
-} from "@camp404/core";
-import type { CalendarEvent } from "./google-calendar";
+import { CAMP_TIME_ZONE, campDayKey, meetingTimeKey } from "@camp404/core";
+import { calendarHref } from "./calendar-month";
 
 // What the meeting-notes pages show, decided from plain data (#268). Pure: the
 // pages read the notes and the calendar, and this words and shapes them.
@@ -16,15 +10,59 @@ export const TEAM_MEETING_LIMIT = 5;
 /** The `?team=` value that asks for whole-camp meetings only. */
 export const WHOLE_CAMP_MEETINGS = "camp";
 
-/** The meetings list, for one team, the whole camp, or everyone. */
-export function meetingsHref(team?: string | null): string {
-  if (team === undefined) return "/meetings";
-  return `/meetings?team=${encodeURIComponent(team ?? WHOLE_CAMP_MEETINGS)}`;
+/**
+ * The meetings list (the Calendar's past meetings since 2026-10-10), for one
+ * team, the whole camp, or everyone.
+ */
+export function meetingsHref(
+  team?: string | null,
+  today = campDayKey(new Date()),
+): string {
+  return calendarHref({
+    view: "list",
+    month: today.slice(0, 7),
+    when: "past",
+    team: team === undefined ? null : (team ?? WHOLE_CAMP_MEETINGS),
+    type: "meetings",
+    event: null,
+    newOn: null,
+  });
 }
 
-/** Where "New meeting" goes, for one team or the whole camp. */
-export function newMeetingHref(team: string | null): string {
-  return `/meetings/new?team=${encodeURIComponent(team ?? WHOLE_CAMP_MEETINGS)}`;
+/**
+ * Where "New meeting" goes: the Calendar's New event form on today, over one
+ * team's (or the whole camp's) meetings.
+ */
+export function newMeetingHref(
+  team: string | null,
+  today = campDayKey(new Date()),
+): string {
+  return calendarHref({
+    view: "month",
+    month: today.slice(0, 7),
+    when: "upcoming",
+    team: team ?? WHOLE_CAMP_MEETINGS,
+    type: "meetings",
+    event: null,
+    newOn: today,
+  });
+}
+
+/** One meeting, open in the Calendar on its month. */
+export function meetingHref(note: {
+  calendarEventId: string | null;
+  heldAt: Date;
+}): string {
+  if (!note.calendarEventId) return meetingsHref();
+  return calendarHref({
+    view: "month",
+    month: campDayKey(note.heldAt).slice(0, 7),
+    when: "upcoming",
+    team: null,
+    type: "all",
+    event: note.calendarEventId,
+    newOn: null,
+  });
 }
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
@@ -93,45 +131,4 @@ export function meetingCounts(input: {
       : null,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-/** An event on the camp calendar the editor offers to link a note to. */
-export interface MeetingEventOption {
-  id: string;
-  /** The event's title without its team's prefix. */
-  title: string;
-  /** Its team's key; null for a whole-camp event. */
-  team: string | null;
-  /** The camp day, YYYY-MM-DD, and the start time (null for all day). */
-  date: string;
-  time: string | null;
-  /** "Fri 2 Oct · 18:00 · Kitchen kickoff". */
-  label: string;
-}
-
-/**
- * The calendar's events as the editor offers them, soonest first, each with
- * its team read the way the Calendar page reads it.
- */
-export function meetingEventOptions(
-  events: readonly CalendarEvent[],
-  teams: readonly CalendarTeam[],
-): MeetingEventOption[] {
-  return events.map((event) => {
-    const { team, title } = readTeamEvent(event.title, event.teamTag, teams);
-    const start = event.allDay
-      ? new Date(`${event.start}T12:00:00+02:00`)
-      : new Date(event.start);
-    const date = event.allDay ? event.start : campDayKey(start);
-    const time = event.allDay ? null : meetingTimeKey(start);
-    const day = SHORT_DAY.format(start).replace(",", "");
-    return {
-      id: event.id,
-      title,
-      team: team?.key ?? null,
-      date,
-      time,
-      label: [day, time ?? "All day", title].join(" · "),
-    };
-  });
 }

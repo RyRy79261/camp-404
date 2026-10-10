@@ -41,10 +41,7 @@ export type ProgramId =
   | "guide-version"
   | "new-guide-chapter"
   | "edit-guide-chapter"
-  | "meetings"
-  | "meeting"
-  | "new-meeting"
-  | "edit-meeting"
+  | "minutes"
   | "power"
   | "logistics"
   | "shifts"
@@ -68,7 +65,6 @@ export type ProgramId =
   | "results"
   | "respondent-answers"
   | "announcements"
-  | "new-event"
   | "overview"
   | "camp-sheet"
   | "applications"
@@ -119,10 +115,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   "guide-version": "Chapter version",
   "new-guide-chapter": "New chapter",
   "edit-guide-chapter": "Edit chapter",
-  meetings: "Meetings",
-  meeting: "Meeting",
-  "new-meeting": "New meeting",
-  "edit-meeting": "Edit meeting",
+  minutes: "Minutes",
   power: "Power",
   logistics: "Logistics",
   shifts: "Shifts",
@@ -146,7 +139,6 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   results: "Results",
   "respondent-answers": "Answers",
   announcements: "Announcements",
-  "new-event": "New event",
   overview: "Camp overview",
   applications: "Applications",
   "claim-approvals": "Claims to approve",
@@ -164,13 +156,13 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
 };
 
 export interface ProgramRoute {
-  /** The route as its folder names it: `/meetings/[id]/edit`. */
+  /** The route as its folder names it: `/calendar/[eventId]/minutes`. */
   pattern: string;
   programId: ProgramId;
   /**
    * The window this URL focuses. Sub-pages of one program share it
    * (`/profile/security` is the My account window); documents get their own
-   * (`meeting:<id>`). Query strings never change it.
+   * (`minutes:<id>`). Query strings never change it.
    */
   instance: (params: readonly string[]) => string;
   /** The generic file name for a title bar, the Terminal and `?next=`. */
@@ -200,8 +192,8 @@ function route(
 
 /**
  * Every console page, as a program. The first row that matches wins, so a
- * static segment (`/meetings/new`) is listed before the dynamic one beside it
- * (`/meetings/[id]`).
+ * static segment (`/guide/new`) is listed before the dynamic one beside it
+ * (`/guide/[slug]`).
  */
 export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   // The desktop itself, and the two old hubs that now send there.
@@ -240,7 +232,15 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
 
   // Camp
   route("/tasks", "tasks", "TASKS.EXE"),
+  // The Calendar (owner, 2026-10-10: meetings are a type of event in it), and
+  // a meeting's minutes in a window of their own, per meeting.
   route("/calendar", "calendar", "CALENDAR.EXE"),
+  route(
+    "/calendar/[eventId]/minutes",
+    "minutes",
+    "MINUTES.TXT",
+    keyed("minutes"),
+  ),
   // Before the team pages, so /teams/budgets is not read as a team's key.
   route("/teams/budgets", "budgets", "BUDGETS.XLS"),
   route("/teams/[key]", "team", "TEAM.EXE", keyed("team")),
@@ -269,15 +269,12 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
     "CHAPTER.VER",
     keyed("guide-version"),
   ),
-  route("/meetings", "meetings", "MINUTES.EXE"),
-  route("/meetings/new", "new-meeting", "NEWMEET.TXT"),
-  route("/meetings/[id]", "meeting", "MEETING.TXT", keyed("meeting")),
-  route(
-    "/meetings/[id]/edit",
-    "edit-meeting",
-    "MEETING.TXT",
-    keyed("edit-meeting"),
-  ),
+  // The Meetings program went away (owner, 2026-10-10); its old addresses
+  // send to the Calendar, so they open its window.
+  route("/meetings", "calendar", "CALENDAR.EXE"),
+  route("/meetings/new", "calendar", "CALENDAR.EXE"),
+  route("/meetings/[id]", "calendar", "CALENDAR.EXE"),
+  route("/meetings/[id]/edit", "calendar", "CALENDAR.EXE"),
   route("/power", "power", "POWER.EXE"),
   route("/power/loads", "power", "POWER.EXE"),
   route("/power/fuel", "power", "POWER.EXE"),
@@ -365,7 +362,8 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
     keyed("respondent-answers"),
   ),
   route("/captains/announcements", "announcements", "BROADCAST.EXE"),
-  route("/captains/calendar", "new-event", "NEWEVENT.EXE"),
+  // Events are added in the Calendar now; the old page sends there.
+  route("/captains/calendar", "calendar", "CALENDAR.EXE"),
   route("/captains/overview", "overview", "CAMPSTAT.EXE"),
   route("/captains/camp-sheet", "camp-sheet", "CAMP_SHEET.XLS"),
   route("/captains/applications", "applications", "INTAKE.DB"),

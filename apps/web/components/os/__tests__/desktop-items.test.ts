@@ -104,7 +104,7 @@ describe("desktopEntries", () => {
 describe("allowedWindowPrograms", () => {
   it("allows the children a rank may open, and drops the rest", () => {
     const member = allowedWindowPrograms(buildProgramManifest(facts()), EMPTY);
-    expect(member.has("meeting")).toBe(true);
+    expect(member.has("minutes")).toBe(true);
     expect(member.has("results")).toBe(false);
     const captain = allowedWindowPrograms(
       buildProgramManifest(facts({ rank: ViewerRank.enum.captain })),
@@ -116,7 +116,7 @@ describe("allowedWindowPrograms", () => {
 
   it("prunes a team's page by its own id", () => {
     expect(windowProgram("team", `team:${KITCHEN}`)).toBe(`team:${KITCHEN}`);
-    expect(windowProgram("meeting", "meeting:m-1")).toBe("meeting");
+    expect(windowProgram("minutes", "minutes:m-1")).toBe("minutes");
   });
 });
 

@@ -42,9 +42,7 @@ test.describe("streamed pages keep the gate on the server (test-mode)", () => {
 
   test("a notFound() page still answers 404", async ({ page, request }) => {
     await signedIn(page, request, "stream-404", "member");
-    const res = await page.goto(
-      "/meetings/00000000-0000-4000-8000-000000000000",
-    );
+    const res = await page.goto("/calendar/nosuchevent/minutes");
     expect(res?.status()).toBe(404);
   });
 

@@ -32,13 +32,17 @@ import {
   type ViewerRank,
 } from "@camp404/types";
 import {
-  calendarWriteConfig,
-  deleteCalendarEvent,
-  forgetCalendarCache,
-  newCalendarEventId,
-  putCalendarEvent,
-  type CalendarEventBody,
-} from "./google-calendar";
+  isCampCalendarWritable,
+  mirror,
+  type CalendarMirrorOutcome,
+  type MirrorTarget,
+} from "./calendar-mirror";
+import {
+  campEventTargets,
+  linkUnlinkedMeetingNotes,
+  listCampEventsToSync,
+} from "./camp-events";
+import { newCalendarEventId, type CalendarEventBody } from "./google-calendar";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 import { logisticsTestStore } from "./test-store-logistics";
@@ -75,17 +79,11 @@ export type {
 };
 
 /** How the camp calendar stands after a save. */
-export type LogisticsCalendarOutcome =
-  /** The camp calendar matches the row. */
-  | "synced"
-  /** There is no camp calendar to write to: it is in the app only. */
-  | "not_connected"
-  /** Google did not take the change; saving again retries. */
-  | "failed";
+export type LogisticsCalendarOutcome = CalendarMirrorOutcome;
 
 /** Whether there is a camp calendar to write the phases to. */
 export function isLogisticsCalendarConnected(): boolean {
-  return usesTestStore() || calendarWriteConfig(process.env) !== null;
+  return isCampCalendarWritable();
 }
 
 export async function listLogisticsPhases(): Promise<LogisticsPhaseRow[]> {
@@ -143,86 +141,8 @@ export function deadlineEventBody(
 }
 
 // --- The calendar mirror -----------------------------------------------------
-
-/** One row, as the mirror needs it. */
-interface MirrorTarget {
-  step: "put" | "remove" | "none";
-  eventId: string | null;
-  /** The event to put, when the step is `put`. */
-  event: { body: CalendarEventBody; date: string; place: string | null } | null;
-  /** Record that the calendar matches this version. False: a newer one landed. */
-  mark: (removed: boolean) => Promise<boolean> | boolean;
-  /** The row as it stands now, to follow a newer save. */
-  latest: () => Promise<MirrorTarget | undefined>;
-}
-
-/** How many times a sync follows a newer save before it gives up. */
-const MAX_SYNC_ROUNDS = 3;
-
-async function removeEvent(id: string): Promise<boolean> {
-  return usesTestStore()
-    ? testStore.deleteCalendarEvent(id)
-    : deleteCalendarEvent(process.env, id);
-}
-
-/**
- * Make the camp calendar match a row as saved. Never throws.
- *
- * Google is written with no lock held, so two saves close together can reach
- * Google in the wrong order. The mark is a compare-and-set on the version:
- * when it misses, a newer save has landed, and what this step just wrote may
- * be stale. So it reads the row again and makes Google match that instead,
- * first taking off an event it put under an id the row no longer holds.
- * Whichever step finishes last therefore leaves Google matching the newest
- * save.
- */
-async function mirror(
-  target: MirrorTarget,
-  actorId: string | null,
-  round = 1,
-): Promise<LogisticsCalendarOutcome> {
-  if (!isLogisticsCalendarConnected()) return "not_connected";
-  const { step, eventId } = target;
-  try {
-    let marked = true;
-    if (step === "put" && eventId && target.event) {
-      if (usesTestStore()) {
-        testStore.putCalendarEvent({
-          id: eventId,
-          title: target.event.body.summary,
-          date: target.event.date,
-          location: target.event.place,
-          teamTag: null,
-          actorId: actorId ?? "",
-        });
-      } else {
-        await putCalendarEvent(process.env, eventId, target.event.body);
-      }
-      marked = await target.mark(false);
-    } else if (step === "remove" && eventId) {
-      if (!(await removeEvent(eventId))) return "failed";
-      marked = await target.mark(true);
-    }
-    forgetCalendarCache();
-    if (marked) return "synced";
-
-    // A newer save landed while this step was at Google.
-    const latest = await target.latest();
-    if (
-      step === "put" &&
-      eventId &&
-      latest?.eventId !== eventId &&
-      !(await removeEvent(eventId))
-    ) {
-      return "failed";
-    }
-    if (!latest || round >= MAX_SYNC_ROUNDS) return "failed";
-    return await mirror(latest, actorId, round + 1);
-  } catch {
-    // putCalendarEvent has logged the HTTP status, and nothing secret.
-    return "failed";
-  }
-}
+// The mirror itself (put, mark, follow a newer save) is ./calendar-mirror,
+// shared with the Calendar's own events.
 
 /** A phase as a mirror target. */
 function phaseTarget(row: LogisticsPhaseRow): MirrorTarget {
@@ -248,8 +168,6 @@ function phaseTarget(row: LogisticsPhaseRow): MirrorTarget {
               startDate: row.startDate,
               endDate: row.endDate,
             }),
-            date: row.startDate,
-            place: row.place,
           }
         : null,
     mark,
@@ -271,11 +189,7 @@ function deadlineTarget(row: DeadlineRow): MirrorTarget {
     eventId: row.calendarEventId,
     event:
       row.dueDate && !removed
-        ? {
-            body: deadlineEventBody({ ...row, dueDate: row.dueDate }),
-            date: row.dueDate,
-            place: null,
-          }
+        ? { body: deadlineEventBody({ ...row, dueDate: row.dueDate }) }
         : null,
     mark: (gone: boolean) => {
       const args = { id: row.id, version: row.version, removed: gone };
@@ -303,7 +217,7 @@ function needsSync(
 
 /**
  * The catch-up: make the camp calendar match every phase and deadline of this
- * year that it may not match yet. A save that Google refused, a removal that
+ * year, and every event made in the Calendar, that it may not match yet. A save that Google refused, a removal that
  * did not reach it, and the phases written with the old team title before
  * titles went plain (migration 0080 marks those) are all put right, each
  * under the event id its row already owns, so nothing is duplicated. Run on a
@@ -314,16 +228,21 @@ export async function catchUpCampCalendar(): Promise<{
   tried: number;
   synced: number;
 }> {
+  // A meeting note that names no event gets one first (in the database, on
+  // every environment), so the Calendar shows it and Google gets it below.
+  await linkUnlinkedMeetingNotes();
   if (!isLogisticsCalendarConnected()) return { tried: 0, synced: 0 };
-  const [phases, deadlines] = await Promise.all([
+  const [phases, deadlines, events] = await Promise.all([
     listLogisticsPhases(),
     usesTestStore()
       ? logisticsTestStore.listDeadlines(undefined, { withRemoved: true })
       : deadlinesDb.listDeadlines(undefined, { withRemoved: true }),
+    listCampEventsToSync(),
   ]);
   const targets = [
     ...phases.map((row) => ({ row, target: phaseTarget(row) })),
     ...deadlines.map((row) => ({ row, target: deadlineTarget(row) })),
+    ...(await campEventTargets(events)),
   ].filter(({ row, target }) => needsSync(row, target.step));
   let synced = 0;
   for (const { target } of targets) {

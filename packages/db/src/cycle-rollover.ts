@@ -588,6 +588,8 @@ export const YEAR_TABLES_ADOPTED_AS_IS = [
   schema.loungeSlots,
   schema.meetingNotes,
   schema.joinSiteContent,
+  // The Calendar's own events and meetings (2026-10-10).
+  schema.campEvents,
 ] as const;
 
 /**

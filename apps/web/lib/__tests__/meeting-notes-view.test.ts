@@ -3,13 +3,11 @@ import {
   actionItemDue,
   campDayLabel,
   meetingCounts,
-  meetingEventOptions,
+  meetingHref,
   meetingsHref,
   meetingWhen,
   newMeetingHref,
 } from "../meeting-notes-view";
-
-const TEAMS = [{ key: "kitchen", label: "Kitchen" }];
 
 describe("meeting notes' words", () => {
   it("says when a meeting was, in camp time", () => {
@@ -39,55 +37,28 @@ describe("meeting notes' words", () => {
     expect(campDayLabel("10/01/2026")).toBeNull();
   });
 
-  it("links to one team's meetings, the whole camp's, or all", () => {
-    expect(meetingsHref()).toBe("/meetings");
-    expect(meetingsHref("kitchen")).toBe("/meetings?team=kitchen");
-    expect(meetingsHref(null)).toBe("/meetings?team=camp");
-    expect(newMeetingHref(null)).toBe("/meetings/new?team=camp");
+  it("links to one team's meetings, the whole camp's, or all, in the Calendar's list of past meetings", () => {
+    const T = "2026-10-10";
+    expect(meetingsHref(undefined, T)).toBe(
+      "/calendar?view=list&when=past&type=meetings",
+    );
+    expect(meetingsHref("kitchen", T)).toBe(
+      "/calendar?view=list&when=past&team=kitchen&type=meetings",
+    );
+    expect(meetingsHref(null, T)).toBe(
+      "/calendar?view=list&when=past&team=camp&type=meetings",
+    );
   });
-});
 
-describe("meetingEventOptions", () => {
-  it("reads each event's team, day and start the way the calendar does", () => {
+  it("opens New meeting as the Calendar's form on today, and a meeting on its month", () => {
+    expect(newMeetingHref("kitchen", "2026-10-10")).toBe(
+      "/calendar?view=month&month=2026-10&team=kitchen&type=meetings&new=2026-10-10",
+    );
     expect(
-      meetingEventOptions(
-        [
-          {
-            id: "a",
-            title: "Kitchen Team - Kickoff",
-            start: "2026-10-02T16:30:00Z",
-            allDay: false,
-            location: null,
-            teamTag: "kitchen",
-          },
-          {
-            id: "b",
-            title: "Build day",
-            start: "2026-10-10",
-            allDay: true,
-            location: null,
-            teamTag: null,
-          },
-        ],
-        TEAMS,
-      ),
-    ).toEqual([
-      {
-        id: "a",
-        title: "Kickoff",
-        team: "kitchen",
-        date: "2026-10-02",
-        time: "18:30",
-        label: "Fri 2 Oct · 18:30 · Kickoff",
-      },
-      {
-        id: "b",
-        title: "Build day",
-        team: null,
-        date: "2026-10-10",
-        time: null,
-        label: "Sat 10 Oct · All day · Build day",
-      },
-    ]);
+      meetingHref({
+        calendarEventId: "evt1",
+        heldAt: new Date("2026-09-30T23:30:00Z"),
+      }),
+    ).toBe("/calendar?view=month&month=2026-10&event=evt1");
   });
 });

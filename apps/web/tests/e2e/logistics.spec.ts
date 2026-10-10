@@ -58,7 +58,8 @@ function phaseRow(page: Page, name: string) {
 
 /** The Calendar's rows that are the Build phase, once the page has painted. */
 async function buildEventsOnCalendar(page: Page) {
-  await page.goto("/calendar");
+  // The Calendar's list of what is coming up: one row per event.
+  await page.goto("/calendar?view=list&when=upcoming");
   await expect(
     page.getByRole("heading", { level: 1, name: "Calendar" }),
   ).toBeVisible();
@@ -156,7 +157,7 @@ test.describe("logistics days (test-mode)", () => {
     await expect(phaseRow(page, "Build")).toContainText("Days not set yet.");
     events = await buildEventsOnCalendar(page);
     await expect(
-      page.getByText("Nothing on the calendar for the year ahead."),
+      page.getByText("Nothing coming up on the calendar."),
     ).toBeVisible();
     await expect(events).toHaveCount(0);
   });

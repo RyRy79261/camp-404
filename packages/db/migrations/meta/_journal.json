@@ -750,6 +750,27 @@
       "when": 1791381279183,
       "tag": "0106_drop_membership_tier",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1791622181550,
+      "tag": "0107_camp_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1791622190976,
+      "tag": "0108_meeting_notes_become_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1791622218800,
+      "tag": "0109_meeting_notes_one_per_event",
+      "breakpoints": true
     }
   ]
 }

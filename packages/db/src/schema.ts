@@ -31,6 +31,7 @@ import {
   INVENTORY_LOCATIONS,
   LOAD_CATEGORIES,
   LOGISTICS_PHASES,
+  CAMP_EVENT_KIND_VALUES,
   ATTENDANCE_ANSWERS,
   SHIFT_SLOT_STATUSES,
   LOAD_OWNERS,
@@ -3130,9 +3131,11 @@ export const meetingNotes = pgTable(
     title: text("title").notNull(),
     // When the meeting started, typed as a camp day and time.
     heldAt: timestamp("held_at", { mode: "date" }).notNull(),
-    // The camp calendar's event for this meeting, when there is one. The
-    // event lives in Google; its title is kept as it was when it was linked,
-    // so the note still names it once the event has passed or gone.
+    // The meeting's camp calendar event (its Google id): a `camp_events` row
+    // the app made, or an event made in Google that was given minutes. Every
+    // note has one since 0108; at most one note per event. The title is kept
+    // as it was when it was linked, so the note still names it once the event
+    // has gone from Google.
     calendarEventId: text("calendar_event_id"),
     calendarEventTitle: text("calendar_event_title"),
     // Markdown, rendered on the note's page.
@@ -3153,6 +3156,10 @@ export const meetingNotes = pgTable(
   (n) => ({
     teamHeldIdx: index("meeting_notes_team_held_idx").on(n.team, n.heldAt),
     cycleIdx: index("meeting_notes_cycle_idx").on(n.cycle),
+    // One meeting's note per calendar event (0108 made every note name one).
+    calendarEventUniq: uniqueIndex("meeting_notes_calendar_event_uniq").on(
+      n.calendarEventId,
+    ),
   }),
 );
 
@@ -3215,6 +3222,73 @@ export const meetingNoteActionItems = pgTable(
     noteIdx: index("meeting_note_action_items_note_idx").on(i.noteId),
     // One action item makes at most one task.
     taskUniq: uniqueIndex("meeting_note_action_items_task_uniq").on(i.taskId),
+  }),
+);
+
+// --- Camp events (the Calendar's own events and meetings) -----------------
+
+// The events made in the app's Calendar (owner, 2026-10-10: "Meetings is a type
+// of calendar item ... you make events in the calendar app"). Each one is ONE
+// event on the camp's shared Google Calendar, whose id the row claims in the
+// transaction that saves it, before Google is called, so a re-save or a retry
+// updates that event and never makes a second (the logistics phases' pattern).
+// A meeting's agenda and minutes live in `meeting_notes`, linked by the same
+// Google id (`meeting_notes.calendar_event_id`). Removing an event marks it
+// (`removed_at`) until Google confirms its event is gone, then the row goes.
+// Captains, and leads of the event's team, write (canManageCampEvent).
+export const campEventKindEnum = pgEnum(
+  "camp_event_kind",
+  CAMP_EVENT_KIND_VALUES,
+);
+
+export const campEvents = pgTable(
+  "camp_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    kind: campEventKindEnum("kind").notNull(),
+    // Null: a whole-camp event.
+    team: teamEnum("team"),
+    title: text("title").notNull(),
+    allDay: boolean("all_day").notNull(),
+    // Camp days; the end is the last day, counted. A timed event is one day.
+    startDate: date("start_date", { mode: "string" }).notNull(),
+    endDate: date("end_date", { mode: "string" }).notNull(),
+    // HH:MM in camp time; null for an all-day event.
+    startTime: text("start_time"),
+    endTime: text("end_time"),
+    // A named place or "Online", never a member's home address.
+    place: text("place"),
+    // Goes on Google with the event.
+    description: text("description"),
+    // The Google Calendar event this row owns (our own id, base32hex).
+    calendarEventId: text("calendar_event_id").notNull(),
+    // The row version the camp calendar last matched; null when it never has.
+    calendarSyncedVersion: integer("calendar_synced_version"),
+    version: integer("version").notNull().default(1),
+    removedAt: timestamp("removed_at", { mode: "date" }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (e) => ({
+    calendarEventUniq: uniqueIndex("camp_events_calendar_event_uniq").on(
+      e.calendarEventId,
+    ),
+    daysIdx: index("camp_events_days_idx").on(e.startDate, e.endDate),
+    daysCheck: check(
+      "camp_events_days_check",
+      sql`${e.endDate} >= ${e.startDate}`,
+    ),
+    timesCheck: check(
+      "camp_events_times_check",
+      sql`(${e.allDay} and ${e.startTime} is null and ${e.endTime} is null) or (not ${e.allDay} and ${e.startTime} is not null and ${e.endTime} is not null and ${e.endTime} > ${e.startTime} and ${e.endDate} = ${e.startDate})`,
+    ),
   }),
 );
 

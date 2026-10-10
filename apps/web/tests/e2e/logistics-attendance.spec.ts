@@ -341,7 +341,7 @@ test.describe("logistics attendance and deadlines (test-mode)", () => {
     await expect(other).toContainText("Not announced yet");
 
     // On the Calendar once, as the camp's (no team), titled AfrikaBurn: ….
-    await page.goto("/calendar");
+    await page.goto("/calendar?view=list&when=upcoming");
     await expect(
       page.getByRole("heading", { level: 1, name: "Calendar" }),
     ).toBeVisible();

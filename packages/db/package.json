@@ -65,7 +65,7 @@
     "./dietary": "./src/dietary.ts",
     "./meal-plan": "./src/meal-plan.ts",
     "./recipes": "./src/recipes.ts",
-    "./calendar-events": "./src/calendar-events.ts",
+    "./camp-events": "./src/camp-events.ts",
     "./audience": "./src/audience.ts",
     "./push": "./src/push.ts",
     "./push-status": "./src/push-status.ts",

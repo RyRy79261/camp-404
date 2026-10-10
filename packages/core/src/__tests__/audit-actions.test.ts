@@ -411,6 +411,16 @@ describe("auditDetail", () => {
     expect(auditDetail("calendar.event_created", { team: "kitchen" })).toBe(
       null,
     );
+    expect(
+      auditDetail(
+        "calendar.event_changed",
+        { title: "Budget round 2", team: "kitchen" },
+        teams,
+      ),
+    ).toBe("Budget round 2 · Kitchen");
+    expect(
+      auditDetail("calendar.event_removed", { title: "Old meeting" }),
+    ).toBe("Old meeting");
   });
 
   it("shows nothing for a shape it does not know", () => {
