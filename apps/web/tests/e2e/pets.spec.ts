@@ -105,15 +105,16 @@ test.describe("Camp pets", () => {
     const form = page.getByRole("form", { name: "Add your pet" });
     await expect(form).toBeVisible();
     await form.getByRole("button", { name: "Send" }).click();
-    await expect(form.getByLabel("Name", { exact: true })).toHaveAttribute(
-      "aria-invalid",
-      "true",
-    );
+    await expect(
+      form.getByRole("textbox", { name: "Name", exact: true }),
+    ).toHaveAttribute("aria-invalid", "true");
     await expect(
       form.getByRole("button", { name: "Add a photo from the front" }),
     ).toHaveAttribute("aria-invalid", "true");
 
-    await form.getByLabel("Name", { exact: true }).fill("Biscuit");
+    await form
+      .getByRole("textbox", { name: "Name", exact: true })
+      .fill("Biscuit");
     await form.getByRole("radio", { name: "Dog" }).click();
     await addPhoto(page, "front", "#ff0000");
     await addPhoto(page, "side", "#0000ff");
