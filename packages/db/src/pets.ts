@@ -42,6 +42,8 @@ export const PET_KEY_TAKEN =
 export const PET_NO_SUCH_MEMBER = "That member isn't in the camp any more.";
 export const PET_NOT_YOURS = "You can only change your own pet.";
 export const PET_NO_ACTOR = "Your account isn't in the camp any more.";
+export const PET_SENT_WITH_PHOTOS =
+  "A pet a member sent in stays theirs: its photos are only for them.";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -402,7 +404,12 @@ export async function setPetHint(input: {
   });
 }
 
-/** Say whose pet it is (or nobody's). The member must not be erased. Audited. */
+/**
+ * Say whose pet it is (or nobody's), for a pet with no photos (a seeded one).
+ * A pet a member sent in is refused: its photos sit in the sender's folder and
+ * only the sender and the founders may see them, so it never changes hands.
+ * The member must not be erased. Audited.
+ */
 export async function setPetOwner(input: {
   actorId: string;
   petId: string;
@@ -411,6 +418,9 @@ export async function setPetOwner(input: {
   return write(async (tx) => {
     await lockActor(tx, input.actorId);
     const pet = await lockPet(tx, input.petId);
+    if (pet.frontPhotoPath !== null || pet.sidePhotoPath !== null) {
+      refuse(PET_SENT_WITH_PHOTOS);
+    }
     if (input.ownerId !== null) {
       if (!UUID.test(input.ownerId)) refuse(PET_NO_SUCH_MEMBER);
       const [member] = await tx

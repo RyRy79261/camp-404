@@ -115,7 +115,10 @@ import {
 } from "./test-store-logistics";
 import { dropMemberShifts, resetShiftsStore } from "./test-store-shifts";
 import { resetCampEventsStore } from "./test-store-camp-events";
-import { resetHelpWantedStore } from "./test-store-help-wanted";
+import {
+  dropTeamRolesOf,
+  resetHelpWantedStore,
+} from "./test-store-help-wanted";
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
 import {
@@ -3009,6 +3012,7 @@ export const testStore = {
     );
     if (idx === -1) return { removed: false, cycle };
     teamMemberships.splice(idx, 1);
+    dropTeamRolesOf(input.userId, input.team, cycle);
     return { removed: true, cycle };
   },
 

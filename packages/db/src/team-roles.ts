@@ -68,6 +68,16 @@ const realMember = and(
   eq(schema.users.approvalStatus, "approved"),
 );
 
+// Who the board lists on a team or a role, and so who a write counts toward
+// a role's places: everyone but the system actors, erased accounts and a
+// declined sign-up. The read and every count use this one rule, so the board
+// never shows a place open that a write then calls full.
+const listedPerson = and(
+  eq(schema.users.isSystem, false),
+  eq(schema.users.sanitised, false),
+  sql`${schema.users.approvalStatus} <> 'rejected'`,
+);
+
 const nameOf = (displayName: string | null) =>
   displayName?.trim() || "Unnamed burner";
 
@@ -175,13 +185,7 @@ export async function readHelpWanted(cycle: number): Promise<HelpWantedRead> {
           schema.users,
           eq(schema.users.id, schema.teamRoleHolders.userId),
         )
-        .where(
-          and(
-            eq(schema.teamRoles.cycle, cycle),
-            eq(schema.users.isSystem, false),
-            eq(schema.users.sanitised, false),
-          ),
-        )
+        .where(and(eq(schema.teamRoles.cycle, cycle), listedPerson))
         .orderBy(asc(schema.teamRoleHolders.createdAt)),
       db
         .select({
@@ -195,14 +199,7 @@ export async function readHelpWanted(cycle: number): Promise<HelpWantedRead> {
           schema.users,
           eq(schema.users.id, schema.teamMemberships.userId),
         )
-        .where(
-          and(
-            eq(schema.teamMemberships.cycle, cycle),
-            eq(schema.users.isSystem, false),
-            eq(schema.users.sanitised, false),
-            sql`${schema.users.approvalStatus} <> 'rejected'`,
-          ),
-        )
+        .where(and(eq(schema.teamMemberships.cycle, cycle), listedPerson))
         .orderBy(asc(schema.users.displayName), asc(schema.users.id)),
       db
         .select({
@@ -349,23 +346,28 @@ async function lockRole(
   return row;
 }
 
+/** Who fills a role, counted as the board lists them (listedPerson). */
 async function holdersOf(tx: Tx, roleId: string): Promise<number> {
   const [row] = await tx
     .select({ n: sql<number>`count(*)::int` })
     .from(schema.teamRoleHolders)
-    .where(eq(schema.teamRoleHolders.roleId, roleId));
+    .innerJoin(schema.users, eq(schema.users.id, schema.teamRoleHolders.userId))
+    .where(and(eq(schema.teamRoleHolders.roleId, roleId), listedPerson));
   return row?.n ?? 0;
 }
 
+/** A team's leads this year, counted as the board lists them. */
 async function leadsOf(tx: Tx, team: Team, cycle: number): Promise<number> {
   const [row] = await tx
     .select({ n: sql<number>`count(*)::int` })
     .from(schema.teamMemberships)
+    .innerJoin(schema.users, eq(schema.users.id, schema.teamMemberships.userId))
     .where(
       and(
         eq(schema.teamMemberships.team, team),
         eq(schema.teamMemberships.cycle, cycle),
         eq(schema.teamMemberships.isLead, true),
+        listedPerson,
       ),
     );
   return row?.n ?? 0;

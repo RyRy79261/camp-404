@@ -1,5 +1,6 @@
 import "server-only";
 
+import { errorLogText } from "@camp404/core";
 import { sanitiseAccount, type SanitiseResult } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "./avatar-blob";
 import { deleteClaimReceiptBlobs } from "./claim-receipts";
@@ -74,7 +75,10 @@ export async function deleteAccount(input: {
   try {
     await deletePetPhotoBlobs(input.userId);
   } catch (err) {
-    console.error("pet-photo cleanup error (account erasure)", err);
+    console.error(
+      "pet-photo cleanup error (account erasure)",
+      errorLogText(err, process.env),
+    );
   }
   return result;
 }

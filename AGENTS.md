@@ -651,7 +651,17 @@ Decisions baked into the schema — keep new code consistent with them:
   their own flags (`lib/help-wanted.ts` cuts it on the server). Every read
   filters on the current year, so a new year starts with no roles ("Copy last
   year's roles" brings the names back, empty) and no leads; `setFoundingYear`
-  adopts sentinel rows. Erasure deletes a member's holders and keen rows.
+  adopts sentinel rows. Erasure deletes a member's holders and keen rows,
+  and taking someone off a team (`removeTeam`) takes them off that team's
+  roles and keen flags for the year in the same transaction. A role's places
+  and a team's leads are counted over the people the board lists (not a
+  declined sign-up, an erased account or a system actor), so the screen and
+  the refusal agree. **The lead places are enforced only in Help wanted**
+  (`giveTeamRole`, under the team-year's lock): the roster, team settings and
+  the connector's `set_team_lead` still make a lead through plain `setLead`,
+  which neither takes that lock nor checks `lead_places`, because a team may
+  have several leads. So a team can show, for example, 2 of 1 leads; Help
+  wanted then refuses another until a captain raises the places.
 - **Notifications.** `broadcasts` are composed messages fanned out into
   per-user `notification_deliveries` (a queue). [CORRECTION 2026-09-29] There
   is no worker: `deliverDue` fans out and drains the queue in `after()` (see
@@ -909,7 +919,11 @@ Decisions baked into the schema — keep new code consistent with them:
   (`PET_PORTRAITS`, a server-drawn SVG). Another member's waiting pet is cut
   on the server (`listPets`). Never write in the UI how or where a pet shows
   up. The four cats (Jinn, Moda, Nipster, Prince) were seeded as in by
-  migration 0112. Erasure deletes the member's pets and their photo folder.
+  migration 0112. A founder may say whose a pet is (`setPetOwner`) only for
+  a pet with no photos (a seeded one): a pet a member sent in never changes
+  hands, so its photos never reach anyone but its sender. Erasure deletes the
+  pets the member sent in and their photo folder; a seeded cat linked to them
+  stays, linked to nobody.
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.

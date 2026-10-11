@@ -70,6 +70,29 @@ function state(): HelpWantedState {
   return g[KEY] as HelpWantedState;
 }
 
+/**
+ * removeTeam's twin: someone taken off a team this year loses its roles and
+ * their keen flags on it (testStore.removeTeam calls this).
+ */
+export function dropTeamRolesOf(
+  userId: string,
+  team: Team,
+  cycle: number,
+): void {
+  const s = state();
+  const ids = new Set(
+    s.roles
+      .filter((r) => r.team === team && r.cycle === cycle)
+      .map((r) => r.id),
+  );
+  s.holders = s.holders.filter(
+    (h) => !(h.userId === userId && ids.has(h.roleId)),
+  );
+  s.keen = s.keen.filter(
+    (k) => !(k.userId === userId && k.team === team && k.cycle === cycle),
+  );
+}
+
 /** Clear Help wanted (testStore.reset calls this). */
 export function resetHelpWantedStore(): void {
   const s = state();
@@ -135,8 +158,15 @@ const roleRow = (r: StoredRole): TeamRoleRow => ({
 const roleOf = (id: string, cycle: number) =>
   state().roles.find((r) => r.id === id && r.cycle === cycle);
 
+// Who the board lists, and so who counts toward a role's places: not a
+// declined sign-up (the db's listedPerson).
+const listed = (userId: string) => {
+  const user = testStore.findUserById(userId);
+  return Boolean(user) && user!.approvalStatus !== "rejected";
+};
+
 const holdersOf = (roleId: string) =>
-  state().holders.filter((h) => h.roleId === roleId).length;
+  state().holders.filter((h) => h.roleId === roleId && listed(h.userId)).length;
 
 const leadPlacesOf = (team: Team, cycle: number) =>
   state().leadPlaces.find((l) => l.team === team && l.cycle === cycle)
@@ -192,7 +222,7 @@ export const helpWantedTestStore = {
         .map((l) => ({ team: l.team, places: l.places })),
       roles: roles.map(roleRow),
       holders: s.holders
-        .filter((h) => ids.has(h.roleId) && testStore.findUserById(h.userId))
+        .filter((h) => ids.has(h.roleId) && listed(h.userId))
         .sort((a, b) => a.at - b.at)
         .map((h) => ({
           roleId: h.roleId,

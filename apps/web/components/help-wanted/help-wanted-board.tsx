@@ -147,7 +147,7 @@ export function HelpWantedBoard({ view }: { view: HelpWantedView }) {
         )}
       </p>
 
-      <div role="group" aria-label="Show" className="flex flex-wrap gap-1.5">
+      <div role="group" aria-label="Show" className="mb-2 flex flex-wrap gap-2">
         {HELP_WANTED_FILTERS.map((f) => {
           const on = filter === f;
           return (
@@ -158,7 +158,7 @@ export function HelpWantedBoard({ view }: { view: HelpWantedView }) {
               aria-pressed={on}
               onClick={() => setFilter(f)}
               className={cn(
-                "inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "inline-flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 on && "border-primary bg-primary/15",
               )}
             >
@@ -182,6 +182,7 @@ export function HelpWantedBoard({ view }: { view: HelpWantedView }) {
             key={t.key}
             team={t}
             year={view.year}
+            keeper={keeper}
             onPick={(row) => setPicking({ team: t, row })}
           />
         ))
@@ -205,10 +206,13 @@ export function HelpWantedBoard({ view }: { view: HelpWantedView }) {
 function TeamCard({
   team,
   year,
+  keeper,
   onPick,
 }: {
   team: HelpWantedTeamView;
   year: number | null;
+  /** The viewer runs some team's roles: every row keeps the pencil's slot. */
+  keeper: boolean;
   onPick: (row: HelpWantedRoleView) => void;
 }) {
   const [editing, setEditing] = React.useState<string | null>(null);
@@ -270,6 +274,7 @@ function TeamCard({
               <RoleRow
                 team={team}
                 row={row}
+                keeper={keeper}
                 onPick={() => onPick(row)}
                 onEdit={() => setEditing(row.key)}
               />
@@ -279,7 +284,7 @@ function TeamCard({
       </ul>
 
       {others === 0 && (
-        <div className="flex flex-col gap-3 border-t border-border px-4 py-3">
+        <div className="flex flex-col gap-3 border-t border-border px-4 py-3 page-sm:flex-row page-sm:items-center page-sm:justify-between">
           <p className={QUIET}>
             No other roles {yearWords} yet.
             {team.lastYear.length > 0 && (
@@ -300,7 +305,7 @@ function TeamCard({
           {team.manages && team.lastYear.length > 0 && (
             <OneTap
               variant="outline"
-              className="self-start"
+              className="h-10 w-full shrink-0 page-sm:h-9 page-sm:w-auto"
               act={async () => {
                 const result = await copyLastYearsRolesAction({
                   team: team.key,
@@ -345,11 +350,13 @@ function TeamCard({
 function RoleRow({
   team,
   row,
+  keeper,
   onPick,
   onEdit,
 }: {
   team: HelpWantedTeamView;
   row: HelpWantedRoleView;
+  keeper: boolean;
   onPick: () => void;
   onEdit: () => void;
 }) {
@@ -391,7 +398,10 @@ function RoleRow({
           aria-label={`You're keen on ${where}. Undo`}
           act={() => setKeenAction({ ...ref, keen: false })}
         >
-          You&apos;re keen ✓ · Undo
+          <span>
+            <span className="hidden page-sm:inline">You&apos;re keen</span>
+            <span className="page-sm:hidden">Keen</span> ✓ · Undo
+          </span>
         </OneTap>
       );
       break;
@@ -409,9 +419,9 @@ function RoleRow({
   return (
     <div
       data-role={row.isLead ? "lead" : row.name}
-      className="grid gap-3 px-4 py-3 page-sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] page-sm:items-center"
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 px-4 py-3 page-sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] page-sm:gap-x-3"
     >
-      <div className="flex min-w-0 flex-col gap-0.5">
+      <div className="col-start-1 row-start-1 flex min-w-0 flex-col gap-1">
         <span className="font-semibold">
           {row.name}
           {row.isLead && row.places > 1 && (
@@ -422,7 +432,7 @@ function RoleRow({
         </span>
         {row.note && <span className={QUIET}>{row.note}</span>}
       </div>
-      <div className="flex min-w-0 flex-col gap-1">
+      <div className="col-start-1 row-start-2 flex min-w-0 flex-col gap-1 page-sm:col-start-2 page-sm:row-start-1">
         <span
           className={cn(
             "text-sm font-semibold tabular-nums",
@@ -441,12 +451,12 @@ function RoleRow({
             {row.people.map((p, i) => (
               <li
                 key={p.userId ?? `${p.name}-${i}`}
-                className="flex items-center gap-1.5 text-sm"
+                className="flex items-center gap-2 text-sm"
               >
                 <span
                   aria-hidden
                   className={cn(
-                    "inline-flex h-5 min-w-5 items-center justify-center bg-muted px-1 text-[10px] font-bold",
+                    "inline-flex h-5 min-w-5 items-center justify-center bg-muted px-1 text-xs leading-none font-bold",
                     p.you && "bg-primary text-primary-foreground",
                   )}
                 >
@@ -466,8 +476,10 @@ function RoleRow({
       </div>
       <RowActions
         label={`Actions for ${where}`}
-        className="page-sm:w-56"
-        primary={<div className="flex w-36 justify-center">{primary}</div>}
+        className="col-start-2 row-span-2 row-start-1 page-sm:col-start-3 page-sm:row-span-1"
+        primary={
+          <div className="flex w-32 justify-center page-sm:w-46">{primary}</div>
+        }
         secondary={
           team.manages ? (
             <Button
@@ -480,7 +492,7 @@ function RoleRow({
             >
               <Pencil aria-hidden />
             </Button>
-          ) : undefined
+          ) : keeper ? null : undefined
         }
       />
     </div>
@@ -645,8 +657,8 @@ function RoleForm({
       <div className="flex flex-wrap justify-end gap-2">
         {row && !lead && (
           <OneTap
-            variant="outline"
-            className="mr-auto"
+            variant="ghost"
+            className="mr-auto text-destructive hover:text-destructive"
             act={async () => {
               const result = await removeTeamRoleAction({
                 id: row.roleId,
@@ -851,7 +863,7 @@ function Picker({
         >
           {sections.map((s) =>
             s.people.length === 0 ? null : (
-              <div key={s.title} className="flex flex-col gap-1.5">
+              <div key={s.title} className="flex flex-col gap-2">
                 <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
                   {s.title} · {s.people.length}
                 </p>

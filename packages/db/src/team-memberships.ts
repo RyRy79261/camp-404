@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
 import { writeAuditEvent } from "./audit";
@@ -221,13 +221,48 @@ export async function removeTeam(
 
     const removed = row !== undefined;
     if (removed) {
+      // Help wanted: off the team means off its roles this year, and no
+      // longer keen on them, or the board would count a place held by
+      // someone who is not on the team.
+      const roleIds = tx
+        .select({ id: schema.teamRoles.id })
+        .from(schema.teamRoles)
+        .where(
+          and(
+            eq(schema.teamRoles.team, input.team),
+            eq(schema.teamRoles.cycle, cycle),
+          ),
+        );
+      const heldRoles = await tx
+        .delete(schema.teamRoleHolders)
+        .where(
+          and(
+            eq(schema.teamRoleHolders.userId, input.userId),
+            inArray(schema.teamRoleHolders.roleId, roleIds),
+          ),
+        )
+        .returning({ roleId: schema.teamRoleHolders.roleId });
+      await tx
+        .delete(schema.teamRoleKeen)
+        .where(
+          and(
+            eq(schema.teamRoleKeen.userId, input.userId),
+            eq(schema.teamRoleKeen.team, input.team),
+            eq(schema.teamRoleKeen.cycle, cycle),
+          ),
+        );
       await writeAuditEvent(tx, {
         actorId: input.actorId ?? null,
         action: "member.team_removed",
         target: input.userId,
         // `wasLead` is the bit that matters on review: removing a lead is a
         // clearance change, not just a roster edit.
-        metadata: { team: input.team, cycle, wasLead: row.isLead },
+        metadata: {
+          team: input.team,
+          cycle,
+          wasLead: row.isLead,
+          rolesTaken: heldRoles.length,
+        },
       });
     }
     return { removed, cycle };

@@ -9,6 +9,7 @@ import {
   PET_NO_SUCH_MEMBER,
   PET_NOT_IN,
   PET_NOT_YOURS,
+  PET_SENT_WITH_PHOTOS,
   type PetPhotoSide,
   type PetRow,
   type PetWriteResult,
@@ -247,6 +248,9 @@ export const petsTestStore = {
   }): PetWriteResult {
     const p = find(input.petId);
     if (!p) return refused(PET_GONE);
+    if (p.frontPhotoPath !== null || p.sidePhotoPath !== null) {
+      return refused(PET_SENT_WITH_PHOTOS);
+    }
     if (input.ownerId !== null && !testStore.findUserById(input.ownerId)) {
       return refused(PET_NO_SUCH_MEMBER);
     }
@@ -254,9 +258,17 @@ export const petsTestStore = {
     return { ok: true };
   },
 
-  /** Erasure's twin: the member's pets go. */
+  /**
+   * Erasure's twin: the pets the member sent in (with photos) go; a seeded
+   * cat linked to them stays, linked to nobody.
+   */
   deletePetsOf(userId: string): void {
     const s = state();
-    s.pets = s.pets.filter((p) => p.ownerId !== userId);
+    s.pets = s.pets.filter(
+      (p) =>
+        p.ownerId !== userId ||
+        (p.frontPhotoPath === null && p.sidePhotoPath === null),
+    );
+    for (const p of s.pets) if (p.ownerId === userId) p.ownerId = null;
   },
 };

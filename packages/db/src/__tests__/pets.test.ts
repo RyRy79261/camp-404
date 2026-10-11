@@ -8,6 +8,7 @@ import {
   PET_KEY_TAKEN,
   PET_NOT_IN,
   PET_NOT_YOURS,
+  PET_SENT_WITH_PHOTOS,
   addPet,
   getPetPhoto,
   listPets,
@@ -310,6 +311,23 @@ describe("pets", () => {
     expect(await auditActions()).toEqual(["pet.owner_set"]);
   });
 
+  it("never moves a pet a member sent in, so its photos stay with the sender", async () => {
+    const founder = await makeUser(h.db());
+    const sender = await makeUser(h.db());
+    const other = await makeUser(h.db());
+    const id = await sendPet(sender.id);
+    expect(
+      await setPetOwner({ actorId: founder.id, petId: id, ownerId: other.id }),
+    ).toEqual({ ok: false, error: PET_SENT_WITH_PHOTOS });
+    expect(
+      await setPetOwner({ actorId: founder.id, petId: id, ownerId: null }),
+    ).toEqual({ ok: false, error: PET_SENT_WITH_PHOTOS });
+    expect(await getPetPhoto(id, "front")).toMatchObject({
+      ownerId: sender.id,
+    });
+    expect(await auditActions()).toEqual([]);
+  });
+
   it("lets the owner change the stupid thing, and nobody else but a reviewer", async () => {
     const owner = await makeUser(h.db());
     const other = await makeUser(h.db());
@@ -353,5 +371,26 @@ describe("pets", () => {
     expect(result.ok).toBe(true);
     const left = await q<{ id: string }>(`SELECT id FROM pets`);
     expect(left.map((r) => r.id)).toEqual([kept]);
+  });
+
+  it("erasure keeps a seeded camp cat, linked to nobody", async () => {
+    const caitlin = await makeUser(h.db(), { displayName: "Caitlin" });
+    await q(SEED);
+    const [jinn] = await q<{ id: string; owner_id: string | null }>(
+      `SELECT id, owner_id FROM pets WHERE module_key = 'jinn'`,
+    );
+    expect(jinn!.owner_id).toBe(caitlin.id);
+    await sendPet(caitlin.id);
+    expect((await sanitiseAccount(caitlin.id)).ok).toBe(true);
+    const left = await q<{ id: string; owner_id: string | null }>(
+      `SELECT id, owner_id FROM pets WHERE owner_id IS NULL OR owner_id = $1`,
+      [caitlin.id],
+    );
+    expect(left.map((r) => r.id)).toContain(jinn!.id);
+    expect(left.every((r) => r.owner_id === null)).toBe(true);
+    const [count] = await q<{ n: number }>(
+      `SELECT count(*)::int AS n FROM pets WHERE front_photo_path IS NOT NULL`,
+    );
+    expect(count!.n).toBe(0);
   });
 });

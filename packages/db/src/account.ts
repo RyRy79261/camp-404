@@ -1,4 +1,4 @@
-import { eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { writeAuditEvent } from "./audit";
 import { isRealCaptain } from "./bootstrap";
 import { withTransaction } from "./index";
@@ -226,9 +226,25 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.documentReads)
       .where(eq(schema.documentReads.userId, userId));
-    // Their pets (Camp pets) are their own words and photos; the photo
-    // folder goes with the erasure in apps/web (lib/account.ts).
-    await tx.delete(schema.pets).where(eq(schema.pets.ownerId, userId));
+    // Their pets (Camp pets): a pet they sent in (it has photos) is their own
+    // words and photos, so it goes; the photo folder goes with the erasure in
+    // apps/web (lib/account.ts). A pet with no photos is one of the camp's
+    // seeded cats a founder linked to them: it stays, linked to nobody.
+    await tx
+      .delete(schema.pets)
+      .where(
+        and(
+          eq(schema.pets.ownerId, userId),
+          or(
+            isNotNull(schema.pets.frontPhotoPath),
+            isNotNull(schema.pets.sidePhotoPath),
+          ),
+        ),
+      );
+    await tx
+      .update(schema.pets)
+      .set({ ownerId: null })
+      .where(eq(schema.pets.ownerId, userId));
     // Lounge offers are the member's own words; their slots go with them.
     await tx
       .delete(schema.loungeOffers)

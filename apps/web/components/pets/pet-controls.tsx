@@ -425,14 +425,14 @@ export function EditThingButton({
         type="button"
         variant="ghost"
         size="icon"
-        className="size-7 shrink-0 text-muted-foreground"
+        className="size-8 shrink-0 text-muted-foreground"
         aria-label={`Change the stupid thing about ${petName}`}
         onClick={() => {
           setThing(current);
           f.openChange(true);
         }}
       >
-        <Pencil aria-hidden className="size-3.5" />
+        <Pencil aria-hidden className="size-4" />
       </Button>
       <SmallDialog
         open={f.open}

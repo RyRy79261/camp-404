@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { get } from "@vercel/blob";
-import { mayReadPetPhoto } from "@camp404/core";
+import { errorLogText, mayReadPetPhoto } from "@camp404/core";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { proofExtension } from "@/lib/payment-proof";
 import { getPetPhoto, isPetReviewer } from "@/lib/pets";
@@ -74,7 +74,7 @@ export async function GET(
     }
     return new NextResponse(result.stream, { headers });
   } catch (err) {
-    console.error("pet-photo read error", err);
+    console.error("pet-photo read error", errorLogText(err, process.env));
     return new NextResponse("Not found", { status: 404 });
   }
 }

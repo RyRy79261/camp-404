@@ -100,18 +100,20 @@ export default async function PetsPage({
     const show = params.show === "waiting" ? "waiting" : "all";
     const list = show === "waiting" ? waiting : pets;
     return (
-      <div className="flex flex-col gap-4">
+      <div>
         {heading}
-        <PetFilter show={show} all={pets.length} waiting={waiting.length} />
-        {list.length > 0 ? (
-          <ul aria-label="Pets" className={GRID}>
-            {list.map(card)}
-          </ul>
-        ) : (
-          <p className="border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            Nothing waiting. Every pet that was sent is in.
-          </p>
-        )}
+        <div className="flex flex-col gap-4">
+          <PetFilter show={show} all={pets.length} waiting={waiting.length} />
+          {list.length > 0 ? (
+            <ul aria-label="Pets" className={GRID}>
+              {list.map(card)}
+            </ul>
+          ) : (
+            <p className="border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              Nothing waiting. Every pet that was sent is in.
+            </p>
+          )}
+        </div>
       </div>
     );
   }
@@ -121,24 +123,26 @@ export default async function PetsPage({
     (p) => p.ownerId !== campUser.id && p.status === "in",
   );
   return (
-    <div className="flex flex-col gap-6">
+    <div>
       {heading}
-      {mine.length > 0 && (
-        <Section title="Yours" count={mine.length}>
-          <ul aria-label="Your pets" className={GRID}>
-            {mine.map(card)}
-          </ul>
-        </Section>
-      )}
-      <Section title="Everyone's" count={everyone.length}>
-        {everyone.length > 0 ? (
-          <ul aria-label="Everyone's pets" className={GRID}>
-            {everyone.map(card)}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">No pets in yet.</p>
+      <div className="flex flex-col gap-6">
+        {mine.length > 0 && (
+          <Section title="Yours" count={mine.length}>
+            <ul aria-label="Your pets" className={GRID}>
+              {mine.map(card)}
+            </ul>
+          </Section>
         )}
-      </Section>
+        <Section title="Everyone's" count={everyone.length}>
+          {everyone.length > 0 ? (
+            <ul aria-label="Everyone's pets" className={GRID}>
+              {everyone.map(card)}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No pets in yet.</p>
+          )}
+        </Section>
+      </div>
     </div>
   );
 }

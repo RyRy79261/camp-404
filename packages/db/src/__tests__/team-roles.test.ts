@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Team } from "@camp404/types";
 import type { CampConfig } from "../camp-config";
 import * as schema from "../schema";
@@ -24,7 +24,7 @@ import {
   takeTeamRole,
 } from "../team-roles";
 import { sanitiseAccount } from "../account";
-import { assignTeam, setLead } from "../team-memberships";
+import { assignTeam, removeTeam, setLead } from "../team-memberships";
 import { useTestDb } from "./_harness";
 import { makeMembership, makeUser } from "./_factories";
 
@@ -430,7 +430,7 @@ describe("I'm keen", () => {
 
 describe("year scoping", () => {
   const h = useTestDb();
-  const { audits } = helpers(h);
+  const { audits, people, role } = helpers(h);
 
   it("reads only this year's roles, and copies last year's names, empty, once", async () => {
     const captain = await makeUser(h.db(), { rank: "captain" });
@@ -499,6 +499,118 @@ describe("year scoping", () => {
     expect(all).toHaveLength(1);
   });
 
+  it("taking someone off a team takes them off its roles and keen flags this year, so the place opens", async () => {
+    const { captain, kitchenLead, dee, sam } = await people();
+    const dish = await role(kitchenLead.id, "Dishwasher captain", 1);
+    const shopper = await role(kitchenLead.id, "Shopper", 1);
+    await giveTeamRole({
+      actorId: kitchenLead.id,
+      team: "kitchen",
+      roleId: dish.id,
+      userId: dee.id,
+    });
+    expect(
+      await setKeen({
+        userId: dee.id,
+        team: "kitchen",
+        roleId: shopper.id,
+        keen: true,
+      }),
+    ).toEqual({ ok: true });
+    // Dee also holds a role on another team, which stays.
+    const saved = await saveTeamRole({
+      actorId: captain.id,
+      team: "structures",
+      name: "Rigger",
+      places: 1,
+      note: null,
+      expectedVersion: 0,
+    });
+    if (!saved.ok) throw new Error(saved.error);
+    await giveTeamRole({
+      actorId: captain.id,
+      team: "structures",
+      roleId: saved.role.id,
+      userId: dee.id,
+    });
+
+    expect(
+      await removeTeam({
+        userId: dee.id,
+        team: "kitchen",
+        actorId: captain.id,
+      }),
+    ).toEqual({ removed: true, cycle: YEAR });
+
+    const read = await readHelpWanted(YEAR);
+    expect(read.holders.map((x) => [x.roleId, x.userId])).toEqual([
+      [saved.role.id, dee.id],
+    ]);
+    expect(read.keen.filter((k) => k.team === "kitchen")).toEqual([]);
+    const [removed] = await audits("member.team_removed");
+    expect(removed?.metadata).toMatchObject({ rolesTaken: 1 });
+    // The place is open again.
+    expect(
+      await giveTeamRole({
+        actorId: kitchenLead.id,
+        team: "kitchen",
+        roleId: dish.id,
+        userId: sam.id,
+      }),
+    ).toEqual({ ok: true, joinedTeam: true });
+  });
+
+  it("counts a role's places and a team's leads over the people the board lists", async () => {
+    const { captain, kitchenLead, dee, sam } = await people();
+    const dish = await role(kitchenLead.id, "Dishwasher captain", 1);
+    await giveTeamRole({
+      actorId: kitchenLead.id,
+      team: "kitchen",
+      roleId: dish.id,
+      userId: dee.id,
+    });
+    // Dee's sign-up and Kit's are declined later, behind the board's back.
+    await h
+      .db()
+      .update(schema.users)
+      .set({ approvalStatus: "rejected" })
+      .where(eq(schema.users.id, dee.id));
+    await h
+      .db()
+      .update(schema.users)
+      .set({ approvalStatus: "rejected" })
+      .where(eq(schema.users.id, kitchenLead.id));
+
+    const read = await readHelpWanted(YEAR);
+    expect(read.holders.filter((x) => x.roleId === dish.id)).toEqual([]);
+    expect(read.members.filter((m) => m.team === "kitchen")).toEqual([]);
+    // The board shows both open, and the writes agree.
+    expect(
+      await setKeen({
+        userId: sam.id,
+        team: "kitchen",
+        roleId: null,
+        keen: true,
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      await giveTeamRole({
+        actorId: captain.id,
+        team: "kitchen",
+        roleId: dish.id,
+        userId: sam.id,
+      }),
+    ).toMatchObject({ ok: true });
+    expect(
+      await giveTeamRole({
+        actorId: captain.id,
+        team: "kitchen",
+        roleId: null,
+        userId: sam.id,
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
   it("erasure takes a member out of every role and drops their keen flags", async () => {
     await campYear(h.db(), YEAR);
     const captain = await makeUser(h.db(), { rank: "captain" });
@@ -527,5 +639,84 @@ describe("year scoping", () => {
     await sanitiseAccount(dee.id);
     expect(await h.db().select().from(schema.teamRoleHolders)).toEqual([]);
     expect(await h.db().select().from(schema.teamRoleKeen)).toEqual([]);
+  });
+});
+
+describe("team role locks", () => {
+  const h = useTestDb();
+  const { people, role } = helpers(h);
+
+  /** The SQL each write's transaction sends, in order. */
+  function recordTransactionSql(): string[] {
+    const client = h.client();
+    const seen: string[] = [];
+    const original = client.transaction.bind(client);
+    vi.spyOn(client, "transaction").mockImplementation((async (
+      fn: (tx: Parameters<Parameters<typeof original>[0]>[0]) => unknown,
+    ) =>
+      original(async (tx) => {
+        const query = tx.query.bind(tx);
+        tx.query = ((text: string, ...rest: unknown[]) => {
+          seen.push(text.toLowerCase());
+          return (query as (...a: unknown[]) => unknown)(text, ...rest);
+        }) as typeof tx.query;
+        return fn(tx);
+      })) as typeof client.transaction);
+    return seen;
+  }
+
+  // PGlite has one connection, so two gives can never overlap here: what
+  // keeps the last place for one person on Postgres is the row lock taken
+  // BEFORE the count. These pin that order.
+  it("giving a role locks the role's row FOR UPDATE before it counts who fills it", async () => {
+    const { kitchenLead, dee } = await people();
+    const dish = await role(kitchenLead.id, "Dishwasher captain", 1);
+    const seen = recordTransactionSql();
+    try {
+      expect(
+        await giveTeamRole({
+          actorId: kitchenLead.id,
+          team: "kitchen",
+          roleId: dish.id,
+          userId: dee.id,
+        }),
+      ).toMatchObject({ ok: true });
+    } finally {
+      vi.restoreAllMocks();
+    }
+    const lock = seen.findIndex(
+      (q) => q.includes('from "team_roles"') && q.endsWith("for update"),
+    );
+    const count = seen.findIndex(
+      (q) => q.includes("count(*)") && q.includes('from "team_role_holders"'),
+    );
+    expect(lock).toBeGreaterThanOrEqual(0);
+    expect(count).toBeGreaterThan(lock);
+  });
+
+  it("giving Lead locks the team-year's settings row FOR UPDATE before it counts the leads", async () => {
+    const { captain, dee } = await people();
+    const seen = recordTransactionSql();
+    try {
+      expect(
+        await giveTeamRole({
+          actorId: captain.id,
+          team: "structures",
+          roleId: null,
+          userId: dee.id,
+        }),
+      ).toEqual({ ok: false, error: ROLE_FULL });
+    } finally {
+      vi.restoreAllMocks();
+    }
+    const lock = seen.findIndex(
+      (q) =>
+        q.includes('from "team_role_settings"') && q.endsWith("for update"),
+    );
+    const count = seen.findIndex(
+      (q) => q.includes("count(*)") && q.includes('from "team_memberships"'),
+    );
+    expect(lock).toBeGreaterThanOrEqual(0);
+    expect(count).toBeGreaterThan(lock);
   });
 });

@@ -50,7 +50,7 @@ function Status({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 text-xs leading-4 font-semibold whitespace-nowrap",
+        "inline-flex items-center gap-2 text-xs leading-4 font-semibold whitespace-nowrap",
         tone === "warning" ? "text-warning" : "text-success",
       )}
     >
@@ -205,12 +205,16 @@ export function PetCard({
                     petName={pet.name}
                     current={pet.hint}
                   />
-                  <SetOwnerButton
-                    petId={pet.id}
-                    petName={pet.name}
-                    ownerId={pet.ownerId}
-                    owners={owners}
-                  />
+                  {/* A pet a member sent in never changes hands: its
+                      photos are only for the sender (setPetOwner refuses). */}
+                  {!pet.hasFrontPhoto && !pet.hasSidePhoto && (
+                    <SetOwnerButton
+                      petId={pet.id}
+                      petName={pet.name}
+                      ownerId={pet.ownerId}
+                      owners={owners}
+                    />
+                  )}
                 </div>
               )}
             </>

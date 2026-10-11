@@ -291,7 +291,11 @@ export function AddPetButton() {
 
   return (
     <>
-      <Button type="button" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        className="w-full page-sm:w-auto"
+        onClick={() => setOpen(true)}
+      >
         <Plus aria-hidden />
         Add your pet
       </Button>
