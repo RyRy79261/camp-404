@@ -60,7 +60,7 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   // the Finance team (moneyActionGate) only.
   "payment-proof/[paymentId]": "camp-access",
   // A pet's photo (Camp pets): camp access and approval, then the member who
-  // sent it or a founder (mayReadPetPhoto) only.
+  // sent it or a captain (mayReadPetPhoto) only.
   "pet-photo/[petId]/[side]": "camp-access",
   "notifications/pending": "camp-access",
   "notifications/popups": "camp-access",

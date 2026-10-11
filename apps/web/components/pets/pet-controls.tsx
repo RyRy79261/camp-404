@@ -36,9 +36,9 @@ import {
   setPetOwnerAction,
 } from "@/app/(console)/pets/actions";
 
-// The small client islands on a pet's card (Camp pets, option A): a founder's
+// The small client islands on a pet's card (Camp pets, option A): a captain's
 // Mark as in, Edit hint and Set owner, and the pencil beside the stupid thing
-// for the pet's own member (or a founder). Each opens a small dialog; a
+// for the pet's own member (or a captain). Each opens a small dialog; a
 // problem with what was typed shows beside the field, a refusal from the
 // server at the dialog's foot. Never say what "in" means.
 
@@ -48,7 +48,7 @@ export interface OwnerChoice {
 }
 
 /**
- * A picture a founder may give a pet: its key, its name and its drawing,
+ * A picture a captain may give a pet: its key, its name and its drawing,
  * drawn on the server (the pictures never ship to the browser as code).
  */
 export interface PictureChoice {
@@ -152,7 +152,7 @@ function useDialogForm() {
   return { open, openChange, error, setError, serverError, pending, run };
 }
 
-/** A founder marks a waiting pet in: its picture and the hint. */
+/** A captain marks a waiting pet in: its picture and the hint. */
 export function MarkInButton({
   petId,
   petName,
@@ -260,7 +260,7 @@ export function MarkInButton({
   );
 }
 
-/** A founder changes the hint on a pet that is in. */
+/** A captain changes the hint on a pet that is in. */
 export function EditHintButton({
   petId,
   petName,
@@ -327,7 +327,7 @@ export function EditHintButton({
   );
 }
 
-/** A founder says whose pet it is. */
+/** A captain says whose pet it is. */
 export function SetOwnerButton({
   petId,
   petName,
@@ -395,7 +395,7 @@ export function SetOwnerButton({
   );
 }
 
-/** The pet's member (or a founder) changes the one stupid thing. */
+/** The pet's member (or a captain) changes the one stupid thing. */
 export function EditThingButton({
   petId,
   petName,

@@ -907,19 +907,25 @@ Decisions baked into the schema — keep new code consistent with them:
     claims, but has no tool to make one (it cannot carry the receipts).
 - **Camp pets (owner, 2026-10-09).** A member sends in a pet (`pets`: name,
   kind, one stupid thing, a front and a side photo); it waits until a
-  founder (`canReviewPets`: a verified FOUNDER_EMAILS address, decided from
-  the session) marks it in, a compare-and-set on `waiting`, audited in the
-  same transaction, with an in-app notice to its member. The PHOTOS are only
-  for the owner to draw the pet from: private blobs under
+  captain (`canReviewPets`, from `users.rank` on the server) marks it in, a
+  compare-and-set on `waiting`, audited in the same transaction, with an
+  in-app notice to its member. Every captain's write (mark in, hint, owner,
+  another member's stupid thing) re-reads the actor's rank inside its own
+  transaction (`lockReviewer` in `packages/db/src/pets.ts`), so a demoted
+  captain is refused. [CORRECTION 2026-10-11] The reviewer used to be a
+  verified FOUNDER_EMAILS address; the owner moved it to the captains ("Why
+  are we controlling access via the env variables for this, captains can
+  control this"). Do not tie pets to FOUNDER_EMAILS again. The PHOTOS are
+  only for the captains to draw the pet from: private blobs under
   `pets/<member id>/`, streamed by `/api/pet-photo` to the member who sent
-  them and the founders only (`mayReadPetPhoto`), never in the gallery. The
+  them and the captains only (`mayReadPetPhoto`), never in the gallery. The
   HINT is public: every member reads every pet's hint. A pet that is in shows
   its picture from CODE: each pet is its own module in `@camp404/games`, and
   `pets.module_key` names its portrait in `@camp404/games/pets`
   (`PET_PORTRAITS`, a server-drawn SVG). Another member's waiting pet is cut
   on the server (`listPets`). Never write in the UI how or where a pet shows
   up. The four cats (Jinn, Moda, Nipster, Prince) were seeded as in by
-  migration 0112. A founder may say whose a pet is (`setPetOwner`) only for
+  migration 0112. A captain may say whose a pet is (`setPetOwner`) only for
   a pet with no photos (a seeded one): a pet a member sent in never changes
   hands, so its photos never reach anyone but its sender. Erasure deletes the
   pets the member sent in and their photo folder; a seeded cat linked to them

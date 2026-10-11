@@ -14,60 +14,68 @@ const OWNER = "owner-1";
 const OTHER = "other-1";
 
 describe("canReviewPets", () => {
-  it("is a founder's alone", () => {
-    expect(canReviewPets({ isFounder: true })).toBe(true);
-    expect(canReviewPets({ isFounder: false })).toBe(false);
+  it("is a captain's alone", () => {
+    expect(canReviewPets({ isCaptain: true })).toBe(true);
+    expect(canReviewPets({ isCaptain: false })).toBe(false);
+  });
+
+  it("fails closed on anything but a plain true", () => {
+    const loose = (v: unknown) =>
+      canReviewPets({ isCaptain: v } as { isCaptain: boolean });
+    expect(loose("captain")).toBe(false);
+    expect(loose(1)).toBe(false);
+    expect(loose(undefined)).toBe(false);
   });
 });
 
 describe("mayReadPetPhoto", () => {
   it("lets the member who sent the pet see its photos", () => {
     expect(
-      mayReadPetPhoto({ viewerId: OWNER, ownerId: OWNER, isFounder: false }),
+      mayReadPetPhoto({ viewerId: OWNER, ownerId: OWNER, isCaptain: false }),
     ).toBe(true);
   });
 
   it("refuses every other member, whatever the pet's status", () => {
     expect(
-      mayReadPetPhoto({ viewerId: OTHER, ownerId: OWNER, isFounder: false }),
+      mayReadPetPhoto({ viewerId: OTHER, ownerId: OWNER, isCaptain: false }),
     ).toBe(false);
   });
 
-  it("lets a founder see any pet's photos", () => {
+  it("lets a captain see any pet's photos", () => {
     expect(
-      mayReadPetPhoto({ viewerId: OTHER, ownerId: OWNER, isFounder: true }),
+      mayReadPetPhoto({ viewerId: OTHER, ownerId: OWNER, isCaptain: true }),
     ).toBe(true);
   });
 
   it("fails closed on a pet with no owner", () => {
     expect(
-      mayReadPetPhoto({ viewerId: OTHER, ownerId: null, isFounder: false }),
+      mayReadPetPhoto({ viewerId: OTHER, ownerId: null, isCaptain: false }),
     ).toBe(false);
   });
 });
 
 describe("maySeePet", () => {
-  const member = { viewerId: OTHER, isFounder: false };
+  const member = { viewerId: OTHER, isCaptain: false };
 
   it("shows a pet that is in to everyone", () => {
     expect(maySeePet({ status: "in", ownerId: OWNER }, member)).toBe(true);
     expect(maySeePet({ status: "in", ownerId: null }, member)).toBe(true);
   });
 
-  it("keeps a waiting pet to its sender and the founders", () => {
+  it("keeps a waiting pet to its sender and the captains", () => {
     expect(maySeePet({ status: "waiting", ownerId: OWNER }, member)).toBe(
       false,
     );
     expect(
       maySeePet(
         { status: "waiting", ownerId: OWNER },
-        { viewerId: OWNER, isFounder: false },
+        { viewerId: OWNER, isCaptain: false },
       ),
     ).toBe(true);
     expect(
       maySeePet(
         { status: "waiting", ownerId: OWNER },
-        { viewerId: OTHER, isFounder: true },
+        { viewerId: OTHER, isCaptain: true },
       ),
     ).toBe(true);
   });

@@ -6,6 +6,7 @@ import { sanitiseAccount } from "../account";
 import {
   PET_ALREADY_IN,
   PET_KEY_TAKEN,
+  PET_NOT_A_REVIEWER,
   PET_NOT_IN,
   PET_NOT_YOURS,
   PET_SENT_WITH_PHOTOS,
@@ -22,7 +23,7 @@ import { makeUser } from "./_factories";
 import { useTestDb } from "./_harness";
 
 // Camp pets (owner, 2026-10-09) against real Postgres: the seed migration,
-// who sees what, the founder's compare-and-set, and erasure.
+// who sees what, the captain's compare-and-set, who may review, and erasure.
 
 const SEED = readFileSync(
   new URL("../../migrations/0112_seed_camp_pets.sql", import.meta.url),
@@ -129,7 +130,7 @@ describe("0112_seed_camp_pets", () => {
     expect(byKey.jinn).toBe(caitlin.id);
   });
 
-  it("keeps a founder's later changes when it runs again", async () => {
+  it("keeps a captain's later changes when it runs again", async () => {
     await q(SEED);
     await q(
       `UPDATE pets SET hint = 'Near the clock' WHERE module_key = 'jinn'`,
@@ -179,12 +180,12 @@ describe("pets", () => {
 
   it("marks a pet in once: a compare-and-set, audited, with the owner's notice", async () => {
     const owner = await makeUser(h.db());
-    const founder = await makeUser(h.db());
+    const captain = await makeUser(h.db(), { rank: "captain" });
     const other = await makeUser(h.db());
     const id = await sendPet(owner.id);
 
     const first = await markPetIn({
-      actorId: founder.id,
+      actorId: captain.id,
       petId: id,
       moduleKey: "biscuit",
       hint: "Look near the clock",
@@ -192,7 +193,7 @@ describe("pets", () => {
     expect(first).toEqual({ ok: true, ownerId: owner.id });
 
     const second = await markPetIn({
-      actorId: founder.id,
+      actorId: captain.id,
       petId: id,
       moduleKey: "other-key",
       hint: "Another",
@@ -208,7 +209,7 @@ describe("pets", () => {
       status: "in",
       moduleKey: "biscuit",
       hint: "Look near the clock",
-      markedInByUserId: founder.id,
+      markedInByUserId: captain.id,
     });
     expect(await auditActions()).toEqual(["pet.marked_in"]);
 
@@ -237,34 +238,34 @@ describe("pets", () => {
   it("lists a pet marked in today before the seeded cats, whose marked-in time is empty", async () => {
     await q(SEED);
     const owner = await makeUser(h.db());
-    const founder = await makeUser(h.db());
+    const captain = await makeUser(h.db(), { rank: "captain" });
     const id = await sendPet(owner.id);
     const r = await markPetIn({
-      actorId: founder.id,
+      actorId: captain.id,
       petId: id,
       moduleKey: "biscuit",
       hint: "Look near the clock",
     });
     expect(r.ok).toBe(true);
 
-    const seen = await listPets({ viewerId: founder.id, isReviewer: false });
+    const seen = await listPets({ viewerId: captain.id, isReviewer: false });
     expect(seen).toHaveLength(5);
     expect(seen[0]?.id).toBe(id);
   });
 
   it("refuses a picture another pet already wears, and changes nothing", async () => {
     const owner = await makeUser(h.db());
-    const founder = await makeUser(h.db());
+    const captain = await makeUser(h.db(), { rank: "captain" });
     const a = await sendPet(owner.id);
     const b = await sendPet(owner.id, { name: "Biscuit" });
     await markPetIn({
-      actorId: founder.id,
+      actorId: captain.id,
       petId: a,
       moduleKey: "k",
       hint: "x",
     });
     const clash = await markPetIn({
-      actorId: founder.id,
+      actorId: captain.id,
       petId: b,
       moduleKey: "k",
       hint: "y",
@@ -281,25 +282,25 @@ describe("pets", () => {
 
   it("edits a hint only on a pet that is in, audited", async () => {
     const owner = await makeUser(h.db());
-    const founder = await makeUser(h.db());
+    const captain = await makeUser(h.db(), { rank: "captain" });
     const id = await sendPet(owner.id);
     expect(
-      await setPetHint({ actorId: founder.id, petId: id, hint: "Too soon" }),
+      await setPetHint({ actorId: captain.id, petId: id, hint: "Too soon" }),
     ).toEqual({ ok: false, error: PET_NOT_IN });
     await markPetIn({
-      actorId: founder.id,
+      actorId: captain.id,
       petId: id,
       moduleKey: "k",
       hint: "a",
     });
     expect(
-      await setPetHint({ actorId: founder.id, petId: id, hint: "Better" }),
+      await setPetHint({ actorId: captain.id, petId: id, hint: "Better" }),
     ).toEqual({ ok: true });
     expect(await auditActions()).toEqual(["pet.marked_in", "pet.hint_changed"]);
   });
 
   it("sets a seeded pet's owner, audited, and refuses an erased member", async () => {
-    const founder = await makeUser(h.db());
+    const captain = await makeUser(h.db(), { rank: "captain" });
     const caitlin = await makeUser(h.db(), { displayName: "Caitlin" });
     const gone = await makeUser(h.db(), { sanitised: true });
     await q(SEED);
@@ -309,14 +310,14 @@ describe("pets", () => {
     await q(`UPDATE pets SET owner_id = NULL`);
     expect(
       await setPetOwner({
-        actorId: founder.id,
+        actorId: captain.id,
         petId: jinn!.id,
         ownerId: gone.id,
       }),
     ).toMatchObject({ ok: false });
     expect(
       await setPetOwner({
-        actorId: founder.id,
+        actorId: captain.id,
         petId: jinn!.id,
         ownerId: caitlin.id,
       }),
@@ -330,15 +331,15 @@ describe("pets", () => {
   });
 
   it("never moves a pet a member sent in, so its photos stay with the sender", async () => {
-    const founder = await makeUser(h.db());
+    const captain = await makeUser(h.db(), { rank: "captain" });
     const sender = await makeUser(h.db());
     const other = await makeUser(h.db());
     const id = await sendPet(sender.id);
     expect(
-      await setPetOwner({ actorId: founder.id, petId: id, ownerId: other.id }),
+      await setPetOwner({ actorId: captain.id, petId: id, ownerId: other.id }),
     ).toEqual({ ok: false, error: PET_SENT_WITH_PHOTOS });
     expect(
-      await setPetOwner({ actorId: founder.id, petId: id, ownerId: null }),
+      await setPetOwner({ actorId: captain.id, petId: id, ownerId: null }),
     ).toEqual({ ok: false, error: PET_SENT_WITH_PHOTOS });
     expect(await getPetPhoto(id, "front")).toMatchObject({
       ownerId: sender.id,
@@ -346,14 +347,14 @@ describe("pets", () => {
     expect(await auditActions()).toEqual([]);
   });
 
-  it("lets the owner change the stupid thing, and nobody else but a reviewer", async () => {
+  it("lets the owner change the stupid thing, and nobody else but a captain", async () => {
     const owner = await makeUser(h.db());
     const other = await makeUser(h.db());
+    const captain = await makeUser(h.db(), { rank: "captain" });
     const id = await sendPet(owner.id);
     expect(
       await setPetStupidThing({
         actorId: other.id,
-        isReviewer: false,
         petId: id,
         stupidThing: "Mine now",
       }),
@@ -361,7 +362,6 @@ describe("pets", () => {
     expect(
       await setPetStupidThing({
         actorId: owner.id,
-        isReviewer: false,
         petId: id,
         stupidThing: "Steals bread.",
       }),
@@ -370,13 +370,110 @@ describe("pets", () => {
     expect(await auditActions()).toEqual([]);
     expect(
       await setPetStupidThing({
-        actorId: other.id,
-        isReviewer: true,
+        actorId: captain.id,
         petId: id,
         stupidThing: "Steals all the bread.",
       }),
     ).toEqual({ ok: true });
     expect(await auditActions()).toEqual(["pet.line_changed"]);
+  });
+
+  it("lets a captain mark a pet in", async () => {
+    const owner = await makeUser(h.db());
+    const captain = await makeUser(h.db(), { rank: "captain" });
+    const id = await sendPet(owner.id);
+    expect(
+      await markPetIn({
+        actorId: captain.id,
+        petId: id,
+        moduleKey: "biscuit",
+        hint: "Look near the clock",
+      }),
+    ).toEqual({ ok: true, ownerId: owner.id });
+  });
+
+  it("refuses a member who is not a captain every reviewer's write, and changes nothing", async () => {
+    const owner = await makeUser(h.db());
+    const member = await makeUser(h.db());
+    const id = await sendPet(owner.id);
+    await q(SEED);
+    const [jinn] = await q<{ id: string }>(
+      `SELECT id FROM pets WHERE module_key = 'jinn'`,
+    );
+    const refused = { ok: false, error: PET_NOT_A_REVIEWER };
+    expect(
+      await markPetIn({
+        actorId: member.id,
+        petId: id,
+        moduleKey: "biscuit",
+        hint: "x",
+      }),
+    ).toEqual(refused);
+    expect(
+      await setPetHint({ actorId: member.id, petId: jinn!.id, hint: "x" }),
+    ).toEqual(refused);
+    expect(
+      await setPetOwner({
+        actorId: member.id,
+        petId: jinn!.id,
+        ownerId: member.id,
+      }),
+    ).toEqual(refused);
+    expect(
+      await setPetStupidThing({
+        actorId: member.id,
+        petId: jinn!.id,
+        stupidThing: "Mine now",
+      }),
+    ).toEqual({ ok: false, error: PET_NOT_YOURS });
+    const [row] = await h
+      .db()
+      .select()
+      .from(schema.pets)
+      .where(eq(schema.pets.id, id));
+    expect(row!.status).toBe("waiting");
+    expect(await auditActions()).toEqual([]);
+  });
+
+  it("refuses a captain who was demoted after the screen said yes", async () => {
+    const owner = await makeUser(h.db());
+    const captain = await makeUser(h.db(), { rank: "captain" });
+    const id = await sendPet(owner.id);
+    await h
+      .db()
+      .update(schema.users)
+      .set({ rank: "member" })
+      .where(eq(schema.users.id, captain.id));
+    expect(
+      await markPetIn({
+        actorId: captain.id,
+        petId: id,
+        moduleKey: "biscuit",
+        hint: "x",
+      }),
+    ).toEqual({ ok: false, error: PET_NOT_A_REVIEWER });
+    expect(
+      await setPetStupidThing({
+        actorId: captain.id,
+        petId: id,
+        stupidThing: "Mine now",
+      }),
+    ).toEqual({ ok: false, error: PET_NOT_YOURS });
+    expect(await auditActions()).toEqual([]);
+  });
+
+  it("refuses a system account even with a captain's rank", async () => {
+    const owner = await makeUser(h.db());
+    const system = await makeUser(h.db(), { rank: "captain", isSystem: true });
+    const id = await sendPet(owner.id);
+    expect(
+      await markPetIn({
+        actorId: system.id,
+        petId: id,
+        moduleKey: "biscuit",
+        hint: "x",
+      }),
+    ).toEqual({ ok: false, error: PET_NOT_A_REVIEWER });
   });
 
   it("erasure deletes the member's pets and leaves everyone else's", async () => {

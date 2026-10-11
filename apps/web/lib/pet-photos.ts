@@ -4,8 +4,8 @@ import { del, list } from "@vercel/blob";
 
 // A pet's two photos (Camp pets, owner 2026-10-09): private blobs in the
 // member's own folder, `pets/<member id>/`, never handed out by their own
-// address. They are only for a founder to draw the pet from, so
-// /api/pet-photo streams one to the member who sent it and to the founders,
+// address. They are only for a captain to draw the pet from, so
+// /api/pet-photo streams one to the member who sent it and to the captains,
 // and to nobody else. Erasure deletes the member's folder. The file checks
 // (a JPEG, PNG or WebP by its first bytes, its EXIF stripped) are the proof
 // upload's: proofBytesToStore in ./payment-proof.

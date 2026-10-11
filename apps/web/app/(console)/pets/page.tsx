@@ -22,9 +22,9 @@ export const metadata = { title: "Camp pets — Camp 404" };
 // waiting ones too, then every pet that is in, as cards with the pet's
 // picture (drawn in code), whose it is, what it is, the one stupid thing and
 // the hint, which is everyone's. A photo is drawn only for the member who sent
-// it and the founders: the page asks mayReadPetPhoto, and the photo route asks
+// it and the captains: the page asks mayReadPetPhoto, and the photo route asks
 // again. Other members' waiting pets are never read for a member: the list is
-// cut on the server (listPets). A founder also gets All / Waiting and the
+// cut on the server (listPets). A captain also gets All / Waiting and the
 // review buttons. Never say what "in" means or where a pet goes.
 
 function Section({
@@ -57,8 +57,8 @@ export default async function PetsPage({
 }: {
   searchParams: Promise<{ show?: string }>;
 }) {
-  const { authUser, campUser } = await requireMemberPage();
-  const reviewer = isPetReviewer(authUser);
+  const { campUser } = await requireMemberPage();
+  const reviewer = isPetReviewer(campUser);
   const [pets, used, owners, params] = await Promise.all([
     listPets({ viewerId: campUser.id, isReviewer: reviewer }),
     reviewer ? listUsedPetModuleKeys() : Promise.resolve([]),
@@ -78,7 +78,7 @@ export default async function PetsPage({
         showPhotos={mayReadPetPhoto({
           viewerId: campUser.id,
           ownerId: pet.ownerId,
-          isFounder: reviewer,
+          isCaptain: reviewer,
         })}
         freeKeys={freeKeys}
         owners={owners}

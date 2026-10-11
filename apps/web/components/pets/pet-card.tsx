@@ -17,9 +17,9 @@ import {
 // picture on top, then the name, whose it is and what it is, the one stupid
 // thing as a quote, and at the foot where it stands. A pet that is in wears
 // its picture from the code (a server-drawn SVG); a waiting one shows its two
-// photos, which only its member and the founders are ever sent. The hint is
+// photos, which only its member and the captains are ever sent. The hint is
 // on every card that has one: it is everyone's (owner, 2026-10-09).
-// Server-rendered; the founder's buttons are small client islands.
+// Server-rendered; the captain's buttons are small client islands.
 
 const DATE = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -31,11 +31,11 @@ export interface PetCardProps {
   pet: PetRow;
   /** The viewer's own pet. */
   mine: boolean;
-  /** The viewer is a founder: Mark as in, Edit hint, Set owner. */
+  /** The viewer is a captain: Mark as in, Edit hint, Set owner. */
   reviewer: boolean;
-  /** Whether this viewer may see the photos (its member, or a founder). */
+  /** Whether this viewer may see the photos (its member, or a captain). */
   showPhotos: boolean;
-  /** For a founder: the pictures no pet wears yet. */
+  /** For a captain: the pictures no pet wears yet. */
   freeKeys: readonly string[];
   owners: readonly OwnerChoice[];
 }
@@ -103,7 +103,7 @@ function Picture({ pet, showPhotos }: { pet: PetRow; showPhotos: boolean }) {
   );
 }
 
-/** A picture key as a founder reads it: "nipster" is "Nipster". */
+/** A picture key as a captain reads it: "nipster" is "Nipster". */
 function pictureName(key: string): string {
   return key
     .split("-")

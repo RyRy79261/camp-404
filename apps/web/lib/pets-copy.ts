@@ -16,5 +16,4 @@ export const PET_WAITING_NOTE =
 export const PET_NEEDS_FRONT = "Add a photo from the front.";
 export const PET_NEEDS_SIDE = "Add a photo from the side.";
 export const PET_PHOTO_TYPES = "Photos must be JPG, PNG or WebP pictures.";
-export const PET_NOT_A_REVIEWER = "Only the camp's founders review pets.";
 export const PET_NO_PICTURE = "Pick a picture for it.";

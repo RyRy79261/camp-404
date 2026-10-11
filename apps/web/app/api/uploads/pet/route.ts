@@ -26,9 +26,9 @@ export const runtime = "nodejs";
 // here each is checked by its first bytes (a JPEG, PNG or WebP, never anything
 // that could run), its EXIF (GPS position, time) is stripped, and it is stored
 // as a PRIVATE blob in the member's own folder, `pets/<member id>/`. The
-// photos are only for the founders to draw the pet from: the blobs' addresses
+// photos are only for the captains to draw the pet from: the blobs' addresses
 // never leave the server, and /api/pet-photo streams each to the member and
-// the founders only.
+// the captains only.
 
 function refuse(error: string, status: number, field?: string) {
   return NextResponse.json({ error, field }, { status });

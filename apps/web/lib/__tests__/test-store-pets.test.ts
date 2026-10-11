@@ -6,6 +6,7 @@ import { PET_REF_TYPE } from "@camp404/core";
 import {
   PET_ALREADY_IN,
   PET_KEY_TAKEN,
+  PET_NOT_A_REVIEWER,
   PET_NOT_IN,
   PET_NOT_YOURS,
 } from "@camp404/db/pets";
@@ -17,14 +18,15 @@ import { petsTestStore as s } from "../test-store-pets";
 // packages/db/src/__tests__/pets.test.ts: a waiting pet is its sender's and a
 // reviewer's only, marking in is a compare-and-set on `waiting` that refuses
 // a picture another pet wears and sends the owner a notice, a hint is only
-// for a pet that is in, and erasure takes the member's pets.
+// for a pet that is in, only a captain reviews (read at the write), and
+// erasure takes the member's pets.
 
-function user(name: string) {
+function user(name: string, rank: "member" | "captain" = "member") {
   return testStore.createUser({
     authUserId: `auth-${name}`,
     displayName: name,
     inviteCode: "seeded",
-    rank: "member",
+    rank,
   });
 }
 
@@ -66,7 +68,7 @@ describe("pets test store", () => {
     const names = (viewerId: string, isReviewer: boolean) =>
       s.listPets({ viewerId, isReviewer }).map((p) => p.name);
     expect(names(sender.id, false)).toContain("Biscuit");
-    expect(names("founder", true)).toContain("Biscuit");
+    expect(names("captain", true)).toContain("Biscuit");
     expect(names(other.id, false)).not.toContain("Biscuit");
     expect(s.getPetPhoto(id, "side")).toEqual({
       ownerId: sender.id,
@@ -76,18 +78,19 @@ describe("pets test store", () => {
 
   it("marks a pet in once, refuses a worn picture, and tells the owner", () => {
     const sender = user("Sen");
+    const f = user("Cap", "captain").id;
     const id = send(sender.id);
     expect(
-      s.markPetIn({ actorId: "f", petId: id, moduleKey: "jinn", hint: "x" }),
+      s.markPetIn({ actorId: f, petId: id, moduleKey: "jinn", hint: "x" }),
     ).toEqual({ ok: false, error: PET_KEY_TAKEN });
-    expect(s.setPetHint({ actorId: "f", petId: id, hint: "x" })).toEqual({
+    expect(s.setPetHint({ actorId: f, petId: id, hint: "x" })).toEqual({
       ok: false,
       error: PET_NOT_IN,
     });
 
     expect(
       s.markPetIn({
-        actorId: "f",
+        actorId: f,
         petId: id,
         moduleKey: "biscuit",
         hint: "Near the kettle",
@@ -96,7 +99,7 @@ describe("pets test store", () => {
     expect(testStore.hasUnreadNotice(sender.id, PET_REF_TYPE)).toBe(true);
     expect(
       s.markPetIn({
-        actorId: "f",
+        actorId: f,
         petId: id,
         moduleKey: "other",
         hint: "again",
@@ -105,14 +108,45 @@ describe("pets test store", () => {
     expect(s.listUsedPetModuleKeys()).toContain("biscuit");
   });
 
-  it("lets only the owner or a reviewer change the stupid thing", () => {
+  it("refuses a member who is not a captain, and a demoted captain", () => {
+    const sender = user("Sen");
+    const member = user("Mem");
+    const captain = user("Cap", "captain");
+    const id = send(sender.id);
+    const jinn = s
+      .listPets({ viewerId: member.id, isReviewer: false })
+      .find((p) => p.moduleKey === "jinn")!.id;
+    const no = { ok: false, error: PET_NOT_A_REVIEWER };
+    const mark = (actorId: string) =>
+      s.markPetIn({ actorId, petId: id, moduleKey: "biscuit", hint: "x" });
+    expect(mark(member.id)).toEqual(no);
+    expect(
+      s.setPetHint({ actorId: member.id, petId: jinn, hint: "x" }),
+    ).toEqual(no);
+    expect(
+      s.setPetOwner({ actorId: member.id, petId: jinn, ownerId: member.id }),
+    ).toEqual(no);
+    testStore.setUserRank(captain.id, "member");
+    expect(mark(captain.id)).toEqual(no);
+    expect(
+      s.setPetStupidThing({
+        actorId: captain.id,
+        petId: id,
+        stupidThing: "No.",
+      }),
+    ).toEqual({ ok: false, error: PET_NOT_YOURS });
+    testStore.setUserRank(captain.id, "captain");
+    expect(mark(captain.id)).toEqual({ ok: true, ownerId: sender.id });
+  });
+
+  it("lets only the owner or a captain change the stupid thing", () => {
     const sender = user("Sen");
     const other = user("Oth");
+    const captain = user("Cap", "captain");
     const id = send(sender.id);
     expect(
       s.setPetStupidThing({
         actorId: other.id,
-        isReviewer: false,
         petId: id,
         stupidThing: "No.",
       }),
@@ -120,9 +154,15 @@ describe("pets test store", () => {
     expect(
       s.setPetStupidThing({
         actorId: sender.id,
-        isReviewer: false,
         petId: id,
         stupidThing: "Eats socks.",
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      s.setPetStupidThing({
+        actorId: captain.id,
+        petId: id,
+        stupidThing: "Eats all the socks.",
       }),
     ).toEqual({ ok: true });
   });
@@ -134,7 +174,7 @@ describe("pets test store", () => {
     send(other.id, "Pebble");
     s.deletePetsOf(sender.id);
     const names = s
-      .listPets({ viewerId: "founder", isReviewer: true })
+      .listPets({ viewerId: "captain", isReviewer: true })
       .map((p) => p.name);
     expect(names).not.toContain("Biscuit");
     expect(names).toContain("Pebble");
