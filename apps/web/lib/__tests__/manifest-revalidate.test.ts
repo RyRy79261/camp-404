@@ -48,6 +48,12 @@ const MUST_REVALIDATE: Record<string, readonly string[]> = {
   "onboarding/questionnaire/actions.ts": ["saveBurnerProfile"],
   "signup/required/actions.ts": ["submitInviteCode"],
   "setup/actions.ts": ["completeSetupAction"],
+  // Help wanted: giving or taking a role may put someone on a team or
+  // change a lead flag.
+  "(console)/help-wanted/actions.ts": [
+    "giveTeamRoleAction",
+    "takeTeamRoleAction",
+  ],
   // Pins ride in the layout.
   "(console)/captains/announcements/actions.ts": ["setPinnedAction"],
 };

@@ -32,6 +32,7 @@ const LINE: Readonly<Record<string, IconKey>> = {
   logistics: "logistics",
   shifts: "shifts",
   "my-shifts": "shifts",
+  "help-wanted": "helpwanted",
   "camp-layout": "siteplan",
   lounge: "lounge",
   inventory: "inventory",

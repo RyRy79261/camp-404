@@ -223,6 +223,7 @@ const PAGE_SIZE: Partial<Record<ProgramId, OpeningSize>> = {
   power: L_WIDE,
   logistics: L_WIDE,
   shifts: L_WIDE,
+  "help-wanted": L_WIDE,
   "my-shifts": L_SIZE,
   guide: L_SIZE,
   "guide-chapter": L_SIZE,

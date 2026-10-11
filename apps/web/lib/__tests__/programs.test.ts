@@ -142,6 +142,7 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "logistics" },
       // The shift roster (#248), for every member.
       { kind: "program", id: "shifts" },
+      { kind: "program", id: "help-wanted" },
       { kind: "program", id: "camp-layout" },
       { kind: "program", id: "lounge" },
       { kind: "program", id: "inventory" },
