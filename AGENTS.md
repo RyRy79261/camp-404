@@ -895,6 +895,21 @@ Decisions baked into the schema — keep new code consistent with them:
     a call site.
   - A claim is made in the app only: the Claude connector lists and moves
     claims, but has no tool to make one (it cannot carry the receipts).
+- **Camp pets (owner, 2026-10-09).** A member sends in a pet (`pets`: name,
+  kind, one stupid thing, a front and a side photo); it waits until a
+  founder (`canReviewPets`: a verified FOUNDER_EMAILS address, decided from
+  the session) marks it in, a compare-and-set on `waiting`, audited in the
+  same transaction, with an in-app notice to its member. The PHOTOS are only
+  for the owner to draw the pet from: private blobs under
+  `pets/<member id>/`, streamed by `/api/pet-photo` to the member who sent
+  them and the founders only (`mayReadPetPhoto`), never in the gallery. The
+  HINT is public: every member reads every pet's hint. A pet that is in shows
+  its picture from CODE: each pet is its own module in `@camp404/games`, and
+  `pets.module_key` names its portrait in `@camp404/games/pets`
+  (`PET_PORTRAITS`, a server-drawn SVG). Another member's waiting pet is cut
+  on the server (`listPets`). Never write in the UI how or where a pet shows
+  up. The four cats (Jinn, Moda, Nipster, Prince) were seeded as in by
+  migration 0108. Erasure deletes the member's pets and their photo folder.
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.
