@@ -440,7 +440,8 @@ activation_id)` would allow any number of duplicates whose
   `questionnaire_activations_one_open_per_key_idx`,
   `notification_deliveries_broadcast_user_uniq`, `dues_charges_one_fee_idx`,
   `afrikaburn_deadlines_cycle_kind_uniq`,
-  `payment_refunds_one_live_idx`. A bare `ON CONFLICT DO
+  `payment_refunds_one_live_idx`, `team_role_keen_role_user_uniq`,
+  `team_role_keen_lead_user_uniq`. A bare `ON CONFLICT DO
 NOTHING`, with no target, is not affected.
 
 **Driver choice.** `@camp404/db` exposes two drivers: `createHttpDb()` is
@@ -632,6 +633,25 @@ Decisions baked into the schema — keep new code consistent with them:
   counts under the slot's row lock, so the last place goes to one member.
   The minimum of 3 is a reminder and a captain's nudge, never a
   `required_actions` block. The Burn days come from the logistics Burn phase.
+- **Help wanted (team roles, owner's pick A, 2026-10-09).** Each team's
+  roles are per year: `team_roles` (cycle, team, name, 1–20 places, a
+  one-line note, order), `team_role_holders` (who fills one) and
+  `team_role_keen` (a member's "I'm keen"); `team_role_settings` holds how
+  many leads a team wants (default 1). **Lead is the first row of every team
+  and is the lead flag itself** (`team_memberships.is_lead`, written through
+  `@camp404/db/team-memberships`); it is never a `team_roles` row, so there
+  is one record of who leads. A captain or a lead OF THAT TEAM runs a team's
+  roles (`canManageTeamRoles`, `packages/core/src/team-roles.ts`, fail
+  closed); only a captain picks or removes a lead (`canPickTeamLead`).
+  Giving a role locks the role and counts its holders (a full role is
+  refused), puts the person on the team when needed, re-reads the actor and
+  writes its audit row in the same transaction (`@camp404/db/team-roles`).
+  Every approved member reads every team's roles at `/help-wanted`; who is
+  keen reaches only a captain or that team's leads, and a member gets only
+  their own flags (`lib/help-wanted.ts` cuts it on the server). Every read
+  filters on the current year, so a new year starts with no roles ("Copy last
+  year's roles" brings the names back, empty) and no leads; `setFoundingYear`
+  adopts sentinel rows. Erasure deletes a member's holders and keen rows.
 - **Notifications.** `broadcasts` are composed messages fanned out into
   per-user `notification_deliveries` (a queue). [CORRECTION 2026-09-29] There
   is no worker: `deliverDue` fans out and drains the queue in `after()` (see
