@@ -34,6 +34,8 @@ import {
 } from "@/app/(console)/calendar/actions";
 import { draftStorageKey } from "@/components/os/window-storage";
 import { DRAFT_OWNER, DraftWindow } from "@/tests/draft-window";
+import type * as React from "react";
+import { useLeaveGuard } from "@camp404/os";
 import { MinutesEditor } from "./minutes-editor";
 
 afterEach(() => {
@@ -44,7 +46,14 @@ afterEach(() => {
 
 const RETURN = "/calendar?view=month&month=2026-10&event=evt1";
 
-function editor(inWindow = false, version: number | null = 2) {
+function editor(
+  inWindow = false,
+  version: number | null = 2,
+  around: {
+    beside?: React.ReactNode;
+    confirm?: (message: string) => boolean;
+  } = {},
+) {
   const ui = (
     <MinutesEditor
       target={{
@@ -85,7 +94,14 @@ function editor(inWindow = false, version: number | null = 2) {
     />
   );
   render(
-    inWindow ? <DraftWindow windowKey="minutes:evt1">{ui}</DraftWindow> : ui,
+    inWindow ? (
+      <DraftWindow windowKey="minutes:evt1" confirm={around.confirm}>
+        {ui}
+        {around.beside}
+      </DraftWindow>
+    ) : (
+      ui
+    ),
   );
 }
 
@@ -248,6 +264,7 @@ describe("MinutesEditor's Find decisions and action items", () => {
             unmatchedName: null,
             team: "finance",
             due: "2026-10-16",
+            dueSaid: "next week",
           },
           {
             text: "Take on the logistics lead role",
@@ -255,6 +272,7 @@ describe("MinutesEditor's Find decisions and action items", () => {
             unmatchedName: "Speaker 3",
             team: null,
             due: null,
+            dueSaid: null,
           },
         ],
         alreadyThere: { decisions: 0, actionItems: 1 },
@@ -340,6 +358,56 @@ describe("MinutesEditor's Find decisions and action items", () => {
         team: null,
       }),
     ]);
+  });
+
+  it("shows the notes' words a suggested date came from", async () => {
+    answer();
+    editor();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Find decisions and action items" }),
+    );
+    await screen.findByText("Claude suggests 2 decisions and 2 action items.");
+    expect(screen.getByText("From “next week”")).toBeTruthy();
+  });
+
+  it("asks before the window goes while suggestions are on screen, and not once they are kept", async () => {
+    answer();
+    const guard: { leave: () => boolean } = { leave: () => true };
+    function Probe() {
+      const leave = useLeaveGuard();
+      guard.leave = () => leave("minutes:evt1");
+      return null;
+    }
+    const asked: string[] = [];
+    editor(true, 2, {
+      beside: <Probe />,
+      confirm: (message) => {
+        asked.push(message);
+        return false;
+      },
+    });
+    expect(guard.leave()).toBe(true);
+    expect(asked).toEqual([]);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Find decisions and action items" }),
+    );
+    await screen.findByText("Claude suggests 2 decisions and 2 action items.");
+    expect(guard.leave()).toBe(false);
+    expect(asked).toEqual([
+      "Claude's suggestions are not kept yet. Leave without keeping them? They will be lost.",
+    ]);
+
+    // Dropped, they are gone on purpose: nothing left to ask about.
+    for (const text of [
+      "Camp targets 35 people",
+      "No cold recruiting",
+      "Start collecting camp fees",
+      "Take on the logistics lead role",
+    ]) {
+      fireEvent.click(screen.getByRole("button", { name: `Drop “${text}”` }));
+    }
+    expect(guard.leave()).toBe(true);
   });
 
   it("says Claude could not read the notes, and keeps everything typed", async () => {

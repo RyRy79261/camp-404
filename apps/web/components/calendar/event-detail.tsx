@@ -75,7 +75,10 @@ export function EventDetail({
           </>
         ) : null}
       </dl>
-      {entry.description ? (
+      {/* A meeting made here keeps its agenda on its note, shown below as
+          Markdown; the event's copy (Google's details) would say it twice. */}
+      {entry.description &&
+      !(entry.kind === "meeting" && entry.source === "app") ? (
         <p className="whitespace-pre-line text-sm leading-[21px] text-foreground/90">
           {entry.description}
         </p>

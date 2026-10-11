@@ -115,12 +115,14 @@ export const MeetingSuggestionAnswer = z.object({
     .array(
       z.object({
         text: z.string().min(1).max(2_000),
-        /** The person as the notes name them; null when nobody is named. */
+        /** The person in the notes' own words; null when nobody is named. */
         person: z.string().max(200).nullable(),
         /** A team key from the list sent; null for the whole camp or none. */
         team: z.string().max(100).nullable(),
         /** YYYY-MM-DD, or null when the notes give no deadline. */
         due: z.string().max(40).nullable(),
+        /** The notes' words the date came from; null with no date. */
+        due_said: z.string().max(200).nullable(),
         already_listed: z.boolean(),
       }),
     )

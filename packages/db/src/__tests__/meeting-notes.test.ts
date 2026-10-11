@@ -419,7 +419,98 @@ describe("meeting notes", () => {
       ).toEqual({ ok: true, version: 2 });
     });
 
-    it("puts an item saved before every item was a task on the board", async () => {
+    it("leaves an old item sent back unchanged off the board, even on a past year's note", async () => {
+      const db = h.db();
+      const { member } = await people();
+      const id = await noteBy(member.id);
+      await db
+        .update(schema.meetingNotes)
+        .set({ cycle: 0 })
+        .where(eq(schema.meetingNotes.id, id));
+      const [old] = await db
+        .insert(schema.meetingNoteActionItems)
+        .values({
+          noteId: id,
+          position: 0,
+          text: "Old item",
+          dueOn: "2025-04-20",
+        })
+        .returning();
+      const saved = await editMeetingNote({
+        actorId: member.id,
+        noteId: id,
+        version: 1,
+        ...fields({
+          notes: "Fixed a typo.",
+          actionItems: [
+            { ...item("Old item"), id: old!.id, dueOn: "2025-04-20" },
+          ],
+        }),
+      });
+      expect(saved).toEqual({ ok: true, version: 2 });
+      expect(await db.select().from(schema.tasks)).toHaveLength(0);
+      const [kept] = await db.select().from(schema.meetingNoteActionItems);
+      expect(kept).toMatchObject({ id: old!.id, taskId: null });
+    });
+
+    it("saves a note whose unchanged old item names someone who has left", async () => {
+      const db = h.db();
+      const { member } = await people();
+      const id = await noteBy(member.id);
+      const gone = await makeUser(db, { approvalStatus: "pending" });
+      const [old] = await db
+        .insert(schema.meetingNoteActionItems)
+        .values({
+          noteId: id,
+          position: 0,
+          text: "Old item",
+          assigneeId: gone.id,
+        })
+        .returning();
+      expect(
+        await editMeetingNote({
+          actorId: member.id,
+          noteId: id,
+          version: 1,
+          ...fields({
+            agenda: "1. Menu",
+            actionItems: [
+              { ...item("Old item"), id: old!.id, assigneeId: gone.id },
+            ],
+          }),
+        }),
+      ).toEqual({ ok: true, version: 2 });
+      expect(await db.select().from(schema.tasks)).toHaveLength(0);
+    });
+
+    it("saves a switched-off team's note with its unchanged old item", async () => {
+      const db = h.db();
+      const { captain } = await people();
+      const made = await createMeetingNote({
+        actorId: captain.id,
+        team: "water",
+        ...fields(),
+      });
+      if (!made.ok) throw new Error(made.error);
+      const [old] = await db
+        .insert(schema.meetingNoteActionItems)
+        .values({ noteId: made.id, position: 0, text: "Old item" })
+        .returning();
+      expect(
+        await editMeetingNote({
+          actorId: captain.id,
+          noteId: made.id,
+          version: 1,
+          ...fields({
+            notes: "Met.",
+            actionItems: [{ ...item("Old item"), id: old!.id, team: "water" }],
+          }),
+        }),
+      ).toEqual({ ok: true, version: 2 });
+      expect(await db.select().from(schema.tasks)).toHaveLength(0);
+    });
+
+    it("puts an old item on the board once it is changed", async () => {
       const db = h.db();
       const { member } = await people();
       const id = await noteBy(member.id);
@@ -544,8 +635,14 @@ describe("meeting notes", () => {
         noteId: made.id,
         version: 1,
         ...fields({
+          // Given a deadline, so it changed and goes on the board now.
           actionItems: [
-            { ...item("Old item"), id: old!.id, assigneeId: gone.id },
+            {
+              ...item("Old item"),
+              id: old!.id,
+              assigneeId: gone.id,
+              dueOn: "2026-10-20",
+            },
           ],
         }),
       });

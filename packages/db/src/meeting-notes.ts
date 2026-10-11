@@ -33,9 +33,10 @@ import { TEAM_NOT_ACTIVE, insertTaskWithin } from "./tasks";
 //    cannot still write. A caller passes only who is acting, never a rank or
 //    a team list.
 //  - Every action item IS a task on the board (owner, 2026-10-11). Saving the
-//    note puts each item that is not on the board yet there, filed under the
-//    team the writer picked (an active team, or the whole camp), in the same
-//    transaction as the save. Whoever may write the note may do this (the
+//    note puts each new or changed item that is not on the board yet there,
+//    filed under the team the writer picked (an active team, or the whole
+//    camp), in the same transaction as the save. An item from before this
+//    rule, sent back unchanged, stays off the board (editMeetingNote). Whoever may write the note may do this (the
 //    owner accepted it): the board's own add rule (a captain or the team's
 //    lead) is not asked. Once on the board, an item's words, person, team and
 //    deadline are the task's, changed there: the note reads them live, and a
@@ -654,15 +655,18 @@ export async function createMeetingNote(
  * Change a note. `version` is the version the editor opened; if someone else
  * saved since, nothing changes and the editor is told.
  *
- * Every action item not on the board yet goes there with this save (a new
- * one, or one saved before every item was a task). One already on the board
- * keeps its words, person, team and deadline (the task is where the work is
- * tracked): only its place in the list moves, a save that changes its words
- * is refused (ON_THE_BOARD), and one left out of the list stays on the note,
- * at the end. An item not on the board that is left out is removed. A person
- * is checked only when they are new to the note, so a note keeps someone who
- * has since left the approved list. With no `actionItems` (the Claude
- * connector's save), the items are left exactly as they are.
+ * An action item goes on the board with this save when it is new, or when
+ * its words, person, team or deadline changed. One saved before every item
+ * was a task (or whose task was deleted) and sent back unchanged stays off the
+ * board and only moves in the list, so fixing a typo in an old meeting's notes
+ * never files its old items on this year's board, and a person who has since
+ * left the approved list, or a team since switched off, does not block the
+ * save. One already on the board keeps its words, person, team and deadline
+ * (the task is where the work is tracked): only its place in the list moves,
+ * a save that changes its words is refused (ON_THE_BOARD), and one left out
+ * of the list stays on the note, at the end. An item not on the board that is
+ * left out is removed. With no `actionItems` (the Claude connector's save),
+ * the items are left exactly as they are.
  */
 export async function editMeetingNote(
   input: MeetingNoteFields & {
@@ -733,6 +737,7 @@ export async function editMeetingNote(
         await writeActionItems(tx, {
           actorId: input.actorId,
           noteId: input.noteId,
+          noteTeam: note.team,
           note: input,
           items: input.actionItems,
           activeTeams: input.activeTeams,
@@ -746,14 +751,34 @@ export async function editMeetingNote(
 }
 
 /**
+ * Whether an item not on the board comes back from the editor exactly as it
+ * was saved. The editor shows such an item under the note's own team (it has
+ * no team of its own until it is a task), so that is the team it compares.
+ */
+export function actionItemUnchanged(
+  before: { text: string; assigneeId: string | null; dueOn: string | null },
+  item: MeetingActionItemWrite,
+  noteTeam: Team | null,
+): boolean {
+  return (
+    item.text === before.text &&
+    item.assigneeId === before.assigneeId &&
+    item.dueOn === before.dueOn &&
+    item.team === noteTeam
+  );
+}
+
+/**
  * The action items of an edit: kept, changed, added or removed, in the order
- * sent, and each not on the board yet put there.
+ * sent. Each new or changed item not on the board yet is put there; an old one
+ * sent back unchanged stays off it (editMeetingNote).
  */
 async function writeActionItems(
   tx: Tx,
   input: {
     actorId: string;
     noteId: string;
+    noteTeam: Team | null;
     note: { title: string; heldAt: Date };
     items: readonly MeetingActionItemWrite[];
     activeTeams: readonly Team[];
@@ -762,7 +787,9 @@ async function writeActionItems(
   const items = await tx
     .select({
       id: schema.meetingNoteActionItems.id,
+      text: schema.meetingNoteActionItems.text,
       assigneeId: schema.meetingNoteActionItems.assigneeId,
+      dueOn: schema.meetingNoteActionItems.dueOn,
       taskId: schema.meetingNoteActionItems.taskId,
       taskTitle: schema.tasks.title,
     })
@@ -776,14 +803,24 @@ async function writeActionItems(
     .for("update", { of: schema.meetingNoteActionItems });
   const saved = new Map(items.map((i) => [i.id, i]));
 
-  // A person is checked only when new to the item, or when the item goes on
-  // the board now (the board takes only an approved member).
+  // An old item sent back as it was stays where it is, off the board.
+  const unchanged = (item: MeetingActionItemWrite) => {
+    const before = item.id ? saved.get(item.id) : undefined;
+    return (
+      before !== undefined &&
+      !before.taskId &&
+      actionItemUnchanged(before, item, input.noteTeam)
+    );
+  };
+
+  // A person is checked only when the item goes on the board now (the board
+  // takes only an approved member).
   const toCheck = input.items
     .filter((i) => {
       if (i.assigneeId === null) return false;
       const before = i.id ? saved.get(i.id) : undefined;
       if (before?.taskId) return false;
-      return true;
+      return !unchanged(i);
     })
     .map((i) => i.assigneeId as string);
   if ((await notMembers(tx, toCheck)).length > 0) {
@@ -797,6 +834,15 @@ async function writeActionItems(
     if (before?.taskId) {
       // Its words are the task's now: the editor sends them back as read.
       if (item.text !== (before.taskTitle ?? item.text)) refuse(ON_THE_BOARD);
+      sent.add(before.id);
+      await tx
+        .update(schema.meetingNoteActionItems)
+        .set({ position })
+        .where(eq(schema.meetingNoteActionItems.id, before.id));
+      position += 1;
+      continue;
+    }
+    if (before && unchanged(item)) {
       sent.add(before.id);
       await tx
         .update(schema.meetingNoteActionItems)

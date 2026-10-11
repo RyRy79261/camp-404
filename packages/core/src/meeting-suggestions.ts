@@ -4,10 +4,13 @@
 // into what the editor shows, and it never trusts the answer's people, teams
 // or dates on their own:
 //
-//  - A person becomes an assignee only when the name the notes give matches
-//    exactly ONE member on the list sent (case, spaces and accents aside). A
-//    name that matches nobody, or two people, is "Who is this?" with no guess:
-//    "Speaker 3" and "Team leads" stay a question for the writer.
+//  - A person becomes an assignee only when the name Claude gives matches
+//    exactly ONE member's whole name (case, spaces and accents aside), among
+//    everyone in camp when the caller passes them, AND that whole name is
+//    written in the agenda or the notes. So Claude cannot turn "Mike" in the
+//    notes into "Mike Smith": the notes never said it, and the writer is asked.
+//    A name that matches nobody, or two people, is "Who is this?" with no
+//    guess: "Speaker 3" and "Team leads" stay a question for the writer.
 //  - A team is kept only when it is one of the active teams sent ("camp" is
 //    the whole camp); otherwise the action item is filed where the meeting is
 //    (its team, or the whole camp).
@@ -38,6 +41,8 @@ export interface SuggestedActionItem {
   team: string | null;
   /** A camp day, YYYY-MM-DD, or null. */
   due: string | null;
+  /** The notes' words the date was worked out from ("next week"), or null. */
+  dueSaid: string | null;
 }
 
 export interface MeetingSuggestions {
@@ -55,6 +60,7 @@ export interface MeetingSuggestionRaw {
     person: string | null;
     team: string | null;
     due: string | null;
+    due_said: string | null;
     already_listed: boolean;
   }[];
 }
@@ -80,18 +86,27 @@ export function comparable(text: string): string {
 
 /**
  * The one member whose whole name is `name`, or null: no match, two members
- * with that name, or no name at all. Never a guess from part of a name.
+ * with that name, or no name at all. Never a guess from part of a name. With
+ * `said` (the agenda and the notes), the whole name must also be written
+ * there, as words of its own.
  */
 export function matchMember(
   name: string | null,
   members: readonly SuggestionMember[],
+  said?: string,
 ): string | null {
   if (!name) return null;
   const wanted = comparable(name);
   if (!wanted) return null;
+  if (said !== undefined && !` ${comparable(said)} `.includes(` ${wanted} `)) {
+    return null;
+  }
   const hits = members.filter((m) => comparable(m.displayName) === wanted);
   return hits.length === 1 ? hits[0]!.id : null;
 }
+
+/** The longest "From “…”" the editor shows under a suggested date. */
+export const DUE_SAID_MAX = 80;
 
 /** Whether `day` is a real calendar day written YYYY-MM-DD. */
 export function isCalendarDay(day: string): boolean {
@@ -119,7 +134,15 @@ function fit(text: string, max: number): string {
 export function meetingSuggestionsFrom(
   raw: MeetingSuggestionRaw,
   context: {
+    /** Who Claude was told about. */
     members: readonly SuggestionMember[];
+    /**
+     * Every approved member in camp, so a name two people share is never
+     * matched to the one Claude was told about; defaults to `members`.
+     */
+    everyone?: readonly SuggestionMember[];
+    /** The agenda and the notes Claude read: a matched name must be in them. */
+    said: string;
     /** The active teams' keys. */
     teams: readonly string[];
     /** The meeting's own team (null for the whole camp). */
@@ -166,7 +189,13 @@ export function meetingSuggestionsFrom(
     if (actionItems.length >= SUGGESTIONS_MAX) continue;
     heldItems.add(key);
     const person = item.person?.trim() || null;
-    const assigneeId = matchMember(person, context.members);
+    const assigneeId = matchMember(
+      person,
+      context.everyone ?? context.members,
+      context.said,
+    );
+    const due = item.due && isCalendarDay(item.due) ? item.due : null;
+    const dueSaid = due ? item.due_said?.trim() || null : null;
     actionItems.push({
       text,
       assigneeId,
@@ -177,7 +206,8 @@ export function meetingSuggestionsFrom(
           : item.team && teams.has(item.team)
             ? item.team
             : fallbackTeam,
-      due: item.due && isCalendarDay(item.due) ? item.due : null,
+      due,
+      dueSaid: dueSaid ? fit(dueSaid, DUE_SAID_MAX) : null,
     });
   }
 

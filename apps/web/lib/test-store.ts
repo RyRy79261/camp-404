@@ -158,6 +158,7 @@ import {
   NOTE_EDITED,
   NOTE_GONE,
   ON_THE_BOARD,
+  actionItemUnchanged,
   meetingNoteRefusal,
   meetingTaskDescription,
   type MeetingActionItemWrite,
@@ -3954,6 +3955,15 @@ export const testStore = {
     }
     const saved = new Map(note.actionItems.map((i) => [i.id, i]));
     const sentItems = input.actionItems;
+    // An old item sent back as it was stays off the board (the db's rule).
+    const unchanged = (item: MeetingActionItemWrite) => {
+      const before = item.id ? saved.get(item.id) : undefined;
+      return (
+        before !== undefined &&
+        !before.taskId &&
+        actionItemUnchanged(before, item, note.team)
+      );
+    };
     if (sentItems) {
       // Every check first, so a refusal changes nothing (the db's transaction).
       for (const item of sentItems) {
@@ -3965,6 +3975,7 @@ export const testStore = {
           }
           continue;
         }
+        if (unchanged(item)) continue;
         if (item.assigneeId && !approved(item.assigneeId)) {
           return { ok: false, error: ASSIGNEE_NOT_A_MEMBER };
         }
@@ -3980,7 +3991,7 @@ export const testStore = {
       for (const item of sentItems) {
         const before = item.id ? saved.get(item.id) : undefined;
         if (before) sent.add(before.id);
-        if (before?.taskId) {
+        if (before?.taskId || (before && unchanged(item))) {
           items.push(before);
           continue;
         }

@@ -106,6 +106,7 @@ const CANNED = {
       person: "Ryan James Noble",
       team: "camp",
       due: null,
+      due_said: null,
       already_listed: true,
     },
     {
@@ -113,6 +114,7 @@ const CANNED = {
       person: "Ryan James Noble",
       team: "finance",
       due: "2026-10-19",
+      due_said: "next week",
       already_listed: false,
     },
     {
@@ -120,6 +122,7 @@ const CANNED = {
       person: "Ryan James Noble",
       team: "structures",
       due: null,
+      due_said: null,
       already_listed: false,
     },
     {
@@ -127,6 +130,7 @@ const CANNED = {
       person: "Speaker 3",
       team: "transport_and_logistics",
       due: null,
+      due_said: null,
       already_listed: false,
     },
     {
@@ -134,6 +138,7 @@ const CANNED = {
       person: "Team leads",
       team: "camp",
       due: "soon",
+      due_said: null,
       already_listed: false,
     },
   ],
@@ -220,6 +225,7 @@ describe("findMeetingSuggestions on the owner's planning call", () => {
         unmatchedName: null,
         team: "finance",
         due: "2026-10-19",
+        dueSaid: "next week",
       },
       {
         text: "Get the Dimension stretch tent quote and compare it to Lance's option",
@@ -227,6 +233,7 @@ describe("findMeetingSuggestions on the owner's planning call", () => {
         unmatchedName: null,
         team: "structures",
         due: null,
+        dueSaid: null,
       },
       {
         text: "Take on the logistics lead role and keep running safety, with Ryan James Noble's support",
@@ -234,6 +241,7 @@ describe("findMeetingSuggestions on the owner's planning call", () => {
         unmatchedName: "Speaker 3",
         team: "transport_and_logistics",
         due: null,
+        dueSaid: null,
       },
       {
         text: "Accept the assigned lead role, or find someone else to lead the team",
@@ -241,6 +249,7 @@ describe("findMeetingSuggestions on the owner's planning call", () => {
         unmatchedName: "Team leads",
         team: null,
         due: null,
+        dueSaid: null,
       },
     ]);
   });

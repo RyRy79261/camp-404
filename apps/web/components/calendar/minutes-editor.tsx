@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { z } from "zod";
+import { useWindowDirty } from "@camp404/os";
 import {
   MEETING_NOTE_PRIVACY_REMINDER,
   type MeetingSuggestions,
@@ -33,7 +34,9 @@ import { Input } from "@camp404/ui/components/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@camp404/ui/components/select";
@@ -271,6 +274,14 @@ function MeetingEditorForm({
     }),
   );
 
+  // Suggestions are never stored, but losing them unasked wastes one of the
+  // member's asks: close, minimise, a switch or a link asks first while any
+  // are on screen (a Back, which cannot ask, drops them).
+  const settleSuggestions = useWindowDirty(
+    suggestedDecisions.length + suggestedItems.length > 0,
+    SUGGESTIONS_PENDING,
+  );
+
   const teamKey = target.team;
   const teamLabel = target.teamLabel;
   // A new action item is filed where the meeting is, when that team is active.
@@ -337,6 +348,7 @@ function MeetingEditorForm({
           unmatchedName: i.unmatchedName,
           team: i.team,
           due: i.due ?? "",
+          dueSaid: i.dueSaid,
         })),
       );
       setFound({
@@ -419,6 +431,7 @@ function MeetingEditorForm({
         return;
       }
       markSaved();
+      settleSuggestions();
       toast.success("Meeting saved");
       router.push(target.returnHref);
       router.refresh();
@@ -745,11 +758,18 @@ function MeetingEditorForm({
                       team={item.team}
                       due={item.due}
                       members={members}
+                      there={attendees}
                       teams={teams}
                       labelOf={labelOf}
                       onChange={(patch) => patchItem(item.key, patch)}
                       disabled={pending}
                     />
+                    {item.id ? (
+                      <p className="text-xs text-muted-foreground">
+                        Not on the task board. Change it, and Save meeting puts
+                        it there.
+                      </p>
+                    ) : null}
                   </li>
                 ),
               )}
@@ -778,7 +798,9 @@ function MeetingEditorForm({
                     unmatchedName={i.unmatchedName}
                     team={i.team}
                     due={i.due}
+                    dueSaid={i.dueSaid}
                     members={members}
+                    there={attendees}
                     teams={teams}
                     labelOf={labelOf}
                     onChange={(patch) =>
@@ -793,6 +815,8 @@ function MeetingEditorForm({
                                   "assigneeId" in patch
                                     ? null
                                     : x.unmatchedName,
+                                // A date changed is the writer's, not the notes'.
+                                dueSaid: "due" in patch ? null : x.dueSaid,
                               }
                             : x,
                         ),
@@ -857,6 +881,9 @@ function MeetingEditorForm({
   );
 }
 
+const SUGGESTIONS_PENDING =
+  "Claude's suggestions are not kept yet. Leave without keeping them? They will be lost.";
+
 const FIND_FAILED =
   "Claude could not read the notes. Your notes are safe. Try again.";
 
@@ -884,6 +911,8 @@ interface SuggestedItemRow {
   unmatchedName: string | null;
   team: string | null;
   due: string;
+  /** The notes' words the date came from, shown as "From “…”". */
+  dueSaid: string | null;
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -1040,6 +1069,9 @@ function SuggestedRow({
   );
 }
 
+const GROUP_LABEL =
+  "text-xs font-semibold uppercase tracking-wide text-muted-foreground";
+
 /** An action item's person, team and deadline. */
 function ItemFields({
   idPrefix,
@@ -1047,7 +1079,9 @@ function ItemFields({
   unmatchedName = null,
   team,
   due,
+  dueSaid = null,
   members,
+  there,
   teams,
   labelOf,
   onChange,
@@ -1058,7 +1092,10 @@ function ItemFields({
   unmatchedName?: string | null;
   team: string | null;
   due: string;
+  dueSaid?: string | null;
   members: MeetingPerson[];
+  /** Who is ticked as there: listed first, the likely people. */
+  there: ReadonlySet<string>;
   teams: { value: string; label: string }[];
   labelOf: (team: string | null) => string;
   onChange: (patch: {
@@ -1070,6 +1107,8 @@ function ItemFields({
 }) {
   const known = new Set(members.map((m) => m.id));
   const asking = unmatchedName !== null && assigneeId === null;
+  const wasThere = members.filter((m) => there.has(m.id));
+  const everyoneElse = members.filter((m) => !there.has(m.id));
   return (
     <div className="grid gap-3 page-sm:grid-cols-3">
       <Field
@@ -1091,17 +1130,36 @@ function ItemFields({
             <SelectValue placeholder="Who is this? Pick" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={NOBODY}>Nobody yet</SelectItem>
             {assigneeId && !known.has(assigneeId) ? (
               <SelectItem value={assigneeId}>
                 Someone no longer approved
               </SelectItem>
             ) : null}
-            {members.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.displayName}
-              </SelectItem>
-            ))}
+            {wasThere.length > 0 ? (
+              <SelectGroup>
+                <SelectLabel className={GROUP_LABEL}>Who was there</SelectLabel>
+                {wasThere.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.displayName}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ) : null}
+            {everyoneElse.length > 0 ? (
+              <SelectGroup>
+                {wasThere.length > 0 ? (
+                  <SelectLabel className={GROUP_LABEL}>
+                    Everyone else
+                  </SelectLabel>
+                ) : null}
+                {everyoneElse.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.displayName}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ) : null}
+            <SelectItem value={NOBODY}>Nobody yet</SelectItem>
           </SelectContent>
         </Select>
       </Field>
@@ -1131,7 +1189,11 @@ function ItemFields({
           </SelectContent>
         </Select>
       </Field>
-      <Field label="Due" htmlFor={`item-due-${idPrefix}`}>
+      <Field
+        label="Due"
+        htmlFor={`item-due-${idPrefix}`}
+        help={dueSaid && due ? `From “${dueSaid}”` : undefined}
+      >
         <DateControl
           id={`item-due-${idPrefix}`}
           value={due}

@@ -69,9 +69,14 @@ const eventFields = {
   /**
    * The Google event's details. On a new event it is the agenda (owner,
    * 2026-10-11: the composer's Details became the Agenda), in Markdown, so it
-   * may be as long as an agenda.
+   * may be as long as an agenda. A plain event's edit form calls it the
+   * description, so the message names neither. Google's copy is cut to fit
+   * (campEventBody in apps/web/lib/camp-events.ts).
    */
-  description: optionalText(10_000, "Keep the agenda under 10,000 characters."),
+  description: optionalText(
+    10_000,
+    "Keep the details under 10,000 characters.",
+  ),
   place: optionalText(200, "Keep the place under 200 characters."),
   team: Team.nullable(),
   date: day("Pick a date for the event."),

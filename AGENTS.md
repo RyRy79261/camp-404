@@ -792,9 +792,13 @@ Decisions baked into the schema — keep new code consistent with them:
   - **An action item IS a task on the board** (owner, 2026-10-11). Each row in
     the minutes editor has its words, a person, a team (where the task is
     filed: the meeting's by default, Whole camp allowed, only an active team)
-    and a deadline. Save meeting puts every item not on the board yet there
-    (`putOnBoard` in `@camp404/db/meeting-notes`, `insertTaskWithin`), in the
-    same transaction as the save. Whoever may write the note may do this
+    and a deadline. Save meeting puts every new or changed item not on the
+    board yet there (`putOnBoard` in `@camp404/db/meeting-notes`,
+    `insertTaskWithin`), in the same transaction as the save. An item from
+    before this rule (or whose task was deleted) sent back unchanged stays off
+    the board (`actionItemUnchanged`), so editing an old meeting never files
+    its old items on this year's board, and a person since gone or a team
+    since switched off on such an item never blocks the save. Whoever may write the note may do this
     (`canWorkInTeam`; the owner accepted that it is wider than the board's own
     add rule). Once on the board, an item's words, person, team and deadline
     are the task's: the note reads them live, the editor shows "On the board:
@@ -812,9 +816,12 @@ Decisions baked into the schema — keep new code consistent with them:
     names of the team's members, whoever is ticked as there and the captains,
     the active teams and what the note already holds; never an email, phone
     number or safety data. The server matches people again
-    (`meetingSuggestionsFrom` in `@camp404/core`): only one member's whole
-    name becomes the person, anything else ("Speaker 3", "Team leads") is
-    "Who is this?" with no guess. Under E2E_TEST_MODE a fixed answer stands
+    (`meetingSuggestionsFrom` in `@camp404/core`): only a whole name that the
+    agenda or notes themselves write, and that one approved member in the
+    whole camp has, becomes the person; anything else ("Mike", "Speaker 3",
+    "Team leads") is "Who is this?" with no guess. Claude returns the notes'
+    own words for a person, never a fuller name it picked from the list, and
+    the words a deadline came from ("From “next week”"). Under E2E_TEST_MODE a fixed answer stands
     in. The note text is never logged.
 - **Logistics calendar (#247).** The year's pack, travel, build, burn, strike
   and unpack days are one row per (year, phase) in `logistics_phases`. A

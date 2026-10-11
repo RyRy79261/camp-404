@@ -347,6 +347,7 @@ export async function suggestMeetingItemsAction(
       agenda: asked.agenda,
       notes: asked.notes,
       members,
+      everyone: approved.map((m) => ({ id: m.id, displayName: m.displayName })),
       teams: active,
       existing: {
         decisions: asked.decisions,

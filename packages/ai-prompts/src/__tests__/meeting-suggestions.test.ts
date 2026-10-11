@@ -21,7 +21,7 @@ const input: MeetingSuggestionsInput = {
 
 describe("meetingSuggestionsPrompt", () => {
   it("is pinned at its own version", () => {
-    expect(PROMPT_VERSIONS.meetingSuggestions).toBe("2026-10-11.1");
+    expect(PROMPT_VERSIONS.meetingSuggestions).toBe("2026-10-11.2");
   });
 
   it("sends the date, the people, the teams and what is already there", () => {
@@ -54,6 +54,7 @@ describe("meetingSuggestionsPrompt", () => {
           person: "Speaker 3",
           team: "finance",
           due: null,
+          due_said: null,
           already_listed: false,
         },
       ],

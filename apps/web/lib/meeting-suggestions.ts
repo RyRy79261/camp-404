@@ -7,6 +7,7 @@ import {
   type MeetingSuggestionsInput,
 } from "@camp404/ai-prompts";
 import {
+  comparable,
   errorLogText,
   meetingSuggestionsFrom,
   WHOLE_CAMP_KEY,
@@ -30,8 +31,9 @@ import { isE2ETestMode } from "./test-mode";
 //    call, a refusal, a cut-off answer or one that fails the Zod shape is the
 //    editor's error state ("Your notes are safe. Try again."), never a retry.
 //  - The answer is made safe in @camp404/core (meetingSuggestionsFrom): a
-//    person only on an exact match of one member's whole name, a team only
-//    from the active list, a date only when it is real.
+//    person only on an exact match of one member's whole name (unique in the
+//    whole camp) that the notes themselves write, a team only from the active
+//    list, a date only when it is real.
 //  - Under E2E_TEST_MODE no call is made: a fixed answer stands in, built
 //    from the people it was given (recipe-proofread.ts's pattern).
 //  - Nothing of the notes is logged: a failure logs errorLogText only.
@@ -55,8 +57,13 @@ export interface MeetingSuggestionRequest {
   teamLabel: string | null;
   agenda: string;
   notes: string;
-  /** Who a person may be matched to. */
+  /** The names Claude is told about. */
   members: readonly SuggestionMember[];
+  /**
+   * Every approved member, so a name two people share is never matched to
+   * the one Claude was told about; defaults to `members`.
+   */
+  everyone?: readonly SuggestionMember[];
   /** The camp's active teams. */
   teams: readonly { key: string; label: string }[];
   existing: { decisions: readonly string[]; actionItems: readonly string[] };
@@ -142,7 +149,11 @@ export function readSuggestionReply(
 export function standInAnswer(
   request: MeetingSuggestionRequest,
 ): MeetingSuggestionRaw {
-  const someone = request.members[0]?.displayName ?? null;
+  // The first member the notes name in full, as Claude would copy them.
+  const said = ` ${comparable(`${request.agenda}\n${request.notes}`)} `;
+  const someone =
+    request.members.find((m) => said.includes(` ${comparable(m.displayName)} `))
+      ?.displayName ?? null;
   return {
     decisions: [
       {
@@ -160,6 +171,7 @@ export function standInAnswer(
         person: someone,
         team: request.teams.some((t) => t.key === "finance") ? "finance" : null,
         due: null,
+        due_said: null,
         already_listed: false,
       },
       {
@@ -167,6 +179,7 @@ export function standInAnswer(
         person: "Speaker 3",
         team: MEETING_WHOLE_CAMP,
         due: null,
+        due_said: null,
         already_listed: false,
       },
     ],
@@ -180,6 +193,8 @@ export async function findMeetingSuggestions(
 ): Promise<SuggestionOutcome> {
   const context = {
     members: request.members,
+    everyone: request.everyone,
+    said: `${request.agenda}\n${request.notes}`,
     teams: request.teams.map((t) => t.key),
     meetingTeam: request.teamKey,
     existing: request.existing,

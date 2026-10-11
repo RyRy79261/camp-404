@@ -17,6 +17,7 @@ const members = [
 
 const context = {
   members,
+  said: "(Ryan James Noble) fees. (Speaker 3) logistics. Caitlin tells everyone.",
   teams: ["finance", "structures"],
   meetingTeam: null,
   existing: { decisions: [], actionItems: [] },
@@ -31,6 +32,7 @@ function item(
     person: null,
     team: null,
     due: null,
+    due_said: null,
     already_listed: false,
     ...extra,
   };
@@ -53,7 +55,69 @@ describe("matchMember", () => {
   });
 });
 
+describe("matchMember against the notes", () => {
+  it("takes a whole name only when the notes write it", () => {
+    expect(matchMember("Ryan James Noble", members, "(Ryan) fees")).toBeNull();
+    expect(
+      matchMember("Ryan James Noble", members, "(Ryan James Noble) fees"),
+    ).toBe("ryan");
+    // "Caitlin" inside another word is not the name.
+    expect(matchMember("Caitlin", members, "Caitlinesque plans")).toBeNull();
+  });
+});
+
 describe("meetingSuggestionsFrom", () => {
+  it("asks who it is when the notes give only a first name, whatever Claude answered", () => {
+    const mikes = [
+      { id: "mike-s", displayName: "Mike Smith" },
+      { id: "mike-j", displayName: "Mike Jones" },
+    ];
+    const out = meetingSuggestionsFrom(
+      {
+        decisions: [],
+        action_items: [
+          item("Get the tent quote", { person: "Mike Smith" }),
+          item("Book the truck", { person: "Mike" }),
+        ],
+      },
+      {
+        ...context,
+        // Claude was told about one Mike; the camp has two.
+        members: [mikes[0]!],
+        everyone: mikes,
+        said: "(Mike) get the tent quote. (Mike) book the truck.",
+      },
+    );
+    expect(out.actionItems.map((i) => [i.assigneeId, i.unmatchedName])).toEqual(
+      [
+        [null, "Mike Smith"],
+        [null, "Mike"],
+      ],
+    );
+  });
+
+  it("never matches a name two people in camp share, though Claude saw one", () => {
+    const out = meetingSuggestionsFrom(
+      {
+        decisions: [],
+        action_items: [item("Get the tent quote", { person: "Mike" })],
+      },
+      {
+        ...context,
+        members: [{ id: "mike-1", displayName: "Mike" }],
+        everyone: [
+          { id: "mike-1", displayName: "Mike" },
+          { id: "mike-2", displayName: "Mike" },
+        ],
+        said: "(Mike) get the tent quote",
+      },
+    );
+    expect(out.actionItems[0]).toMatchObject({
+      assigneeId: null,
+      unmatchedName: "Mike",
+    });
+  });
+
   it("keeps matched people, known teams and real dates, and asks who the rest are", () => {
     const out = meetingSuggestionsFrom(
       {
@@ -63,11 +127,13 @@ describe("meetingSuggestionsFrom", () => {
             person: "Ryan James Noble",
             team: "finance",
             due: "2026-10-19",
+            due_said: "next week",
           }),
           item("Take on the logistics lead role", {
             person: "Speaker 3",
             team: "transport",
             due: "next week",
+            due_said: "next week",
           }),
           item("Tell everyone", { person: "Caitlin", team: "camp" }),
           item("Check the date", { due: "2026-02-30" }),
@@ -83,6 +149,7 @@ describe("meetingSuggestionsFrom", () => {
         unmatchedName: null,
         team: "finance",
         due: "2026-10-19",
+        dueSaid: "next week",
       },
       {
         text: "Take on the logistics lead role",
@@ -91,6 +158,7 @@ describe("meetingSuggestionsFrom", () => {
         // Not an active team: filed under the meeting's.
         team: "structures",
         due: null,
+        dueSaid: null,
       },
       {
         text: "Tell everyone",
@@ -98,6 +166,7 @@ describe("meetingSuggestionsFrom", () => {
         unmatchedName: null,
         team: null,
         due: null,
+        dueSaid: null,
       },
       {
         text: "Check the date",
@@ -105,6 +174,7 @@ describe("meetingSuggestionsFrom", () => {
         unmatchedName: null,
         team: "structures",
         due: null,
+        dueSaid: null,
       },
     ]);
   });

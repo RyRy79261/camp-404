@@ -18,7 +18,12 @@
 // active teams (key and name), and the decisions and action items already on
 // the note. Never an email, phone number, ID or anything of anyone's safety
 // data. The server matches the names again on its side, and takes only an
-// exact match of one member's whole name.
+// exact match of one member's whole name that the notes themselves write.
+//
+// 2026-10-11.2: `person` is the notes' own words for the person, never a
+// name from the members list put in their place (Claude turned "Mike" into
+// one member's full name, and the camp may have two), and `due_said` carries
+// the words a deadline was worked out from, so the writer can check it.
 
 export interface MeetingSuggestionsInput {
   /** The meeting's title, as its calendar event has it. */
@@ -54,9 +59,10 @@ Camp 404 is a theme camp of 30 to 80 people at AfrikaBurn, in South Africa. Its 
 What you return, by calling the ${MEETING_SUGGESTIONS_TOOL} tool exactly once:
 - decisions: each thing the meeting settled, one short line each, in plain words, as a statement ("Camp targets 35 people instead of 45 to 50"). Not a topic, not a discussion, not an idea someone raised that nobody agreed to. At most 50.
 - action_items: each piece of work someone agreed to do after the meeting, as an instruction that starts with a verb ("Get the Dimension stretch tent quote and compare it to Lance's"). At most 120 characters each, at most 50. For each:
-  - person: the person responsible exactly as the members list writes their name, when the notes name one person who is on that list. When the notes name someone who is not on the list, a role, a group or a speaker label ("Speaker 3", "Team leads", "Caitlin's friend"), give the words the notes use. When nobody is named, null. Never guess a person from a first name that two members share, and never pick someone the notes do not name.
+  - person: the person responsible, in the exact words the notes use for them: a full name, a first name, a nickname, a role, a group or a speaker label ("Ryan James Noble", "Mike", "Speaker 3", "Team leads"). Copy those words as written; never replace them with a fuller name from the members list, even when only one member could be meant. The app matches the words to a member itself and asks the writer when they are not a whole name. When nobody is named, null. Never pick someone the notes do not name.
   - team: the key of the team whose task board the work belongs on, from the teams list, when the work is plainly that team's (tent quotes are Structures', fees are Finance's). "${MEETING_WHOLE_CAMP}" when it is for the whole camp. null when you cannot tell: the app then files it under the meeting's own team.
   - due: the deadline as YYYY-MM-DD when the notes give one. Count words like "next week", "by Friday" or "end of the month" from the meeting's day: "next week" is the Monday of the week after the meeting's week (weeks start on Monday), "by Friday" is the first Friday after the meeting's day. null when the notes give no deadline.
+  - due_said: when due is a date, the words in the notes it was worked out from, copied as written ("next week", "by Friday", "on the 20th"); null when due is null.
 - already_listed: true when the decision or action item is one the note already holds (the same thing, even in other words); false otherwise. List those too, marked, so the writer can see that you found them.
 
 Rules:
@@ -148,9 +154,17 @@ const TOOL = {
             person: { type: ["string", "null"] },
             team: { type: ["string", "null"] },
             due: { type: ["string", "null"] },
+            due_said: { type: ["string", "null"] },
             already_listed: { type: "boolean" },
           },
-          required: ["text", "person", "team", "due", "already_listed"],
+          required: [
+            "text",
+            "person",
+            "team",
+            "due",
+            "due_said",
+            "already_listed",
+          ],
           additionalProperties: false,
         },
       },
