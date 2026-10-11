@@ -567,6 +567,10 @@ export const YEAR_TABLES_ADOPTED_AS_IS = [
   schema.afrikaburnDeadlines,
   schema.shiftTypes,
   schema.volunteerShifts,
+  // Help wanted: team roles, how many leads a team wants, and keen flags.
+  schema.teamRoles,
+  schema.teamRoleSettings,
+  schema.teamRoleKeen,
   // The Kitchen (#244, #245) beyond the meal plan.
   schema.kitchenMenuItems,
   schema.kitchenSnacks,

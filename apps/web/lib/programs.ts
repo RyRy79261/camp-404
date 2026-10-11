@@ -330,6 +330,19 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // Help wanted (owner's pick A, 2026-10-09): every team's roles this year
+  // and who fills them. Every member reads it and says "I'm keen"; a captain
+  // or the team's lead picks (canManageTeamRoles, checked in each write).
+  {
+    id: "help-wanted",
+    label: "Help wanted",
+    keywords: ["Team roles", "Needs a lead", "I'm keen", "Volunteer"],
+    fileName: "HELPWANT.TXT",
+    href: "/help-wanted",
+    icon: "help-wanted",
+    place: CAMP,
+    rank: "camp_member",
+  },
   // The site plan (#271): every member reads it; its page gates the edits.
   {
     id: "camp-layout",
@@ -384,6 +397,18 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     fileName: "LINEAGE.EXE",
     href: "/family-tree",
     icon: "family-tree",
+    place: CAMP,
+    rank: "camp_member",
+  },
+  // Camp pets (owner, 2026-10-09): every approved member sends in their pet
+  // and sees the ones that are in; its page gives the founders their review.
+  {
+    id: "pets",
+    label: "Camp pets",
+    keywords: ["Cats", "Dogs", "Add your pet", "Hints"],
+    fileName: "PETS.DB",
+    href: "/pets",
+    icon: "pets",
     place: CAMP,
     rank: "camp_member",
   },

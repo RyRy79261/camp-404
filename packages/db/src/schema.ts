@@ -40,6 +40,8 @@ import {
   LOUNGE_NEEDS,
   LOUNGE_OFFER_KINDS,
   LOUNGE_OFFER_STATUSES,
+  PET_KINDS,
+  PET_STATUSES,
   CAN_MATERIALS,
   GRID_NODE_KINDS,
   SHARE_GENERATOR_SOURCES,
@@ -70,6 +72,8 @@ import {
   type LoungeNeed,
   type LoungeOfferKind,
   type LoungeOfferStatus,
+  type PetKind,
+  type PetStatus,
   type CanMaterial,
   type GridNodeKind,
   type ShareGeneratorSource,
@@ -2784,6 +2788,127 @@ export const teamPrograms = pgTable(
   }),
 );
 
+// --- Help wanted: team roles (owner's pick A, 2026-10-09) ------------------
+// Each team's roles for one year and who fills them, so the camp sees which
+// teams still need a lead and which roles are open. Year-scoped like
+// team_memberships: a new year starts with no roles ("Copy last year's roles"
+// brings the names back, empty), and last year's stay on file.
+//
+// LEAD IS NOT A ROW HERE. It is the first role of every team, always, and its
+// people are `team_memberships.is_lead` (written only through
+// @camp404/db/team-memberships setLead), never a second record. How many
+// leads a team wants is `team_role_settings.lead_places` (1 when no row).
+//
+// A captain or a lead of THAT team runs the roles (canManageTeamRoles); only
+// a captain gives Lead (canPickTeamLead). Written only through
+// @camp404/db/team-roles: each change re-reads the actor inside its own
+// transaction and writes its audit row there; giving a role locks the role's
+// row and counts who fills it, so the last place goes to one person.
+
+// One team's settings for one year. The row is also the team-year's lock: a
+// write that copies roles, adds one or gives Lead upserts it and locks it.
+export const teamRoleSettings = pgTable(
+  "team_role_settings",
+  {
+    cycle: integer("cycle").notNull(),
+    team: teamEnum("team").notNull(),
+    leadPlaces: integer("lead_places").notNull().default(1),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.cycle, t.team] }),
+    leadPlacesCheck: check(
+      "team_role_settings_lead_places_check",
+      sql`${t.leadPlaces} >= 1 and ${t.leadPlaces} <= 20`,
+    ),
+  }),
+);
+
+// One role in one team for one year, Lead aside.
+export const teamRoles = pgTable(
+  "team_roles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    team: teamEnum("team").notNull(),
+    name: text("name").notNull(),
+    places: integer("places").notNull().default(1),
+    note: text("note"),
+    // The order the team's roles are listed in, after Lead.
+    position: integer("position").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    cycleTeamIdx: index("team_roles_cycle_team_idx").on(t.cycle, t.team),
+    placesCheck: check(
+      "team_roles_places_check",
+      sql`${t.places} >= 1 and ${t.places} <= 20`,
+    ),
+    nameCheck: check(
+      "team_roles_name_check",
+      sql`char_length(${t.name}) between 1 and 60`,
+    ),
+    noteCheck: check(
+      "team_roles_note_check",
+      sql`${t.note} is null or char_length(${t.note}) <= 120`,
+    ),
+  }),
+);
+
+// Who fills a role. Every member reads it, as they read who is on a team.
+export const teamRoleHolders = pgTable(
+  "team_role_holders",
+  {
+    roleId: uuid("role_id")
+      .notNull()
+      .references(() => teamRoles.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The captain or lead who gave it.
+    addedByUserId: uuid("added_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.roleId, t.userId] }),
+    userIdx: index("team_role_holders_user_idx").on(t.userId),
+  }),
+);
+
+// A member's "I'm keen" on a role: their own flag, read only by them, the
+// captains and that team's leads. `role_id` null is the team's Lead, so the
+// rule is two partial unique indexes (a nullable column in one index would
+// let any number of Lead rows through).
+export const teamRoleKeen = pgTable(
+  "team_role_keen",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cycle: integer("cycle").notNull(),
+    team: teamEnum("team").notNull(),
+    roleId: uuid("role_id").references(() => teamRoles.id, {
+      onDelete: "cascade",
+    }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    roleUserUniq: uniqueIndex("team_role_keen_role_user_uniq")
+      .on(t.roleId, t.userId)
+      .where(sql`${t.roleId} is not null`),
+    leadUserUniq: uniqueIndex("team_role_keen_lead_user_uniq")
+      .on(t.cycle, t.team, t.userId)
+      .where(sql`${t.roleId} is null`),
+    cycleIdx: index("team_role_keen_cycle_idx").on(t.cycle),
+    userIdx: index("team_role_keen_user_idx").on(t.userId),
+  }),
+);
+
 // --- Desktop layouts -----------------------------------------------------
 // Where a member keeps the icons on their 404 OS desktop, and the shortcuts
 // and folders they made there (owner's decision 14 B, 2026-09-26: on the
@@ -3483,6 +3608,59 @@ export const loungeSettings = pgTable("lounge_settings", {
   }),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
+
+// --- Camp pets ------------------------------------------------------------
+// Members send in their pets (owner, 2026-10-09); a founder marks each one
+// "in" with a hint, once its picture is drawn in code (@camp404/games/pets,
+// keyed by `module_key`). The photos are private blobs under
+// `pets/<member id>/`, read only by the member who sent them and the founders
+// (/api/pet-photo); the hint is every member's. Not year-scoped: a pet stays.
+// The four cats the camp already had are seeded by a migration, in, with no
+// photos and an owner linked by name where exactly one member matches.
+// Erasure deletes the member's pets and their photo folder (account.ts).
+
+export const pets = pgTable(
+  "pets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // The member whose pet it is; NULL for a seeded pet nobody is linked to.
+    ownerId: uuid("owner_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    name: text("name").notNull(),
+    kind: text("kind").$type<PetKind>().notNull(),
+    // The member's own word when the kind is "other".
+    kindOther: text("kind_other"),
+    // One short line about them, in the member's words.
+    stupidThing: text("stupid_thing").notNull(),
+    status: text("status").$type<PetStatus>().notNull().default("waiting"),
+    // The founder's one line, every member's to read; NULL until written.
+    hint: text("hint"),
+    // The picture's key in the code's registry; set when the pet goes in, and
+    // never worn by two pets.
+    moduleKey: text("module_key"),
+    // Private blob pathnames; NULL for a seeded pet (it was never sent).
+    frontPhotoPath: text("front_photo_path"),
+    sidePhotoPath: text("side_photo_path"),
+    markedInByUserId: uuid("marked_in_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    markedInAt: timestamp("marked_in_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (p) => ({
+    ownerIdx: index("pets_owner_idx").on(p.ownerId),
+    moduleKeyUniq: uniqueIndex("pets_module_key_uniq").on(p.moduleKey),
+    kindCheck: check("pets_kind_check", oneOf(p.kind, PET_KINDS)),
+    statusCheck: check("pets_status_check", oneOf(p.status, PET_STATUSES)),
+    // A pet is in exactly when it wears a picture.
+    moduleCheck: check(
+      "pets_module_key_when_in_check",
+      sql`(${p.status} = 'in') = (${p.moduleKey} is not null)`,
+    ),
+  }),
+);
 
 // --- Inventory (#246) -----------------------------------------------------
 // The camp's gear, at /inventory. Each row is one item with its current

@@ -155,6 +155,16 @@ describe("partial unique and queue indexes keep their predicates", () => {
         columns: ["payment_id"],
         where: "status <> 'declined'",
       },
+      // Help wanted: one keen flag per member per role, and per team's Lead
+      // (role_id null). Inserted with a bare ON CONFLICT DO NOTHING.
+      team_role_keen_role_user_uniq: {
+        columns: ["role_id", "user_id"],
+        where: "role_id is not null",
+      },
+      team_role_keen_lead_user_uniq: {
+        columns: ["cycle", "team", "user_id"],
+        where: "role_id is null",
+      },
       broadcasts_pinned_idx: {
         columns: ["published_at"],
         where: "pinned_at is not null",
@@ -246,6 +256,8 @@ describe("every member-data column has a reader in the field-access list", () =>
     paymentRefunds: schema.paymentRefunds,
     logisticsAttendance: schema.logisticsAttendance,
     shiftSignups: schema.shiftSignups,
+    teamRoleHolders: schema.teamRoleHolders,
+    teamRoleKeen: schema.teamRoleKeen,
     volunteerShifts: schema.volunteerShifts,
     rentalOrders: schema.rentalOrders,
     rentalOrderLines: schema.rentalOrderLines,
@@ -395,6 +407,9 @@ describe("year-scoped tables", () => {
     "shift_types",
     "team_budgets",
     "team_memberships",
+    "team_role_keen",
+    "team_role_settings",
+    "team_roles",
     "transport_trailers",
     "volunteer_shifts",
   ];

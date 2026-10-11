@@ -48,7 +48,12 @@ describe("the cats stay out of the first bundle", () => {
       (f) =>
         !f.endsWith(path.join("os", "cats-on-desktop.tsx")) &&
         staticImports(f).some(
-          (s) => s.startsWith("@camp404/games") && !s.endsWith(".css"),
+          (s) =>
+            s.startsWith("@camp404/games") &&
+            !s.endsWith(".css") &&
+            // Camp pets' pictures: data and a server-drawn SVG, no game,
+            // and only on the Camp pets page, never the desktop's bundle.
+            s !== "@camp404/games/pets",
         ),
     );
     expect(offenders.map((f) => path.relative(WEB, f))).toEqual([]);

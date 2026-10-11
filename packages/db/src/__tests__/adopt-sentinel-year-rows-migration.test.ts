@@ -161,7 +161,12 @@ describe("0105_adopt_sentinel_year_rows", () => {
     expect(rows.length).toBeGreaterThan(40);
     // Tables made after 0105 (frozen): setFoundingYear adopts their rows
     // (YEAR_TABLES_ADOPTED_AS_IS), and no row could be stranded before them.
-    const madeLater = new Set(["camp_events"]);
+    const madeLater = new Set([
+      "camp_events",
+      "team_roles",
+      "team_role_keen",
+      "team_role_settings",
+    ]);
     for (const { table_name } of rows.filter(
       (r) => !madeLater.has(r.table_name),
     )) {

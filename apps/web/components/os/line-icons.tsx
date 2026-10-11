@@ -40,6 +40,7 @@ export const PROGRAM_ICON_KEYS = [
   "lift",
   "logistics",
   "shifts",
+  "helpwanted",
   "tent",
   "receipt",
   "basket",
@@ -326,6 +327,15 @@ const PATHS: Record<IconKey, ReactNode> = {
       <path d="M6 4h12v17H6z" />
       <path d="M9 3h6v3H9z" />
       <path d="M9 10h6M9 14h6M9 18h3" />
+    </>
+  ),
+  // A raised hand, for Help wanted (team roles, "I'm keen").
+  helpwanted: (
+    <>
+      <path d="M8 13V6.5a1.5 1.5 0 0 1 3 0V12" />
+      <path d="M11 11V4.5a1.5 1.5 0 0 1 3 0V11" />
+      <path d="M14 11V5.5a1.5 1.5 0 0 1 3 0V14" />
+      <path d="M8 12.5l-1.6-1.8a1.5 1.5 0 0 0-2.3 1.9L8 18c1.2 1.9 2.8 3 5 3h.5a3.5 3.5 0 0 0 3.5-3.5V14" />
     </>
   ),
   // A shopping basket with its handle, for the Kitchen's shopping list (#245).

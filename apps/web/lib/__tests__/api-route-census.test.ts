@@ -59,6 +59,9 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   // A proof of payment (#240): camp access and approval, then its member or
   // the Finance team (moneyActionGate) only.
   "payment-proof/[paymentId]": "camp-access",
+  // A pet's photo (Camp pets): camp access and approval, then the member who
+  // sent it or a founder (mayReadPetPhoto) only.
+  "pet-photo/[petId]/[side]": "camp-access",
   "notifications/pending": "camp-access",
   "notifications/popups": "camp-access",
   "push/tokens": "camp-access",
@@ -93,6 +96,8 @@ const ROUTE_GUARDS: Record<string, GuardClass> = {
   "uploads/claim": "camp-access",
   // A member's own proof of payment (#240), stored in their own folder.
   "uploads/payment-proof": "camp-access",
+  // A member's own pet and its two photos, stored in their own folder.
+  "uploads/pet": "camp-access",
   "uploads/questionnaire-image": "camp-access",
   // A bug report's screenshot (#313), stored privately in the member's folder.
   "uploads/report-screenshot": "camp-access",

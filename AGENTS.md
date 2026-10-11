@@ -440,7 +440,8 @@ activation_id)` would allow any number of duplicates whose
   `questionnaire_activations_one_open_per_key_idx`,
   `notification_deliveries_broadcast_user_uniq`, `dues_charges_one_fee_idx`,
   `afrikaburn_deadlines_cycle_kind_uniq`,
-  `payment_refunds_one_live_idx`. A bare `ON CONFLICT DO
+  `payment_refunds_one_live_idx`, `team_role_keen_role_user_uniq`,
+  `team_role_keen_lead_user_uniq`. A bare `ON CONFLICT DO
 NOTHING`, with no target, is not affected.
 
 **Driver choice.** `@camp404/db` exposes two drivers: `createHttpDb()` is
@@ -632,6 +633,35 @@ Decisions baked into the schema — keep new code consistent with them:
   counts under the slot's row lock, so the last place goes to one member.
   The minimum of 3 is a reminder and a captain's nudge, never a
   `required_actions` block. The Burn days come from the logistics Burn phase.
+- **Help wanted (team roles, owner's pick A, 2026-10-09).** Each team's
+  roles are per year: `team_roles` (cycle, team, name, 1–20 places, a
+  one-line note, order), `team_role_holders` (who fills one) and
+  `team_role_keen` (a member's "I'm keen"); `team_role_settings` holds how
+  many leads a team wants (default 1). **Lead is the first row of every team
+  and is the lead flag itself** (`team_memberships.is_lead`, written through
+  `@camp404/db/team-memberships`); it is never a `team_roles` row, so there
+  is one record of who leads. A captain or a lead OF THAT TEAM runs a team's
+  roles (`canManageTeamRoles`, `packages/core/src/team-roles.ts`, fail
+  closed); only a captain picks or removes a lead (`canPickTeamLead`).
+  Giving a role locks the role and counts its holders (a full role is
+  refused), puts the person on the team when needed, re-reads the actor and
+  writes its audit row in the same transaction (`@camp404/db/team-roles`).
+  Every approved member reads every team's roles at `/help-wanted`; who is
+  keen reaches only a captain or that team's leads, and a member gets only
+  their own flags (`lib/help-wanted.ts` cuts it on the server). Every read
+  filters on the current year, so a new year starts with no roles ("Copy last
+  year's roles" brings the names back, empty) and no leads; `setFoundingYear`
+  adopts sentinel rows. Erasure deletes a member's holders and keen rows,
+  and taking someone off a team (`removeTeam`) takes them off that team's
+  roles and keen flags for the year in the same transaction. A role's places
+  and a team's leads are counted over the people the board lists (not a
+  declined sign-up, an erased account or a system actor), so the screen and
+  the refusal agree. **The lead places are enforced only in Help wanted**
+  (`giveTeamRole`, under the team-year's lock): the roster, team settings and
+  the connector's `set_team_lead` still make a lead through plain `setLead`,
+  which neither takes that lock nor checks `lead_places`, because a team may
+  have several leads. So a team can show, for example, 2 of 1 leads; Help
+  wanted then refuses another until a captain raises the places.
 - **Notifications.** `broadcasts` are composed messages fanned out into
   per-user `notification_deliveries` (a queue). [CORRECTION 2026-09-29] There
   is no worker: `deliverDue` fans out and drains the queue in `after()` (see
@@ -875,6 +905,25 @@ Decisions baked into the schema — keep new code consistent with them:
     a call site.
   - A claim is made in the app only: the Claude connector lists and moves
     claims, but has no tool to make one (it cannot carry the receipts).
+- **Camp pets (owner, 2026-10-09).** A member sends in a pet (`pets`: name,
+  kind, one stupid thing, a front and a side photo); it waits until a
+  founder (`canReviewPets`: a verified FOUNDER_EMAILS address, decided from
+  the session) marks it in, a compare-and-set on `waiting`, audited in the
+  same transaction, with an in-app notice to its member. The PHOTOS are only
+  for the owner to draw the pet from: private blobs under
+  `pets/<member id>/`, streamed by `/api/pet-photo` to the member who sent
+  them and the founders only (`mayReadPetPhoto`), never in the gallery. The
+  HINT is public: every member reads every pet's hint. A pet that is in shows
+  its picture from CODE: each pet is its own module in `@camp404/games`, and
+  `pets.module_key` names its portrait in `@camp404/games/pets`
+  (`PET_PORTRAITS`, a server-drawn SVG). Another member's waiting pet is cut
+  on the server (`listPets`). Never write in the UI how or where a pet shows
+  up. The four cats (Jinn, Moda, Nipster, Prince) were seeded as in by
+  migration 0112. A founder may say whose a pet is (`setPetOwner`) only for
+  a pet with no photos (a seeded one): a pet a member sent in never changes
+  hands, so its photos never reach anyone but its sender. Erasure deletes the
+  pets the member sent in and their photo folder; a seeded cat linked to them
+  stays, linked to nobody.
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.

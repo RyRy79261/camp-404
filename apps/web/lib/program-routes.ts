@@ -35,6 +35,7 @@ export type ProgramId =
   | "budgets"
   | "roster"
   | "family-tree"
+  | "pets"
   | "about"
   | "guide"
   | "guide-chapter"
@@ -45,6 +46,7 @@ export type ProgramId =
   | "power"
   | "logistics"
   | "shifts"
+  | "help-wanted"
   | "camp-layout"
   | "lounge"
   | "inventory"
@@ -109,6 +111,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   budgets: "Budgets",
   roster: "Roster",
   "family-tree": "Family tree",
+  pets: "Camp pets",
   about: "About Camp 404",
   guide: "Survival Guide",
   "guide-chapter": "Chapter",
@@ -119,6 +122,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   power: "Power",
   logistics: "Logistics",
   shifts: "Shifts",
+  "help-wanted": "Help wanted",
   "camp-layout": "Camp layout",
   lounge: "Lounge",
   inventory: "Inventory",
@@ -246,6 +250,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/teams/[key]", "team", "TEAM.EXE", keyed("team")),
   route("/captains/camp-management", "roster", "ROSTER.DB"),
   route("/family-tree", "family-tree", "LINEAGE.EXE"),
+  route("/pets", "pets", "PETS.DB"),
   route("/about", "about", "README.TXT"),
   // The Survival Guide (#250): its contents, then each chapter in its own
   // window; "new" is listed before the chapter beside it.
@@ -280,6 +285,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/power/fuel", "power", "POWER.EXE"),
   route("/logistics", "logistics", "LOGISTICS.EXE"),
   route("/shifts", "shifts", "ROSTER.EXE"),
+  route("/help-wanted", "help-wanted", "HELPWANT.TXT"),
   route("/camp-layout", "camp-layout", "SITEPLAN.DWG"),
   route("/lounge", "lounge", "LOUNGE.EXE"),
   // The inventory's four views and each item's page share one window: an

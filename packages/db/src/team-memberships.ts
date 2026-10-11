@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
-import { createHttpDb, withTransaction } from "./index";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
 import { writeAuditEvent } from "./audit";
 import { currentCycleNumber } from "./cycles";
@@ -142,34 +142,48 @@ export async function assignTeam(
   // holds.
   const cycle = await currentCycleNumber();
   return withTransaction(async (tx) => {
-    const [row] = await tx
-      .insert(schema.teamMemberships)
-      .values({
-        userId: input.userId,
-        team: input.team,
-        isLead: false,
-        cycle,
-      })
-      .onConflictDoNothing({
-        target: [
-          schema.teamMemberships.userId,
-          schema.teamMemberships.team,
-          schema.teamMemberships.cycle,
-        ],
-      })
-      .returning({ team: schema.teamMemberships.team });
-
-    const created = row !== undefined;
-    if (created) {
-      await writeAuditEvent(tx, {
-        actorId: input.actorId ?? null,
-        action: "member.team_assigned",
-        target: input.userId,
-        metadata: { team: input.team, cycle },
-      });
-    }
+    const { created } = await assignTeamInTx(tx, input, cycle);
     return { created, cycle };
   });
+}
+
+/**
+ * `assignTeam` inside a caller's transaction, for a write that puts someone
+ * on a team as part of a larger change (Help wanted's "give a role"). The
+ * same rules and audit row; the caller passes the year it read inside `tx`.
+ */
+export async function assignTeamInTx(
+  tx: Tx,
+  input: TeamWriteInput,
+  cycle: number,
+): Promise<{ created: boolean }> {
+  const [row] = await tx
+    .insert(schema.teamMemberships)
+    .values({
+      userId: input.userId,
+      team: input.team,
+      isLead: false,
+      cycle,
+    })
+    .onConflictDoNothing({
+      target: [
+        schema.teamMemberships.userId,
+        schema.teamMemberships.team,
+        schema.teamMemberships.cycle,
+      ],
+    })
+    .returning({ team: schema.teamMemberships.team });
+
+  const created = row !== undefined;
+  if (created) {
+    await writeAuditEvent(tx, {
+      actorId: input.actorId ?? null,
+      action: "member.team_assigned",
+      target: input.userId,
+      metadata: { team: input.team, cycle },
+    });
+  }
+  return { created };
 }
 
 /**
@@ -207,13 +221,48 @@ export async function removeTeam(
 
     const removed = row !== undefined;
     if (removed) {
+      // Help wanted: off the team means off its roles this year, and no
+      // longer keen on them, or the board would count a place held by
+      // someone who is not on the team.
+      const roleIds = tx
+        .select({ id: schema.teamRoles.id })
+        .from(schema.teamRoles)
+        .where(
+          and(
+            eq(schema.teamRoles.team, input.team),
+            eq(schema.teamRoles.cycle, cycle),
+          ),
+        );
+      const heldRoles = await tx
+        .delete(schema.teamRoleHolders)
+        .where(
+          and(
+            eq(schema.teamRoleHolders.userId, input.userId),
+            inArray(schema.teamRoleHolders.roleId, roleIds),
+          ),
+        )
+        .returning({ roleId: schema.teamRoleHolders.roleId });
+      await tx
+        .delete(schema.teamRoleKeen)
+        .where(
+          and(
+            eq(schema.teamRoleKeen.userId, input.userId),
+            eq(schema.teamRoleKeen.team, input.team),
+            eq(schema.teamRoleKeen.cycle, cycle),
+          ),
+        );
       await writeAuditEvent(tx, {
         actorId: input.actorId ?? null,
         action: "member.team_removed",
         target: input.userId,
         // `wasLead` is the bit that matters on review: removing a lead is a
         // clearance change, not just a roster edit.
-        metadata: { team: input.team, cycle, wasLead: row.isLead },
+        metadata: {
+          team: input.team,
+          cycle,
+          wasLead: row.isLead,
+          rolesTaken: heldRoles.length,
+        },
       });
     }
     return { removed, cycle };
@@ -239,43 +288,55 @@ export async function setLead(
   input: TeamWriteInput & { isLead: boolean },
 ): Promise<SetLeadResult> {
   const cycle = await currentCycleNumber();
-  return withTransaction(async (tx) => {
-    const [existing] = await tx
-      .select({ isLead: schema.teamMemberships.isLead })
-      .from(schema.teamMemberships)
-      .where(
-        and(
-          eq(schema.teamMemberships.userId, input.userId),
-          eq(schema.teamMemberships.team, input.team),
-          eq(schema.teamMemberships.cycle, cycle),
-        ),
-      )
-      .limit(1);
+  return withTransaction((tx) => setLeadInTx(tx, input, cycle));
+}
 
-    if (!existing)
-      return { ok: false as const, reason: "not_a_member" as const };
-    if (existing.isLead === input.isLead) {
-      return { ok: true as const, changed: false };
-    }
+/**
+ * `setLead` inside a caller's transaction, for a write that gives or takes
+ * the Lead role as part of a larger change (Help wanted). The one writer of
+ * the lead flag either way: the same refusal, no-op and audit row. The caller
+ * passes the year it read inside `tx`, and checks that the actor may.
+ */
+export async function setLeadInTx(
+  tx: Tx,
+  input: TeamWriteInput & { isLead: boolean },
+  cycle: number,
+): Promise<SetLeadResult> {
+  const [existing] = await tx
+    .select({ isLead: schema.teamMemberships.isLead })
+    .from(schema.teamMemberships)
+    .where(
+      and(
+        eq(schema.teamMemberships.userId, input.userId),
+        eq(schema.teamMemberships.team, input.team),
+        eq(schema.teamMemberships.cycle, cycle),
+      ),
+    )
+    .limit(1)
+    .for("update");
 
-    await tx
-      .update(schema.teamMemberships)
-      .set({ isLead: input.isLead })
-      .where(
-        and(
-          eq(schema.teamMemberships.userId, input.userId),
-          eq(schema.teamMemberships.team, input.team),
-          eq(schema.teamMemberships.cycle, cycle),
-        ),
-      );
-    await writeAuditEvent(tx, {
-      actorId: input.actorId ?? null,
-      action: "member.team_lead_set",
-      target: input.userId,
-      metadata: { team: input.team, cycle, isLead: input.isLead },
-    });
-    return { ok: true as const, changed: true };
+  if (!existing) return { ok: false as const, reason: "not_a_member" as const };
+  if (existing.isLead === input.isLead) {
+    return { ok: true as const, changed: false };
+  }
+
+  await tx
+    .update(schema.teamMemberships)
+    .set({ isLead: input.isLead })
+    .where(
+      and(
+        eq(schema.teamMemberships.userId, input.userId),
+        eq(schema.teamMemberships.team, input.team),
+        eq(schema.teamMemberships.cycle, cycle),
+      ),
+    );
+  await writeAuditEvent(tx, {
+    actorId: input.actorId ?? null,
+    action: "member.team_lead_set",
+    target: input.userId,
+    metadata: { team: input.team, cycle, isLead: input.isLead },
   });
+  return { ok: true as const, changed: true };
 }
 
 /** One team's standing in the camp's CURRENT year. */

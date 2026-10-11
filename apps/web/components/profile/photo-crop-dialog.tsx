@@ -65,10 +65,12 @@ function CroppedPhoto({
 function Preview({
   label,
   px,
+  square,
   ...photo
 }: {
   label: string;
   px: number;
+  square: boolean;
   src: string;
   image: ImageSize;
   crop: SquareCrop;
@@ -78,7 +80,10 @@ function Preview({
       <div
         role="img"
         aria-label={`Preview: ${label.toLowerCase()}`}
-        className="relative overflow-hidden rounded-full border border-border bg-[#0b0c0e]"
+        className={cn(
+          "relative overflow-hidden border border-border bg-[#0b0c0e]",
+          !square && "rounded-full",
+        )}
         style={{ width: px, height: px }}
       >
         <CroppedPhoto {...photo} />
@@ -88,12 +93,37 @@ function Preview({
   );
 }
 
+/**
+ * What the dialog says and draws, for a photo that is not the member's own
+ * face (Camp pets: "Fit the front photo", a square frame, one preview).
+ * Left out, it is the profile photo's "Fit your photo".
+ */
+export interface PhotoCropCopy {
+  title?: string;
+  /** The line under the title on a wide screen. */
+  description?: string;
+  /** The line under the title on a phone. */
+  phoneDescription?: string;
+  /** A square frame instead of the round one. */
+  square?: boolean;
+  /** The previews beside the frame, largest first. */
+  previews?: readonly { label: string; px: number }[];
+}
+
+const PROFILE_PREVIEWS = [
+  { label: "Your profile", px: 96 },
+  { label: "In lists", px: 40 },
+] as const;
+
 export function PhotoCropDialog({
   file,
   onSave,
   onCancel,
   onPickAnother,
-}: AvatarFitProps) {
+  copy = {},
+}: AvatarFitProps & { copy?: PhotoCropCopy }) {
+  const square = copy.square === true;
+  const previews = copy.previews ?? PROFILE_PREVIEWS;
   const [src, setSrc] = React.useState<string | null>(null);
   const [image, setImage] = React.useState<ImageSize | null>(null);
   const [crop, setCrop] = React.useState<SquareCrop | null>(null);
@@ -212,15 +242,16 @@ export function PhotoCropDialog({
         <div className="flex flex-col gap-1 pr-6">
           {/* Montserrat, as in the approved picture, not the pixel face. */}
           <DialogTitle className="px-0 font-sans text-lg leading-6 font-bold tracking-normal normal-case sm:pl-0">
-            Fit your photo
+            {copy.title ?? "Fit your photo"}
           </DialogTitle>
           <DialogDescription>
             <span className="sm:hidden">
-              Drag with one finger to move the photo. Pinch, or use the slider,
-              to zoom.
+              {copy.phoneDescription ??
+                "Drag with one finger to move the photo. Pinch, or use the slider, to zoom."}
             </span>
             <span className="max-sm:hidden">
-              Drag the photo to move it. Zoom until your face fills the circle.
+              {copy.description ??
+                "Drag the photo to move it. Zoom until your face fills the circle."}
             </span>
           </DialogDescription>
         </div>
@@ -266,7 +297,10 @@ export function PhotoCropDialog({
               )}
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 rounded-full shadow-[0_0_0_999px_rgba(11,12,14,0.62)] outline-2 -outline-offset-1 outline-foreground/85"
+                className={cn(
+                  "pointer-events-none absolute inset-0 shadow-[0_0_0_999px_rgba(11,12,14,0.62)] outline-2 -outline-offset-1 outline-foreground/85",
+                  !square && "rounded-full",
+                )}
               />
               {broken && (
                 <p className="absolute inset-0 flex items-center justify-center p-8 text-center text-sm text-foreground">
@@ -318,24 +352,19 @@ export function PhotoCropDialog({
               How it will look
             </h3>
             <div className="flex items-end gap-4">
-              {src && image && crop ? (
-                <>
-                  <Preview
-                    label="Your profile"
-                    px={96}
-                    src={src}
-                    image={image}
-                    crop={crop}
-                  />
-                  <Preview
-                    label="In lists"
-                    px={40}
-                    src={src}
-                    image={image}
-                    crop={crop}
-                  />
-                </>
-              ) : null}
+              {src && image && crop
+                ? previews.map((p) => (
+                    <Preview
+                      key={p.label}
+                      label={p.label}
+                      px={p.px}
+                      square={square}
+                      src={src}
+                      image={image}
+                      crop={crop}
+                    />
+                  ))
+                : null}
             </div>
             <div className="sm:hidden">{another}</div>
           </div>

@@ -4,7 +4,8 @@ The desktop's toys: the INKBLOT game, the camp's cats and Shadow Work, the
 camp's art piece. They take props and hold no app content.
 
 - **Exports:** `@camp404/games/inkblot`, `/inkblot/art`, `/inkblot/styles.css`,
-  `/cats`, `/cats/styles.css`, `/shadow-work`, `/characters`, `/camp-cats`.
+  `/cats`, `/cats/styles.css`, `/shadow-work`, `/characters`, `/camp-cats`,
+  `/pets` (the pictures of the camp's pets that are in, for Camp pets).
 - **Depends on:** `@camp404/os` for style order only.
 - **Imported by:** `apps/web`, lazily, through
   `apps/web/components/os/desktop-cats.tsx`. `apps/join` may import only

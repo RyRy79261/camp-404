@@ -274,6 +274,15 @@ export function TeamCoverageCard({ rows }: { rows: TeamCoverageRow[] }) {
                 Camp settings
               </Link>
             </p>
+            {/* Which teams still need a lead, and the roles each team needs
+                filled: Help wanted. */}
+            <Link
+              href="/help-wanted"
+              className="inline-flex items-center gap-1 text-sm font-semibold underline-offset-4 hover:text-accent hover:underline"
+            >
+              Leads and roles in Help wanted
+              <ArrowRight aria-hidden className="h-3.5 w-3.5" />
+            </Link>
           </>
         )}
       </CardContent>

@@ -24,6 +24,8 @@ export const NOTIFICATION_KINDS = [
   "task_reminder",
   // A driver wrote to the people riding in their car this year.
   "car_message",
+  // A founder marked the member's pet in, with its hint (Camp pets).
+  "pet_in",
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

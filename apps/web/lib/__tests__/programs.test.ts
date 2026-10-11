@@ -142,11 +142,13 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "logistics" },
       // The shift roster (#248), for every member.
       { kind: "program", id: "shifts" },
+      { kind: "program", id: "help-wanted" },
       { kind: "program", id: "camp-layout" },
       { kind: "program", id: "lounge" },
       { kind: "program", id: "inventory" },
       { kind: "program", id: "transport" },
       { kind: "program", id: "family-tree" },
+      { kind: "program", id: "pets" },
       { kind: "program", id: "about" },
       // The Survival Guide (#250): every member reads it.
       { kind: "program", id: "guide" },

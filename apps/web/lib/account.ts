@@ -1,12 +1,15 @@
 import "server-only";
 
+import { errorLogText } from "@camp404/core";
 import { sanitiseAccount, type SanitiseResult } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "./avatar-blob";
 import { deleteClaimReceiptBlobs } from "./claim-receipts";
 import { deletePaymentProofBlobs } from "./payment-proof";
+import { deletePetPhotoBlobs } from "./pet-photos";
 import { deleteReportScreenshotBlobs } from "./report-screenshots";
 import { isE2ETestMode, usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { petsTestStore } from "./test-store-pets";
 
 /**
  * Erase a member's account (anonymise to a "Lost Cat #N" stub). No-op under
@@ -36,6 +39,7 @@ export async function deleteAccount(input: {
       testStore.deleteDesktopLayout(input.userId);
       testStore.deleteInkblotRuns(input.userId);
       testStore.deleteReportScreenshotsOf(input.userId);
+      petsTestStore.deletePetsOf(input.userId);
     }
     return { ok: true, lostCatNumber: 0 };
   }
@@ -65,6 +69,16 @@ export async function deleteAccount(input: {
     await deleteReportScreenshotBlobs(input.userId);
   } catch (err) {
     console.error("report-screenshot cleanup error (account erasure)", err);
+  }
+  // And their pets' photos (Camp pets), filed under the camp id; the pets'
+  // rows went with the erasure's transaction.
+  try {
+    await deletePetPhotoBlobs(input.userId);
+  } catch (err) {
+    console.error(
+      "pet-photo cleanup error (account erasure)",
+      errorLogText(err, process.env),
+    );
   }
   return result;
 }

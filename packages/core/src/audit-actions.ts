@@ -102,6 +102,10 @@ export const AUDIT_ACTION_LABELS = {
   "participation.decided": "Decided a member's place this year",
   "participation.withdrawn": "Withdrew from this year",
   "payment.recorded": "Recorded a payment",
+  "pet.hint_changed": "Changed a pet's hint",
+  "pet.line_changed": "Changed the one stupid thing on a pet's card",
+  "pet.marked_in": "Marked a pet as in",
+  "pet.owner_set": "Said whose pet it is",
   "power.fuel_can_added": "Added a fuel can",
   "power.fuel_can_changed": "Changed a fuel can",
   "power.fuel_can_removed": "Removed a fuel can",
@@ -154,6 +158,13 @@ export const AUDIT_ACTION_LABELS = {
   "shifts.type_changed": "Changed a shift",
   "shifts.type_removed": "Removed a shift",
   "team.program_changed": "Changed a team's description or links",
+  "team.role_added": "Added a role to a team",
+  "team.role_changed": "Changed a team's role",
+  "team.role_removed": "Removed a team's role",
+  "team.roles_copied": "Copied last year's roles to a team",
+  "team.lead_places_set": "Changed how many leads a team wants",
+  "team.role_given": "Gave a member a role in a team",
+  "team.role_taken": "Took a member out of a team's role",
   "team_budget.set": "Set a team budget",
   "ticket.pass_changed": "Changed a member's ticket, DDT or WAP",
 } as const;
@@ -377,6 +388,11 @@ export function auditDetail(
       if (!item) return null;
       return team ? `${item} (${teamLabel(team)})` : item;
     }
+    case "pet.marked_in":
+    case "pet.hint_changed":
+    case "pet.line_changed":
+    case "pet.owner_set":
+      return text(metadata, "name");
     case "participation.decided":
       return participationDetail(
         PARTICIPATION_DECISION_WORDS,
@@ -504,6 +520,28 @@ export function auditDetail(
     case "team.program_changed": {
       const team = text(metadata, "team");
       return team ? teamLabel(team) : null;
+    }
+    case "team.role_added":
+    case "team.role_changed":
+    case "team.role_removed":
+    case "team.role_given":
+    case "team.role_taken": {
+      const team = text(metadata, "team");
+      const name = text(metadata, "name");
+      if (!team || !name) return null;
+      return `${teamLabel(team)}: ${name}`;
+    }
+    case "team.roles_copied": {
+      const team = text(metadata, "team");
+      const copied = count(metadata, "copied");
+      if (!team || copied === null) return null;
+      return `${teamLabel(team)}: ${copied} ${copied === 1 ? "role" : "roles"}`;
+    }
+    case "team.lead_places_set": {
+      const team = text(metadata, "team");
+      const places = count(metadata, "places");
+      if (!team || places === null) return null;
+      return `${teamLabel(team)}: ${places} ${places === 1 ? "lead" : "leads"}`;
     }
     case "team_budget.set": {
       const team = text(metadata, "team");
