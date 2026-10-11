@@ -236,7 +236,7 @@ export function CalendarBoard(props: CalendarBoardProps) {
         <div className="flex min-w-0 flex-1 flex-col">
           {state.view === "month" ? (
             <>
-              <div className="hidden min-h-0 flex-1 flex-col page-md:flex">
+              <div className="hidden flex-1 flex-col page-md:flex">
                 <MonthGrid
                   month={state.month}
                   today={today}
