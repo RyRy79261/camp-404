@@ -35,6 +35,24 @@ describe("meetingSuggestionsPrompt", () => {
     );
   });
 
+  it("names a team's meeting, and says so when a list or the text is empty", () => {
+    const text = meetingSuggestionsPrompt.user({
+      ...input,
+      teamLabel: "Kitchen",
+      agenda: "  ",
+      notes: "",
+      members: [],
+      teams: [],
+      existing: { decisions: [], actionItems: [] },
+    });
+    expect(text).toContain("The meeting's team: Kitchen.");
+    expect(text).not.toContain("A whole-camp meeting.");
+    expect(text).toMatch(/<members>\n\(none\)\n<\/members>/);
+    expect(text).toMatch(/<teams>\n\(none\)\n<\/teams>/);
+    expect(text).toContain("<agenda>\n(no agenda)\n</agenda>");
+    expect(text).toContain("<notes>\n(no notes)\n</notes>");
+  });
+
   it("closes off a tag inside the notes, so the data cannot end its block", () => {
     const text = meetingSuggestionsPrompt.user(input);
     expect(text.match(/<\/notes>/g)).toHaveLength(1);
