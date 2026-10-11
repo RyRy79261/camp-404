@@ -1,7 +1,9 @@
 // Camp pets (owner, 2026-10-09): who sees what, and who reviews.
 //
-//  - The reviewers are the founders (FOUNDER_EMAILS with a verified address).
-//    The app works that out from the session; these rules take the answer.
+//  - The reviewers are the camp's captains (users.rank = 'captain'). The
+//    owner moved it there from the FOUNDER_EMAILS list on 2026-10-11:
+//    "captains can control this". The app reads the rank on the server; these
+//    rules take the answer.
 //  - The PHOTOS are only for a reviewer to draw the pet from: the member who
 //    sent them and the reviewers see them, nobody else, ever. The gallery
 //    never shows a photo of someone else's pet.
@@ -25,9 +27,9 @@ export function petKindText(kind: PetKind, kindOther: string | null): string {
   return PET_KIND_LABEL[kind];
 }
 
-/** Whether this viewer reviews pets: a founder, and nobody else. */
-export function canReviewPets(viewer: { isFounder: boolean }): boolean {
-  return viewer.isFounder === true;
+/** Whether this viewer reviews pets: a captain, and nobody else. Fails closed. */
+export function canReviewPets(viewer: { isCaptain: boolean }): boolean {
+  return viewer.isCaptain === true;
 }
 
 /**
@@ -38,7 +40,7 @@ export function canReviewPets(viewer: { isFounder: boolean }): boolean {
 export function mayReadPetPhoto(input: {
   viewerId: string;
   ownerId: string | null;
-  isFounder: boolean;
+  isCaptain: boolean;
 }): boolean {
   if (canReviewPets(input)) return true;
   return input.ownerId !== null && input.ownerId === input.viewerId;
@@ -50,7 +52,7 @@ export function mayReadPetPhoto(input: {
  */
 export function maySeePet(
   pet: { status: PetStatus; ownerId: string | null },
-  viewer: { viewerId: string; isFounder: boolean },
+  viewer: { viewerId: string; isCaptain: boolean },
 ): boolean {
   if (pet.status === "in") return true;
   return mayReadPetPhoto({ ...viewer, ownerId: pet.ownerId });

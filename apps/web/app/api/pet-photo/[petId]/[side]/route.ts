@@ -15,8 +15,8 @@ const E2E_STAND_IN_PHOTO = Buffer.from(
 export const runtime = "nodejs";
 
 // Stream one of a pet's photos (Camp pets, owner 2026-10-09) to the member who
-// sent it and to the founders, and to nobody else, whoever holds the link and
-// whether or not the pet is in: the photos are only for a founder to draw the
+// sent it and to the captains, and to nobody else, whoever holds the link and
+// whether or not the pet is in: the photos are only for a captain to draw the
 // pet from. Anyone else gets the same 404 as a pet with no photo, so the
 // address says nothing. A photo opens under a sandbox, so nothing in it runs.
 
@@ -44,7 +44,7 @@ export async function GET(
     !mayReadPetPhoto({
       viewerId: campUser.id,
       ownerId: photo.ownerId,
-      isFounder: isPetReviewer(user),
+      isCaptain: isPetReviewer(campUser),
     })
   ) {
     return new NextResponse("Not found", { status: 404 });

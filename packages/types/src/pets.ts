@@ -2,9 +2,9 @@ import { z } from "zod";
 
 // Camp pets (owner, 2026-10-09): a member sends in their pet (a name, what it
 // is, a photo from the front and one from the side, and one stupid thing about
-// it), and a founder marks it "in" with a hint. The photos are for the founder
+// it), and a captain marks it "in" with a hint. The photos are for the captains
 // alone to work from, so they are private to the member who sent them and the
-// founders; the hint is everyone's. A pet that is in wears a picture drawn in
+// captains; the hint is everyone's. A pet that is in wears a picture drawn in
 // code (@camp404/games/pets), keyed by `moduleKey`. Who may do what is
 // @camp404/core's (pets.ts), never this shape's rule.
 
@@ -12,7 +12,7 @@ export const PET_KINDS = ["cat", "dog", "other"] as const;
 export const PetKind = z.enum(PET_KINDS);
 export type PetKind = z.infer<typeof PetKind>;
 
-/** Where a pet stands: sent and waiting for a founder, or in. */
+/** Where a pet stands: sent and waiting for a captain, or in. */
 export const PET_STATUSES = ["waiting", "in"] as const;
 export const PetStatus = z.enum(PET_STATUSES);
 export type PetStatus = z.infer<typeof PetStatus>;
@@ -84,7 +84,7 @@ export const PetInput = z
   }));
 export type PetInput = z.output<typeof PetInput>;
 
-/** A founder marks a waiting pet in: its picture's key and the hint. */
+/** A captain marks a waiting pet in: its picture's key and the hint. */
 export const MarkPetInInput = z.object({
   petId: RowId,
   moduleKey: z
@@ -95,21 +95,21 @@ export const MarkPetInInput = z.object({
 });
 export type MarkPetInInput = z.infer<typeof MarkPetInInput>;
 
-/** A founder changes the hint on a pet that is in. */
+/** A captain changes the hint on a pet that is in. */
 export const EditPetHintInput = z.object({
   petId: RowId,
   hint: Hint,
 });
 export type EditPetHintInput = z.infer<typeof EditPetHintInput>;
 
-/** A founder says whose pet it is (a seeded pet has nobody yet). */
+/** A captain says whose pet it is (a seeded pet has nobody yet). */
 export const SetPetOwnerInput = z.object({
   petId: RowId,
   ownerId: RowId.nullable(),
 });
 export type SetPetOwnerInput = z.infer<typeof SetPetOwnerInput>;
 
-/** The pet's member (or a founder) changes the one stupid thing. */
+/** The pet's member (or a captain) changes the one stupid thing. */
 export const EditPetThingInput = z.object({
   petId: RowId,
   stupidThing: StupidThing,

@@ -3610,10 +3610,10 @@ export const loungeSettings = pgTable("lounge_settings", {
 });
 
 // --- Camp pets ------------------------------------------------------------
-// Members send in their pets (owner, 2026-10-09); a founder marks each one
+// Members send in their pets (owner, 2026-10-09); a captain marks each one
 // "in" with a hint, once its picture is drawn in code (@camp404/games/pets,
 // keyed by `module_key`). The photos are private blobs under
-// `pets/<member id>/`, read only by the member who sent them and the founders
+// `pets/<member id>/`, read only by the member who sent them and the captains
 // (/api/pet-photo); the hint is every member's. Not year-scoped: a pet stays.
 // The four cats the camp already had are seeded by a migration, in, with no
 // photos and an owner linked by name where exactly one member matches.

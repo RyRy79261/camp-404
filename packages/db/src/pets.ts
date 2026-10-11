@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, or, sql } from "drizzle-orm";
-import { petInNotification } from "@camp404/core";
+import { canReviewPets, petInNotification } from "@camp404/core";
 import type { PetInput, PetKind, PetStatus } from "@camp404/types";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { deliveryValues } from "./deliveries";
@@ -10,13 +10,14 @@ import * as schema from "./schema";
 //
 //  - Any approved member sends in a pet with two photos (the upload route
 //    checks the photos and the approval, then calls addPet). It waits.
-//  - A FOUNDER reviews: marks a waiting pet in with a picture key from the
-//    code's registry and a one-line hint, edits a hint, and says whose a
-//    seeded pet is. Founders are known from the session (FOUNDER_EMAILS with
-//    a verified address), not from this database, so the caller checks
-//    canReviewPets before it calls a reviewer's write and passes only the
-//    actor's id. Each such write is audited in its own transaction.
-//  - Marking in is a compare-and-set on `waiting`: a second founder's click,
+//  - A CAPTAIN reviews (owner, 2026-10-11; it was a FOUNDER_EMAILS list):
+//    marks a waiting pet in with a picture key from the code's registry and a
+//    one-line hint, edits a hint, says whose a seeded pet is, and may change
+//    any pet's one stupid thing. The caller checks the rank before it calls a
+//    reviewer's write, and each write reads the actor's rank AGAIN inside its
+//    own transaction (lockReviewer), so a captain demoted between the check
+//    and the write is refused. Each such write is audited in that transaction.
+//  - Marking in is a compare-and-set on `waiting`: a second captain's click,
 //    or a key another pet took first, gets a sentence, never an overwrite. It
 //    writes the owner's in-app notice in the same transaction; the caller
 //    sends it on with deliverAfterResponse().
@@ -42,6 +43,7 @@ export const PET_KEY_TAKEN =
 export const PET_NO_SUCH_MEMBER = "That member isn't in the camp any more.";
 export const PET_NOT_YOURS = "You can only change your own pet.";
 export const PET_NO_ACTOR = "Your account isn't in the camp any more.";
+export const PET_NOT_A_REVIEWER = "Only captains review pets.";
 export const PET_SENT_WITH_PHOTOS =
   "A pet a member sent in stays theirs: its photos are only for them.";
 
@@ -244,21 +246,31 @@ async function lockPet(tx: Tx, petId: string) {
   return pet;
 }
 
-/** The actor is a camp member who has not been erased, read and locked. */
-async function lockActor(tx: DbOrTx, actorId: string): Promise<void> {
+/**
+ * The actor is a camp member who has not been erased, read and locked.
+ * Returns whether they review pets: a real (not system) captain, as the
+ * database says now, never as the caller said.
+ */
+async function lockActor(tx: DbOrTx, actorId: string): Promise<boolean> {
   if (!UUID.test(actorId)) refuse(PET_NO_ACTOR);
   const [row] = await tx
-    .select({ id: schema.users.id })
+    .select({ rank: schema.users.rank, isSystem: schema.users.isSystem })
     .from(schema.users)
     .where(and(eq(schema.users.id, actorId), eq(schema.users.sanitised, false)))
     .for("share");
   if (!row) refuse(PET_NO_ACTOR);
+  return canReviewPets({ isCaptain: !row.isSystem && row.rank === "captain" });
+}
+
+/** The actor is a captain, read and locked in this transaction, or refused. */
+async function lockReviewer(tx: DbOrTx, actorId: string): Promise<void> {
+  if (!(await lockActor(tx, actorId))) refuse(PET_NOT_A_REVIEWER);
 }
 
 // --- The member's writes -----------------------------------------------------
 
 /**
- * A member sends in their pet. It waits for a founder. The photos are the
+ * A member sends in their pet. It waits for a captain. The photos are the
  * pathnames the upload route stored in the member's own folder.
  */
 export async function addPet(
@@ -287,20 +299,19 @@ export async function addPet(
 }
 
 /**
- * Change a pet's stupid thing: its owner, or a reviewer (the caller says
- * which it checked). A reviewer's change to someone else's pet is audited.
+ * Change a pet's stupid thing: its owner, or a captain (read here, in the
+ * transaction). A captain's change to someone else's pet is audited.
  */
 export async function setPetStupidThing(input: {
   actorId: string;
-  isReviewer: boolean;
   petId: string;
   stupidThing: string;
 }): Promise<PetWriteResult> {
   return write(async (tx) => {
-    await lockActor(tx, input.actorId);
+    const reviewer = await lockActor(tx, input.actorId);
     const pet = await lockPet(tx, input.petId);
     const own = pet.ownerId !== null && pet.ownerId === input.actorId;
-    if (!own && !input.isReviewer) refuse(PET_NOT_YOURS);
+    if (!own && !reviewer) refuse(PET_NOT_YOURS);
     await tx
       .update(schema.pets)
       .set({ stupidThing: input.stupidThing, updatedAt: new Date() })
@@ -317,7 +328,7 @@ export async function setPetStupidThing(input: {
   });
 }
 
-// --- A reviewer's writes (the caller checked canReviewPets) ------------------
+// --- A captain's writes (each re-reads the actor's rank: lockReviewer) ------
 
 /**
  * Mark a waiting pet in: its picture key and the hint. A compare-and-set on
@@ -331,7 +342,7 @@ export async function markPetIn(input: {
   hint: string;
 }): Promise<PetWriteResult<{ ownerId: string | null }>> {
   return write(async (tx) => {
-    await lockActor(tx, input.actorId);
+    await lockReviewer(tx, input.actorId);
     const pet = await lockPet(tx, input.petId);
     if (pet.status !== "waiting") refuse(PET_ALREADY_IN);
     const [taken] = await tx
@@ -387,7 +398,7 @@ export async function setPetHint(input: {
   hint: string;
 }): Promise<PetWriteResult> {
   return write(async (tx) => {
-    await lockActor(tx, input.actorId);
+    await lockReviewer(tx, input.actorId);
     const pet = await lockPet(tx, input.petId);
     if (pet.status !== "in") refuse(PET_NOT_IN);
     await tx
@@ -407,7 +418,7 @@ export async function setPetHint(input: {
 /**
  * Say whose pet it is (or nobody's), for a pet with no photos (a seeded one).
  * A pet a member sent in is refused: its photos sit in the sender's folder and
- * only the sender and the founders may see them, so it never changes hands.
+ * only the sender and the captains may see them, so it never changes hands.
  * The member must not be erased. Audited.
  */
 export async function setPetOwner(input: {
@@ -416,7 +427,7 @@ export async function setPetOwner(input: {
   ownerId: string | null;
 }): Promise<PetWriteResult> {
   return write(async (tx) => {
-    await lockActor(tx, input.actorId);
+    await lockReviewer(tx, input.actorId);
     const pet = await lockPet(tx, input.petId);
     if (pet.frontPhotoPath !== null || pet.sidePhotoPath !== null) {
       refuse(PET_SENT_WITH_PHOTOS);

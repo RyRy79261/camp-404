@@ -228,7 +228,7 @@ export function carMessageNotification(input: {
 }
 
 /**
- * A founder marked the member's pet in. The hint is the founder's one line,
+ * A captain marked the member's pet in. The hint is the captain's one line,
  * and the pet's name the member's own; nothing says what "in" means.
  */
 export function petInNotification(input: {

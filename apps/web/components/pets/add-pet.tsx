@@ -43,7 +43,7 @@ import {
 // needed; Send with gaps says what each needs, beside it. Each photo slot
 // opens the profile photo's crop step with a square frame, and the square is
 // cut and shrunk in the browser before it is sent (lib/image.ts), which also
-// drops the camera's EXIF. The photos are only for the founders: the form
+// drops the camera's EXIF. The photos are only for the captains: the form
 // says who sees them. Never say what happens to a pet after it is sent.
 
 type Side = "front" | "side";
@@ -417,7 +417,7 @@ export function AddPetButton() {
                 ))}
               </div>
               <p className="text-xs leading-4 text-muted-foreground">
-                Only you and the camp&apos;s founders ever see them.
+                Only you and the camp&apos;s captains ever see them.
               </p>
             </fieldset>
 

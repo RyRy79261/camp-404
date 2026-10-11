@@ -9,20 +9,22 @@ import {
   login,
   redeemInviteAtGate,
   resetTestState,
+  setRank,
 } from "./_helpers";
 
 // Camp pets (owner, 2026-10-09; test-mode, on the store's twin,
 // lib/test-store-pets.ts). A member sends in their pet with a front and a
 // side photo; it waits in their own "Yours" section, photos and all. Another
-// member never sees it, and the photo route answers them 404. A founder sees
+// member never sees it, and the photo route answers them 404. A captain sees
 // it under Waiting with both photos. The four seeded cats are in for
-// everyone, each with its picture from the code and no photo; a founder's
-// hint on one shows to every member. Marking a pet in (the compare-and-set,
+// everyone, each with its picture from the code and no photo; a captain's
+// hint on one shows to every member. The reviewer is a captain by rank (owner,
+// 2026-10-11), not a FOUNDER_EMAILS address. Marking a pet in (the compare-and-set,
 // its audit row and the owner's notice) is covered on PGlite
 // (packages/db/src/__tests__/pets.test.ts): every picture in the code is worn
-// by a seeded cat today, so here the founder's dialog says none is free.
+// by a seeded cat today, so here the captain's dialog says none is free.
 
-const FOUNDER = "pets-founder";
+const CAPTAIN = "pets-captain";
 
 async function approvedMember(
   page: Page,
@@ -37,14 +39,10 @@ async function approvedMember(
   await completeOnboarding(request, id);
 }
 
-async function founder(page: Page, request: APIRequestContext) {
-  await login(page, {
-    id: FOUNDER,
-    email: "god@example.com",
-    displayName: "Foun Der",
-  });
-  await page.goto("/"); // lazily creates the camp user row
-  await completeOnboarding(request, FOUNDER);
+/** A plain approved member (no FOUNDER_EMAILS address), made a captain. */
+async function captain(page: Page, request: APIRequestContext) {
+  await approvedMember(page, request, CAPTAIN, "Cap Tain");
+  await setRank(request, CAPTAIN, "captain");
 }
 
 async function openPets(page: Page) {
@@ -92,7 +90,7 @@ test.describe("Camp pets", () => {
     await resetTestState(request);
   });
 
-  test("a member sends a pet in; its photos are theirs and the founders' only", async ({
+  test("a member sends a pet in; its photos are theirs and the captains' only", async ({
     page,
     request,
   }) => {
@@ -156,8 +154,8 @@ test.describe("Camp pets", () => {
     );
     expect((await page.request.get(src!)).status()).toBe(404);
 
-    // A founder: Waiting (1), both photos, and the photo route answers.
-    await founder(page, request);
+    // A captain: Waiting (1), both photos, and the photo route answers.
+    await captain(page, request);
     await openPets(page);
     await page.getByRole("link", { name: "Waiting (1)" }).click();
     await expect(page).toHaveURL(/\/pets\?show=waiting$/);
@@ -177,9 +175,9 @@ test.describe("Camp pets", () => {
     await expect(markIn).toBeHidden();
   });
 
-  test("a founder's hint is everyone's", async ({ page, request }) => {
+  test("a captain's hint is everyone's", async ({ page, request }) => {
     await approvedMember(page, request, "pets-reader", "Rea Der");
-    await founder(page, request);
+    await captain(page, request);
     await openPets(page);
 
     const jinn = card(page, "Jinn");

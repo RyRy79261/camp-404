@@ -3,8 +3,7 @@ import "server-only";
 import { canReviewPets } from "@camp404/core";
 import * as pets from "@camp404/db/pets";
 import type { PetPhotoSide, PetRow, PetWriteResult } from "@camp404/db/pets";
-import { isGodEmail } from "./access-control";
-import type { AuthenticatedUser } from "./auth";
+import type { CampUser } from "./users";
 import { usesTestStore } from "./test-mode";
 import { petsTestStore } from "./test-store-pets";
 
@@ -12,19 +11,19 @@ import { petsTestStore } from "./test-store-pets";
 // store's twin (test-store-pets.ts). The rules live in @camp404/db/pets and
 // the twin repeats them.
 //
-// The reviewers are the FOUNDERS: a FOUNDER_EMAILS address, and only once it
-// is verified (`primaryEmail` is already null for an unverified founder
-// address, lib/session-user.ts). That is known from the session, not the
-// database, so it is decided here, on the server, and a reviewer's write is
-// only ever called after isPetReviewer said yes.
+// The reviewers are the camp's CAPTAINS (owner, 2026-10-11, moving it off the
+// FOUNDER_EMAILS list: "captains can control this"). The page and the photo
+// route read it from the camp user's rank on the server; the actions gate on
+// captainActionGate("captain"), and every reviewer's write reads the rank
+// again inside its own transaction (@camp404/db/pets, and the twin).
 
 export type { PetPhotoSide, PetRow, PetWriteResult };
 
 const store = () => (usesTestStore() ? petsTestStore : null);
 
-/** Whether this signed-in person reviews pets: a verified founder. */
-export function isPetReviewer(authUser: AuthenticatedUser): boolean {
-  return canReviewPets({ isFounder: isGodEmail(authUser.primaryEmail) });
+/** Whether this camp user reviews pets: a captain. */
+export function isPetReviewer(campUser: Pick<CampUser, "rank">): boolean {
+  return canReviewPets({ isCaptain: campUser.rank === "captain" });
 }
 
 // --- Reads --------------------------------------------------------------------

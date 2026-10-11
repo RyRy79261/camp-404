@@ -1,12 +1,13 @@
 import "server-only";
 
-import { petInNotification } from "@camp404/core";
+import { canReviewPets, petInNotification } from "@camp404/core";
 import {
   PET_ALREADY_IN,
   PET_GONE,
   PET_KEY_TAKEN,
   PET_NO_ACTOR,
   PET_NO_SUCH_MEMBER,
+  PET_NOT_A_REVIEWER,
   PET_NOT_IN,
   PET_NOT_YOURS,
   PET_SENT_WITH_PHOTOS,
@@ -21,7 +22,8 @@ import { testStore } from "./test-store";
 // same rules, sentences and results over the store's own rows: a waiting pet
 // is its sender's and a reviewer's, marking in is a compare-and-set on
 // `waiting` that refuses a picture another pet wears, and the owner gets the
-// same in-app notice. It starts with the four seeded cats, as the migration
+// same in-app notice. A reviewer is a captain, read from the store at the
+// write, as the database reads the rank inside each write. It starts with the four seeded cats, as the migration
 // leaves them on a camp where no member's name matches (no owner). The store
 // keeps no audit log and is one synchronous process, so nothing to lock.
 
@@ -118,6 +120,23 @@ function find(petId: string): PetStoreRow | undefined {
 
 const refused = (error: string) => ({ ok: false as const, error });
 
+/**
+ * The actor, read now (lockActor's twin): null when there is no such member,
+ * else whether they review pets (a captain).
+ */
+function actorReviews(actorId: string): boolean | null {
+  const actor = testStore.findUserById(actorId);
+  if (!actor) return null;
+  return canReviewPets({ isCaptain: actor.rank === "captain" });
+}
+
+/** lockReviewer's twin: the refusal for a non-captain, or null to go on. */
+function notAReviewer(actorId: string): ReturnType<typeof refused> | null {
+  const reviews = actorReviews(actorId);
+  if (reviews === null) return refused(PET_NO_ACTOR);
+  return reviews ? null : refused(PET_NOT_A_REVIEWER);
+}
+
 export const petsTestStore = {
   listPets(viewer: { viewerId: string; isReviewer: boolean }): PetRow[] {
     return state()
@@ -192,14 +211,15 @@ export const petsTestStore = {
 
   setPetStupidThing(input: {
     actorId: string;
-    isReviewer: boolean;
     petId: string;
     stupidThing: string;
   }): PetWriteResult {
+    const reviewer = actorReviews(input.actorId);
+    if (reviewer === null) return refused(PET_NO_ACTOR);
     const p = find(input.petId);
     if (!p) return refused(PET_GONE);
     const own = p.ownerId !== null && p.ownerId === input.actorId;
-    if (!own && !input.isReviewer) return refused(PET_NOT_YOURS);
+    if (!own && !reviewer) return refused(PET_NOT_YOURS);
     p.stupidThing = input.stupidThing;
     return { ok: true };
   },
@@ -210,6 +230,8 @@ export const petsTestStore = {
     moduleKey: string;
     hint: string;
   }): PetWriteResult<{ ownerId: string | null }> {
+    const no = notAReviewer(input.actorId);
+    if (no) return no;
     const p = find(input.petId);
     if (!p) return refused(PET_GONE);
     if (p.status !== "waiting") return refused(PET_ALREADY_IN);
@@ -234,6 +256,8 @@ export const petsTestStore = {
     petId: string;
     hint: string;
   }): PetWriteResult {
+    const no = notAReviewer(input.actorId);
+    if (no) return no;
     const p = find(input.petId);
     if (!p) return refused(PET_GONE);
     if (p.status !== "in") return refused(PET_NOT_IN);
@@ -246,6 +270,8 @@ export const petsTestStore = {
     petId: string;
     ownerId: string | null;
   }): PetWriteResult {
+    const no = notAReviewer(input.actorId);
+    if (no) return no;
     const p = find(input.petId);
     if (!p) return refused(PET_GONE);
     if (p.frontPhotoPath !== null || p.sidePhotoPath !== null) {
