@@ -712,7 +712,7 @@ function PeopleInRole({
             <span>{p.name}</span>
             <OneTap
               variant="ghost"
-              aria-label={`Take ${p.name} off ${row.name}`}
+              aria-label={`Take ${p.you ? "yourself" : p.name} off ${row.name}`}
               act={() =>
                 takeTeamRoleAction({
                   team: team.key,
@@ -720,7 +720,7 @@ function PeopleInRole({
                   userId: p.userId,
                 })
               }
-              done={`${p.name} is no longer ${row.isLead ? "a lead of" : `${withArticle(row.name)} in`} ${team.label}.`}
+              done={`${p.you ? "You are" : `${p.name} is`} no longer ${row.isLead ? "a lead of" : `${withArticle(row.name)} in`} ${team.label}.`}
             >
               Take off
             </OneTap>

@@ -234,6 +234,24 @@ describe("pets", () => {
     ]);
   });
 
+  it("lists a pet marked in today before the seeded cats, whose marked-in time is empty", async () => {
+    await q(SEED);
+    const owner = await makeUser(h.db());
+    const founder = await makeUser(h.db());
+    const id = await sendPet(owner.id);
+    const r = await markPetIn({
+      actorId: founder.id,
+      petId: id,
+      moduleKey: "biscuit",
+      hint: "Look near the clock",
+    });
+    expect(r.ok).toBe(true);
+
+    const seen = await listPets({ viewerId: founder.id, isReviewer: false });
+    expect(seen).toHaveLength(5);
+    expect(seen[0]?.id).toBe(id);
+  });
+
   it("refuses a picture another pet already wears, and changes nothing", async () => {
     const owner = await makeUser(h.db());
     const founder = await makeUser(h.db());

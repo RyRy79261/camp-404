@@ -147,7 +147,7 @@ export async function listPets(viewer: {
     .where(visible)
     .orderBy(
       desc(sql`${schema.pets.status} = 'waiting'`),
-      desc(schema.pets.markedInAt),
+      sql`${schema.pets.markedInAt} desc nulls last`,
       desc(schema.pets.createdAt),
       asc(schema.pets.name),
     );
