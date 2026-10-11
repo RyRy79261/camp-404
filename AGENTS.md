@@ -909,7 +909,7 @@ Decisions baked into the schema — keep new code consistent with them:
   (`PET_PORTRAITS`, a server-drawn SVG). Another member's waiting pet is cut
   on the server (`listPets`). Never write in the UI how or where a pet shows
   up. The four cats (Jinn, Moda, Nipster, Prince) were seeded as in by
-  migration 0108. Erasure deletes the member's pets and their photo folder.
+  migration 0112. Erasure deletes the member's pets and their photo folder.
 
 **Bespoke over generic.** Features get distinct domain tables and bespoke
 components — no CMS, no dynamic content engine, no generic response store.
