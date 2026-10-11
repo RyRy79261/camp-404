@@ -39,3 +39,4 @@ export * from "./inkblot";
 export * from "./lounge";
 export * from "./claims";
 export * from "./guide";
+export * from "./pets";

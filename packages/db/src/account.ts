@@ -226,6 +226,9 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
     await tx
       .delete(schema.documentReads)
       .where(eq(schema.documentReads.userId, userId));
+    // Their pets (Camp pets) are their own words and photos; the photo
+    // folder goes with the erasure in apps/web (lib/account.ts).
+    await tx.delete(schema.pets).where(eq(schema.pets.ownerId, userId));
     // Lounge offers are the member's own words; their slots go with them.
     await tx
       .delete(schema.loungeOffers)

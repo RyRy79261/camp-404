@@ -102,6 +102,10 @@ export const AUDIT_ACTION_LABELS = {
   "participation.decided": "Decided a member's place this year",
   "participation.withdrawn": "Withdrew from this year",
   "payment.recorded": "Recorded a payment",
+  "pet.hint_changed": "Changed a pet's hint",
+  "pet.line_changed": "Changed the one stupid thing on a pet's card",
+  "pet.marked_in": "Marked a pet as in",
+  "pet.owner_set": "Said whose pet it is",
   "power.fuel_can_added": "Added a fuel can",
   "power.fuel_can_changed": "Changed a fuel can",
   "power.fuel_can_removed": "Removed a fuel can",
@@ -384,6 +388,11 @@ export function auditDetail(
       if (!item) return null;
       return team ? `${item} (${teamLabel(team)})` : item;
     }
+    case "pet.marked_in":
+    case "pet.hint_changed":
+    case "pet.line_changed":
+    case "pet.owner_set":
+      return text(metadata, "name");
     case "participation.decided":
       return participationDetail(
         PARTICIPATION_DECISION_WORDS,

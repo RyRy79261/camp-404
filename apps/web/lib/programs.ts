@@ -400,6 +400,18 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     place: CAMP,
     rank: "camp_member",
   },
+  // Camp pets (owner, 2026-10-09): every approved member sends in their pet
+  // and sees the ones that are in; its page gives the founders their review.
+  {
+    id: "pets",
+    label: "Camp pets",
+    keywords: ["Cats", "Dogs", "Add your pet", "Hints"],
+    fileName: "PETS.DB",
+    href: "/pets",
+    icon: "pets",
+    place: CAMP,
+    rank: "camp_member",
+  },
   // The camp's intro, once a Notion page (#264): every approved member reads
   // it; captains edit its words in Join site.
   {

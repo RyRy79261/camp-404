@@ -42,6 +42,10 @@ export function notificationLink(
   if (refType === "shift_minimum") {
     return "/shifts";
   }
+  // A pet's notice opens Camp pets, where its card carries the hint.
+  if (refType === "pet") {
+    return "/pets";
+  }
   // A required action has no page of its own; home sends the member on to
   // whatever still blocks them (requireMemberPage).
   if (refType === "required_action" && refId && UUID.test(refId)) {

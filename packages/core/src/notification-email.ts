@@ -34,6 +34,9 @@ export function shouldEmailNotification(
     case "lead_directive":
     case "car_message":
       return false;
+    // A pet's hint: a nice surprise, not something a member must not miss.
+    case "pet_in":
+      return false;
     default: {
       const _exhaustive: never = kind;
       return _exhaustive;

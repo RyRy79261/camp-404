@@ -35,6 +35,7 @@ export type ProgramId =
   | "budgets"
   | "roster"
   | "family-tree"
+  | "pets"
   | "about"
   | "guide"
   | "guide-chapter"
@@ -110,6 +111,7 @@ export const PROGRAM_TITLES: Readonly<Record<ProgramId, string>> = {
   budgets: "Budgets",
   roster: "Roster",
   "family-tree": "Family tree",
+  pets: "Camp pets",
   about: "About Camp 404",
   guide: "Survival Guide",
   "guide-chapter": "Chapter",
@@ -248,6 +250,7 @@ export const PROGRAM_ROUTES: readonly ProgramRoute[] = [
   route("/teams/[key]", "team", "TEAM.EXE", keyed("team")),
   route("/captains/camp-management", "roster", "ROSTER.DB"),
   route("/family-tree", "family-tree", "LINEAGE.EXE"),
+  route("/pets", "pets", "PETS.DB"),
   route("/about", "about", "README.TXT"),
   // The Survival Guide (#250): its contents, then each chapter in its own
   // window; "new" is listed before the chapter beside it.

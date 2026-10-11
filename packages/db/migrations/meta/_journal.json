@@ -778,6 +778,20 @@
       "when": 1791703751242,
       "tag": "0110_team_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1791704053139,
+      "tag": "0111_camp_pets",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1791704054711,
+      "tag": "0112_seed_camp_pets",
+      "breakpoints": true
     }
   ]
 }

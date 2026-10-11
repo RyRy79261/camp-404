@@ -98,6 +98,7 @@ import {
   resetDuesStore,
 } from "./test-store-dues";
 import { resetClaimsStore } from "./test-store-claims";
+import { resetPetsStore } from "./test-store-pets";
 import { resetVoiceStore } from "./test-store-voice";
 import { resetKitchenMenuStore } from "./test-store-kitchen-menu";
 import {
@@ -6790,6 +6791,7 @@ export const testStore = {
     resetHelpWantedStore();
     resetDailySheetStore();
     resetClaimsStore();
+    resetPetsStore();
     resetVoiceStore();
     resetKitchenMenuStore();
     resetKitchenExtrasStore();

@@ -22,6 +22,7 @@ const LINE: Readonly<Record<string, IconKey>> = {
   roster: "roster",
   minutes: "minutes",
   "family-tree": "lineage",
+  pets: "cat",
   about: "readme",
   guide: "guide",
   "guide-chapter": "guide",

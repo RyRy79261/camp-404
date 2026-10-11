@@ -26,6 +26,8 @@ export const ANNOUNCEMENT_REF_TYPE = "announcement";
 export const CAPTAIN_PROMOTION_REF_TYPE = "captain_promotion";
 /** The reference a task deadline reminder carries: the task. */
 export const TASK_REF_TYPE = "task";
+/** The reference a pet's notice carries: the pet. */
+export const PET_REF_TYPE = "pet";
 /** The reference a driver's message carries: its own broadcast. */
 export const CAR_MESSAGE_REF_TYPE = "car_message";
 /**
@@ -222,6 +224,24 @@ export function carMessageNotification(input: {
     body: input.body,
     refType: CAR_MESSAGE_REF_TYPE,
     refId: input.broadcastId,
+  };
+}
+
+/**
+ * A founder marked the member's pet in. The hint is the founder's one line,
+ * and the pet's name the member's own; nothing says what "in" means.
+ */
+export function petInNotification(input: {
+  petId: string;
+  petName: string;
+  hint: string;
+}): NotificationPayload {
+  return {
+    kind: "pet_in",
+    title: `${input.petName} is in`,
+    body: `Your pet is in. Hint: ${input.hint}`,
+    refType: PET_REF_TYPE,
+    refId: input.petId,
   };
 }
 

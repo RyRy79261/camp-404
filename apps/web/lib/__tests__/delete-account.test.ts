@@ -10,6 +10,7 @@ vi.mock("@/lib/claim-receipts", () => ({ deleteClaimReceiptBlobs: vi.fn() }));
 vi.mock("@/lib/report-screenshots", () => ({
   deleteReportScreenshotBlobs: vi.fn(),
 }));
+vi.mock("@/lib/pet-photos", () => ({ deletePetPhotoBlobs: vi.fn() }));
 vi.mock("@/lib/test-mode", () => ({
   isE2ETestMode: vi.fn(() => false),
   usesTestStore: vi.fn(() => false),
@@ -20,6 +21,8 @@ import { sanitiseAccount } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "@/lib/avatar-blob";
 import { deleteClaimReceiptBlobs } from "@/lib/claim-receipts";
 import { deletePaymentProofBlobs } from "@/lib/payment-proof";
+import { deletePetPhotoBlobs } from "@/lib/pet-photos";
+import { petsTestStore } from "@/lib/test-store-pets";
 import { deleteReportScreenshotBlobs } from "@/lib/report-screenshots";
 import { isE2ETestMode, usesTestStore } from "@/lib/test-mode";
 import { testStore } from "@/lib/test-store";
@@ -120,6 +123,8 @@ describe("deleteAccount", () => {
     expect(deleteClaimReceiptBlobs).toHaveBeenCalledExactlyOnceWith("u1");
     // A bug report's screenshots (#313), filed under the camp id.
     expect(deleteReportScreenshotBlobs).toHaveBeenCalledExactlyOnceWith("u1");
+    // Their pets' photos (Camp pets), filed under the camp id.
+    expect(deletePetPhotoBlobs).toHaveBeenCalledExactlyOnceWith("u1");
   });
 
   it("takes no avatar blobs with it when the DB refused the erasure", async () => {
@@ -136,6 +141,43 @@ describe("deleteAccount", () => {
     expect(deletePaymentProofBlobs).not.toHaveBeenCalled();
     expect(deleteClaimReceiptBlobs).not.toHaveBeenCalled();
     expect(deleteReportScreenshotBlobs).not.toHaveBeenCalled();
+    expect(deletePetPhotoBlobs).not.toHaveBeenCalled();
+  });
+
+  it("deletes only the erased member's pets from the test store", async () => {
+    vi.mocked(isE2ETestMode).mockReturnValue(true);
+    vi.mocked(usesTestStore).mockReturnValue(true);
+    testStore.reset();
+    const member = testStore.createUser({
+      authUserId: "auth-erased",
+      displayName: "Erased",
+      inviteCode: "seed",
+    });
+    const other = testStore.createUser({
+      authUserId: "auth-kept",
+      displayName: "Kept",
+      inviteCode: "seed",
+    });
+    for (const u of [member, other]) {
+      petsTestStore.addPet({
+        ownerId: u.id,
+        name: `${u.displayName}'s dog`,
+        kind: "dog",
+        kindOther: null,
+        stupidThing: "Barks.",
+        frontPhotoPath: "f",
+        sidePhotoPath: "s",
+      });
+    }
+
+    await deleteAccount({ userId: member.id, authUserId: member.authUserId });
+
+    const owners = petsTestStore
+      .listPets({ viewerId: "", isReviewer: true })
+      .map((p) => p.ownerId);
+    expect(owners).not.toContain(member.id);
+    expect(owners).toContain(other.id);
+    testStore.reset();
   });
 
   it("swallows a blob-cleanup failure (the DB scrub stands) and logs it", async () => {

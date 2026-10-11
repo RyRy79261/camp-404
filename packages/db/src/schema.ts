@@ -40,6 +40,8 @@ import {
   LOUNGE_NEEDS,
   LOUNGE_OFFER_KINDS,
   LOUNGE_OFFER_STATUSES,
+  PET_KINDS,
+  PET_STATUSES,
   CAN_MATERIALS,
   GRID_NODE_KINDS,
   SHARE_GENERATOR_SOURCES,
@@ -70,6 +72,8 @@ import {
   type LoungeNeed,
   type LoungeOfferKind,
   type LoungeOfferStatus,
+  type PetKind,
+  type PetStatus,
   type CanMaterial,
   type GridNodeKind,
   type ShareGeneratorSource,
@@ -3604,6 +3608,59 @@ export const loungeSettings = pgTable("lounge_settings", {
   }),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
+
+// --- Camp pets ------------------------------------------------------------
+// Members send in their pets (owner, 2026-10-09); a founder marks each one
+// "in" with a hint, once its picture is drawn in code (@camp404/games/pets,
+// keyed by `module_key`). The photos are private blobs under
+// `pets/<member id>/`, read only by the member who sent them and the founders
+// (/api/pet-photo); the hint is every member's. Not year-scoped: a pet stays.
+// The four cats the camp already had are seeded by a migration, in, with no
+// photos and an owner linked by name where exactly one member matches.
+// Erasure deletes the member's pets and their photo folder (account.ts).
+
+export const pets = pgTable(
+  "pets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // The member whose pet it is; NULL for a seeded pet nobody is linked to.
+    ownerId: uuid("owner_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    name: text("name").notNull(),
+    kind: text("kind").$type<PetKind>().notNull(),
+    // The member's own word when the kind is "other".
+    kindOther: text("kind_other"),
+    // One short line about them, in the member's words.
+    stupidThing: text("stupid_thing").notNull(),
+    status: text("status").$type<PetStatus>().notNull().default("waiting"),
+    // The founder's one line, every member's to read; NULL until written.
+    hint: text("hint"),
+    // The picture's key in the code's registry; set when the pet goes in, and
+    // never worn by two pets.
+    moduleKey: text("module_key"),
+    // Private blob pathnames; NULL for a seeded pet (it was never sent).
+    frontPhotoPath: text("front_photo_path"),
+    sidePhotoPath: text("side_photo_path"),
+    markedInByUserId: uuid("marked_in_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    markedInAt: timestamp("marked_in_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (p) => ({
+    ownerIdx: index("pets_owner_idx").on(p.ownerId),
+    moduleKeyUniq: uniqueIndex("pets_module_key_uniq").on(p.moduleKey),
+    kindCheck: check("pets_kind_check", oneOf(p.kind, PET_KINDS)),
+    statusCheck: check("pets_status_check", oneOf(p.status, PET_STATUSES)),
+    // A pet is in exactly when it wears a picture.
+    moduleCheck: check(
+      "pets_module_key_when_in_check",
+      sql`(${p.status} = 'in') = (${p.moduleKey} is not null)`,
+    ),
+  }),
+);
 
 // --- Inventory (#246) -----------------------------------------------------
 // The camp's gear, at /inventory. Each row is one item with its current
