@@ -20,6 +20,19 @@ export type CampEventKind = "event" | "meeting";
 
 export const CAMP_EVENT_KINDS: readonly CampEventKind[] = ["event", "meeting"];
 
+/**
+ * What a new event is (owner, 2026-10-11): one added with an agenda is a
+ * meeting, with its meeting note made from the same agenda; one with no
+ * agenda is what it was asked to be (a plain event, unless the Calendar's
+ * caller says meeting).
+ */
+export function campEventKindFor(
+  asked: CampEventKind,
+  agenda: string,
+): CampEventKind {
+  return agenda.trim() ? "meeting" : asked;
+}
+
 function isViewerRank(rank: string): rank is ViewerRank {
   return ViewerRank.safeParse(rank).success;
 }

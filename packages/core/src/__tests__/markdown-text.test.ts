@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { plainPreview } from "../markdown-text";
+import { plainPreview, plainTextWithLists } from "../markdown-text";
 
 // plainPreview guards the plain-text boundaries: push, email, Telegram, and
 // every clipped row. Each case below is a marker a captain can type that must
@@ -216,5 +216,34 @@ describe("plainPreview — a clipped row (max given)", () => {
 
   it("does not leave a dangling space before the ellipsis", () => {
     expect(plainPreview("abcdefghi jkl", 10)).toBe("abcdefghi…");
+  });
+});
+
+describe("plainTextWithLists", () => {
+  it("keeps an agenda's numbers, bullets and line breaks, and drops the rest", () => {
+    const agenda = [
+      "## Kitchen kickoff",
+      "",
+      "1. **Menu** for the week",
+      "2. Gas: [quote](https://example.com)",
+      "",
+      "- Bring a _mug_",
+      "* Ask `Finance`",
+    ].join("\n");
+    expect(plainTextWithLists(agenda)).toBe(
+      [
+        "Kitchen kickoff",
+        "",
+        "1. Menu for the week",
+        "2. Gas: quote",
+        "",
+        "• Bring a mug",
+        "• Ask Finance",
+      ].join("\n"),
+    );
+  });
+
+  it("leaves plainPreview's list stripping as it was", () => {
+    expect(plainPreview("1. Menu\n- Gas")).toBe("Menu\nGas");
   });
 });

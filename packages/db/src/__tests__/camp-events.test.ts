@@ -111,12 +111,39 @@ describe("camp events", () => {
       });
     });
 
+    it("makes an event added with an agenda a meeting, its note linked with the same agenda", async () => {
+      const { lead } = await people();
+      const id = newId();
+      const made = await createCampEvent({
+        actorId: lead.id,
+        kind: "event",
+        agenda: "1. Shade budget\n2. Dome trailer",
+        newEventId: id,
+        ...fields({ description: "1. Shade budget\n2. Dome trailer" }),
+      });
+      if (!made.ok) throw new Error(made.error);
+      expect(made.row.kind).toBe("meeting");
+      expect(made.row.description).toBe("1. Shade budget\n2. Dome trailer");
+      const note = await getMeetingNoteByEvent(id);
+      expect(note).toMatchObject({
+        id: made.noteId,
+        team: "kitchen",
+        title: "Kitchen planning",
+        calendarEventId: id,
+        calendarEventTitle: "Kitchen planning",
+        agenda: "1. Shade budget\n2. Dome trailer",
+      });
+      expect(
+        (await audits("calendar.event_created"))[0]!.metadata,
+      ).toMatchObject({ kind: "meeting" });
+    });
+
     it("makes no note for an event, and keeps an all-day event's days", async () => {
       const { captain } = await people();
       const made = await createCampEvent({
         actorId: captain.id,
         kind: "event",
-        agenda: "ignored",
+        agenda: "  ",
         newEventId: newId(),
         ...fields({
           team: null,
@@ -499,6 +526,7 @@ describe("camp events", () => {
         attendeeIds: [],
         decisions: [],
         actionItems: [],
+        activeTeams: ["kitchen" as const],
       };
       expect((await createMeetingNote(base)).ok).toBe(true);
       expect(await createMeetingNote(base)).toEqual({

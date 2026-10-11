@@ -185,6 +185,9 @@ const THEMATIC_BREAK =
 const SETEXT_HEADING =
   /^(?=[ \t]{0,3}\S)([^\n]+)\n[ \t]{0,3}(?:=+|-+)[ \t]*$/gm;
 
+/** A list item's bullet or number, at the start of its line. */
+const LIST_MARKER = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm;
+
 /**
  * Applied in order, and only to what the code scanners left behind. Block
  * markers first (they are anchored to line starts and would be disturbed by
@@ -201,7 +204,7 @@ const RULES: readonly [RegExp, string][] = [
   [THEMATIC_BREAK, ""],
   [/^[ \t]{0,3}#{1,6}(?:[ \t]+|[ \t]*$)/gm, ""], // ATX heading marker
   [/^(?:[ \t]{0,3}>[ \t]?)+/gm, ""], // block quote markers, however nested
-  [/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm, ""], // list bullets and numbers
+  [LIST_MARKER, ""], // list bullets and numbers
   [/\*\*(?=\S)([\s\S]*?\S)\*\*/g, "$1"], // **bold**
   [/__(?=\S)([\s\S]*?\S)__/g, "$1"], // __bold__
   [/(^|[^\w*])\*(?=\S)([^*\n]*?\S)\*(?!\w)/g, "$1$2"], // *italic*
@@ -231,17 +234,7 @@ const RULES: readonly [RegExp, string][] = [
  * `packages/ui/src/components/markdown-body.tsx`.
  */
 export function plainPreview(markdown: string, max?: number): string {
-  const parked: string[] = [];
-  const source = markdown.replace(/\r\n?/g, "\n").replaceAll(MARK, "");
-  const withCode = parkCodeSpans(parkFencedCode(source, parked), parked);
-  const withEscapes = withCode.replace(ESCAPED, (_match, ch: string) =>
-    park(ch, parked),
-  );
-
-  const stripped = RULES.reduce(
-    (acc, [pattern, replacement]) => acc.replace(pattern, replacement),
-    withEscapes,
-  ).replace(PARKED, (_match, index: string) => parked[Number(index)] ?? "");
+  const stripped = strip(markdown, RULES);
 
   if (max === undefined) {
     return stripped.replace(/\n{3,}/g, "\n\n").trim();
@@ -250,4 +243,43 @@ export function plainPreview(markdown: string, max?: number): string {
   const oneLine = stripped.replace(/\s+/g, " ").trim();
   if (oneLine.length <= max) return oneLine;
   return `${oneLine.slice(0, max).trimEnd()}…`;
+}
+
+/**
+ * The same rules, but a list keeps its shape: a bullet becomes "• " and a
+ * number stays ("1. "). For a plain-text copy a person reads as a document,
+ * where the order of the points matters: a meeting's agenda in its Google
+ * event's details (owner's mock-up, 2026-10-11: "as plain text").
+ */
+const LIST_RULES: readonly [RegExp, string][] = RULES.flatMap(
+  ([pattern, replacement]): [RegExp, string][] =>
+    pattern === LIST_MARKER
+      ? [
+          [/^[ \t]*[-*+][ \t]+/gm, "• "],
+          [/^[ \t]*(\d+[.)])[ \t]+/gm, "$1 "],
+        ]
+      : [[pattern, replacement]],
+);
+
+/** Markdown as plain text with its paragraphs and list markers kept. */
+export function plainTextWithLists(markdown: string): string {
+  return strip(markdown, LIST_RULES)
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function strip(markdown: string, rules: readonly [RegExp, string][]): string {
+  const parked: string[] = [];
+  const source = markdown.replace(/\r\n?/g, "\n").replaceAll(MARK, "");
+  const withCode = parkCodeSpans(parkFencedCode(source, parked), parked);
+  const withEscapes = withCode.replace(ESCAPED, (_match, ch: string) =>
+    park(ch, parked),
+  );
+
+  return rules
+    .reduce(
+      (acc, [pattern, replacement]) => acc.replace(pattern, replacement),
+      withEscapes,
+    )
+    .replace(PARKED, (_match, index: string) => parked[Number(index)] ?? "");
 }

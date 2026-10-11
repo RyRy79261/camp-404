@@ -4,6 +4,7 @@ import {
   CAMP_TIME_ZONE,
   campEventCalendarStep,
   nextCampDay,
+  plainTextWithLists,
   teamEventTitle,
 } from "@camp404/core";
 import * as db from "@camp404/db/camp-events";
@@ -47,6 +48,38 @@ const MEETING_NOTE =
   "A meeting: its agenda and minutes are in the Camp 404 app, under Calendar.";
 
 /**
+ * The most a Google event's details hold here. Google does not document a cap
+ * on `description`, but one about 8,192 characters is widely reported, and a
+ * details field over it would fail the mirror on every catch-up. The app keeps
+ * up to 10,000 (the agenda), so Google's copy is cut below that.
+ */
+export const GOOGLE_DETAILS_MAX = 8_000;
+const CUT_NOTE = "… the rest is in the Camp 404 app, under Calendar.";
+
+/**
+ * The details Google shows: a meeting's agenda as plain text (the owner's
+ * mock-up: Markdown markers mean nothing in Google Calendar; numbers, bullets
+ * and line breaks stay), then the notes, cut so the whole stays under
+ * GOOGLE_DETAILS_MAX.
+ */
+function googleDetails(row: CampEventRow): string {
+  const tail = [row.kind === "meeting" ? MEETING_NOTE : null, APP_NOTE]
+    .filter(Boolean)
+    .join("\n\n");
+  let details = row.description
+    ? row.kind === "meeting"
+      ? plainTextWithLists(row.description)
+      : row.description.trim()
+    : "";
+  if (!details) return tail;
+  const room = GOOGLE_DETAILS_MAX - tail.length - 2;
+  if (details.length > room) {
+    details = `${details.slice(0, room - CUT_NOTE.length - 1).trimEnd()}\n${CUT_NOTE}`;
+  }
+  return `${details}\n\n${tail}`;
+}
+
+/**
  * The Google event for one of the Calendar's events. A team's goes on twice,
  * as every event the app makes: in the title, in the camp's convention
  * ("Kitchen Team - Planning"), for people reading Google Calendar, and as the
@@ -62,13 +95,7 @@ export function campEventBody(
     dateTime: `${row.startDate}T${hhmm}:00+02:00`,
     timeZone: CAMP_TIME_ZONE,
   });
-  const description = [
-    row.description,
-    row.kind === "meeting" ? MEETING_NOTE : null,
-    APP_NOTE,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  const description = googleDetails(row);
   return {
     summary: teamEventTitle(
       row.team ? (teamLabel ?? row.team) : null,
@@ -233,11 +260,16 @@ export async function createCampEvent(
   actorId: string,
   input: NewCampEventInput,
 ): Promise<Saved<{ noteId: string | null }>> {
+  // The composer's Details is the Agenda (owner, 2026-10-11): the Google
+  // event's details carry it, and an event with one is a meeting whose note
+  // starts with the same agenda (campEventKindFor, in the write).
+  const fields = fieldsOf(input);
   const args = {
-    ...fieldsOf(input),
+    ...fields,
+    description: fields.description ?? (input.agenda || null),
     actorId,
     kind: input.kind,
-    agenda: input.kind === "meeting" ? input.agenda : "",
+    agenda: input.agenda,
     newEventId: newCalendarEventId(),
   };
   const saved = usesTestStore()

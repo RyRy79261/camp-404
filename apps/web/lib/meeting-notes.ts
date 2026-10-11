@@ -6,7 +6,6 @@ import {
   getMeetingNote as dbGetMeetingNote,
   getMeetingNoteByEvent as dbGetMeetingNoteByEvent,
   listMeetingNotes as dbListMeetingNotes,
-  turnActionItemIntoTask as dbTurnActionItemIntoTask,
   type MeetingNote,
   type MeetingNoteActionItem,
   type MeetingNoteSummary,
@@ -64,12 +63,4 @@ export async function editMeetingNote(
   return usesTestStore()
     ? testStore.editMeetingNote(input)
     : dbEditMeetingNote(input);
-}
-
-export async function turnActionItemIntoTask(
-  input: Parameters<typeof dbTurnActionItemIntoTask>[0],
-): Promise<MeetingNoteWriteResult<{ taskId: string; noteId: string }>> {
-  return usesTestStore()
-    ? testStore.turnActionItemIntoTask(input)
-    : dbTurnActionItemIntoTask(input);
 }

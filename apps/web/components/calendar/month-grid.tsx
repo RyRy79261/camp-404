@@ -45,7 +45,7 @@ export function MonthGrid({
 }) {
   const weeks = monthWeeks(month, entries, today);
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-month-grid>
+    <div className="flex flex-1 flex-col" data-month-grid>
       <div
         className="grid grid-cols-7 border border-b-0 border-border bg-card"
         aria-hidden
@@ -59,7 +59,7 @@ export function MonthGrid({
           </span>
         ))}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col border border-border">
+      <div className="flex flex-1 flex-col border border-border">
         {weeks.map((week, w) => {
           // A six-week month has shorter weeks: a row fewer each.
           const rows = weeks.length > 5 ? ROWS_PER_DAY - 1 : ROWS_PER_DAY;

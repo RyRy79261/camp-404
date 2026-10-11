@@ -45,6 +45,7 @@ vi.mock("../google-calendar", async (importOriginal) => ({
 
 import * as db from "@camp404/db/camp-events";
 import {
+  GOOGLE_DETAILS_MAX,
   campEventBody,
   createCampEvent,
   removeCampEvent,
@@ -105,6 +106,24 @@ describe("the Calendar's events on Google", () => {
   });
   afterEach(() => {
     vi.unstubAllEnvs();
+  });
+
+  it("writes the agenda into the Google event's details, and hands it to the note", async () => {
+    vi.mocked(db.createCampEvent).mockResolvedValue({
+      ok: true,
+      row: row(),
+      noteId: "note-1",
+    });
+    await createCampEvent("user-1", {
+      ...NEW,
+      kind: "event",
+      description: null,
+      agenda: "1. Shade budget",
+    });
+    expect(vi.mocked(db.createCampEvent).mock.calls[0]![0]).toMatchObject({
+      description: "1. Shade budget",
+      agenda: "1. Shade budget",
+    });
   });
 
   it("puts a new meeting on Google under the id its row claimed, then marks the version", async () => {
@@ -289,11 +308,31 @@ describe("campEventBody", () => {
     expect(body.description).toContain("Made in the Camp 404 app");
   });
 
-  it("says a meeting's agenda and minutes are in the app, never what they say", () => {
+  it("carries the details (a meeting's agenda) and says its minutes are in the app", () => {
     const body = campEventBody(row(), "Kitchen");
     expect(body.description).toContain("The week's menu.");
     expect(body.description).toContain(
       "agenda and minutes are in the Camp 404 app",
     );
+  });
+
+  it("gives Google a meeting's agenda as plain text, numbers and bullets kept", () => {
+    const body = campEventBody(
+      row({ description: "## Menu\n\n1. **Dinners**\n- Bring a _mug_" }),
+      "Kitchen",
+    );
+    expect(body.description).toMatch(/^Menu\n\n1\. Dinners\n• Bring a mug\n\n/);
+  });
+
+  it("cuts a longest agenda to fit Google's details, and says the rest is in the app", () => {
+    const body = campEventBody(
+      row({ description: "Plan the week. ".repeat(700).slice(0, 10_000) }),
+      "Kitchen",
+    );
+    expect(body.description!.length).toBeLessThanOrEqual(GOOGLE_DETAILS_MAX);
+    expect(body.description).toContain(
+      "… the rest is in the Camp 404 app, under Calendar.",
+    );
+    expect(body.description).toContain("Made in the Camp 404 app");
   });
 });

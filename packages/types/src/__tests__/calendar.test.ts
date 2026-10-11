@@ -127,11 +127,42 @@ describe("MeetingMinutesInput", () => {
       attendeeIds: ["a", "a", "b"],
       decisions: ["Buy panels"],
       actionItems: [
-        { id: null, text: "Order", assigneeId: null, due: "2026-10-20" },
+        {
+          id: null,
+          text: "Order",
+          assigneeId: null,
+          team: "power_and_lighting",
+          due: "2026-10-20",
+        },
       ],
     });
     expect(parsed.notes).toBe("We met.");
     expect(parsed.attendeeIds).toEqual(["a", "b"]);
+    expect(parsed.actionItems[0]?.team).toBe("power_and_lighting");
+  });
+
+  it("files an action item under a known team or the whole camp, nothing else", () => {
+    const item = { id: null, text: "Order", assigneeId: null, due: null };
+    const base = {
+      eventId: "evt1",
+      version: null,
+      agenda: "",
+      notes: "",
+      attendeeIds: [],
+      decisions: [],
+    };
+    for (const [team, ok] of [
+      [null, true],
+      ["finance", true],
+      ["not_a_team", false],
+    ] as const) {
+      expect(
+        MeetingMinutesInput.safeParse({
+          ...base,
+          actionItems: [{ ...item, team }],
+        }).success,
+      ).toBe(ok);
+    }
   });
 
   it("refuses an event id that is not one", () => {

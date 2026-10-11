@@ -175,13 +175,19 @@ export async function listMyOpenTasks(
 export interface AssignableMember {
   id: string;
   displayName: string;
+  /** Rank is on the roster every member reads. */
+  rank: "captain" | "member";
 }
 
 /** The people a task can be given to: approved members, by name. */
 export async function listAssignableMembers(): Promise<AssignableMember[]> {
   const db = createHttpDb();
   const rows = await db
-    .select({ id: schema.users.id, displayName: schema.users.displayName })
+    .select({
+      id: schema.users.id,
+      displayName: schema.users.displayName,
+      rank: schema.users.rank,
+    })
     .from(schema.users)
     .where(
       and(
@@ -194,6 +200,7 @@ export async function listAssignableMembers(): Promise<AssignableMember[]> {
   return rows.map((r) => ({
     id: r.id,
     displayName: r.displayName ?? "Unnamed member",
+    rank: r.rank,
   }));
 }
 
@@ -264,8 +271,7 @@ export async function addTask(
 /**
  * The board's one add path, inside a transaction the caller holds: the rule
  * (a captain, or a lead of the task's team), read and locked here, then the
- * insert. A meeting note's action item becomes a task through this, in the
- * same transaction that links the item to it.
+ * insert.
  */
 export async function addTaskWithin(
   tx: Tx,
@@ -279,6 +285,21 @@ export async function addTaskWithin(
       return { ok: false, error: NOT_YOUR_TEAM };
     }
   }
+  return insertTaskWithin(tx, input);
+}
+
+/**
+ * The insert behind the board's add path, for a caller that has ALREADY
+ * checked who may add, inside the transaction it holds: a meeting's action
+ * items go on the board under the meeting note's own write rule (owner,
+ * 2026-10-11: whoever may write the note files its action items). The person
+ * responsible is still checked here. The team is the caller's to check (an
+ * active team, or none).
+ */
+export async function insertTaskWithin(
+  tx: Tx,
+  input: AddTaskInput,
+): Promise<TaskWriteResult<{ id: string }>> {
   const assignable = await assertAssignable(tx, input.assigneeId);
   if (!assignable.ok) return assignable;
   const [row] = await tx

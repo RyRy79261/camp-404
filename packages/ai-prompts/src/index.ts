@@ -7,6 +7,12 @@ export {
 } from "./recipe-source-revision";
 export { recipeAdjustPrompt, type RecipeAdjustInput } from "./recipe-adjust";
 export {
+  meetingSuggestionsPrompt,
+  MEETING_SUGGESTIONS_TOOL,
+  MEETING_WHOLE_CAMP,
+  type MeetingSuggestionsInput,
+} from "./meeting-suggestions";
+export {
   voiceCommandPrompt,
   VOICE_REPLY_TOOLS,
   type VoiceCommandContext,
@@ -24,4 +30,5 @@ export const PROMPT_VERSIONS = {
   recipeSourceRevision: "2026-10-02.1",
   recipeAdjust: "2026-10-02.1",
   voiceCommand: "2026-10-06.2",
+  meetingSuggestions: "2026-10-11.2",
 } as const;

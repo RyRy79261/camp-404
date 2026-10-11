@@ -763,7 +763,8 @@ Decisions baked into the schema — keep new code consistent with them:
   event programs are gone; `/meetings/*` and `/captains/calendar` redirect
   into the Calendar.
   - Events made in the Calendar are `camp_events` rows (`@camp404/db/camp-events`):
-    an Event or a Meeting, one team or the whole camp. Captains, and leads of
+    an Event or a Meeting (one added with an agenda), one team or the whole
+    camp. Captains, and leads of
     the event's team, make, change and remove them (`canManageCampEvent`,
     owner 1A; whole camp is captains'); a compare-and-set on `version`,
     audited (`calendar.event_created` / `_changed` / `_removed`). Each row
@@ -781,6 +782,47 @@ Decisions baked into the schema — keep new code consistent with them:
     meeting event of its own (the catch-up puts them on Google).
   - Google's description of an event made in Google is still never read; the
     Calendar shows the description only of events the app made.
+  - **A meeting starts by adding an event with an agenda** (owner,
+    2026-10-11). The New event form has no Event/Meeting switch: its Details
+    is the Agenda (`MarkdownField`), written into the Google event's details;
+    an event added with an agenda is a meeting (`campEventKindFor`), its note
+    made in the same transaction with the same agenda, and the Calendar opens
+    it. One with no agenda stays a plain event. Google is still called after
+    the row, by the mirror; a Google failure keeps the meeting and says so.
+  - **An action item IS a task on the board** (owner, 2026-10-11). Each row in
+    the minutes editor has its words, a person, a team (where the task is
+    filed: the meeting's by default, Whole camp allowed, only an active team)
+    and a deadline. Save meeting puts every new or changed item not on the
+    board yet there (`putOnBoard` in `@camp404/db/meeting-notes`,
+    `insertTaskWithin`), in the same transaction as the save. An item from
+    before this rule (or whose task was deleted) sent back unchanged stays off
+    the board (`actionItemUnchanged`), so editing an old meeting never files
+    its old items on this year's board, and a person since gone or a team
+    since switched off on such an item never blocks the save. Whoever may write the note may do this
+    (`canWorkInTeam`; the owner accepted that it is wider than the board's own
+    add rule). Once on the board, an item's words, person, team and deadline
+    are the task's: the note reads them live, the editor shows "On the board:
+    <column>", and a save that changes the words is refused (`ON_THE_BOARD`).
+    There is no separate "Add to tasks" button. The Claude connector's
+    `update_meeting_notes` leaves the action items as they are.
+  - **"Find decisions and action items"** (owner's mock-up A, 2026-10-11):
+    in the minutes editor, Claude Sonnet 5.5 reads the agenda and the notes
+    and PROPOSES decisions and action items as dashed "Suggested" rows with
+    Keep and Drop; nothing is stored until Keep and Save meeting
+    (`suggestMeetingItemsAction`, `lib/meeting-suggestions.ts`,
+    `meetingSuggestionsPrompt` at `PROMPT_VERSIONS.meetingSuggestions`).
+    Gated as writing the minutes, at most 20 asks per member a day
+    (`rateLimiter`). It sends the notes, the agenda, the meeting's day, the
+    names of the team's members, whoever is ticked as there and the captains,
+    the active teams and what the note already holds; never an email, phone
+    number or safety data. The server matches people again
+    (`meetingSuggestionsFrom` in `@camp404/core`): only a whole name that the
+    agenda or notes themselves write, and that one approved member in the
+    whole camp has, becomes the person; anything else ("Mike", "Speaker 3",
+    "Team leads") is "Who is this?" with no guess. Claude returns the notes'
+    own words for a person, never a fuller name it picked from the list, and
+    the words a deadline came from ("From “next week”"). Under E2E_TEST_MODE a fixed answer stands
+    in. The note text is never logged.
 - **Logistics calendar (#247).** The year's pack, travel, build, burn, strike
   and unpack days are one row per (year, phase) in `logistics_phases`. A
   captain or a Transport and Logistics lead sets them (`canEditLogistics`), a
@@ -971,13 +1013,19 @@ version instead. [CORRECTION 2026-10-07] What each pinned model does today
   writing (`lib/recipe-proofread.ts`, `kitchen/recipes/actions.ts`).
 - Claude Haiku 4.5 (`claude-haiku-4-5-20251001`): the optional "Improve with
   AI" pass on a bug or feature report (`lib/feedback-ai.ts`).
-- Claude Sonnet 5.5 (`claude-sonnet-5-5`): voice commands.
+- Claude Sonnet 5.5 (`claude-sonnet-5-5`): voice commands, and (2026-10-11)
+  the meeting editor's "Find decisions and action items"
+  (`lib/meeting-suggestions.ts`).
 - Groq Whisper Large v3 Turbo (`whisper-large-v3-turbo`): voice transcription.
 
 Every Anthropic client sets `maxRetries: 0` (`lib/anthropic.ts`, and voice's
 own in `lib/voice/service.ts`).
 
-Sonnet 5.5 (owner 2026-10-06) is voice's model only (#356): it turns a captain's words into connector tool calls
+[CORRECTION 2026-10-11] Sonnet 5.5 was voice's model only; it now also
+proposes a meeting's decisions and action items (one call, `tool_choice` auto
+with one strict tool, because Sonnet 5.5 refuses a forced `tool_choice` and a
+`temperature`; a missing or bad answer is the editor's error, never a retry).
+For voice (owner 2026-10-06, #356) it turns a captain's words into connector tool calls
 (`voiceCommandPrompt`). A change to that prompt or model needs a new version
 and three passing real-model runs of `pnpm --filter @camp404/web eval:voice`
 (zero wrong actions; `VOICE_EVAL_LIMIT=10` first, to see the cost); there is

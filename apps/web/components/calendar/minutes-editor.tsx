@@ -2,9 +2,22 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Info, ListChecks, Plus, Save, Trash2 } from "lucide-react";
+import {
+  Check,
+  Info,
+  Plus,
+  Save,
+  Sparkles,
+  SquareKanban,
+  Trash2,
+  X,
+} from "lucide-react";
 import { z } from "zod";
-import { MEETING_NOTE_PRIVACY_REMINDER } from "@camp404/core";
+import { useWindowDirty } from "@camp404/os";
+import {
+  MEETING_NOTE_PRIVACY_REMINDER,
+  type MeetingSuggestions,
+} from "@camp404/core";
 import { MeetingMinutesInput } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
@@ -21,7 +34,9 @@ import { Input } from "@camp404/ui/components/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@camp404/ui/components/select";
@@ -32,13 +47,25 @@ import {
   useEditorDraft,
   type EditorDraft,
 } from "@/components/os/editor-draft";
-import { saveMinutesAction } from "@/app/(console)/calendar/actions";
+import {
+  saveMinutesAction,
+  suggestMeetingItemsAction,
+} from "@/app/(console)/calendar/actions";
 import { MarkdownField } from "@/components/markdown/markdown-field";
+import { shortDayLabel } from "@/lib/calendar-month";
+import { TASK_STATUS_LABEL } from "@/lib/meeting-notes-view";
 
 // A meeting's agenda and minutes (#268; owner, 2026-10-10: a meeting is an
 // event on the calendar, with an agenda before and minutes after). The
 // meeting's title, team and time are its calendar event's, said in the page's
-// heading, never fields here. The fields in cards, the privacy reminder in
+// heading, never fields here. Every action item is a task on the board (owner,
+// 2026-10-11): a row has its words, a person, the team whose board it goes on
+// (the meeting's by default, Whole camp allowed) and a deadline, and Save
+// meeting puts each new one there; one already there shows how it stands and
+// is changed on the board. "Find decisions and action items" asks Claude to
+// read the agenda and notes and propose rows, shown as dashed "Suggested"
+// rows with Keep and Drop: nothing is kept until Keep, and nothing stored
+// until Save meeting. The fields in cards, the privacy reminder in
 // the accent box, then the footer with the one button, kept in sight at the
 // bottom of the window (long minutes on a phone are four screens). The agenda
 // and the notes are written in the WYSIWYG Markdown editor with a live
@@ -51,14 +78,20 @@ export interface MeetingPerson {
   displayName: string;
 }
 
+type TaskStatus = keyof typeof TASK_STATUS_LABEL;
+
 export interface MeetingEditorItem {
   /** Null for an item not saved yet. */
   id: string | null;
   text: string;
   assigneeId: string | null;
+  /** The team whose board its task is on: a key, or null (whole camp). */
+  team: string | null;
   due: string;
-  /** Already a task on the board: its words are fixed here. */
+  /** Already a task on the board: it is changed there, not here. */
   onBoard: boolean;
+  /** Its task's column, when it is on the board. */
+  status: TaskStatus | null;
 }
 
 export interface MeetingEditorValues {
@@ -82,6 +115,7 @@ export interface MinutesTarget {
 }
 
 const NOBODY = "__nobody__";
+const WHOLE_CAMP = "__camp__";
 
 type FieldName = "agenda" | "notes";
 
@@ -111,8 +145,10 @@ const MeetingDraft = z.object({
         id: z.string().max(200).nullable(),
         text: z.string().max(1_000),
         assigneeId: z.string().max(200).nullable(),
+        team: z.string().max(100).nullable(),
         due: z.string().max(40),
         onBoard: z.boolean(),
+        status: z.enum(["open", "in_progress", "done", "cancelled"]).nullable(),
       }),
     )
     .max(200),
@@ -135,8 +171,10 @@ function meetingDraft(
       id: i.id,
       text: i.text,
       assigneeId: i.assigneeId,
+      team: i.team,
       due: i.due,
       onBoard: i.onBoard,
+      status: i.status,
     })),
   };
 }
@@ -163,6 +201,10 @@ type MeetingEditorProps = {
   teamPeople: string[];
   /** People on the note who are no longer approved members, by name. */
   formerAttendees?: MeetingPerson[];
+  /** The active teams a task may be filed under. */
+  teams: { value: string; label: string }[];
+  /** Every team's name by key, archived ones too, for rows on the board. */
+  teamLabels: Record<string, string>;
 };
 
 /**
@@ -185,6 +227,8 @@ function MeetingEditorForm({
   members,
   teamPeople,
   formerAttendees = [],
+  teams,
+  teamLabels,
   draft,
 }: MeetingEditorProps & { draft: EditorDraft<MeetingDraft> }) {
   const router = useRouter();
@@ -207,6 +251,16 @@ function MeetingEditorForm({
   >({});
   const [error, setError] = React.useState<string | null>(null);
 
+  // Claude's proposals: in this editor only, never in the draft or the save.
+  const [finding, startFinding] = React.useTransition();
+  const [found, setFound] = React.useState<FoundState>({ kind: "idle" });
+  const [suggestedDecisions, setSuggestedDecisions] = React.useState<
+    SuggestedDecisionRow[]
+  >([]);
+  const [suggestedItems, setSuggestedItems] = React.useState<
+    SuggestedItemRow[]
+  >([]);
+
   // What is typed now, against what is saved: the guard, the kept draft and
   // this tab's autosave (editor-draft.tsx).
   const { saved: markSaved } = useDraftAutosave(
@@ -220,8 +274,21 @@ function MeetingEditorForm({
     }),
   );
 
+  // Suggestions are never stored, but losing them unasked wastes one of the
+  // member's asks: close, minimise, a switch or a link asks first while any
+  // are on screen (a Back, which cannot ask, drops them).
+  const settleSuggestions = useWindowDirty(
+    suggestedDecisions.length + suggestedItems.length > 0,
+    SUGGESTIONS_PENDING,
+  );
+
   const teamKey = target.team;
   const teamLabel = target.teamLabel;
+  // A new action item is filed where the meeting is, when that team is active.
+  const defaultTeam =
+    teamKey && teams.some((t) => t.value === teamKey) ? teamKey : null;
+  const labelOf = (team: string | null) =>
+    team ? (teamLabels[team] ?? team) : "Whole camp";
 
   // The team's people first, then everyone else; someone on the note who is no
   // longer on the approved list shows in a group of their own, so they can be
@@ -232,6 +299,8 @@ function MeetingEditorForm({
   const otherRows = members.filter((m) => !onTeam.has(m.id));
   const gone = formerAttendees.filter((p) => !known.has(p.id));
   const othersTicked = otherRows.filter((m) => attendees.has(m.id)).length;
+  const nameOf = (id: string | null) =>
+    id ? (known.get(id)?.displayName ?? "Someone no longer approved") : null;
 
   function toggle(id: string, on: boolean) {
     setAttendees((before) => {
@@ -240,6 +309,82 @@ function MeetingEditorForm({
       else next.delete(id);
       return next;
     });
+  }
+
+  function patchItem(key: string, patch: Partial<MeetingEditorItem>) {
+    setItems((all) => all.map((x) => (x.key === key ? { ...x, ...patch } : x)));
+  }
+
+  function findSuggestions() {
+    setFound({ kind: "loading" });
+    startFinding(async () => {
+      const result = await suggestMeetingItemsAction({
+        eventId: target.eventId,
+        agenda,
+        notes,
+        attendeeIds: [...attendees],
+        decisions: decisions
+          .map((d) => d.text.trim())
+          .filter(Boolean)
+          .slice(0, 50),
+        actionItems: items
+          .map((i) => i.text.trim())
+          .filter(Boolean)
+          .slice(0, 50),
+      }).catch(() => null);
+      if (!result || !result.ok) {
+        setFound({ kind: "error", message: result?.error ?? FIND_FAILED });
+        return;
+      }
+      const s: MeetingSuggestions = result.data;
+      setSuggestedDecisions(
+        s.decisions.map((d) => ({ key: nextKey(), text: d.text })),
+      );
+      setSuggestedItems(
+        s.actionItems.map((i) => ({
+          key: nextKey(),
+          text: i.text,
+          assigneeId: i.assigneeId,
+          unmatchedName: i.unmatchedName,
+          team: i.team,
+          due: i.due ?? "",
+          dueSaid: i.dueSaid,
+        })),
+      );
+      setFound({
+        kind: "ready",
+        decisions: s.decisions.length,
+        actionItems: s.actionItems.length,
+        alreadyThere: s.alreadyThere,
+      });
+    });
+  }
+
+  function keepDecisions(keys: readonly string[]) {
+    const keep = suggestedDecisions.filter((d) => keys.includes(d.key));
+    setDecisions((all) => [
+      ...all,
+      ...keep.map((d) => ({ key: nextKey(), text: d.text })),
+    ]);
+    setSuggestedDecisions((all) => all.filter((d) => !keys.includes(d.key)));
+  }
+
+  function keepItems(keys: readonly string[]) {
+    const keep = suggestedItems.filter((i) => keys.includes(i.key));
+    setItems((all) => [
+      ...all,
+      ...keep.map((i) => ({
+        key: nextKey(),
+        id: null,
+        text: i.text,
+        assigneeId: i.assigneeId,
+        team: i.team,
+        due: i.due,
+        onBoard: false,
+        status: null,
+      })),
+    ]);
+    setSuggestedItems((all) => all.filter((i) => !keys.includes(i.key)));
   }
 
   function submit(e: React.FormEvent) {
@@ -258,6 +403,7 @@ function MeetingEditorForm({
           id: i.id,
           text: i.text,
           assigneeId: i.assigneeId,
+          team: i.team,
           due: i.due || null,
         })),
     };
@@ -285,11 +431,14 @@ function MeetingEditorForm({
         return;
       }
       markSaved();
-      toast.success("Minutes saved");
+      settleSuggestions();
+      toast.success("Meeting saved");
       router.push(target.returnHref);
       router.refresh();
     });
   }
+
+  const busy = pending || finding;
 
   return (
     <form onSubmit={submit} noValidate className="flex min-w-0 flex-col gap-6">
@@ -403,16 +552,33 @@ function MeetingEditorForm({
         </CardContent>
       </Card>
 
+      <FindPanel found={found} busy={busy} onFind={findSuggestions} />
+
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 pb-3">
           <CardTitle className="text-base">Decisions</CardTitle>
+          {suggestedDecisions.length > 1 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                keepDecisions(suggestedDecisions.map((d) => d.key))
+              }
+              disabled={pending}
+            >
+              <Check aria-hidden />
+              Keep all {suggestedDecisions.length}
+            </Button>
+          ) : null}
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          {decisions.length === 0 ? (
+          {decisions.length === 0 && suggestedDecisions.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               One short line for each thing the meeting settled.
             </p>
-          ) : (
+          ) : null}
+          {decisions.length > 0 ? (
             <ol className="flex flex-col gap-2" aria-label="Decisions">
               {decisions.map((d, index) => (
                 <li key={d.key} className="flex items-center gap-2">
@@ -444,7 +610,27 @@ function MeetingEditorForm({
                 </li>
               ))}
             </ol>
-          )}
+          ) : null}
+          {suggestedDecisions.length > 0 ? (
+            <ul
+              className="flex flex-col gap-2"
+              aria-label="Suggested decisions"
+            >
+              {suggestedDecisions.map((d) => (
+                <SuggestedRow
+                  key={d.key}
+                  text={d.text}
+                  onKeep={() => keepDecisions([d.key])}
+                  onDrop={() =>
+                    setSuggestedDecisions((all) =>
+                      all.filter((x) => x.key !== d.key),
+                    )
+                  }
+                  disabled={pending}
+                />
+              ))}
+            </ul>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -461,16 +647,34 @@ function MeetingEditorForm({
       </Card>
 
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Action items</CardTitle>
+        <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 pb-3">
+          <div className="flex flex-col gap-1.5">
+            <CardTitle className="text-base">Action items</CardTitle>
+            <CardDescription>
+              Each one is a task: Save meeting puts it on the board, under its
+              team.
+            </CardDescription>
+          </div>
+          {suggestedItems.length > 1 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => keepItems(suggestedItems.map((i) => i.key))}
+              disabled={pending}
+            >
+              <Check aria-hidden />
+              Keep all {suggestedItems.length}
+            </Button>
+          ) : null}
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          {items.length === 0 ? (
+          {items.length === 0 && suggestedItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Who does what next. Once saved, a lead or a captain can put each
-              one on the task board.
+              Who does what next, under which team, by when.
             </p>
-          ) : (
+          ) : null}
+          {items.length > 0 ? (
             <ol className="flex flex-col gap-3" aria-label="Action items">
               {items.map((item, index) =>
                 item.onBoard ? (
@@ -478,15 +682,34 @@ function MeetingEditorForm({
                     key={item.key}
                     className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/30 p-3"
                   >
-                    <span className="text-sm font-medium leading-none">
-                      Action item {index + 1}
-                    </span>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <span className="text-sm font-medium leading-none">
+                        Action item {index + 1}
+                      </span>
+                      {item.status ? (
+                        <span className="inline-flex items-center gap-1.5 border border-border px-2 py-1 text-xs font-semibold">
+                          <SquareKanban className="h-3.5 w-3.5" aria-hidden />
+                          {item.status === "cancelled"
+                            ? "Taken off the task board"
+                            : `On the board: ${TASK_STATUS_LABEL[item.status]}`}
+                        </span>
+                      ) : null}
+                    </div>
                     <span className="flex items-start gap-2 text-sm [overflow-wrap:anywhere]">
-                      <ListChecks
+                      <SquareKanban
                         className="mt-0.5 h-4 w-4 shrink-0 text-accent"
                         aria-hidden
                       />
                       {item.text}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {[
+                        nameOf(item.assigneeId) ?? "Nobody yet",
+                        labelOf(item.team),
+                        item.due
+                          ? `Due ${shortDayLabel(item.due)}`
+                          : "No deadline",
+                      ].join(" · ")}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       On the task board: change it there.
@@ -495,98 +718,116 @@ function MeetingEditorForm({
                 ) : (
                   <li
                     key={item.key}
-                    className="grid gap-3 rounded-lg border border-border p-3 page-sm:grid-cols-[minmax(0,1fr)_11rem_10rem_auto] page-sm:items-start"
+                    className="flex flex-col gap-3 rounded-lg border border-border p-3"
                   >
-                    <Field
-                      label={`Action item ${index + 1}`}
-                      htmlFor={`item-text-${item.key}`}
-                    >
-                      <Input
-                        id={`item-text-${item.key}`}
-                        value={item.text}
-                        maxLength={120}
-                        placeholder="e.g. Buy the gas"
-                        onChange={(e) =>
+                    <div className="flex items-end gap-2">
+                      <Field
+                        label={`Action item ${index + 1}`}
+                        htmlFor={`item-text-${item.key}`}
+                        className="min-w-0 flex-1"
+                      >
+                        <Input
+                          id={`item-text-${item.key}`}
+                          value={item.text}
+                          maxLength={120}
+                          placeholder="e.g. Buy the gas"
+                          onChange={(e) =>
+                            patchItem(item.key, { text: e.target.value })
+                          }
+                          disabled={pending}
+                        />
+                      </Field>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove action item ${index + 1}`}
+                        onClick={() =>
                           setItems((all) =>
-                            all.map((x) =>
-                              x.key === item.key
-                                ? { ...x, text: e.target.value }
-                                : x,
-                            ),
-                          )
-                        }
-                        disabled={pending}
-                      />
-                    </Field>
-                    <Field label="Who" htmlFor={`item-who-${item.key}`}>
-                      <Select
-                        value={item.assigneeId ?? NOBODY}
-                        onValueChange={(next) =>
-                          setItems((all) =>
-                            all.map((x) =>
-                              x.key === item.key
-                                ? {
-                                    ...x,
-                                    assigneeId: next === NOBODY ? null : next,
-                                  }
-                                : x,
-                            ),
+                            all.filter((x) => x.key !== item.key),
                           )
                         }
                         disabled={pending}
                       >
-                        <SelectTrigger id={`item-who-${item.key}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={NOBODY}>Nobody yet</SelectItem>
-                          {item.assigneeId && !known.has(item.assigneeId) ? (
-                            <SelectItem value={item.assigneeId}>
-                              Someone no longer approved
-                            </SelectItem>
-                          ) : null}
-                          {members.map((m) => (
-                            <SelectItem key={m.id} value={m.id}>
-                              {m.displayName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Field label="Due" htmlFor={`item-due-${item.key}`}>
-                      <DateControl
-                        id={`item-due-${item.key}`}
-                        value={item.due}
-                        onChange={(e) =>
-                          setItems((all) =>
-                            all.map((x) =>
-                              x.key === item.key
-                                ? { ...x, due: e.target.value }
-                                : x,
-                            ),
-                          )
-                        }
-                        disabled={pending}
-                      />
-                    </Field>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="justify-self-end page-sm:self-end"
-                      aria-label={`Remove action item ${index + 1}`}
-                      onClick={() =>
-                        setItems((all) => all.filter((x) => x.key !== item.key))
-                      }
+                        <Trash2 aria-hidden />
+                      </Button>
+                    </div>
+                    <ItemFields
+                      idPrefix={item.key}
+                      assigneeId={item.assigneeId}
+                      team={item.team}
+                      due={item.due}
+                      members={members}
+                      there={attendees}
+                      teams={teams}
+                      labelOf={labelOf}
+                      onChange={(patch) => patchItem(item.key, patch)}
                       disabled={pending}
-                    >
-                      <Trash2 aria-hidden />
-                    </Button>
+                    />
+                    {item.id ? (
+                      <p className="text-xs text-muted-foreground">
+                        Not on the task board. Change it, and Save meeting puts
+                        it there.
+                      </p>
+                    ) : null}
                   </li>
                 ),
               )}
             </ol>
-          )}
+          ) : null}
+          {suggestedItems.length > 0 ? (
+            <ul
+              className="flex flex-col gap-2"
+              aria-label="Suggested action items"
+            >
+              {suggestedItems.map((i) => (
+                <SuggestedRow
+                  key={i.key}
+                  text={i.text}
+                  onKeep={() => keepItems([i.key])}
+                  onDrop={() =>
+                    setSuggestedItems((all) =>
+                      all.filter((x) => x.key !== i.key),
+                    )
+                  }
+                  disabled={pending}
+                >
+                  <ItemFields
+                    idPrefix={i.key}
+                    assigneeId={i.assigneeId}
+                    unmatchedName={i.unmatchedName}
+                    team={i.team}
+                    due={i.due}
+                    dueSaid={i.dueSaid}
+                    members={members}
+                    there={attendees}
+                    teams={teams}
+                    labelOf={labelOf}
+                    onChange={(patch) =>
+                      setSuggestedItems((all) =>
+                        all.map((x) =>
+                          x.key === i.key
+                            ? {
+                                ...x,
+                                ...patch,
+                                // A person picked answers "Who is this?".
+                                unmatchedName:
+                                  "assigneeId" in patch
+                                    ? null
+                                    : x.unmatchedName,
+                                // A date changed is the writer's, not the notes'.
+                                dueSaid: "due" in patch ? null : x.dueSaid,
+                              }
+                            : x,
+                        ),
+                      )
+                    }
+                    disabled={pending}
+                  />
+                </SuggestedRow>
+              ))}
+            </ul>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -599,8 +840,10 @@ function MeetingEditorForm({
                   id: null,
                   text: "",
                   assigneeId: null,
+                  team: defaultTeam,
                   due: "",
                   onBoard: false,
+                  status: null,
                 },
               ])
             }
@@ -631,9 +874,333 @@ function MeetingEditorForm({
         </p>
         <Button type="submit" disabled={pending} className="shrink-0">
           <Save aria-hidden />
-          {pending ? "Saving…" : "Save minutes"}
+          {pending ? "Saving…" : "Save meeting"}
         </Button>
       </div>
     </form>
+  );
+}
+
+const SUGGESTIONS_PENDING =
+  "Claude's suggestions are not kept yet. Leave without keeping them? They will be lost.";
+
+const FIND_FAILED =
+  "Claude could not read the notes. Your notes are safe. Try again.";
+
+type FoundState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "error"; message: string }
+  | {
+      kind: "ready";
+      decisions: number;
+      actionItems: number;
+      alreadyThere: { decisions: number; actionItems: number };
+    };
+
+interface SuggestedDecisionRow {
+  key: string;
+  text: string;
+}
+
+interface SuggestedItemRow {
+  key: string;
+  text: string;
+  assigneeId: string | null;
+  /** The name the notes give when it matched nobody: "Who is this?". */
+  unmatchedName: string | null;
+  team: string | null;
+  due: string;
+  /** The notes' words the date came from, shown as "From “…”". */
+  dueSaid: string | null;
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** "Claude suggests 5 decisions and 7 action items." */
+function foundSentence(f: Extract<FoundState, { kind: "ready" }>): string {
+  if (f.decisions === 0 && f.actionItems === 0) {
+    return "Claude found nothing new to suggest.";
+  }
+  return `Claude suggests ${plural(f.decisions, "decision", "decisions")} and ${plural(f.actionItems, "action item", "action items")}.`;
+}
+
+/** "1 action item was already there." or null. */
+function alreadySentence(a: {
+  decisions: number;
+  actionItems: number;
+}): string | null {
+  const parts = [
+    a.decisions > 0 ? plural(a.decisions, "decision", "decisions") : null,
+    a.actionItems > 0
+      ? plural(a.actionItems, "action item", "action items")
+      : null,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  const total = a.decisions + a.actionItems;
+  return `${parts.join(" and ")} ${total === 1 ? "was" : "were"} already there.`;
+}
+
+/** The "Let Claude read the notes" box: its button, and how it went. */
+function FindPanel({
+  found,
+  busy,
+  onFind,
+}: {
+  found: FoundState;
+  busy: boolean;
+  onFind: () => void;
+}) {
+  const heading =
+    found.kind === "loading"
+      ? "Reading the notes…"
+      : found.kind === "ready"
+        ? foundSentence(found)
+        : found.kind === "error"
+          ? found.message
+          : "Let Claude read the notes";
+  const detail =
+    found.kind === "ready"
+      ? [alreadySentence(found.alreadyThere), "Keep what is right, below."]
+          .filter(Boolean)
+          .join(" ")
+      : found.kind === "idle"
+        ? "It suggests the decisions and the action items. Nothing is added until you keep it."
+        : null;
+  return (
+    <section
+      aria-label="Find decisions and action items"
+      aria-busy={found.kind === "loading"}
+      className="flex flex-col gap-3 rounded-lg border border-primary/50 bg-primary/10 p-4 page-sm:flex-row page-sm:items-center page-sm:justify-between"
+    >
+      <div className="flex items-start gap-2.5">
+        <Sparkles
+          className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+          aria-hidden
+        />
+        <div className="flex flex-col gap-0.5">
+          <p
+            className={
+              found.kind === "error"
+                ? "text-sm font-semibold text-destructive"
+                : "text-sm font-semibold"
+            }
+            role={found.kind === "error" ? "alert" : "status"}
+          >
+            {heading}
+          </p>
+          {detail ? (
+            <p className="text-sm text-muted-foreground">{detail}</p>
+          ) : null}
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        className="shrink-0"
+        onClick={onFind}
+        disabled={busy}
+      >
+        <Sparkles aria-hidden />
+        {found.kind === "ready"
+          ? "Find again"
+          : found.kind === "error"
+            ? "Try again"
+            : "Find decisions and action items"}
+      </Button>
+    </section>
+  );
+}
+
+/**
+ * One of Claude's proposals: dashed, marked Suggested, with Keep (the same
+ * place on every row) and a quiet Drop.
+ */
+function SuggestedRow({
+  text,
+  onKeep,
+  onDrop,
+  disabled,
+  children,
+}: {
+  text: string;
+  onKeep: () => void;
+  onDrop: () => void;
+  disabled: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <li
+      data-suggested
+      className="flex flex-col gap-3 rounded-lg border border-dashed border-primary/70 p-3"
+    >
+      <div className="flex items-start gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <span className="self-start border border-primary/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+            Suggested
+          </span>
+          <span className="text-sm [overflow-wrap:anywhere]">{text}</span>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          onClick={onKeep}
+          disabled={disabled}
+          aria-label={`Keep “${text}”`}
+        >
+          <Check aria-hidden />
+          Keep
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onDrop}
+          disabled={disabled}
+          aria-label={`Drop “${text}”`}
+        >
+          <X aria-hidden />
+        </Button>
+      </div>
+      {children}
+    </li>
+  );
+}
+
+const GROUP_LABEL =
+  "text-xs font-semibold uppercase tracking-wide text-muted-foreground";
+
+/** An action item's person, team and deadline. */
+function ItemFields({
+  idPrefix,
+  assigneeId,
+  unmatchedName = null,
+  team,
+  due,
+  dueSaid = null,
+  members,
+  there,
+  teams,
+  labelOf,
+  onChange,
+  disabled,
+}: {
+  idPrefix: string;
+  assigneeId: string | null;
+  unmatchedName?: string | null;
+  team: string | null;
+  due: string;
+  dueSaid?: string | null;
+  members: MeetingPerson[];
+  /** Who is ticked as there: listed first, the likely people. */
+  there: ReadonlySet<string>;
+  teams: { value: string; label: string }[];
+  labelOf: (team: string | null) => string;
+  onChange: (patch: {
+    assigneeId?: string | null;
+    team?: string | null;
+    due?: string;
+  }) => void;
+  disabled: boolean;
+}) {
+  const known = new Set(members.map((m) => m.id));
+  const asking = unmatchedName !== null && assigneeId === null;
+  const wasThere = members.filter((m) => there.has(m.id));
+  const everyoneElse = members.filter((m) => !there.has(m.id));
+  return (
+    <div className="grid gap-3 page-sm:grid-cols-3">
+      <Field
+        label="Who"
+        htmlFor={`item-who-${idPrefix}`}
+        help={asking ? `The notes say “${unmatchedName}”` : undefined}
+      >
+        <Select
+          value={asking ? undefined : (assigneeId ?? NOBODY)}
+          onValueChange={(next) =>
+            onChange({ assigneeId: next === NOBODY ? null : next })
+          }
+          disabled={disabled}
+        >
+          <SelectTrigger
+            id={`item-who-${idPrefix}`}
+            className={asking ? "border-warning text-warning" : undefined}
+          >
+            <SelectValue placeholder="Who is this? Pick" />
+          </SelectTrigger>
+          <SelectContent>
+            {assigneeId && !known.has(assigneeId) ? (
+              <SelectItem value={assigneeId}>
+                Someone no longer approved
+              </SelectItem>
+            ) : null}
+            {wasThere.length > 0 ? (
+              <SelectGroup>
+                <SelectLabel className={GROUP_LABEL}>Who was there</SelectLabel>
+                {wasThere.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.displayName}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ) : null}
+            {everyoneElse.length > 0 ? (
+              <SelectGroup>
+                {wasThere.length > 0 ? (
+                  <SelectLabel className={GROUP_LABEL}>
+                    Everyone else
+                  </SelectLabel>
+                ) : null}
+                {everyoneElse.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.displayName}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ) : null}
+            <SelectItem value={NOBODY}>Nobody yet</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Team" htmlFor={`item-team-${idPrefix}`}>
+        <Select
+          value={team ?? WHOLE_CAMP}
+          onValueChange={(next) =>
+            onChange({ team: next === WHOLE_CAMP ? null : next })
+          }
+          disabled={disabled}
+        >
+          <SelectTrigger id={`item-team-${idPrefix}`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={WHOLE_CAMP}>Whole camp</SelectItem>
+            {teams.map((t) => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+              </SelectItem>
+            ))}
+            {team && !teams.some((t) => t.value === team) ? (
+              <SelectItem value={team}>
+                {labelOf(team)} (switched off)
+              </SelectItem>
+            ) : null}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field
+        label="Due"
+        htmlFor={`item-due-${idPrefix}`}
+        help={dueSaid && due ? `From “${dueSaid}”` : undefined}
+      >
+        <DateControl
+          id={`item-due-${idPrefix}`}
+          value={due}
+          onChange={(e) => onChange({ due: e.target.value })}
+          disabled={disabled}
+        />
+      </Field>
+    </div>
   );
 }

@@ -26,11 +26,11 @@ import { notFound, runTool, ToolError } from "../tool-utils";
 //    meetings are captains'), and saves only on the version the person read
 //    (a compare-and-set: someone else's save in between is refused with the
 //    editor's sentence). The editor sends the whole note, so the parts not
-//    given here are sent back exactly as read: who was there and the action
-//    items. The meeting's title and time are its calendar event's.
+//    given here are sent back exactly as read: who was there. The action
+//    items are left out of the write, which then leaves them as they are. The meeting's title and time are its calendar event's.
 //  - Making a meeting (it goes on the camp's shared Google Calendar, so it is
 //    website-only), the first minutes of an event made in Google, ticking
-//    attendees, action items and putting one on the task board stay on the
+//    attendees and action items (each one a task on the board) stay on the
 //    Calendar. No audit row: the site writes none for team planning data.
 
 const MeetingFilter = z.union([Team, z.literal(WHOLE_CAMP_MEETINGS)]);
@@ -60,9 +60,14 @@ function presentNote(
     notes: note.notes,
     attendees: note.attendees.map((a) => a.displayName),
     decisions: note.decisions.map((d) => d.text),
+    // Every action item is a task on the board (owner, 2026-10-11); one
+    // saved before that may not be yet (taskStatus null). Once on the board,
+    // its words, person, team and deadline are the task's.
     actionItems: note.actionItems.map((item) => ({
       text: item.text,
       assigneeName: item.assigneeName,
+      team: item.team,
+      teamLabel: item.team ? (labels[item.team] ?? item.team) : "Whole camp",
       due: item.dueOn,
       taskStatus: item.task?.status ?? null,
     })),
@@ -121,7 +126,7 @@ export function registerMeetingTools(server: McpServer): void {
     {
       title: "Read a meeting's notes",
       description:
-        "One meeting in full, as the Calendar shows it: the agenda, the notes, who was there, the decisions and the action items (with the task each became). `version` is what update_meeting_notes needs; `canEdit` says whether you may change it (its team's members this year, and captains).",
+        "One meeting in full, as the Calendar shows it: the agenda, the notes, who was there, the decisions and the action items (each a task on the board: its person, team, deadline and status). `version` is what update_meeting_notes needs; `canEdit` says whether you may change it (its team's members this year, and captains).",
       inputSchema: z.object({ meetingId: z.string().uuid() }),
     },
     async (args, extra) =>
@@ -182,12 +187,8 @@ export function registerMeetingTools(server: McpServer): void {
             notes: args.notes ?? note.notes,
             attendeeIds: note.attendees.map((a) => a.id),
             decisions: args.decisions ?? note.decisions.map((d) => d.text),
-            actionItems: note.actionItems.map((item) => ({
-              id: item.id,
-              text: item.text,
-              assigneeId: item.assigneeId,
-              due: item.dueOn,
-            })),
+            // The action items are not this tool's: the write leaves them.
+            actionItems: [],
           });
           if (!parsed.success) {
             throw new ToolError(
@@ -212,12 +213,10 @@ export function registerMeetingTools(server: McpServer): void {
             notes: input.notes,
             attendeeIds: input.attendeeIds,
             decisions: input.decisions,
-            actionItems: input.actionItems.map((item) => ({
-              id: item.id,
-              text: item.text,
-              assigneeId: item.assigneeId,
-              dueOn: item.due,
-            })),
+            // Left out: the write keeps the action items exactly as they are
+            // (none goes on the task board from here).
+            actionItems: undefined,
+            activeTeams: [],
           });
           if (!result.ok) throw new ToolError(result.error);
           const saved = await getMeetingNote(note.id);

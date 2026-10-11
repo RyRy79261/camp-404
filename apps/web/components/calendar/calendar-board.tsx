@@ -56,7 +56,8 @@ export interface SelectedEvent {
   note: MeetingNote | null;
   canEditEvent: boolean;
   canWriteMinutes: boolean;
-  canMakeTasks: boolean;
+  /** Every team's name by key, for the team each action item is filed in. */
+  teamLabels: Record<string, string>;
 }
 
 export interface CalendarBoardProps {
@@ -149,7 +150,6 @@ export function CalendarBoard(props: CalendarBoardProps) {
           kind: "new",
           day: state.newOn,
           team: state.team,
-          meeting: state.type === "meetings",
         }}
         teams={form}
         onClose={close}
@@ -236,7 +236,7 @@ export function CalendarBoard(props: CalendarBoardProps) {
         <div className="flex min-w-0 flex-1 flex-col">
           {state.view === "month" ? (
             <>
-              <div className="hidden min-h-0 flex-1 flex-col page-md:flex">
+              <div className="hidden flex-1 flex-col page-md:flex">
                 <MonthGrid
                   month={state.month}
                   today={today}

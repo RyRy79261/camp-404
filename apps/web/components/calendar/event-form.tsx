@@ -37,12 +37,15 @@ import {
   QUIET_BUTTON,
 } from "./parts";
 
-// The New event form, beside the month (the approved mock-up's form): the
-// type (an Event, or a Meeting with an agenda before and minutes after), the
-// team, title, date (and a last day for an all-day event over several days),
-// the times, place and description, and a meeting's agenda in the WYSIWYG
-// Markdown editor. The same form changes an event the app made (its type
-// stays) and takes it off the calendar. The form's own check is the Zod
+// The New event form, beside the month: the title, the agenda (owner,
+// 2026-10-11: the composer's Details became the Agenda, in the WYSIWYG
+// Markdown editor), the team, the date (and a last day for an all-day event
+// over several days), the times and the place. The agenda goes into the
+// Google event's details; an event added with one is a meeting, and the app
+// makes its meeting page with the same agenda and opens it. One with no
+// agenda stays a plain event. The same form changes an event the app made
+// (its type stays: a meeting's agenda is changed with its minutes) and takes
+// it off the calendar. The form's own check is the Zod
 // shape; the action checks the shape and the rule again, and the write once
 // more inside its transaction.
 
@@ -56,9 +59,8 @@ type Mode =
   | {
       kind: "new";
       day: string;
-      /** The Calendar's filters, as the form's start: a team, meetings. */
+      /** The Calendar's team filter, as the form's start. */
       team?: string | null;
-      meeting?: boolean;
     }
   | { kind: "edit"; entry: CalendarEntry };
 
@@ -108,9 +110,6 @@ export function EventForm({
         ? WHOLE_CAMP
         : (teams.teams[0]?.value ?? WHOLE_CAMP);
   const initial = {
-    kind:
-      editing?.kind ??
-      (mode.kind === "new" && mode.meeting ? "meeting" : "event"),
     team: firstTeam,
     title: editing?.title ?? "",
     date: editing?.startDay ?? (mode.kind === "new" ? mode.day : ""),
@@ -125,7 +124,6 @@ export function EventForm({
     description: editing?.description ?? "",
     agenda: "",
   };
-  const [kind, setKind] = React.useState<"event" | "meeting">(initial.kind);
   const [team, setTeam] = React.useState(initial.team);
   const [title, setTitle] = React.useState(initial.title);
   const [date, setDate] = React.useState(initial.date);
@@ -144,7 +142,6 @@ export function EventForm({
   const [confirming, setConfirming] = React.useState(false);
 
   const values = {
-    kind,
     team,
     title,
     date,
@@ -165,8 +162,12 @@ export function EventForm({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    // A new event's agenda is its Google details too; an event with one is
+    // a meeting. A changed event keeps its details (a meeting's agenda is
+    // changed with its minutes).
+    const newAgenda = editing ? "" : agenda;
     const fields = {
-      kind,
+      kind: newAgenda.trim() ? ("meeting" as const) : ("event" as const),
       team: team === WHOLE_CAMP ? null : team,
       title,
       date,
@@ -175,8 +176,12 @@ export function EventForm({
       start: allDay ? "" : start,
       end: allDay ? "" : end,
       place,
-      description,
-      agenda: kind === "meeting" ? agenda : "",
+      description: editing
+        ? editing.kind === "meeting"
+          ? (editing.description ?? "")
+          : description
+        : newAgenda,
+      agenda: newAgenda,
     };
     const parsed = NewCampEventInput.safeParse(fields);
     if (!parsed.success) {
@@ -206,6 +211,7 @@ export function EventForm({
     setErrors({});
     startTransition(async () => {
       const { kind: _kind, agenda: _agenda, ...rest } = fields;
+      const meeting = fields.kind === "meeting";
       const result = editing
         ? await editCampEventAction({
             ...rest,
@@ -220,7 +226,14 @@ export function EventForm({
       settle();
       const note = GOOGLE_NOTE[result.data.calendar];
       if (note) toast.info(note);
-      else toast.success(editing ? "Event saved" : "Added to the calendar");
+      else
+        toast.success(
+          editing
+            ? "Event saved"
+            : meeting
+              ? "Added to the calendar, with its meeting page"
+              : "Added to the calendar",
+        );
       onSaved(result.data);
     });
   }
@@ -283,41 +296,56 @@ export function EventForm({
             Goes on the camp&apos;s Google Calendar. Every member sees it.
           </p>
 
-          {editing ? null : (
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="mb-1.5 text-sm font-medium">Type</legend>
-              <div className="grid grid-cols-2 gap-2">
-                {(
-                  [
-                    ["event", "Event", "Something on a day"],
-                    [
-                      "meeting",
-                      "Meeting",
-                      "With an agenda before and minutes after",
-                    ],
-                  ] as const
-                ).map(([value, label, help]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={kind === value}
-                    onClick={() => setKind(value)}
-                    disabled={pending}
-                    className={cn(
-                      "flex flex-col items-start gap-0.5 border px-3 py-2.5 text-left",
-                      kind === value
-                        ? "border-2 border-primary bg-[var(--color-pick,color-mix(in_oklab,var(--color-primary)_24%,var(--color-card)))] px-[11px] py-[9px]"
-                        : "border-[var(--color-choice-edge,var(--color-border))] bg-[var(--color-choice,var(--color-card))]",
-                    )}
-                  >
-                    <b className="text-sm font-semibold">{label}</b>
-                    <span className="text-xs text-muted-foreground">
-                      {help}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </fieldset>
+          <Field
+            label="Title"
+            htmlFor="event-title"
+            required
+            error={errors.title}
+          >
+            <Input
+              id="event-title"
+              value={title}
+              maxLength={120}
+              placeholder="e.g. Kitchen planning"
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={pending}
+            />
+          </Field>
+
+          {editing === null ? (
+            <Field
+              label="Agenda"
+              error={errors.agenda ?? errors.description}
+              help="Written to the Google Calendar event's details, and to the meeting page the app makes for it. Leave it empty for an event that is not a meeting."
+            >
+              <MarkdownField
+                label="Agenda"
+                value={agenda}
+                onChange={setAgenda}
+                disabled={pending}
+                emptyPreview="No agenda yet."
+              />
+            </Field>
+          ) : editing.kind === "meeting" ? (
+            <p className="text-xs text-muted-foreground">
+              The agenda is changed with the minutes.
+            </p>
+          ) : (
+            <Field
+              label="Description"
+              htmlFor="event-description"
+              error={errors.description}
+            >
+              <Textarea
+                id="event-description"
+                rows={2}
+                value={description}
+                maxLength={10_000}
+                placeholder="What it is for. This goes on Google too."
+                onChange={(e) => setDescription(e.target.value)}
+                disabled={pending}
+              />
+            </Field>
           )}
 
           <Field label="Team" htmlFor="event-team" help={teamHelp}>
@@ -342,26 +370,6 @@ export function EventForm({
                 ) : null}
               </SelectContent>
             </Select>
-          </Field>
-
-          <Field
-            label="Title"
-            htmlFor="event-title"
-            required
-            error={errors.title}
-          >
-            <Input
-              id="event-title"
-              value={title}
-              maxLength={120}
-              placeholder={
-                kind === "meeting"
-                  ? "e.g. Kitchen planning"
-                  : "e.g. Dome rehearsal"
-              }
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={pending}
-            />
           </Field>
 
           <div className="grid grid-cols-2 items-start gap-2.5">
@@ -438,43 +446,6 @@ export function EventForm({
               disabled={pending}
             />
           </Field>
-
-          <Field
-            label="Description"
-            htmlFor="event-description"
-            error={errors.description}
-          >
-            <Textarea
-              id="event-description"
-              rows={2}
-              value={description}
-              maxLength={2000}
-              placeholder="What it is for. This goes on Google too."
-              onChange={(e) => setDescription(e.target.value)}
-              disabled={pending}
-            />
-          </Field>
-
-          {kind === "meeting" && !editing ? (
-            <Field
-              label="Agenda"
-              error={errors.agenda}
-              help="The minutes are written on the meeting after it starts."
-            >
-              <MarkdownField
-                label="Agenda"
-                value={agenda}
-                onChange={setAgenda}
-                disabled={pending}
-                emptyPreview="No agenda yet."
-              />
-            </Field>
-          ) : null}
-          {editing?.kind === "meeting" ? (
-            <p className="text-xs text-muted-foreground">
-              The agenda is changed with the minutes.
-            </p>
-          ) : null}
 
           {error ? (
             <p role="alert" className="text-sm font-medium text-destructive">

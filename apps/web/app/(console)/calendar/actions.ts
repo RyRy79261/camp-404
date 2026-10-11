@@ -3,13 +3,15 @@
 import { revalidatePath } from "next/cache";
 import {
   campDayStart,
+  canWorkInTeam,
   meetingInstant,
   NOT_AN_EVENT_MAKER,
+  type MeetingSuggestions,
 } from "@camp404/core";
 import {
-  ActionItemToTaskInput,
   EditCampEventInput,
   MeetingMinutesInput,
+  MeetingSuggestInput,
   NewCampEventInput,
   RemoveCampEventInput,
   Team,
@@ -24,18 +26,20 @@ import {
 import { captainActionGate } from "@/lib/captain-gate";
 import { findCalendarEntry } from "@/lib/calendar-page";
 import type { CalendarMirrorOutcome } from "@/lib/calendar-mirror";
-import {
-  createMeetingNote,
-  editMeetingNote,
-  turnActionItemIntoTask,
-} from "@/lib/meeting-notes";
+import { createMeetingNote, editMeetingNote } from "@/lib/meeting-notes";
+import { findMeetingSuggestions } from "@/lib/meeting-suggestions";
+import { rateLimiter } from "@/lib/rate-limit";
+import { listTeamPeople } from "@/lib/roster";
+import { listAssignableMembers } from "@/lib/tasks";
+import { getMyTeams } from "@/lib/users";
 
 // The Calendar's writes. The gate here answers the screen; the rules are
 // checked again inside each write's own transaction: who may make, change
 // and remove an event (a captain, or a lead of its team; whole camp is
 // captains'), and who may write a meeting's agenda and minutes (its team's
 // members this year, and captains). An event's Google copy follows its row
-// (lib/calendar-mirror.ts), on production only.
+// (lib/calendar-mirror.ts), on production only. Saving the minutes puts every
+// action item on the task board in the same transaction (owner, 2026-10-11).
 
 const TEAM_OFF = "That team isn't active any more. Pick another team.";
 
@@ -183,7 +187,16 @@ export async function saveMinutesAction(
       notes: minutes.notes,
       attendeeIds: minutes.attendeeIds,
       decisions: minutes.decisions,
+      activeTeams: activeTeamKeys(config),
     };
+    const actionItems = (withIds: boolean) =>
+      minutes.actionItems.map((item) => ({
+        id: withIds ? item.id : null,
+        text: item.text,
+        assigneeId: item.assigneeId,
+        team: item.team,
+        dueOn: item.due,
+      }));
 
     if (note) {
       if (minutes.version === null) {
@@ -198,15 +211,11 @@ export async function saveMinutesAction(
         actorId: gate.campUser.id,
         noteId: note.id,
         version: minutes.version,
-        actionItems: minutes.actionItems.map((item) => ({
-          id: item.id,
-          text: item.text,
-          assigneeId: item.assigneeId,
-          dueOn: item.due,
-        })),
+        actionItems: actionItems(true),
       });
       if (!result.ok) return result;
       revalidateCalendar([note.team]);
+      revalidatePath("/tasks");
       return { ok: true, data: { version: result.version } };
     }
 
@@ -218,43 +227,134 @@ export async function saveMinutesAction(
       ...fields,
       actorId: gate.campUser.id,
       team: team as Team | null,
-      actionItems: minutes.actionItems.map((item) => ({
-        id: null,
-        text: item.text,
-        assigneeId: item.assigneeId,
-        dueOn: item.due,
-      })),
+      actionItems: actionItems(false),
     });
     if (!result.ok) return result;
     revalidateCalendar([team]);
+    revalidatePath("/tasks");
     return { ok: true, data: { version: 1 } };
   });
 }
 
-/** Put one of a meeting's action items on the task board. */
-export async function actionItemToTaskAction(
+/** The keys of the camp's active teams, as the writes take them. */
+function activeTeamKeys(config: Awaited<ReturnType<typeof getTeamsConfig>>) {
+  return activeTeams(config)
+    .map((t) => t.key)
+    .filter((key): key is Team => Team.safeParse(key).success);
+}
+
+/** How many times a member may ask Claude to read notes in a day. */
+const SUGGESTIONS_PER_DAY = 20;
+
+/**
+ * "Find decisions and action items": Claude reads the meeting's agenda and
+ * notes, as the editor holds them now, and proposes. Nothing is stored. Gated
+ * exactly as writing the minutes is (the meeting's team's members this year,
+ * and captains; a whole-camp meeting's are captains'), and limited per member
+ * per day, so nobody runs up the bill.
+ */
+export async function suggestMeetingItemsAction(
   input: unknown,
-): Promise<ActionResult<{ taskId: string }>> {
-  return runAction("actionItemToTaskAction", async () => {
+): Promise<ActionResult<MeetingSuggestions>> {
+  return runAction("suggestMeetingItemsAction", async () => {
     const gate = await captainActionGate("camp_member");
     if (!gate.ok) return gate;
-    const parsed = ActionItemToTaskInput.safeParse(input);
+    const parsed = MeetingSuggestInput.safeParse(input);
     if (!parsed.success) {
       return {
         ok: false,
-        error: "That action item isn't on the note any more.",
+        error:
+          parsed.error.issues[0]?.message ?? "Check the notes and try again.",
       };
     }
-    const result = await turnActionItemIntoTask({
-      actorId: gate.campUser.id,
-      itemId: parsed.data.itemId,
-      activeTeams: activeTeams(await getTeamsConfig())
-        .map((t) => t.key)
-        .filter((key): key is Team => Team.safeParse(key).success),
+    const asked = parsed.data;
+    if (!asked.notes.trim() && !asked.agenda.trim()) {
+      return {
+        ok: false,
+        error: "Write the notes first: Claude reads the agenda and the notes.",
+      };
+    }
+    const config = await getTeamsConfig();
+    const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
+    const [found, memberships] = await Promise.all([
+      findCalendarEntry(asked.eventId, teams),
+      getMyTeams(gate.campUser.id),
+    ]);
+    if (!found) {
+      return {
+        ok: false,
+        error: "That meeting isn't on the calendar any more.",
+      };
+    }
+    const { entry, note } = found;
+    if (
+      entry.kind !== "meeting" &&
+      (entry.source !== "google" || note !== null)
+    ) {
+      return { ok: false, error: "Only a meeting has minutes." };
+    }
+    const teamKey = entry.team?.key ?? null;
+    if (
+      !canWorkInTeam(
+        gate.rank,
+        memberships.map((m) => m.team),
+        teamKey,
+      )
+    ) {
+      return {
+        ok: false,
+        error: teamKey
+          ? "Only this team's members and captains can write its meeting notes."
+          : "Only captains can write whole-camp meeting notes.",
+      };
+    }
+    const limit = await rateLimiter.limit(
+      `meeting-suggestions:${gate.campUser.id}`,
+      { limit: SUGGESTIONS_PER_DAY, windowMs: 86_400_000 },
+    );
+    if (!limit.ok) {
+      return {
+        ok: false,
+        error: `Claude has read notes for you ${SUGGESTIONS_PER_DAY} times today. Try again tomorrow, or write them in by hand.`,
+      };
+    }
+
+    // Who a person may be matched to: the meeting's team this year, whoever
+    // is ticked as there, and the captains. Names only go to Claude.
+    const [approved, teamPeople] = await Promise.all([
+      listAssignableMembers(),
+      teamKey && Team.safeParse(teamKey).success
+        ? listTeamPeople(teamKey as Team)
+        : Promise.resolve([]),
+    ]);
+    const onTeam = new Set(teamPeople.map((p) => p.id));
+    const there = new Set(asked.attendeeIds);
+    const members = approved
+      .filter(
+        (m) => m.rank === "captain" || onTeam.has(m.id) || there.has(m.id),
+      )
+      .map((m) => ({ id: m.id, displayName: m.displayName }));
+    const active = activeTeams(config).map((t) => ({
+      key: t.key,
+      label: t.label,
+    }));
+
+    const outcome = await findMeetingSuggestions({
+      title: entry.title,
+      heldOn: entry.startDay,
+      teamKey,
+      teamLabel: entry.team?.label ?? null,
+      agenda: asked.agenda,
+      notes: asked.notes,
+      members,
+      everyone: approved.map((m) => ({ id: m.id, displayName: m.displayName })),
+      teams: active,
+      existing: {
+        decisions: asked.decisions,
+        actionItems: asked.actionItems,
+      },
     });
-    if (!result.ok) return result;
-    revalidatePath("/tasks");
-    revalidatePath("/calendar");
-    return { ok: true, data: { taskId: result.taskId } };
+    if (!outcome.ok) return outcome;
+    return { ok: true, data: outcome.suggestions };
   });
 }

@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  campEventKindFor,
   campEventRefusal,
   hasMinutes,
   MEETING_HAS_MINUTES,
@@ -95,11 +96,12 @@ export const campEventsTestStore = {
   ): CampEventWriteResult<{ row: CampEventRow; noteId: string | null }> {
     const refused = refusal(input.actorId, input.team);
     if (refused) return { ok: false, error: refused };
+    const kind = campEventKindFor(input.kind, input.agenda);
     const now = new Date();
     const row: CampEventRow = {
       id: randomUUID(),
       cycle: testStore.currentCycleNumber(),
-      kind: input.kind,
+      kind,
       team: input.team,
       title: input.title,
       allDay: input.allDay,
@@ -118,7 +120,7 @@ export const campEventsTestStore = {
     };
     rows().push(row);
     const noteId =
-      input.kind === "meeting"
+      kind === "meeting"
         ? testStore.meetingNoteForEvent.add({
             calendarEventId: row.calendarEventId,
             team: row.team,

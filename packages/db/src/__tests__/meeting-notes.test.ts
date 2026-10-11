@@ -2,29 +2,30 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import * as schema from "../schema";
 import {
-  ALREADY_A_TASK,
   ASSIGNEE_NOT_A_MEMBER,
   ATTENDEE_NOT_A_MEMBER,
   EVENT_NOT_ON_CALENDAR,
   NOTE_EDITED,
   NOT_A_CAMP_NOTE_WRITER,
   NOT_A_NOTE_WRITER,
+  ON_THE_BOARD,
   createMeetingNote,
   editMeetingNote,
   getMeetingNote,
   listMeetingNotes,
-  turnActionItemIntoTask,
+  type MeetingActionItemWrite,
   type MeetingNoteFields,
 } from "../meeting-notes";
-import { NOT_YOUR_TEAM, NOT_A_TASK_AUTHOR, TEAM_NOT_ACTIVE } from "../tasks";
+import { NOT_A_MEMBER, TEAM_NOT_ACTIVE } from "../tasks";
 import { useTestDb } from "./_harness";
 import { makeMembership, makeUser } from "./_factories";
 
 // Meeting notes (#268) on a real Postgres (PGlite). What matters: who may
 // write which team's notes (the team's members this year and captains; a
-// whole-camp note is a captain's); that an edit is a compare-and-set and keeps
-// action items that are already tasks; and that an action item becomes a task
-// through the task board's own rule, in one transaction with its link.
+// whole-camp note is a captain's); that an edit is a compare-and-set; and that
+// every action item IS a task (owner, 2026-10-11): the save puts each on the
+// board, with its person and team, in the same transaction, and once there its
+// words are the board's.
 
 const HELD = new Date("2026-10-02T16:30:00Z");
 
@@ -38,7 +39,22 @@ function fields(overrides: Partial<MeetingNoteFields> = {}): MeetingNoteFields {
     attendeeIds: [],
     decisions: [],
     actionItems: [],
+    activeTeams: ["kitchen", "finance", "structures"],
     ...overrides,
+  };
+}
+
+function item(
+  text: string,
+  extra: Partial<MeetingActionItemWrite> = {},
+): MeetingActionItemWrite {
+  return {
+    id: null,
+    text,
+    assigneeId: null,
+    team: "kitchen",
+    dueOn: null,
+    ...extra,
   };
 }
 
@@ -75,12 +91,7 @@ describe("meeting notes", () => {
           attendeeIds: [member.id, lead.id],
           decisions: ["Dinner at 19:00", "No glass in the kitchen"],
           actionItems: [
-            {
-              id: null,
-              text: "Buy the gas",
-              assigneeId: lead.id,
-              dueOn: "2026-10-09",
-            },
+            item("Buy the gas", { assigneeId: lead.id, dueOn: "2026-10-09" }),
           ],
         }),
       });
@@ -108,8 +119,9 @@ describe("meeting notes", () => {
         expect.objectContaining({
           text: "Buy the gas",
           assigneeName: "Kitchen Lead",
+          team: "kitchen",
           dueOn: "2026-10-09",
-          task: null,
+          task: { id: expect.any(String), status: "open" },
         }),
       ]);
     });
@@ -188,9 +200,7 @@ describe("meeting notes", () => {
           actorId: member.id,
           team: "kitchen",
           ...fields({
-            actionItems: [
-              { id: null, text: "X", assigneeId: pending.id, dueOn: null },
-            ],
+            actionItems: [item("X", { assigneeId: pending.id })],
           }),
         }),
       ).toEqual({ ok: false, error: ASSIGNEE_NOT_A_MEMBER });
@@ -325,25 +335,29 @@ describe("meeting notes", () => {
       expect((await getMeetingNote(id))?.title).toBe("Kitchen kickoff");
     });
 
-    it("keeps an action item that is a task, and removes one left out that is not", async () => {
-      const { lead, member } = await people();
+    it("refuses new words on an item already on the board, and keeps it when left out", async () => {
+      const { member } = await people();
       const id = await noteBy(member.id, {
-        actionItems: [
-          { id: null, text: "Buy the gas", assigneeId: null, dueOn: null },
-          { id: null, text: "Clean the pots", assigneeId: null, dueOn: null },
-        ],
+        actionItems: [item("Buy the gas"), item("Clean the pots")],
       });
       const before = await getMeetingNote(id);
       const [gas, pots] = before!.actionItems;
-      const task = await turnActionItemIntoTask({
-        actorId: lead.id,
-        itemId: gas!.id,
-        activeTeams: ["kitchen"],
-      });
-      expect(task.ok).toBe(true);
+      expect(gas?.task).not.toBeNull();
 
-      // The editor sends neither old item, rewrites the task's words (ignored)
-      // and adds a new one.
+      expect(
+        await editMeetingNote({
+          actorId: member.id,
+          noteId: id,
+          version: 1,
+          ...fields({
+            actionItems: [{ ...item("Changed"), id: gas!.id }],
+          }),
+        }),
+      ).toEqual({ ok: false, error: ON_THE_BOARD });
+      expect(await getMeetingNote(id)).toMatchObject({ version: 1 });
+
+      // Sent back as read, it moves; a new one goes on the board too; one
+      // already on the board that is left out stays, at the end.
       expect(
         await editMeetingNote({
           actorId: member.id,
@@ -351,165 +365,291 @@ describe("meeting notes", () => {
           version: 1,
           ...fields({
             actionItems: [
-              { id: gas!.id, text: "Changed", assigneeId: null, dueOn: null },
-              {
-                id: null,
-                text: "Book the truck",
-                assigneeId: null,
-                dueOn: null,
-              },
+              { ...item("Book the truck"), team: "structures" },
+              { ...item(gas!.text), id: gas!.id },
             ],
           }),
         }),
       ).toEqual({ ok: true, version: 2 });
       const after = await getMeetingNote(id);
       expect(after?.actionItems.map((i) => i.text)).toEqual([
-        "Buy the gas",
         "Book the truck",
+        "Buy the gas",
+        "Clean the pots",
       ]);
-      expect(after?.actionItems.map((i) => i.id)).not.toContain(pots!.id);
+      expect(after?.actionItems.map((i) => i.id)).toContain(pots!.id);
+      expect(after?.actionItems[0]).toMatchObject({
+        team: "structures",
+        task: { status: "open" },
+      });
+      expect(await h.db().select().from(schema.tasks)).toHaveLength(3);
+    });
 
-      // Left out entirely, the task's item stays, at the end.
+    it("reads an item on the board from its task, as the board has changed it", async () => {
+      const db = h.db();
+      const { member, lead } = await people();
+      const id = await noteBy(member.id, { actionItems: [item("Buy gas")] });
+      const [gas] = (await getMeetingNote(id))!.actionItems;
+      await db
+        .update(schema.tasks)
+        .set({
+          title: "Buy two gas bottles",
+          assigneeId: lead.id,
+          team: "finance",
+          status: "in_progress",
+          dueAt: new Date("2026-10-20T00:00:00+02:00"),
+        })
+        .where(eq(schema.tasks.id, gas!.task!.id));
+      const read = (await getMeetingNote(id))!.actionItems[0];
+      expect(read).toMatchObject({
+        text: "Buy two gas bottles",
+        assigneeName: "Kitchen Lead",
+        team: "finance",
+        dueOn: "2026-10-20",
+        task: { status: "in_progress" },
+      });
+      // The editor sends back what it read, and the save goes through.
+      expect(
+        await editMeetingNote({
+          actorId: member.id,
+          noteId: id,
+          version: 1,
+          ...fields({ actionItems: [{ ...item(read!.text), id: read!.id }] }),
+        }),
+      ).toEqual({ ok: true, version: 2 });
+    });
+
+    it("leaves an old item sent back unchanged off the board, even on a past year's note", async () => {
+      const db = h.db();
+      const { member } = await people();
+      const id = await noteBy(member.id);
+      await db
+        .update(schema.meetingNotes)
+        .set({ cycle: 0 })
+        .where(eq(schema.meetingNotes.id, id));
+      const [old] = await db
+        .insert(schema.meetingNoteActionItems)
+        .values({
+          noteId: id,
+          position: 0,
+          text: "Old item",
+          dueOn: "2025-04-20",
+        })
+        .returning();
+      const saved = await editMeetingNote({
+        actorId: member.id,
+        noteId: id,
+        version: 1,
+        ...fields({
+          notes: "Fixed a typo.",
+          actionItems: [
+            { ...item("Old item"), id: old!.id, dueOn: "2025-04-20" },
+          ],
+        }),
+      });
+      expect(saved).toEqual({ ok: true, version: 2 });
+      expect(await db.select().from(schema.tasks)).toHaveLength(0);
+      const [kept] = await db.select().from(schema.meetingNoteActionItems);
+      expect(kept).toMatchObject({ id: old!.id, taskId: null });
+    });
+
+    it("saves a note whose unchanged old item names someone who has left", async () => {
+      const db = h.db();
+      const { member } = await people();
+      const id = await noteBy(member.id);
+      const gone = await makeUser(db, { approvalStatus: "pending" });
+      const [old] = await db
+        .insert(schema.meetingNoteActionItems)
+        .values({
+          noteId: id,
+          position: 0,
+          text: "Old item",
+          assigneeId: gone.id,
+        })
+        .returning();
+      expect(
+        await editMeetingNote({
+          actorId: member.id,
+          noteId: id,
+          version: 1,
+          ...fields({
+            agenda: "1. Menu",
+            actionItems: [
+              { ...item("Old item"), id: old!.id, assigneeId: gone.id },
+            ],
+          }),
+        }),
+      ).toEqual({ ok: true, version: 2 });
+      expect(await db.select().from(schema.tasks)).toHaveLength(0);
+    });
+
+    it("saves a switched-off team's note with its unchanged old item", async () => {
+      const db = h.db();
+      const { captain } = await people();
+      const made = await createMeetingNote({
+        actorId: captain.id,
+        team: "water",
+        ...fields(),
+      });
+      if (!made.ok) throw new Error(made.error);
+      const [old] = await db
+        .insert(schema.meetingNoteActionItems)
+        .values({ noteId: made.id, position: 0, text: "Old item" })
+        .returning();
+      expect(
+        await editMeetingNote({
+          actorId: captain.id,
+          noteId: made.id,
+          version: 1,
+          ...fields({
+            notes: "Met.",
+            actionItems: [{ ...item("Old item"), id: old!.id, team: "water" }],
+          }),
+        }),
+      ).toEqual({ ok: true, version: 2 });
+      expect(await db.select().from(schema.tasks)).toHaveLength(0);
+    });
+
+    it("puts an old item on the board once it is changed", async () => {
+      const db = h.db();
+      const { member } = await people();
+      const id = await noteBy(member.id);
+      const [old] = await db
+        .insert(schema.meetingNoteActionItems)
+        .values({ noteId: id, position: 0, text: "Old item" })
+        .returning();
+      expect((await getMeetingNote(id))!.actionItems[0]).toMatchObject({
+        team: "kitchen",
+        task: null,
+      });
       await editMeetingNote({
         actorId: member.id,
         noteId: id,
-        version: 2,
-        ...fields({ actionItems: [] }),
+        version: 1,
+        ...fields({
+          actionItems: [{ ...item("Old item"), id: old!.id, team: null }],
+        }),
       });
+      const [task] = await db.select().from(schema.tasks);
+      expect(task).toMatchObject({ title: "Old item", team: null });
+      const [linked] = await db.select().from(schema.meetingNoteActionItems);
+      expect(linked?.taskId).toBe(task?.id);
+    });
+
+    it("leaves the action items as they are when the save sends none (the connector's)", async () => {
+      const { member } = await people();
+      const id = await noteBy(member.id, { actionItems: [item("Buy gas")] });
+      expect(
+        await editMeetingNote({
+          actorId: member.id,
+          noteId: id,
+          version: 1,
+          ...fields({ notes: "Met.", actionItems: undefined }),
+        }),
+      ).toEqual({ ok: true, version: 2 });
       expect(
         (await getMeetingNote(id))?.actionItems.map((i) => i.text),
-      ).toEqual(["Buy the gas"]);
+      ).toEqual(["Buy gas"]);
     });
   });
 
-  describe("turnActionItemIntoTask", () => {
-    async function itemOn(
-      actorId: string,
-      team: "kitchen" | null,
-      assigneeId: string | null = null,
-    ) {
+  describe("action items are tasks", () => {
+    it("puts each on the board in the save's transaction, with its person, team and deadline", async () => {
+      const { member, lead } = await people();
+      // A plain member of the team: the note's rule, not the board's.
       const made = await createMeetingNote({
-        actorId,
-        team,
+        actorId: member.id,
+        team: "kitchen",
         ...fields({
           actionItems: [
-            { id: null, text: "Buy the gas", assigneeId, dueOn: "2026-10-09" },
+            item("Buy the gas", { assigneeId: lead.id, dueOn: "2026-10-09" }),
+            item("Ask Finance for the float", { team: "finance" }),
+            item("Tell everyone", { team: null }),
           ],
         }),
       });
       if (!made.ok) throw new Error(made.error);
-      const note = await getMeetingNote(made.id);
-      return note!.actionItems[0]!.id;
-    }
-
-    it("puts the item on the board and links it, in one go", async () => {
-      const { lead, member } = await people();
-      const itemId = await itemOn(member.id, "kitchen", member.id);
-      const made = await turnActionItemIntoTask({
-        actorId: lead.id,
-        itemId,
-        activeTeams: ["kitchen"],
-      });
-      if (!made.ok) throw new Error(made.error);
-
-      const [task] = await h
+      const tasks = await h
         .db()
         .select()
         .from(schema.tasks)
-        .where(eq(schema.tasks.id, made.taskId));
-      expect(task).toMatchObject({
-        title: "Buy the gas",
+        .orderBy(schema.tasks.createdAt);
+      expect(tasks).toHaveLength(3);
+      expect(tasks.find((t) => t.title === "Buy the gas")).toMatchObject({
         team: "kitchen",
-        assigneeId: member.id,
-        createdByUserId: lead.id,
+        assigneeId: lead.id,
+        createdByUserId: member.id,
         status: "open",
         dueAt: new Date("2026-10-09T00:00:00+02:00"),
         description: "From the meeting “Kitchen kickoff” on 2 Oct 2026.",
       });
-      const note = await getMeetingNote(made.noteId);
-      expect(note?.actionItems[0]?.task).toEqual({
-        id: made.taskId,
-        status: "open",
-      });
-
-      // A second click finds it already done, and adds nothing.
       expect(
-        await turnActionItemIntoTask({
-          actorId: lead.id,
-          itemId,
-          activeTeams: ["kitchen"],
-        }),
-      ).toEqual({ ok: false, error: ALREADY_A_TASK });
-      expect(await h.db().select().from(schema.tasks)).toHaveLength(1);
+        tasks.find((t) => t.title === "Ask Finance for the float")?.team,
+      ).toBe("finance");
+      expect(tasks.find((t) => t.title === "Tell everyone")?.team).toBeNull();
+      const note = await getMeetingNote(made.id);
+      expect(note?.actionItems.every((i) => i.task !== null)).toBe(true);
     });
 
-    it("follows the board's rule: a plain member of the team, or a lead of another, may not", async () => {
-      const db = h.db();
-      const { member, outsider } = await people();
-      await db
-        .update(schema.teamMemberships)
-        .set({ isLead: true })
-        .where(eq(schema.teamMemberships.userId, outsider.id));
-      const itemId = await itemOn(member.id, "kitchen");
+    it("refuses a switched-off team and keeps nothing of the save", async () => {
+      const { member } = await people();
       expect(
-        await turnActionItemIntoTask({
+        await createMeetingNote({
           actorId: member.id,
-          itemId,
-          activeTeams: ["kitchen"],
-        }),
-      ).toEqual({ ok: false, error: NOT_A_TASK_AUTHOR });
-      expect(
-        await turnActionItemIntoTask({
-          actorId: outsider.id,
-          itemId,
-          activeTeams: ["kitchen"],
-        }),
-      ).toEqual({ ok: false, error: NOT_YOUR_TEAM });
-      expect(await db.select().from(schema.tasks)).toHaveLength(0);
-    });
-
-    it("lets a captain turn a whole-camp item into a task with no team", async () => {
-      const { captain } = await people();
-      const itemId = await itemOn(captain.id, null);
-      const made = await turnActionItemIntoTask({
-        actorId: captain.id,
-        itemId,
-        activeTeams: [],
-      });
-      expect(made.ok).toBe(true);
-      const [task] = await h.db().select().from(schema.tasks);
-      expect(task?.team).toBeNull();
-    });
-
-    it("refuses an item on a switched-off team's note", async () => {
-      const { captain, member } = await people();
-      const itemId = await itemOn(member.id, "kitchen");
-      expect(
-        await turnActionItemIntoTask({
-          actorId: captain.id,
-          itemId,
-          activeTeams: ["finance"],
+          team: "kitchen",
+          ...fields({
+            decisions: ["Kept?"],
+            actionItems: [item("Fine"), item("Archived", { team: "water" })],
+          }),
         }),
       ).toEqual({ ok: false, error: TEAM_NOT_ACTIVE });
+      expect(await noteRows()).toHaveLength(0);
+      expect(await h.db().select().from(schema.tasks)).toHaveLength(0);
     });
 
-    it("adds no task when the person responsible has left the approved list", async () => {
+    it("refuses a person who has left the approved list, on an item going on the board", async () => {
       const db = h.db();
-      const { lead, member } = await people();
-      const itemId = await itemOn(member.id, "kitchen", member.id);
-      await db
-        .update(schema.users)
-        .set({ approvalStatus: "pending" })
-        .where(eq(schema.users.id, member.id));
-      const made = await turnActionItemIntoTask({
-        actorId: lead.id,
-        itemId,
-        activeTeams: ["kitchen"],
+      const { member } = await people();
+      const made = await createMeetingNote({
+        actorId: member.id,
+        team: "kitchen",
+        ...fields(),
       });
-      expect(made.ok).toBe(false);
+      if (!made.ok) throw new Error(made.error);
+      const [old] = await db
+        .insert(schema.meetingNoteActionItems)
+        .values({
+          noteId: made.id,
+          position: 0,
+          text: "Old item",
+          assigneeId: member.id,
+        })
+        .returning();
+      const gone = await makeUser(db, { approvalStatus: "pending" });
+      await db
+        .update(schema.meetingNoteActionItems)
+        .set({ assigneeId: gone.id })
+        .where(eq(schema.meetingNoteActionItems.id, old!.id));
+      const result = await editMeetingNote({
+        actorId: member.id,
+        noteId: made.id,
+        version: 1,
+        ...fields({
+          // Given a deadline, so it changed and goes on the board now.
+          actionItems: [
+            {
+              ...item("Old item"),
+              id: old!.id,
+              assigneeId: gone.id,
+              dueOn: "2026-10-20",
+            },
+          ],
+        }),
+      });
+      expect([ASSIGNEE_NOT_A_MEMBER, NOT_A_MEMBER]).toContain(
+        result.ok ? null : result.error,
+      );
       expect(await db.select().from(schema.tasks)).toHaveLength(0);
-      const [item] = await db.select().from(schema.meetingNoteActionItems);
-      expect(item?.taskId).toBeNull();
     });
   });
 });
