@@ -116,7 +116,8 @@ function PhotoSlot({
             <b className="text-sm leading-5 font-semibold text-foreground">
               {label}
             </b>
-            <span>{SLOT_HELP[side]}</span>
+            {/* Two lines kept, so Front and Side line up when one wraps. */}
+            <span className="min-h-8">{SLOT_HELP[side]}</span>
           </>
         )}
       </button>

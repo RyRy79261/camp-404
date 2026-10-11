@@ -7,6 +7,11 @@ import { getPetPhoto, isPetReviewer } from "@/lib/pets";
 import { isE2ETestMode } from "@/lib/test-mode";
 import { findCampUserByAuthId, hasCampAccess, isApproved } from "@/lib/users";
 
+const E2E_STAND_IN_PHOTO = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEElEQVR4nGOoyOuBIwbiOABYUhchIurzLwAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 export const runtime = "nodejs";
 
 // Stream one of a pet's photos (Camp pets, owner 2026-10-09) to the member who
@@ -62,8 +67,11 @@ export async function GET(
   };
 
   if (isE2ETestMode()) {
-    // E2E only: no blob store; a stand-in body so access can be tested.
-    return new NextResponse("test pet photo", { headers });
+    // E2E only: no blob store. A stand-in picture (a flat 4x4 PNG) so access
+    // can be tested and the card draws a photo, not its alt text.
+    return new NextResponse(new Uint8Array(E2E_STAND_IN_PHOTO), {
+      headers: { ...headers, "Content-Type": "image/png" },
+    });
   }
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) return new NextResponse("Not found", { status: 404 });
