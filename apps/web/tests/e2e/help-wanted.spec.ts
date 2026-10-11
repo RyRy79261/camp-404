@@ -60,7 +60,9 @@ test.describe("help wanted (test-mode)", () => {
     // The Kitchen's lead adds a role with one place.
     await openBoard(page);
     const kitchen = team(page, "Kitchen");
-    await kitchen.getByRole("button", { name: "Add a role to Kitchen" }).click();
+    await kitchen
+      .getByRole("button", { name: "Add a role to Kitchen" })
+      .click();
     const form = kitchen.getByRole("form", { name: "New role in Kitchen" });
     await form.getByLabel("Role name").fill("Shopper");
     await form.getByLabel("Places").fill("1");
@@ -83,9 +85,9 @@ test.describe("help wanted (test-mode)", () => {
     await expect(page.getByTestId("help-wanted-summary")).toContainText(
       "role open",
     );
-    await expect(page.getByRole("button", { name: /^Pick someone/ })).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByRole("button", { name: /^Pick someone/ }),
+    ).toHaveCount(0);
     await expect(page.getByRole("button", { name: /^Change / })).toHaveCount(0);
     await page
       .getByRole("button", { name: "I'm keen on Shopper in Kitchen" })
@@ -144,7 +146,9 @@ test.describe("help wanted (test-mode)", () => {
       name: "A lead for Structures",
     });
     await leadPicker.getByRole("radio", { name: /Sam Other/ }).check();
-    await leadPicker.getByRole("button", { name: "Give them the role" }).click();
+    await leadPicker
+      .getByRole("button", { name: "Give them the role" })
+      .click();
     await expect(
       page.getByText("Sam Other is a lead of Structures now."),
     ).toBeVisible();
