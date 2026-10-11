@@ -107,6 +107,24 @@ describe("the Calendar's events on Google", () => {
     vi.unstubAllEnvs();
   });
 
+  it("writes the agenda into the Google event's details, and hands it to the note", async () => {
+    vi.mocked(db.createCampEvent).mockResolvedValue({
+      ok: true,
+      row: row(),
+      noteId: "note-1",
+    });
+    await createCampEvent("user-1", {
+      ...NEW,
+      kind: "event",
+      description: null,
+      agenda: "1. Shade budget",
+    });
+    expect(vi.mocked(db.createCampEvent).mock.calls[0]![0]).toMatchObject({
+      description: "1. Shade budget",
+      agenda: "1. Shade budget",
+    });
+  });
+
   it("puts a new meeting on Google under the id its row claimed, then marks the version", async () => {
     vi.mocked(db.createCampEvent).mockResolvedValue({
       ok: true,
@@ -289,7 +307,7 @@ describe("campEventBody", () => {
     expect(body.description).toContain("Made in the Camp 404 app");
   });
 
-  it("says a meeting's agenda and minutes are in the app, never what they say", () => {
+  it("carries the details (a meeting's agenda) and says its minutes are in the app", () => {
     const body = campEventBody(row(), "Kitchen");
     expect(body.description).toContain("The week's menu.");
     expect(body.description).toContain(

@@ -26,7 +26,9 @@ interface SeedMinutes {
     text: string;
     assigneeAuthUserId?: string;
     due?: string;
-    /** Put it on the task board, open or already done. */
+    /** Where its task is filed; the meeting's team when left out. */
+    team?: string | null;
+    /** Every action item is a task; "done" moves it to Done. */
     task?: "open" | "done";
   }[];
 }
@@ -125,6 +127,11 @@ export async function POST(req: Request) {
           assigneeId: item.assigneeAuthUserId
             ? await userId(item.assigneeAuthUserId)
             : null,
+          team: (item.team !== undefined
+            ? item.team
+            : e.team && Team.safeParse(e.team).success
+              ? e.team
+              : null) as Team | null,
           dueOn: item.due ?? null,
         });
       }
@@ -142,6 +149,7 @@ export async function POST(req: Request) {
         attendeeIds,
         decisions: m.decisions ?? [],
         actionItems,
+        activeTeams: Team.options,
       };
       const saved = existing
         ? testStore.editMeetingNote({
@@ -156,25 +164,17 @@ export async function POST(req: Request) {
       if (!saved.ok) return fail(saved.error);
       const note = testStore.getMeetingNoteByEvent(eventId);
       noteIds[noteIds.length - 1] = note?.id ?? null;
-      // Action items on the board, through the board's own path.
+      // Every action item is on the board now; a done one is moved there.
       for (const [i, item] of (m.actionItems ?? []).entries()) {
-        const saved = note?.actionItems[i];
-        if (!item.task || !saved) continue;
-        const task = testStore.turnActionItemIntoTask({
+        const taskId = note?.actionItems[i]?.task?.id;
+        if (item.task !== "done" || !taskId) continue;
+        const moved = testStore.moveTask({
+          taskId,
           actorId: maker.id,
-          itemId: saved.id,
-          activeTeams: Team.options,
+          from: "open",
+          to: "done",
         });
-        if (!task.ok) return fail(task.error);
-        if (item.task === "done") {
-          const moved = testStore.moveTask({
-            taskId: task.taskId,
-            actorId: maker.id,
-            from: "open",
-            to: "done",
-          });
-          if (!moved.ok) return fail(moved.error);
-        }
+        if (!moved.ok) return fail(moved.error);
       }
     }
   }

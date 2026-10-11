@@ -9,10 +9,13 @@ import {
 
 // The minutes editor's own behaviour: someone on the note who is no longer an
 // approved member can still be unticked, and the save leaves them off; an
-// action item already on the task board is shown, not editable, and is still
-// sent so the note keeps it in place; the meeting's title, team and time are
-// the calendar event's, never fields here; and the unsaved draft is kept and
-// thrown away as the other long-text editors' are.
+// action item already on the task board is shown with how it stands, not
+// editable, and is still sent so the note keeps it in place; a new one has a
+// person, a team (the meeting's by default) and a deadline; Claude's
+// suggestions are kept or dropped and nothing of them is sent until kept; the
+// meeting's title, team and time are the calendar event's, never fields here;
+// and the unsaved draft is kept and thrown away as the other long-text
+// editors' are.
 
 const push = vi.fn();
 const refresh = vi.fn();
@@ -22,9 +25,13 @@ vi.mock("@camp404/ui/components/toast", () => ({
 }));
 vi.mock("@/app/(console)/calendar/actions", () => ({
   saveMinutesAction: vi.fn(async () => ({ ok: true, data: { version: 3 } })),
+  suggestMeetingItemsAction: vi.fn(),
 }));
 
-import { saveMinutesAction } from "@/app/(console)/calendar/actions";
+import {
+  saveMinutesAction,
+  suggestMeetingItemsAction,
+} from "@/app/(console)/calendar/actions";
 import { draftStorageKey } from "@/components/os/window-storage";
 import { DRAFT_OWNER, DraftWindow } from "@/tests/draft-window";
 import { MinutesEditor } from "./minutes-editor";
@@ -56,15 +63,25 @@ function editor(inWindow = false, version: number | null = 2) {
           {
             id: "item-1",
             text: "Buy the gas",
-            assigneeId: null,
-            due: "",
+            assigneeId: "crew",
+            team: "kitchen",
+            due: "2026-10-16",
             onBoard: true,
+            status: "in_progress",
           },
         ],
       }}
-      members={[{ id: "crew", displayName: "Kitchen Crew" }]}
+      members={[
+        { id: "crew", displayName: "Kitchen Crew" },
+        { id: "ryan", displayName: "Ryan James Noble" },
+      ]}
       teamPeople={["crew"]}
       formerAttendees={[{ id: "gone", displayName: "Left Camp" }]}
+      teams={[
+        { value: "kitchen", label: "Kitchen" },
+        { value: "finance", label: "Finance" },
+      ]}
+      teamLabels={{ kitchen: "Kitchen", finance: "Finance" }}
     />
   );
   render(
@@ -122,7 +139,7 @@ describe("MinutesEditor's unsaved draft", () => {
     fireEvent.change(screen.getByLabelText("Decision 1"), {
       target: { value: "Saved" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save minutes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save meeting" }));
     await waitFor(() => expect(push).toHaveBeenCalledWith(RETURN));
     cleanup();
     expect(window.sessionStorage.getItem(KEY)).toBeNull();
@@ -135,7 +152,7 @@ describe("MinutesEditor", () => {
     const box = screen.getByRole("checkbox", { name: "Left Camp" });
     expect(box.getAttribute("data-state")).toBe("checked");
     fireEvent.click(box);
-    fireEvent.click(screen.getByRole("button", { name: "Save minutes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save meeting" }));
     await waitFor(() => expect(saveMinutesAction).toHaveBeenCalled());
     const sent = vi.mocked(saveMinutesAction).mock.calls[0]![0] as {
       eventId: string;
@@ -155,7 +172,7 @@ describe("MinutesEditor", () => {
 
   it("sends no version for a meeting's first minutes", async () => {
     editor(false, null);
-    fireEvent.click(screen.getByRole("button", { name: "Save minutes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save meeting" }));
     await waitFor(() => expect(saveMinutesAction).toHaveBeenCalled());
     expect(
       (vi.mocked(saveMinutesAction).mock.calls[0]![0] as { version: unknown })
@@ -181,8 +198,169 @@ describe("MinutesEditor", () => {
   it("has no title, team, date or time fields: those are the event's", () => {
     editor();
     expect(screen.queryByLabelText(/^Title/)).toBeNull();
+    // The only Team field is an action item's (where its task is filed).
     expect(screen.queryByText("Team")).toBeNull();
     expect(screen.queryByLabelText(/^Time/)).toBeNull();
     expect(screen.queryByText("On the calendar")).toBeNull();
+  });
+
+  it("shows an item on the board with its person, team, deadline and column", () => {
+    editor();
+    expect(screen.getByText("On the board: Doing")).toBeTruthy();
+    expect(screen.getByText(/Kitchen Crew · Kitchen · Due/)).toBeTruthy();
+  });
+
+  it("files a new action item under the meeting's team, and sends its team", async () => {
+    editor();
+    fireEvent.click(screen.getByRole("button", { name: "Add action item" }));
+    fireEvent.change(screen.getByLabelText("Action item 2"), {
+      target: { value: "Book the truck" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save meeting" }));
+    await waitFor(() => expect(saveMinutesAction).toHaveBeenCalled());
+    const sent = vi.mocked(saveMinutesAction).mock.calls[0]![0] as {
+      actionItems: { id: string | null; text: string; team: string | null }[];
+    };
+    expect(sent.actionItems).toEqual([
+      expect.objectContaining({ id: "item-1", team: "kitchen" }),
+      expect.objectContaining({
+        id: null,
+        text: "Book the truck",
+        team: "kitchen",
+      }),
+    ]);
+  });
+});
+
+describe("MinutesEditor's Find decisions and action items", () => {
+  function answer() {
+    vi.mocked(suggestMeetingItemsAction).mockResolvedValue({
+      ok: true,
+      data: {
+        decisions: [
+          { text: "Camp targets 35 people" },
+          { text: "No cold recruiting" },
+        ],
+        actionItems: [
+          {
+            text: "Start collecting camp fees",
+            assigneeId: "ryan",
+            unmatchedName: null,
+            team: "finance",
+            due: "2026-10-16",
+          },
+          {
+            text: "Take on the logistics lead role",
+            assigneeId: null,
+            unmatchedName: "Speaker 3",
+            team: null,
+            due: null,
+          },
+        ],
+        alreadyThere: { decisions: 0, actionItems: 1 },
+      },
+    });
+  }
+
+  it("asks with what the editor holds, and shows the proposals as suggestions only", async () => {
+    answer();
+    editor();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Find decisions and action items" }),
+    );
+    await screen.findByText("Claude suggests 2 decisions and 2 action items.");
+    expect(
+      screen.getByText(
+        "1 action item was already there. Keep what is right, below.",
+      ),
+    ).toBeTruthy();
+    expect(vi.mocked(suggestMeetingItemsAction).mock.calls[0]![0]).toEqual(
+      expect.objectContaining({
+        eventId: "evt1",
+        agenda: "1. Menu",
+        actionItems: ["Buy the gas"],
+      }),
+    );
+    expect(document.querySelectorAll("[data-suggested]")).toHaveLength(4);
+    // An unmatched name is a question, never a guess.
+    expect(screen.getByText("The notes say “Speaker 3”")).toBeTruthy();
+    expect(screen.getByText("Who is this? Pick")).toBeTruthy();
+
+    // Nothing suggested is sent until it is kept.
+    fireEvent.click(screen.getByRole("button", { name: "Save meeting" }));
+    await waitFor(() => expect(saveMinutesAction).toHaveBeenCalled());
+    const sent = vi.mocked(saveMinutesAction).mock.calls[0]![0] as {
+      decisions: string[];
+      actionItems: unknown[];
+    };
+    expect(sent.decisions).toEqual([]);
+    expect(sent.actionItems).toHaveLength(1);
+  });
+
+  it("keeps one, drops one, keeps all, and sends the kept rows with their person and team", async () => {
+    answer();
+    editor();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Find decisions and action items" }),
+    );
+    await screen.findByText("Claude suggests 2 decisions and 2 action items.");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Keep “Camp targets 35 people”" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Drop “No cold recruiting”" }),
+    );
+    expect(
+      (screen.getByLabelText("Decision 1") as HTMLInputElement).value,
+    ).toBe("Camp targets 35 people");
+    fireEvent.click(screen.getByRole("button", { name: "Keep all 2" }));
+    expect(document.querySelectorAll("[data-suggested]")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Save meeting" }));
+    await waitFor(() => expect(saveMinutesAction).toHaveBeenCalled());
+    const sent = vi.mocked(saveMinutesAction).mock.calls[0]![0] as {
+      decisions: string[];
+      actionItems: {
+        text: string;
+        assigneeId: string | null;
+        team: string | null;
+        due: string | null;
+      }[];
+    };
+    expect(sent.decisions).toEqual(["Camp targets 35 people"]);
+    expect(sent.actionItems.slice(1)).toEqual([
+      expect.objectContaining({
+        text: "Start collecting camp fees",
+        assigneeId: "ryan",
+        team: "finance",
+        due: "2026-10-16",
+      }),
+      expect.objectContaining({
+        text: "Take on the logistics lead role",
+        assigneeId: null,
+        team: null,
+      }),
+    ]);
+  });
+
+  it("says Claude could not read the notes, and keeps everything typed", async () => {
+    vi.mocked(suggestMeetingItemsAction).mockResolvedValue({
+      ok: false,
+      error: "Claude could not read the notes. Your notes are safe. Try again.",
+    });
+    editor();
+    fireEvent.click(screen.getByRole("button", { name: "Add decision" }));
+    fireEvent.change(screen.getByLabelText("Decision 1"), {
+      target: { value: "Mine" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Find decisions and action items" }),
+    );
+    await screen.findByText(
+      "Claude could not read the notes. Your notes are safe. Try again.",
+    );
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    expect(
+      (screen.getByLabelText("Decision 1") as HTMLInputElement).value,
+    ).toBe("Mine");
   });
 });

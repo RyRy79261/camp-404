@@ -2,15 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Clock, MapPin, Pencil, SquareKanban } from "lucide-react";
 import { MarkdownBody } from "@camp404/ui/components/markdown-body";
-import { Spinner } from "@camp404/ui/components/spinner";
-import { toast } from "@camp404/ui/components/toast";
 import { cn } from "@camp404/ui/lib/utils";
-import { actionItemToTaskAction } from "@/app/(console)/calendar/actions";
 import { entryWhen, isPastEntry, shortDayLabel } from "@/lib/calendar-month";
 import type { MeetingNote } from "@/lib/meeting-notes";
+import { TASK_STATUS_LABEL } from "@/lib/meeting-notes-view";
 import type { SelectedEvent } from "./calendar-board";
 import {
   GHOST_BUTTON,
@@ -26,8 +23,9 @@ import {
 // One event, beside the month or in a phone's sheet (the approved mock-up's
 // detail): its type and team, title, when and where, its description, and
 // where it is kept. A meeting shows its agenda before, and its minutes after:
-// the notes, what was decided, the action items (each on the task board,
-// with how it stands), who came, then the agenda folded away. A meeting with
+// the notes, what was decided, the action items (each a task on the board:
+// who, under which team, by when, and how it stands there), who came, then
+// the agenda folded away. A meeting with
 // no minutes has "Write minutes" for its team's members and captains.
 
 /** Where an event is kept and changed, said once under it. */
@@ -93,7 +91,7 @@ export function EventDetail({
           minutes={entry.meeting?.minutes ?? false}
           past={past}
           canWrite={selected.canWriteMinutes}
-          canMakeTasks={selected.canMakeTasks}
+          teamLabels={selected.teamLabels}
         />
       ) : selected.canWriteMinutes ? (
         <section className="mt-5 border-t border-border pt-4">
@@ -139,14 +137,14 @@ function Meeting({
   minutes,
   past,
   canWrite,
-  canMakeTasks,
+  teamLabels,
 }: {
   eventId: string;
   note: MeetingNote | null;
   minutes: boolean;
   past: boolean;
   canWrite: boolean;
-  canMakeTasks: boolean;
+  teamLabels: Record<string, string>;
 }) {
   const edit = canWrite ? (
     <Link href={minutesHref(eventId)} className={GHOST_BUTTON}>
@@ -223,11 +221,7 @@ function Meeting({
               className="flex flex-col border border-border"
             >
               {note.actionItems.map((item) => (
-                <ActionItem
-                  key={item.id}
-                  item={item}
-                  canMakeTask={canMakeTasks}
-                />
+                <ActionItem key={item.id} item={item} teamLabels={teamLabels} />
               ))}
             </ul>
           </>
@@ -262,25 +256,19 @@ function Meeting({
 
 function ActionItem({
   item,
-  canMakeTask,
+  teamLabels,
 }: {
   item: MeetingNote["actionItems"][number];
-  canMakeTask: boolean;
+  teamLabels: Record<string, string>;
 }) {
   const done = item.task?.status === "done";
+  const team = item.team ? (teamLabels[item.team] ?? item.team) : "Whole camp";
   return (
     <li className="grid grid-cols-[1.125rem_minmax(0,1fr)] gap-x-2.5 gap-y-1 border-border px-3 py-2.5 text-sm leading-5 [&:not(:first-child)]:border-t">
-      <span
+      <SquareKanban
         aria-hidden
-        className={cn(
-          "mt-0.5 grid h-4 w-4 place-items-center border-[1.5px]",
-          done
-            ? "border-success bg-success text-success-foreground"
-            : "border-muted-foreground",
-        )}
-      >
-        {done ? "✓" : null}
-      </span>
+        className={cn("mt-0.5 h-4 w-4", done ? "text-success" : "text-accent")}
+      />
       <span
         className={cn(
           "[overflow-wrap:anywhere]",
@@ -290,59 +278,32 @@ function ActionItem({
         {item.text}
         {done ? <span className="sr-only"> (done)</span> : null}
       </span>
-      <span className="col-start-2 flex flex-wrap items-center gap-2 text-xs leading-4 text-muted-foreground">
-        <span>{item.assigneeName ?? "Nobody yet"}</span>
-        {item.dueOn ? <span>Due {shortDayLabel(item.dueOn)}</span> : null}
+      <span className="col-start-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-4 text-muted-foreground">
+        <span>
+          {[
+            item.assigneeName ?? "Nobody yet",
+            team,
+            item.dueOn ? `Due ${shortDayLabel(item.dueOn)}` : "No deadline",
+          ].join(" · ")}
+        </span>
         {item.task ? (
           <Link
             href="/tasks"
-            className="font-semibold text-accent hover:underline"
+            className={cn(
+              "border px-1.5 py-0.5 font-semibold hover:underline",
+              done
+                ? "border-success/60 text-success"
+                : "border-border text-foreground",
+            )}
           >
-            {done
-              ? "Done on the task board"
-              : item.task.status === "cancelled"
-                ? "Taken off the task board"
-                : "On the task board"}
+            {item.task.status === "cancelled"
+              ? "Taken off the task board"
+              : `On the board: ${TASK_STATUS_LABEL[item.task.status]}`}
           </Link>
-        ) : canMakeTask ? (
-          <MakeTaskButton itemId={item.id} text={item.text} />
         ) : (
-          <span>Not on the task board yet</span>
+          <span>Goes on the task board when the minutes are saved</span>
         )}
       </span>
     </li>
-  );
-}
-
-/**
- * One tap puts an action item on the task board (the board's own rule: a
- * captain or a lead of the meeting's team). A one-tap change reports its
- * failure as a toast, and only this button spins (AGENTS.md).
- */
-function MakeTaskButton({ itemId, text }: { itemId: string; text: string }) {
-  const router = useRouter();
-  const [pending, startTransition] = React.useTransition();
-  function makeTask() {
-    startTransition(async () => {
-      const result = await actionItemToTaskAction({ itemId });
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success("Added to the task board");
-      router.refresh();
-    });
-  }
-  return (
-    <button
-      type="button"
-      onClick={makeTask}
-      disabled={pending}
-      aria-label={`Add “${text}” to the task board`}
-      className="inline-flex items-center gap-1 font-semibold text-accent hover:underline disabled:opacity-60"
-    >
-      {pending ? <Spinner /> : <SquareKanban className="h-3 w-3" aria-hidden />}
-      Add to the task board
-    </button>
   );
 }

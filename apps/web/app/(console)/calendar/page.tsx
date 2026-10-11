@@ -134,10 +134,8 @@ async function CalendarBody({
         canWriteMinutes:
           (found.entry.kind === "meeting" || found.entry.source === "google") &&
           canWorkInTeam(rank, memberTeams, found.entry.team?.key ?? null),
-        canMakeTasks:
-          rank === "captain" ||
-          (found.entry.team !== null &&
-            leadTeams.includes(found.entry.team.key)),
+        // Each action item's task is filed under a team, said by name.
+        teamLabels: Object.fromEntries(teams.map((t) => [t.key, t.label])),
       }
     : null;
 

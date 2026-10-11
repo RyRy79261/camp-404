@@ -56,7 +56,8 @@ export interface SelectedEvent {
   note: MeetingNote | null;
   canEditEvent: boolean;
   canWriteMinutes: boolean;
-  canMakeTasks: boolean;
+  /** Every team's name by key, for the team each action item is filed in. */
+  teamLabels: Record<string, string>;
 }
 
 export interface CalendarBoardProps {
@@ -149,7 +150,6 @@ export function CalendarBoard(props: CalendarBoardProps) {
           kind: "new",
           day: state.newOn,
           team: state.team,
-          meeting: state.type === "meetings",
         }}
         teams={form}
         onClose={close}

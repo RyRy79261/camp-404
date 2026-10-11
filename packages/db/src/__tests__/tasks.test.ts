@@ -728,6 +728,8 @@ describe("tasks", () => {
     await makeUser(db, { displayName: "System", isSystem: true });
 
     const members = await listAssignableMembers();
-    expect(members).toEqual([{ id: ok.id, displayName: "Zed" }]);
+    expect(members).toEqual([
+      { id: ok.id, displayName: "Zed", rank: "member" },
+    ]);
   });
 });

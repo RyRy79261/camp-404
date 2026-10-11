@@ -158,7 +158,9 @@
 //     campEventCalendarStep (./camp-events)
 //   - meeting notes: canWorkInTeam (a team's members this year, or a
 //     captain; a whole-camp note is a captain's), meetingInstant,
-//     meetingTimeKey and MEETING_NOTE_PRIVACY_REMINDER (./meeting-notes)
+//     meetingTimeKey and MEETING_NOTE_PRIVACY_REMINDER (./meeting-notes);
+//     Claude's proposed decisions and action items made safe for the editor:
+//     meetingSuggestionsFrom, matchMember (./meeting-suggestions)
 //   - transport: canEditTransport (a captain or a Transport & Logistics
 //     lead), canManageCar (those, or the car's own driver), canRemoveRider
 //     (those, or the rider), seatsLeft, vehicleLabel, transportTotals
@@ -246,6 +248,7 @@ export * from "./kitchen-prints";
 export * from "./recipe-source";
 export * from "./calendar-titles";
 export * from "./meeting-notes";
+export * from "./meeting-suggestions";
 export * from "./camp-events";
 export * from "./guide";
 export * from "./guide-public";

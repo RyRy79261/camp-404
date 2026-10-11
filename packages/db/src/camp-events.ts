@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import {
   campDayStart,
+  campEventKindFor,
   campEventRefusal,
   hasMinutes,
   meetingInstant,
@@ -232,11 +233,14 @@ export async function createCampEvent(
   input: CampEventFields & {
     actorId: string;
     kind: CampEventKind;
-    /** A meeting's agenda; ignored for an event. */
+    /** The agenda: when it is not empty, the event is a meeting. */
     agenda: string;
     newEventId: string;
   },
 ): Promise<CampEventWriteResult<{ row: CampEventRow; noteId: string | null }>> {
+  // An event with an agenda is a meeting (owner, 2026-10-11: a meeting
+  // starts by adding an event with its agenda); one with none stays plain.
+  const kind = campEventKindFor(input.kind, input.agenda);
   return write(async (tx) => {
     await assertManager(tx, input.actorId, input.team);
     const cycle = await currentCycleNumber(tx);
@@ -244,7 +248,7 @@ export async function createCampEvent(
       .insert(e)
       .values({
         cycle,
-        kind: input.kind,
+        kind,
         team: input.team,
         title: input.title,
         allDay: input.allDay,
@@ -260,7 +264,7 @@ export async function createCampEvent(
       })
       .returning(COLUMNS);
     let noteId: string | null = null;
-    if (input.kind === "meeting") {
+    if (kind === "meeting") {
       const [note] = await tx
         .insert(schema.meetingNotes)
         .values({
@@ -281,7 +285,7 @@ export async function createCampEvent(
       actorId: input.actorId,
       action: "calendar.event_created",
       target: `calendar_event:${input.newEventId}`,
-      metadata: auditMetadata({ ...input, kind: input.kind }),
+      metadata: auditMetadata({ ...input, kind }),
     });
     return { row: row!, noteId };
   });

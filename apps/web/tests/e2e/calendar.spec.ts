@@ -145,10 +145,10 @@ test.describe("the Calendar (test-mode)", () => {
     await expect(page).toHaveURL(/event=[0-9a-v]+/);
     await expect(chip(page, "Workshop clean-out")).toBeVisible();
 
-    // A Kitchen meeting with an agenda, on the 20th.
+    // A Kitchen meeting, on the 20th: an event added with an agenda is a
+    // meeting, its meeting page made with the same agenda.
     await page.getByRole("button", { name: "New event" }).first().click();
     const meeting = page.getByRole("form", { name: "New event" });
-    await meeting.getByRole("button", { name: /^Meeting/ }).click();
     await meeting.locator("#event-team").click();
     await page.getByRole("option", { name: "Kitchen" }).click();
     await meeting.getByLabel("Title").fill("Kitchen planning");
@@ -159,6 +159,9 @@ test.describe("the Calendar (test-mode)", () => {
       .getByRole("textbox", { name: "Agenda", exact: true })
       .fill("The menu and the gas");
     await meeting.getByRole("button", { name: "Add to the calendar" }).click();
+    await expect(
+      page.getByText("Added to the calendar, with its meeting page"),
+    ).toBeVisible();
     const planning = panel(page, "Kitchen planning");
     await expect(planning.getByText("MEETING", { exact: true })).toBeVisible();
     await expect(planning.getByText("The menu and the gas")).toBeVisible();
@@ -329,8 +332,8 @@ test.describe("the Calendar (test-mode)", () => {
     await page
       .getByLabel("Decision 1", { exact: true })
       .fill("Curry on night two");
-    await page.getByRole("button", { name: "Save minutes" }).click();
-    await expect(page.getByText("Minutes saved")).toBeVisible();
+    await page.getByRole("button", { name: "Save meeting" }).click();
+    await expect(page.getByText("Meeting saved")).toBeVisible();
     // Back on the meeting, in its month, with its minutes.
     await expect(page).toHaveURL(/\/calendar\?view=month&month=.*&event=/);
     const saved = panel(page, "Kitchen menu tasting");
@@ -354,6 +357,87 @@ test.describe("the Calendar (test-mode)", () => {
     const id = link.searchParams.get("event")!;
     await page.goto(`/calendar/${id}/minutes`);
     await expect(page.getByText("The team's members only")).toBeVisible();
+  });
+
+  test("Claude's suggestions are kept, and saving the meeting puts every action item on the task board", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, GRID);
+    await approvedMember(page, request, "cal-find", "Kitchen Crew");
+    await seedTeam(request, "cal-find", "kitchen");
+    await captain(page, request, "cal-cap");
+    await seedCalendar(request, "cal-cap", [
+      {
+        event: {
+          kind: "meeting",
+          team: "kitchen",
+          title: "Kitchen sync",
+          date: TODAY,
+          allDay: false,
+          start: "18:00",
+          end: "19:00",
+          agenda: "1. Fees",
+        },
+      },
+    ]);
+
+    // A Kitchen member writes the notes and asks Claude (the test store's
+    // stand-in answer: no call is made).
+    await login(page, { id: "cal-find", email: "cal-find@example.com" });
+    await openCalendar(page);
+    await chip(page, "Kitchen sync").click();
+    await panel(page, "Kitchen sync")
+      .getByRole("link", { name: "Write minutes" })
+      .click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Kitchen sync" }),
+    ).toBeVisible();
+    await page
+      .getByRole("textbox", { name: "Notes", exact: true })
+      .fill("We agreed to target 35 people. Speaker 3 takes logistics.");
+    await page
+      .getByRole("button", { name: "Find decisions and action items" })
+      .click();
+    await expect(
+      page.getByText("Claude suggests 2 decisions and 2 action items."),
+    ).toBeVisible();
+    // A name the camp does not know is a question, never a guess.
+    await expect(page.getByText("The notes say “Speaker 3”")).toBeVisible();
+    await expect(page.getByText("Who is this? Pick")).toBeVisible();
+
+    // Nothing is kept until Keep: keep them all, then save.
+    await page.getByRole("button", { name: "Keep all 2" }).first().click();
+    await page.getByRole("button", { name: "Keep all 2" }).click();
+    await expect(page.locator("[data-suggested]")).toHaveCount(0);
+    await expect(page.getByLabel("Decision 1", { exact: true })).toHaveValue(
+      "Camp targets 35 people instead of 45 to 50",
+    );
+    await page.getByRole("button", { name: "Save meeting" }).click();
+    await expect(page.getByText("Meeting saved")).toBeVisible();
+
+    // Back on the meeting: each action item is a task, and says how it stands.
+    const saved = panel(page, "Kitchen sync");
+    const items = saved.getByRole("list", { name: "Action items" });
+    await expect(items.getByText("Start collecting camp fees")).toBeVisible();
+    await expect(
+      items.getByRole("link", { name: "On the board: To do" }),
+    ).toHaveCount(2);
+
+    // And on the board, for everyone.
+    await page.goto("/tasks");
+    await expect(page.getByText("Start collecting camp fees")).toBeVisible();
+    await expect(
+      page.getByText("Take on the logistics lead role"),
+    ).toBeVisible();
+
+    // Once on the board, its words are changed there, not in the minutes.
+    await page.goBack();
+    await saved.getByRole("link", { name: "Edit" }).click();
+    await expect(
+      page.getByText("On the task board: change it there."),
+    ).toHaveCount(2);
+    await expect(page.getByLabel("Action item 1")).toHaveCount(0);
   });
 
   test("a shared link opens the same view: the list of past meetings with one open", async ({

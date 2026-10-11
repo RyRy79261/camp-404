@@ -10,12 +10,18 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { CAMP_TIME_ZONE, campDayStart, canWorkInTeam } from "@camp404/core";
+import { alias } from "drizzle-orm/pg-core";
+import {
+  CAMP_TIME_ZONE,
+  campDayKey,
+  campDayStart,
+  canWorkInTeam,
+} from "@camp404/core";
 import type { DbOrTx } from "./audit";
 import { currentCycleNumber } from "./cycles";
-import { createHttpDb, withTransaction } from "./index";
+import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
-import { TEAM_NOT_ACTIVE, addTaskWithin } from "./tasks";
+import { TEAM_NOT_ACTIVE, insertTaskWithin } from "./tasks";
 
 // Meeting notes (#268): the data layer.
 //
@@ -26,9 +32,14 @@ import { TEAM_NOT_ACTIVE, addTaskWithin } from "./tasks";
 //    locks them (lockTeamWork), so someone taken off the team a moment ago
 //    cannot still write. A caller passes only who is acting, never a rank or
 //    a team list.
-//  - An action item becomes a task through the task board's own add path
-//    (addTaskWithin), in the same transaction that links the item to it, so
-//    the board's rule decides: a captain, or a lead of the note's team.
+//  - Every action item IS a task on the board (owner, 2026-10-11). Saving the
+//    note puts each item that is not on the board yet there, filed under the
+//    team the writer picked (an active team, or the whole camp), in the same
+//    transaction as the save. Whoever may write the note may do this (the
+//    owner accepted it): the board's own add rule (a captain or the team's
+//    lead) is not asked. Once on the board, an item's words, person, team and
+//    deadline are the task's, changed there: the note reads them live, and a
+//    save that changes the words is refused.
 //  - An edit is a compare-and-set on `version`: a lost race says so in a
 //    sentence, never overwrites.
 //
@@ -59,8 +70,8 @@ export const ASSIGNEE_NOT_A_MEMBER =
   "An action item's person isn't an approved camp member.";
 export const EVENT_NOT_ON_CALENDAR =
   "That event isn't on the camp calendar any more. Pick another, or none.";
-export const ITEM_GONE = "That action item isn't on the note any more.";
-export const ALREADY_A_TASK = "That action item is already on the task board.";
+export const ON_THE_BOARD =
+  "An action item on the task board was changed here. Change it on the board, or open the meeting again.";
 export const MINUTES_STARTED =
   "Someone started this meeting's minutes a moment ago. Open it again to see them.";
 
@@ -188,9 +199,15 @@ export interface MeetingNotePerson {
 
 export interface MeetingNoteActionItem {
   id: string;
+  /** The task's title once it is on the board; the item's words before. */
   text: string;
   assigneeId: string | null;
   assigneeName: string | null;
+  /**
+   * Where the task is filed: the task's team once it is on the board; the
+   * note's team (the editor's default) before. Null is the whole camp.
+   */
+  team: Team | null;
   /** A camp day, YYYY-MM-DD. */
   dueOn: string | null;
   /** The task it became, live from the board; null while it is not one. */
@@ -219,6 +236,9 @@ export interface MeetingNote {
 }
 
 const displayName = (name: string | null) => name?.trim() || "Unnamed member";
+
+/** The task's person, beside the item's own (users joined twice). */
+const taskAssignee = alias(schema.users, "task_assignee");
 
 /** The note of the meeting whose calendar event is `calendarEventId`. */
 export async function getMeetingNoteByEvent(
@@ -285,6 +305,11 @@ export async function getMeetingNote(
         dueOn: schema.meetingNoteActionItems.dueOn,
         taskId: schema.tasks.id,
         taskStatus: schema.tasks.status,
+        taskTitle: schema.tasks.title,
+        taskTeam: schema.tasks.team,
+        taskAssigneeId: schema.tasks.assigneeId,
+        taskAssigneeName: taskAssignee.displayName,
+        taskDueAt: schema.tasks.dueAt,
       })
       .from(schema.meetingNoteActionItems)
       .leftJoin(
@@ -295,6 +320,7 @@ export async function getMeetingNote(
         schema.tasks,
         eq(schema.tasks.id, schema.meetingNoteActionItems.taskId),
       )
+      .leftJoin(taskAssignee, eq(taskAssignee.id, schema.tasks.assigneeId))
       .where(eq(schema.meetingNoteActionItems.noteId, noteId))
       .orderBy(asc(schema.meetingNoteActionItems.position)),
   ]);
@@ -307,17 +333,29 @@ export async function getMeetingNote(
       displayName: displayName(a.displayName),
     })),
     decisions,
-    actionItems: items.map((i) => ({
-      id: i.id,
-      text: i.text,
-      assigneeId: i.assigneeId,
-      assigneeName: i.assigneeId ? displayName(i.assigneeName) : null,
-      dueOn: i.dueOn,
-      task:
-        i.taskId && i.taskStatus
-          ? { id: i.taskId, status: i.taskStatus }
-          : null,
-    })),
+    actionItems: items.map((i) =>
+      i.taskId && i.taskStatus
+        ? {
+            id: i.id,
+            text: i.taskTitle ?? i.text,
+            assigneeId: i.taskAssigneeId,
+            assigneeName: i.taskAssigneeId
+              ? displayName(i.taskAssigneeName)
+              : null,
+            team: i.taskTeam,
+            dueOn: i.taskDueAt ? campDayKey(i.taskDueAt) : null,
+            task: { id: i.taskId, status: i.taskStatus },
+          }
+        : {
+            id: i.id,
+            text: i.text,
+            assigneeId: i.assigneeId,
+            assigneeName: i.assigneeId ? displayName(i.assigneeName) : null,
+            team: note.team,
+            dueOn: i.dueOn,
+            task: null,
+          },
+    ),
   };
 }
 
@@ -406,6 +444,8 @@ export interface MeetingActionItemWrite {
   id: string | null;
   text: string;
   assigneeId: string | null;
+  /** Where its task is filed: an active team, or null for the whole camp. */
+  team: Team | null;
   dueOn: string | null;
 }
 
@@ -422,7 +462,16 @@ export interface MeetingNoteFields {
   notes: string;
   attendeeIds: readonly string[];
   decisions: readonly string[];
-  actionItems: readonly MeetingActionItemWrite[];
+  /**
+   * Every action item, in order; each not yet on the board goes there. Left
+   * out (an edit only, the Claude connector's), the items stay as they are.
+   */
+  actionItems?: readonly MeetingActionItemWrite[];
+  /**
+   * The teams switched on in the camp's config: a task is filed only under
+   * one of them, or the whole camp.
+   */
+  activeTeams: readonly Team[];
 }
 
 /** The ids among `ids` that are not approved, current members. */
@@ -478,6 +527,64 @@ async function writeLists(
   }
 }
 
+const TASK_DATE = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: CAMP_TIME_ZONE,
+});
+
+/** The words a meeting's task carries under its title on the board. */
+export function meetingTaskDescription(note: {
+  title: string;
+  heldAt: Date;
+}): string {
+  return `From the meeting “${note.title}” on ${TASK_DATE.format(note.heldAt)}.`;
+}
+
+/**
+ * Put one action item on the task board and link it, inside the save's own
+ * transaction: the task takes the item's words, person, team and deadline.
+ * The note's write rule has already been checked; the team must be active
+ * (or none, the whole camp), and the person an approved member.
+ */
+async function putOnBoard(
+  tx: Tx,
+  input: {
+    actorId: string;
+    itemId: string;
+    item: MeetingActionItemWrite;
+    note: { title: string; heldAt: Date };
+    activeTeams: readonly Team[];
+  },
+): Promise<void> {
+  if (input.item.team && !input.activeTeams.includes(input.item.team)) {
+    refuse(TEAM_NOT_ACTIVE);
+  }
+  const task = await insertTaskWithin(tx, {
+    creatorId: input.actorId,
+    title: input.item.text,
+    description: meetingTaskDescription(input.note),
+    team: input.item.team,
+    assigneeId: input.item.assigneeId,
+    dueAt: input.item.dueOn ? campDayStart(input.item.dueOn) : null,
+  });
+  if (!task.ok) refuse(task.error);
+  const linked = await tx
+    .update(schema.meetingNoteActionItems)
+    .set({ taskId: task.id })
+    .where(
+      and(
+        eq(schema.meetingNoteActionItems.id, input.itemId),
+        isNull(schema.meetingNoteActionItems.taskId),
+      ),
+    )
+    .returning({ id: schema.meetingNoteActionItems.id });
+  // The note's row is locked for the save, so nobody else links it; if that
+  // ever failed, the task goes back with the save rather than stay unlinked.
+  if (linked.length === 0) refuse(NOTE_EDITED);
+}
+
 /** Write a note, as one of its team's members or a captain. */
 export async function createMeetingNote(
   input: MeetingNoteFields & { actorId: string; team: Team | null },
@@ -494,7 +601,8 @@ export async function createMeetingNote(
       if ((await notMembers(tx, input.attendeeIds)).length > 0) {
         refuse(ATTENDEE_NOT_A_MEMBER);
       }
-      const assignees = input.actionItems
+      const actionItems = input.actionItems ?? [];
+      const assignees = actionItems
         .map((i) => i.assigneeId)
         .filter((id): id is string => id !== null);
       if ((await notMembers(tx, assignees)).length > 0) {
@@ -518,16 +626,24 @@ export async function createMeetingNote(
         .returning({ id: schema.meetingNotes.id });
       const id = note!.id;
       await writeLists(tx, id, input);
-      if (input.actionItems.length > 0) {
-        await tx.insert(schema.meetingNoteActionItems).values(
-          input.actionItems.map((item, position) => ({
+      for (const [position, item] of actionItems.entries()) {
+        const [row] = await tx
+          .insert(schema.meetingNoteActionItems)
+          .values({
             noteId: id,
             position,
             text: item.text,
             assigneeId: item.assigneeId,
             dueOn: item.dueOn,
-          })),
-        );
+          })
+          .returning({ id: schema.meetingNoteActionItems.id });
+        await putOnBoard(tx, {
+          actorId: input.actorId,
+          itemId: row!.id,
+          item,
+          note: input,
+          activeTeams: input.activeTeams,
+        });
       }
       return { ok: true as const, id };
     }),
@@ -538,11 +654,15 @@ export async function createMeetingNote(
  * Change a note. `version` is the version the editor opened; if someone else
  * saved since, nothing changes and the editor is told.
  *
- * Action items that are already tasks keep their words (the task is where
- * the work is tracked): only their place in the list moves, and one left out
- * of the list stays on the note, at the end. Other items are saved as sent;
- * one left out is removed. A person is checked only when they are new to the
- * note, so a note keeps someone who has since left the approved list.
+ * Every action item not on the board yet goes there with this save (a new
+ * one, or one saved before every item was a task). One already on the board
+ * keeps its words, person, team and deadline (the task is where the work is
+ * tracked): only its place in the list moves, a save that changes its words
+ * is refused (ON_THE_BOARD), and one left out of the list stays on the note,
+ * at the end. An item not on the board that is left out is removed. A person
+ * is checked only when they are new to the note, so a note keeps someone who
+ * has since left the approved list. With no `actionItems` (the Claude
+ * connector's save), the items are left exactly as they are.
  */
 export async function editMeetingNote(
   input: MeetingNoteFields & {
@@ -585,32 +705,10 @@ export async function editMeetingNote(
         .select({ userId: schema.meetingNoteAttendees.userId })
         .from(schema.meetingNoteAttendees)
         .where(eq(schema.meetingNoteAttendees.noteId, input.noteId));
-      const items = await tx
-        .select({
-          id: schema.meetingNoteActionItems.id,
-          position: schema.meetingNoteActionItems.position,
-          assigneeId: schema.meetingNoteActionItems.assigneeId,
-          taskId: schema.meetingNoteActionItems.taskId,
-        })
-        .from(schema.meetingNoteActionItems)
-        .where(eq(schema.meetingNoteActionItems.noteId, input.noteId))
-        .orderBy(asc(schema.meetingNoteActionItems.position))
-        .for("update");
       const already = new Set(attending.map((a) => a.userId));
       const newAttendees = input.attendeeIds.filter((id) => !already.has(id));
       if ((await notMembers(tx, newAttendees)).length > 0) {
         refuse(ATTENDEE_NOT_A_MEMBER);
-      }
-      const saved = new Map(items.map((i) => [i.id, i]));
-      const newAssignees = input.actionItems
-        .filter(
-          (i) =>
-            i.assigneeId !== null &&
-            (i.id === null || saved.get(i.id)?.assigneeId !== i.assigneeId),
-        )
-        .map((i) => i.assigneeId as string);
-      if ((await notMembers(tx, newAssignees)).length > 0) {
-        refuse(ASSIGNEE_NOT_A_MEMBER);
       }
 
       const [written] = await tx
@@ -631,50 +729,14 @@ export async function editMeetingNote(
       if (!written) refuse(NOTE_GONE);
       await writeLists(tx, input.noteId, input);
 
-      // The action items: kept, changed, added or removed, in the order sent.
-      const sent = new Set<string>();
-      let position = 0;
-      for (const item of input.actionItems) {
-        const before = item.id ? saved.get(item.id) : undefined;
-        if (before) {
-          sent.add(before.id);
-          await tx
-            .update(schema.meetingNoteActionItems)
-            .set(
-              before.taskId
-                ? { position }
-                : {
-                    position,
-                    text: item.text,
-                    assigneeId: item.assigneeId,
-                    dueOn: item.dueOn,
-                  },
-            )
-            .where(eq(schema.meetingNoteActionItems.id, before.id));
-        } else {
-          await tx.insert(schema.meetingNoteActionItems).values({
-            noteId: input.noteId,
-            position,
-            text: item.text,
-            assigneeId: item.assigneeId,
-            dueOn: item.dueOn,
-          });
-        }
-        position += 1;
-      }
-      for (const item of items) {
-        if (sent.has(item.id)) continue;
-        if (item.taskId) {
-          await tx
-            .update(schema.meetingNoteActionItems)
-            .set({ position })
-            .where(eq(schema.meetingNoteActionItems.id, item.id));
-          position += 1;
-        } else {
-          await tx
-            .delete(schema.meetingNoteActionItems)
-            .where(eq(schema.meetingNoteActionItems.id, item.id));
-        }
+      if (input.actionItems) {
+        await writeActionItems(tx, {
+          actorId: input.actorId,
+          noteId: input.noteId,
+          note: input,
+          items: input.actionItems,
+          activeTeams: input.activeTeams,
+        });
       }
       // The version THIS save made, from its own UPDATE: a caller that
       // carries it on (voice's list) must never pick up a later save's.
@@ -683,78 +745,113 @@ export async function editMeetingNote(
   );
 }
 
-const TASK_DATE = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: CAMP_TIME_ZONE,
-});
-
 /**
- * Put an action item on the task board, and link it, in one transaction. The
- * task board's rule decides (addTaskWithin: a captain, or a lead of the
- * note's team); the task takes the note's team, the item's words, person and
- * deadline. `activeTeams` are the teams switched on in the camp's config: an
- * item on an archived team's note cannot become a task.
+ * The action items of an edit: kept, changed, added or removed, in the order
+ * sent, and each not on the board yet put there.
  */
-export async function turnActionItemIntoTask(input: {
-  actorId: string;
-  itemId: string;
-  activeTeams: readonly Team[];
-}): Promise<MeetingNoteWriteResult<{ taskId: string; noteId: string }>> {
-  if (!UUID.test(input.itemId)) return { ok: false, error: ITEM_GONE };
-  return refusing(() =>
-    withTransaction(async (tx) => {
-      const [item] = await tx
-        .select({
-          noteId: schema.meetingNoteActionItems.noteId,
-          text: schema.meetingNoteActionItems.text,
-          assigneeId: schema.meetingNoteActionItems.assigneeId,
-          dueOn: schema.meetingNoteActionItems.dueOn,
-          taskId: schema.meetingNoteActionItems.taskId,
-        })
-        .from(schema.meetingNoteActionItems)
-        .where(eq(schema.meetingNoteActionItems.id, input.itemId))
-        .for("update");
-      if (!item) refuse(ITEM_GONE);
-      if (item.taskId) refuse(ALREADY_A_TASK);
-      const [note] = await tx
-        .select({
-          team: schema.meetingNotes.team,
-          title: schema.meetingNotes.title,
-          heldAt: schema.meetingNotes.heldAt,
-        })
-        .from(schema.meetingNotes)
-        .where(eq(schema.meetingNotes.id, item.noteId));
-      if (!note) refuse(ITEM_GONE);
-      if (note.team && !input.activeTeams.includes(note.team)) {
-        refuse(TEAM_NOT_ACTIVE);
-      }
+async function writeActionItems(
+  tx: Tx,
+  input: {
+    actorId: string;
+    noteId: string;
+    note: { title: string; heldAt: Date };
+    items: readonly MeetingActionItemWrite[];
+    activeTeams: readonly Team[];
+  },
+): Promise<void> {
+  const items = await tx
+    .select({
+      id: schema.meetingNoteActionItems.id,
+      assigneeId: schema.meetingNoteActionItems.assigneeId,
+      taskId: schema.meetingNoteActionItems.taskId,
+      taskTitle: schema.tasks.title,
+    })
+    .from(schema.meetingNoteActionItems)
+    .leftJoin(
+      schema.tasks,
+      eq(schema.tasks.id, schema.meetingNoteActionItems.taskId),
+    )
+    .where(eq(schema.meetingNoteActionItems.noteId, input.noteId))
+    .orderBy(asc(schema.meetingNoteActionItems.position))
+    .for("update", { of: schema.meetingNoteActionItems });
+  const saved = new Map(items.map((i) => [i.id, i]));
 
-      const task = await addTaskWithin(tx, {
-        creatorId: input.actorId,
-        title: item.text,
-        description: `From the meeting “${note.title}” on ${TASK_DATE.format(note.heldAt)}.`,
-        team: note.team,
-        assigneeId: item.assigneeId,
-        dueAt: item.dueOn ? campDayStart(item.dueOn) : null,
-      });
-      if (!task.ok) refuse(task.error);
+  // A person is checked only when new to the item, or when the item goes on
+  // the board now (the board takes only an approved member).
+  const toCheck = input.items
+    .filter((i) => {
+      if (i.assigneeId === null) return false;
+      const before = i.id ? saved.get(i.id) : undefined;
+      if (before?.taskId) return false;
+      return true;
+    })
+    .map((i) => i.assigneeId as string);
+  if ((await notMembers(tx, toCheck)).length > 0) {
+    refuse(ASSIGNEE_NOT_A_MEMBER);
+  }
 
-      const linked = await tx
+  const sent = new Set<string>();
+  let position = 0;
+  for (const item of input.items) {
+    const before = item.id ? saved.get(item.id) : undefined;
+    if (before?.taskId) {
+      // Its words are the task's now: the editor sends them back as read.
+      if (item.text !== (before.taskTitle ?? item.text)) refuse(ON_THE_BOARD);
+      sent.add(before.id);
+      await tx
         .update(schema.meetingNoteActionItems)
-        .set({ taskId: task.id })
-        .where(
-          and(
-            eq(schema.meetingNoteActionItems.id, input.itemId),
-            isNull(schema.meetingNoteActionItems.taskId),
-          ),
-        )
+        .set({ position })
+        .where(eq(schema.meetingNoteActionItems.id, before.id));
+      position += 1;
+      continue;
+    }
+    let itemId: string;
+    if (before) {
+      sent.add(before.id);
+      itemId = before.id;
+      await tx
+        .update(schema.meetingNoteActionItems)
+        .set({
+          position,
+          text: item.text,
+          assigneeId: item.assigneeId,
+          dueOn: item.dueOn,
+        })
+        .where(eq(schema.meetingNoteActionItems.id, before.id));
+    } else {
+      const [row] = await tx
+        .insert(schema.meetingNoteActionItems)
+        .values({
+          noteId: input.noteId,
+          position,
+          text: item.text,
+          assigneeId: item.assigneeId,
+          dueOn: item.dueOn,
+        })
         .returning({ id: schema.meetingNoteActionItems.id });
-      // The row is locked, so this cannot lose; if it ever did, the task is
-      // rolled back with it rather than left on the board unlinked.
-      if (linked.length === 0) refuse(ALREADY_A_TASK);
-      return { ok: true as const, taskId: task.id, noteId: item.noteId };
-    }),
-  );
+      itemId = row!.id;
+    }
+    await putOnBoard(tx, {
+      actorId: input.actorId,
+      itemId,
+      item,
+      note: input.note,
+      activeTeams: input.activeTeams,
+    });
+    position += 1;
+  }
+  for (const item of items) {
+    if (sent.has(item.id)) continue;
+    if (item.taskId) {
+      await tx
+        .update(schema.meetingNoteActionItems)
+        .set({ position })
+        .where(eq(schema.meetingNoteActionItems.id, item.id));
+      position += 1;
+    } else {
+      await tx
+        .delete(schema.meetingNoteActionItems)
+        .where(eq(schema.meetingNoteActionItems.id, item.id));
+    }
+  }
 }

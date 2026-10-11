@@ -233,11 +233,16 @@ export async function createCampEvent(
   actorId: string,
   input: NewCampEventInput,
 ): Promise<Saved<{ noteId: string | null }>> {
+  // The composer's Details is the Agenda (owner, 2026-10-11): the Google
+  // event's details carry it, and an event with one is a meeting whose note
+  // starts with the same agenda (campEventKindFor, in the write).
+  const fields = fieldsOf(input);
   const args = {
-    ...fieldsOf(input),
+    ...fields,
+    description: fields.description ?? (input.agenda || null),
     actorId,
     kind: input.kind,
-    agenda: input.kind === "meeting" ? input.agenda : "",
+    agenda: input.agenda,
     newEventId: newCalendarEventId(),
   };
   const saved = usesTestStore()

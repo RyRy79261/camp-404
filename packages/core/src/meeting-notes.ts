@@ -15,9 +15,11 @@ import { CAMP_TIME_ZONE } from "./time-zone";
 // re-reads the actor's rank and teams inside its own transaction and passes
 // them here; it never takes a team list from the caller.
 //
-// Turning an action item into a task is NOT this rule: it is the task board's
-// own (a captain, or a lead of the task's team), checked by the board's add
-// path inside the same transaction.
+// Every action item is a task on the board (owner, 2026-10-11): saving the
+// meeting puts each new one there, in the same transaction. That is THIS rule,
+// not the board's own add rule (a captain or the task team's lead): whoever
+// may write the note files its action items, under any active team or the
+// whole camp (the owner accepted that).
 
 function isViewerRank(rank: string): rank is ViewerRank {
   return ViewerRank.safeParse(rank).success;

@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   announcementNotification,
+  campDayKey,
   campDayStart,
   nextCampDay,
   approvalNotification,
@@ -150,15 +151,16 @@ import {
   type UnseatedMember,
 } from "@camp404/db/transport";
 import {
-  ALREADY_A_TASK,
   ASSIGNEE_NOT_A_MEMBER,
   ATTENDEE_NOT_A_MEMBER,
   EVENT_NOT_ON_CALENDAR,
-  ITEM_GONE,
   MINUTES_STARTED,
   NOTE_EDITED,
   NOTE_GONE,
+  ON_THE_BOARD,
   meetingNoteRefusal,
+  meetingTaskDescription,
+  type MeetingActionItemWrite,
   type MeetingNote,
   type MeetingNoteFields,
   type MeetingNoteSummary,
@@ -1128,6 +1130,14 @@ function publicCalendarEvent(e: TestCalendarEvent): CalendarEvent {
     teamTag: e.teamTag,
     origin: e.origin ?? null,
   };
+}
+
+/** Whether an action item's team may hold a task: active, or the whole camp. */
+function teamFiles(
+  item: Pick<MeetingActionItemWrite, "team">,
+  activeTeams: readonly Team[],
+): boolean {
+  return item.team === null || activeTeams.includes(item.team);
 }
 
 function findUserById(userId: string): TestUser | null {
@@ -3798,16 +3808,28 @@ export const testStore = {
         .map((id) => ({ id, displayName: name(id) }))
         .sort((a, b) => a.displayName.localeCompare(b.displayName)),
       decisions: n.decisions.map((d) => ({ ...d })),
+      // Once on the board, an item is its task, read live (the db's rule).
       actionItems: n.actionItems.map((i) => {
         const task = i.taskId ? tasks.find((t) => t.id === i.taskId) : null;
-        return {
-          id: i.id,
-          text: i.text,
-          assigneeId: i.assigneeId,
-          assigneeName: i.assigneeId ? name(i.assigneeId) : null,
-          dueOn: i.dueOn,
-          task: task ? { id: task.id, status: task.status } : null,
-        };
+        return task
+          ? {
+              id: i.id,
+              text: task.title,
+              assigneeId: task.assigneeId,
+              assigneeName: task.assigneeId ? name(task.assigneeId) : null,
+              team: task.team,
+              dueOn: task.dueAt ? campDayKey(task.dueAt) : null,
+              task: { id: task.id, status: task.status },
+            }
+          : {
+              id: i.id,
+              text: i.text,
+              assigneeId: i.assigneeId,
+              assigneeName: i.assigneeId ? name(i.assigneeId) : null,
+              team: n.team,
+              dueOn: i.dueOn,
+              task: null,
+            };
       }),
     };
   },
@@ -3833,10 +3855,12 @@ export const testStore = {
     if (!input.attendeeIds.every(approved)) {
       return { ok: false, error: ATTENDEE_NOT_A_MEMBER };
     }
-    if (
-      !input.actionItems.every((i) => !i.assigneeId || approved(i.assigneeId))
-    ) {
+    const actionItems = input.actionItems ?? [];
+    if (!actionItems.every((i) => !i.assigneeId || approved(i.assigneeId))) {
       return { ok: false, error: ASSIGNEE_NOT_A_MEMBER };
+    }
+    if (!actionItems.every((i) => teamFiles(i, input.activeTeams))) {
+      return { ok: false, error: TEAM_NOT_ACTIVE };
     }
     const now = new Date();
     const id = crypto.randomUUID();
@@ -3859,15 +3883,38 @@ export const testStore = {
         id: crypto.randomUUID(),
         text,
       })),
-      actionItems: input.actionItems.map((i) => ({
+      actionItems: actionItems.map((i) => ({
         id: crypto.randomUUID(),
         text: i.text,
         assigneeId: i.assigneeId,
         dueOn: i.dueOn,
-        taskId: null,
+        taskId: testStore.boardTaskFor(i, input, input.actorId),
       })),
     });
     return { ok: true, id };
+  },
+
+  /** Twin of putOnBoard: the task an action item becomes, checked before. */
+  boardTaskFor(
+    item: MeetingActionItemWrite,
+    note: { title: string; heldAt: Date },
+    actorId: string,
+  ): string {
+    const id = crypto.randomUUID();
+    tasks.push({
+      id,
+      title: item.text,
+      description: meetingTaskDescription(note),
+      team: item.team,
+      status: "open",
+      assigneeId: item.assigneeId,
+      createdById: actorId,
+      dueAt: item.dueOn ? campDayStart(item.dueOn) : null,
+      createdAt: new Date(),
+      completedAt: null,
+      version: 1,
+    });
+    return id;
   },
 
   editMeetingNote(
@@ -3906,41 +3953,48 @@ export const testStore = {
       return { ok: false, error: ATTENDEE_NOT_A_MEMBER };
     }
     const saved = new Map(note.actionItems.map((i) => [i.id, i]));
-    const assigneeOk = input.actionItems.every((i) => {
-      if (!i.assigneeId) return true;
-      const before = i.id ? saved.get(i.id) : undefined;
-      return before?.assigneeId === i.assigneeId || approved(i.assigneeId);
-    });
-    if (!assigneeOk) return { ok: false, error: ASSIGNEE_NOT_A_MEMBER };
-
-    const sent = new Set<string>();
-    const items: TestMeetingNote["actionItems"] = [];
-    for (const item of input.actionItems) {
-      const before = item.id ? saved.get(item.id) : undefined;
-      if (before) {
-        sent.add(before.id);
-        items.push(
-          before.taskId
-            ? before
-            : {
-                ...before,
-                text: item.text,
-                assigneeId: item.assigneeId,
-                dueOn: item.dueOn,
-              },
-        );
-      } else {
+    const sentItems = input.actionItems;
+    if (sentItems) {
+      // Every check first, so a refusal changes nothing (the db's transaction).
+      for (const item of sentItems) {
+        const before = item.id ? saved.get(item.id) : undefined;
+        if (before?.taskId) {
+          const task = tasks.find((t) => t.id === before.taskId);
+          if (task && item.text !== task.title) {
+            return { ok: false, error: ON_THE_BOARD };
+          }
+          continue;
+        }
+        if (item.assigneeId && !approved(item.assigneeId)) {
+          return { ok: false, error: ASSIGNEE_NOT_A_MEMBER };
+        }
+        if (!teamFiles(item, input.activeTeams)) {
+          return { ok: false, error: TEAM_NOT_ACTIVE };
+        }
+      }
+    }
+    let items = note.actionItems;
+    if (sentItems) {
+      const sent = new Set<string>();
+      items = [];
+      for (const item of sentItems) {
+        const before = item.id ? saved.get(item.id) : undefined;
+        if (before) sent.add(before.id);
+        if (before?.taskId) {
+          items.push(before);
+          continue;
+        }
         items.push({
-          id: crypto.randomUUID(),
+          id: before?.id ?? crypto.randomUUID(),
           text: item.text,
           assigneeId: item.assigneeId,
           dueOn: item.dueOn,
-          taskId: null,
+          taskId: testStore.boardTaskFor(item, input, input.actorId),
         });
       }
-    }
-    for (const item of note.actionItems) {
-      if (!sent.has(item.id) && item.taskId) items.push(item);
+      for (const item of note.actionItems) {
+        if (!sent.has(item.id) && item.taskId) items.push(item);
+      }
     }
     Object.assign(note, {
       title: input.title,
@@ -3959,39 +4013,6 @@ export const testStore = {
       actionItems: items,
     });
     return { ok: true, version: note.version };
-  },
-
-  turnActionItemIntoTask(input: {
-    actorId: string;
-    itemId: string;
-    activeTeams: readonly Team[];
-  }): MeetingNoteWriteResult<{ taskId: string; noteId: string }> {
-    const note = meetingNotes.find((n) =>
-      n.actionItems.some((i) => i.id === input.itemId),
-    );
-    const item = note?.actionItems.find((i) => i.id === input.itemId);
-    if (!note || !item) return { ok: false, error: ITEM_GONE };
-    if (item.taskId) return { ok: false, error: ALREADY_A_TASK };
-    if (note.team && !input.activeTeams.includes(note.team)) {
-      return { ok: false, error: TEAM_NOT_ACTIVE };
-    }
-    const day = new Intl.DateTimeFormat("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      timeZone: "Africa/Johannesburg",
-    }).format(note.heldAt);
-    const task = testStore.addTask({
-      creatorId: input.actorId,
-      title: item.text,
-      description: `From the meeting “${note.title}” on ${day}.`,
-      team: note.team,
-      assigneeId: item.assigneeId,
-      dueAt: item.dueOn ? campDayStart(item.dueOn) : null,
-    });
-    if (!task.ok) return task;
-    item.taskId = task.id;
-    return { ok: true, taskId: task.id, noteId: note.id };
   },
 
   // --- The task board: twins of @camp404/db/tasks, same rules, same words ---
@@ -4062,6 +4083,7 @@ export const testStore = {
       .map((u) => ({
         id: u.id,
         displayName: u.displayName ?? "Unnamed member",
+        rank: u.rank,
       }))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
   },
