@@ -14,6 +14,13 @@ const mcpHandler = createMcpHandler((server) => registerCampMcpTools(server), {
   serverInfo: { name: "camp-404", version: "0.1.0" },
   // Returned at initialize: what the camp is and how to use the tools.
   instructions: SERVER_INSTRUCTIONS,
+  // The tool list never changes while a server runs, so offer no change
+  // notifications. With the SDK's default (listChanged: true) a 2026-era
+  // client holds a subscriptions/listen stream open until Vercel kills it at
+  // 300 s, then opens the next one, all day and with no one using the camp
+  // tools (#384). Without the offer the client opens none, and a listen sent
+  // anyway ends at once.
+  capabilities: { tools: { listChanged: false } },
 });
 
 async function baseHandler(req: Request): Promise<Response> {

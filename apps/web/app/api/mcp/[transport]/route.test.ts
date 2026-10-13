@@ -1,4 +1,8 @@
 // @vitest-environment node
+import {
+  Client,
+  StreamableHTTPClientTransport,
+} from "@modelcontextprotocol/client";
 import { describe, expect, it, vi } from "vitest";
 
 // The connector's endpoint through the real mcp-handler and MCP SDK: the
@@ -132,6 +136,35 @@ describe("POST /api/mcp/mcp", () => {
     expect(call.result).toMatchObject({
       content: [{ type: "text", text: "pong u1" }],
     });
+  });
+
+  // Issue #384: a 2026-era client opens subscriptions/listen to hear about
+  // tool list changes. The camp's tools never change while a server runs, so
+  // the server must not offer that: an offered listen stream stays open until
+  // Vercel kills it at 300 s, and the client opens the next one, all day.
+  it("offers no change notifications, so a listen stream ends at once", async () => {
+    const client = new Client(
+      { name: "test", version: "1" },
+      { versionNegotiation: { mode: { pin: "2026-07-28" } } },
+    );
+    const transport = new StreamableHTTPClientTransport(
+      new globalThis.URL(URL),
+      {
+        requestInit: { headers: { authorization: "Bearer good" } },
+        fetch: (input, init) => POST(new Request(input, init)),
+      },
+    );
+    await client.connect(transport);
+    expect(client.getServerCapabilities()?.tools?.listChanged).toBe(false);
+
+    const sub = await client.listen({ toolsListChanged: true });
+    expect(sub.honoredFilter).toEqual({});
+    const ended = await Promise.race([
+      sub.closed.then(() => "ended"),
+      new Promise((r) => setTimeout(() => r("still open"), 2000)),
+    ]);
+    expect(ended).toBe("ended");
+    await client.close();
   });
 
   it("answers 404 on any path but the connector's", async () => {
