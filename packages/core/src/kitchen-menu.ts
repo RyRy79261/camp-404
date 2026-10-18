@@ -1,5 +1,6 @@
 import {
   INGREDIENT_CATEGORIES,
+  MEALS,
   ViewerRank,
   type IngredientCategory,
   type MealOfTheDay,
@@ -29,6 +30,32 @@ import {
  */
 export function canTickShoppingList(rank: string): boolean {
   return ViewerRank.safeParse(rank).success;
+}
+
+// --- The check both menu stores apply ----------------------------------------
+// @camp404/db/kitchen-menu and the E2E test store both run it, so the two give
+// the same sentence for the same day and meal.
+
+export const MENU_DAY_NOT_ON_PLAN =
+  "That day isn't on the meal plan. Reload the page.";
+export const MENU_MEAL_HAS_NO_PLATES =
+  "Save some plates for that meal first, then add a recipe.";
+
+/**
+ * Whether a recipe may go on `meal` of `day` of this year's meal plan: a meal
+ * the camp does, on a day on site, with plates saved for it. The sentence, or
+ * null.
+ */
+export function menuSlotProblem(
+  plan: { daysOnSite: number; days: readonly MealPlanDay[] },
+  day: number,
+  meal: string,
+): string | null {
+  const isMeal = (MEALS as readonly string[]).includes(meal);
+  if (!isMeal || !Number.isInteger(day)) return MENU_DAY_NOT_ON_PLAN;
+  if (day < 1 || day > plan.daysOnSite) return MENU_DAY_NOT_ON_PLAN;
+  const plates = plan.days[day - 1]?.[meal as MealOfTheDay] ?? 0;
+  return plates > 0 ? null : MENU_MEAL_HAS_NO_PLATES;
 }
 
 /** A snack's tick key. */

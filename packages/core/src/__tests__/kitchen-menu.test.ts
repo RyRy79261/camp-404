@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { MealPlanDay } from "@camp404/types";
 import {
+  MENU_DAY_NOT_ON_PLAN,
+  MENU_MEAL_HAS_NO_PLATES,
+  menuSlotProblem,
   amountToBuy,
   buildShoppingList,
   canTickShoppingList,
@@ -277,5 +280,36 @@ describe("amountToBuy", () => {
       quantity: 20,
       toTaste: true,
     });
+  });
+});
+
+describe("menuSlotProblem", () => {
+  const plan = {
+    daysOnSite: 2,
+    days: [
+      { breakfast: 30, dinner: 45 },
+      { breakfast: 0, dinner: 45 },
+    ] satisfies MealPlanDay[],
+  };
+
+  it("takes a meal the camp does, on a day on site, with plates", () => {
+    expect(menuSlotProblem(plan, 1, "breakfast")).toBeNull();
+    expect(menuSlotProblem(plan, 2, "dinner")).toBeNull();
+  });
+
+  it("refuses a day off the plan, a part day and a meal the camp does not do", () => {
+    for (const [day, meal] of [
+      [0, "dinner"],
+      [3, "dinner"],
+      [1.5, "dinner"],
+      [1, "lunch"],
+      [1, "constructor"],
+    ] as const) {
+      expect(menuSlotProblem(plan, day, meal)).toBe(MENU_DAY_NOT_ON_PLAN);
+    }
+  });
+
+  it("refuses a meal with no plates saved", () => {
+    expect(menuSlotProblem(plan, 2, "breakfast")).toBe(MENU_MEAL_HAS_NO_PLATES);
   });
 });
