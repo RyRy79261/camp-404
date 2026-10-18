@@ -69,6 +69,18 @@ Traps that already cost real time:
   store cannot hold against a real Postgres. A data function with no test-store twin cannot be driven
   by Playwright. Add the twin with the feature, or say in the PR that the flow
   has no E2E cover.
+  [CORRECTION 2026-10-18] The money domains (payments, dues, claims and
+  budgets, gear rental) no longer switch per function: the facade names its
+  data functions once in `twin(real, store, keys)` (`apps/web/lib/twin.ts`),
+  which asks `usesTestStore()` at call time and looks both sides up then too,
+  so a `vi.mock` of the db module still works. A rule both sides apply (the
+  order of the checks and the refusal sentences) is one pure function in
+  `packages/core` that the db module and the store both call; locks, SQL and
+  audit rows stay in `packages/db`. Each such domain has an agreement suite,
+  `apps/web/lib/__tests__/<domain>-agreement.test.ts` (shared half:
+  `_agreement.ts`), that runs the facade on PGlite and on the store and
+  compares the answers; a new data function in it gets a case there. Other
+  domains still switch per function until they move.
 - **A `"use server"` file may export only async functions.** A `const`
   export breaks the page under `next dev`, and neither typecheck nor lint
   catches it. Put shared constants in a plain module.
