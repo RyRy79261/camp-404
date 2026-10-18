@@ -12,7 +12,7 @@ import {
   type ResponsiveColumn,
 } from "@camp404/ui/components/responsive-data-table";
 import { auditEntry, type AuditEntry } from "@/lib/audit-format";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { usesTestStore } from "@/lib/test-mode";
 
@@ -61,7 +61,7 @@ export default async function AuditLogPage({
 }) {
   // The gate first, before any boundary: the refusal and the page's status
   // are decided here, on the server.
-  const { cleared } = await captainPageGate("captain");
+  const { cleared } = await programPage("audit");
   const { before } = await searchParams;
   const cursor = before && isAuditCursor(before) ? before : null;
 

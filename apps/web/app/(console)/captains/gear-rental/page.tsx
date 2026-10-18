@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, Tent } from "lucide-react";
-import { formatMoney, sumMinor, RENTAL_MANAGER } from "@camp404/core";
+import { formatMoney, sumMinor } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import {
   Card,
@@ -16,7 +16,7 @@ import {
 } from "@camp404/ui/components/responsive-data-table";
 import { AskEveryone } from "@/components/rental/ask-everyone";
 import { RentalFrame } from "@/components/rental/rental-frame";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { PLACE_WORDS } from "@/lib/dues-view";
 import { ledgerCycle } from "@/lib/payments";
 import {
@@ -123,8 +123,8 @@ const COLUMNS: ResponsiveColumn<RentalOrder>[] = [
 ];
 
 export default async function GearRentalOrdersPage() {
-  const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && RENTAL_MANAGER.allows(gate.actor);
+  const gate = await programPage("gear-rental");
+  const cleared = gate.allowed;
   const cycle = cleared ? await ledgerCycle() : null;
   const [orders, unanswered] =
     cycle === null

@@ -10,7 +10,7 @@ import {
 } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { CheckListCard } from "@/components/system/check-list";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { BACKGROUND_JOBS } from "@/lib/background-jobs";
 import { getSystemStatus } from "@/lib/system-probe";
 
@@ -35,7 +35,7 @@ const HEADING = {
 } as const;
 
 export default async function SystemStatusPage() {
-  const { cleared } = await captainPageGate("captain");
+  const { cleared } = await programPage("system");
 
   if (!cleared) {
     return (

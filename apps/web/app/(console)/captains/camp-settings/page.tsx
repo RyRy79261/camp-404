@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getTeamsConfig } from "@/lib/camp-config";
 import { TeamSettingsManager, type TeamRow } from "./team-settings-manager";
 
@@ -27,7 +27,7 @@ export const metadata = { title: "Camp settings — Camp 404" };
 // projection the roster filter uses.
 
 export default async function CampSettingsPage() {
-  const { cleared } = await captainPageGate("captain");
+  const { cleared } = await programPage("camp-settings");
 
   const teams: TeamRow[] = cleared
     ? [...(await getTeamsConfig()).teams].sort((a, b) => a.order - b.order)

@@ -5,7 +5,7 @@ import { getOpenActivationForKey } from "@camp404/db/questionnaire-lifecycle";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { QuestionnaireBuilderV2 } from "@/components/questionnaires/builder";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export default async function QuestionnaireBuilderPage({
     campUser,
     rank,
     cleared: canAuthor,
-  } = await captainPageGate("team_lead");
+  } = await programPage("edit-questionnaire");
 
   const chrome = (heading: { new: boolean }, children: ReactNode) => (
     <div className="flex flex-col">

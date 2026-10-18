@@ -16,7 +16,7 @@ import {
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getCurrentCycle } from "@/lib/camp-config";
 import { CaptainStatusBoard, RecentActivity } from "./captain-panels";
 
@@ -102,7 +102,7 @@ const SECTIONS: {
 ];
 
 export default async function CampOverviewPage() {
-  const { cleared } = await captainPageGate("captain");
+  const { cleared } = await programPage("overview");
   const cycle = cleared ? await getCurrentCycle() : null;
 
   return (

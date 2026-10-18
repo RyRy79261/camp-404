@@ -7,7 +7,7 @@ import {
   DeadlinesManager,
   type DeadlineItem,
 } from "@/components/logistics/deadlines-manager";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   deadlineCalendarState,
   isLogisticsCalendarConnected,
@@ -43,7 +43,7 @@ export const metadata = { title: "The camp's year — Camp 404" };
 // Logistics.
 
 export default async function CycleRolloverPage() {
-  const { cleared } = await captainPageGate("captain");
+  const { cleared } = await programPage("camp-settings");
 
   // Typed to the island's structural view so the page conforms to the client
   // contract by assignment, rather than the island importing the DB package.

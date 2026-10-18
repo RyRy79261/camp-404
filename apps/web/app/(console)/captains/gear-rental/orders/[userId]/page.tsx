@@ -6,7 +6,7 @@ import { Button } from "@camp404/ui/components/button";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { GearOrderForm } from "@/components/rental/gear-order-form";
 import { RentalFrame } from "@/components/rental/rental-frame";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { memberDuesPath } from "@/lib/dues-copy";
 import { PLACE_WORDS } from "@/lib/dues-view";
 import { ledgerCycle } from "@/lib/payments";
@@ -21,7 +21,6 @@ import {
 import { RENTAL_PATH, rentalOrderPath } from "@/lib/rental-copy";
 import { orderBadge, tentForForm } from "@/lib/rental-view";
 import { OrderManager } from "./order-manager";
-import { RENTAL_MANAGER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -42,8 +41,8 @@ export default async function GearOrderPage({
   params: Promise<{ userId: string }>;
   searchParams: Promise<{ edit?: string }>;
 }) {
-  const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && RENTAL_MANAGER.allows(gate.actor);
+  const gate = await programPage("gear-rental");
+  const cleared = gate.allowed;
   if (!cleared) {
     return (
       <RentalFrame
