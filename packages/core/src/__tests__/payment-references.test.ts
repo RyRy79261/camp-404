@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { UnknownCurrencyError } from "../money";
 import {
+  checkPaymentInput,
   formatMemberRefCode,
+  memberPaymentAllowed,
   memberRefSequence,
   paymentReference,
   paymentSettlesDues,
@@ -40,5 +43,54 @@ describe("paymentSettlesDues", () => {
     expect(paymentSettlesDues("reconciled")).toBe(true);
     expect(paymentSettlesDues("waived")).toBe(true);
     expect(paymentSettlesDues("pending")).toBe(false);
+  });
+});
+
+describe("checkPaymentInput", () => {
+  it("refuses any currency but ZAR first, then anything but whole cents", () => {
+    expect(() =>
+      checkPaymentInput({ currency: "USD", amountCents: 1.5 }),
+    ).toThrow(UnknownCurrencyError);
+    expect(() =>
+      checkPaymentInput({ currency: "zar", amountCents: 100 }),
+    ).toThrow(UnknownCurrencyError);
+    expect(() =>
+      checkPaymentInput({ currency: "ZAR", amountCents: 1.5 }),
+    ).toThrow("whole cents");
+    expect(() =>
+      checkPaymentInput({ currency: "ZAR", amountCents: -1 }),
+    ).toThrow("whole cents");
+    expect(() =>
+      checkPaymentInput({ currency: "ZAR", amountCents: 0 }),
+    ).not.toThrow();
+  });
+});
+
+describe("memberPaymentAllowed", () => {
+  const own = {
+    userId: "m",
+    recordedByUserId: "m",
+    status: "pending" as const,
+  };
+
+  it("lets a member add only their own pending payment", () => {
+    expect(memberPaymentAllowed({ ...own, source: "member" })).toBe(true);
+    expect(
+      memberPaymentAllowed({ ...own, source: "member", recordedByUserId: "x" }),
+    ).toBe(false);
+    expect(
+      memberPaymentAllowed({ ...own, source: "member", status: "reconciled" }),
+    ).toBe(false);
+  });
+
+  it("leaves every other source to the Finance rule", () => {
+    expect(memberPaymentAllowed({ ...own, status: "waived" })).toBe(true);
+    expect(
+      memberPaymentAllowed({
+        ...own,
+        source: "captain",
+        recordedByUserId: "x",
+      }),
+    ).toBe(true);
   });
 });

@@ -48,7 +48,8 @@
 //   - member export: MEMBER_EXPORT_COLUMNS, memberExportColumnsFor — the
 //     roster CSV's columns by rank, from the field list (./member-export)
 //   - payment references: formatMemberRefCode, paymentReference,
-//     PAYMENT_STATUSES, paymentSettlesDues (./payment-references)
+//     PAYMENT_STATUSES, paymentSettlesDues, and the ledger's input checks
+//     (checkPaymentInput, memberPaymentAllowed) (./payment-references)
 //   - dues: canManageMoney (captains and Finance leads), duesBalance,
 //     duesSettled, nextInstalment, splitEvenly, proposeRefund and the
 //     statement import (parseStatement, proposeStatementMatches) (./dues)

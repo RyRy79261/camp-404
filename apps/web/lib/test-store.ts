@@ -10,7 +10,7 @@ import {
   captainPromotionNotification,
   FOUNDER_CODE,
   formatMemberRefCode,
-  isCurrency,
+  checkPaymentInput,
   isParticipationDecision,
   isReviewTransition,
   normalizeInviteCode,
@@ -21,7 +21,7 @@ import {
   type NotificationPayload,
   paymentReference,
   sumMinor,
-  UnknownCurrencyError,
+  memberPaymentAllowed,
   type PaymentStatus,
   QUESTIONNAIRE_REF_TYPE,
   sortPinned,
@@ -4455,8 +4455,10 @@ export const testStore = {
   },
 
   // --- payments ledger (mirrors @camp404/db/payments) -----------------------
-  // The same rules as the real ledger, asserted case for case in
-  // lib/__tests__/test-store-payments.test.ts: any currency but ZAR is
+  // The same rules as the real ledger: the input checks are the same
+  // function (checkPaymentInput in @camp404/core), and the rest is held
+  // equal by lib/__tests__/payments-agreement.test.ts and asserted case for
+  // case in lib/__tests__/test-store-payments.test.ts: any currency but ZAR is
   // refused before anything is written, references are the member's
   // reference, the year and their count that year, a status moves only from
   // the one the captain saw, and money received is a plain rand total. The
@@ -4486,22 +4488,17 @@ export const testStore = {
 
   /** Record a payment for this year (mirrors recordPayment). */
   recordPayment(input: RecordPaymentInput): { id: string; reference: string } {
-    if (!isCurrency(input.currency)) {
-      throw new UnknownCurrencyError(input.currency);
-    }
-    const source = input.source ?? "captain";
-    const allowed =
-      source === "member"
-        ? input.recordedByUserId === input.userId && input.status === "pending"
-        : isMoneyKeeperInStore(input.recordedByUserId);
-    if (!allowed) throw new MoneyRefused(NOT_A_MONEY_KEEPER);
-    if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0) {
-      throw new Error(
-        "recordPayment: the amount must be whole cents, not negative",
-      );
-    }
+    // The ledger's order: the input, the member, then who is recording it.
+    checkPaymentInput(input);
     const refCode = this.ensureMemberRefCode(input.userId);
     if (!refCode) throw new Error("recordPayment: no such member");
+    const source = input.source ?? "captain";
+    if (!memberPaymentAllowed(input)) {
+      throw new MoneyRefused(NOT_A_MONEY_KEEPER);
+    }
+    if (source !== "member" && !isMoneyKeeperInStore(input.recordedByUserId)) {
+      throw new MoneyRefused(NOT_A_MONEY_KEEPER);
+    }
     const cycle = currentCycleNumber();
     const count = payments.filter(
       (p) => p.userId === input.userId && p.cycle === cycle,
