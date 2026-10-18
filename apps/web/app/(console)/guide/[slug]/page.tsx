@@ -14,7 +14,7 @@ import { DutyCardShifts } from "@/components/guide/duty-card-shifts";
 import { ReviewButton } from "@/components/guide/review-button";
 import { VersionsCard } from "@/components/guide/versions-card";
 import { getCurrentCycle, getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   getGuideDraft,
   getPublishedChapter,
@@ -61,7 +61,7 @@ export default async function GuideChapterPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("guide-chapter");
   const { slug } = await params;
   const leadTeams = actor.ledTeams;
   const [chapter, config, cycle] = await Promise.all([

@@ -8,7 +8,7 @@ import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ChapterView } from "@/components/guide/chapter-view";
 import { VersionsCard } from "@/components/guide/versions-card";
 import { getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getChapterVersion, listChapterVersions } from "@/lib/guide";
 import {
   guideCategoryLabel,
@@ -32,7 +32,7 @@ export default async function GuideVersionPage({
 }: {
   params: Promise<{ slug: string; version: string }>;
 }) {
-  const { rank, actor } = await captainPageGate("camp_member");
+  const { rank, actor } = await programPage("guide-version");
   const { slug, version: raw } = await params;
   const number = /^\d{1,6}$/.test(raw) ? Number(raw) : NaN;
   const version = await getChapterVersion(slug, number);

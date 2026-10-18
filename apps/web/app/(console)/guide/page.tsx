@@ -30,7 +30,7 @@ import { ChapterRow } from "@/components/guide/chapter-row";
 import { GuideTabs, type GuideGrouping } from "@/components/guide/guide-tabs";
 import { SectionSwitch } from "@/components/guide/section-switch";
 import { getCurrentCycle, getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   listChapterReads,
   listGuideDrafts,
@@ -71,7 +71,7 @@ export default async function GuidePage({
 }: {
   searchParams: Promise<{ q?: string; by?: string }>;
 }) {
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("guide");
   const { q, by: requested } = await searchParams;
   const query = (q ?? "").trim().slice(0, 100);
   const by: GuideGrouping = requested === "team" ? "team" : "topic";

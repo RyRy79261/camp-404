@@ -1,11 +1,11 @@
-import { canEditAnyGuideChapter, canEditGuideChapter } from "@camp404/core";
+import { canEditGuideChapter } from "@camp404/core";
 import { Team } from "@camp404/types";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ChapterEditor, WHOLE_CAMP } from "@/components/guide/chapter-editor";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { listGuideSections } from "@/lib/guide";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +18,9 @@ export const metadata = { title: "New chapter — Survival Guide" };
 // more inside its transaction.
 
 export default async function NewGuideChapterPage() {
-  const { rank, cleared, actor } = await captainPageGate("team_lead");
+  const { rank, allowed, actor } = await programPage("new-guide-chapter");
   const leadTeams = actor.ledTeams;
-  if (!cleared || !canEditAnyGuideChapter(rank, leadTeams)) {
+  if (!allowed) {
     return (
       <div className="flex flex-col">
         <PageHeading eyebrow="Camp / Survival Guide" title="New chapter" />
