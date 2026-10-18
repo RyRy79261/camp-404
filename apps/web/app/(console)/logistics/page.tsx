@@ -47,7 +47,6 @@ import {
   phaseRangeText,
 } from "@/lib/logistics-copy";
 import { ledgerCycle } from "@/lib/payments";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -468,9 +467,9 @@ function Deadlines({
 
 export default async function LogisticsPage() {
   // Every approved member reads the days.
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const [leadTeams, rows, cycle, year, deadlines, asked] = await Promise.all([
-    rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
+  const [rows, cycle, year, deadlines, asked] = await Promise.all([
     listLogisticsPhases(),
     getCurrentCycle(),
     ledgerCycle(),

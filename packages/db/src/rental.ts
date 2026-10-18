@@ -2,7 +2,6 @@ import { and, asc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import {
   campStockInUse,
   campStockTaken,
-  canManageRental,
   checkRentalOrder,
   GEAR_ORDER_ACTION_KEY,
   GEAR_ORDER_ACTION_TITLE,
@@ -18,6 +17,7 @@ import {
   type RentalLineDraft,
   type RentalSummary,
   type RentalTentDraft,
+  RENTAL_MANAGER,
 } from "@camp404/core";
 import type {
   ParticipationStatus,
@@ -27,11 +27,10 @@ import type {
   RentalSource,
   RentalTentChoice,
 } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import { closeNudge, openNudges } from "./nudges";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // Gear rental (#241): the data layer for the year's sleeping gear and each
@@ -47,7 +46,7 @@ import * as schema from "./schema";
 //    order that would make two orders disagree is refused.
 //  - A captain runs the rest (canManageRental): the catalogue, confirming and
 //    reopening orders, tent labels. Every such write re-reads the actor's
-//    rank and led teams INSIDE its own transaction (lockSenderReach), so a
+//    rank and led teams INSIDE its own transaction (lockActor), so a
 //    demotion that committed first is seen and one that comes later waits.
 //  - Confirming is a compare-and-set on `submitted` and the version the
 //    captain saw, and writes the `rental` charge on the member's dues and the
@@ -123,21 +122,10 @@ async function write<T extends object>(
   }
 }
 
-/**
- * Whether the actor may run gear rental, read and locked inside the write's
- * own transaction.
- */
-export async function lockRentalManager(
-  tx: DbOrTx,
-  actorId: string,
-): Promise<boolean> {
-  if (!UUID.test(actorId)) return false;
-  const reach = await lockSenderReach(tx, actorId);
-  return canManageRental(reachRank(reach), reach ?? []);
-}
-
 async function assertRentalManager(tx: Tx, actorId: string): Promise<void> {
-  if (!(await lockRentalManager(tx, actorId))) refuse(NOT_A_RENTAL_MANAGER);
+  if (!(await lockAllowed(tx, actorId, RENTAL_MANAGER))) {
+    refuse(NOT_A_RENTAL_MANAGER);
+  }
 }
 
 const nameOf = (name: string | null) => name?.trim() || "Unnamed burner";

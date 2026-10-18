@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { canAskForShifts, canManageShifts } from "@camp404/core";
+import { canAskForShifts, shiftKeeper } from "@camp404/core";
 import {
   AddVolunteerShiftInput,
   FillShiftDaysInput,
@@ -36,7 +36,6 @@ import {
   SHIFTS_ACTION_REFUSAL,
   SHIFTS_PATH,
 } from "@/lib/shifts-copy";
-import { getLeadTeams } from "@/lib/users";
 
 // The shift roster's writes (#248). Each action: the gate, the Zod boundary,
 // then the facade with the actor's id alone. Setting shifts up needs at least
@@ -68,9 +67,7 @@ export async function saveShiftTypeAction(
       };
     }
     // The screen's answer; the write checks again with the rows it locks.
-    const led =
-      gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-    if (!canManageShifts(gate.rank, led, parsed.data.team)) {
+    if (!shiftKeeper(parsed.data.team).allows(gate.actor)) {
       return { ok: false, error: SHIFTS_ACTION_REFUSAL };
     }
     const result = await saveShiftType(gate.campUser.id, parsed.data);

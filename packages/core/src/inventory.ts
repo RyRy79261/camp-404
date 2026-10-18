@@ -1,9 +1,9 @@
 import {
   INVENTORY_CATEGORIES,
   Team,
-  ViewerRank,
   type InventoryCategory,
 } from "@camp404/types";
+import { allowsRank, captainOrLeadOf, type Rule } from "./actor";
 
 // Inventory (#246). Pure: no DB, no session, no next/*.
 //
@@ -18,12 +18,12 @@ import {
 // inside its own transaction and passes those here; it never takes a team
 // list from the caller.
 
-function isViewerRank(rank: string): rank is ViewerRank {
-  return ViewerRank.safeParse(rank).success;
-}
-
-function isTeam(team: string): team is Team {
-  return Team.safeParse(team).success;
+/**
+ * Who may change `team`'s gear and needs: a captain, or a lead of that team
+ * this year. A key that is not a team allows nobody.
+ */
+export function inventoryEditor(team: string): Rule {
+  return captainOrLeadOf(team);
 }
 
 /**
@@ -35,10 +35,7 @@ export function canEditInventory(
   ledTeams: readonly string[],
   team: string,
 ): boolean {
-  if (!isViewerRank(rank) || !isTeam(team)) return false;
-  if (rank === "captain") return true;
-  if (rank === "team_lead") return ledTeams.includes(team);
-  return false;
+  return allowsRank(inventoryEditor(team), rank, ledTeams);
 }
 
 /** Whether someone may change gear of at least one team (the Add button). */

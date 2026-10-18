@@ -30,7 +30,6 @@ import {
 } from "@/lib/guide-copy";
 import { getDutyCardShifts } from "@/lib/shifts";
 import { SHIFTS_PATH } from "@/lib/shifts-copy";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -62,9 +61,9 @@ export default async function GuideChapterPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { campUser, rank } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
   const { slug } = await params;
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const leadTeams = actor.ledTeams;
   const [chapter, config, cycle] = await Promise.all([
     getPublishedChapter(slug),
     getTeamsConfig(),

@@ -1,9 +1,5 @@
-import {
-  LOUNGE_BANDS,
-  MAX_LOUNGE_DAYS,
-  ViewerRank,
-  type LoungeBand,
-} from "@camp404/types";
+import { LOUNGE_BANDS, MAX_LOUNGE_DAYS, type LoungeBand } from "@camp404/types";
+import { allowsRank, captainOrLeadOf, type Rule } from "./actor";
 import { campDayKey } from "./notification-days";
 
 // The lounge programme (#269). Pure: no DB, no session, no next/*.
@@ -26,9 +22,8 @@ import { campDayKey } from "./notification-days";
 /** The team whose leads run the lounge programme. */
 export const LOUNGE_TEAM = "ministry_of_vibes";
 
-function isViewerRank(rank: string): rank is ViewerRank {
-  return ViewerRank.safeParse(rank).success;
-}
+/** Who may run the lounge programme: a captain, or a lead of the Ministry of Vibes. */
+export const LOUNGE_RUNNER: Rule = captainOrLeadOf(LOUNGE_TEAM);
 
 /**
  * Whether someone may decide offers, place them in the programme and set the
@@ -39,10 +34,7 @@ export function canRunLounge(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  if (!isViewerRank(rank)) return false;
-  if (rank === "captain") return true;
-  if (rank === "team_lead") return ledTeams.includes(LOUNGE_TEAM);
-  return false;
+  return allowsRank(LOUNGE_RUNNER, rank, ledTeams);
 }
 
 // --- Time ----------------------------------------------------------------------

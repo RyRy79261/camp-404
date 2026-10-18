@@ -1,4 +1,5 @@
-import { canEditTeamProgram } from "./team-programs";
+import { CAPTAIN_ONLY, allowsRank, type Rule } from "./actor";
+import { teamProgramEditor } from "./team-programs";
 
 // Help wanted (owner's pick A, 2026-10-09): every team's roles for this year
 // and who fills them, so the camp sees which teams still need a lead and
@@ -20,6 +21,11 @@ import { canEditTeamProgram } from "./team-programs";
 // may run. Both rules fail closed. The writes re-read the actor's rank and
 // led teams inside their own transaction and pass those here.
 
+/** Who may run `team`'s roles: the team program's editors. */
+export function roleKeeper(team: string): Rule {
+  return teamProgramEditor(team);
+}
+
 /**
  * Whether someone may run `team`'s roles this year: add, change, remove, copy
  * last year's, give one to someone or take it back (Lead aside), and read who
@@ -30,15 +36,18 @@ export function canManageTeamRoles(
   ledTeams: readonly string[],
   team: string,
 ): boolean {
-  return canEditTeamProgram(rank, ledTeams, team);
+  return allowsRank(roleKeeper(team), rank, ledTeams);
 }
+
+/** Who may give the Lead role or take it back: a captain. */
+export const LEAD_PICKER: Rule = CAPTAIN_ONLY;
 
 /**
  * Whether someone may give the Lead role or take it back: a captain. It is
  * the lead flag itself, and with it the team_lead rung everywhere.
  */
 export function canPickTeamLead(rank: string): boolean {
-  return rank === "captain";
+  return allowsRank(LEAD_PICKER, rank);
 }
 
 /** How full one role is. */

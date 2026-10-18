@@ -11,10 +11,10 @@ import {
   attendanceAskNotification,
   attendanceIsOpen,
   campDayKey,
-  canAskForAttendance,
-  canManageDeadlines,
   isAskedForAttendance,
   type AttendanceEntry,
+  DEADLINE_KEEPER,
+  ATTENDANCE_ASKER,
 } from "@camp404/core";
 import {
   CANNOT_SKIP_DATE,
@@ -36,7 +36,6 @@ import {
   type AttendanceRead,
   type LogisticsWriteResult,
 } from "@camp404/db/logistics";
-import { reachRank } from "@camp404/db/power";
 import {
   ATTENDANCE_PHASES,
   type AttendanceAnswer,
@@ -146,11 +145,7 @@ function keeper<T extends object>(
   actorId: string,
   fn: () => T | string,
 ): DeadlineWriteResult<T> {
-  const known = testStore.findUserById(actorId) !== null;
-  if (
-    !known ||
-    !canManageDeadlines(reachRank(testStore.senderReach(actorId)))
-  ) {
+  if (!DEADLINE_KEEPER.allows(testStore.actorInStore(actorId))) {
     return { ok: false, error: NOT_A_DEADLINE_KEEPER };
   }
   const result = fn();
@@ -237,11 +232,7 @@ export const logisticsTestStore = {
     actorId: string;
     now?: Date;
   }): LogisticsWriteResult<{ asked: number; notified: number }> {
-    const known = testStore.findUserById(input.actorId) !== null;
-    if (
-      !known ||
-      !canAskForAttendance(reachRank(testStore.senderReach(input.actorId)))
-    ) {
+    if (!ATTENDANCE_ASKER.allows(testStore.actorInStore(input.actorId))) {
       return { ok: false, error: NOT_AN_ATTENDANCE_ASKER };
     }
     const cycle = testStore.currentCycleNumber();

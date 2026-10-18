@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import {
-  canAddPrepSteps,
-  canCheckMenuAllergens,
-  canEditMealPlan,
+  MEAL_PLAN_EDITOR,
+  ALLERGEN_CHECKER,
+  PREP_EDITOR,
+  type Rule,
 } from "@camp404/core";
 import {
   AddMenuItemInput,
@@ -18,7 +19,7 @@ import {
   RemoveSnackInput,
 } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
-import { captainActionGate } from "@/lib/captain-gate";
+import { ruleActionGate, type RuleActionAccess } from "@/lib/rule-gate";
 import {
   addMenuItem,
   addPrepStep,
@@ -44,13 +45,12 @@ import {
   SHOPPING_LIST_PATH,
   SNACK_REFUSAL,
 } from "@/lib/recipe-copy";
-import { getLeadTeams } from "@/lib/users";
 
 /** The task board, where a prep step before we leave lands. */
 const TASKS_PATH = "/tasks";
 
 // The meal plan's one write (2026-09-24): the gate (a captain or a Kitchen
-// lead, canEditMealPlan), the Zod boundary, then the facade with the actor's
+// lead, MEAL_PLAN_EDITOR), the Zod boundary, then the facade with the actor's
 // id alone. The gate answers the screen; the rule is checked again inside the
 // write's own transaction, which re-reads the actor's rank and led teams and
 // never takes a team list from here, writes the audit row, and compares the
@@ -61,13 +61,8 @@ export async function saveMealPlanAction(
   input: unknown,
 ): Promise<ActionResult<{ version: number }>> {
   return runAction("saveMealPlanAction", async () => {
-    const gate = await captainActionGate("team_lead", MEAL_PLAN_REFUSAL);
+    const gate = await ruleActionGate(MEAL_PLAN_EDITOR, MEAL_PLAN_REFUSAL);
     if (!gate.ok) return gate;
-    const led =
-      gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-    if (!canEditMealPlan(gate.rank, led)) {
-      return { ok: false, error: MEAL_PLAN_REFUSAL };
-    }
     const parsed = MealPlanInput.safeParse(input);
     if (!parsed.success) {
       return {
@@ -87,24 +82,17 @@ export async function saveMealPlanAction(
 }
 
 // The menu inside the meal plan (#244, the owner's layout A, 2026-09-30) and
-// the year's snacks: the same people as the meal plan (canEditMealPlan), the
+// the year's snacks: the same people as the meal plan (MEAL_PLAN_EDITOR), the
 // same two moves. The gate answers the screen; each write re-reads the actor
 // inside its own transaction and writes its audit row there. Each is a
 // one-tap change: the screen reports a refusal as a toast.
 
 /** The editor gate: a captain, or a lead of Kitchen this year. */
-async function menuGate(
+function menuGate(
   refusal: string,
-  rule: (rank: string, led: readonly string[]) => boolean = canEditMealPlan,
-) {
-  const gate = await captainActionGate("team_lead", refusal);
-  if (!gate.ok) return gate;
-  const led =
-    gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-  if (!rule(gate.rank, led)) {
-    return { ok: false as const, error: refusal };
-  }
-  return gate;
+  rule: Rule = MEAL_PLAN_EDITOR,
+): Promise<RuleActionAccess> {
+  return ruleActionGate(rule, refusal);
 }
 
 function menuChanged() {
@@ -197,8 +185,8 @@ export async function removeSnackAction(input: unknown): Promise<ActionResult> {
 }
 
 // The dietary check and prep steps on the meal plan (#245; the owner's
-// Option A, 2026-10-02): the same people (canCheckMenuAllergens,
-// canAddPrepSteps: a captain or a Kitchen lead), the same moves. A plan and a
+// Option A, 2026-10-02): the same people (ALLERGEN_CHECKER,
+// PREP_EDITOR: a captain or a Kitchen lead), the same moves. A plan and a
 // correction are compare-and-set on the version the dialog opened; a prep
 // step before we leave becomes a Kitchen task in the same write.
 
@@ -207,7 +195,7 @@ export async function recordAllergenPlanAction(
   input: unknown,
 ): Promise<ActionResult<{ version: number }>> {
   return runAction("recordAllergenPlanAction", async () => {
-    const gate = await menuGate(PLAN_REFUSAL, canCheckMenuAllergens);
+    const gate = await menuGate(PLAN_REFUSAL, ALLERGEN_CHECKER);
     if (!gate.ok) return gate;
     const parsed = RecordAllergenPlanInput.safeParse(input);
     if (!parsed.success) {
@@ -231,7 +219,7 @@ export async function correctAllergensAction(
   input: unknown,
 ): Promise<ActionResult<{ revision: number }>> {
   return runAction("correctAllergensAction", async () => {
-    const gate = await menuGate(ALLERGENS_REFUSAL, canCheckMenuAllergens);
+    const gate = await menuGate(ALLERGENS_REFUSAL, ALLERGEN_CHECKER);
     if (!gate.ok) return gate;
     const parsed = CorrectRecipeAllergensInput.safeParse(input);
     if (!parsed.success) {
@@ -255,7 +243,7 @@ export async function addPrepStepAction(
   input: unknown,
 ): Promise<ActionResult<{ onBoard: boolean; due: string }>> {
   return runAction("addPrepStepAction", async () => {
-    const gate = await menuGate(PREP_REFUSAL, canAddPrepSteps);
+    const gate = await menuGate(PREP_REFUSAL, PREP_EDITOR);
     if (!gate.ok) return gate;
     const parsed = AddPrepStepInput.safeParse(input);
     if (!parsed.success) {
@@ -280,7 +268,7 @@ export async function removePrepStepAction(
   input: unknown,
 ): Promise<ActionResult> {
   return runAction("removePrepStepAction", async () => {
-    const gate = await menuGate(PREP_REFUSAL, canAddPrepSteps);
+    const gate = await menuGate(PREP_REFUSAL, PREP_EDITOR);
     if (!gate.ok) return gate;
     const parsed = RemovePrepStepInput.safeParse(input);
     if (!parsed.success) return { ok: false, error: CHECK_PREP };

@@ -3,7 +3,6 @@ import "server-only";
 import {
   campStockInUse,
   campStockTaken,
-  canManageRental,
   checkRentalOrder,
   GEAR_ORDER_ACTION_KEY,
   GEAR_ORDER_ACTION_TITLE,
@@ -16,8 +15,8 @@ import {
   rentalChargeDescription,
   rentalSummary,
   tentConflict,
+  RENTAL_MANAGER,
 } from "@camp404/core";
-import { reachRank } from "@camp404/db/power";
 import {
   NOT_A_RENTAL_MANAGER,
   OWN_TENT,
@@ -60,7 +59,7 @@ import {
 
 // The in-memory twin of @camp404/db/rental (#241), for E2E_TEST_MODE. The same
 // rules, sentences and results as the database module, over the store's own
-// rows: only a captain runs gear rental (the twin of lockRentalManager), a
+// rows: only a captain runs gear rental (RENTAL_MANAGER, as the real writes), a
 // member writes only their own order, the confirmation is a compare-and-set
 // on `submitted` and the version, and it charges the dues store. The store
 // keeps no audit log and is one synchronous process, so there is nothing to
@@ -122,11 +121,9 @@ export function resetRentalStore(): void {
   r.orders.length = 0;
 }
 
-/** A captain (lockRentalManager's twin). */
+/** A captain (RENTAL_MANAGER). */
 function isManager(actorId: string): boolean {
-  if (!testStore.findUserById(actorId)) return false;
-  const reach = testStore.senderReach(actorId);
-  return canManageRental(reachRank(reach), reach ?? []);
+  return RENTAL_MANAGER.allows(testStore.actorInStore(actorId));
 }
 
 function manager<T extends object>(

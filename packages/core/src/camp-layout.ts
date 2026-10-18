@@ -1,6 +1,5 @@
 import {
   LAYOUT_STEP_M,
-  ViewerRank,
   type CampLayout,
   type LayoutBlockPart,
   type LayoutNorth,
@@ -8,6 +7,7 @@ import {
   type LayoutPieceKind,
   type LayoutPlot,
 } from "@camp404/types";
+import { CAPTAIN_ONLY, allowsRank, captainOrLeadOf, type Rule } from "./actor";
 
 // The camp layout (#271): this year's site plan. Pure: no DB, no session, no
 // next/*. The editor, the page and the neighbour page call these.
@@ -30,9 +30,8 @@ import {
 /** The team whose leads keep the plan. */
 export const LAYOUT_TEAM = "structures";
 
-function isViewerRank(rank: string): rank is ViewerRank {
-  return ViewerRank.safeParse(rank).success;
-}
+/** Who may change this year's plan: a captain, or a lead of Structures. */
+export const LAYOUT_EDITOR: Rule = captainOrLeadOf(LAYOUT_TEAM);
 
 /**
  * Whether someone may change this year's plan: a captain, or a lead of
@@ -42,15 +41,15 @@ export function canEditLayout(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  if (!isViewerRank(rank)) return false;
-  if (rank === "captain") return true;
-  if (rank === "team_lead") return ledTeams.includes(LAYOUT_TEAM);
-  return false;
+  return allowsRank(LAYOUT_EDITOR, rank, ledTeams);
 }
+
+/** Who may turn the neighbour link on, off, or make a new one: a captain. */
+export const LAYOUT_SHARER: Rule = CAPTAIN_ONLY;
 
 /** Whether someone may turn the neighbour link on, off, or make a new one. */
 export function canShareLayout(rank: string): boolean {
-  return isViewerRank(rank) && rank === "captain";
+  return allowsRank(LAYOUT_SHARER, rank);
 }
 
 // --- Pieces ------------------------------------------------------------------

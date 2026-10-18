@@ -42,6 +42,7 @@
     "./questionnaire-responses": "./src/questionnaire-responses.ts",
     "./email": "./src/email.ts",
     "./questionnaire-results": "./src/questionnaire-results.ts",
+    "./actor": "./src/actor.ts",
     "./broadcasts": "./src/broadcasts.ts",
     "./report-screenshots": "./src/report-screenshots.ts",
     "./tasks": "./src/tasks.ts",

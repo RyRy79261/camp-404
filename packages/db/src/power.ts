@@ -1,5 +1,5 @@
 import { and, asc, count, eq, isNull, lt, max, sql } from "drizzle-orm";
-import { canEditPower, type PowerWindow } from "@camp404/core";
+import { type PowerWindow, POWER_EDITOR } from "@camp404/core";
 import {
   POWER_PLAN_DEFAULTS,
   type CurrentKind,
@@ -14,8 +14,8 @@ import {
   type LoadSchedule,
   type PowerPlanInput,
 } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import type { DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
@@ -25,7 +25,7 @@ import * as schema from "./schema";
 //  - Anyone in the camp reads the load list, the generators and the plan.
 //  - Only a captain or a Power & Lighting lead writes (canEditPower). Every
 //    write re-reads the actor's rank and the teams they lead this year INSIDE
-//    its own transaction (lockPowerEditor, through lockSenderReach), so a
+//    its own transaction (lockAllowed, POWER_EDITOR), so a
 //    demotion that committed first is seen and one that comes later waits. A
 //    caller passes only who is acting, never a rank or a team list.
 //  - Loads and the plan are the year's (stamped with currentCycleNumber, read
@@ -62,7 +62,8 @@ export const ALREADY_HAS_PLAN =
   "This year already has a plan, so last year's wasn't copied.";
 export const NOTHING_TO_COPY = "There is no earlier year to copy from.";
 
-export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // --- Shapes ------------------------------------------------------------------
 
@@ -258,38 +259,13 @@ export async function write<T extends object>(
   }
 }
 
-/**
- * The rank rung an edit check stands on, from lockSenderReach's answer:
- * undefined is a captain, an empty list of led teams a member, and a
- * non-empty one a lead.
- */
-export function reachRank(
-  reach: readonly string[] | undefined,
-): "captain" | "team_lead" | "camp_member" {
-  if (reach === undefined) return "captain";
-  return reach.length > 0 ? "team_lead" : "camp_member";
-}
-
-/**
- * Whether the actor may change the power plan, read and locked inside the
- * write's own transaction: a captain, or a lead of Power & Lighting this
- * year. The lock (lockSenderReach) means a demotion that committed first is
- * seen, and one that comes later waits for this transaction.
- */
-export async function lockPowerEditor(
-  tx: DbOrTx,
-  actorId: string,
-): Promise<boolean> {
-  if (!UUID.test(actorId)) return false;
-  const reach = await lockSenderReach(tx, actorId);
-  return canEditPower(reachRank(reach), reach ?? []);
-}
-
 export async function assertPowerEditor(
   tx: Tx,
   actorId: string,
 ): Promise<void> {
-  if (!(await lockPowerEditor(tx, actorId))) refuse(NOT_A_POWER_EDITOR);
+  if (!(await lockAllowed(tx, actorId, POWER_EDITOR))) {
+    refuse(NOT_A_POWER_EDITOR);
+  }
 }
 
 /** A linked inventory item must exist and not be archived. */

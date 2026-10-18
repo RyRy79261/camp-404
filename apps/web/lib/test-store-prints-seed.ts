@@ -2,10 +2,10 @@ import "server-only";
 
 import type { ParticipationStatus } from "@camp404/types";
 import { InventoryItemInput } from "@camp404/types";
-import { reachRank } from "@camp404/db/power";
 import { testStore } from "./test-store";
 import { inventoryStore } from "./test-store-inventory";
 import { logisticsTestStore } from "./test-store-logistics";
+import { CAPTAIN_ONLY } from "@camp404/core";
 
 // A camp's worth of rows for the prints round (#249) in the E2E test store:
 // the burn timeline's phases and attendance answers, the members the
@@ -209,10 +209,7 @@ export const SEED_PRINTS_CAPTAINS_ONLY =
 
 export function seedPrintsExample(actorId: string): void {
   // Checked before the first write, so a refused seed leaves nothing behind.
-  if (
-    testStore.findUserById(actorId) === null ||
-    reachRank(testStore.senderReach(actorId)) !== "captain"
-  ) {
+  if (!CAPTAIN_ONLY.allows(testStore.actorInStore(actorId))) {
     throw new Error(SEED_PRINTS_CAPTAINS_ONLY);
   }
   const members = NAMES.map((name, i) => {

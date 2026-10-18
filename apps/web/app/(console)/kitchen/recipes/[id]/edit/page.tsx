@@ -10,7 +10,6 @@ import {
   getRecipeSource,
   resetStaleRuns,
 } from "@/lib/recipes";
-import { getLeadTeams } from "@/lib/users";
 import { SourceEditor, type OpenRun } from "./source-editor";
 
 export const dynamic = "force-dynamic";
@@ -41,11 +40,11 @@ export default async function EditRecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { campUser, rank } = await captainPageGate("team_lead");
+  const { rank, actor } = await captainPageGate("team_lead");
 
   // Below team_lead, or a lead of another team: the refusal, and not a word
   // of the recipe.
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const leadTeams = actor.ledTeams;
   if (!canApproveRecipe(rank, leadTeams)) {
     return (
       <div className="flex flex-col">

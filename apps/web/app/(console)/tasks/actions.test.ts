@@ -48,6 +48,7 @@ function signedIn(id = "user-1") {
     ok: true,
     campUser: { id } as never,
     rank: "team_lead",
+    actor: { rank: "team_lead", ledTeams: [] },
   });
 }
 

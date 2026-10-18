@@ -7,12 +7,13 @@ import {
   paymentReference,
   type PaymentStatus,
   UnknownCurrencyError,
+  MONEY_KEEPER,
 } from "@camp404/core";
 import type { PaymentMethod, PaymentSource } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent } from "./audit";
 import { currentCycleNumber } from "./cycles";
 import {
-  lockMoneyKeeper,
   MoneyRefused,
   NOT_A_MONEY_KEEPER,
   REFUND_HOLDS_PAYMENT,
@@ -26,7 +27,7 @@ import * as schema from "./schema";
 // what the bank statement shows. Every write leaves an audit row in the same
 // transaction. The Finance team (captains and Finance leads, canManageMoney)
 // records and moves payments, and each write re-checks that inside its own
-// transaction (lockMoneyKeeper); a member may add only their own pending
+// transaction (lockAllowed, MONEY_KEEPER); a member may add only their own pending
 // payment, with a proof file (#240).
 
 /** Postgres unique_violation, which drizzle may nest under `.cause`. */
@@ -145,7 +146,7 @@ export async function recordPayment(
       return await withTransaction(async (tx) => {
         if (
           source !== "member" &&
-          !(await lockMoneyKeeper(tx, input.recordedByUserId))
+          !(await lockAllowed(tx, input.recordedByUserId, MONEY_KEEPER))
         ) {
           throw new MoneyRefused(NOT_A_MONEY_KEEPER);
         }
@@ -222,7 +223,7 @@ export async function setPaymentStatus(input: {
 }): Promise<boolean> {
   if (input.from === input.to) return false;
   return withTransaction(async (tx) => {
-    if (!(await lockMoneyKeeper(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, MONEY_KEEPER))) {
       throw new MoneyRefused(NOT_A_MONEY_KEEPER);
     }
     // Lock the payment before looking at its refunds. requestRefund and

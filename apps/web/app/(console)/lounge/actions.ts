@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { z } from "zod";
-import { canRunLounge } from "@camp404/core";
+import { LOUNGE_RUNNER } from "@camp404/core";
 import {
   DecideLoungeOfferInput,
   EditLoungeOfferInput,
@@ -13,10 +13,8 @@ import {
   WithdrawLoungeOfferInput,
 } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
-import {
-  captainActionGate,
-  type CaptainActionAccess,
-} from "@/lib/captain-gate";
+import { captainActionGate } from "@/lib/captain-gate";
+import { ruleActionGate, type RuleActionAccess } from "@/lib/rule-gate";
 import {
   addLoungeOffer,
   decideLoungeOffer,
@@ -34,18 +32,15 @@ import {
   LOUNGE_PRINT_PATH,
   LOUNGE_REFUSAL,
 } from "@/lib/lounge-copy";
-import { getLeadTeams } from "@/lib/users";
 
 // The lounge programme's writes (#269). Each action: the gate, the Zod
 // boundary, then the facade with the actor's id alone. Offers are any approved
 // member's (the gate at camp_member); the write itself keeps a member to their
 // own offer. Deciding, placing and the music note are a captain's or a
 // Ministry of Vibes lead's: the gate answers the screen, and the rule is
-// checked again inside each write's own transaction (lockLoungeRunner), which
+// checked again inside each write's own transaction (lockAllowed, LOUNGE_RUNNER), which
 // re-reads the actor's rank and led teams and never takes a team list from
 // here.
-
-type Gate = Extract<CaptainActionAccess, { ok: true }>;
 
 function firstIssue(error: z.ZodError, fallback: string): string {
   return error.issues[0]?.message ?? fallback;
@@ -61,15 +56,8 @@ function revalidateLounge(): void {
  * canRunLounge on the teams they lead, so a lead of another team is told here
  * rather than by the write.
  */
-async function runnerGate(): Promise<Gate | { ok: false; error: string }> {
-  const gate = await captainActionGate("team_lead", LOUNGE_REFUSAL);
-  if (!gate.ok) return gate;
-  const led =
-    gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-  if (!canRunLounge(gate.rank, led)) {
-    return { ok: false, error: LOUNGE_REFUSAL };
-  }
-  return gate;
+function runnerGate(): Promise<RuleActionAccess> {
+  return ruleActionGate(LOUNGE_RUNNER, LOUNGE_REFUSAL);
 }
 
 /** Offer an activity or a DJ set. Any approved member. */

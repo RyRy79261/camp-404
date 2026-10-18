@@ -423,8 +423,9 @@ describe("sendAction — the audience gate", () => {
       });
     }
     expect(sendActivation).not.toHaveBeenCalled();
-    // The rank gate refuses before the audience is even consulted.
-    expect(getLeadTeams).not.toHaveBeenCalled();
+    // The rank gate refuses before the audience is even consulted: its own
+    // read of the lead teams, once per send, is the only one.
+    expect(getLeadTeams).toHaveBeenCalledTimes(2);
   });
 });
 

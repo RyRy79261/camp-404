@@ -1,7 +1,6 @@
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   campDayKey,
-  canManageMoney,
   duesBalance,
   nextInstalment,
   paymentFigures,
@@ -11,6 +10,7 @@ import {
   type NextInstalment,
   type PaymentFigures,
   type RefundRule,
+  MONEY_KEEPER,
 } from "@camp404/core";
 import type {
   ChargeKind,
@@ -26,10 +26,9 @@ import type {
   SetFeeInput,
   SettleUpInput,
 } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { createHttpDb, withTransaction, type Tx } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 import type { PaymentStatus } from "@camp404/core";
 
@@ -40,8 +39,8 @@ import type { PaymentStatus } from "@camp404/core";
 //    reason and the ledger notes).
 //  - The Finance team (captains and Finance leads, canManageMoney) reads every
 //    account and writes them. Every Finance write re-reads the actor's rank and
-//    the teams they lead INSIDE its own transaction (lockMoneyKeeper, through
-//    lockSenderReach), so a demotion that committed first is seen and one
+//    the teams they lead INSIDE its own transaction (lockAllowed,
+//    MONEY_KEEPER), so a demotion that committed first is seen and one
 //    that comes later waits. A caller passes only who is acting.
 //  - Every Finance write leaves its audit row in the same transaction. Each
 //    decision is a compare-and-set on the state the actor saw, and a lost race
@@ -135,21 +134,10 @@ async function write<T extends object>(
   }
 }
 
-/**
- * Whether the actor may keep the camp's money, read and locked inside the
- * write's own transaction: a captain, or a lead of Finance this year.
- */
-export async function lockMoneyKeeper(
-  tx: DbOrTx,
-  actorId: string,
-): Promise<boolean> {
-  if (!UUID.test(actorId)) return false;
-  const reach = await lockSenderReach(tx, actorId);
-  return canManageMoney(reachRank(reach), reach ?? []);
-}
-
 async function assertMoneyKeeper(tx: Tx, actorId: string): Promise<void> {
-  if (!(await lockMoneyKeeper(tx, actorId))) refuse(NOT_A_MONEY_KEEPER);
+  if (!(await lockAllowed(tx, actorId, MONEY_KEEPER))) {
+    refuse(NOT_A_MONEY_KEEPER);
+  }
 }
 
 /** A real, not erased, camp member, or a refusal. */

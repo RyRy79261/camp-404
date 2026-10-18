@@ -498,6 +498,31 @@ Decisions baked into the schema — keep new code consistent with them:
     real `isTeamLead()` flag. Never hand-roll a gate with
     `deriveViewerRank(rank, false)`: on a surface that requires `team_lead`
     it locks out a genuine lead.
+    [CORRECTION 2026-10-18] The gate reads the led teams (`getLeadTeams`, the
+    same one cached read the flag came from) and hands back `actor` (rank
+    and led teams, see GLOSSARY.md) beside `rank`. A page or action asks its
+    rule on it, `MONEY_KEEPER.allows(gate.actor)`, and never reads the led
+    teams again. An action behind one rule uses
+    `ruleActionGate(RULE, refusal)` (`lib/rule-gate.ts`).
+  - **One Actor, named rules** (2026-10-18). "A captain, or a lead of team X
+    this year" is written once: `captainOrLeadOf(team)` and `CAPTAIN_ONLY` in
+    `packages/core/src/actor.ts`, and each domain names its rule beside the
+    domain (`MONEY_KEEPER` in `dues.ts`, `POWER_EDITOR`, `TRANSPORT_EDITOR`,
+    `LOGISTICS_EDITOR`, `LOUNGE_RUNNER`, `LAYOUT_EDITOR`, `KITCHEN_REVIEWER`,
+    `MEAL_PLAN_EDITOR`, `RENTAL_MANAGER`, `teamProgramEditor(team)`, ...).
+    The old `canX(rank, ledTeams)` functions are one-liners over those
+    rules. A write reads and locks its actor with `lockActor(tx, userId)`
+    (`packages/db/src/actor.ts`) and asks the rule,
+    `lockAllowed(tx, id, RULE)`; the test store's twin is
+    `testStore.actorInStore(id)`; the connector's gates ask the same rules
+    on `scopeActor(scope)`. Change a rule in its constant, never at a call
+    site. Rules of another shape
+    (`canApproveClaim`, `canWorkInTeam`, `canEditGuideChapter`,
+    `canManageCampEvent`, `canManageCar`, `canSendToAudience`) keep their
+    own functions. Whose claims a list shows is `claimApprovalScope` (Claims
+    to approve) and `claimReviewScope` (the connector's list, which gives a
+    Finance lead every claim as the Finance page does), in
+    `packages/core/src/claims.ts`.
   - Team membership and the lead flag are **year-scoped**: `cycle` is part
     of `team_memberships`' primary key and every production read filters on
     the camp's current burn year, because the owner ruled that teams and
@@ -524,7 +549,9 @@ Decisions baked into the schema — keep new code consistent with them:
     the teams they lead. Team announcements let a lead publish (and pin) only
     to a team they lead. The action's check answers the screen; the write
     reads the sender's rank and lead teams again inside its own transaction
-    and locks those rows (`lockSenderReach` in `packages/db/src/broadcasts.ts`),
+    and locks those rows (`lockSenderReach` in `packages/db/src/broadcasts.ts`,
+    [CORRECTION 2026-10-18] now a thin reading of `lockActor` in
+    `packages/db/src/actor.ts`, which holds the locks),
     so a demotion between the check and the write cannot slip through. Never
     pass the write a list of teams from the caller. Both moves are the
     safety property: the rank gate on its own would put every member one
@@ -1132,7 +1159,10 @@ LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
 - **Dues (#240): the Finance tools are for captains and Finance leads.**
   `canManageMoney` in `packages/core/src/dues.ts` is the one rule (fail-closed;
   a lead of any other team is refused), and every Finance write re-checks it
-  inside its own transaction (`lockMoneyKeeper`). A member reads only their own
+  inside its own transaction (`lockMoneyKeeper`). [CORRECTION 2026-10-18] The
+  rule is the `MONEY_KEEPER` constant (`canManageMoney` is a one-liner over
+  it), and the write's check is `lockAllowed(tx, actorId, MONEY_KEEPER)`;
+  `lockMoneyKeeper` is gone. A member reads only their own
   dues; a concession's reason and the ledger notes never reach them. Proof of
   payment files are private blobs read only through `/api/payment-proof`, and
   the bank statement import reads the file in memory and stores nothing but

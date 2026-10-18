@@ -13,7 +13,6 @@ import {
   type MemberOption,
 } from "@/components/questionnaires/activation-form";
 import { captainPageGate } from "@/lib/captain-gate";
-import { getLeadTeams } from "@/lib/users";
 import {
   audienceLabel,
   getCurrentCycle,
@@ -51,7 +50,7 @@ export default async function SendPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { key } = await params;
-  const { cleared, rank, campUser } = await captainPageGate("team_lead");
+  const { cleared, rank, actor } = await captainPageGate("team_lead");
   const isCaptain = rank === "captain";
   const chrome = (children: ReactNode, title: string, description?: string) => (
     <div className="flex flex-col">
@@ -66,8 +65,8 @@ export default async function SendPage({
 
   // A lead sends only to a team they lead this year (owner's call, 2026-09-16).
   // sendAction checks the same rule again (canSendToAudience).
-  const leadTeams =
-    cleared && !isCaptain ? await getLeadTeams(campUser.id) : [];
+  const leadTeams: readonly string[] =
+    cleared && !isCaptain ? actor.ledTeams : [];
   if (!cleared || (!isCaptain && leadTeams.length === 0)) {
     // Nothing about the questionnaire is read for a viewer who can't send, so
     // the heading names the page, not the questionnaire.

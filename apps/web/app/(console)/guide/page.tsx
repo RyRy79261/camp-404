@@ -50,7 +50,6 @@ import {
   NEW_GUIDE_CHAPTER_PATH,
   WHOLE_CAMP_LABEL,
 } from "@/lib/guide-copy";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -72,12 +71,12 @@ export default async function GuidePage({
 }: {
   searchParams: Promise<{ q?: string; by?: string }>;
 }) {
-  const { campUser, rank } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
   const { q, by: requested } = await searchParams;
   const query = (q ?? "").trim().slice(0, 100);
   const by: GuideGrouping = requested === "team" ? "team" : "topic";
 
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const leadTeams = actor.ledTeams;
   const writer = canEditAnyGuideChapter(rank, leadTeams);
   const [chapters, reads, config, cycle, drafts, dutyCards, sections, all] =
     await Promise.all([

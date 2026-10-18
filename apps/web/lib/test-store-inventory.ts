@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import {
   bookableNow,
-  canEditInventory,
   nextMaintenanceDue,
+  inventoryEditor,
 } from "@camp404/core";
 import {
   ALREADY_BOOKED,
@@ -151,15 +151,7 @@ function nameOf(userId: string | null): string | null {
 }
 
 function isEditor(actorId: string, team: string): boolean {
-  const reach = testStore.senderReach(actorId);
-  const rank =
-    reach === undefined
-      ? "captain"
-      : reach.length > 0
-        ? "team_lead"
-        : "camp_member";
-  if (!testStore.findUserById(actorId)) return false;
-  return canEditInventory(rank, reach ?? [], team);
+  return inventoryEditor(team).allows(testStore.actorInStore(actorId));
 }
 
 function refuseOr(error: string): { ok: false; error: string } {

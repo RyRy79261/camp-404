@@ -3,7 +3,6 @@ import { HelpWantedBoard } from "@/components/help-wanted/help-wanted-board";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getHelpWantedView } from "@/lib/help-wanted";
 import { KEEPER_DESCRIPTION, MEMBER_DESCRIPTION } from "@/lib/help-wanted-copy";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +16,8 @@ export const metadata = { title: "Help wanted — Camp 404" };
 // (lib/help-wanted.ts).
 
 export default async function HelpWantedPage() {
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const ledTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const ledTeams = actor.ledTeams;
   const view = await getHelpWantedView({
     userId: campUser.id,
     rank,

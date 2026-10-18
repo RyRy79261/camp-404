@@ -1,10 +1,9 @@
 import { and, eq, sql } from "drizzle-orm";
-import { canEditTeamProgram } from "@camp404/core";
+import { teamProgramEditor } from "@camp404/core";
 import type { Team } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { createHttpDb, withTransaction } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // Team programs (docs/specs/2026-09-27-team-programs.md): what a team's own
@@ -14,7 +13,7 @@ import * as schema from "./schema";
 //  - Every approved member reads them (the page gates the reader).
 //  - Only a captain or a lead OF THAT TEAM writes (owner's ruling 1,
 //    canEditTeamProgram). The write re-reads the actor's rank and the teams
-//    they lead this year INSIDE its own transaction (lockSenderReach), so a
+//    they lead this year INSIDE its own transaction (lockActor), so a
 //    demotion that committed first is seen and one that comes later waits. A
 //    caller passes only who is acting, never a rank or a team list.
 //  - Every write is a compare-and-set on `version` (0 = nothing saved yet):
@@ -80,8 +79,9 @@ export async function saveTeamProgram(input: {
   expectedVersion: number;
 }): Promise<TeamProgramWriteResult> {
   return withTransaction(async (tx) => {
-    const reach = await lockSenderReach(tx, input.actorId);
-    if (!canEditTeamProgram(reachRank(reach), reach ?? [], input.team)) {
+    if (
+      !(await lockAllowed(tx, input.actorId, teamProgramEditor(input.team)))
+    ) {
       return { ok: false, error: NOT_A_TEAM_EDITOR } as const;
     }
     const now = new Date();

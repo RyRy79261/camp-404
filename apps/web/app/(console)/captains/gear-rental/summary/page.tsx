@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { ChevronRight, Printer } from "lucide-react";
-import { formatMoney, RENTAL_SOURCE_LABELS } from "@camp404/core";
+import {
+  formatMoney,
+  RENTAL_SOURCE_LABELS,
+  RENTAL_MANAGER,
+} from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import {
   Card,
@@ -23,7 +27,6 @@ import {
   RENTAL_SUMMARY_PATH,
   rentalOrderPath,
 } from "@/lib/rental-copy";
-import { runsRental } from "@/lib/rental-gate";
 import { nameList, ownTentText, tentNeedText } from "@/lib/rental-view";
 
 export const dynamic = "force-dynamic";
@@ -168,7 +171,7 @@ const TENT_COLUMNS: ResponsiveColumn<TentRow>[] = [
 
 export default async function GearRentalSummaryPage() {
   const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && (await runsRental(gate));
+  const cleared = gate.cleared && RENTAL_MANAGER.allows(gate.actor);
   const overview = cleared
     ? await getRentalOverview(await ledgerCycle())
     : null;

@@ -3,8 +3,8 @@ import { captainPageGate } from "@/lib/captain-gate";
 import { ledgerCycle } from "@/lib/payments";
 import { listRentalItems } from "@/lib/rental";
 import { RENTAL_CATALOGUE_PATH } from "@/lib/rental-copy";
-import { runsRental } from "@/lib/rental-gate";
 import { CatalogueManager } from "./catalogue-manager";
+import { RENTAL_MANAGER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export const metadata = { title: "Gear rental catalogue — Camp 404" };
 
 export default async function GearRentalCataloguePage() {
   const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && (await runsRental(gate));
+  const cleared = gate.cleared && RENTAL_MANAGER.allows(gate.actor);
   const items = cleared ? await listRentalItems(await ledgerCycle()) : null;
   return (
     <RentalFrame

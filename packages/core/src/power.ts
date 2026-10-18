@@ -1,8 +1,5 @@
-import {
-  ViewerRank,
-  type LoadCategory,
-  type LoadSchedule,
-} from "@camp404/types";
+import { type LoadCategory, type LoadSchedule } from "@camp404/types";
+import { allowsRank, captainOrLeadOf, type Rule } from "./actor";
 
 // Power and fuel (#253 load list and calculator, #254 generators and fuel).
 // Pure: no DB, no session, no next/*. The screens call these; the database
@@ -22,9 +19,8 @@ import {
 /** The team whose leads keep the power plan. */
 export const POWER_TEAM = "power_and_lighting";
 
-function isViewerRank(rank: string): rank is ViewerRank {
-  return ViewerRank.safeParse(rank).success;
-}
+/** Who may change the power plan: a captain, or a lead of Power & Lighting. */
+export const POWER_EDITOR: Rule = captainOrLeadOf(POWER_TEAM);
 
 /**
  * Whether someone may change the loads, the generators or the year's plan: a
@@ -35,10 +31,7 @@ export function canEditPower(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  if (!isViewerRank(rank)) return false;
-  if (rank === "captain") return true;
-  if (rank === "team_lead") return ledTeams.includes(POWER_TEAM);
-  return false;
+  return allowsRank(POWER_EDITOR, rank, ledTeams);
 }
 
 // --- Shapes ----------------------------------------------------------------

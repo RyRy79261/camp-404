@@ -16,7 +16,6 @@ import {
   type MealChecks,
 } from "@/lib/kitchen-menu";
 import { getMealPlan } from "@/lib/meal-plan";
-import { getLeadTeams } from "@/lib/users";
 import { DietaryBox } from "./dietary-box";
 import type { MealCheckView } from "./meal-checks";
 import { MealPlanEditor } from "./meal-plan-editor";
@@ -105,8 +104,8 @@ function checkView(
 }
 
 export default async function MealPlanPage() {
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
   const canEdit = canEditMealPlan(rank, leadTeams);
   const [plan, menu, snacks, book, dietary, checks] = await Promise.all([
     getMealPlan(),

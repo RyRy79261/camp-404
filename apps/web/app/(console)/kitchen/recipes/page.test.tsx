@@ -26,6 +26,7 @@ import {
 } from "@/lib/recipes";
 import { getLeadTeams } from "@/lib/users";
 import RecipeBookPage from "./page";
+import { toActor } from "@camp404/core";
 
 const queued = (id: string, status: "suggested" | "changes_requested") => ({
   id,
@@ -56,6 +57,7 @@ async function renderAs(
     campUser: { id: "viewer" },
     rank,
     cleared: true,
+    actor: toActor(rank, leads)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(leads);
   render(await RecipeBookPage());

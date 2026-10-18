@@ -7,7 +7,8 @@ import {
   type FoodReactionEntry,
   type KitchenAllergen,
 } from "@camp404/types";
-import { canEditMealPlan } from "./recipes";
+import { allowsRank, type Rule } from "./actor";
+import { MEAL_PLAN_EDITOR } from "./recipes";
 
 // The dietary cross-check on the meal plan (#245; the owner approved Option A
 // of design/kitchen-dietary.html, 2026-10-02). Pure: no DB, no session, no
@@ -29,6 +30,9 @@ import { canEditMealPlan } from "./recipes";
 // other clash (an allergy or an intolerance) is an amber line. Diets are
 // counted, never matched.
 
+/** Who reads the dietary counts and records allergen plans: the meal plan's editors. */
+export const ALLERGEN_CHECKER: Rule = MEAL_PLAN_EDITOR;
+
 /**
  * Whether someone may read the counts, record a plan and correct a recipe's
  * allergens: a captain or a Kitchen lead, the people who edit the meal plan.
@@ -37,7 +41,7 @@ export function canCheckMenuAllergens(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  return canEditMealPlan(rank, ledTeams);
+  return allowsRank(ALLERGEN_CHECKER, rank, ledTeams);
 }
 
 /** One member's answers, as the counts need them: no id, no name. */

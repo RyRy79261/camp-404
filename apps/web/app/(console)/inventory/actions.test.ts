@@ -60,6 +60,7 @@ function signedIn() {
     ok: true,
     campUser: { id: "actor" } as never,
     rank: "team_lead",
+    actor: { rank: "team_lead", ledTeams: [] },
   });
 }
 

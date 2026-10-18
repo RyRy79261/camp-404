@@ -1,11 +1,10 @@
 import { and, asc, desc, eq, isNull, lt, max, sql } from "drizzle-orm";
-import { canManageTeamRoles, canPickTeamLead } from "@camp404/core";
+import { roleKeeper, type Actor, LEAD_PICKER } from "@camp404/core";
 import { MAX_TEAM_ROLES, type Team } from "@camp404/types";
+import { lockActor } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 import { assignTeamInTx, setLeadInTx } from "./team-memberships";
 
@@ -19,7 +18,7 @@ import { assignTeamInTx, setLeadInTx } from "./team-memberships";
 //  - A captain or a lead OF THAT TEAM runs a team's roles
 //    (canManageTeamRoles); only a captain gives or takes Lead
 //    (canPickTeamLead). Every write re-reads the actor's rank and the teams
-//    they lead this year INSIDE its own transaction (lockSenderReach), so a
+//    they lead this year INSIDE its own transaction (lockActor), so a
 //    demotion that committed first is seen. A caller passes only who is
 //    acting, never a rank or a team list.
 //  - Giving a role locks the role's row (Lead: the team-year's settings row)
@@ -283,22 +282,8 @@ async function write<T extends object>(
 }
 
 /** The actor's rank and led teams, read and locked inside the write. */
-async function lockActor(
-  tx: Tx,
-  actorId: string,
-): Promise<{ rank: string; led: readonly string[] }> {
-  if (!UUID.test(actorId)) return { rank: "", led: [] };
-  const reach = await lockSenderReach(tx, actorId);
-  return { rank: reachRank(reach), led: reach ?? [] };
-}
-
-function assertKeeper(
-  actor: { rank: string; led: readonly string[] },
-  team: string,
-): void {
-  if (!canManageTeamRoles(actor.rank, actor.led, team)) {
-    refuse(NOT_A_ROLE_KEEPER);
-  }
+function assertKeeper(actor: Actor | null, team: string): void {
+  if (!roleKeeper(team).allows(actor)) refuse(NOT_A_ROLE_KEEPER);
 }
 
 /**
@@ -698,7 +683,7 @@ export async function giveTeamRole(input: {
     const actor = await lockActor(tx, input.actorId);
     const cycle = await currentCycleNumber(tx);
     if (input.roleId === null) {
-      if (!canPickTeamLead(actor.rank)) refuse(NOT_A_LEAD_PICKER);
+      if (!LEAD_PICKER.allows(actor)) refuse(NOT_A_LEAD_PICKER);
       const { leadPlaces } = await lockTeamYear(tx, cycle, input.team);
       if (!(await isRealMember(tx, input.userId))) refuse(ROLE_NOT_A_MEMBER);
       if ((await leadsOf(tx, input.team, cycle)) >= leadPlaces) {
@@ -761,7 +746,7 @@ export async function takeTeamRole(input: {
     const cycle = await currentCycleNumber(tx);
     if (!UUID.test(input.userId)) refuse(ROLE_NOT_HELD);
     if (input.roleId === null) {
-      if (!canPickTeamLead(actor.rank)) refuse(NOT_A_LEAD_PICKER);
+      if (!LEAD_PICKER.allows(actor)) refuse(NOT_A_LEAD_PICKER);
       await lockTeamYear(tx, cycle, input.team);
       const set = await setLeadInTx(
         tx,

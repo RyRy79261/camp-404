@@ -23,7 +23,7 @@ import {
   readCalendarDays,
   stateRange,
 } from "@/lib/calendar-page";
-import { getLeadTeams, getMyTeams } from "@/lib/users";
+import { getMyTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -50,8 +50,8 @@ export default async function CalendarPage({
 }) {
   // The gate first, before any boundary: a redirect or a refusal is decided
   // here, on the server, with the page's own status.
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
   const canCreate = canCreateCampEvents(rank, leadTeams);
 
   return (
@@ -99,7 +99,7 @@ async function CalendarBody({
 }: {
   userId: string;
   rank: Awaited<ReturnType<typeof captainPageGate>>["rank"];
-  leadTeams: string[];
+  leadTeams: readonly string[];
   canCreate: boolean;
   searchParams: SearchParams;
 }) {

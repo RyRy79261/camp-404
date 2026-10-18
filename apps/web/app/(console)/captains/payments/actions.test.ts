@@ -25,6 +25,7 @@ import { MoneyRefused, NOT_A_MONEY_KEEPER } from "@camp404/db/dues";
 import { findCampUserById, getLeadTeams } from "@/lib/users";
 import { recordPayment, setPaymentStatus } from "@/lib/payments";
 import { recordPaymentAction, setPaymentStatusAction } from "./actions";
+import { toActor } from "@camp404/core";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -32,6 +33,7 @@ beforeEach(() => {
     ok: true,
     campUser: { id: "cap-1" },
     rank: "captain",
+    actor: toActor("captain", [])!,
   } as never);
   vi.mocked(findCampUserById).mockResolvedValue({ id: "m1" } as never);
 });
@@ -137,6 +139,7 @@ describe("recordPaymentAction", () => {
       ok: true,
       campUser: { id: "lead-1" },
       rank: "team_lead",
+      actor: toActor("team_lead", ["finance"])!,
     } as never);
     vi.mocked(getLeadTeams).mockResolvedValue(["finance"]);
     expect((await recordPaymentAction(VALID)).ok).toBe(true);
@@ -145,6 +148,12 @@ describe("recordPaymentAction", () => {
     );
 
     vi.mocked(recordPayment).mockClear();
+    vi.mocked(captainActionGate).mockResolvedValue({
+      ok: true,
+      campUser: { id: "lead-1" },
+      rank: "team_lead",
+      actor: toActor("team_lead", ["kitchen"])!,
+    } as never);
     vi.mocked(getLeadTeams).mockResolvedValue(["kitchen"]);
     expect(await recordPaymentAction(VALID)).toEqual({
       ok: false,

@@ -17,7 +17,6 @@ import {
   guideEditPath,
   WHOLE_CAMP_LABEL,
 } from "@/lib/guide-copy";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +32,12 @@ export default async function GuideVersionPage({
 }: {
   params: Promise<{ slug: string; version: string }>;
 }) {
-  const { campUser, rank } = await captainPageGate("camp_member");
+  const { rank, actor } = await captainPageGate("camp_member");
   const { slug, version: raw } = await params;
   const number = /^\d{1,6}$/.test(raw) ? Number(raw) : NaN;
   const version = await getChapterVersion(slug, number);
   if (!version) notFound();
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const leadTeams = actor.ledTeams;
   const canEdit = canEditGuideChapter(rank, leadTeams, version.chapter.team);
   if (!version.chapter.published && !canEdit) notFound();
 

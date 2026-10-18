@@ -40,7 +40,6 @@ import {
   type ProofreadRunRow,
   type ReviewQueueEntry,
 } from "@/lib/recipes";
-import { getLeadTeams } from "@/lib/users";
 import { ProofreadBatch, type MealPlates } from "./proofread-batch";
 
 export const dynamic = "force-dynamic";
@@ -254,7 +253,7 @@ function Section({
 }
 
 export default async function RecipeReviewPage() {
-  const { campUser, rank, cleared } = await captainPageGate("team_lead");
+  const { rank, cleared, actor } = await captainPageGate("team_lead");
   const now = new Date();
   // No cron: a run that stopped, or was queued and never started, goes back
   // to its recipe with the reason every time a Kitchen page loads.
@@ -280,7 +279,7 @@ export default async function RecipeReviewPage() {
     );
   }
 
-  const leadTeams = rank === "captain" ? [] : await getLeadTeams(campUser.id);
+  const leadTeams = actor.ledTeams;
   if (!canApproveRecipe(rank, leadTeams)) {
     return (
       <div className="flex flex-col">

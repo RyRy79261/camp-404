@@ -47,13 +47,19 @@ import {
   recordAllergenPlanAction,
   removePrepStepAction,
 } from "./actions";
+import { toActor } from "@camp404/core";
 
 const LADDER: ViewerRank[] = ["camp_member", "team_lead", "captain"];
 
 function actAs(rank: ViewerRank, led: string[] = [], id = "user-1") {
   vi.mocked(captainActionGate).mockImplementation(async (required, refusal) =>
     LADDER.indexOf(rank) >= LADDER.indexOf(required)
-      ? ({ ok: true, rank, campUser: { id } } as never)
+      ? ({
+          ok: true,
+          rank,
+          campUser: { id },
+          actor: toActor(rank, led),
+        } as never)
       : { ok: false, error: refusal ?? "No." },
   );
   vi.mocked(getLeadTeams).mockResolvedValue(led as never);

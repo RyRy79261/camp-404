@@ -1,4 +1,6 @@
 import { Team, ViewerRank, type ClaimStatus } from "@camp404/types";
+import type { Actor } from "./actor";
+import { MONEY_KEEPER } from "./dues";
 import { sumMinor } from "./money";
 
 // Team budgets and claims (#242). Pure: no DB, no session, no next/*.
@@ -38,6 +40,30 @@ export function canApproveClaim(
 
 function isTeam(key: string): boolean {
   return Team.safeParse(key).success;
+}
+
+/** Which teams' claims someone sees: every claim, or those of these teams. */
+export type ClaimScope = "all" | readonly Team[];
+
+/**
+ * Whose claims the "Claims to approve" page lists: a captain every team's, a
+ * lead the teams they lead this year, anyone else none. A Finance lead is a
+ * lead here like any other: the Finance page is where they read every claim.
+ */
+export function claimApprovalScope(actor: Actor): ClaimScope {
+  if (actor.rank === "captain") return "all";
+  if (actor.rank === "team_lead") return actor.ledTeams;
+  return [];
+}
+
+/**
+ * Whose claims the connector's review list returns: a captain or a Finance
+ * lead every claim (what the website's Finance page shows them), a lead the
+ * teams they lead this year, anyone else none.
+ */
+export function claimReviewScope(actor: Actor): ClaimScope {
+  if (MONEY_KEEPER.allows(actor)) return "all";
+  return claimApprovalScope(actor);
 }
 
 /**

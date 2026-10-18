@@ -6,7 +6,6 @@ import { ChapterEditor, WHOLE_CAMP } from "@/components/guide/chapter-editor";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { listGuideSections } from "@/lib/guide";
 import { captainPageGate } from "@/lib/captain-gate";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +18,8 @@ export const metadata = { title: "New chapter — Survival Guide" };
 // more inside its transaction.
 
 export default async function NewGuideChapterPage() {
-  const { campUser, rank, cleared } = await captainPageGate("team_lead");
-  const leadTeams =
-    cleared && rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { rank, cleared, actor } = await captainPageGate("team_lead");
+  const leadTeams = actor.ledTeams;
   if (!cleared || !canEditAnyGuideChapter(rank, leadTeams)) {
     return (
       <div className="flex flex-col">

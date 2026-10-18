@@ -24,7 +24,6 @@ import { captainPageGate } from "@/lib/captain-gate";
 import { listSheetPrepSteps } from "@/lib/kitchen-menu";
 import { getMealPlan } from "@/lib/meal-plan";
 import { MEAL_PLAN_PATH, PREP_PLAN_REFUSAL } from "@/lib/recipe-copy";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -61,8 +60,8 @@ function StepRows({ steps }: { steps: readonly PlanPrepStep[] }) {
 }
 
 export default async function PrepPlanPrintPage() {
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
   if (!canEditMealPlan(rank, leadTeams)) {
     return (
       <PrintRefusal>

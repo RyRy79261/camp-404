@@ -2,8 +2,8 @@ import { PaymentsFrame } from "@/components/dues/payments-frame";
 import { loadBudgetRows } from "@/lib/budget-rows";
 import { captainPageGate } from "@/lib/captain-gate";
 import { BUDGETS_REFUSAL, PAYMENTS_BUDGETS_PATH } from "@/lib/claims-copy";
-import { keepsMoney } from "@/lib/money-gate";
 import { BudgetsManager } from "./budgets-manager";
+import { MONEY_KEEPER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export const metadata = { title: "Budgets — Camp 404" };
 
 export default async function BudgetsPage() {
   const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && (await keepsMoney(gate));
+  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
   const data = cleared ? await loadBudgetRows() : null;
 
   return (

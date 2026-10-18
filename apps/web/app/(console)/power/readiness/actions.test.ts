@@ -40,6 +40,7 @@ import {
   startChecklistAction,
   tickReadinessItemAction,
 } from "./actions";
+import { toActor } from "@camp404/core";
 
 const ID = "0f8fad5b-d9cb-469f-a165-70867728950e";
 const LADDER: ViewerRank[] = ["camp_member", "team_lead", "captain"];
@@ -47,7 +48,12 @@ const LADDER: ViewerRank[] = ["camp_member", "team_lead", "captain"];
 function actAs(rank: ViewerRank, led: string[] = [], id = "user-1") {
   vi.mocked(captainActionGate).mockImplementation(async (required, refusal) =>
     LADDER.indexOf(rank) >= LADDER.indexOf(required)
-      ? { ok: true, campUser: { id } as never, rank }
+      ? {
+          ok: true,
+          campUser: { id } as never,
+          rank,
+          actor: toActor(rank, led)!,
+        }
       : { ok: false, error: refusal ?? "refused" },
   );
   vi.mocked(getLeadTeams).mockResolvedValue(led);

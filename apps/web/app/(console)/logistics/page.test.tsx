@@ -55,6 +55,7 @@ import {
 } from "@/lib/logistics-copy";
 import { getLeadTeams } from "@/lib/users";
 import LogisticsPage from "./page";
+import { toActor } from "@camp404/core";
 
 function signIn(
   rank: "camp_member" | "team_lead" | "captain",
@@ -63,6 +64,7 @@ function signIn(
   vi.mocked(captainPageGate).mockResolvedValue({
     campUser: { id: "user-1" },
     rank,
+    actor: toActor(rank, led)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(led as never);
 }

@@ -20,7 +20,6 @@ import {
   listGuideSections,
 } from "@/lib/guide";
 import { dutyCardPrintPath, guideLongDay, KIND_LABEL } from "@/lib/guide-copy";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -37,10 +36,9 @@ export default async function EditGuideChapterPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { campUser, rank, cleared } = await captainPageGate("team_lead");
+  const { rank, cleared, actor } = await captainPageGate("team_lead");
   const { slug } = await params;
-  const leadTeams =
-    cleared && rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const leadTeams = actor.ledTeams;
   const lock = (message: string) => (
     <div className="flex flex-col">
       <PageHeading eyebrow="Camp / Survival Guide" title="Edit chapter" />

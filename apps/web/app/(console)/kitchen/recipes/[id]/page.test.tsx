@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sourceFromText } from "@camp404/core";
+import { sourceFromText, toActor } from "@camp404/core";
 import { KitchenRecipe } from "@camp404/types";
 import type { ProofreadProgress, RecipeDetail } from "@/lib/recipes";
 
@@ -152,6 +152,7 @@ async function renderAs(
     campUser: { id: viewer.id },
     rank: viewer.rank,
     cleared: true,
+    actor: toActor(viewer.rank, leads)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(leads);
   vi.mocked(getRecipeDetail).mockResolvedValue(recipe);
@@ -297,7 +298,8 @@ describe("recipe page", () => {
       expect(document.body.textContent).not.toMatch(NO_RUN_COUNT);
       cleanup();
     }
-    expect(getLeadTeams).toHaveBeenCalledTimes(1);
+    // The gate hands the page the actor's led teams: no second read.
+    expect(getLeadTeams).not.toHaveBeenCalled();
     vi.mocked(getProofreadProgress).mockClear();
 
     for (const [viewer, leads, recipe] of [
@@ -404,6 +406,7 @@ describe("recipe page", () => {
       campUser: { id: "cap" },
       rank: "captain",
       cleared: true,
+      actor: toActor("captain", [])!,
     } as never);
     vi.mocked(getRecipeDetail).mockImplementationOnce(async () => {
       order.push("read");

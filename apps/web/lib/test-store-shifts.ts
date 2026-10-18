@@ -13,7 +13,6 @@ import {
   shiftDays,
   shiftsAskNotification,
 } from "@camp404/core";
-import { reachRank } from "@camp404/db/power";
 import {
   DUTY_CARD_GONE,
   NOT_A_SHIFT_ASKER,
@@ -125,9 +124,9 @@ const isMember = (userId: string) =>
   testStore.findUserById(userId)?.approvalStatus === "approved";
 
 function keeperOf(actorId: string): { rank: string; led: readonly string[] } {
-  if (!testStore.findUserById(actorId)) return { rank: "", led: [] };
-  const reach = testStore.senderReach(actorId);
-  return { rank: reachRank(reach), led: reach ?? [] };
+  const actor = testStore.actorInStore(actorId);
+  if (!actor) return { rank: "", led: [] };
+  return { rank: actor.rank, led: actor.ledTeams };
 }
 
 class Refused extends Error {

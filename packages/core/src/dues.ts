@@ -1,10 +1,10 @@
 import {
-  ViewerRank,
   type ChargeKind,
   type PaymentMethod,
   type PaymentSource,
   type RefundStatus,
 } from "@camp404/types";
+import { allowsRank, captainOrLeadOf, type Rule } from "./actor";
 import { isCurrency, sumMinor, UnknownCurrencyError } from "./money";
 import type { PaymentStatus } from "./payment-references";
 
@@ -27,9 +27,8 @@ import type { PaymentStatus } from "./payment-references";
 /** The team whose leads keep the camp's money with the captains. */
 export const FINANCE_TEAM = "finance";
 
-function isViewerRank(rank: string): rank is ViewerRank {
-  return ViewerRank.safeParse(rank).success;
-}
+/** Who may work in the Finance tools: a captain, or a lead of Finance. */
+export const MONEY_KEEPER: Rule = captainOrLeadOf(FINANCE_TEAM);
 
 /**
  * Whether someone may work in the Finance tools (dues, payments, refunds,
@@ -41,10 +40,7 @@ export function canManageMoney(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  if (!isViewerRank(rank)) return false;
-  if (rank === "captain") return true;
-  if (rank === "team_lead") return ledTeams.includes(FINANCE_TEAM);
-  return false;
+  return allowsRank(MONEY_KEEPER, rank, ledTeams);
 }
 
 // --- Words -------------------------------------------------------------------

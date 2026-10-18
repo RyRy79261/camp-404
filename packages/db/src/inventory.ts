@@ -13,8 +13,8 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import {
   bookableNow,
-  canEditInventory,
   nextMaintenanceDue,
+  inventoryEditor,
 } from "@camp404/core";
 import type {
   EditInventoryItemInput,
@@ -31,8 +31,8 @@ import type {
   InventoryReviewInput,
   Team,
 } from "@camp404/types";
-import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
+import { lockAllowed } from "./actor";
+import { writeAuditEvent } from "./audit";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
@@ -44,7 +44,7 @@ import * as schema from "./schema";
 //    the item; the page asks `canEditInventory` and passes the flag here.
 //  - A captain or a lead of the item's OWN team changes it (canEditInventory).
 //    Every such write re-reads the actor's rank and the teams they lead this
-//    year INSIDE its own transaction (lockSenderReach), so a demotion that
+//    year INSIDE its own transaction (lockActor), so a demotion that
 //    committed first is seen and one that comes later waits. A caller passes
 //    only who is acting, never a rank or a team list.
 //  - Any member proposes a change; approving it is a compare-and-set on
@@ -240,30 +240,8 @@ async function write<T extends object>(
   }
 }
 
-/** The rung lockSenderReach's answer stands on: undefined is a captain. */
-function reachRank(
-  reach: readonly string[] | undefined,
-): "captain" | "team_lead" | "camp_member" {
-  if (reach === undefined) return "captain";
-  return reach.length > 0 ? "team_lead" : "camp_member";
-}
-
-/**
- * Whether the actor may change `team`'s gear, read and locked inside the
- * write's own transaction: a captain, or a lead of that team this year.
- */
-export async function lockInventoryEditor(
-  tx: DbOrTx,
-  actorId: string,
-  team: string,
-): Promise<boolean> {
-  if (!UUID.test(actorId)) return false;
-  const reach = await lockSenderReach(tx, actorId);
-  return canEditInventory(reachRank(reach), reach ?? [], team);
-}
-
 async function assertEditor(tx: Tx, actorId: string, team: string) {
-  if (!(await lockInventoryEditor(tx, actorId, team))) {
+  if (!(await lockAllowed(tx, actorId, inventoryEditor(team)))) {
     refuse(NOT_AN_INVENTORY_EDITOR);
   }
 }
@@ -1170,7 +1148,10 @@ export async function cancelInventoryBooking(input: {
       .for("update", { of: schema.inventoryBookings });
     if (!booking) refuse(BOOKING_GONE);
     const own = booking.userId === input.actorId;
-    if (!own && !(await lockInventoryEditor(tx, input.actorId, booking.team))) {
+    if (
+      !own &&
+      !(await lockAllowed(tx, input.actorId, inventoryEditor(booking.team)))
+    ) {
       refuse(NOT_YOUR_BOOKING);
     }
     await tx

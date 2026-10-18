@@ -1,4 +1,4 @@
-import { Team, ViewerRank } from "@camp404/types";
+import { allowsRank, captainOrLeadOf, type Rule } from "./actor";
 
 // Team programs (docs/specs/2026-09-27-team-programs.md): each team's own
 // window on the 404 OS desktop. Pure: no DB, no session, no next/*.
@@ -16,6 +16,14 @@ import { Team, ViewerRank } from "@camp404/types";
 // here; it never takes a team list from the caller.
 
 /**
+ * Who may change `teamKey`'s program: a captain, or a lead of that team this
+ * year. A key that is not a team allows nobody.
+ */
+export function teamProgramEditor(teamKey: string): Rule {
+  return captainOrLeadOf(teamKey);
+}
+
+/**
  * Whether someone may change a team's program (its description
  * today). `ledTeams` are the team keys they lead this year.
  */
@@ -24,9 +32,5 @@ export function canEditTeamProgram(
   ledTeams: readonly string[],
   teamKey: string,
 ): boolean {
-  if (!ViewerRank.safeParse(rank).success) return false;
-  if (!Team.safeParse(teamKey).success) return false;
-  if (rank === "captain") return true;
-  if (rank === "team_lead") return ledTeams.includes(teamKey);
-  return false;
+  return allowsRank(teamProgramEditor(teamKey), rank, ledTeams);
 }

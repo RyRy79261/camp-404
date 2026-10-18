@@ -4,11 +4,12 @@ import {
   SHIFTS_ACTION_TITLE,
   SHIFTS_REF_TYPE,
   campDayKey,
-  canAskForShifts,
-  canManageShifts,
   shiftChangesOpen,
   shiftDays,
   shiftsAskNotification,
+  SHIFT_ASKER,
+  shiftKeeper,
+  type Actor,
 } from "@camp404/core";
 import {
   MAX_SHIFT_TYPES,
@@ -17,13 +18,12 @@ import {
   type ShiftSlotStatus,
   type Team,
 } from "@camp404/types";
+import { lockActor, lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import { comingMembers } from "./logistics";
 import { closeNudge, openNudges } from "./nudges";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // The shift roster (#248). The data layer.
@@ -35,7 +35,7 @@ import * as schema from "./schema";
 //  - A shift type belongs to one team. A captain or a lead of THAT team sets
 //    it up and puts members on or takes them off (canManageShifts). Every
 //    write re-reads the actor's rank and the teams they lead this year INSIDE
-//    its own transaction (lockSenderReach), so a demotion that committed
+//    its own transaction (lockActor), so a demotion that committed
 //    first is seen and one that comes later waits. A caller passes only who
 //    is acting, never a rank or a team list.
 //  - Taking a place locks the slot's row and counts who is on it, so two
@@ -225,23 +225,15 @@ async function write<T extends object>(
   }
 }
 
-/** The actor's rank and led teams, read and locked inside the write. */
-async function lockKeeper(
-  tx: Tx,
-  actorId: string,
-): Promise<{ rank: string; led: readonly string[] }> {
-  if (!UUID.test(actorId)) refuse(NOT_A_SHIFT_KEEPER);
-  const reach = await lockSenderReach(tx, actorId);
-  return { rank: reachRank(reach), led: reach ?? [] };
+/** The actor, read and locked inside the write, or a refusal. */
+async function lockKeeper(tx: Tx, actorId: string): Promise<Actor> {
+  const actor = await lockActor(tx, actorId);
+  if (!actor) refuse(NOT_A_SHIFT_KEEPER);
+  return actor;
 }
 
-function assertKeeper(
-  keeper: { rank: string; led: readonly string[] },
-  team: string,
-): void {
-  if (!canManageShifts(keeper.rank, keeper.led, team)) {
-    refuse(NOT_A_SHIFT_KEEPER);
-  }
+function assertKeeper(keeper: Actor, team: string): void {
+  if (!shiftKeeper(team).allows(keeper)) refuse(NOT_A_SHIFT_KEEPER);
 }
 
 /** This year's Burn days, from the logistics calendar's Burn phase. */
@@ -903,7 +895,7 @@ async function takePlace(
     addedByUserId: string | null;
     cycle: number;
     now: Date;
-    keeper?: { rank: string; led: readonly string[] };
+    keeper?: Actor;
   },
 ): Promise<{ slot: ShiftSlotRow; type: ShiftTypeRow }> {
   const found = await lockSlot(tx, input.slotId, input.cycle);
@@ -1083,9 +1075,9 @@ export async function askForShifts(input: {
   now?: Date;
 }): Promise<ShiftWriteResult<{ asked: number; notified: number }>> {
   return write(async (tx) => {
-    if (!UUID.test(input.actorId)) refuse(NOT_A_SHIFT_ASKER);
-    const reach = await lockSenderReach(tx, input.actorId);
-    if (!canAskForShifts(reachRank(reach))) refuse(NOT_A_SHIFT_ASKER);
+    if (!(await lockAllowed(tx, input.actorId, SHIFT_ASKER))) {
+      refuse(NOT_A_SHIFT_ASKER);
+    }
     const cycle = await currentCycleNumber(tx);
     const now = input.now ?? new Date();
     const coming = await comingMembers(tx, cycle);

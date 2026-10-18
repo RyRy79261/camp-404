@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { canApproveRecipe, canRunLounge } from "@camp404/core";
+import { LOUNGE_RUNNER, KITCHEN_REVIEWER } from "@camp404/core";
 import { SEARCH_KINDS, type SearchViewer } from "@camp404/db/search";
 import { captainActionGate } from "@/lib/captain-gate";
 import { RECENT_MAX } from "@/lib/program-search";
 import { resolveRecent, searchCamp } from "@/lib/search";
-import { getLeadTeams } from "@/lib/users";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,13 +64,12 @@ export async function GET(request: NextRequest) {
       },
     );
   }
-  const { campUser, rank } = access;
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { campUser, rank, actor } = access;
   const viewer: SearchViewer = {
     userId: campUser.id,
     rank,
-    runsLounge: canRunLounge(rank, leadTeams),
-    reviewsRecipes: canApproveRecipe(rank, leadTeams),
+    runsLounge: LOUNGE_RUNNER.allows(actor),
+    reviewsRecipes: KITCHEN_REVIEWER.allows(actor),
   };
 
   const entries = query?.success

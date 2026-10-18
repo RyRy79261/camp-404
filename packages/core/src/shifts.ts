@@ -4,9 +4,10 @@ import {
   type NotificationPayload,
   type ParticipationStatus,
 } from "@camp404/types";
+import { CAPTAIN_ONLY, allowsRank, type Rule } from "./actor";
 import { clockText } from "./lounge";
 import { isComingThisYear } from "./participation";
-import { canEditTeamProgram } from "./team-programs";
+import { teamProgramEditor } from "./team-programs";
 
 // The shift roster (#248). Pure: no DB, no session, no next/*.
 //
@@ -32,6 +33,11 @@ import { canEditTeamProgram } from "./team-programs";
 /** The team whose leads set up the cleaning shifts. */
 export const CLEANING_TEAM = "sanitation_and_water";
 
+/** Who may set up `team`'s shifts: the team program's editors. */
+export function shiftKeeper(team: string): Rule {
+  return teamProgramEditor(team);
+}
+
 /**
  * Whether someone may set up `team`'s shifts: add, change or remove a shift
  * type, mark a day not needed, and put members on or take them off. A captain,
@@ -42,7 +48,7 @@ export function canManageShifts(
   ledTeams: readonly string[],
   team: string,
 ): boolean {
-  return canEditTeamProgram(rank, ledTeams, team);
+  return allowsRank(shiftKeeper(team), rank, ledTeams);
 }
 
 /** The teams, of `teams`, whose shifts someone may set up. */
@@ -54,13 +60,16 @@ export function shiftTeamsFor(
   return teams.filter((t) => canManageShifts(rank, ledTeams, t));
 }
 
+/** Who may press "Ask everyone" about shifts: a captain. */
+export const SHIFT_ASKER: Rule = CAPTAIN_ONLY;
+
 /**
  * Whether someone may press "Ask everyone" about shifts: a captain. It sends
  * a notice to every member who is coming, and a lead's reach is one team
  * (canSendToAudience), as for the logistics days. Fails closed.
  */
 export function canAskForShifts(rank: string): boolean {
-  return rank === "captain";
+  return allowsRank(SHIFT_ASKER, rank);
 }
 
 /**

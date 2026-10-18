@@ -1,14 +1,19 @@
 import "server-only";
 
-import { deriveViewerRank, requireClearance } from "@camp404/core";
+import {
+  deriveViewerRank,
+  requireClearance,
+  toActor,
+  type Actor,
+} from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
 import { getAuthenticatedUser, type AuthenticatedUser } from "./auth";
 import { requireMemberPage } from "./member-gate";
 import {
   ensureCampUser,
+  getLeadTeams,
   hasCampAccess,
   isApproved,
-  isTeamLead,
   type CampUser,
 } from "./users";
 
@@ -21,6 +26,12 @@ import {
 // `captain` (team_lead < captain). So `rank` is exact whenever the viewer is
 // cleared, and whenever the bar is below captain. A locked captain-bar page
 // must not read `rank`.
+//
+// The same read gives the teams the viewer leads this year, so the gate hands
+// back the `actor` (rank and led teams) and a page or action asks its rule
+// `RULE.allows(gate.actor)` with no second read. A captain's `ledTeams` is
+// empty (never read): no rule asks a captain's teams. The screen's answer
+// only; every write reads and locks its own actor (`lockActor`).
 
 const REFUSAL: Record<ViewerRank, string> = {
   captain: "Captain access only.",
@@ -28,21 +39,22 @@ const REFUSAL: Record<ViewerRank, string> = {
   camp_member: "Camp members only.",
 };
 
-async function viewerRank(
+async function viewerActor(
   campUser: CampUser,
   required: ViewerRank,
-): Promise<ViewerRank> {
+): Promise<Actor> {
   const leadCanMatter = campUser.rank !== "captain" && required !== "captain";
-  return deriveViewerRank(
-    campUser.rank,
-    leadCanMatter ? await isTeamLead(campUser.id) : false,
-  );
+  const led = leadCanMatter ? await getLeadTeams(campUser.id) : [];
+  const rank = deriveViewerRank(campUser.rank, led.length > 0);
+  return toActor(rank, led) ?? { rank, ledTeams: [] };
 }
 
 export interface CaptainPageAccess {
   authUser: AuthenticatedUser;
   campUser: CampUser;
   rank: ViewerRank;
+  /** Who is looking: `rank` and the teams they lead this year. */
+  actor: Actor;
   /** False: render the page chrome with a CaptainLock, and fetch no data. */
   cleared: boolean;
 }
@@ -57,17 +69,18 @@ export async function captainPageGate(
   required: ViewerRank,
 ): Promise<CaptainPageAccess> {
   const { authUser, campUser } = await requireMemberPage();
-  const rank = await viewerRank(campUser, required);
+  const actor = await viewerActor(campUser, required);
   return {
     authUser,
     campUser,
-    rank,
-    cleared: requireClearance(rank, required).cleared,
+    rank: actor.rank,
+    actor,
+    cleared: requireClearance(actor.rank, required).cleared,
   };
 }
 
 export type CaptainActionAccess =
-  | { ok: true; campUser: CampUser; rank: ViewerRank }
+  | { ok: true; campUser: CampUser; rank: ViewerRank; actor: Actor }
   | { ok: false; error: string };
 
 /**
@@ -91,9 +104,9 @@ export async function captainActionGate(
   if (!isApproved(campUser, authUser.primaryEmail)) {
     return { ok: false, error: "Your account is still awaiting approval." };
   }
-  const rank = await viewerRank(campUser, required);
-  if (!requireClearance(rank, required).cleared) {
+  const actor = await viewerActor(campUser, required);
+  if (!requireClearance(actor.rank, required).cleared) {
     return { ok: false, error: refusal };
   }
-  return { ok: true, campUser, rank };
+  return { ok: true, campUser, rank: actor.rank, actor };
 }

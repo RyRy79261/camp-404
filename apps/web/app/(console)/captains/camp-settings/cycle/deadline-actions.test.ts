@@ -36,6 +36,7 @@ import {
   setAfrikaburnDateAction,
   setDeadlineDoneAction,
 } from "./deadline-actions";
+import { toActor } from "@camp404/core";
 
 const LADDER: ViewerRank[] = ["camp_member", "team_lead", "captain"];
 const ID = "3f9c2a1e-8b7d-4c6e-9f10-112233445566";
@@ -43,7 +44,7 @@ const ID = "3f9c2a1e-8b7d-4c6e-9f10-112233445566";
 function actAs(rank: ViewerRank, id = "user-1") {
   vi.mocked(captainActionGate).mockImplementation(async (required, refusal) =>
     LADDER.indexOf(rank) >= LADDER.indexOf(required)
-      ? { ok: true, campUser: { id } as never, rank }
+      ? { ok: true, campUser: { id } as never, rank, actor: toActor(rank, [])! }
       : { ok: false, error: refusal ?? "refused" },
   );
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ReceiptText } from "lucide-react";
-import { formatMoney, sumMinor } from "@camp404/core";
+import { claimApprovalScope, formatMoney, sumMinor } from "@camp404/core";
 import { Team } from "@camp404/types";
 import { buttonVariants } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
@@ -18,7 +18,6 @@ import { listBudgetTotals, listClaimsForApproval } from "@/lib/claims";
 import { APPROVALS_REFUSAL, MY_CLAIMS_PATH } from "@/lib/claims-copy";
 import { BudgetStats } from "@/components/teams/budget-stats";
 import { ledgerCycle } from "@/lib/payments";
-import { getLeadTeams } from "@/lib/users";
 import { ClaimApprovals, type ApprovalRow } from "./claim-approvals";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +27,7 @@ export const metadata = { title: "Claims to approve — Camp 404" };
 // Claims waiting for a team's yes (#242). A lead OF THAT TEAM, or a captain,
 // says yes at any amount (owner, 2026-09-30: no limit that needs a second
 // yes); then the Finance team pays. A lead sees only the claims of the teams
-// they lead (canApproveClaim), a captain every team's; a member sees the
+// they lead (claimApprovalScope), a captain every team's; a member sees the
 // heading and a lock, and nothing is read. What a lead reads is who, how
 // much, when and what for, never the receipts or the bank details (those are
 // the Finance team's and the member's). Each team's budget sits above its
@@ -42,12 +41,7 @@ export default async function ClaimApprovalsPage() {
   const data = gate.cleared
     ? await (async () => {
         const cycle = await ledgerCycle();
-        const scope =
-          gate.rank === "captain"
-            ? ("all" as const)
-            : (await getLeadTeams(gate.campUser.id)).filter(
-                (t): t is Team => Team.safeParse(t).success,
-              );
+        const scope = claimApprovalScope(gate.actor);
         const [claims, totals, config] = await Promise.all([
           listClaimsForApproval({ cycle, teams: scope }),
           listBudgetTotals(cycle),

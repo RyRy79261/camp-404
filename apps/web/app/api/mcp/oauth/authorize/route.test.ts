@@ -14,7 +14,10 @@ vi.mock("@/lib/users", () => ({
   hasCampAccess: vi.fn(() => true),
   isApproved: vi.fn(() => true),
 }));
-vi.mock("@/lib/mcp/scope", () => ({ getMcpScope: vi.fn() }));
+vi.mock("@/lib/mcp/scope", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/mcp/scope")>()),
+  getMcpScope: vi.fn(),
+}));
 vi.mock("@/lib/mcp/oauth", () => ({
   DEFAULT_SCOPE: "camp",
   findClient: vi.fn(),

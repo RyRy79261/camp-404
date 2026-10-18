@@ -24,13 +24,19 @@ import { TEAM_PROGRAM_REFUSAL } from "@/lib/team-program-copy";
 import { saveTeamProgram } from "@/lib/team-programs";
 import { getLeadTeams } from "@/lib/users";
 import { saveTeamProgramAction } from "./actions";
+import { toActor } from "@camp404/core";
 
 const LADDER: ViewerRank[] = ["camp_member", "team_lead", "captain"];
 
 function actAs(rank: ViewerRank, led: string[] = [], id = "user-1") {
   vi.mocked(captainActionGate).mockImplementation(async (required, refusal) =>
     LADDER.indexOf(rank) >= LADDER.indexOf(required)
-      ? { ok: true, campUser: { id } as never, rank }
+      ? {
+          ok: true,
+          campUser: { id } as never,
+          rank,
+          actor: toActor(rank, led)!,
+        }
       : { ok: false, error: refusal ?? "refused" },
   );
   vi.mocked(getLeadTeams).mockResolvedValue(led);

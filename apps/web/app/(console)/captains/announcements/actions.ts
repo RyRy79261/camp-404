@@ -2,11 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { revalidateManifest } from "@/lib/manifest-revalidate";
-import {
-  AnnouncementAudience,
-  ComposeAnnouncementInput,
-  Team,
-} from "@camp404/types";
+import { AnnouncementAudience, ComposeAnnouncementInput } from "@camp404/types";
 import { canSendToAudience, type AudienceActor } from "@camp404/core";
 import {
   countAnnouncementAudience,
@@ -22,7 +18,6 @@ import {
 } from "@/lib/notifications";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainActionGate } from "@/lib/captain-gate";
-import { getLeadTeams } from "@/lib/users";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { NOT_YOUR_PIN, NOT_YOUR_TEAM, PERSON_GONE } from "./audience-copy";
 import { deliverAfterResponse } from "@/lib/background-work";
@@ -48,9 +43,7 @@ async function requireSender(): Promise<Sender | { ok: false; error: string }> {
   if (gate.rank === "captain") {
     return { ok: true, senderId: campUser.id, isCaptain: true };
   }
-  const leadTeams = (await getLeadTeams(campUser.id)).filter(
-    (t): t is TeamKey => Team.safeParse(t).success,
-  );
+  const leadTeams = [...gate.actor.ledTeams];
   if (leadTeams.length === 0) {
     return { ok: false, error: "Captains and team leads only." };
   }

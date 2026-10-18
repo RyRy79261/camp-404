@@ -22,7 +22,6 @@ import {
   transportStrip,
 } from "@/lib/transport-view";
 import { listFuelCans } from "@/lib/power-site";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +42,8 @@ export const metadata = { title: "Transport — Camp 404" };
 // never gets its controls.
 
 export default async function TransportPage() {
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
   const canEdit = canEditTransport(rank, leadTeams);
   const me = campUser.id;
 

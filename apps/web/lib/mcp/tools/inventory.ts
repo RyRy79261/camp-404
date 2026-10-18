@@ -33,7 +33,7 @@ import { runTool, ToolError, truncateList } from "../tool-utils";
 //    item's team: canEditInventory, the page's own filter).
 //  - Adding an item is addInventoryItem, the page's Add dialog's write. It
 //    re-reads the actor's rank and led teams inside its own transaction
-//    (lockInventoryEditor) and refuses a team they may not edit; the change
+//    (lockAllowed, inventoryEditor) and refuses a team they may not edit; the change
 //    log row ("Added", by them) is written in the same transaction, as on the
 //    page. Nothing here passes a rank or a team list.
 //  - Any member may suggest a change to an item (proposeInventoryChange), as

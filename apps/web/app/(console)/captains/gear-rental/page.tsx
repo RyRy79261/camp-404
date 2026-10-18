@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, Tent } from "lucide-react";
-import { formatMoney, sumMinor } from "@camp404/core";
+import { formatMoney, sumMinor, RENTAL_MANAGER } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import {
   Card,
@@ -25,7 +25,6 @@ import {
   type RentalOrder,
 } from "@/lib/rental";
 import { RENTAL_PATH, rentalOrderPath } from "@/lib/rental-copy";
-import { runsRental } from "@/lib/rental-gate";
 import { orderBadge, quantityText, tentNeedText } from "@/lib/rental-view";
 
 export const dynamic = "force-dynamic";
@@ -125,7 +124,7 @@ const COLUMNS: ResponsiveColumn<RentalOrder>[] = [
 
 export default async function GearRentalOrdersPage() {
   const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && (await runsRental(gate));
+  const cleared = gate.cleared && RENTAL_MANAGER.allows(gate.actor);
   const cycle = cleared ? await ledgerCycle() : null;
   const [orders, unanswered] =
     cycle === null

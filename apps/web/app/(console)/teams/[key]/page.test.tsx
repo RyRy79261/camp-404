@@ -108,11 +108,13 @@ import { listPowerLoads } from "@/lib/power";
 import { listTeamPeople } from "@/lib/roster";
 import { getLeadTeams } from "@/lib/users";
 import TeamPage from "./page";
+import { toActor } from "@camp404/core";
 
 function viewAs(rank: ViewerRank, led: string[] = []) {
   vi.mocked(captainPageGate).mockResolvedValue({
     campUser: { id: "viewer" },
     rank,
+    actor: toActor(rank, led)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(led);
 }

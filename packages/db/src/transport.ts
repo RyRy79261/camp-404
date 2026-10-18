@@ -7,13 +7,15 @@ import {
   canSendToAudience,
   carMessageNotification,
   vehicleLabel,
+  type Actor,
+  TRANSPORT_EDITOR,
 } from "@camp404/core";
+import { lockActor } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach, resolveAudience } from "./broadcasts";
+import { resolveAudience } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction, type Tx } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // Transport (#270): this year's cars, who rides in them, lift requests, the
@@ -23,7 +25,7 @@ import * as schema from "./schema";
 //    the fields MEMBER_FIELD_READERS opens). Lift requests and the members
 //    without a seat are the caller's to filter by viewer; this module returns
 //    the facts.
-//  - Writes re-read the actor inside their own transaction (lockSenderReach:
+//  - Writes re-read the actor inside their own transaction (lockActor:
 //    rank and led teams, held FOR SHARE) and ask @camp404/core
 //    (canEditTransport, canManageCar, canRemoveRider). A caller passes only
 //    who is acting, never a rank or a team list.
@@ -101,9 +103,7 @@ async function write<T extends object>(
   }
 }
 
-interface LockedActor {
-  rank: "captain" | "team_lead" | "camp_member";
-  ledTeams: readonly string[];
+interface LockedActor extends Actor {
   cycle: number;
 }
 
@@ -111,11 +111,14 @@ interface LockedActor {
  * The actor's rank and led teams, read and held inside the write's own
  * transaction, and the camp's year as the transaction sees it.
  */
-async function lockActor(tx: Tx, actorId: string): Promise<LockedActor> {
-  if (!UUID.test(actorId)) refuse(NOT_A_TRANSPORT_EDITOR);
-  const reach = await lockSenderReach(tx, actorId);
+async function lockTransportActor(
+  tx: Tx,
+  actorId: string,
+): Promise<LockedActor> {
+  const actor = await lockActor(tx, actorId);
+  if (!actor) refuse(NOT_A_TRANSPORT_EDITOR);
   const cycle = await currentCycleNumber(tx);
-  return { rank: reachRank(reach), ledTeams: reach ?? [], cycle };
+  return { ...actor, cycle };
 }
 
 /**
@@ -540,7 +543,7 @@ export async function addRider(input: {
   memberUserId: string;
 }): Promise<TransportResult> {
   return write(async (tx) => {
-    const actor = await lockActor(tx, input.actorId);
+    const actor = await lockTransportActor(tx, input.actorId);
     if (
       !canManageCar(
         actor.rank,
@@ -566,7 +569,7 @@ export async function removeRider(input: {
   memberUserId: string;
 }): Promise<TransportResult> {
   return write(async (tx) => {
-    const actor = await lockActor(tx, input.actorId);
+    const actor = await lockTransportActor(tx, input.actorId);
     if (
       !canRemoveRider(
         actor.rank,
@@ -612,7 +615,7 @@ export async function setSeatsOffered(input: {
   seatsOffered: number;
 }): Promise<TransportResult> {
   return write(async (tx) => {
-    const actor = await lockActor(tx, input.actorId);
+    const actor = await lockTransportActor(tx, input.actorId);
     if (
       !canManageCar(
         actor.rank,
@@ -669,7 +672,7 @@ export async function requestLift(input: {
   driverUserId: string | null;
 }): Promise<TransportResult> {
   return write(async (tx) => {
-    const actor = await lockActor(tx, input.actorId);
+    const actor = await lockTransportActor(tx, input.actorId);
     if (!(await approvedMember(tx, input.actorId))) refuse(NOT_A_MEMBER);
     if (await isDriving(tx, input.actorId, actor.cycle))
       refuse(YOU_ARE_DRIVING);
@@ -711,7 +714,7 @@ export async function withdrawLiftRequest(input: {
   actorId: string;
 }): Promise<TransportResult> {
   return write(async (tx) => {
-    const actor = await lockActor(tx, input.actorId);
+    const actor = await lockTransportActor(tx, input.actorId);
     const gone = await tx
       .delete(schema.liftRequests)
       .where(
@@ -743,7 +746,7 @@ export async function answerLiftRequest(input: {
   requestedAt: string;
 }): Promise<TransportResult> {
   return write(async (tx) => {
-    const actor = await lockActor(tx, input.actorId);
+    const actor = await lockTransportActor(tx, input.actorId);
     if (!UUID.test(input.memberUserId)) refuse(REQUEST_GONE);
     const [request] = await tx
       .select({
@@ -802,10 +805,8 @@ export async function answerLiftRequest(input: {
 // --- Trailers ----------------------------------------------------------------
 
 async function assertEditor(tx: Tx, actorId: string): Promise<LockedActor> {
-  const actor = await lockActor(tx, actorId);
-  if (!canEditTransport(actor.rank, actor.ledTeams)) {
-    refuse(NOT_A_TRANSPORT_EDITOR);
-  }
+  const actor = await lockTransportActor(tx, actorId);
+  if (!TRANSPORT_EDITOR.allows(actor)) refuse(NOT_A_TRANSPORT_EDITOR);
   return actor;
 }
 
@@ -950,7 +951,7 @@ export async function removeTrailer(input: {
 /**
  * A driver writes to the people riding in their car this year.
  *
- * In ONE transaction: the sender's rank is re-read and held (lockSenderReach),
+ * In ONE transaction: the sender's rank is re-read and held (lockActor),
  * their own driver profile for this year is locked, canSendToAudience decides
  * on the `car` scope for THEIR car, the riders are read through the shared
  * resolver (the same one every broadcast uses), and the broadcast and one
@@ -966,8 +967,8 @@ export async function sendCarMessage(input: {
   body: string;
 }): Promise<TransportResult<{ broadcastId: string; recipientCount: number }>> {
   return write(async (tx) => {
-    if (!UUID.test(input.senderId)) refuse(CAR_MESSAGE_REFUSED);
-    const reach = await lockSenderReach(tx, input.senderId);
+    const sender = await lockActor(tx, input.senderId);
+    if (!sender) refuse(CAR_MESSAGE_REFUSED);
     const cycle = await currentCycleNumber(tx);
     // FOR UPDATE on the driver's row: a seat added or taken away (both lock
     // this row first) waits for the message, so the riders read below are
@@ -975,8 +976,8 @@ export async function sendCarMessage(input: {
     const driver = await lockDrivingProfile(tx, input.senderId, cycle);
     const allowed = canSendToAudience(
       {
-        rank: reachRank(reach),
-        leadTeams: reach ?? [],
+        rank: sender.rank,
+        leadTeams: sender.ledTeams,
         userId: input.senderId,
         drivesCar: driver !== null,
       },

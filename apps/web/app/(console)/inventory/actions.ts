@@ -43,7 +43,7 @@ import {
 // The inventory's writes (#246). Each action: the member gate (any approved
 // member may reach it), the Zod boundary, then the facade with the actor's id
 // alone. Who may change a team's gear (a captain or a lead of that team) is
-// decided inside each write's own transaction (lockInventoryEditor), which
+// decided inside each write's own transaction (lockAllowed, inventoryEditor), which
 // re-reads the actor's rank and led teams and never takes a team list from
 // here. Proposals, pledges and bookings are open to every member.
 

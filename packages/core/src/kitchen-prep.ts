@@ -1,5 +1,6 @@
 import type { MealOfTheDay, PrepTiming } from "@camp404/types";
-import { canEditMealPlan } from "./recipes";
+import { allowsRank, type Rule } from "./actor";
+import { MEAL_PLAN_EDITOR } from "./recipes";
 
 // Prep steps on the meal plan (#245; the owner approved Option A of
 // design/kitchen-prep.html, 2026-10-02, and answered where they go). Pure: no
@@ -15,12 +16,15 @@ import { canEditMealPlan } from "./recipes";
 //    printed site sheet, never the task board (there is no internet on site).
 // Dates are UTC round trips on YYYY-MM-DD keys, never hand-rolled maths.
 
+/** Who may add and remove prep steps: the meal plan's editors. */
+export const PREP_EDITOR: Rule = MEAL_PLAN_EDITOR;
+
 /** Who may add and remove prep steps: a captain or a Kitchen lead. */
 export function canAddPrepSteps(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  return canEditMealPlan(rank, ledTeams);
+  return allowsRank(PREP_EDITOR, rank, ledTeams);
 }
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;

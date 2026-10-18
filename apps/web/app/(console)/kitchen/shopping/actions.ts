@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { canPriceShoppingList, canTickShoppingList } from "@camp404/core";
+import { canTickShoppingList, SHOPPING_PRICER } from "@camp404/core";
 import { SetShoppingPriceInput, SetShoppingTicksInput } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { captainActionGate } from "@/lib/captain-gate";
+import { ruleActionGate } from "@/lib/rule-gate";
 import { setShoppingPrice, setShoppingTicks } from "@/lib/kitchen-menu";
 import {
   CHECK_PRICE,
@@ -12,7 +13,6 @@ import {
   SHOPPING_LIST_PATH,
   TICK_REFUSAL,
 } from "@/lib/recipe-copy";
-import { getLeadTeams } from "@/lib/users";
 
 // The shopping list's two writes (#245). Ticks are shared by the whole camp,
 // and any approved member may tick (the owner, 2026-09-30). The gate answers
@@ -58,13 +58,8 @@ export async function setShoppingPriceAction(
   input: unknown,
 ): Promise<ActionResult<{ version: number }>> {
   return runAction("setShoppingPriceAction", async () => {
-    const gate = await captainActionGate("team_lead", PRICE_REFUSAL);
+    const gate = await ruleActionGate(SHOPPING_PRICER, PRICE_REFUSAL);
     if (!gate.ok) return gate;
-    const led =
-      gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-    if (!canPriceShoppingList(gate.rank, led)) {
-      return { ok: false, error: PRICE_REFUSAL };
-    }
     const parsed = SetShoppingPriceInput.safeParse(input);
     if (!parsed.success) {
       return {

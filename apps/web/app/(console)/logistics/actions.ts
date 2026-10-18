@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { canAskForAttendance, canEditLogistics } from "@camp404/core";
+import { canAskForAttendance, LOGISTICS_EDITOR } from "@camp404/core";
 import {
   ClearLogisticsPhaseInput,
   SetAttendanceInput,
@@ -9,10 +9,8 @@ import {
   type AttendanceAnswer,
 } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
-import {
-  captainActionGate,
-  type CaptainActionAccess,
-} from "@/lib/captain-gate";
+import { captainActionGate } from "@/lib/captain-gate";
+import { ruleActionGate, type RuleActionAccess } from "@/lib/rule-gate";
 import {
   askForAttendance,
   clearLogisticsPhase,
@@ -27,7 +25,6 @@ import {
   LOGISTICS_REFUSAL,
 } from "@/lib/logistics-copy";
 import { deliverAfterResponse } from "@/lib/background-work";
-import { getLeadTeams } from "@/lib/users";
 
 /** The Kitchen's pages, which name the days on site, and the task board. */
 const KITCHEN_PATH = "/kitchen";
@@ -39,17 +36,8 @@ const TASKS_PATH = "/tasks";
 // inside the write's own transaction, which re-reads the actor's rank and led
 // teams and never takes a team list from here.
 
-type Gate = Extract<CaptainActionAccess, { ok: true }>;
-
-async function logisticsGate(): Promise<Gate | { ok: false; error: string }> {
-  const gate = await captainActionGate("team_lead", LOGISTICS_REFUSAL);
-  if (!gate.ok) return gate;
-  const led =
-    gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-  if (!canEditLogistics(gate.rank, led)) {
-    return { ok: false, error: LOGISTICS_REFUSAL };
-  }
-  return gate;
+function logisticsGate(): Promise<RuleActionAccess> {
+  return ruleActionGate(LOGISTICS_EDITOR, LOGISTICS_REFUSAL);
 }
 
 /**

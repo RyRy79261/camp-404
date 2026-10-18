@@ -26,7 +26,7 @@ vi.mock("@/lib/lounge", () => ({
 }));
 
 import { revalidatePath } from "next/cache";
-import { LOUNGE_TEAM } from "@camp404/core";
+import { LOUNGE_TEAM, toActor } from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
 import { captainActionGate } from "@/lib/captain-gate";
 import {
@@ -55,7 +55,12 @@ const LADDER: ViewerRank[] = ["camp_member", "team_lead", "captain"];
 function actAs(rank: ViewerRank, led: string[] = [], id = "user-1") {
   vi.mocked(captainActionGate).mockImplementation(async (required, refusal) =>
     LADDER.indexOf(rank) >= LADDER.indexOf(required)
-      ? { ok: true, campUser: { id } as never, rank }
+      ? {
+          ok: true,
+          campUser: { id } as never,
+          rank,
+          actor: toActor(rank, led)!,
+        }
       : { ok: false, error: refusal ?? "refused" },
   );
   vi.mocked(getLeadTeams).mockResolvedValue(led);

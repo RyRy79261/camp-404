@@ -46,6 +46,7 @@ function actAs(user: { id: string }) {
     ok: true,
     campUser: { id: user.id } as never,
     rank: "camp_member",
+    actor: { rank: "camp_member", ledTeams: [] },
   });
 }
 

@@ -56,7 +56,6 @@ import {
   type RecipeRunDetail,
   type RecipeSourceHistoryEntry,
 } from "@/lib/recipes";
-import { getLeadTeams } from "@/lib/users";
 import { DecisionPanel, EditAndResubmit } from "./decision-panel";
 import { PlateBar } from "./plate-bar";
 import { AdjustButton } from "./adjust-button";
@@ -564,8 +563,8 @@ export default async function RecipePage({
 }) {
   const { id } = await params;
   const query = (await searchParams) ?? {};
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
   const reviewer = canApproveRecipe(rank, leadTeams);
   // Captains and Kitchen leads send recipes to Claude (the owner's decision
   // 2A).

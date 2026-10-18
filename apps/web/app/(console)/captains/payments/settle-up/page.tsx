@@ -2,9 +2,9 @@ import { PaymentsFrame } from "@/components/dues/payments-frame";
 import { captainPageGate } from "@/lib/captain-gate";
 import { settleUpCandidates } from "@/lib/dues";
 import { PAYMENTS_SETTLE_UP_PATH } from "@/lib/dues-copy";
-import { keepsMoney } from "@/lib/money-gate";
 import { ledgerCycle } from "@/lib/payments";
 import { SettleUpForm } from "./settle-up-form";
+import { MONEY_KEEPER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export const metadata = { title: "Settle-up — Camp 404" };
 
 export default async function SettleUpPage() {
   const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && (await keepsMoney(gate));
+  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
   const candidates = cleared
     ? await settleUpCandidates(await ledgerCycle())
     : [];

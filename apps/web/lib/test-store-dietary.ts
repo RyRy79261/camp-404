@@ -1,13 +1,12 @@
 import "server-only";
 
-import { canCheckMenuAllergens } from "@camp404/core";
+import { ALLERGEN_CHECKER } from "@camp404/core";
 import {
   DIETARY_NOT_A_MEMBER,
   menuDietary,
   type MenuDietary,
   type MyDietary,
 } from "@camp404/db/dietary";
-import { reachRank } from "@camp404/db/power";
 import {
   readDiets,
   readFoodReactions,
@@ -107,8 +106,7 @@ export const dietaryTestStore = {
 
   /** The twin of getMenuDietaryFor: counts only, for the meal plan's editors. */
   getMenuDietaryFor(viewerId: string): MenuDietary | null {
-    const reach = testStore.senderReach(viewerId);
-    if (!canCheckMenuAllergens(reachRank(reach), reach ?? [])) return null;
+    if (!ALLERGEN_CHECKER.allows(testStore.actorInStore(viewerId))) return null;
     const cycle = testStore.currentCycleNumber();
     return menuDietary(
       [...state().entries()].flatMap(([userId, row]) => {
