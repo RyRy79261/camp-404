@@ -4,12 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
 import { findFullPrefetches } from "@camp404/os/prefetch-guard";
 import { Team, ViewerRank } from "@camp404/types";
-import {
-  PROGRAM_REGISTRY,
-  buildProgramManifest,
-  type ProgramFacts,
-} from "@/lib/programs";
-import { PROGRAM_TITLES } from "@/lib/program-routes";
+import { buildProgramManifest, type ProgramFacts } from "@/lib/programs";
 import {
   allowedWindowPrograms,
   desktopEntries,
@@ -117,18 +112,6 @@ describe("allowedWindowPrograms", () => {
   it("prunes a team's page by its own id", () => {
     expect(windowProgram("team", `team:${KITCHEN}`)).toBe(`team:${KITCHEN}`);
     expect(windowProgram("minutes", "minutes:m-1")).toBe("minutes");
-  });
-});
-
-describe("PROGRAM_TITLES (the browser's copy of the plain names)", () => {
-  it("says what the registry says, for every program", () => {
-    for (const entry of PROGRAM_REGISTRY) {
-      if (entry.perTeam) continue;
-      expect([entry.id, PROGRAM_TITLES[entry.id]]).toEqual([
-        entry.id,
-        entry.label,
-      ]);
-    }
   });
 });
 

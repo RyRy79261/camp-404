@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { LineIcon, type IconKey } from "./line-icons";
 import { PixelIcon, teamPixelIcon } from "@camp404/os/pixel-icons";
+import { PROGRAM_DEFINITIONS, type ProgramId } from "@/lib/program-routes";
 
 // A picture for each program, by the icon key the manifest sends (never by
 // anything that says who may open it): the approved prototype's line art for
@@ -10,76 +11,23 @@ import { PixelIcon, teamPixelIcon } from "@camp404/os/pixel-icons";
 
 export type Drawing = (className: string) => ReactNode;
 
-/** The manifest's icon keys (and child program ids), to the line drawings. */
-const LINE: Readonly<Record<string, IconKey>> = {
-  inbox: "inbox",
-  "my-forms": "myforms",
-  account: "account",
-  invites: "keygen",
-  "my-lift": "lift",
-  tasks: "tasks",
-  calendar: "calendar",
-  roster: "roster",
-  minutes: "minutes",
-  "family-tree": "lineage",
-  pets: "cat",
-  about: "readme",
-  guide: "guide",
-  "guide-chapter": "guide",
-  "guide-version": "guide",
-  "new-guide-chapter": "guide",
-  "edit-guide-chapter": "guide",
-  power: "power",
-  logistics: "logistics",
-  shifts: "shifts",
-  "my-shifts": "shifts",
-  "help-wanted": "helpwanted",
-  "camp-layout": "siteplan",
-  lounge: "lounge",
-  inventory: "inventory",
-  transport: "lift",
-  recipes: "cookbook",
-  recipe: "cookbook",
-  "new-recipe": "cookbook",
-  "edit-recipe": "cookbook",
-  "recipe-version": "cookbook",
-  "recipe-source": "cookbook",
-  "meal-plan": "mealplan",
-  "shopping-list": "basket",
-  "recipe-review": "review",
-  questionnaires: "forms",
-  "edit-questionnaire": "forms",
-  "preview-questionnaire": "forms",
-  "send-questionnaire": "forms",
-  results: "forms",
-  "respondent-answers": "forms",
-  announcements: "broadcast",
-  announcement: "broadcast",
-  overview: "campstat",
-  "camp-sheet": "ledger",
-  applications: "tickets",
-  payments: "ledger",
-  "my-dues": "ledger",
-  "my-gear": "tent",
-  "gear-rental": "tent",
-  "my-claims": "receipt",
-  budgets: "ledger",
-  "claim-approvals": "receipt",
-  "camp-settings": "settings",
-  "join-site": "joinsite",
-  audit: "audit",
-  "report-screenshots": "review",
-  system: "sysmon",
-  form: "myforms",
-  "form-answers": "myforms",
-  questionnaire: "myforms",
-  terminal: "terminal",
-  inkblot: "cat",
-  folder: "folder",
-  "member-folder": "folder",
-  kitchen: "folder",
-  team: "folder",
-};
+/** A drawing key for each program, as its definition names it. */
+type DefinedLine = (typeof PROGRAM_DEFINITIONS)[ProgramId]["line"];
+// Fails to compile when a definition names a drawing line-icons.tsx lacks.
+const definedLine = (key: DefinedLine): IconKey => key;
+
+/**
+ * The manifest's icon keys (each program's id) and the folders' keys, to the
+ * line drawings.
+ */
+const LINE: ReadonlyMap<string, IconKey> = new Map<string, IconKey>([
+  ...(Object.keys(PROGRAM_DEFINITIONS) as ProgramId[]).map(
+    (id) => [id, definedLine(PROGRAM_DEFINITIONS[id].line)] as const,
+  ),
+  ["folder", "folder"],
+  ["member-folder", "folder"],
+  ["kitchen", "folder"],
+]);
 
 function line(key: IconKey): Drawing {
   return function LineDrawing(className: string) {
@@ -105,7 +53,7 @@ export function programIcon(program: { id: string; icon: string }): Drawing {
 
 /** The picture for an icon key alone (a folder, or a child program by its id). */
 export function iconFor(key: string): Drawing {
-  return line(LINE[key] ?? "folder");
+  return line(LINE.get(key) ?? "folder");
 }
 
 /** A folder, shut or open (its window is on the desktop). */

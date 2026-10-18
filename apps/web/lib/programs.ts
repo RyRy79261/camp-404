@@ -10,7 +10,12 @@ import {
   type Rule,
 } from "@camp404/core";
 import { Team, type ViewerRank } from "@camp404/types";
-import type { ProgramId } from "./program-routes";
+import {
+  PROGRAM_TITLES,
+  programDefinition,
+  programHome,
+  type ProgramId,
+} from "./program-routes";
 import { tasksHref } from "./task-board";
 
 // The 404 OS program manifest (docs/specs/2026-09-25-404-os-console-design.md,
@@ -92,7 +97,11 @@ export interface ProgramContext {
   hasLift: boolean;
 }
 
-/** One program in the registry. Server-only: `rank` and `requires` stay here. */
+/**
+ * One program in the registry: its program definition (lib/program-routes.ts)
+ * plus what stays on the server, where its icon sits and who may open it.
+ * Server-only: `rank` and `requires` stay here.
+ */
 export interface RegistryEntry {
   id: Exclude<ProgramId, "desktop">;
   /** The plain name on icons, the Start menu and the window title. */
@@ -138,6 +147,26 @@ const CAPTAINS = { group: "captains", folder: "captains" } as const;
 /** In the Captains column, on the desktop itself, after the folder. */
 const CAPTAINS_DESKTOP = { group: "captains", folder: null } as const;
 
+/** What a registry entry says itself; the rest is its definition's. */
+type Placement = Omit<RegistryEntry, "label" | "fileName" | "href" | "icon">;
+
+/**
+ * A registry entry from its placement and its program definition: the
+ * definition's title and file name, its first route as the icon's link (none
+ * for a child window or the per-team page), and its id as the icon key.
+ */
+function fromDefinition(placement: Placement): RegistryEntry {
+  const def = programDefinition(placement.id);
+  return {
+    ...placement,
+    label: PROGRAM_TITLES[placement.id],
+    fileName: def.file,
+    href:
+      placement.place && !placement.perTeam ? programHome(placement.id) : null,
+    icon: placement.id,
+  };
+}
+
 /** A `requires` that asks a core rule about the viewer. */
 const byRule = (rule: Rule) => (ctx: ProgramContext) =>
   rule.allows(toActor(ctx.rank, ctx.ledTeams));
@@ -145,734 +174,479 @@ const byRule = (rule: Rule) => (ctx: ProgramContext) =>
 const reviewsRecipes = byRule(KITCHEN_REVIEWER);
 
 /**
- * Every program, in default-layout order within each group and folder. Plain
- * names (owner, 2026-09-25: "some of the terminology might be a bit too
- * geeky"); the file names are the catalogue's
- * (docs/specs/2026-09-25-404-os-program-catalogue.md).
+ * Every program but the desktop, in default-layout order within each group
+ * and folder: where its icon sits and its gate. Its name, file name and link
+ * come from its program definition (lib/program-routes.ts).
  */
-export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
-  // --- Me ------------------------------------------------------------------
-  // In the approved prototype's order (owner, 2026-09-26): Tasks and Calendar
-  // sit with the member's own things, then Camp is Roster, Teams, Kitchen,
-  // Power, Family tree (the folders' `after` places them). Meetings are in
-  // the Calendar since 2026-10-10.
-  {
-    id: "inbox",
-    label: "Inbox",
-    keywords: ["Notifications", "Unread", "Announcements"],
-    fileName: "INBOX.EXE",
-    href: "/notifications",
-    icon: "inbox",
-    place: ME,
-    rank: "camp_member",
-    applicants: true,
-  },
-  {
-    id: "tasks",
-    label: "Tasks",
-    keywords: ["To do", "Doing", "Deadline"],
-    fileName: "TASKS.EXE",
-    href: "/tasks",
-    icon: "tasks",
-    place: ME,
-    rank: "camp_member",
-  },
-  {
-    id: "calendar",
-    label: "Calendar",
-    keywords: [
-      "Events",
-      "Coming up",
-      "Meetings",
-      "Minutes",
-      "Agenda",
-      "Decisions",
-      "Action items",
-      "New event",
-    ],
-    fileName: "CALENDAR.EXE",
-    href: "/calendar",
-    icon: "calendar",
-    place: ME,
-    rank: "camp_member",
-  },
-  {
-    id: "my-forms",
-    label: "My forms",
-    keywords: ["Dietary needs", "Questionnaire"],
-    fileName: "MYFORMS.EXE",
-    href: "/tools/forms",
-    icon: "my-forms",
-    place: ME,
-    rank: "camp_member",
-  },
-  {
-    id: "invites",
-    label: "Invites",
-    keywords: ["Invite code", "Invite a member"],
-    fileName: "KEYGEN.EXE",
-    href: "/tools/invite",
-    icon: "invites",
-    place: ME,
-    rank: "camp_member",
-  },
-  {
-    id: "account",
-    label: "My account",
-    keywords: ["Profile", "Ticket", "Payment reference", "Password"],
-    fileName: "MY_ACCOUNT.CPL",
-    href: "/profile",
-    icon: "account",
-    place: ME,
-    rank: "camp_member",
-  },
-  // Every member's own dues (#240): what they owe, their pledge, and where
-  // they send their proof of payment.
-  {
-    id: "my-dues",
-    label: "My dues",
-    keywords: ["Payment plan", "Charges", "Refund"],
-    fileName: "MY_DUES.TXT",
-    href: "/dues",
-    icon: "my-dues",
-    place: ME,
-    rank: "camp_member",
-  },
-  // Every member's own gear order (#241): the tent, mattress and bedding
-  // they need this year, and the tent they are in.
-  {
-    id: "my-gear",
-    label: "My gear",
-    keywords: ["Tent", "Bedding", "Sharing a tent"],
-    fileName: "MY_GEAR.TXT",
-    href: "/gear",
-    icon: "my-gear",
-    place: ME,
-    rank: "camp_member",
-  },
-  // Every member's own shifts in burn week (#248), with a pocket card to
-  // print: there is no internet on site.
-  {
-    id: "my-shifts",
-    label: "My shifts",
-    keywords: ["Volunteer shifts", "AfrikaBurn shift"],
-    fileName: "MY_SHIFTS.TXT",
-    href: "/shifts/mine",
-    icon: "my-shifts",
-    place: ME,
-    rank: "camp_member",
-  },
-  // Every member's own claims (#242): money they spent for a team, claimed
-  // back with the receipts, and where each claim is.
-  {
-    id: "my-claims",
-    label: "My claims",
-    keywords: ["Receipts", "Bank details"],
-    fileName: "CLAIMS.TXT",
-    href: "/claims",
-    icon: "my-claims",
-    place: ME,
-    rank: "camp_member",
-  },
-  // Decision 11 A (owner, 2026-09-26): a driver, or a member with a seat in
-  // someone's car, gets their lift as a program.
-  {
-    id: "my-lift",
-    label: "My lift",
-    keywords: ["Driver", "Riders", "Ride", "Your car"],
-    fileName: "MY_LIFT.EXE",
-    href: "/lift",
-    icon: "my-lift",
-    place: ME,
-    rank: "camp_member",
-    requires: (ctx) => ctx.hasLift,
-  },
+export const PROGRAM_REGISTRY: readonly RegistryEntry[] = (
+  [
+    // --- Me ------------------------------------------------------------------
+    // In the approved prototype's order (owner, 2026-09-26): Tasks and Calendar
+    // sit with the member's own things, then Camp is Roster, Teams, Kitchen,
+    // Power, Family tree (the folders' `after` places them). Meetings are in
+    // the Calendar since 2026-10-10.
+    {
+      id: "inbox",
+      keywords: ["Notifications", "Unread", "Announcements"],
+      place: ME,
+      rank: "camp_member",
+      applicants: true,
+    },
+    {
+      id: "tasks",
+      keywords: ["To do", "Doing", "Deadline"],
+      place: ME,
+      rank: "camp_member",
+    },
+    {
+      id: "calendar",
+      keywords: [
+        "Events",
+        "Coming up",
+        "Meetings",
+        "Minutes",
+        "Agenda",
+        "Decisions",
+        "Action items",
+        "New event",
+      ],
+      place: ME,
+      rank: "camp_member",
+    },
+    {
+      id: "my-forms",
+      keywords: ["Dietary needs", "Questionnaire"],
+      place: ME,
+      rank: "camp_member",
+    },
+    {
+      id: "invites",
+      keywords: ["Invite code", "Invite a member"],
+      place: ME,
+      rank: "camp_member",
+    },
+    {
+      id: "account",
+      keywords: ["Profile", "Ticket", "Payment reference", "Password"],
+      place: ME,
+      rank: "camp_member",
+    },
+    // Every member's own dues (#240): what they owe, their pledge, and where
+    // they send their proof of payment.
+    {
+      id: "my-dues",
+      keywords: ["Payment plan", "Charges", "Refund"],
+      place: ME,
+      rank: "camp_member",
+    },
+    // Every member's own gear order (#241): the tent, mattress and bedding
+    // they need this year, and the tent they are in.
+    {
+      id: "my-gear",
+      keywords: ["Tent", "Bedding", "Sharing a tent"],
+      place: ME,
+      rank: "camp_member",
+    },
+    // Every member's own shifts in burn week (#248), with a pocket card to
+    // print: there is no internet on site.
+    {
+      id: "my-shifts",
+      keywords: ["Volunteer shifts", "AfrikaBurn shift"],
+      place: ME,
+      rank: "camp_member",
+    },
+    // Every member's own claims (#242): money they spent for a team, claimed
+    // back with the receipts, and where each claim is.
+    {
+      id: "my-claims",
+      keywords: ["Receipts", "Bank details"],
+      place: ME,
+      rank: "camp_member",
+    },
+    // Decision 11 A (owner, 2026-09-26): a driver, or a member with a seat in
+    // someone's car, gets their lift as a program.
+    {
+      id: "my-lift",
+      keywords: ["Driver", "Riders", "Ride", "Your car"],
+      place: ME,
+      rank: "camp_member",
+      requires: (ctx) => ctx.hasLift,
+    },
 
-  // --- Camp ----------------------------------------------------------------
-  // A member program that lives under /captains: the page picks the
-  // projection by rank (captain, lead or member), it never locks.
-  {
-    id: "roster",
-    label: "Roster",
-    keywords: ["Members", "Waiting list"],
-    fileName: "ROSTER.DB",
-    href: "/captains/camp-management",
-    icon: "roster",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // /power is the program's home: the answer rail (a phone's list of the six
-  // sections), with the load list beside it in a wide window.
-  {
-    id: "power",
-    label: "Power",
-    keywords: ["Fuel cans", "Generator", "Loads", "Grid", "Refuelling"],
-    fileName: "POWER.EXE",
-    href: "/power",
-    icon: "power",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // The year's pack-to-unpack days (#247), for every member to read.
-  {
-    id: "logistics",
-    label: "Logistics",
-    keywords: ["AfrikaBurn dates", "Deadlines", "Who can help"],
-    fileName: "LOGISTICS.EXE",
-    href: "/logistics",
-    icon: "logistics",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // The shift roster (#248): every member signs up before the burn; a
-  // captain or a lead of a shift's team sets it up; printed for site.
-  {
-    id: "shifts",
-    label: "Shifts",
-    keywords: ["Burn days", "Duty card"],
-    fileName: "ROSTER.EXE",
-    href: "/shifts",
-    icon: "shifts",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // Help wanted (owner's pick A, 2026-10-09): every team's roles this year
-  // and who fills them. Every member reads it and says "I'm keen"; a captain
-  // or the team's lead picks (canManageTeamRoles, checked in each write).
-  {
-    id: "help-wanted",
-    label: "Help wanted",
-    keywords: ["Team roles", "Needs a lead", "I'm keen", "Volunteer"],
-    fileName: "HELPWANT.TXT",
-    href: "/help-wanted",
-    icon: "help-wanted",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // The site plan (#271): every member reads it; its page gates the edits.
-  {
-    id: "camp-layout",
-    label: "Camp layout",
-    keywords: ["Site plan", "Our plot", "Neighbours", "Arrivals"],
-    fileName: "SITEPLAN.DWG",
-    href: "/camp-layout",
-    icon: "camp-layout",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // The Ministry of Vibes' lounge programme (#269): every member reads it and
-  // offers something; its page decides who may run it (canRunLounge).
-  {
-    id: "lounge",
-    label: "Lounge",
-    keywords: ["Programme", "Offers", "Event guide", "Music"],
-    fileName: "LOUNGE.EXE",
-    href: "/lounge",
-    icon: "lounge",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // The camp's gear (#246): every member reads it, suggests changes and
-  // books; a captain or a lead of the item's team changes it.
-  {
-    id: "inventory",
-    label: "Inventory",
-    keywords: ["Gear", "Bookings", "Lent out", "Maintenance"],
-    fileName: "INVENTRY.DB",
-    href: "/inventory",
-    icon: "inventory",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // Transport (#270): every approved member reads the car list; the page's
-  // controls and the writes carry their own rules.
-  {
-    id: "transport",
-    label: "Transport",
-    keywords: ["Lifts", "Fuel cans", "Cars", "Trailers", "Seats"],
-    fileName: "CARPOOL.EXE",
-    href: "/transport",
-    icon: "transport",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  {
-    id: "family-tree",
-    label: "Family tree",
-    keywords: ["Invited by"],
-    fileName: "LINEAGE.EXE",
-    href: "/family-tree",
-    icon: "family-tree",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // Camp pets (owner, 2026-10-09): every approved member sends in their pet
-  // and sees the ones that are in; its page gives the founders their review.
-  {
-    id: "pets",
-    label: "Camp pets",
-    keywords: ["Cats", "Dogs", "Add your pet", "Hints"],
-    fileName: "PETS.DB",
-    href: "/pets",
-    icon: "pets",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // The camp's intro, once a Notion page (#264): every approved member reads
-  // it; captains edit its words in Join site.
-  {
-    id: "about",
-    label: "About Camp 404",
-    keywords: ["Camp fee", "Getting there", "Where we are"],
-    fileName: "README.TXT",
-    href: "/about",
-    icon: "about",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // The Survival Guide (#250): every approved member reads it; captains and
-  // a team's leads write it (canEditGuideChapter, checked in each write).
-  {
-    id: "guide",
-    label: "Survival Guide",
-    keywords: ["Chapters", "Duty cards"],
-    fileName: "GUIDE.HLP",
-    href: "/guide",
-    icon: "guide",
-    place: CAMP,
-    rank: "camp_member",
-  },
-  // Every team's page, for every approved member (owner's decision 2,
-  // 2026-09-26: every member sees every team's dashboard, read-only; the
-  // actions on it keep their own gates).
-  {
-    id: "team",
-    label: "Team",
-    fileName: "TEAM.EXE",
-    href: null,
-    icon: "team",
-    place: TEAMS,
-    rank: "camp_member",
-    perTeam: true,
-  },
-  // Every team's budget for the year in one table (#242; owner, 2026-09-30:
-  // every member sees each team's totals). Read-only here; the Finance team
-  // sets them on its Budgets tab.
-  {
-    id: "budgets",
-    label: "Budgets",
-    keywords: ["Team budgets", "Spent", "Over budget"],
-    fileName: "BUDGETS.XLS",
-    href: "/teams/budgets",
-    icon: "budgets",
-    place: TEAMS,
-    rank: "camp_member",
-  },
-  {
-    id: "recipes",
-    label: "Recipes",
-    keywords: ["Recipe book", "Import a recipe", "Dictate"],
-    fileName: "COOKBOOK.EXE",
-    href: "/kitchen/recipes",
-    icon: "recipes",
-    place: KITCHEN,
-    rank: "camp_member",
-  },
-  {
-    id: "meal-plan",
-    label: "Meal plan",
-    keywords: ["Menu", "Snacks", "Allergies", "Prep plan"],
-    fileName: "MEALPLAN.XLS",
-    href: "/kitchen/meal-plan",
-    icon: "meal-plan",
-    place: KITCHEN,
-    rank: "camp_member",
-  },
-  {
-    id: "shopping-list",
-    label: "Shopping list",
-    keywords: ["Food cost", "To buy"],
-    fileName: "SHOPPING.LST",
-    href: "/kitchen/shopping",
-    icon: "shopping-list",
-    place: KITCHEN,
-    rank: "camp_member",
-  },
-  {
-    id: "recipe-review",
-    label: "Recipe review",
-    keywords: ["Proofread", "Suggestions"],
-    fileName: "REVIEW.EXE",
-    href: "/kitchen/recipes/review",
-    icon: "recipe-review",
-    place: KITCHEN,
-    rank: "team_lead",
-    requires: reviewsRecipes,
-  },
+    // --- Camp ----------------------------------------------------------------
+    // A member program that lives under /captains: the page picks the
+    // projection by rank (captain, lead or member), it never locks.
+    {
+      id: "roster",
+      keywords: ["Members", "Waiting list"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // /power is the program's home: the answer rail (a phone's list of the six
+    // sections), with the load list beside it in a wide window.
+    {
+      id: "power",
+      keywords: ["Fuel cans", "Generator", "Loads", "Grid", "Refuelling"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // The year's pack-to-unpack days (#247), for every member to read.
+    {
+      id: "logistics",
+      keywords: ["AfrikaBurn dates", "Deadlines", "Who can help"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // The shift roster (#248): every member signs up before the burn; a
+    // captain or a lead of a shift's team sets it up; printed for site.
+    {
+      id: "shifts",
+      keywords: ["Burn days", "Duty card"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // Help wanted (owner's pick A, 2026-10-09): every team's roles this year
+    // and who fills them. Every member reads it and says "I'm keen"; a captain
+    // or the team's lead picks (canManageTeamRoles, checked in each write).
+    {
+      id: "help-wanted",
+      keywords: ["Team roles", "Needs a lead", "I'm keen", "Volunteer"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // The site plan (#271): every member reads it; its page gates the edits.
+    {
+      id: "camp-layout",
+      keywords: ["Site plan", "Our plot", "Neighbours", "Arrivals"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // The Ministry of Vibes' lounge programme (#269): every member reads it and
+    // offers something; its page decides who may run it (canRunLounge).
+    {
+      id: "lounge",
+      keywords: ["Programme", "Offers", "Event guide", "Music"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // The camp's gear (#246): every member reads it, suggests changes and
+    // books; a captain or a lead of the item's team changes it.
+    {
+      id: "inventory",
+      keywords: ["Gear", "Bookings", "Lent out", "Maintenance"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // Transport (#270): every approved member reads the car list; the page's
+    // controls and the writes carry their own rules.
+    {
+      id: "transport",
+      keywords: ["Lifts", "Fuel cans", "Cars", "Trailers", "Seats"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    {
+      id: "family-tree",
+      keywords: ["Invited by"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // Camp pets (owner, 2026-10-09): every approved member sends in their pet
+    // and sees the ones that are in; its page gives the founders their review.
+    {
+      id: "pets",
+      keywords: ["Cats", "Dogs", "Add your pet", "Hints"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // The camp's intro, once a Notion page (#264): every approved member reads
+    // it; captains edit its words in Join site.
+    {
+      id: "about",
+      keywords: ["Camp fee", "Getting there", "Where we are"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // The Survival Guide (#250): every approved member reads it; captains and
+    // a team's leads write it (canEditGuideChapter, checked in each write).
+    {
+      id: "guide",
+      keywords: ["Chapters", "Duty cards"],
+      place: CAMP,
+      rank: "camp_member",
+    },
+    // Every team's page, for every approved member (owner's decision 2,
+    // 2026-09-26: every member sees every team's dashboard, read-only; the
+    // actions on it keep their own gates).
+    {
+      id: "team",
+      place: TEAMS,
+      rank: "camp_member",
+      perTeam: true,
+    },
+    // Every team's budget for the year in one table (#242; owner, 2026-09-30:
+    // every member sees each team's totals). Read-only here; the Finance team
+    // sets them on its Budgets tab.
+    {
+      id: "budgets",
+      keywords: ["Team budgets", "Spent", "Over budget"],
+      place: TEAMS,
+      rank: "camp_member",
+    },
+    {
+      id: "recipes",
+      keywords: ["Recipe book", "Import a recipe", "Dictate"],
+      place: KITCHEN,
+      rank: "camp_member",
+    },
+    {
+      id: "meal-plan",
+      keywords: ["Menu", "Snacks", "Allergies", "Prep plan"],
+      place: KITCHEN,
+      rank: "camp_member",
+    },
+    {
+      id: "shopping-list",
+      keywords: ["Food cost", "To buy"],
+      place: KITCHEN,
+      rank: "camp_member",
+    },
+    {
+      id: "recipe-review",
+      keywords: ["Proofread", "Suggestions"],
+      place: KITCHEN,
+      rank: "team_lead",
+      requires: reviewsRecipes,
+    },
 
-  // --- Captains folder -------------------------------------------------------
-  {
-    id: "overview",
-    label: "Camp overview",
-    keywords: ["Camp ready", "Team coverage", "Tickets"],
-    fileName: "CAMPSTAT.EXE",
-    href: "/captains/overview",
-    icon: "overview",
-    place: CAPTAINS,
-    rank: "captain",
-  },
-  // Every member and everything the camp holds on them, on one screen, like
-  // the previous captain's spreadsheet. It shows ID numbers: captains only.
-  {
-    id: "camp-sheet",
-    label: "Camp sheet",
-    keywords: ["Spreadsheet", "Everyone", "Emergency contacts", "Allergies"],
-    fileName: "CAMP_SHEET.XLS",
-    href: "/captains/camp-sheet",
-    icon: "camp-sheet",
-    place: CAPTAINS,
-    rank: "captain",
-  },
-  // Who is coming this year, with tickets and WAP for captains
-  // (#238). A team lead reads the statuses only, so the bar is team_lead.
-  {
-    id: "applications",
-    label: "Applications",
-    keywords: ["Accept", "Tickets", "WAP", "DDT"],
-    fileName: "INTAKE.DB",
-    href: "/captains/applications",
-    icon: "applications",
-    place: CAPTAINS,
-    rank: "team_lead",
-  },
-  {
-    id: "questionnaires",
-    label: "Questionnaires",
-    keywords: ["Results", "Responses", "Publish"],
-    fileName: "FORMS.EXE",
-    href: "/captains/questionnaires",
-    icon: "questionnaires",
-    place: CAPTAINS,
-    rank: "team_lead",
-  },
-  {
-    id: "announcements",
-    label: "Announcements",
-    keywords: ["Pop-up", "Drafts"],
-    fileName: "BROADCAST.EXE",
-    href: "/captains/announcements",
-    icon: "announcements",
-    place: CAPTAINS,
-    rank: "team_lead",
-  },
-  // Claims waiting for a team's yes (#242): every lead (the page shows only
-  // the teams they lead, canApproveClaim) and captains (every team).
-  {
-    id: "claim-approvals",
-    label: "Claims to approve",
-    keywords: ["Approve claims", "Turn down"],
-    fileName: "APPROVE.EXE",
-    href: "/captains/claims",
-    icon: "claim-approvals",
-    place: CAPTAINS,
-    rank: "team_lead",
-  },
-  // The Finance tools (#240): captains and Finance leads (canManageMoney).
-  // The page's rank gate is team_lead, because clearance is global; the rule
-  // narrows it, so a lead of another team is not offered it. A Finance lead
-  // also finds it in their Finance team folder (TEAM_TOOLS).
-  {
-    id: "payments",
-    label: "Payments",
-    keywords: [
-      "Who owes what",
-      "Bank statement",
-      "Settle-up",
-      "Fee tiers",
-      "Proofs",
-    ],
-    fileName: "LEDGER.DB",
-    href: "/captains/payments",
-    icon: "payments",
-    place: CAPTAINS,
-    rank: "team_lead",
-    requires: byRule(MONEY_KEEPER),
-  },
-  // Gear rental (#241): captains only (canManageRental). This is member
-  // money data, so a team lead gets nothing extra and is not offered it.
-  {
-    id: "gear-rental",
-    label: "Gear rental",
-    keywords: ["Tents", "Catalogue", "Orders", "Supplier price"],
-    fileName: "RENTAL.DB",
-    href: "/captains/gear-rental",
-    icon: "gear-rental",
-    place: CAPTAINS,
-    rank: "team_lead",
-    requires: byRule(RENTAL_MANAGER),
-  },
-  {
-    id: "camp-settings",
-    label: "Camp settings",
-    keywords: ["Teams", "New year", "Rollover"],
-    fileName: "SETTINGS.CPL",
-    href: "/captains/camp-settings",
-    icon: "camp-settings",
-    place: CAPTAINS,
-    rank: "captain",
-  },
-  {
-    id: "join-site",
-    label: "Join site",
-    keywords: ["Fee levels", "How to join"],
-    fileName: "JOINSITE.EXE",
-    href: "/captains/join-site",
-    icon: "join-site",
-    place: CAPTAINS,
-    rank: "captain",
-  },
-  // Screenshots attached to bug reports (#313): captains only, because a
-  // screenshot can show other members' details.
-  {
-    id: "report-screenshots",
-    label: "Report screenshots",
-    keywords: ["Bug reports", "Feedback"],
-    fileName: "SCREENSHOTS.EXE",
-    href: "/captains/report-screenshots",
-    icon: "report-screenshots",
-    place: CAPTAINS,
-    rank: "captain",
-  },
-  {
-    id: "audit",
-    label: "Audit log",
-    keywords: ["History", "Changes"],
-    fileName: "AUDIT.LOG",
-    href: "/captains/audit",
-    icon: "audit",
-    place: CAPTAINS,
-    rank: "captain",
-  },
-  {
-    id: "system",
-    label: "System status",
-    keywords: ["Core services", "Background work"],
-    fileName: "SYSMON.EXE",
-    href: "/captains/system",
-    icon: "system",
-    place: CAPTAINS,
-    rank: "captain",
-  },
-  // The Terminal (owner, 2026-09-25: "We do need the terminal"): every
-  // approved member. It ends the Captains column, after the folder; for a
-  // member with no Captains folder it ends the Camp column instead
-  // (buildProgramManifest moves it).
-  {
-    id: "terminal",
-    label: "Terminal",
-    keywords: ["Commands", "Inkblot"],
-    fileName: "TERMINAL.EXE",
-    href: "/terminal",
-    icon: "terminal",
-    place: CAPTAINS_DESKTOP,
-    rank: "camp_member",
-    endsColumn: true,
-  },
+    // --- Captains folder -------------------------------------------------------
+    {
+      id: "overview",
+      keywords: ["Camp ready", "Team coverage", "Tickets"],
+      place: CAPTAINS,
+      rank: "captain",
+    },
+    // Every member and everything the camp holds on them, on one screen, like
+    // the previous captain's spreadsheet. It shows ID numbers: captains only.
+    {
+      id: "camp-sheet",
+      keywords: ["Spreadsheet", "Everyone", "Emergency contacts", "Allergies"],
+      place: CAPTAINS,
+      rank: "captain",
+    },
+    // Who is coming this year, with tickets and WAP for captains
+    // (#238). A team lead reads the statuses only, so the bar is team_lead.
+    {
+      id: "applications",
+      keywords: ["Accept", "Tickets", "WAP", "DDT"],
+      place: CAPTAINS,
+      rank: "team_lead",
+    },
+    {
+      id: "questionnaires",
+      keywords: ["Results", "Responses", "Publish"],
+      place: CAPTAINS,
+      rank: "team_lead",
+    },
+    {
+      id: "announcements",
+      keywords: ["Pop-up", "Drafts"],
+      place: CAPTAINS,
+      rank: "team_lead",
+    },
+    // Claims waiting for a team's yes (#242): every lead (the page shows only
+    // the teams they lead, canApproveClaim) and captains (every team).
+    {
+      id: "claim-approvals",
+      keywords: ["Approve claims", "Turn down"],
+      place: CAPTAINS,
+      rank: "team_lead",
+    },
+    // The Finance tools (#240): captains and Finance leads (canManageMoney).
+    // The page's rank gate is team_lead, because clearance is global; the rule
+    // narrows it, so a lead of another team is not offered it. A Finance lead
+    // also finds it in their Finance team folder (TEAM_TOOLS).
+    {
+      id: "payments",
+      keywords: [
+        "Who owes what",
+        "Bank statement",
+        "Settle-up",
+        "Fee tiers",
+        "Proofs",
+      ],
+      place: CAPTAINS,
+      rank: "team_lead",
+      requires: byRule(MONEY_KEEPER),
+    },
+    // Gear rental (#241): captains only (canManageRental). This is member
+    // money data, so a team lead gets nothing extra and is not offered it.
+    {
+      id: "gear-rental",
+      keywords: ["Tents", "Catalogue", "Orders", "Supplier price"],
+      place: CAPTAINS,
+      rank: "team_lead",
+      requires: byRule(RENTAL_MANAGER),
+    },
+    {
+      id: "camp-settings",
+      keywords: ["Teams", "New year", "Rollover"],
+      place: CAPTAINS,
+      rank: "captain",
+    },
+    {
+      id: "join-site",
+      keywords: ["Fee levels", "How to join"],
+      place: CAPTAINS,
+      rank: "captain",
+    },
+    // Screenshots attached to bug reports (#313): captains only, because a
+    // screenshot can show other members' details.
+    {
+      id: "report-screenshots",
+      keywords: ["Bug reports", "Feedback"],
+      place: CAPTAINS,
+      rank: "captain",
+    },
+    {
+      id: "audit",
+      keywords: ["History", "Changes"],
+      place: CAPTAINS,
+      rank: "captain",
+    },
+    {
+      id: "system",
+      keywords: ["Core services", "Background work"],
+      place: CAPTAINS,
+      rank: "captain",
+    },
+    // The Terminal (owner, 2026-09-25: "We do need the terminal"): every
+    // approved member. It ends the Captains column, after the folder; for a
+    // member with no Captains folder it ends the Camp column instead
+    // (buildProgramManifest moves it).
+    {
+      id: "terminal",
+      keywords: ["Commands", "Inkblot"],
+      place: CAPTAINS_DESKTOP,
+      rank: "camp_member",
+      endsColumn: true,
+    },
 
-  // --- Child windows: no icon, opened from another program -------------------
-  {
-    id: "announcement",
-    label: "Announcement",
-    fileName: "ANNOUNCE.TXT",
-    href: null,
-    icon: "announcement",
-    place: null,
-    rank: "camp_member",
-    applicants: true,
-  },
-  {
-    id: "form",
-    label: "Form",
-    fileName: "FORM.DOC",
-    href: null,
-    icon: "form",
-    place: null,
-    rank: "camp_member",
-  },
-  {
-    id: "form-answers",
-    label: "Answers",
-    fileName: "ANSWERS.TXT",
-    href: null,
-    icon: "form",
-    place: null,
-    rank: "camp_member",
-  },
-  // A meeting's minutes, opened from the Calendar: every member reads the
-  // meeting there; the page locks for anyone not on its team (canWorkInTeam).
-  {
-    id: "minutes",
-    label: "Minutes",
-    fileName: "MINUTES.TXT",
-    href: null,
-    icon: "minutes",
-    place: null,
-    rank: "camp_member",
-  },
-  {
-    id: "guide-chapter",
-    label: "Chapter",
-    fileName: "CHAPTER.HLP",
-    href: null,
-    icon: "guide",
-    place: null,
-    rank: "camp_member",
-  },
-  {
-    id: "guide-version",
-    label: "Chapter version",
-    fileName: "CHAPTER.VER",
-    href: null,
-    icon: "guide",
-    place: null,
-    rank: "camp_member",
-  },
-  // Writing opens for captains and leads; the page locks a lead out of
-  // another team's chapter, and every write checks again.
-  {
-    id: "new-guide-chapter",
-    label: "New chapter",
-    fileName: "CHAPTER.WRI",
-    href: null,
-    icon: "guide",
-    place: null,
-    rank: "team_lead",
-    requires: (ctx) => canEditAnyGuideChapter(ctx.rank, ctx.ledTeams),
-  },
-  {
-    id: "edit-guide-chapter",
-    label: "Edit chapter",
-    fileName: "CHAPTER.WRI",
-    href: null,
-    icon: "guide",
-    place: null,
-    rank: "team_lead",
-    requires: (ctx) => canEditAnyGuideChapter(ctx.rank, ctx.ledTeams),
-  },
-  {
-    id: "new-recipe",
-    label: "New recipe",
-    fileName: "IMPORT.EXE",
-    href: null,
-    icon: "recipes",
-    place: null,
-    rank: "camp_member",
-  },
-  {
-    id: "recipe",
-    label: "Recipe",
-    fileName: "RECIPE.RCP",
-    href: null,
-    icon: "recipes",
-    place: null,
-    rank: "camp_member",
-  },
-  {
-    id: "edit-recipe",
-    label: "Edit recipe",
-    fileName: "RECIPE.WRI",
-    href: null,
-    icon: "recipes",
-    place: null,
-    rank: "team_lead",
-    requires: reviewsRecipes,
-  },
-  {
-    id: "recipe-version",
-    label: "Recipe version",
-    fileName: "RECIPE.VER",
-    href: null,
-    icon: "recipes",
-    place: null,
-    rank: "camp_member",
-  },
-  {
-    id: "recipe-source",
-    label: "Recipe source",
-    fileName: "SOURCE.TXT",
-    href: null,
-    icon: "recipes",
-    place: null,
-    rank: "camp_member",
-  },
-  {
-    id: "edit-questionnaire",
-    label: "Edit questionnaire",
-    fileName: "QBUILD.EXE",
-    href: null,
-    icon: "questionnaires",
-    place: null,
-    rank: "team_lead",
-  },
-  {
-    id: "preview-questionnaire",
-    label: "Preview",
-    fileName: "QVIEW.EXE",
-    href: null,
-    icon: "questionnaires",
-    place: null,
-    rank: "team_lead",
-  },
-  {
-    id: "send-questionnaire",
-    label: "Send questionnaire",
-    fileName: "QSEND.EXE",
-    href: null,
-    icon: "questionnaires",
-    place: null,
-    rank: "team_lead",
-  },
-  {
-    id: "results",
-    label: "Results",
-    fileName: "QSTATS.EXE",
-    href: null,
-    icon: "questionnaires",
-    place: null,
-    rank: "captain",
-  },
-  {
-    id: "respondent-answers",
-    label: "Answers",
-    fileName: "ANSWERS.TXT",
-    href: null,
-    icon: "questionnaires",
-    place: null,
-    rank: "captain",
-  },
-  // INKBLOT, opened from the Terminal (`play inkblot`), never from an icon.
-  {
-    id: "inkblot",
-    label: "INKBLOT",
-    fileName: "INKBLOT.EXE",
-    href: null,
-    icon: "inkblot",
-    place: null,
-    rank: "camp_member",
-  },
-  // The questionnaire runner and its last page. Their gate is camp access,
-  // then the member's own required action for that send.
-  {
-    id: "questionnaire",
-    label: "Questionnaire",
-    fileName: "FORM.FRM",
-    href: null,
-    icon: "form",
-    place: null,
-    rank: "camp_member",
-    applicants: true,
-  },
-];
+    // --- Child windows: no icon, opened from another program -------------------
+    {
+      id: "announcement",
+      place: null,
+      rank: "camp_member",
+      applicants: true,
+    },
+    {
+      id: "form",
+      place: null,
+      rank: "camp_member",
+    },
+    {
+      id: "form-answers",
+      place: null,
+      rank: "camp_member",
+    },
+    // A meeting's minutes, opened from the Calendar: every member reads the
+    // meeting there; the page locks for anyone not on its team (canWorkInTeam).
+    {
+      id: "minutes",
+      place: null,
+      rank: "camp_member",
+    },
+    {
+      id: "guide-chapter",
+      place: null,
+      rank: "camp_member",
+    },
+    {
+      id: "guide-version",
+      place: null,
+      rank: "camp_member",
+    },
+    // Writing opens for captains and leads; the page locks a lead out of
+    // another team's chapter, and every write checks again.
+    {
+      id: "new-guide-chapter",
+      place: null,
+      rank: "team_lead",
+      requires: (ctx) => canEditAnyGuideChapter(ctx.rank, ctx.ledTeams),
+    },
+    {
+      id: "edit-guide-chapter",
+      place: null,
+      rank: "team_lead",
+      requires: (ctx) => canEditAnyGuideChapter(ctx.rank, ctx.ledTeams),
+    },
+    {
+      id: "new-recipe",
+      place: null,
+      rank: "camp_member",
+    },
+    {
+      id: "recipe",
+      place: null,
+      rank: "camp_member",
+    },
+    {
+      id: "edit-recipe",
+      place: null,
+      rank: "team_lead",
+      requires: reviewsRecipes,
+    },
+    {
+      id: "recipe-version",
+      place: null,
+      rank: "camp_member",
+    },
+    {
+      id: "recipe-source",
+      place: null,
+      rank: "camp_member",
+    },
+    {
+      id: "edit-questionnaire",
+      place: null,
+      rank: "team_lead",
+    },
+    {
+      id: "preview-questionnaire",
+      place: null,
+      rank: "team_lead",
+    },
+    {
+      id: "send-questionnaire",
+      place: null,
+      rank: "team_lead",
+    },
+    {
+      id: "results",
+      place: null,
+      rank: "captain",
+    },
+    {
+      id: "respondent-answers",
+      place: null,
+      rank: "captain",
+    },
+    // INKBLOT, opened from the Terminal (`play inkblot`), never from an icon.
+    {
+      id: "inkblot",
+      place: null,
+      rank: "camp_member",
+    },
+    // The questionnaire runner and its last page. Their gate is camp access,
+    // then the member's own required action for that send.
+    {
+      id: "questionnaire",
+      place: null,
+      rank: "camp_member",
+      applicants: true,
+    },
+  ] satisfies readonly Placement[]
+).map(fromDefinition);
 
 const FOLDERS: readonly {
   id: FolderId;

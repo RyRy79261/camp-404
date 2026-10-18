@@ -170,6 +170,12 @@ describe("program routes against the route tree", () => {
     }
   });
 
+  it("gives each page to one program only", () => {
+    const patterns = PROGRAM_ROUTES.map((r) => r.pattern);
+    const twice = patterns.filter((p, i) => patterns.indexOf(p) !== i);
+    expect(twice).toEqual([]);
+  });
+
   it("has a page for every row", () => {
     const orphans = PROGRAM_ROUTES.map((r) => r.pattern).filter(
       (pattern) => !pages.includes(pattern),
