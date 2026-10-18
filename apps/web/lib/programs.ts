@@ -30,16 +30,19 @@ import { tasksHref } from "./task-board";
 // shown. A program a member may not use is absent from it, not hidden
 // (owner's decision 2, 2026-09-26: hidden, folders too).
 //
-// Hiding is never the security boundary. Every page still runs
-// `requireMemberPage` or `captainPageGate` (and its CaptainLock), and every
-// action its own gate. So each entry carries the SAME bar its page guards on;
+// Hiding is never the security boundary. Every page still runs its gate (and
+// its CaptainLock), and every action its own. Most pages ask this registry
+// for it: `programPage(id)` (lib/program-page.ts) runs the entry's `rank` and
+// `rule`, so the icon and the page cannot disagree. The rest still name their
+// bar (`requireMemberPage`, or a gate of their own);
 // lib/__tests__/program-registry-drift.test.ts reads every console page and
-// fails when the two disagree.
+// fails when a page asks another program's gate, or names a bar that is not
+// its entry's.
 //
-// `requires` may call only the existing core rules and predicates
-// (`hasClearance`, KITCHEN_REVIEWER through `byRule`, `canWorkInTeam`, and
-// the others the design names), so a rule changes in one place. No new
-// predicate is added here.
+// `rule` and `requires` may use only the existing core rules and predicates
+// (`hasClearance`, KITCHEN_REVIEWER, `canWorkInTeam`, and the others the
+// design names), so a rule changes in one place. No new predicate is added
+// here.
 
 export type ManifestMode = "full" | "restricted" | "held";
 export type ProgramGroup = "me" | "camp" | "captains";
@@ -122,7 +125,16 @@ export interface RegistryEntry {
   place: { group: ProgramGroup; folder: FolderId | null } | null;
   /** The lowest rank its page clears: the same bar the page's gate uses. */
   rank: ViewerRank;
-  /** A narrower rule than the rank, from the core predicates only. */
+  /**
+   * A narrower rule than the rank, a core rule about the viewer. Its page asks
+   * it too (`programPage(id).allowed`, lib/program-page.ts), so the icon and
+   * the page agree by construction. `requires` is read from it.
+   */
+  rule?: Rule;
+  /**
+   * A narrower test than the rank, from the core predicates only: the
+   * entry's `rule`, or a fact about the member that is not a rule (a lift).
+   */
   requires?: (ctx: ProgramContext) => boolean;
   /**
    * Its page gates on camp access only, so an applicant waiting for approval
@@ -148,7 +160,13 @@ const CAPTAINS = { group: "captains", folder: "captains" } as const;
 const CAPTAINS_DESKTOP = { group: "captains", folder: null } as const;
 
 /** What a registry entry says itself; the rest is its definition's. */
-type Placement = Omit<RegistryEntry, "label" | "fileName" | "href" | "icon">;
+type Placement = Omit<
+  RegistryEntry,
+  "label" | "fileName" | "href" | "icon" | "requires"
+> & {
+  /** Only for a test that is not a `rule` (a lift); a rule fills it in. */
+  requires?: RegistryEntry["requires"];
+};
 
 /**
  * A registry entry from its placement and its program definition: the
@@ -159,6 +177,7 @@ function fromDefinition(placement: Placement): RegistryEntry {
   const def = programDefinition(placement.id);
   return {
     ...placement,
+    ...(placement.rule ? { requires: byRule(placement.rule) } : {}),
     label: PROGRAM_TITLES[placement.id],
     fileName: def.file,
     href:
@@ -171,7 +190,11 @@ function fromDefinition(placement: Placement): RegistryEntry {
 const byRule = (rule: Rule) => (ctx: ProgramContext) =>
   rule.allows(toActor(ctx.rank, ctx.ledTeams));
 
-const reviewsRecipes = byRule(KITCHEN_REVIEWER);
+/** Writes at least one Survival Guide chapter: the New chapter button. */
+const GUIDE_WRITER: Rule = {
+  allows: (actor) =>
+    !!actor && canEditAnyGuideChapter(actor.rank, actor.ledTeams),
+};
 
 /**
  * Every program but the desktop, in default-layout order within each group
@@ -416,7 +439,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = (
       keywords: ["Proofread", "Suggestions"],
       place: KITCHEN,
       rank: "team_lead",
-      requires: reviewsRecipes,
+      rule: KITCHEN_REVIEWER,
     },
 
     // --- Captains folder -------------------------------------------------------
@@ -477,7 +500,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = (
       ],
       place: CAPTAINS,
       rank: "team_lead",
-      requires: byRule(MONEY_KEEPER),
+      rule: MONEY_KEEPER,
     },
     // Gear rental (#241): captains only (canManageRental). This is member
     // money data, so a team lead gets nothing extra and is not offered it.
@@ -486,7 +509,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = (
       keywords: ["Tents", "Catalogue", "Orders", "Supplier price"],
       place: CAPTAINS,
       rank: "team_lead",
-      requires: byRule(RENTAL_MANAGER),
+      rule: RENTAL_MANAGER,
     },
     {
       id: "camp-settings",
@@ -572,13 +595,13 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = (
       id: "new-guide-chapter",
       place: null,
       rank: "team_lead",
-      requires: (ctx) => canEditAnyGuideChapter(ctx.rank, ctx.ledTeams),
+      rule: GUIDE_WRITER,
     },
     {
       id: "edit-guide-chapter",
       place: null,
       rank: "team_lead",
-      requires: (ctx) => canEditAnyGuideChapter(ctx.rank, ctx.ledTeams),
+      rule: GUIDE_WRITER,
     },
     {
       id: "new-recipe",
@@ -594,7 +617,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = (
       id: "edit-recipe",
       place: null,
       rank: "team_lead",
-      requires: reviewsRecipes,
+      rule: KITCHEN_REVIEWER,
     },
     {
       id: "recipe-version",

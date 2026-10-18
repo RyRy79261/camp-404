@@ -253,7 +253,17 @@ keyboard's way to them is the Terminal.
   and the icon map are read from it. A new page is a route on its program's
   definition; a new program is a definition plus a `PROGRAM_REGISTRY` entry
   that says only its place and its gate (rank bar, `requires`), which stay
-  on the server. A page still starts with
+  on the server. [CORRECTION 2026-10-18] A page no longer names its bar: it
+  calls `programPage("<its own program id>")` (`lib/program-page.ts`), which
+  runs `captainPageGate` at the registry entry's `rank` and then the entry's
+  `rule` (a core rule, such as `MONEY_KEEPER`) on the same actor, and returns
+  the gate plus `allowed`. Lock on `cleared`/`allowed` as before, with the
+  page's own words. `program-registry-drift.test.ts` fails when a page asks
+  another program's id or a program is half moved. Still on their own gate:
+  the member pages that call `requireMemberPage` (drift-checked by regex),
+  Power's sections (PowerFrame), the Roster's projection, the inbox, an
+  announcement, the questionnaire runner and Results (`results-data.ts`).
+  A page still starts with
   `PageHeading` and owns no container: the window pads it. A window can be
   470px wide on a wide screen, so a page lays itself out by its WINDOW's
   width: use the kit's `page-sm:`/`page-md:`/`page-lg:`/`page-xl:` variants
