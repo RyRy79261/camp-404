@@ -64,6 +64,7 @@ import {
   removePrepStepAction,
 } from "./actions";
 import MealPlanPage from "./page";
+import { toActor } from "@camp404/core";
 
 const OATS = "00000000-0000-4000-8000-000000000001";
 const SHAKSHUKA = "00000000-0000-4000-8000-000000000002";
@@ -132,6 +133,7 @@ async function renderAs(
     campUser: { id: "viewer" },
     rank,
     cleared: true,
+    actor: toActor(rank, rank === "team_lead" ? ["kitchen"] : [])!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(
     rank === "team_lead" ? ["kitchen"] : [],

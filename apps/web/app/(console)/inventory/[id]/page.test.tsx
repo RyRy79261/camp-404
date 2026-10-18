@@ -57,6 +57,7 @@ import {
 } from "@/lib/inventory";
 import { getLeadTeams } from "@/lib/users";
 import InventoryItemPage from "./page";
+import { toActor } from "@camp404/core";
 
 const ITEM_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
 
@@ -113,6 +114,7 @@ function as(rank: string, led: string[] = []) {
     authUser: {} as never,
     campUser: { id: "viewer" } as never,
     rank: rank as never,
+    actor: toActor(rank, led)!,
     cleared: true,
   });
   vi.mocked(getLeadTeams).mockResolvedValue(led);

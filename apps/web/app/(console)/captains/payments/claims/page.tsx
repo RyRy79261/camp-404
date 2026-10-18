@@ -4,9 +4,9 @@ import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
 import { listClaimsForFinance } from "@/lib/claims";
 import { PAYMENTS_CLAIMS_PATH } from "@/lib/claims-copy";
-import { keepsMoney } from "@/lib/money-gate";
 import { ledgerCycle } from "@/lib/payments";
 import { ClaimsPayManager, type FinanceClaim } from "./claims-pay-manager";
+import { MONEY_KEEPER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export const metadata = { title: "Claims — Camp 404" };
 
 export default async function FinanceClaimsPage() {
   const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && (await keepsMoney(gate));
+  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
   const data = cleared
     ? await (async () => {
         const cycle = await ledgerCycle();

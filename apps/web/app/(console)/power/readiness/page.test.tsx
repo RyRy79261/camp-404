@@ -26,6 +26,7 @@ import { getLeadTeams } from "@/lib/users";
 import { setUpPowerCamp, type PowerCamp } from "@/tests/power-camp";
 import { renderServer } from "@/tests/render-server";
 import PowerReadinessPage from "./page";
+import { toActor } from "@camp404/core";
 
 let camp: PowerCamp;
 
@@ -38,6 +39,7 @@ async function renderAs(
     campUser: { id: camp[who].id },
     rank,
     cleared: true,
+    actor: toActor(rank, leads)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(leads as never);
   await renderServer(PowerReadinessPage());

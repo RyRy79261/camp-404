@@ -55,6 +55,7 @@ import { getMealPlan } from "@/lib/meal-plan";
 import { getLeadTeams } from "@/lib/users";
 import { addMenuItemAction, saveMealPlanAction } from "./actions";
 import MealPlanPage from "./page";
+import { toActor } from "@camp404/core";
 
 const DAL = "00000000-0000-4000-8000-000000000001";
 const RICE = "00000000-0000-4000-8000-000000000002";
@@ -112,6 +113,7 @@ async function renderAs(
     campUser: { id: "viewer" },
     rank,
     cleared: true,
+    actor: toActor(rank, leads)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(leads);
   vi.mocked(getMealPlan).mockResolvedValue({

@@ -12,10 +12,10 @@ import {
 } from "lucide-react";
 import {
   canApproveClaim,
-  canEditTeamProgram,
   canManageCampEvent,
   canManageMoney,
   errorLogText,
+  teamProgramEditor,
 } from "@camp404/core";
 import { Team } from "@camp404/types";
 import { Badge } from "@camp404/ui/components/badge";
@@ -53,7 +53,6 @@ import { presentTask, TASK_COLUMN_LABEL, tasksHref } from "@/lib/task-board";
 import { buildTeamPage, writeAnnouncementHref } from "@/lib/team-page";
 import { listBoardTasks } from "@/lib/tasks";
 import { getTeamProgram, listTeamAnnouncements } from "@/lib/team-programs";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -140,7 +139,7 @@ export default async function TeamPage({
 }: {
   params: Promise<{ key: string }>;
 }) {
-  const { campUser, rank } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
   const [{ key }, config] = await Promise.all([params, getTeamsConfig()]);
   // A team the config names (an archived one too: its page still says who was
   // on it this year). Anything else is not a page.
@@ -149,26 +148,18 @@ export default async function TeamPage({
   if (!entry || !team.success) notFound();
 
   const now = new Date();
-  const [
-    people,
-    calendar,
-    tasks,
-    leadTeams,
-    meetings,
-    about,
-    announcements,
-    budgets,
-  ] = await Promise.all([
-    listTeamPeople(team.data),
-    getUpcomingEvents(CALENDAR_PAGE_RANGE),
-    listBoardTasks(now),
-    rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
-    listMeetingNotes({ team: team.data, limit: TEAM_MEETING_LIMIT }),
-    getTeamProgram(team.data),
-    listTeamAnnouncements(team.data),
-    ledgerCycle().then(listBudgetTotals),
-  ]);
-  const canEdit = canEditTeamProgram(rank, leadTeams, team.data);
+  const [people, calendar, tasks, meetings, about, announcements, budgets] =
+    await Promise.all([
+      listTeamPeople(team.data),
+      getUpcomingEvents(CALENDAR_PAGE_RANGE),
+      listBoardTasks(now),
+      listMeetingNotes({ team: team.data, limit: TEAM_MEETING_LIMIT }),
+      getTeamProgram(team.data),
+      listTeamAnnouncements(team.data),
+      ledgerCycle().then(listBudgetTotals),
+    ]);
+  const leadTeams = actor.ledTeams;
+  const canEdit = teamProgramEditor(team.data).allows(actor);
   // The team's own panels read their own data; drawn here, before the page,
   // so the whole program arrives in one server render. A panel that fails
   // leaves the shared cards standing: it is logged and left out.

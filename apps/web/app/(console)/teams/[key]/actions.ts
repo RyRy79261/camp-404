@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { canEditTeamProgram } from "@camp404/core";
+import { teamProgramEditor } from "@camp404/core";
 import { TeamProgramInput } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { captainActionGate } from "@/lib/captain-gate";
@@ -11,7 +11,6 @@ import {
   teamProgramPath,
 } from "@/lib/team-program-copy";
 import { saveTeamProgram } from "@/lib/team-programs";
-import { getLeadTeams } from "@/lib/users";
 
 // A team program's one write today: its description (owner's ruling 4,
 // 2026-09-27). The gate (the team_lead rung, clearance being
@@ -33,9 +32,7 @@ export async function saveTeamProgramAction(
         error: parsed.error.issues[0]?.message ?? CHECK_TEAM_PROGRAM,
       };
     }
-    const led =
-      gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-    if (!canEditTeamProgram(gate.rank, led, parsed.data.team)) {
+    if (!teamProgramEditor(parsed.data.team).allows(gate.actor)) {
       return { ok: false, error: TEAM_PROGRAM_REFUSAL };
     }
     const result = await saveTeamProgram({

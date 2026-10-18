@@ -29,6 +29,7 @@ beforeEach(() => {
     ok: true,
     campUser: { id: USER } as never,
     rank: "camp_member",
+    actor: { rank: "camp_member", ledTeams: [] },
   });
   vi.mocked(getLeadTeams).mockResolvedValue([]);
   vi.mocked(searchCamp).mockResolvedValue([]);
@@ -107,19 +108,21 @@ describe("GET /api/search", () => {
   });
 
   it("reads a lead's teams: a Kitchen lead reviews recipes, a Vibes lead runs the lounge", async () => {
-    vi.mocked(captainActionGate).mockResolvedValue({
-      ok: true,
-      campUser: { id: USER } as never,
-      rank: "team_lead",
-    });
-    vi.mocked(getLeadTeams).mockResolvedValue(["kitchen"]);
+    const asLeadOf = (team: "kitchen" | "ministry_of_vibes") =>
+      vi.mocked(captainActionGate).mockResolvedValue({
+        ok: true,
+        campUser: { id: USER } as never,
+        rank: "team_lead",
+        actor: { rank: "team_lead", ledTeams: [team] },
+      });
+    asLeadOf("kitchen");
     await get("q=pot");
     expect(vi.mocked(searchCamp).mock.calls[0]![0]).toMatchObject({
       rank: "team_lead",
       reviewsRecipes: true,
       runsLounge: false,
     });
-    vi.mocked(getLeadTeams).mockResolvedValue(["ministry_of_vibes"]);
+    asLeadOf("ministry_of_vibes");
     await get("q=pot");
     expect(vi.mocked(searchCamp).mock.calls[1]![0]).toMatchObject({
       reviewsRecipes: false,

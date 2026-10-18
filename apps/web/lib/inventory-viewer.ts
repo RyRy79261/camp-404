@@ -1,10 +1,9 @@
 import "server-only";
 
-import { canEditInventory } from "@camp404/core";
+import { inventoryEditor } from "@camp404/core";
 import { Team, type ViewerRank } from "@camp404/types";
 import { activeTeams, getTeamsConfig, teamLabelMap } from "./camp-config";
 import type { CaptainPageAccess } from "./captain-gate";
-import { getLeadTeams } from "./users";
 
 // Who is looking at an inventory page, and what they may change (#246). Every
 // approved member reads the inventory; `canEdit(team)` is canEditInventory on
@@ -30,13 +29,14 @@ export interface InventoryViewer {
 export async function inventoryViewer({
   campUser,
   rank,
-}: Pick<CaptainPageAccess, "campUser" | "rank">): Promise<InventoryViewer> {
-  const [ledTeams, config] = await Promise.all([
-    rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
-    getTeamsConfig(),
-  ]);
+  actor,
+}: Pick<
+  CaptainPageAccess,
+  "campUser" | "rank" | "actor"
+>): Promise<InventoryViewer> {
+  const config = await getTeamsConfig();
   const labels = teamLabelMap(config);
-  const canEdit = (team: string) => canEditInventory(rank, ledTeams, team);
+  const canEdit = (team: string) => inventoryEditor(team).allows(actor);
   const order = new Map(activeTeams(config).map((t, i) => [t.key, i]));
   return {
     userId: campUser.id,

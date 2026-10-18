@@ -17,7 +17,6 @@ import {
   WHOLE_CAMP_LABEL,
 } from "@/lib/guide-copy";
 import { getDutyCardShifts } from "@/lib/shifts";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +40,7 @@ export default async function DutyCardPrintPage({
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ draft?: string | string[] }>;
 }) {
-  const { campUser, rank } = await captainPageGate("camp_member");
+  const { rank, actor } = await captainPageGate("camp_member");
   const [{ slug }, query] = await Promise.all([params, searchParams]);
   const wantsDraft = query.draft === "1";
   const printed = printedOn(new Date());
@@ -52,8 +51,7 @@ export default async function DutyCardPrintPage({
       : (config.teams.find((t) => t.key === team)?.label ?? team);
 
   if (wantsDraft) {
-    const leadTeams =
-      rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+    const leadTeams = actor.ledTeams;
     const draft = await getGuideDraft(slug);
     if (!draft || draft.kind !== "duty_card") notFound();
     if (!canEditGuideChapter(rank, leadTeams, draft.team)) {

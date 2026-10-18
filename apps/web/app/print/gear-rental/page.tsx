@@ -9,9 +9,9 @@ import {
   RENTAL_REFUSAL,
   RENTAL_SUMMARY_PATH,
 } from "@/lib/rental-copy";
-import { runsRental } from "@/lib/rental-gate";
 import { SHEET_TABLE } from "@/lib/print";
 import { ownTentText, printedOnText, tentNeedText } from "@/lib/rental-view";
+import { RENTAL_MANAGER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,7 @@ export default async function GearRentalPrintPage({
   searchParams: Promise<{ sheet?: string }>;
 }) {
   const gate = await captainPageGate("team_lead");
-  if (!gate.cleared || !(await runsRental(gate))) {
+  if (!gate.cleared || !RENTAL_MANAGER.allows(gate.actor)) {
     return (
       <PrintRefusal>
         <p>{RENTAL_REFUSAL}</p>

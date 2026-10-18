@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // The one gate behind every captain-console page and action. The member ladder
 // and the users helpers are mocked; what these assert is the order of the
-// checks, the refusal copy, and that the team-lead flag is read only when it
-// can change the answer.
+// checks, the refusal copy, and that the team-lead flag (the led teams) is
+// read only when it can change the answer.
 
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
 vi.mock("@/lib/member-gate", () => ({ requireMemberPage: vi.fn() }));
@@ -11,7 +11,7 @@ vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(),
   isApproved: vi.fn(),
-  isTeamLead: vi.fn(),
+  getLeadTeams: vi.fn(),
 }));
 
 import { getAuthenticatedUser } from "@/lib/auth";
@@ -20,7 +20,7 @@ import {
   ensureCampUser,
   hasCampAccess,
   isApproved,
-  isTeamLead,
+  getLeadTeams,
 } from "@/lib/users";
 import { captainActionGate, captainPageGate } from "../captain-gate";
 
@@ -31,13 +31,13 @@ function asPageViewer(rank: "captain" | "member", lead = false) {
     authUser: AUTH,
     campUser: { id: "user-1", rank },
   } as never);
-  vi.mocked(isTeamLead).mockResolvedValue(lead);
+  vi.mocked(getLeadTeams).mockResolvedValue(lead ? ["kitchen"] : []);
 }
 
 function asActionViewer(rank: "captain" | "member", lead = false) {
   vi.mocked(getAuthenticatedUser).mockResolvedValue(AUTH as never);
   vi.mocked(ensureCampUser).mockResolvedValue({ id: "user-1", rank } as never);
-  vi.mocked(isTeamLead).mockResolvedValue(lead);
+  vi.mocked(getLeadTeams).mockResolvedValue(lead ? ["kitchen"] : []);
 }
 
 beforeEach(() => {
@@ -51,7 +51,7 @@ describe("captainPageGate", () => {
     vi.mocked(requireMemberPage).mockRejectedValue(new Error("NEXT_REDIRECT"));
 
     await expect(captainPageGate("captain")).rejects.toThrow("NEXT_REDIRECT");
-    expect(isTeamLead).not.toHaveBeenCalled();
+    expect(getLeadTeams).not.toHaveBeenCalled();
   });
 
   it("clears a captain for a captain page without reading the lead flag", async () => {
@@ -61,14 +61,14 @@ describe("captainPageGate", () => {
       rank: "captain",
       cleared: true,
     });
-    expect(isTeamLead).not.toHaveBeenCalled();
+    expect(getLeadTeams).not.toHaveBeenCalled();
   });
 
   it("locks a member out of a captain page without reading the lead flag", async () => {
     asPageViewer("member", true);
 
     expect(await captainPageGate("captain")).toMatchObject({ cleared: false });
-    expect(isTeamLead).not.toHaveBeenCalled();
+    expect(getLeadTeams).not.toHaveBeenCalled();
   });
 
   it("reads the real lead flag for a team-lead page", async () => {
@@ -76,9 +76,10 @@ describe("captainPageGate", () => {
 
     expect(await captainPageGate("team_lead")).toMatchObject({
       rank: "team_lead",
+      actor: { rank: "team_lead", ledTeams: ["kitchen"] },
       cleared: true,
     });
-    expect(isTeamLead).toHaveBeenCalledWith("user-1");
+    expect(getLeadTeams).toHaveBeenCalledWith("user-1");
   });
 
   it("locks a plain member out of a team-lead page", async () => {
@@ -144,6 +145,7 @@ describe("captainActionGate", () => {
     expect(await captainActionGate("team_lead")).toMatchObject({
       ok: true,
       rank: "team_lead",
+      actor: { rank: "team_lead", ledTeams: ["kitchen"] },
       campUser: { id: "user-1" },
     });
 

@@ -1,12 +1,11 @@
 import { notFound } from "next/navigation";
-import { campDayKey } from "@camp404/core";
+import { campDayKey, MONEY_KEEPER } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { PaymentsFrame } from "@/components/dues/payments-frame";
 import { captainPageGate } from "@/lib/captain-gate";
 import { getDuesYear, getMemberDues, listFeeTiers } from "@/lib/dues";
 import { PAYMENTS_OWING_PATH } from "@/lib/dues-copy";
 import { PLACE_WORDS } from "@/lib/dues-view";
-import { keepsMoney } from "@/lib/money-gate";
 import { ledgerCycle } from "@/lib/payments";
 import { MemberDuesManager } from "./member-dues-manager";
 
@@ -28,7 +27,7 @@ export default async function MemberDuesPage({
   params: Promise<{ userId: string }>;
 }) {
   const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && (await keepsMoney(gate));
+  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
   if (!cleared) {
     return (
       <PaymentsFrame

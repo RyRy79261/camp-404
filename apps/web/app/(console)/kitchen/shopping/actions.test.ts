@@ -18,6 +18,7 @@ import { setShoppingPrice, setShoppingTicks } from "@/lib/kitchen-menu";
 import { PRICE_REFUSAL, TICK_REFUSAL } from "@/lib/recipe-copy";
 import { getLeadTeams } from "@/lib/users";
 import { setShoppingPriceAction, setShoppingTicksAction } from "./actions";
+import { toActor } from "@camp404/core";
 
 const LINES = [{ key: "onions|g", amount: "3.5 kg" }];
 
@@ -29,6 +30,7 @@ describe("setShoppingTicksAction", () => {
       ok: true,
       rank: "camp_member",
       campUser: { id: "member-1" },
+      actor: toActor("camp_member", [])!,
     } as never);
     expect(
       await setShoppingTicksAction({
@@ -57,6 +59,7 @@ describe("setShoppingTicksAction", () => {
       ok: true,
       rank: "camp_member",
       campUser: { id: "member-1" },
+      actor: toActor("camp_member", [])!,
     } as never);
     expect(await setShoppingTicksAction({ lines: [], ticked: true })).toEqual({
       ok: false,
@@ -80,6 +83,7 @@ describe("setShoppingPriceAction (#245)", () => {
       ok: true,
       rank,
       campUser: { id: "lead-1" },
+      actor: toActor(rank, led)!,
     } as never);
     vi.mocked(getLeadTeams).mockResolvedValue(led as never);
   };

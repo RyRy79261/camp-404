@@ -51,6 +51,7 @@ import {
   saveDuesYearAction,
   setFeeAction,
 } from "./dues-actions";
+import { toActor } from "@camp404/core";
 
 const REFUSAL = "Payments are for captains and Finance leads.";
 const TIER = "5f0c1b9e-6a55-4d2b-9d6f-3a1f2b3c4d5e";
@@ -60,6 +61,7 @@ function as(rank: "captain" | "team_lead", led: string[] = []) {
     ok: true,
     campUser: { id: `${rank}-1` },
     rank,
+    actor: toActor(rank, led)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(led);
 }

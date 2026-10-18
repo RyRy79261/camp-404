@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, Users } from "lucide-react";
-import { campDayKey, formatMoney } from "@camp404/core";
+import { campDayKey, formatMoney, MONEY_KEEPER } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import {
@@ -14,7 +14,6 @@ import { captainPageGate } from "@/lib/captain-gate";
 import { getDuesYear, listDuesAccounts, type DuesAccountRow } from "@/lib/dues";
 import { memberDuesPath, PAYMENTS_OWING_PATH } from "@/lib/dues-copy";
 import { balanceLabel, formatDay, PLACE_WORDS } from "@/lib/dues-view";
-import { keepsMoney } from "@/lib/money-gate";
 import { ledgerCycle } from "@/lib/payments";
 
 export const dynamic = "force-dynamic";
@@ -208,7 +207,7 @@ export default async function WhoOwesWhatPage({
   searchParams: Promise<{ show?: string }>;
 }) {
   const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && (await keepsMoney(gate));
+  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
   const { show: raw } = await searchParams;
   const show: Show = (SHOW as readonly string[]).includes(raw ?? "")
     ? (raw as Show)

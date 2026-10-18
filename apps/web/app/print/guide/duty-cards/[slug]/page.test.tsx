@@ -31,6 +31,7 @@ import { getDutyCardShifts } from "@/lib/shifts";
 import { getLeadTeams } from "@/lib/users";
 import { TEAM_SHEET_STYLES } from "@camp404/ui/lib/team-style";
 import DutyCardPrintPage from "./page";
+import { toActor } from "@camp404/core";
 
 const CARD: DutyCard = {
   subRoles: [
@@ -63,11 +64,15 @@ const PUBLISHED = {
   versions: [],
 };
 
-function gate(rank: "camp_member" | "team_lead" | "captain") {
+function gate(
+  rank: "camp_member" | "team_lead" | "captain",
+  led: string[] = [],
+) {
   vi.mocked(captainPageGate).mockResolvedValue({
     campUser: { id: "viewer" },
     rank,
     cleared: true,
+    actor: toActor(rank, led)!,
   } as never);
 }
 
@@ -221,7 +226,7 @@ describe("the duty card print", () => {
       expect(screen.queryByText("Not published yet.")).toBeNull();
       cleanup();
 
-      gate("team_lead");
+      gate("team_lead", ["structures"]);
       vi.mocked(getLeadTeams).mockResolvedValue(["structures"]);
       const lead = render(await open("evening-clean", "1"));
       expect(screen.getByTestId("duty-card-refusal")).toBeTruthy();
@@ -229,7 +234,7 @@ describe("the duty card print", () => {
     });
 
     it("prints the saved copy for a lead of its team, marked as a draft, with no author", async () => {
-      gate("team_lead");
+      gate("team_lead", ["kitchen"]);
       vi.mocked(getLeadTeams).mockResolvedValue(["kitchen"]);
       const { container } = render(await open("evening-clean", "1"));
       expect(container.querySelector(`[${PRINT_SHEET_ATTR}]`)).toBeTruthy();

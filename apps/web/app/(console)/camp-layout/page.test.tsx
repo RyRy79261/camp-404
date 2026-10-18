@@ -33,7 +33,7 @@ vi.mock("@/lib/camp-layout", () => ({
   previousLayoutCycle: vi.fn(async () => null),
 }));
 
-import { LAYOUT_TEAM, emptyLayout, newPiece } from "@camp404/core";
+import { LAYOUT_TEAM, emptyLayout, newPiece, toActor } from "@camp404/core";
 import { captainPageGate } from "@/lib/captain-gate";
 import {
   getCampLayout,
@@ -66,6 +66,7 @@ async function renderAs(
     campUser: { id: "viewer" },
     rank,
     cleared: true,
+    actor: toActor(rank, leads)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(leads);
   render(await CampLayoutPage({ searchParams: Promise.resolve({ version }) }));

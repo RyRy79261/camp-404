@@ -34,7 +34,6 @@ import {
   LAYOUT_PRINT_PATH,
   NEIGHBOUR_SEES,
 } from "@/lib/camp-layout-copy";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -68,9 +67,9 @@ export default async function CampLayoutPage({
   searchParams: Promise<{ version?: string }>;
 }) {
   // Every approved member reads the plan.
-  const { campUser, rank } = await captainPageGate("camp_member");
+  const { rank, actor } = await captainPageGate("camp_member");
   const { version: asked } = await searchParams;
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const leadTeams = actor.ledTeams;
   const canEdit = canEditLayout(rank, leadTeams);
   const canShare = canShareLayout(rank);
 

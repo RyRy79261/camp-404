@@ -39,6 +39,7 @@ import { captainPageGate } from "@/lib/captain-gate";
 import { getRecipeDetail } from "@/lib/recipes";
 import { addLessonAction } from "../../../actions";
 import RecipeVersionPage from "./page";
+import { toActor } from "@camp404/core";
 
 const RECIPE = "11111111-1111-4111-8111-111111111111";
 
@@ -125,6 +126,7 @@ async function renderAs(
     campUser: { id: viewer },
     rank: "camp_member",
     cleared: true,
+    actor: toActor("camp_member", [])!,
   } as never);
   vi.mocked(getRecipeDetail).mockResolvedValue(recipe);
   render(

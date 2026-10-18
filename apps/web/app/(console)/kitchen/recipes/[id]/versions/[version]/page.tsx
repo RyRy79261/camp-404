@@ -9,7 +9,6 @@ import { captainPageGate } from "@/lib/captain-gate";
 import { recipeHistoryPath } from "@/lib/recipe-copy";
 import { formatDay } from "@/lib/recipe-labels";
 import { getOpenRun, getRecipeDetail } from "@/lib/recipes";
-import { getLeadTeams } from "@/lib/users";
 import { AddLesson } from "../../recipe-actions";
 import { AdjustButton } from "../../adjust-button";
 
@@ -46,8 +45,8 @@ export default async function RecipeVersionPage({
   params: Promise<{ id: string; version: string }>;
 }) {
   const { id, version } = await params;
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
   const detail = await getRecipeDetail(id);
   if (!detail) notFound();
   const privileged =

@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sourceFromText } from "@camp404/core";
+import { sourceFromText, toActor } from "@camp404/core";
 import type { RecipeDetail } from "@/lib/recipes";
 
 // One source version on its own page (the owner, 2026-09-24): the heading
@@ -43,6 +43,7 @@ async function renderAs(
     campUser: { id: viewer.id },
     rank: viewer.rank,
     cleared: true,
+    actor: toActor(viewer.rank, viewer.leads ?? [])!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(viewer.leads ?? []);
   render(

@@ -38,7 +38,6 @@ import {
   resetStaleRuns,
   type RecipeBookEntry,
 } from "@/lib/recipes";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -113,8 +112,8 @@ const BOOK_COLUMNS: ResponsiveColumn<RecipeBookEntry>[] = [
 
 export default async function RecipeBookPage() {
   // Every approved member; the gate resolves the lead flag for the review link.
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
   const reviewer = canApproveRecipe(rank, leadTeams);
   // No cron: a run that stopped, or never started, is handed back here.
   await resetStaleRuns(new Date());

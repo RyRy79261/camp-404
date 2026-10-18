@@ -9,7 +9,6 @@ import { captainPageGate } from "@/lib/captain-gate";
 import { recipeHistoryPath } from "@/lib/recipe-copy";
 import { formatDay, platesLabel } from "@/lib/recipe-labels";
 import { getRecipeDetail, listRecipeSources } from "@/lib/recipes";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +44,8 @@ export default async function RecipeSourceVersionPage({
   params: Promise<{ id: string; version: string }>;
 }) {
   const { id, version } = await params;
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
   const detail = await getRecipeDetail(id);
   if (!detail) notFound();
   const privileged =

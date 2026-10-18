@@ -1,10 +1,8 @@
-import { Team } from "@camp404/types";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
 import { presentTask } from "@/lib/task-board";
 import { listAssignableMembers, listBoardTasks } from "@/lib/tasks";
-import { getLeadTeams } from "@/lib/users";
 import { TaskBoard, type TeamOption } from "./task-board";
 
 export const dynamic = "force-dynamic";
@@ -24,15 +22,10 @@ export default async function TasksPage({
 }: {
   searchParams: Promise<{ team?: string; add?: string; task?: string }>;
 }) {
-  const { campUser, rank } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
   const { team: askedTeam, add, task: askedTask } = await searchParams;
   const isCaptain = rank === "captain";
-  const leadTeams =
-    rank === "team_lead"
-      ? (await getLeadTeams(campUser.id)).filter(
-          (t) => Team.safeParse(t).success,
-        )
-      : [];
+  const leadTeams: readonly string[] = actor.ledTeams;
 
   const now = new Date();
   const [tasks, members, config] = await Promise.all([

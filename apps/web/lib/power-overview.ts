@@ -20,7 +20,6 @@ import {
 } from "./power-site";
 import type { PowerOverview } from "./power-summary";
 import { listTeamPeople } from "./roster";
-import { getLeadTeams } from "./users";
 
 // The rows every Power section and the answer rail read, fetched once per
 // request, in parallel: the rail (components/power/power-frame.tsx) and the
@@ -28,8 +27,8 @@ import { getLeadTeams } from "./users";
 
 /** Every approved member reads Power; a captain or a P&L lead edits it. */
 export const powerViewer = cache(async () => {
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const leadTeams = rank === "team_lead" ? await getLeadTeams(campUser.id) : [];
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
   return { campUser, rank, canEdit: canEditPower(rank, leadTeams) };
 });
 

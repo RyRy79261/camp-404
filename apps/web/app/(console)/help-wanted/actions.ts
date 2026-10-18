@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { canManageTeamRoles, canPickTeamLead } from "@camp404/core";
+import { canPickTeamLead, roleKeeper, type Actor } from "@camp404/core";
 import {
   CopyTeamRolesInput,
   RemoveTeamRoleInput,
@@ -28,7 +28,6 @@ import {
   RELOAD,
 } from "@/lib/help-wanted-copy";
 import { revalidateManifest } from "@/lib/manifest-revalidate";
-import { getLeadTeams } from "@/lib/users";
 
 // Help wanted's writes (owner's pick A, 2026-10-09). Each action: the gate,
 // the Zod boundary, the screen's answer to "may they?", then the facade with
@@ -41,13 +40,8 @@ import { getLeadTeams } from "@/lib/users";
 const keeperGate = () => captainActionGate("team_lead", HELP_WANTED_REFUSAL);
 
 /** The screen's check: may this actor run `team`'s roles? */
-async function mayRun(
-  gate: { campUser: { id: string }; rank: string },
-  team: string,
-): Promise<boolean> {
-  const led =
-    gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-  return canManageTeamRoles(gate.rank, led, team);
+function mayRun(gate: { actor: Actor }, team: string): boolean {
+  return roleKeeper(team).allows(gate.actor);
 }
 
 function firstIssue(error: { issues: { message: string }[] }): string {
@@ -63,7 +57,7 @@ export async function saveTeamRoleAction(
     if (!gate.ok) return gate;
     const parsed = SaveTeamRoleInput.safeParse(input);
     if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
-    if (!(await mayRun(gate, parsed.data.team))) {
+    if (!mayRun(gate, parsed.data.team)) {
       return { ok: false, error: HELP_WANTED_REFUSAL };
     }
     const result = await saveTeamRole(gate.campUser.id, parsed.data);
@@ -98,7 +92,7 @@ export async function setLeadPlacesAction(
     if (!gate.ok) return gate;
     const parsed = SetLeadPlacesInput.safeParse(input);
     if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
-    if (!(await mayRun(gate, parsed.data.team))) {
+    if (!mayRun(gate, parsed.data.team)) {
       return { ok: false, error: HELP_WANTED_REFUSAL };
     }
     const result = await setLeadPlaces(gate.campUser.id, parsed.data);
@@ -117,7 +111,7 @@ export async function copyLastYearsRolesAction(
     if (!gate.ok) return gate;
     const parsed = CopyTeamRolesInput.safeParse(input);
     if (!parsed.success) return { ok: false, error: RELOAD };
-    if (!(await mayRun(gate, parsed.data.team))) {
+    if (!mayRun(gate, parsed.data.team)) {
       return { ok: false, error: HELP_WANTED_REFUSAL };
     }
     const result = await copyLastYearsRoles(gate.campUser.id, parsed.data);
@@ -157,7 +151,7 @@ export async function giveTeamRoleAction(
     const allowed =
       parsed.data.roleId === null
         ? canPickTeamLead(gate.rank)
-        : await mayRun(gate, parsed.data.team);
+        : mayRun(gate, parsed.data.team);
     if (!allowed) return { ok: false, error: HELP_WANTED_REFUSAL };
     const result = await giveTeamRole(gate.campUser.id, parsed.data);
     if (!result.ok) return result;
@@ -179,7 +173,7 @@ export async function takeTeamRoleAction(
     const allowed =
       parsed.data.roleId === null
         ? canPickTeamLead(gate.rank)
-        : await mayRun(gate, parsed.data.team);
+        : mayRun(gate, parsed.data.team);
     if (!allowed) return { ok: false, error: HELP_WANTED_REFUSAL };
     const result = await takeTeamRole(gate.campUser.id, parsed.data);
     if (!result.ok) return result;

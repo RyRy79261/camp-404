@@ -34,7 +34,6 @@ import {
   openingDay,
   STAGE_ORDER,
 } from "@/lib/lounge-view";
-import { getLeadTeams } from "@/lib/users";
 
 export const dynamic = "force-dynamic";
 
@@ -59,12 +58,9 @@ export default async function LoungePage({
   searchParams: Promise<{ tab?: string; offer?: string }>;
 }) {
   // Every approved member reads the programme.
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const [camp, leadTeams, params] = await Promise.all([
-    getCampSettings(),
-    rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
-    searchParams,
-  ]);
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const leadTeams = actor.ledTeams;
+  const [camp, params] = await Promise.all([getCampSettings(), searchParams]);
   const canRun = canRunLounge(rank, leadTeams);
   const cycle = camp.cycleNumber;
   const [programme, mine, all, settings] = await Promise.all([

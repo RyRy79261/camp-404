@@ -23,7 +23,6 @@ import {
   SHIFTS_PATH,
   SHIFTS_PRINT_PATH,
 } from "@/lib/shifts-copy";
-import { getLeadTeams } from "@/lib/users";
 import { dailySheetHref } from "@/lib/daily-sheet-copy";
 
 export const dynamic = "force-dynamic";
@@ -165,9 +164,9 @@ export default async function ShiftsPage({
   searchParams: Promise<{ day?: string; shift?: string }>;
 }) {
   // Every approved member reads the roster and signs up.
-  const { campUser, rank } = await captainPageGate("camp_member");
-  const [ledTeams, params, asked] = await Promise.all([
-    rank === "team_lead" ? getLeadTeams(campUser.id) : Promise.resolve([]),
+  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const ledTeams = actor.ledTeams;
+  const [params, asked] = await Promise.all([
     searchParams,
     isAskedForShifts(campUser.id),
   ]);

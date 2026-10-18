@@ -1,6 +1,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { sourceFromText } from "@camp404/core";
+import { sourceFromText, toActor } from "@camp404/core";
 import type {
   ProofreadProgress,
   RecipeDetail,
@@ -132,6 +132,7 @@ async function renderAs(
     campUser: { id: "viewer" },
     rank: viewer.rank,
     cleared: viewer.rank !== "camp_member",
+    actor: toActor(viewer.rank, leads)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(leads);
   vi.mocked(getRecipeDetail).mockResolvedValue(recipe);

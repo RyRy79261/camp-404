@@ -60,6 +60,7 @@ import {
 import { runProofreadingAction } from "../actions";
 import { getLeadTeams } from "@/lib/users";
 import RecipeReviewPage from "./page";
+import { toActor } from "@camp404/core";
 
 const RECIPE = "11111111-1111-4111-8111-111111111111";
 
@@ -127,6 +128,7 @@ async function renderAs(
     campUser: { id: "viewer" },
     rank,
     cleared: rank !== "camp_member",
+    actor: toActor(rank, leads)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(leads);
   render(await RecipeReviewPage());

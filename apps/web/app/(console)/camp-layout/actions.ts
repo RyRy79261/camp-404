@@ -2,13 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { canEditLayout } from "@camp404/core";
+import { LAYOUT_EDITOR } from "@camp404/core";
 import { SaveLayoutInput } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
-import {
-  captainActionGate,
-  type CaptainActionAccess,
-} from "@/lib/captain-gate";
+import { captainActionGate } from "@/lib/captain-gate";
+import { ruleActionGate, type RuleActionAccess } from "@/lib/rule-gate";
 import {
   copyLastYearLayout,
   restoreLayoutVersion,
@@ -22,29 +20,19 @@ import {
   LAYOUT_REFUSAL,
   SHARE_REFUSAL,
 } from "@/lib/camp-layout-copy";
-import { getLeadTeams } from "@/lib/users";
 
 // The camp layout's writes (#271). Each action: the gate, the Zod boundary,
 // then the facade with the actor's id alone. The gate answers the screen; the
 // rule is checked again inside each write's own transaction, which re-reads
 // the actor's rank and led teams and never takes a team list from here.
 
-type Gate = Extract<CaptainActionAccess, { ok: true }>;
-
 /**
  * The editor's gate: the rank gate at team_lead (clearance is global), then
  * canEditLayout on the teams they lead, so a lead of another team is told
  * here rather than by the write.
  */
-async function layoutGate(): Promise<Gate | { ok: false; error: string }> {
-  const gate = await captainActionGate("team_lead", LAYOUT_REFUSAL);
-  if (!gate.ok) return gate;
-  const led =
-    gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-  if (!canEditLayout(gate.rank, led)) {
-    return { ok: false, error: LAYOUT_REFUSAL };
-  }
-  return gate;
+function layoutGate(): Promise<RuleActionAccess> {
+  return ruleActionGate(LAYOUT_EDITOR, LAYOUT_REFUSAL);
 }
 
 const RestoreInput = z.object({

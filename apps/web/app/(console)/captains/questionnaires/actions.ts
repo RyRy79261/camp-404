@@ -12,6 +12,7 @@ import {
   isQuestionnaireTemplateKey,
   mealPlanRatingRows,
   type AudienceSpec,
+  type Actor,
 } from "@camp404/core";
 import type { GridRow } from "@camp404/types";
 import { getMealPlan } from "@/lib/meal-plan";
@@ -33,7 +34,6 @@ import {
 import { captainActionGate } from "@/lib/captain-gate";
 import { canEditQuestionnaire } from "@/lib/questionnaire-authoring";
 import type { CampUser } from "@/lib/users";
-import { getLeadTeams } from "@/lib/users";
 import { runAction } from "@/lib/action-result";
 import { getCampManagementRoster } from "@/lib/roster";
 import {
@@ -66,7 +66,7 @@ export type QResultWithActivation =
 export type PublishActionResult = PublishResult;
 
 type AuthorGate =
-  | { ok: true; campUser: CampUser; rank: ViewerRank }
+  | { ok: true; campUser: CampUser; rank: ViewerRank; actor: Actor }
   | { ok: false; error: string };
 
 /** Gate to >= team_lead clearance — the level that may author drafts. */
@@ -118,13 +118,9 @@ const ATTENDANCE_QUESTION_MISSING =
  * THIS year, which is the only per-team fact in the system; clearance itself
  * stays global (owner-ratified).
  */
-async function allowSendTo(
-  gate: { campUser: CampUser; rank: ViewerRank },
-  audience: AudienceSpec,
-): Promise<QResult> {
-  const leadTeams =
-    gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-  if (!canSendToAudience({ rank: gate.rank, leadTeams }, audience)) {
+function allowSendTo(gate: { actor: Actor }, audience: AudienceSpec): QResult {
+  const { rank, ledTeams } = gate.actor;
+  if (!canSendToAudience({ rank, leadTeams: ledTeams }, audience)) {
     return { ok: false, error: AUDIENCE_REFUSED };
   }
   return { ok: true };
@@ -473,7 +469,7 @@ export async function sendAction(
         error: parsed.error.issues[0]?.message ?? "Invalid send settings.",
       };
     }
-    const allowed = await allowSendTo(gate, {
+    const allowed = allowSendTo(gate, {
       scope: parsed.data.scope,
       team: parsed.data.team ?? null,
     });
@@ -563,7 +559,7 @@ export async function previewAudienceCount(
     // they lead and a refusal for everything else, exactly as at Send.
     const gate = await gateAuthor();
     if (!gate.ok) return gate;
-    const allowed = await allowSendTo(gate, { scope, team });
+    const allowed = allowSendTo(gate, { scope, team });
     if (!allowed.ok) return allowed;
 
     // The roster read is already cycle-scoped (this year's teams and leads) and

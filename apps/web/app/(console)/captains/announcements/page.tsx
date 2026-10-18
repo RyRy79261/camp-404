@@ -1,4 +1,3 @@
-import { Team } from "@camp404/types";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import {
@@ -7,7 +6,6 @@ import {
 } from "@/lib/notifications";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainPageGate } from "@/lib/captain-gate";
-import { getLeadTeams } from "@/lib/users";
 import {
   AnnouncementsManager,
   type AudienceOption,
@@ -32,12 +30,7 @@ export default async function AnnouncementsPage({
   const { audience: asked } = await searchParams;
   const { campUser } = gate;
   const isCaptain = gate.rank === "captain";
-  const leadTeams =
-    gate.cleared && !isCaptain
-      ? (await getLeadTeams(campUser.id)).filter(
-          (t) => Team.safeParse(t).success,
-        )
-      : [];
+  const leadTeams = gate.cleared && !isCaptain ? [...gate.actor.ledTeams] : [];
   const cleared = gate.cleared && (isCaptain || leadTeams.length > 0);
 
   // Withhold the data server-side when locked — never fetch what we won't send.

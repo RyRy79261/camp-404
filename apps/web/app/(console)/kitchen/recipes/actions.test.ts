@@ -124,6 +124,7 @@ import {
   sendSourceForProofreadingAction,
   suggestRecipeAction,
 } from "./actions";
+import { toActor } from "@camp404/core";
 
 const RECIPE_A = "0f8fad5b-d9cb-469f-a165-70867728950e";
 const RECIPE_B = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
@@ -133,7 +134,12 @@ const LADDER: ViewerRank[] = ["camp_member", "team_lead", "captain"];
 function actAs(rank: ViewerRank, led: string[] = [], id = "user-1") {
   vi.mocked(captainActionGate).mockImplementation(async (required, refusal) =>
     LADDER.indexOf(rank) >= LADDER.indexOf(required)
-      ? { ok: true, campUser: { id } as never, rank }
+      ? {
+          ok: true,
+          campUser: { id } as never,
+          rank,
+          actor: toActor(rank, led)!,
+        }
       : { ok: false, error: refusal ?? "refused" },
   );
   vi.mocked(getLeadTeams).mockResolvedValue(led);
@@ -1001,7 +1007,12 @@ describe("proofreadProgressAction", () => {
       await proofreadProgressAction({ recipeId: RECIPE_A, runId: RUN }),
     ).toEqual({
       ok: true,
-      data: { stage: "reading", outcome: "failed", questions: null, error: "stuck" },
+      data: {
+        stage: "reading",
+        outcome: "failed",
+        questions: null,
+        error: "stuck",
+      },
     });
     expect(resetStaleRuns).toHaveBeenCalledTimes(1);
     expect(vi.mocked(resetStaleRuns).mock.invocationCallOrder[0]!).toBeLessThan(

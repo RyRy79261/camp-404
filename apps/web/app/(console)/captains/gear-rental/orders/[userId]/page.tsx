@@ -19,9 +19,9 @@ import {
   listRentalSharerChoices,
 } from "@/lib/rental";
 import { RENTAL_PATH, rentalOrderPath } from "@/lib/rental-copy";
-import { runsRental } from "@/lib/rental-gate";
 import { orderBadge, tentForForm } from "@/lib/rental-view";
 import { OrderManager } from "./order-manager";
+import { RENTAL_MANAGER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +43,7 @@ export default async function GearOrderPage({
   searchParams: Promise<{ edit?: string }>;
 }) {
   const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && (await runsRental(gate));
+  const cleared = gate.cleared && RENTAL_MANAGER.allows(gate.actor);
   if (!cleared) {
     return (
       <RentalFrame

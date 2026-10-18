@@ -5,10 +5,11 @@ import { after } from "next/server";
 import { z } from "zod";
 import { PROMPT_VERSIONS } from "@camp404/ai-prompts";
 import {
-  canApproveRecipe,
-  canRunProofread,
   defaultPlates,
   mealPlanPeaks,
+  KITCHEN_REVIEWER,
+  PROOFREADER,
+  type Rule,
 } from "@camp404/core";
 import { progressIsStale } from "@camp404/db/recipes";
 import {
@@ -28,10 +29,8 @@ import {
 } from "@camp404/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { MODELS } from "@/lib/anthropic";
-import {
-  captainActionGate,
-  type CaptainActionAccess,
-} from "@/lib/captain-gate";
+import { captainActionGate } from "@/lib/captain-gate";
+import { ruleActionGate, type RuleActionAccess } from "@/lib/rule-gate";
 import { getMealPlan } from "@/lib/meal-plan";
 import { processRuns } from "@/lib/recipe-proofread";
 import {
@@ -64,7 +63,6 @@ import {
   type ProofreadProgress,
 } from "@/lib/recipes";
 import { isE2ETestMode } from "@/lib/test-mode";
-import { getLeadTeams } from "@/lib/users";
 
 // The kitchen's recipe writes (#243). Each action: the rank gate
 // (captainActionGate), the Zod boundary, then the facade. The gate answers the
@@ -79,8 +77,6 @@ import { getLeadTeams } from "@/lib/users";
 // count still runs inline under E2E, so its Playwright flow stays
 // deterministic.
 
-type Gate = Extract<CaptainActionAccess, { ok: true }>;
-
 function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? CHECK_RECIPE;
 }
@@ -93,24 +89,19 @@ function revalidateRecipe(recipeId?: string): void {
 /**
  * The Kitchen reviewer's gate, following canSendToAudience: the rank gate at
  * team_lead (clearance is global), then the rule on the teams they lead
- * (canApproveRecipe, or canRunProofread for anything sent to Claude), so a
+ * (KITCHEN_REVIEWER, or PROOFREADER for anything sent to Claude), so a
  * lead of another team is told here rather than by the write.
  */
-async function kitchenGate(
+function kitchenGate(
   refusal: string,
-  rule: (rank: string, led: readonly string[]) => boolean = canApproveRecipe,
-): Promise<Gate | { ok: false; error: string }> {
-  const gate = await captainActionGate("team_lead", refusal);
-  if (!gate.ok) return gate;
-  const led =
-    gate.rank === "captain" ? [] : await getLeadTeams(gate.campUser.id);
-  if (!rule(gate.rank, led)) return { ok: false, error: refusal };
-  return gate;
+  rule: Rule = KITCHEN_REVIEWER,
+): Promise<RuleActionAccess> {
+  return ruleActionGate(rule, refusal);
 }
 
 /** A reviewer who may send recipes to Claude (the owner's decision 2A). */
-function runGate(): Promise<Gate | { ok: false; error: string }> {
-  return kitchenGate(RUN_REFUSAL, canRunProofread);
+function runGate(): Promise<RuleActionAccess> {
+  return kitchenGate(RUN_REFUSAL, PROOFREADER);
 }
 
 /**

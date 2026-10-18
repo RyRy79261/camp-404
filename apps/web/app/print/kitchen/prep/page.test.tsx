@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { KITCHEN_TEAM } from "@camp404/core";
+import { KITCHEN_TEAM, toActor } from "@camp404/core";
 
 // The prep plan print (#249, Option A of design/print-prep-plan.html): before
 // we leave by date, then each day on site, a tick box per step, the dish and
@@ -28,6 +28,7 @@ function as(rank: string, led: string[] = []) {
     campUser: { id: "viewer" },
     rank,
     cleared: true,
+    actor: toActor(rank, led)!,
   } as never);
   vi.mocked(getLeadTeams).mockResolvedValue(led as never);
 }
