@@ -4,18 +4,24 @@ import {
   campStockInUse,
   campStockTaken,
   checkRentalOrder,
+  confirmTentProblem,
+  filledOrderLocked,
   GEAR_ORDER_ACTION_KEY,
   GEAR_ORDER_ACTION_TITLE,
   GEAR_ORDER_REF_TYPE,
   gearOrderAskNotification,
   isAskedForGear,
+  MAX_RENTAL_ITEMS,
+  memberOrderLocked,
   priceRentalOrder,
   RENTAL_NOT_A_TENT,
-  RENTAL_PICK_A_TENT,
   rentalChargeDescription,
+  rentalItemValues,
+  rentalSendProblem,
   rentalSummary,
   tentConflict,
   RENTAL_MANAGER,
+  withdrawLocked,
 } from "@camp404/core";
 import {
   NOT_A_RENTAL_MANAGER,
@@ -23,12 +29,7 @@ import {
   RENTAL_ITEM_MISSING,
   RENTAL_KIND_IN_USE,
   RENTAL_NO_SUCH_MEMBER,
-  RENTAL_NOTHING_TO_SEND,
-  RENTAL_ORDER_CHANGED,
-  RENTAL_ORDER_CONFIRMED,
   RENTAL_ORDER_MOVED,
-  RENTAL_ORDER_SENT,
-  RENTAL_REOPEN_FIRST,
   RENTAL_SHARER_GONE,
   RENTAL_TENT_NOT_CONFIRMED,
   TENT_NOT_PICKED,
@@ -59,7 +60,9 @@ import {
 
 // The in-memory twin of @camp404/db/rental (#241), for E2E_TEST_MODE. The same
 // rules, sentences and results as the database module, over the store's own
-// rows: only a captain runs gear rental (RENTAL_MANAGER, as the real writes), a
+// rows (the order checks, pricing, conflicts and refusal sentences are the
+// same functions, in @camp404/core; the rest is held equal by
+// lib/__tests__/rental-agreement.test.ts): only a captain runs gear rental (RENTAL_MANAGER, as the real writes), a
 // member writes only their own order, the confirmation is a compare-and-set
 // on `submitted` and the version, and it charges the dues store. The store
 // keeps no audit log and is one synchronous process, so there is nothing to
@@ -156,19 +159,6 @@ function itemsOf(cycle: number, includeArchived = false): ItemRow[] {
 function toItem(row: ItemRow): RentalItem {
   const { archivedAt, ...item } = row;
   return { ...item, archived: archivedAt !== null };
-}
-
-function itemFields(item: RentalItemInput) {
-  return {
-    name: item.name,
-    isTent: item.isTent,
-    sleeps: item.isTent ? item.sleeps : 1,
-    campPriceCents: item.campPriceCents,
-    campStockCount: item.campStockCount,
-    supplierPriceCents: item.supplierPriceCents,
-    reserveCount: item.reserveCount,
-    reserveSource: item.reserveSource,
-  };
 }
 
 /** The twin of campTakenByOrders. */
@@ -310,9 +300,8 @@ function storeOrder(
   const refuse = (error: string) => ({ ok: false as const, error });
   const checked = checkRentalOrder(itemsOf(input.cycle), input, input.userId);
   if (!checked.ok) return refuse(checked.error);
-  if (input.submit && checked.tent === null && checked.lines.length === 0) {
-    return refuse(RENTAL_NOTHING_TO_SEND);
-  }
+  const nothing = rentalSendProblem(input.submit, checked);
+  if (nothing) return refuse(nothing);
   if (!testStore.findUserById(input.userId)) {
     return refuse(RENTAL_NO_SUCH_MEMBER);
   }
@@ -423,12 +412,13 @@ export const rentalTestStore = {
     actorId: string;
   }): RentalResult<{ id: string }> {
     return manager(input.actorId, () => {
-      if (itemsOf(input.cycle).length >= 30) return TOO_MANY_RENTAL_ITEMS;
+      if (itemsOf(input.cycle).length >= MAX_RENTAL_ITEMS)
+        return TOO_MANY_RENTAL_ITEMS;
       const id = crypto.randomUUID();
       state().items.push({
         id,
         cycle: input.cycle,
-        ...itemFields(input.item),
+        ...rentalItemValues(input.item),
         currency: "ZAR",
         archived: false,
         archivedAt: null,
@@ -460,7 +450,7 @@ export const rentalTestStore = {
       if (taken > (input.item.campStockCount ?? 0)) {
         return campStockInUse(input.item.name, taken);
       }
-      Object.assign(row, itemFields(input.item));
+      Object.assign(row, rentalItemValues(input.item));
       return {};
     });
   },
@@ -682,12 +672,7 @@ export const rentalTestStore = {
       ...input,
       from: ["draft"],
       filledBy: null,
-      locked: (status) =>
-        status === "submitted"
-          ? RENTAL_ORDER_SENT
-          : status === "confirmed"
-            ? RENTAL_ORDER_CONFIRMED
-            : RENTAL_ORDER_CHANGED,
+      locked: memberOrderLocked,
     });
   },
 
@@ -702,13 +687,7 @@ export const rentalTestStore = {
       order.status !== "submitted" ||
       order.version !== input.expectedVersion
     ) {
-      return {
-        ok: false,
-        error:
-          order?.status === "confirmed"
-            ? RENTAL_ORDER_CONFIRMED
-            : RENTAL_ORDER_CHANGED,
-      };
+      return { ok: false, error: withdrawLocked(order?.status) };
     }
     order.status = "draft";
     order.version += 1;
@@ -738,8 +717,7 @@ export const rentalTestStore = {
       expectedVersion: input.expectedVersion,
       from: ["draft", "submitted"],
       filledBy: input.actorId,
-      locked: (status) =>
-        status === "confirmed" ? RENTAL_REOPEN_FIRST : RENTAL_ORDER_MOVED,
+      locked: filledOrderLocked,
     });
     return saved.ok ? { ok: true, version: saved.version } : saved;
   },
@@ -787,11 +765,8 @@ export const rentalTestStore = {
         return RENTAL_ORDER_MOVED;
       }
       const pick = input.tent ?? null;
-      if ((order.tentChoice === "need") !== (pick !== null)) {
-        return order.tentChoice === "need"
-          ? RENTAL_PICK_A_TENT
-          : RENTAL_ORDER_MOVED;
-      }
+      const tentProblem = confirmTentProblem(order.tentChoice, pick);
+      if (tentProblem) return tentProblem;
       const items = itemsOf(order.cycle, true);
       const isTent = (itemId: string) =>
         items.some((i) => i.id === itemId && i.isTent);
