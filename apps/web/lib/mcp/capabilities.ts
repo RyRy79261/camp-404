@@ -1,17 +1,18 @@
 import {
   canEditAnyInventory,
-  canEditLogistics,
-  canEditTransport,
-  canManageMoney,
-  canManageRental,
-  canRunProofread,
   hasClearance,
+  LOGISTICS_EDITOR,
+  MONEY_KEEPER,
+  PROOFREADER,
+  RENTAL_MANAGER,
+  TRANSPORT_EDITOR,
+  type Rule,
 } from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
 import { LOGISTICS_REFUSAL } from "../logistics-copy";
 import { TEAM_PROGRAM_REFUSAL } from "../team-program-copy";
 import { SITE_URL } from "../site";
-import type { McpScope } from "./scope";
+import { scopeActor, type McpScope } from "./scope";
 
 // The Claude connector's one list of who may call what (owner, 2026-10-04:
 // "MCP gets the SAME access as the signed-in person … never more").
@@ -23,7 +24,7 @@ import type { McpScope } from "./scope";
 //    So the description, the refusal and the capabilities answer cannot drift
 //    from the check. A test fails when a tool has no entry, or an entry no
 //    tool.
-//  - A gate is the website's own predicate on the caller's rung
+//  - A gate is the website's own rule on the caller's rung
 //    (`scope.viewerRank`, the global ladder) and their led teams. Finer rules
 //    (whose claim, which car, which chapter) stay where the website keeps
 //    them: in the database write, which reads and locks the actor itself.
@@ -44,6 +45,12 @@ const atLeast =
   (scope: McpScope): boolean =>
     hasClearance(scope.viewerRank, rung);
 
+/** A gate's check: the website's own rule, on the caller's actor. */
+const byRule =
+  (rule: Rule) =>
+  (scope: McpScope): boolean =>
+    rule.allows(scopeActor(scope));
+
 export const GATES = {
   member: {
     who: "Any camp member",
@@ -63,7 +70,7 @@ export const GATES = {
   },
   money: {
     who: "Captains and Finance leads",
-    allows: (s) => canManageMoney(s.viewerRank, s.leadTeams),
+    allows: byRule(MONEY_KEEPER),
     refusal: "Only a captain or a Finance lead can do this.",
   },
   // Website-only gates: no tool uses them, what_can_i_do does.
@@ -74,24 +81,24 @@ export const GATES = {
   },
   rental: {
     who: "Captains",
-    allows: (s) => canManageRental(s.viewerRank, s.leadTeams),
+    allows: byRule(RENTAL_MANAGER),
     refusal: "Only a captain runs gear rental.",
   },
   kitchenReview: {
     who: "Captains and Kitchen leads",
-    allows: (s) => canRunProofread(s.viewerRank, s.leadTeams),
+    allows: byRule(PROOFREADER),
     refusal: "Only a captain or a Kitchen lead can do this.",
   },
   transportEditor: {
     who: "Captains and Transport & Logistics leads",
-    allows: (s) => canEditTransport(s.viewerRank, s.leadTeams),
+    allows: byRule(TRANSPORT_EDITOR),
     refusal: "Only a captain or a Transport & Logistics lead can do this.",
   },
-  // The Logistics page's editors (canEditLogistics): the same people as
+  // The Logistics page's editors (LOGISTICS_EDITOR): the same people as
   // transportEditor today, kept apart so each follows its own page's rule.
   logisticsEditor: {
     who: "Captains and Transport & Logistics leads",
-    allows: (s) => canEditLogistics(s.viewerRank, s.leadTeams),
+    allows: byRule(LOGISTICS_EDITOR),
     refusal: LOGISTICS_REFUSAL,
   },
   // The Inventory page's Add button (canEditAnyInventory). Which team's gear

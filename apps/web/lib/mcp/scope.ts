@@ -1,4 +1,4 @@
-import { deriveViewerRank } from "@camp404/core";
+import { deriveViewerRank, type Actor } from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
 import { getMcpScopeRows, type McpScopeRows, type Team } from "@camp404/db/mcp";
 
@@ -14,10 +14,10 @@ import { getMcpScopeRows, type McpScopeRows, type Team } from "@camp404/db/mcp";
  * token, so a rank change or new team membership takes effect on the
  * next call rather than next reconnect.
  *
- * Who may do what is NOT decided here. The tools ask the same predicates the
+ * Who may do what is NOT decided here. The tools ask the same rules the
  * website asks (`./capabilities` for the rung, and @camp404/core's
- * canManageMoney, canEditTransport, canEditGuideChapter, … for the rest),
- * with `viewerRank` and `leadTeams` as their inputs.
+ * MONEY_KEEPER, TRANSPORT_EDITOR, canEditGuideChapter, … for the rest), on
+ * the caller's actor (`scopeActor`: `viewerRank` and `leadTeams`).
  */
 export interface McpScope {
   campUserId: string;
@@ -38,6 +38,11 @@ export interface McpScope {
   isDriver: boolean;
   /** `rank === "captain"`. */
   isCaptain: boolean;
+}
+
+/** The caller as a rule sees them: their rung and the teams they lead. */
+export function scopeActor(scope: McpScope): Actor {
+  return { rank: scope.viewerRank, ledTeams: scope.leadTeams };
 }
 
 /**

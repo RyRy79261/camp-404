@@ -1,11 +1,13 @@
 import "server-only";
 
 import {
-  canApproveRecipe,
   canEditAnyGuideChapter,
-  canManageMoney,
-  canManageRental,
   hasClearance,
+  KITCHEN_REVIEWER,
+  MONEY_KEEPER,
+  RENTAL_MANAGER,
+  toActor,
+  type Rule,
 } from "@camp404/core";
 import { Team, type ViewerRank } from "@camp404/types";
 import type { ProgramId } from "./program-routes";
@@ -29,9 +31,10 @@ import { tasksHref } from "./task-board";
 // lib/__tests__/program-registry-drift.test.ts reads every console page and
 // fails when the two disagree.
 //
-// `requires` may call only the existing core predicates (`hasClearance`,
-// `canApproveRecipe`, `canWorkInTeam`, and the others the design names), so a
-// rule changes in one place. No new predicate is added here.
+// `requires` may call only the existing core rules and predicates
+// (`hasClearance`, KITCHEN_REVIEWER through `byRule`, `canWorkInTeam`, and
+// the others the design names), so a rule changes in one place. No new
+// predicate is added here.
 
 export type ManifestMode = "full" | "restricted" | "held";
 export type ProgramGroup = "me" | "camp" | "captains";
@@ -135,8 +138,11 @@ const CAPTAINS = { group: "captains", folder: "captains" } as const;
 /** In the Captains column, on the desktop itself, after the folder. */
 const CAPTAINS_DESKTOP = { group: "captains", folder: null } as const;
 
-const reviewsRecipes = (ctx: ProgramContext) =>
-  canApproveRecipe(ctx.rank, ctx.ledTeams);
+/** A `requires` that asks a core rule about the viewer. */
+const byRule = (rule: Rule) => (ctx: ProgramContext) =>
+  rule.allows(toActor(ctx.rank, ctx.ledTeams));
+
+const reviewsRecipes = byRule(KITCHEN_REVIEWER);
 
 /**
  * Every program, in default-layout order within each group and folder. Plain
@@ -590,7 +596,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     icon: "payments",
     place: CAPTAINS,
     rank: "team_lead",
-    requires: (ctx) => canManageMoney(ctx.rank, ctx.ledTeams),
+    requires: byRule(MONEY_KEEPER),
   },
   // Gear rental (#241): captains only (canManageRental). This is member
   // money data, so a team lead gets nothing extra and is not offered it.
@@ -603,7 +609,7 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = [
     icon: "gear-rental",
     place: CAPTAINS,
     rank: "team_lead",
-    requires: (ctx) => canManageRental(ctx.rank, ctx.ledTeams),
+    requires: byRule(RENTAL_MANAGER),
   },
   {
     id: "camp-settings",

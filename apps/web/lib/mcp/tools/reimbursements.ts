@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { claimReviewScope } from "@camp404/core";
 import * as schema from "@camp404/db/schema";
 import {
   decideClaim,
@@ -8,7 +9,7 @@ import {
   type ClaimResult,
   type ReimbursementTeam,
 } from "@camp404/db/reimbursements";
-import { GATES } from "../capabilities";
+import { scopeActor } from "../scope";
 import { deny, runTool, ToolError, truncateList } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
@@ -104,15 +105,17 @@ function registerReviewTools(server: McpServer): void {
         extra,
         argsForAudit: args,
         handler: async ({ scope }) => {
-          const everything = scope.isCaptain || GATES.money.allows(scope);
+          // The website's rule: a captain or a Finance lead every claim, as
+          // the Finance page; a lead the teams they lead.
+          const reviewScope = claimReviewScope(scopeActor(scope));
           let teams: ReimbursementTeam[] | undefined;
-          if (!everything) {
+          if (reviewScope !== "all") {
             if (args.team === "general") {
               deny("Claims under no team are a captain's to review.");
             }
             teams = args.team
-              ? scope.leadTeams.filter((t) => t === args.team)
-              : [...scope.leadTeams];
+              ? reviewScope.filter((t) => t === args.team)
+              : [...reviewScope];
             if (args.team && teams.length === 0) {
               deny("You don't lead that team this year.");
             }
