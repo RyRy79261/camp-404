@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { PREP_WHAT_MAX } from "@camp404/types";
 import {
+  PREP_NEEDS_WORDS,
+  prepStepInput,
   PREP_BAD_DATE,
   PREP_DATE_NOT_BEFORE,
   PREP_NEEDS_DAY_ONE,
@@ -169,5 +172,28 @@ describe("dayOneShift", () => {
     expect(dayOneShift(null, "2027-04-22")).toBeNull();
     expect(dayOneShift("2027-04-22", null)).toBeNull();
     expect(dayOneShift("2027-04-22", "soon")).toBeNull();
+  });
+});
+
+describe("prepStepInput", () => {
+  it("keeps what to do, trimmed and cut to the limit", () => {
+    expect(prepStepInput({ what: " Soak ", when: "day_before" })).toEqual({
+      ok: true,
+      what: "Soak",
+    });
+    expect(
+      prepStepInput({ what: "x".repeat(PREP_WHAT_MAX + 3), when: "same_day" }),
+    ).toEqual({ ok: true, what: "x".repeat(PREP_WHAT_MAX) });
+  });
+
+  it("refuses a step that says nothing or names no timing", () => {
+    expect(prepStepInput({ what: " ", when: "same_day" })).toEqual({
+      ok: false,
+      error: PREP_NEEDS_WORDS,
+    });
+    expect(prepStepInput({ what: "Soak", when: "whenever" })).toEqual({
+      ok: false,
+      error: PREP_NEEDS_WORDS,
+    });
   });
 });

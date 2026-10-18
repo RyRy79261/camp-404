@@ -1,5 +1,8 @@
 import {
   ALLERGEN_LABELS,
+  ALLERGEN_PLAN_KINDS,
+  ALLERGEN_PLAN_MAX,
+  type AllergenPlanKind,
   DIETS,
   DIET_LABELS,
   KITCHEN_ALLERGENS,
@@ -32,6 +35,27 @@ import { MEAL_PLAN_EDITOR } from "./recipes";
 
 /** Who reads the dietary counts and records allergen plans: the meal plan's editors. */
 export const ALLERGEN_CHECKER: Rule = MEAL_PLAN_EDITOR;
+
+export const PLAN_NEEDS_WORDS = "Say what exactly the kitchen will do.";
+
+/**
+ * An allergy plan as typed (the check both plan stores apply): refused when
+ * it says nothing, else its words (trimmed, cut to ALLERGEN_PLAN_MAX) and its
+ * kind (an unknown one is a portion).
+ */
+export function allergenPlanInput(input: {
+  details: string;
+  kind: string;
+}):
+  | { ok: false; error: string }
+  | { ok: true; details: string; kind: AllergenPlanKind } {
+  const details = input.details.trim().slice(0, ALLERGEN_PLAN_MAX);
+  if (!details) return { ok: false, error: PLAN_NEEDS_WORDS };
+  const kind = (ALLERGEN_PLAN_KINDS as readonly string[]).includes(input.kind)
+    ? (input.kind as AllergenPlanKind)
+    : "portion";
+  return { ok: true, details, kind };
+}
 
 /**
  * Whether someone may read the counts, record a plan and correct a recipe's

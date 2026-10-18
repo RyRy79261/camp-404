@@ -1,5 +1,11 @@
-import type { MealPlanDay, PriceKind } from "@camp404/types";
-import { sumMinor } from "./money";
+import {
+  MAX_LINE_PRICE_CENTS,
+  PRICE_KINDS,
+  SHOP_NAME_MAX,
+  type MealPlanDay,
+  type PriceKind,
+} from "@camp404/types";
+import { isCurrency, sumMinor } from "./money";
 import { allowsRank, type Rule } from "./actor";
 import { MEAL_PLAN_EDITOR } from "./recipes";
 
@@ -21,6 +27,58 @@ import { MEAL_PLAN_EDITOR } from "./recipes";
 //  - Per person per day: the food cost over person-days, where each day counts
 //    its larger meal's plates (the camp does breakfast and dinner).
 // Money is rands in whole cents; sums go through sumMinor.
+
+// --- The check both price stores apply ----------------------------------------
+// @camp404/db/kitchen-prices and the E2E test store both run it, in this
+// order, before the actor is read: rands only, the amount, then the line.
+
+export const PRICE_RANDS_ONLY = "Prices are in rands (ZAR) only.";
+export const PRICE_BAD_AMOUNT = "Type the price in rands, like 96,00.";
+export const PRICE_BAD_LINE = "That line isn't on the list. Reload the page.";
+
+/** A line's key names an ingredient and its unit, or a snack. */
+export function isShoppingLineKey(key: string): boolean {
+  return (
+    key.length > 0 &&
+    key.length <= 300 &&
+    (key.includes("|") || /^snack:[0-9a-f-]{36}$/i.test(key))
+  );
+}
+
+/**
+ * A line's price as typed: refused with a sentence, or the values to store
+ * (the shop trimmed and cut to SHOP_NAME_MAX, an unknown kind an estimate).
+ */
+export function shoppingPriceInput(input: {
+  key: string;
+  shop: string | null;
+  amountCents: number | null;
+  kind: string;
+  currency: string;
+}):
+  | { ok: false; error: string }
+  | { ok: true; shop: string | null; kind: PriceKind } {
+  if (!isCurrency(input.currency))
+    return { ok: false, error: PRICE_RANDS_ONLY };
+  if (
+    input.amountCents !== null &&
+    (!Number.isSafeInteger(input.amountCents) ||
+      input.amountCents < 0 ||
+      input.amountCents > MAX_LINE_PRICE_CENTS)
+  ) {
+    return { ok: false, error: PRICE_BAD_AMOUNT };
+  }
+  if (!isShoppingLineKey(input.key))
+    return { ok: false, error: PRICE_BAD_LINE };
+  const kind = (PRICE_KINDS as readonly string[]).includes(input.kind)
+    ? (input.kind as PriceKind)
+    : "estimate";
+  return {
+    ok: true,
+    shop: input.shop?.trim().slice(0, SHOP_NAME_MAX) || null,
+    kind,
+  };
+}
 
 /** Who prices the shopping list and reads the food cost: the meal plan's editors. */
 export const SHOPPING_PRICER: Rule = MEAL_PLAN_EDITOR;
