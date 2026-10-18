@@ -1,11 +1,11 @@
 import {
-  ViewerRank,
   type ParticipationStatus,
   type RentalChoice,
   type RentalOrderStatus,
   type RentalTentChoice,
   type RentalSource,
 } from "@camp404/types";
+import { CAPTAIN_ONLY, allowsRank, type Rule } from "./actor";
 import { sumMinor } from "./money";
 import { isComingThisYear } from "./participation";
 
@@ -34,9 +34,11 @@ import { isComingThisYear } from "./participation";
 // already took, plus an adoptee reserve kept from camp stock, counts against
 // the number. The camp's Inventory is not priced and is not linked here.
 
-function isViewerRank(rank: string): rank is ViewerRank {
-  return ViewerRank.safeParse(rank).success;
-}
+/**
+ * Who may run gear rental: a captain only. Letting the Finance leads in later
+ * is a change here and nowhere else.
+ */
+export const RENTAL_MANAGER: Rule = CAPTAIN_ONLY;
 
 /**
  * Whether someone may run gear rental: set the catalogue, read every order,
@@ -46,10 +48,9 @@ function isViewerRank(rank: string): rank is ViewerRank {
  */
 export function canManageRental(
   rank: string,
-  _ledTeams: readonly string[],
+  ledTeams: readonly string[],
 ): boolean {
-  if (!isViewerRank(rank)) return false;
-  return rank === "captain";
+  return allowsRank(RENTAL_MANAGER, rank, ledTeams);
 }
 
 // --- Asking everyone ---------------------------------------------------------

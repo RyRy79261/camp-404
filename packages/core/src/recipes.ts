@@ -1,11 +1,11 @@
 import {
   DEFAULT_PLATES,
   INGREDIENT_CATEGORIES,
-  ViewerRank,
   type IngredientCategory,
   type MealPlanDay,
   type RecipeStatus,
 } from "@camp404/types";
+import { allowsRank, captainOrLeadOf, type Rule } from "./actor";
 
 // Recipes (#243, Kitchen 1): who may act on a recipe, which moves its status
 // may make, and how a recipe is arranged on its page. Pure: no DB, no session,
@@ -33,9 +33,8 @@ import {
 /** The team whose leads run the kitchen's recipes. */
 export const KITCHEN_TEAM = "kitchen";
 
-function isViewerRank(rank: string): rank is ViewerRank {
-  return ViewerRank.safeParse(rank).success;
-}
+/** Who works the Kitchen's review, Claude runs and the meal plan: a captain, or a lead of Kitchen. */
+export const KITCHEN_REVIEWER: Rule = captainOrLeadOf(KITCHEN_TEAM);
 
 /**
  * Whether someone may approve, reject or ask for changes on a suggestion, and
@@ -47,10 +46,7 @@ export function canApproveRecipe(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  if (!isViewerRank(rank)) return false;
-  if (rank === "captain") return true;
-  if (rank === "team_lead") return ledTeams.includes(KITCHEN_TEAM);
-  return false;
+  return allowsRank(KITCHEN_REVIEWER, rank, ledTeams);
 }
 
 /**

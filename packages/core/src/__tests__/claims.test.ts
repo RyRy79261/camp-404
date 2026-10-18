@@ -4,6 +4,8 @@ import {
   budgetSpentPercent,
   budgetTotals,
   canApproveClaim,
+  claimApprovalScope,
+  claimReviewScope,
   CLAIM_MOVES,
   CLAIM_STATUS_LABELS,
 } from "../claims";
@@ -102,5 +104,35 @@ describe("claim words and moves", () => {
     }
     expect(CLAIM_MOVES.rejected).toEqual([]);
     expect(CLAIM_MOVES.paid).toEqual([]);
+  });
+});
+
+describe("claim scopes", () => {
+  const captain = { rank: "captain", ledTeams: [] } as const;
+  const financeLead = { rank: "team_lead", ledTeams: ["finance"] } as const;
+  const kitchenLead = {
+    rank: "team_lead",
+    ledTeams: ["kitchen", "power_and_lighting"],
+  } as const;
+  const member = { rank: "camp_member", ledTeams: [] } as const;
+
+  it("Claims to approve: a captain every team's, a lead only the teams they lead", () => {
+    expect(claimApprovalScope(captain)).toBe("all");
+    expect(claimApprovalScope(financeLead)).toEqual(["finance"]);
+    expect(claimApprovalScope(kitchenLead)).toEqual([
+      "kitchen",
+      "power_and_lighting",
+    ]);
+    expect(claimApprovalScope(member)).toEqual([]);
+  });
+
+  it("the connector's review list: a Finance lead every claim, as the Finance page", () => {
+    expect(claimReviewScope(captain)).toBe("all");
+    expect(claimReviewScope(financeLead)).toBe("all");
+    expect(claimReviewScope(kitchenLead)).toEqual([
+      "kitchen",
+      "power_and_lighting",
+    ]);
+    expect(claimReviewScope(member)).toEqual([]);
   });
 });

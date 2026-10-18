@@ -1,4 +1,4 @@
-import { ViewerRank } from "@camp404/types";
+import { allowsRank, captainOrLeadOf, isViewerRank, type Rule } from "./actor";
 
 // Transport (#270): this year's cars, riders and trailers. Pure: no DB, no
 // session, no next/*. The page and the writes call these; the writes pass
@@ -20,9 +20,8 @@ import { ViewerRank } from "@camp404/types";
 /** The team whose leads run the transport tool. */
 export const TRANSPORT_TEAM = "transport_and_logistics";
 
-function isViewerRank(rank: string): rank is ViewerRank {
-  return ViewerRank.safeParse(rank).success;
-}
+/** Who may work in the whole transport tool: a captain, or a lead of Transport & Logistics. */
+export const TRANSPORT_EDITOR: Rule = captainOrLeadOf(TRANSPORT_TEAM);
 
 /**
  * Whether someone may work in the whole transport tool: match anyone into any
@@ -34,10 +33,7 @@ export function canEditTransport(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  if (!isViewerRank(rank)) return false;
-  if (rank === "captain") return true;
-  if (rank === "team_lead") return ledTeams.includes(TRANSPORT_TEAM);
-  return false;
+  return allowsRank(TRANSPORT_EDITOR, rank, ledTeams);
 }
 
 /**

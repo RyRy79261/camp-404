@@ -4,7 +4,6 @@ import {
   ATTENDANCE_PHASES,
   LOGISTICS_PHASES,
   LOGISTICS_PHASE_LABELS,
-  ViewerRank,
   type AfrikaburnDateKind,
   type AttendanceAnswer,
   type AttendancePhase,
@@ -12,6 +11,7 @@ import {
   type NotificationPayload,
   type ParticipationStatus,
 } from "@camp404/types";
+import { CAPTAIN_ONLY, allowsRank, captainOrLeadOf, type Rule } from "./actor";
 import { isComingThisYear } from "./participation";
 
 // The logistics calendar (#247): the year's pack, travel, build, burn, strike
@@ -44,9 +44,8 @@ import { isComingThisYear } from "./participation";
 /** The team whose leads keep the logistics calendar. */
 export const LOGISTICS_TEAM = "transport_and_logistics";
 
-function isViewerRank(rank: string): rank is ViewerRank {
-  return ViewerRank.safeParse(rank).success;
-}
+/** Who may set the year's logistics days: a captain, or a lead of Transport and Logistics. */
+export const LOGISTICS_EDITOR: Rule = captainOrLeadOf(LOGISTICS_TEAM);
 
 /**
  * Whether someone may set or clear the year's logistics days: a captain, or a
@@ -57,10 +56,7 @@ export function canEditLogistics(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  if (!isViewerRank(rank)) return false;
-  if (rank === "captain") return true;
-  if (rank === "team_lead") return ledTeams.includes(LOGISTICS_TEAM);
-  return false;
+  return allowsRank(LOGISTICS_EDITOR, rank, ledTeams);
 }
 
 /**
@@ -156,6 +152,9 @@ export function campOnSite(
 
 // --- Attendance --------------------------------------------------------------
 
+/** Who may press "Ask everyone" for attendance: a captain. */
+export const ATTENDANCE_ASKER: Rule = CAPTAIN_ONLY;
+
 /**
  * Whether someone may press "Ask everyone" for attendance: a captain. It
  * sends a notice to every member who is coming, and a team lead's reach is
@@ -163,7 +162,7 @@ export function campOnSite(
  * otherwise. Fails closed on a rank this module does not know.
  */
 export function canAskForAttendance(rank: string): boolean {
-  return isViewerRank(rank) && rank === "captain";
+  return allowsRank(ATTENDANCE_ASKER, rank);
 }
 
 /**
@@ -269,13 +268,16 @@ export function attendanceBoard(
 
 // --- AfrikaBurn deadlines ----------------------------------------------------
 
+/** Who keeps the year's AfrikaBurn deadlines: a captain. */
+export const DEADLINE_KEEPER: Rule = CAPTAIN_ONLY;
+
 /**
  * Whether someone may add, change, tick or remove the year's AfrikaBurn
  * deadlines: a captain (owner, 2026-09-30: "Captains add"). They are camp
  * config and go onto the camp calendar. Every member reads them.
  */
 export function canManageDeadlines(rank: string): boolean {
-  return isViewerRank(rank) && rank === "captain";
+  return allowsRank(DEADLINE_KEEPER, rank);
 }
 
 /**

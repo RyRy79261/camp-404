@@ -189,6 +189,7 @@
 // (blocked on deciding McpScope's type home).
 
 export * from "./access";
+export * from "./actor";
 export * from "./approval-review";
 export * from "./family-tree";
 export * from "./invites";

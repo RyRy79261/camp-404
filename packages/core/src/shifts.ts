@@ -4,6 +4,7 @@ import {
   type NotificationPayload,
   type ParticipationStatus,
 } from "@camp404/types";
+import { CAPTAIN_ONLY, allowsRank, type Rule } from "./actor";
 import { clockText } from "./lounge";
 import { isComingThisYear } from "./participation";
 import { canEditTeamProgram } from "./team-programs";
@@ -54,13 +55,16 @@ export function shiftTeamsFor(
   return teams.filter((t) => canManageShifts(rank, ledTeams, t));
 }
 
+/** Who may press "Ask everyone" about shifts: a captain. */
+export const SHIFT_ASKER: Rule = CAPTAIN_ONLY;
+
 /**
  * Whether someone may press "Ask everyone" about shifts: a captain. It sends
  * a notice to every member who is coming, and a lead's reach is one team
  * (canSendToAudience), as for the logistics days. Fails closed.
  */
 export function canAskForShifts(rank: string): boolean {
-  return rank === "captain";
+  return allowsRank(SHIFT_ASKER, rank);
 }
 
 /**
