@@ -4,10 +4,15 @@ import {
   campDayKey,
   duesBalance,
   duesSettled,
+  feeStandardCents,
+  isFeeConcession,
+  MAX_FEE_TIERS,
   nextInstalment,
   paymentFigures,
   proposeRefund,
-  splitEvenly,
+  refundAmount,
+  resolvePledge,
+  settleUpCharges,
   MONEY_KEEPER,
 } from "@camp404/core";
 import {
@@ -15,18 +20,14 @@ import {
   FEE_ALREADY_SET,
   FEE_CHANGED,
   NO_SUCH_MEMBER,
-  NO_TIERS_YET,
   NOT_A_MONEY_KEEPER,
   NOT_YOUR_PAYMENT,
   PLAN_CHANGED,
-  PLEDGE_NOT_BELOW,
   REFUND_ALREADY_OPEN,
   REFUND_CHANGED,
   REFUND_NOT_RECEIVED,
   REFUND_PAYMENT_NOT_RECEIVED,
   REFUND_TOO_LARGE,
-  SETTLE_UP_CHANGED,
-  SETTLE_UP_NOBODY,
   TIER_GONE,
   TOO_MANY_TIERS,
   YEAR_CHANGED,
@@ -56,7 +57,9 @@ import { testStore, type TestPayment } from "./test-store";
 
 // The in-memory twin of @camp404/db/dues (#240), for E2E_TEST_MODE. The same
 // rules, sentences and results as the database module, over the store's own
-// rows: only a captain or a Finance lead writes (MONEY_KEEPER, as the real writes),
+// rows (the pledge, the fee's standard, the settle-up split and the refund
+// amount are the same functions, in @camp404/core; the rest is held equal by
+// lib/__tests__/dues-agreement.test.ts): only a captain or a Finance lead writes (MONEY_KEEPER, as the real writes),
 // every decision is a compare-and-set, and a pledge becomes the fee when the
 // member is accepted. The store keeps no audit log. Kept apart from
 // test-store.ts, which calls in here only to reset, to charge a fee on
@@ -265,14 +268,6 @@ export function isChargeLiveInStore(chargeId: string): boolean {
   );
 }
 
-function isConcession(c: ChargeRow): boolean {
-  return (
-    c.kind === "fee" &&
-    (c.concessionReason !== null ||
-      (c.standardAmountCents !== null && c.amountCents < c.standardAmountCents))
-  );
-}
-
 function liveTiers(cycle: number): TierRow[] {
   return state()
     .tiers.filter((t) => t.cycle === cycle && t.archivedAt === null)
@@ -392,7 +387,7 @@ export const duesTestStore = {
     input: FeeTierInput & { cycle: number; actorId: string },
   ): MoneyResult<{ id: string }> {
     return keeper(input.actorId, () => {
-      if (liveTiers(input.cycle).length >= 12) return TOO_MANY_TIERS;
+      if (liveTiers(input.cycle).length >= MAX_FEE_TIERS) return TOO_MANY_TIERS;
       const id = crypto.randomUUID();
       state().tiers.push({
         id,
@@ -470,7 +465,7 @@ export const duesTestStore = {
       currency: "ZAR",
       standardAmountCents: options.forFinance ? c.standardAmountCents : null,
       concessionReason: options.forFinance ? c.concessionReason : null,
-      concession: options.forFinance ? isConcession(c) : false,
+      concession: options.forFinance ? isFeeConcession(c) : false,
       cancelled: c.cancelledAt !== null,
       createdAt: c.createdAt,
     }));
@@ -540,22 +535,9 @@ export const duesTestStore = {
     pledge: PledgeInput;
   }): MoneyResult<{ charged: boolean }> {
     if (!isMember(input.userId)) return { ok: false, error: NO_SUCH_MEMBER };
-    const tiers = liveTiers(input.cycle);
-    if (tiers.length === 0) return { ok: false, error: NO_TIERS_YET };
-    const pledge = input.pledge;
-    let tierId: string | null = null;
-    let amountCents: number;
-    if (pledge.kind === "tier") {
-      const tier = tiers.find((t) => t.id === pledge.tierId);
-      if (!tier) return { ok: false, error: TIER_GONE };
-      tierId = tier.id;
-      amountCents = tier.amountCents;
-    } else {
-      if (pledge.amountCents >= tiers[0]!.amountCents) {
-        return { ok: false, error: PLEDGE_NOT_BELOW };
-      }
-      amountCents = pledge.amountCents;
-    }
+    const pledged = resolvePledge(input.pledge, liveTiers(input.cycle));
+    if (typeof pledged === "string") return { ok: false, error: pledged };
+    const { tierId, amountCents } = pledged;
     if (liveCharges(input.userId, input.cycle).some((c) => c.kind === "fee")) {
       return { ok: false, error: FEE_ALREADY_SET };
     }
@@ -598,11 +580,7 @@ export const duesTestStore = {
       );
       const now = new Date();
       if (live) live.cancelledAt = now;
-      const standard =
-        account?.pledgedAmountCents ??
-        live?.standardAmountCents ??
-        live?.amountCents ??
-        null;
+      const standard = feeStandardCents(account?.pledgedAmountCents, live);
       const id = crypto.randomUUID();
       state().charges.push({
         id,
@@ -704,7 +682,7 @@ export const duesTestStore = {
           pledgeLabel: dues.pledge?.tierLabel ?? null,
           pledgeCents: dues.pledge?.amountCents ?? null,
           feeCents: fee?.amountCents ?? null,
-          concession: fee ? isConcession(fee) : false,
+          concession: fee ? isFeeConcession(fee) : false,
           balance: dues.balance,
           next: dues.next,
           pendingProofs: dues.payments.filter(
@@ -728,7 +706,7 @@ export const duesTestStore = {
       .map((c) => ({
         userId: c.userId,
         name: nameOf(c.userId),
-        concession: isConcession(c),
+        concession: isFeeConcession(c),
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
@@ -741,31 +719,27 @@ export const duesTestStore = {
     },
   ): MoneyResult<{ id: string; members: number }> {
     return keeper(input.actorId, () => {
-      const ids = this.settleUpCandidates(input.cycle)
-        .filter((c) => !(input.skipConcessions && c.concession))
-        .map((c) => c.userId)
-        .sort();
-      const previewed = [...new Set(input.previewedUserIds)].sort();
-      if (ids.length === 0) return SETTLE_UP_NOBODY;
-      if (ids.join(",") !== previewed.join(",")) return SETTLE_UP_CHANGED;
-      const sign = input.direction === "refund" ? -1 : 1;
+      const split = settleUpCharges({
+        ...input,
+        candidates: this.settleUpCandidates(input.cycle),
+      });
+      if (typeof split === "string") return split;
       const id = crypto.randomUUID();
-      for (const [userId, cents] of splitEvenly(input.totalCents, ids)) {
-        if (cents <= 0) continue;
+      for (const { userId, amountCents } of split.charges) {
         state().charges.push({
           id: crypto.randomUUID(),
           userId,
           cycle: input.cycle,
           kind: "settle_up",
           description: input.description,
-          amountCents: sign * cents,
+          amountCents,
           standardAmountCents: null,
           concessionReason: null,
           cancelledAt: null,
           createdAt: new Date(),
         });
       }
-      return { id, members: ids.length };
+      return { id, members: split.userIds.length };
     });
   },
 
@@ -805,11 +779,13 @@ export const duesTestStore = {
       return { ok: false, error: REFUND_NOT_RECEIVED };
     }
     const proposal = this.proposeRefundFor(input.paymentId, input.today)!;
-    const amountCents = asMember
-      ? (proposal.amountCents ?? payment.amountCents)
-      : input.amountCents!;
-    if (amountCents > payment.amountCents) {
-      return { ok: false, error: REFUND_TOO_LARGE };
+    const amountCents = refundAmount({
+      requestedCents: input.amountCents,
+      proposedCents: proposal.amountCents,
+      paymentCents: payment.amountCents,
+    });
+    if (typeof amountCents === "string") {
+      return { ok: false, error: amountCents };
     }
     if (refundStatusOf(input.paymentId) !== null) {
       return { ok: false, error: REFUND_ALREADY_OPEN };

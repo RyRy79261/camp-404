@@ -2,7 +2,9 @@ import {
   type ChargeKind,
   type PaymentMethod,
   type PaymentSource,
+  type PledgeInput,
   type RefundStatus,
+  type SettleUpInput,
 } from "@camp404/types";
 import { allowsRank, captainOrLeadOf, type Rule } from "./actor";
 import { isCurrency, sumMinor, UnknownCurrencyError } from "./money";
@@ -323,6 +325,126 @@ export function proposeRefund(
     };
   }
   return { amountCents: 0, rule: "none" };
+}
+
+// --- The rules both dues stores apply ------------------------------------------
+//
+// @camp404/db/dues and the E2E test store (apps/web/lib/test-store-dues.ts)
+// both call these, so the order of the checks and the sentences are written
+// once. The reads, locks and audit rows stay in the database module.
+
+export const TIER_GONE = "That fee tier isn't there any more. Reload the page.";
+export const TOO_MANY_TIERS = "A year has at most 12 fee tiers.";
+export const NO_TIERS_YET =
+  "The Finance team hasn't set this year's fees yet. Check back soon.";
+export const PLEDGE_NOT_BELOW =
+  "A pledge below the lowest tier must be less than it. Otherwise pick a tier.";
+export const SETTLE_UP_CHANGED =
+  "The members to share it across changed. Preview it again.";
+export const SETTLE_UP_NOBODY =
+  "Nobody has a camp fee this year to share it across.";
+export const REFUND_TOO_LARGE = "A refund can't be more than the payment.";
+
+/** The most live fee tiers one year may have. */
+export const MAX_FEE_TIERS = 12;
+
+/**
+ * Whether a charge is a concession: a camp fee with a reason, or below what
+ * the fee would be without one (`standardAmountCents`).
+ */
+export function isFeeConcession(c: {
+  kind: ChargeKind;
+  standardAmountCents: number | null;
+  amountCents: number;
+  concessionReason: string | null;
+}): boolean {
+  if (c.kind !== "fee") return false;
+  return (
+    c.concessionReason !== null ||
+    (c.standardAmountCents !== null && c.amountCents < c.standardAmountCents)
+  );
+}
+
+/**
+ * What a fee the Finance team sets would be without a concession: the
+ * member's pledge, else the standard of the fee it replaces, else that fee.
+ */
+export function feeStandardCents(
+  pledgedCents: number | null | undefined,
+  replaced:
+    | { standardAmountCents: number | null; amountCents: number }
+    | null
+    | undefined,
+): number | null {
+  return (
+    pledgedCents ??
+    replaced?.standardAmountCents ??
+    replaced?.amountCents ??
+    null
+  );
+}
+
+/**
+ * A member's pledge against the year's LIVE tiers, cheapest first: the tier
+ * they picked, or an amount below the lowest tier. A refusal is a sentence.
+ */
+export function resolvePledge(
+  pledge: PledgeInput,
+  liveTiers: readonly { id: string; amountCents: number }[],
+): { tierId: string | null; amountCents: number } | string {
+  if (liveTiers.length === 0) return NO_TIERS_YET;
+  if (pledge.kind === "tier") {
+    const tier = liveTiers.find((t) => t.id === pledge.tierId);
+    return tier
+      ? { tierId: tier.id, amountCents: tier.amountCents }
+      : TIER_GONE;
+  }
+  if (pledge.amountCents >= liveTiers[0]!.amountCents) return PLEDGE_NOT_BELOW;
+  return { tierId: null, amountCents: pledge.amountCents };
+}
+
+/**
+ * A settle-up's charges: the total shared evenly (splitEvenly) across the
+ * members with a live fee (less concessions when asked), as long as they are
+ * exactly the members the Finance team previewed. Money back is negative.
+ * A share of nothing is left out. A refusal is a sentence.
+ */
+export function settleUpCharges(input: {
+  candidates: readonly { userId: string; concession: boolean }[];
+  skipConcessions: boolean;
+  previewedUserIds: readonly string[];
+  totalCents: number;
+  direction: SettleUpInput["direction"];
+}):
+  | { userIds: string[]; charges: { userId: string; amountCents: number }[] }
+  | string {
+  const userIds = input.candidates
+    .filter((c) => !(input.skipConcessions && c.concession))
+    .map((c) => c.userId)
+    .sort();
+  const previewed = [...new Set(input.previewedUserIds)].sort();
+  if (userIds.length === 0) return SETTLE_UP_NOBODY;
+  if (userIds.join(",") !== previewed.join(",")) return SETTLE_UP_CHANGED;
+  const sign = input.direction === "refund" ? -1 : 1;
+  const charges = [...splitEvenly(input.totalCents, userIds).entries()]
+    .filter(([, cents]) => cents > 0)
+    .map(([userId, cents]) => ({ userId, amountCents: sign * cents }));
+  return { userIds, charges };
+}
+
+/**
+ * How much a refund asked for pays back: the amount the Finance team named,
+ * or for a member's own request (`requestedCents` null) the schedule's
+ * proposal, else the whole payment. Never more than the payment.
+ */
+export function refundAmount(input: {
+  requestedCents: number | null;
+  proposedCents: number | null;
+  paymentCents: number;
+}): number | string {
+  const amountCents =
+    input.requestedCents ?? input.proposedCents ?? input.paymentCents;
+  return amountCents > input.paymentCents ? REFUND_TOO_LARGE : amountCents;
 }
 
 // --- The bank statement import ------------------------------------------------------
