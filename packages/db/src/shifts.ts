@@ -10,6 +10,21 @@ import {
   SHIFT_ASKER,
   shiftKeeper,
   type Actor,
+  placeProblem,
+  placesBelowTaken,
+  shiftTypeChangeProblem,
+  shiftTypeRemoveProblem,
+  slotNeededProblem,
+  SHIFT_ALREADY_ON,
+  SHIFT_CLOSED,
+  SHIFT_DAY_HAS_PEOPLE,
+  SHIFT_FULL,
+  SHIFT_HAS_PEOPLE,
+  SHIFT_MEMBER_ALREADY_ON,
+  SHIFT_NOT_A_MEMBER,
+  SHIFT_NOT_NEEDED,
+  SHIFT_SLOT_CHANGED,
+  SHIFT_TYPE_CHANGED,
 } from "@camp404/core";
 import {
   MAX_SHIFT_TYPES,
@@ -59,28 +74,30 @@ export type ShiftWriteResult<T = object> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 
+// The sentences of the checks the store shares live with them in
+// @camp404/core (placeProblem, slotNeededProblem, shiftTypeChangeProblem,
+// shiftTypeRemoveProblem).
+export {
+  placesBelowTaken,
+  SHIFT_ALREADY_ON,
+  SHIFT_CLOSED,
+  SHIFT_DAY_HAS_PEOPLE,
+  SHIFT_FULL,
+  SHIFT_HAS_PEOPLE,
+  SHIFT_MEMBER_ALREADY_ON,
+  SHIFT_NOT_A_MEMBER,
+  SHIFT_NOT_NEEDED,
+  SHIFT_SLOT_CHANGED,
+  SHIFT_TYPE_CHANGED,
+};
+
 export const NOT_A_SHIFT_KEEPER =
   "Only captains and that team's leads can set up its shifts.";
-export const SHIFT_TYPE_CHANGED =
-  "Someone changed this shift first. Reload the page.";
-export const SHIFT_SLOT_CHANGED =
-  "Someone changed this day first. Reload the page.";
 export const SHIFT_GONE = "That shift isn't there any more. Reload the page.";
-export const SHIFT_FULL = "That shift is full. Pick another one.";
-export const SHIFT_NOT_NEEDED = "That shift isn't needed that day.";
-export const SHIFT_ALREADY_ON = "You're already on this shift.";
-export const SHIFT_MEMBER_ALREADY_ON = "They're already on this shift.";
 export const SHIFT_NOT_ON =
   "You're not on this shift any more. Reload the page.";
 export const SHIFT_MEMBER_NOT_ON =
   "They're not on this shift any more. Reload the page.";
-export const SHIFT_CLOSED =
-  "That day has started. Change the printed roster instead.";
-export const SHIFT_NOT_A_MEMBER = "Only approved camp members can take shifts.";
-export const SHIFT_HAS_PEOPLE =
-  "People are on this shift. Take them off first.";
-export const SHIFT_DAY_HAS_PEOPLE =
-  "People are on this day. Take them off first.";
 export const NO_BURN_DAYS = "Set the Burn's days on Logistics first.";
 export const TOO_MANY_SHIFT_TYPES = `The roster holds ${MAX_SHIFT_TYPES} shifts at most. Remove one first.`;
 export const NOT_A_SHIFT_ASKER = "Only captains can ask everyone about shifts.";
@@ -89,11 +106,6 @@ export const VOLUNTEER_SHIFT_GONE =
   "That AfrikaBurn shift isn't there any more. Reload the page.";
 export const DUTY_CARD_GONE =
   "That duty card isn't in the Survival Guide any more. Pick another.";
-
-/** Fewer places than people already on one of its days. */
-export function placesBelowTaken(taken: number): string {
-  return `${taken} people are already on one of its days. Keep at least ${taken} places, or take someone off first.`;
-}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -649,16 +661,10 @@ export async function saveShiftType(input: {
       const current = await lockType(tx, input.id, cycle);
       if (!current) refuse(SHIFT_GONE);
       assertKeeper(keeper, current.team);
-      if (current.version !== input.expectedVersion) refuse(SHIFT_TYPE_CHANGED);
-      // A change reaches every day of the shift, and a day that has started
-      // is on paper now (shiftChangesOpen): the printed roster is the record.
       const days = await tx
         .select({ day: schema.shiftSlots.day })
         .from(schema.shiftSlots)
         .where(eq(schema.shiftSlots.typeId, current.id));
-      if (days.some(({ day }) => !shiftChangesOpen(day, campDayKey(now)))) {
-        refuse(SHIFT_CLOSED);
-      }
       const [most] = await tx
         .select({ n: count() })
         .from(schema.shiftSignups)
@@ -670,7 +676,15 @@ export async function saveShiftType(input: {
         .groupBy(schema.shiftSignups.slotId)
         .orderBy(sql`count(*) desc`)
         .limit(1);
-      if (most && most.n > input.places) refuse(placesBelowTaken(most.n));
+      const problem = shiftTypeChangeProblem({
+        version: current.version,
+        expectedVersion: input.expectedVersion,
+        days: days.map(({ day }) => day),
+        today: campDayKey(now),
+        places: input.places,
+        mostOnADay: most?.n ?? 0,
+      });
+      if (problem) refuse(problem);
       [type] = await tx
         .update(schema.shiftTypes)
         .set({ ...fields, version: sql`${schema.shiftTypes.version} + 1` })
@@ -768,17 +782,12 @@ export async function removeShiftType(input: {
     const current = await lockType(tx, input.id, cycle);
     if (!current) refuse(SHIFT_GONE);
     assertKeeper(keeper, current.team);
-    if (current.version !== input.expectedVersion) refuse(SHIFT_TYPE_CHANGED);
     // Once one of its days has started, the printed roster is the record:
     // the shift stays, empty or not.
-    const today = campDayKey(input.now ?? new Date());
     const slotDays = await tx
       .select({ day: schema.shiftSlots.day })
       .from(schema.shiftSlots)
       .where(eq(schema.shiftSlots.typeId, current.id));
-    if (slotDays.some(({ day }) => !shiftChangesOpen(day, today))) {
-      refuse(SHIFT_CLOSED);
-    }
     const [people] = await tx
       .select({ n: count() })
       .from(schema.shiftSignups)
@@ -787,7 +796,14 @@ export async function removeShiftType(input: {
         eq(schema.shiftSlots.id, schema.shiftSignups.slotId),
       )
       .where(eq(schema.shiftSlots.typeId, current.id));
-    if ((people?.n ?? 0) > 0) refuse(SHIFT_HAS_PEOPLE);
+    const problem = shiftTypeRemoveProblem({
+      version: current.version,
+      expectedVersion: input.expectedVersion,
+      days: slotDays.map(({ day }) => day),
+      today: campDayKey(input.now ?? new Date()),
+      people: people?.n ?? 0,
+    });
+    if (problem) refuse(problem);
     await tx
       .delete(schema.shiftTypes)
       .where(eq(schema.shiftTypes.id, current.id));
@@ -851,14 +867,16 @@ export async function setSlotNeeded(input: {
     const found = await lockSlot(tx, input.slotId, cycle);
     if (!found) refuse(SHIFT_GONE);
     assertKeeper(keeper, found.type.team);
-    if (found.slot.version !== input.expectedVersion)
-      refuse(SHIFT_SLOT_CHANGED);
     const now = input.now ?? new Date();
-    if (!shiftChangesOpen(found.slot.day, campDayKey(now)))
-      refuse(SHIFT_CLOSED);
-    if (!input.needed && (await takenOn(tx, found.slot.id)) > 0) {
-      refuse(SHIFT_DAY_HAS_PEOPLE);
-    }
+    const problem = slotNeededProblem({
+      version: found.slot.version,
+      expectedVersion: input.expectedVersion,
+      day: found.slot.day,
+      today: campDayKey(now),
+      needed: input.needed,
+      taken: input.needed ? 0 : await takenOn(tx, found.slot.id),
+    });
+    if (problem) refuse(problem);
     const [slot] = await tx
       .update(schema.shiftSlots)
       .set({
@@ -901,26 +919,31 @@ async function takePlace(
   const found = await lockSlot(tx, input.slotId, input.cycle);
   if (!found) refuse(SHIFT_GONE);
   if (input.keeper) assertKeeper(input.keeper, found.type.team);
-  if (!shiftChangesOpen(found.slot.day, campDayKey(input.now))) {
-    refuse(SHIFT_CLOSED);
-  }
-  if (found.slot.status !== "open") refuse(SHIFT_NOT_NEEDED);
-  if (!(await isRealMember(tx, input.userId))) refuse(SHIFT_NOT_A_MEMBER);
-  const [already] = await tx
-    .select({ userId: schema.shiftSignups.userId })
-    .from(schema.shiftSignups)
-    .where(
-      and(
-        eq(schema.shiftSignups.slotId, found.slot.id),
-        eq(schema.shiftSignups.userId, input.userId),
-      ),
-    );
-  if (already) {
-    refuse(input.addedByUserId ? SHIFT_MEMBER_ALREADY_ON : SHIFT_ALREADY_ON);
-  }
-  if ((await takenOn(tx, found.slot.id)) >= found.type.places) {
-    refuse(SHIFT_FULL);
-  }
+  // isRealMember answers false for an id that is not a uuid, so the reads
+  // below, which would choke on one, run only for a member.
+  const member = await isRealMember(tx, input.userId);
+  const [already] = member
+    ? await tx
+        .select({ userId: schema.shiftSignups.userId })
+        .from(schema.shiftSignups)
+        .where(
+          and(
+            eq(schema.shiftSignups.slotId, found.slot.id),
+            eq(schema.shiftSignups.userId, input.userId),
+          ),
+        )
+    : [];
+  const problem = placeProblem({
+    day: found.slot.day,
+    today: campDayKey(input.now),
+    status: found.slot.status,
+    member,
+    already: Boolean(already),
+    placed: Boolean(input.addedByUserId),
+    taken: await takenOn(tx, found.slot.id),
+    places: found.type.places,
+  });
+  if (problem) refuse(problem);
   await tx.insert(schema.shiftSignups).values({
     slotId: found.slot.id,
     userId: input.userId,

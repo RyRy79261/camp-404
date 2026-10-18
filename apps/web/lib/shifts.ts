@@ -42,11 +42,16 @@ import { getCampSettings } from "./camp-config";
 import { guideChapterPath } from "./guide-copy";
 import { getMyParticipation } from "./participations";
 import { printName } from "./lounge-copy";
-import { usesTestStore } from "./test-mode";
 import { guideTestStore } from "./test-store-guide";
 import { shiftsTestStore } from "./test-store-shifts";
+import { twin } from "./twin";
 
-// The shift roster (#248): from the database or, under E2E, the test store.
+// The shift roster (#248): from the database or, under E2E, the test store's
+// twin. Who sets a shift up is one rule (canManageShifts), and the checks on
+// taking a place, a day's "not needed" and changing or removing a shift live
+// once in @camp404/core (placeProblem, slotNeededProblem,
+// shiftTypeChangeProblem, shiftTypeRemoveProblem);
+// lib/__tests__/shifts-agreement.test.ts holds the rest equal.
 // Every approved member reads the roster; what each viewer gets is decided
 // HERE, on the server, never hidden in the UI:
 //
@@ -63,6 +68,29 @@ import { shiftsTestStore } from "./test-store-shifts";
 //    captains, who see the dialog.
 
 export type { ShiftWriteResult };
+
+const shifts = twin(db, shiftsTestStore, [
+  "readShiftRoster",
+  "readBurnDays",
+  "listComingForShifts",
+  "listShiftMembers",
+  "listMyVolunteerShifts",
+  "listShiftsForDutyCard",
+  "hasOpenShiftAsk",
+  "saveShiftType",
+  "removeShiftType",
+  "fillShiftDays",
+  "setSlotNeeded",
+  "signUpForShift",
+  "leaveShift",
+  "placeMemberOnShift",
+  "takeMemberOffShift",
+  "askForShifts",
+  "addVolunteerShift",
+  "removeVolunteerShift",
+]);
+
+const guide = twin(documentsDb, guideTestStore, ["listPublishedDutyCards"]);
 
 /** A shift's duty card, as the row links to it. */
 export interface ShiftDutyCardLink {
@@ -156,23 +184,9 @@ export interface ShiftsView {
   dutyCards: DutyCardChoice[] | null;
 }
 
-async function listDutyCards(): Promise<DutyCardChoice[]> {
-  return usesTestStore()
-    ? guideTestStore.listPublishedDutyCards()
-    : documentsDb.listPublishedDutyCards();
-}
-
-async function readRoster(cycle: number): Promise<ShiftRosterRead> {
-  return usesTestStore()
-    ? shiftsTestStore.readShiftRoster(cycle)
-    : db.readShiftRoster(cycle);
-}
-
-async function readBurnDays(cycle: number): Promise<string[]> {
-  return usesTestStore()
-    ? shiftsTestStore.readBurnDays(cycle)
-    : db.readBurnDays(cycle);
-}
+const listDutyCards = guide.listPublishedDutyCards;
+const readRoster = shifts.readShiftRoster;
+const readBurnDays = shifts.readBurnDays;
 
 function slotView(
   slot: ShiftSlotRow,
@@ -222,11 +236,7 @@ export async function getShiftsView(viewer: {
     readRoster(cycle),
     readBurnDays(cycle),
     getMyParticipation(viewer.userId),
-    lead
-      ? usesTestStore()
-        ? shiftsTestStore.listComingForShifts(cycle)
-        : db.listComingForShifts(cycle)
-      : Promise.resolve(null),
+    lead ? shifts.listComingForShifts(cycle) : Promise.resolve(null),
     lead ? listDutyCards() : Promise.resolve(null),
   ]);
   const today = campDayKey(viewer.now ?? new Date());
@@ -238,11 +248,7 @@ export async function getShiftsView(viewer: {
     )
     .map((t) => ({ key: t.key as Team, label: t.label }));
   const managesAny = teams.length > 0 || viewer.rank === "captain";
-  const members = managesAny
-    ? await (usesTestStore()
-        ? shiftsTestStore.listShiftMembers()
-        : db.listShiftMembers())
-    : null;
+  const members = managesAny ? await shifts.listShiftMembers() : null;
 
   const taken = new Set(roster.signups.map((s) => s.slotId));
   const types: ShiftTypeView[] = roster.types.map((t) => {
@@ -373,9 +379,7 @@ export async function getMyShifts(
   const cycle = camp.cycleNumber;
   const [roster, volunteer, burnDays, place] = await Promise.all([
     readRoster(cycle),
-    usesTestStore()
-      ? shiftsTestStore.listMyVolunteerShifts(userId, cycle)
-      : db.listMyVolunteerShifts(userId, cycle),
+    shifts.listMyVolunteerShifts(userId, cycle),
     readBurnDays(cycle),
     getMyParticipation(userId),
   ]);
@@ -474,11 +478,7 @@ export async function getShiftsForDutyCards(
   const cycle = camp.cycleNumber;
   const [lists, burnDays] = await Promise.all([
     Promise.all(
-      documentIds.map((id) =>
-        usesTestStore()
-          ? shiftsTestStore.listShiftsForDutyCard(id, cycle)
-          : db.listShiftsForDutyCard(id, cycle),
-      ),
+      documentIds.map((id) => shifts.listShiftsForDutyCard(id, cycle)),
     ),
     readBurnDays(cycle),
   ]);
@@ -498,23 +498,17 @@ export async function getShiftsForDutyCards(
 }
 
 /** Whether a captain's "Ask everyone" is still open for this member. */
-export async function isAskedForShifts(userId: string): Promise<boolean> {
-  return usesTestStore()
-    ? shiftsTestStore.hasOpenShiftAsk(userId)
-    : db.hasOpenShiftAsk(userId);
-}
+export const isAskedForShifts = shifts.hasOpenShiftAsk;
 
 // --- Writes ----------------------------------------------------------------------
-// Each passes only who is acting; the rule is checked inside the write.
+// Each passes only who is acting; the rule is checked inside the write. They
+// stay functions because they take who is acting apart from the form's input.
 
 export async function saveShiftType(
   actorId: string,
   input: SaveShiftTypeInput,
 ): Promise<ShiftWriteResult<{ daysAdded: number }>> {
-  const args = { ...input, actorId };
-  const saved = usesTestStore()
-    ? shiftsTestStore.saveShiftType(args)
-    : await db.saveShiftType(args);
+  const saved = await shifts.saveShiftType({ ...input, actorId });
   return saved.ok ? { ok: true, daysAdded: saved.daysAdded } : saved;
 }
 
@@ -522,30 +516,21 @@ export async function removeShiftType(
   actorId: string,
   input: RemoveShiftTypeInput,
 ): Promise<ShiftWriteResult> {
-  const args = { ...input, actorId };
-  return usesTestStore()
-    ? shiftsTestStore.removeShiftType(args)
-    : db.removeShiftType(args);
+  return shifts.removeShiftType({ ...input, actorId });
 }
 
 export async function fillShiftDays(
   actorId: string,
   input: FillShiftDaysInput,
 ): Promise<ShiftWriteResult<{ daysAdded: number }>> {
-  const args = { ...input, actorId };
-  return usesTestStore()
-    ? shiftsTestStore.fillShiftDays(args)
-    : db.fillShiftDays(args);
+  return shifts.fillShiftDays({ ...input, actorId });
 }
 
 export async function setSlotNeeded(
   actorId: string,
   input: SetSlotNeededInput,
 ): Promise<ShiftWriteResult> {
-  const args = { ...input, actorId };
-  const saved = usesTestStore()
-    ? shiftsTestStore.setSlotNeeded(args)
-    : await db.setSlotNeeded(args);
+  const saved = await shifts.setSlotNeeded({ ...input, actorId });
   return saved.ok ? { ok: true } : saved;
 }
 
@@ -553,66 +538,46 @@ export async function signUpForShift(
   userId: string,
   input: ShiftSlotInput,
 ): Promise<ShiftWriteResult<{ mine: number }>> {
-  const args = { ...input, userId };
-  return usesTestStore()
-    ? shiftsTestStore.signUpForShift(args)
-    : db.signUpForShift(args);
+  return shifts.signUpForShift({ ...input, userId });
 }
 
 export async function leaveShift(
   userId: string,
   input: ShiftSlotInput,
 ): Promise<ShiftWriteResult<{ mine: number }>> {
-  const args = { ...input, userId };
-  return usesTestStore()
-    ? shiftsTestStore.leaveShift(args)
-    : db.leaveShift(args);
+  return shifts.leaveShift({ ...input, userId });
 }
 
 export async function placeMemberOnShift(
   actorId: string,
   input: ShiftMemberInput,
 ): Promise<ShiftWriteResult> {
-  const args = { ...input, actorId };
-  return usesTestStore()
-    ? shiftsTestStore.placeMemberOnShift(args)
-    : db.placeMemberOnShift(args);
+  return shifts.placeMemberOnShift({ ...input, actorId });
 }
 
 export async function takeMemberOffShift(
   actorId: string,
   input: ShiftMemberInput,
 ): Promise<ShiftWriteResult> {
-  const args = { ...input, actorId };
-  return usesTestStore()
-    ? shiftsTestStore.takeMemberOffShift(args)
-    : db.takeMemberOffShift(args);
+  return shifts.takeMemberOffShift({ ...input, actorId });
 }
 
 export async function askForShifts(
   actorId: string,
 ): Promise<ShiftWriteResult<{ asked: number; notified: number }>> {
-  return usesTestStore()
-    ? shiftsTestStore.askForShifts({ actorId })
-    : db.askForShifts({ actorId });
+  return shifts.askForShifts({ actorId });
 }
 
 export async function addVolunteerShift(
   userId: string,
   input: AddVolunteerShiftInput,
 ): Promise<ShiftWriteResult<{ id: string }>> {
-  const args = { ...input, userId };
-  return usesTestStore()
-    ? shiftsTestStore.addVolunteerShift(args)
-    : db.addVolunteerShift(args);
+  return shifts.addVolunteerShift({ ...input, userId });
 }
 
 export async function removeVolunteerShift(
   userId: string,
   input: RemoveVolunteerShiftInput,
 ): Promise<ShiftWriteResult> {
-  const args = { ...input, userId };
-  return usesTestStore()
-    ? shiftsTestStore.removeVolunteerShift(args)
-    : db.removeVolunteerShift(args);
+  return shifts.removeVolunteerShift({ ...input, userId });
 }
