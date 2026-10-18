@@ -1,6 +1,11 @@
 import {
+  ADJUST_INSTRUCTION_MAX,
+  ADJUST_INSTRUCTION_NEEDED,
+  ADJUST_INSTRUCTION_TOO_LONG,
   DEFAULT_PLATES,
   INGREDIENT_CATEGORIES,
+  PROOFREAD_ANSWER_MAX,
+  RECIPE_TEXT_MAX,
   type IngredientCategory,
   type MealPlanDay,
   type RecipeStatus,
@@ -116,6 +121,98 @@ export function canMoveRecipe(from: RecipeStatus, to: RecipeStatus): boolean {
   return Object.hasOwn(RECIPE_TRANSITIONS, from)
     ? RECIPE_TRANSITIONS[from].includes(to)
     : false;
+}
+
+// --- The checks both recipe stores apply -----------------------------------
+// @camp404/db/recipes and the E2E test store run these, in this order, so the
+// two give the same sentence for the same input. Locks, the recipe's own row
+// and the audit rows stay in the db module.
+
+/** The statuses a proofreading run may be queued from. */
+export const RECIPE_QUEUEABLE: readonly RecipeStatus[] = [
+  "approved",
+  "proofread",
+  "accepted",
+];
+
+/** The statuses a reviewer may retype a recipe's text in. */
+export const RECIPE_RETYPABLE: readonly RecipeStatus[] = [
+  "suggested",
+  "approved",
+  "proofread",
+];
+
+export const PLATES_OUT_OF_RANGE =
+  "Give a whole number of plates from 1 to 500.";
+export const REJECT_REASON_NEEDED = "Say why it is rejected.";
+export const CHANGES_NOTE_NEEDED = "Say what should change.";
+export const RERUN_NOTE_NEEDED = "Say what Claude should do differently.";
+export const RERUN_NOTE_MAX = 1_000;
+export const ANSWER_NEEDED = "Write your answer.";
+export const ANSWER_TOO_LONG = `Keep the answer under ${PROOFREAD_ANSWER_MAX} characters.`;
+export const RECIPE_TEXT_TOO_LONG = `Keep the recipe under ${RECIPE_TEXT_MAX} characters.`;
+
+/** A recipe's pasted text (trimmed) may be at most RECIPE_TEXT_MAX long. */
+export function recipeTextProblem(
+  text: string | null | undefined,
+): string | null {
+  return (text?.trim() ?? "").length > RECIPE_TEXT_MAX
+    ? RECIPE_TEXT_TOO_LONG
+    : null;
+}
+
+/** A run's plates: a whole number from 1 to 500, or the sentence. */
+export function platesProblem(plates: number): string | null {
+  return Number.isInteger(plates) && plates >= 1 && plates <= 500
+    ? null
+    : PLATES_OUT_OF_RANGE;
+}
+
+/** A reviewer's decision says why, when it rejects or asks for changes. */
+export function recipeDecisionProblem(
+  input:
+    | { decision: "approve" }
+    | { decision: "reject"; reason: string }
+    | { decision: "request_changes"; note: string },
+): string | null {
+  if (input.decision === "reject") {
+    return input.reason.trim() ? null : REJECT_REASON_NEEDED;
+  }
+  if (input.decision === "request_changes") {
+    return input.note.trim() ? null : CHANGES_NOTE_NEEDED;
+  }
+  return null;
+}
+
+/** A re-run request's note (trimmed): there, and not too long. */
+export function rerunNoteProblem(note: string): string | null {
+  const words = note.trim();
+  if (!words) return RERUN_NOTE_NEEDED;
+  if (words.length > RERUN_NOTE_MAX) {
+    return `Keep the note under ${RERUN_NOTE_MAX} characters.`;
+  }
+  return null;
+}
+
+/** What "Adjust with Claude" should change (trimmed): there, and not too long. */
+export function adjustInstructionProblem(instruction: string): string | null {
+  const words = instruction.trim();
+  if (!words) return ADJUST_INSTRUCTION_NEEDED;
+  if (words.length > ADJUST_INSTRUCTION_MAX) return ADJUST_INSTRUCTION_TOO_LONG;
+  return null;
+}
+
+/** A reviewer's answer to Claude's questions (trimmed): there, and not too long. */
+export function proofreadAnswerProblem(answer: string): string | null {
+  const words = answer.trim();
+  if (!words) return ANSWER_NEEDED;
+  if (words.length > PROOFREAD_ANSWER_MAX) return ANSWER_TOO_LONG;
+  return null;
+}
+
+/** The error a failed run keeps: the worker's words, cut short, or a default. */
+export function runErrorText(error: string): string {
+  return error.trim().slice(0, 1_000) || "The run failed.";
 }
 
 // --- Reading a recipe ------------------------------------------------------

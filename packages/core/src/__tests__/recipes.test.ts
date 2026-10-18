@@ -1,10 +1,32 @@
 import { describe, expect, it } from "vitest";
 import {
+  ADJUST_INSTRUCTION_MAX,
+  ADJUST_INSTRUCTION_NEEDED,
+  ADJUST_INSTRUCTION_TOO_LONG,
   DEFAULT_PLATES,
+  PROOFREAD_ANSWER_MAX,
   RECIPE_STATUSES,
+  RECIPE_TEXT_MAX,
   type RecipeStatus,
 } from "@camp404/types";
 import {
+  ANSWER_NEEDED,
+  ANSWER_TOO_LONG,
+  CHANGES_NOTE_NEEDED,
+  PLATES_OUT_OF_RANGE,
+  RECIPE_QUEUEABLE,
+  RECIPE_RETYPABLE,
+  RECIPE_TEXT_TOO_LONG,
+  REJECT_REASON_NEEDED,
+  RERUN_NOTE_MAX,
+  RERUN_NOTE_NEEDED,
+  adjustInstructionProblem,
+  platesProblem,
+  proofreadAnswerProblem,
+  recipeDecisionProblem,
+  recipeTextProblem,
+  rerunNoteProblem,
+  runErrorText,
   RECIPE_TRANSITIONS,
   canApproveRecipe,
   canEditMealPlan,
@@ -237,5 +259,67 @@ describe("the meal plan", () => {
     expect(canEditMealPlan("team_lead", ["structures"])).toBe(false);
     expect(canEditMealPlan("camp_member", ["kitchen"])).toBe(false);
     expect(canEditMealPlan("wizard", ["kitchen"])).toBe(false);
+  });
+});
+
+describe("the checks both recipe stores apply", () => {
+  it("takes a whole number of plates from 1 to 500", () => {
+    expect(platesProblem(1)).toBeNull();
+    expect(platesProblem(500)).toBeNull();
+    for (const bad of [0, 501, 4.5, Number.NaN]) {
+      expect(platesProblem(bad)).toBe(PLATES_OUT_OF_RANGE);
+    }
+  });
+
+  it("asks a rejection for its reason and a change request for its note", () => {
+    expect(recipeDecisionProblem({ decision: "approve" })).toBeNull();
+    expect(recipeDecisionProblem({ decision: "reject", reason: " " })).toBe(
+      REJECT_REASON_NEEDED,
+    );
+    expect(
+      recipeDecisionProblem({ decision: "reject", reason: "Too salty" }),
+    ).toBeNull();
+    expect(
+      recipeDecisionProblem({ decision: "request_changes", note: "" }),
+    ).toBe(CHANGES_NOTE_NEEDED);
+  });
+
+  it("holds a re-run note, an adjust instruction and an answer to their length", () => {
+    expect(rerunNoteProblem("  ")).toBe(RERUN_NOTE_NEEDED);
+    expect(rerunNoteProblem("x".repeat(RERUN_NOTE_MAX))).toBeNull();
+    expect(rerunNoteProblem(` ${"x".repeat(RERUN_NOTE_MAX + 1)} `)).toBe(
+      `Keep the note under ${RERUN_NOTE_MAX} characters.`,
+    );
+    expect(adjustInstructionProblem("")).toBe(ADJUST_INSTRUCTION_NEEDED);
+    expect(
+      adjustInstructionProblem("x".repeat(ADJUST_INSTRUCTION_MAX + 1)),
+    ).toBe(ADJUST_INSTRUCTION_TOO_LONG);
+    expect(adjustInstructionProblem("Less salt.")).toBeNull();
+    expect(proofreadAnswerProblem(" ")).toBe(ANSWER_NEEDED);
+    expect(proofreadAnswerProblem("x".repeat(PROOFREAD_ANSWER_MAX + 1))).toBe(
+      ANSWER_TOO_LONG,
+    );
+    expect(proofreadAnswerProblem("Four.")).toBeNull();
+  });
+
+  it("measures a recipe's text after trimming it", () => {
+    expect(recipeTextProblem(null)).toBeNull();
+    expect(recipeTextProblem(` ${"x".repeat(RECIPE_TEXT_MAX)} `)).toBeNull();
+    expect(recipeTextProblem("x".repeat(RECIPE_TEXT_MAX + 1))).toBe(
+      RECIPE_TEXT_TOO_LONG,
+    );
+  });
+
+  it("keeps a failed run's words, cut short, or says the run failed", () => {
+    expect(runErrorText("  Timed out ")).toBe("Timed out");
+    expect(runErrorText(" ")).toBe("The run failed.");
+    expect(runErrorText("x".repeat(1_200))).toHaveLength(1_000);
+  });
+
+  it("queues a run only from a status the moves allow to queued", () => {
+    for (const status of RECIPE_QUEUEABLE) {
+      expect(canMoveRecipe(status, "queued")).toBe(true);
+    }
+    expect(RECIPE_RETYPABLE).not.toContain("accepted");
   });
 });

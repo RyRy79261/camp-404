@@ -47,6 +47,15 @@ import {
   POWER_EDITOR,
   PROOFREADER,
   KITCHEN_REVIEWER,
+  adjustInstructionProblem,
+  platesProblem,
+  proofreadAnswerProblem,
+  RECIPE_QUEUEABLE,
+  RECIPE_RETYPABLE,
+  recipeDecisionProblem,
+  recipeTextProblem,
+  rerunNoteProblem,
+  runErrorText,
   teamProgramEditor,
   LOGISTICS_EDITOR,
 } from "@camp404/core";
@@ -247,9 +256,6 @@ import {
   type TestPowerSite,
 } from "./test-store-power-site";
 import {
-  ANSWER_NEEDED,
-  ANSWER_TOO_LONG,
-  CHANGES_NOTE_NEEDED,
   LESSON_NEEDED,
   LESSON_VERSION_GONE,
   NEVER_STARTED_ERROR,
@@ -264,9 +270,6 @@ import {
   RECIPE_CHANGED,
   RECIPE_DECIDED,
   RECIPE_GONE,
-  REJECT_REASON_NEEDED,
-  RERUN_NOTE_MAX,
-  RERUN_NOTE_NEEDED,
   RUN_STAGES,
   SENDER_NOT_A_REVIEWER,
   ADJUST_VERSION_GONE,
@@ -279,7 +282,6 @@ import {
   TEXT_NEEDED,
   TEXT_TOO_LONG,
   UNTITLED_RECIPE,
-  PLATES_OUT_OF_RANGE,
   VERSION_CHANGED,
   adjustReason,
   baseLines,
@@ -342,9 +344,6 @@ import {
 } from "@camp404/db/desktop-layouts";
 import { InkblotRunInvalidError } from "@camp404/db/inkblot";
 import {
-  ADJUST_INSTRUCTION_MAX,
-  ADJUST_INSTRUCTION_NEEDED,
-  ADJUST_INSTRUCTION_TOO_LONG,
   ANNOUNCEMENT_NOTIFICATION_KINDS,
   DEFAULT_PLATES,
   DesktopLayout,
@@ -355,7 +354,6 @@ import {
   MealPlanInput,
   MEAL_PLAN_MAX_DAYS,
   DAY_ONE_NEEDED_FOR_PREP,
-  PROOFREAD_ANSWER_MAX,
   PlateProofread,
   RECIPE_TEXT_MAX,
   ProofreadExchange,
@@ -1489,11 +1487,7 @@ function recordRecipeEvent(
 }
 
 /** The statuses a proofreading run may be queued from (QUEUEABLE). */
-const QUEUEABLE: readonly RecipeStatus[] = [
-  "approved",
-  "proofread",
-  "accepted",
-];
+const QUEUEABLE = RECIPE_QUEUEABLE;
 
 function sourceVersionOf(row: TestRecipeSource): RecipeSourceVersion {
   return {
@@ -5176,6 +5170,8 @@ export const testStore = {
     if (findUserById(input.submitterId)?.approvalStatus !== "approved") {
       return { ok: false, error: NOT_AN_APPROVED_MEMBER };
     }
+    const tooLong = recipeTextProblem(input.text);
+    if (tooLong) return { ok: false, error: tooLong };
     const text = input.text?.trim() || null;
     if (!text) return { ok: false, error: TEXT_NEEDED };
     const id = crypto.randomUUID();
@@ -5229,6 +5225,8 @@ export const testStore = {
     if (recipe.submitterId !== input.actorId) {
       return { ok: false, error: NOT_YOUR_SUGGESTION };
     }
+    const tooLong = recipeTextProblem(input.text);
+    if (tooLong) return { ok: false, error: tooLong };
     const text = input.text?.trim() || null;
     if (recipe.source !== "url" && !text) {
       return { ok: false, error: TEXT_NEEDED };
@@ -5266,16 +5264,14 @@ export const testStore = {
     if (!isKitchenReviewer(input.actorId)) {
       return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
     }
+    const problem = recipeDecisionProblem(input);
+    if (problem) return { ok: false, error: problem };
     const recipe = findRecipe(input.recipeId);
     if (!recipe) return { ok: false, error: RECIPE_GONE };
     let detail: Record<string, unknown> = {};
     if (input.decision === "reject") {
-      if (!input.reason.trim()) {
-        return { ok: false, error: REJECT_REASON_NEEDED };
-      }
       detail = { reason: input.reason.trim() };
     } else if (input.decision === "request_changes") {
-      if (!input.note.trim()) return { ok: false, error: CHANGES_NOTE_NEEDED };
       detail = { note: input.note.trim() };
     }
     if (recipe.status !== "suggested") {
@@ -5311,11 +5307,13 @@ export const testStore = {
     if (!isKitchenReviewer(input.actorId)) {
       return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
     }
-    const recipe = findRecipe(input.recipeId);
-    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    const tooLong = recipeTextProblem(input.text);
+    if (tooLong) return { ok: false, error: tooLong };
     const text = input.text.trim();
     if (!text) return { ok: false, error: TEXT_NEEDED };
-    if (!["suggested", "approved", "proofread"].includes(recipe.status)) {
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    if (!RECIPE_RETYPABLE.includes(recipe.status)) {
       return { ok: false, error: RECIPE_CHANGED };
     }
     const now = new Date();
@@ -5346,17 +5344,12 @@ export const testStore = {
     if (!isKitchenReviewer(input.actorId)) {
       return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
     }
+    const problem = rerunNoteProblem(input.note);
+    if (problem) return { ok: false, error: problem };
+    const note = input.note.trim();
     const recipe = findRecipe(input.recipeId);
     if (!recipe) return { ok: false, error: RECIPE_GONE };
-    const note = input.note.trim();
-    if (!note) return { ok: false, error: RERUN_NOTE_NEEDED };
-    if (note.length > RERUN_NOTE_MAX) {
-      return {
-        ok: false,
-        error: `Keep the note under ${RERUN_NOTE_MAX} characters.`,
-      };
-    }
-    if (!["approved", "proofread", "accepted"].includes(recipe.status)) {
+    if (!QUEUEABLE.includes(recipe.status)) {
       return { ok: false, error: RECIPE_CHANGED };
     }
     const now = input.now ?? new Date();
@@ -5383,15 +5376,11 @@ export const testStore = {
     if (!mayRunProofread(input.actorId)) {
       return { ok: false, error: ONLY_A_REVIEWER_SENDS };
     }
-    const ids = [...new Set(input.recipeIds)];
+    // Sorted, in the order the database locks them.
+    const ids = [...new Set(input.recipeIds)].sort();
     if (ids.length === 0) return { ok: false, error: NOT_READY_TO_PROOFREAD };
-    if (
-      !Number.isInteger(input.plates) ||
-      input.plates < 1 ||
-      input.plates > 500
-    ) {
-      return { ok: false, error: PLATES_OUT_OF_RANGE };
-    }
+    const platesWrong = platesProblem(input.plates);
+    if (platesWrong) return { ok: false, error: platesWrong };
     const picked: { recipe: TestRecipe; source: TestRecipeSource }[] = [];
     for (const id of ids) {
       const recipe = findRecipe(id);
@@ -5459,13 +5448,8 @@ export const testStore = {
     if (!mayRunProofread(input.actorId)) {
       return { ok: false, error: ONLY_A_REVIEWER_SENDS };
     }
-    if (
-      !Number.isInteger(input.plates) ||
-      input.plates < 1 ||
-      input.plates > 500
-    ) {
-      return { ok: false, error: PLATES_OUT_OF_RANGE };
-    }
+    const platesWrong = platesProblem(input.plates);
+    if (platesWrong) return { ok: false, error: platesWrong };
     if (!servesInRange(input.serves)) {
       return { ok: false, error: SERVES_OUT_OF_RANGE };
     }
@@ -5562,18 +5546,11 @@ export const testStore = {
     if (!mayRunProofread(input.actorId)) {
       return { ok: false, error: ONLY_A_REVIEWER_SENDS };
     }
+    const instructionProblem = adjustInstructionProblem(input.instruction);
+    if (instructionProblem) return { ok: false, error: instructionProblem };
     const instruction = input.instruction.trim();
-    if (!instruction) return { ok: false, error: ADJUST_INSTRUCTION_NEEDED };
-    if (instruction.length > ADJUST_INSTRUCTION_MAX) {
-      return { ok: false, error: ADJUST_INSTRUCTION_TOO_LONG };
-    }
-    if (
-      !Number.isInteger(input.plates) ||
-      input.plates < 1 ||
-      input.plates > 500
-    ) {
-      return { ok: false, error: PLATES_OUT_OF_RANGE };
-    }
+    const platesWrong = platesProblem(input.plates);
+    if (platesWrong) return { ok: false, error: platesWrong };
     const recipe = findRecipe(input.recipeId);
     if (!recipe) return { ok: false, error: RECIPE_GONE };
     if (!QUEUEABLE.includes(recipe.status)) {
@@ -5622,11 +5599,9 @@ export const testStore = {
     if (!mayRunProofread(input.actorId)) {
       return { ok: false, error: ONLY_A_REVIEWER_SENDS };
     }
+    const answerProblem = proofreadAnswerProblem(input.answer);
+    if (answerProblem) return { ok: false, error: answerProblem };
     const answer = input.answer.trim();
-    if (!answer) return { ok: false, error: ANSWER_NEEDED };
-    if (answer.length > PROOFREAD_ANSWER_MAX) {
-      return { ok: false, error: ANSWER_TOO_LONG };
-    }
     const recipe = findRecipe(input.recipeId);
     if (!recipe) return { ok: false, error: RECIPE_GONE };
     if (
@@ -5855,7 +5830,7 @@ export const testStore = {
       return { ok: false, error: RECIPE_CHANGED };
     }
     const now = input.now ?? new Date();
-    const error = input.error.trim().slice(0, 1_000) || "The run failed.";
+    const error = runErrorText(input.error);
     run.outcome = "failed";
     run.finishedAt = now;
     run.error = error;
@@ -5910,9 +5885,8 @@ export const testStore = {
       return { ok: false, error: ONLY_A_REVIEWER_SENDS };
     }
     const plates = input.plates;
-    if (!Number.isInteger(plates) || plates < 1 || plates > 500) {
-      return { ok: false, error: PLATES_OUT_OF_RANGE };
-    }
+    const platesWrong = platesProblem(plates);
+    if (platesWrong) return { ok: false, error: platesWrong };
     const recipe = findRecipe(input.recipeId);
     if (!recipe) return { ok: false, error: RECIPE_GONE };
     if (recipe.acceptedVersionId === null) {
@@ -6070,7 +6044,7 @@ export const testStore = {
     }
     run.outcome = "failed";
     run.finishedAt = input.now ?? new Date();
-    run.error = input.error.trim().slice(0, 1_000) || "The run failed.";
+    run.error = runErrorText(input.error);
     if (input.usage) {
       run.inputTokens = input.usage.inputTokens;
       run.outputTokens = input.usage.outputTokens;
@@ -6720,6 +6694,11 @@ export const testStore = {
   /** Whether a recipe is in the book (it has an accepted version). */
   recipeInBook(recipeId: string): boolean {
     return Boolean(findRecipe(recipeId)?.acceptedVersionId);
+  },
+
+  /** The twin of getAcceptedVersion: only the recipe's accepted version. */
+  getAcceptedVersion(recipeId: string): RecipeVersionDetail | null {
+    return testStore.getRecipeDetail(recipeId)?.currentVersion ?? null;
   },
 
   getPlateCount(versionId: string, plates: number): PlateCountDetail | null {

@@ -7,17 +7,30 @@ import {
   sectionText,
   sourceFromText,
   sourceText,
+  adjustInstructionProblem,
+  ANSWER_NEEDED,
+  ANSWER_TOO_LONG,
+  CHANGES_NOTE_NEEDED,
   KITCHEN_REVIEWER,
+  PLATES_OUT_OF_RANGE,
+  platesProblem,
+  proofreadAnswerProblem,
+  RECIPE_QUEUEABLE,
+  RECIPE_RETYPABLE,
+  RECIPE_TEXT_TOO_LONG,
+  recipeDecisionProblem,
+  recipeTextProblem,
+  REJECT_REASON_NEEDED,
+  RERUN_NOTE_MAX,
+  RERUN_NOTE_NEEDED,
+  rerunNoteProblem,
+  runErrorText,
 } from "@camp404/core";
 import {
-  ADJUST_INSTRUCTION_MAX,
-  ADJUST_INSTRUCTION_NEEDED,
-  ADJUST_INSTRUCTION_TOO_LONG,
   DEFAULT_PLATES,
   DraftReport,
   KitchenRecipe,
   LINK_ONLY_TEXT,
-  PROOFREAD_ANSWER_MAX,
   PlateProofread,
   ProofreadExchange,
   RECIPE_TEXT_MAX,
@@ -110,11 +123,20 @@ export const NOT_A_KITCHEN_REVIEWER =
 export const NOT_AN_APPROVED_MEMBER = "Only approved camp members can do this.";
 export const NOT_YOUR_SUGGESTION =
   "Only the member who suggested this recipe can change it.";
-export const REJECT_REASON_NEEDED = "Say why it is rejected.";
-export const CHANGES_NOTE_NEEDED = "Say what should change.";
+// The sentences of the checks both recipe stores share live with those
+// checks in @camp404/core; they are named here too, beside the rest.
+export {
+  ANSWER_NEEDED,
+  ANSWER_TOO_LONG,
+  CHANGES_NOTE_NEEDED,
+  PLATES_OUT_OF_RANGE,
+  REJECT_REASON_NEEDED,
+  RERUN_NOTE_MAX,
+  RERUN_NOTE_NEEDED,
+};
 export const TITLE_NEEDED = "Give the recipe a name.";
 export const TEXT_NEEDED = "Paste the recipe text.";
-export const TEXT_TOO_LONG = `Keep the recipe under ${RECIPE_TEXT_MAX} characters.`;
+export const TEXT_TOO_LONG = RECIPE_TEXT_TOO_LONG;
 export const ONLY_A_REVIEWER_SENDS =
   "Only a Kitchen lead or a captain can send a recipe to Claude.";
 export const SOURCE_CHANGED =
@@ -123,8 +145,6 @@ export const SOURCE_INVALID =
   "This recipe's text has something the editor cannot keep. Reload the page and try again.";
 export const SERVES_OUT_OF_RANGE =
   "Say how many it serves as a whole number from 1 to 500, or leave it blank.";
-export const ANSWER_NEEDED = "Write your answer.";
-export const ANSWER_TOO_LONG = `Keep the answer under ${PROOFREAD_ANSWER_MAX} characters.`;
 export const NO_TEXT_TO_SEND =
   "Paste the recipe's text first. Claude does not open links.";
 export const NO_AI_CONSENT =
@@ -400,8 +420,9 @@ async function recipeExists(tx: Tx, recipeId: string): Promise<boolean> {
 }
 
 function cleanText(text: string | null | undefined): string | null {
+  const tooLong = recipeTextProblem(text);
+  if (tooLong) refuse(tooLong);
   const trimmed = text?.trim() ?? "";
-  if (trimmed.length > RECIPE_TEXT_MAX) refuse(TEXT_TOO_LONG);
   return trimmed === "" ? null : trimmed;
 }
 
@@ -699,6 +720,8 @@ export async function decideRecipe(
   return write(async (tx) => {
     await assertKitchenReviewer(tx, input.actorId);
     if (!UUID.test(input.recipeId)) refuse(RECIPE_GONE);
+    const problem = recipeDecisionProblem(input);
+    if (problem) refuse(problem);
     const now = new Date();
     let set: Partial<typeof schema.recipes.$inferInsert>;
     let detail: Record<string, unknown> = {};
@@ -706,7 +729,6 @@ export async function decideRecipe(
       set = { status: "approved", approvedBy: input.actorId, approvedAt: now };
     } else if (input.decision === "reject") {
       const reason = input.reason.trim();
-      if (!reason) refuse(REJECT_REASON_NEEDED);
       set = {
         status: "rejected",
         rejectedBy: input.actorId,
@@ -716,7 +738,6 @@ export async function decideRecipe(
       detail = { reason };
     } else {
       const note = input.note.trim();
-      if (!note) refuse(CHANGES_NOTE_NEEDED);
       set = { status: "changes_requested", changesNote: note };
       detail = { note };
     }
@@ -750,10 +771,10 @@ export async function decideRecipe(
   });
 }
 
-const RETYPABLE: RecipeStatus[] = ["suggested", "approved", "proofread"];
+const RETYPABLE = [...RECIPE_RETYPABLE];
 
 /** The statuses a proofreading run may be queued from. */
-const QUEUEABLE: RecipeStatus[] = ["approved", "proofread", "accepted"];
+const QUEUEABLE = [...RECIPE_QUEUEABLE];
 
 /**
  * A reviewer retypes the recipe's working text, and becomes its author. This
@@ -814,9 +835,6 @@ export async function retypeRecipeText(input: {
   });
 }
 
-export const RERUN_NOTE_NEEDED = "Say what Claude should do differently.";
-export const RERUN_NOTE_MAX = 1_000;
-
 /**
  * A Kitchen lead (or a captain) asks a captain to run proofreading again,
  * saying what should change. It costs nothing and sends nothing: the note
@@ -834,11 +852,9 @@ export async function requestRerun(input: {
   return write(async (tx) => {
     await assertKitchenReviewer(tx, input.actorId);
     if (!UUID.test(input.recipeId)) refuse(RECIPE_GONE);
+    const problem = rerunNoteProblem(input.note);
+    if (problem) refuse(problem);
     const note = input.note.trim();
-    if (!note) refuse(RERUN_NOTE_NEEDED);
-    if (note.length > RERUN_NOTE_MAX) {
-      refuse(`Keep the note under ${RERUN_NOTE_MAX} characters.`);
-    }
     const [asked] = await tx
       .update(schema.recipes)
       .set({
@@ -871,13 +887,9 @@ export async function requestRerun(input: {
 
 // --- Proofreading ----------------------------------------------------------
 
-export const PLATES_OUT_OF_RANGE =
-  "Give a whole number of plates from 1 to 500.";
-
 function platesOrRefuse(plates: number): number {
-  return Number.isInteger(plates) && plates >= 1 && plates <= 500
-    ? plates
-    : refuse(PLATES_OUT_OF_RANGE);
+  const problem = platesProblem(plates);
+  return problem ? refuse(problem) : plates;
 }
 
 /**
@@ -1223,11 +1235,9 @@ export async function adjustVersion(input: {
     if (!(await lockAllowed(tx, input.actorId, KITCHEN_REVIEWER))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
+    const instructionProblem = adjustInstructionProblem(input.instruction);
+    if (instructionProblem) refuse(instructionProblem);
     const instruction = input.instruction.trim();
-    if (!instruction) refuse(ADJUST_INSTRUCTION_NEEDED);
-    if (instruction.length > ADJUST_INSTRUCTION_MAX) {
-      refuse(ADJUST_INSTRUCTION_TOO_LONG);
-    }
     const plates = platesOrRefuse(input.plates);
 
     const recipe = await lockRecipe(tx, input.recipeId);
@@ -1289,9 +1299,9 @@ export async function answerProofreadQuestions(input: {
     if (!(await lockAllowed(tx, input.actorId, KITCHEN_REVIEWER))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
+    const answerProblem = proofreadAnswerProblem(input.answer);
+    if (answerProblem) refuse(answerProblem);
     const answer = input.answer.trim();
-    if (!answer) refuse(ANSWER_NEEDED);
-    if (answer.length > PROOFREAD_ANSWER_MAX) refuse(ANSWER_TOO_LONG);
 
     const recipe = await lockRecipe(tx, input.recipeId);
     if (
@@ -1931,7 +1941,7 @@ export async function failRun(input: {
   now?: Date;
 }): Promise<RecipeWriteResult> {
   const now = input.now ?? new Date();
-  const error = input.error.trim().slice(0, 1_000) || "The run failed.";
+  const error = runErrorText(input.error);
   return write(async (tx) => {
     if (!UUID.test(input.runId)) refuse(RECIPE_GONE);
     const [run] = await tx
@@ -2372,7 +2382,7 @@ export async function failPlateRun(input: {
   now?: Date;
 }): Promise<RecipeWriteResult> {
   const now = input.now ?? new Date();
-  const error = input.error.trim().slice(0, 1_000) || "The run failed.";
+  const error = runErrorText(input.error);
   return write(async (tx) => {
     if (!UUID.test(input.runId)) refuse(RECIPE_GONE);
     const [run] = await tx
