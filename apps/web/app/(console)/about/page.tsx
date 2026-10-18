@@ -24,7 +24,7 @@ import {
   InlineText,
 } from "@/components/markdown/inline-text";
 import { getAboutCamp } from "@/lib/about";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { GIFT_ICON } from "@/lib/join-gift-icons";
 import { AboutToc, type TocItem } from "./about-toc";
 
@@ -174,7 +174,7 @@ function ScheduleGroup({
 const icon = (Icon: typeof Heart) => <Icon aria-hidden />;
 
 export default async function AboutPage() {
-  const { rank } = await captainPageGate("camp_member");
+  const { rank } = await programPage("about");
   const about = await getAboutCamp();
   const { content } = about;
   const canEdit = hasClearance(rank, "captain");

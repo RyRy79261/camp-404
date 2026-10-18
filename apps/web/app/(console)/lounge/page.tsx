@@ -17,7 +17,7 @@ import {
 } from "@/components/lounge/offers-table";
 import { ProgrammeDay } from "@/components/lounge/programme-day";
 import { getCampSettings } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   getLoungeProgramme,
   getLoungeSettings,
@@ -58,7 +58,7 @@ export default async function LoungePage({
   searchParams: Promise<{ tab?: string; offer?: string }>;
 }) {
   // Every approved member reads the programme.
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("lounge");
   const leadTeams = actor.ledTeams;
   const [camp, params] = await Promise.all([getCampSettings(), searchParams]);
   const canRun = canRunLounge(rank, leadTeams);

@@ -37,7 +37,7 @@ import { TeamBudgetCard } from "@/components/teams/team-budget-card";
 import { TEAM_PANELS } from "@/components/teams/team-panels";
 import { getUpcomingEvents } from "@/lib/camp-calendar";
 import { getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { listBudgetTotals } from "@/lib/claims";
 import { buildCalendarDays } from "@/lib/calendar-view";
 import { CALENDAR_PAGE_RANGE } from "@/lib/google-calendar";
@@ -139,7 +139,7 @@ export default async function TeamPage({
 }: {
   params: Promise<{ key: string }>;
 }) {
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("team");
   const [{ key }, config] = await Promise.all([params, getTeamsConfig()]);
   // A team the config names (an archived one too: its page still says who was
   // on it this year). Anything else is not a page.

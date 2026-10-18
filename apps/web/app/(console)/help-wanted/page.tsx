@@ -1,6 +1,6 @@
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { HelpWantedBoard } from "@/components/help-wanted/help-wanted-board";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getHelpWantedView } from "@/lib/help-wanted";
 import { KEEPER_DESCRIPTION, MEMBER_DESCRIPTION } from "@/lib/help-wanted-copy";
 
@@ -16,7 +16,7 @@ export const metadata = { title: "Help wanted — Camp 404" };
 // (lib/help-wanted.ts).
 
 export default async function HelpWantedPage() {
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("help-wanted");
   const ledTeams = actor.ledTeams;
   const view = await getHelpWantedView({
     userId: campUser.id,

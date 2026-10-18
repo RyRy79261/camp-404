@@ -11,7 +11,7 @@ import { Skeleton, SkeletonRegion } from "@camp404/ui/components/skeleton";
 import { CalendarBoard } from "@/components/calendar/calendar-board";
 import { NewEventButton } from "@/components/calendar/new-event-button";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   filterEntries,
   parseCalendarState,
@@ -50,7 +50,7 @@ export default async function CalendarPage({
 }) {
   // The gate first, before any boundary: a redirect or a refusal is decided
   // here, on the server, with the page's own status.
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("calendar");
   const leadTeams = actor.ledTeams;
   const canCreate = canCreateCampEvents(rank, leadTeams);
 
@@ -98,7 +98,7 @@ async function CalendarBody({
   searchParams,
 }: {
   userId: string;
-  rank: Awaited<ReturnType<typeof captainPageGate>>["rank"];
+  rank: Awaited<ReturnType<typeof programPage>>["rank"];
   leadTeams: readonly string[];
   canCreate: boolean;
   searchParams: SearchParams;

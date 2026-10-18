@@ -23,7 +23,7 @@ import {
   inventoryItemPath,
   shortDate,
 } from "@/lib/inventory-copy";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { inventoryViewer } from "@/lib/inventory-viewer";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +43,7 @@ function lentBy(l: InventoryLoanRow): string {
 }
 
 export default async function InventoryLoansPage() {
-  const viewer = await inventoryViewer(await captainPageGate("camp_member"));
+  const viewer = await inventoryViewer(await programPage("inventory"));
   const loans = await listInventoryLoans();
   const out = loans.filter((l) => l.returnedAt === null);
   const back = loans.filter((l) => l.returnedAt !== null);

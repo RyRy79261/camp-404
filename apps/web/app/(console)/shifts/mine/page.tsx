@@ -10,7 +10,7 @@ import {
   AddVolunteerShift,
   RemoveVolunteerShift,
 } from "@/components/shifts/volunteer-shifts";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getMyShifts } from "@/lib/shifts";
 import { MY_SHIFTS_PRINT_PATH, SHIFTS_PATH } from "@/lib/shifts-copy";
 
@@ -37,7 +37,7 @@ function ClashLine({ with: others }: { with: string[] }) {
 }
 
 export default async function MyShiftsPage() {
-  const { campUser } = await captainPageGate("camp_member");
+  const { campUser } = await programPage("my-shifts");
   const view = await getMyShifts(campUser.id);
 
   return (
