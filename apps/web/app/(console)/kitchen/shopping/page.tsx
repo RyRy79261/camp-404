@@ -12,7 +12,7 @@ import {
 } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { listBudgetTotals } from "@/lib/claims";
 import {
   getShoppingFacts,
@@ -93,7 +93,7 @@ function linePrice(
 }
 
 export default async function ShoppingListPage() {
-  const { rank, campUser } = await captainPageGate("camp_member");
+  const { rank, campUser } = await programPage("shopping-list");
   const [{ plan, menu, snacks, ticks }, priceRows] = await Promise.all([
     getShoppingFacts(),
     getShoppingPricesFor(campUser.id),

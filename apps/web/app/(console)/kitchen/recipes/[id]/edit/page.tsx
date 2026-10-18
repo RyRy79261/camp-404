@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
-import { canApproveRecipe, sourceFromText } from "@camp404/core";
+import { sourceFromText } from "@camp404/core";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { SOURCE_EDIT_REFUSAL } from "@/lib/recipe-copy";
 import {
   getProofreadProgress,
@@ -26,10 +26,11 @@ export const metadata = { title: "Edit recipe — Camp 404" };
 // questions open in a dialog. A successful run is in the book, and the editor
 // opens the recipe page.
 //
-// The rank gate is team_lead (clearance is global); canApproveRecipe then
-// narrows it to a captain or a lead of Kitchen, so a member or a lead of
-// Structures reads the refusal and nothing of the recipe. Each write checks
-// both again inside its own transaction.
+// The rank gate is team_lead (clearance is global); the program's rule
+// (KITCHEN_REVIEWER, the one canApproveRecipe asks) then narrows it to a
+// captain or a lead of Kitchen, so a member or a lead of Structures reads the
+// refusal and nothing of the recipe. Each write checks both again inside its
+// own transaction.
 
 /** A suggestion not yet approved, or turned down, has no source to edit. */
 const NOT_EDITABLE = ["suggested", "changes_requested", "rejected"];
@@ -40,12 +41,11 @@ export default async function EditRecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { rank, actor } = await captainPageGate("team_lead");
+  const { allowed } = await programPage("edit-recipe");
 
   // Below team_lead, or a lead of another team: the refusal, and not a word
   // of the recipe.
-  const leadTeams = actor.ledTeams;
-  if (!canApproveRecipe(rank, leadTeams)) {
+  if (!allowed) {
     return (
       <div className="flex flex-col">
         <PageHeading eyebrow="Kitchen / Recipes" title="Edit recipe" />

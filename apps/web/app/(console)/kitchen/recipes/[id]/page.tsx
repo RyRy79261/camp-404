@@ -30,7 +30,7 @@ import { PageHeading } from "@camp404/ui/components/page-heading";
 import type { OpenRun } from "@/components/recipes/proofread-questions";
 import { RecipeReader } from "@/components/recipes/recipe-reader";
 import { RecipeStatusBadge } from "@/components/recipes/recipe-status-badge";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   RECIPES_PATH,
   recipeCardPath,
@@ -563,7 +563,7 @@ export default async function RecipePage({
 }) {
   const { id } = await params;
   const query = (await searchParams) ?? {};
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("recipe");
   const leadTeams = actor.ledTeams;
   const reviewer = canApproveRecipe(rank, leadTeams);
   // Captains and Kitchen leads send recipes to Claude (the owner's decision

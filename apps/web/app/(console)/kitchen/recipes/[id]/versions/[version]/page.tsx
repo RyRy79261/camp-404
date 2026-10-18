@@ -5,7 +5,7 @@ import { canApproveRecipe, canRunProofread } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { RecipeReader } from "@/components/recipes/recipe-reader";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { recipeHistoryPath } from "@/lib/recipe-copy";
 import { formatDay } from "@/lib/recipe-labels";
 import { getOpenRun, getRecipeDetail } from "@/lib/recipes";
@@ -45,7 +45,7 @@ export default async function RecipeVersionPage({
   params: Promise<{ id: string; version: string }>;
 }) {
   const { id, version } = await params;
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("recipe-version");
   const leadTeams = actor.ledTeams;
   const detail = await getRecipeDetail(id);
   if (!detail) notFound();
