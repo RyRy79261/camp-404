@@ -1,5 +1,11 @@
 import { and, asc, eq } from "drizzle-orm";
-import { budgetTotals, type BudgetTotals, MONEY_KEEPER } from "@camp404/core";
+import {
+  BUDGET_BAD_AMOUNT,
+  budgetAmountProblem,
+  budgetTotals,
+  type BudgetTotals,
+  MONEY_KEEPER,
+} from "@camp404/core";
 import type { Team } from "@camp404/types";
 import { lockAllowed } from "./actor";
 import { writeAuditEvent } from "./audit";
@@ -21,7 +27,7 @@ export const BUDGET_NOT_FINANCE =
   "Only captains and Finance leads can set budgets.";
 export const BUDGET_CHANGED =
   "Someone changed this budget first. Reload the page.";
-export const BUDGET_BAD_AMOUNT = "A budget must be R0 or more.";
+export { BUDGET_BAD_AMOUNT };
 
 /** One year's budget rows, by team. */
 export async function listTeamBudgets(cycle: number): Promise<TeamBudgetRow[]> {
@@ -68,12 +74,8 @@ export async function setTeamBudget(input: {
   expectedCents: number | null;
   actorId: string;
 }): Promise<MoneyResult> {
-  if (
-    input.amountCents !== null &&
-    (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0)
-  ) {
-    return { ok: false, error: BUDGET_BAD_AMOUNT };
-  }
+  const problem = budgetAmountProblem(input.amountCents);
+  if (problem) return { ok: false, error: problem };
   try {
     await withTransaction(async (tx) => {
       if (!(await lockAllowed(tx, input.actorId, MONEY_KEEPER))) {

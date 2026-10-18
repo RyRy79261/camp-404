@@ -1,4 +1,9 @@
-import { Team, ViewerRank, type ClaimStatus } from "@camp404/types";
+import {
+  CLAIM_MAX_FILES,
+  Team,
+  ViewerRank,
+  type ClaimStatus,
+} from "@camp404/types";
 import type { Actor } from "./actor";
 import { MONEY_KEEPER } from "./dues";
 import { sumMinor } from "./money";
@@ -140,3 +145,79 @@ export const CLAIM_MOVES: Readonly<
   paid: [],
   rejected: [],
 };
+
+// --- The rules both claim stores apply ----------------------------------------
+//
+// @camp404/db/reimbursements and team-budgets, and the E2E test store
+// (apps/web/lib/test-store-claims.ts), call these, so the order of the checks
+// and the sentences are written once. Locks and audit rows stay in the
+// database modules.
+
+export const CLAIM_NEEDS_A_RECEIPT =
+  "Add at least one receipt: a photo or a PDF.";
+export const CLAIM_TOO_MANY_FILES = `Add at most ${CLAIM_MAX_FILES} files to one claim.`;
+export const CLAIM_BAD_AMOUNT = "The amount must be more than R0.";
+export const CLAIM_CHANGED =
+  "Someone else changed this claim first. Reload the page.";
+export const BUDGET_BAD_AMOUNT = "A budget must be R0 or more.";
+
+/**
+ * What is wrong with a claim to lodge before anything is read, in order: no
+ * receipt, too many files, an amount that is not whole cents above R0. Null
+ * when it may go on.
+ */
+export function claimInputProblem(input: {
+  files: readonly unknown[];
+  amountCents: number;
+}): string | null {
+  if (input.files.length === 0) return CLAIM_NEEDS_A_RECEIPT;
+  if (input.files.length > CLAIM_MAX_FILES) return CLAIM_TOO_MANY_FILES;
+  if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) {
+    return CLAIM_BAD_AMOUNT;
+  }
+  return null;
+}
+
+/** Whether a claim at `status` may move `from` → `to`: the compare-and-set. */
+export function claimMayMove(
+  status: ClaimStatus,
+  from: ClaimStatus,
+  to: ClaimStatus,
+): boolean {
+  return status === from && CLAIM_MOVES[from].includes(to);
+}
+
+/**
+ * What a move stamps on the claim: the team's decision (who, when, and the
+ * note on a no), the payment (who and when), or the Finance team's no after
+ * all (its reason).
+ */
+export function claimMoveStamp(input: {
+  from: ClaimStatus;
+  to: ClaimStatus;
+  actorId: string;
+  note?: string | null;
+  now: Date;
+}):
+  | { approverId: string; approvedAt: Date; decisionNote: string | null }
+  | { paidById: string; paidAt: Date }
+  | { decisionNote: string | null } {
+  if (input.from === "submitted") {
+    return {
+      approverId: input.actorId,
+      approvedAt: input.now,
+      decisionNote: input.note ?? null,
+    };
+  }
+  if (input.to === "paid")
+    return { paidById: input.actorId, paidAt: input.now };
+  return { decisionNote: input.note ?? null };
+}
+
+/** A team budget to set: whole cents, R0 or more, or null for none. */
+export function budgetAmountProblem(amountCents: number | null): string | null {
+  if (amountCents === null) return null;
+  return Number.isSafeInteger(amountCents) && amountCents >= 0
+    ? null
+    : BUDGET_BAD_AMOUNT;
+}

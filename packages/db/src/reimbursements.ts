@@ -1,8 +1,17 @@
 import { and, desc, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { canApproveClaim, CLAIM_MOVES, MONEY_KEEPER } from "@camp404/core";
 import {
-  CLAIM_MAX_FILES,
+  canApproveClaim,
+  CLAIM_BAD_AMOUNT,
+  CLAIM_CHANGED,
+  claimInputProblem,
+  claimMayMove,
+  claimMoveStamp,
+  CLAIM_NEEDS_A_RECEIPT,
+  CLAIM_TOO_MANY_FILES,
+  MONEY_KEEPER,
+} from "@camp404/core";
+import {
   CLAIM_NEEDS_A_REASON,
   type ClaimAccountType,
   type ClaimStatus,
@@ -39,15 +48,17 @@ export type ReimbursementStatus = ClaimStatus;
 export type ReimbursementTeam = Team;
 export type ClaimResult<T = object> = MoneyResult<T>;
 
-export const CLAIM_NEEDS_A_RECEIPT =
-  "Add at least one receipt: a photo or a PDF.";
-export const CLAIM_TOO_MANY_FILES = `Add at most ${CLAIM_MAX_FILES} files to one claim.`;
-export const CLAIM_BAD_AMOUNT = "The amount must be more than R0.";
+// The sentences of the checks both claim stores share live with those checks
+// in @camp404/core; they are named here too, beside the rest.
+export {
+  CLAIM_BAD_AMOUNT,
+  CLAIM_CHANGED,
+  CLAIM_NEEDS_A_RECEIPT,
+  CLAIM_TOO_MANY_FILES,
+};
 export const CLAIM_NO_SUCH_MEMBER = "That member isn't in the camp.";
 export const CLAIM_NOT_FOUND =
   "That claim isn't there any more. Reload the page.";
-export const CLAIM_CHANGED =
-  "Someone else changed this claim first. Reload the page.";
 export const NOT_THE_CLAIMS_TEAM =
   "Only a lead of this claim's team, or a captain, can decide it.";
 export const CLAIM_NOT_FINANCE =
@@ -326,14 +337,8 @@ export interface SubmitClaimInput {
 export async function submitClaim(
   input: SubmitClaimInput,
 ): Promise<ClaimResult<{ id: string }>> {
-  if (input.files.length === 0)
-    return { ok: false, error: CLAIM_NEEDS_A_RECEIPT };
-  if (input.files.length > CLAIM_MAX_FILES) {
-    return { ok: false, error: CLAIM_TOO_MANY_FILES };
-  }
-  if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) {
-    return { ok: false, error: CLAIM_BAD_AMOUNT };
-  }
+  const problem = claimInputProblem(input);
+  if (problem) return { ok: false, error: problem };
   if (!UUID.test(input.submitterId)) {
     return { ok: false, error: CLAIM_NO_SUCH_MEMBER };
   }
@@ -406,23 +411,9 @@ async function move(
   },
 ): Promise<void> {
   const { claim } = input;
-  if (
-    claim.status !== input.from ||
-    !CLAIM_MOVES[input.from].includes(input.to)
-  ) {
-    refuse(CLAIM_CHANGED);
-  }
+  if (!claimMayMove(claim.status, input.from, input.to)) refuse(CLAIM_CHANGED);
   const now = new Date();
-  const stamp =
-    input.from === "submitted"
-      ? {
-          approverId: input.actorId,
-          approvedAt: now,
-          decisionNote: input.note ?? null,
-        }
-      : input.to === "paid"
-        ? { paidById: input.actorId, paidAt: now }
-        : { decisionNote: input.note ?? null };
+  const stamp = claimMoveStamp({ ...input, now });
   const rows = await tx
     .update(schema.reimbursements)
     .set({ status: input.to, updatedAt: now, ...stamp })
