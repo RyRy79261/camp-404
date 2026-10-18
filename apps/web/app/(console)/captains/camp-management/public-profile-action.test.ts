@@ -12,7 +12,7 @@ vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   hasCampAccess: vi.fn(() => true),
   isApproved: vi.fn(() => true),
-  isTeamLead: vi.fn(async () => false),
+  getLeadTeams: vi.fn(async () => []),
   decideUserApproval: vi.fn(),
 }));
 vi.mock("@/lib/promotion", () => ({
