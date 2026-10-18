@@ -49,6 +49,9 @@ export function canApproveRecipe(
   return allowsRank(KITCHEN_REVIEWER, rank, ledTeams);
 }
 
+/** Who may send recipes to Claude: the people who approve them. */
+export const PROOFREADER: Rule = KITCHEN_REVIEWER;
+
 /**
  * Whether someone may send recipes to Claude, which costs money: a captain,
  * or a lead of Kitchen (the owner's decision 2A), the same people who approve
@@ -58,8 +61,11 @@ export function canRunProofread(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  return canApproveRecipe(rank, ledTeams);
+  return allowsRank(PROOFREADER, rank, ledTeams);
 }
+
+/** Who may change the year's meal plan: the people who send recipes to Claude. */
+export const MEAL_PLAN_EDITOR: Rule = PROOFREADER;
 
 /**
  * Whether someone may change the year's meal plan: a captain or a Kitchen
@@ -70,7 +76,7 @@ export function canEditMealPlan(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  return canApproveRecipe(rank, ledTeams);
+  return allowsRank(MEAL_PLAN_EDITOR, rank, ledTeams);
 }
 
 /**

@@ -1,6 +1,7 @@
 import type { MealPlanDay, PriceKind } from "@camp404/types";
 import { sumMinor } from "./money";
-import { canEditMealPlan } from "./recipes";
+import { allowsRank, type Rule } from "./actor";
+import { MEAL_PLAN_EDITOR } from "./recipes";
 
 // The Kitchen's prices and food cost (#245; the owner approved Option A of
 // design/kitchen-prices.html and kitchen-costing.html, 2026-10-02). Pure: no
@@ -21,6 +22,9 @@ import { canEditMealPlan } from "./recipes";
 //    its larger meal's plates (the camp does breakfast and dinner).
 // Money is rands in whole cents; sums go through sumMinor.
 
+/** Who prices the shopping list and reads the food cost: the meal plan's editors. */
+export const SHOPPING_PRICER: Rule = MEAL_PLAN_EDITOR;
+
 /**
  * Whether someone may give shopping lines a shop and a price, and read the
  * food cost: a captain or a Kitchen lead. `ledTeams` are the team keys they
@@ -30,7 +34,7 @@ export function canPriceShoppingList(
   rank: string,
   ledTeams: readonly string[],
 ): boolean {
-  return canEditMealPlan(rank, ledTeams);
+  return allowsRank(SHOPPING_PRICER, rank, ledTeams);
 }
 
 /** One shopping line's price, as the cost needs it. */

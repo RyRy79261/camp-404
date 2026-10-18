@@ -3,7 +3,7 @@ import {
   Team,
   type InventoryCategory,
 } from "@camp404/types";
-import { allowsRank, captainOrLeadOf } from "./actor";
+import { allowsRank, captainOrLeadOf, type Rule } from "./actor";
 
 // Inventory (#246). Pure: no DB, no session, no next/*.
 //
@@ -19,6 +19,14 @@ import { allowsRank, captainOrLeadOf } from "./actor";
 // list from the caller.
 
 /**
+ * Who may change `team`'s gear and needs: a captain, or a lead of that team
+ * this year. A key that is not a team allows nobody.
+ */
+export function inventoryEditor(team: string): Rule {
+  return captainOrLeadOf(team);
+}
+
+/**
  * Whether someone may change a team's gear and needs: a captain, or a lead of
  * that team this year. `ledTeams` are the team keys they lead this year.
  */
@@ -27,7 +35,7 @@ export function canEditInventory(
   ledTeams: readonly string[],
   team: string,
 ): boolean {
-  return allowsRank(captainOrLeadOf(team), rank, ledTeams);
+  return allowsRank(inventoryEditor(team), rank, ledTeams);
 }
 
 /** Whether someone may change gear of at least one team (the Add button). */

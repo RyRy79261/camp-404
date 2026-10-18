@@ -33,7 +33,7 @@ import { firstIssue, powerGate, revalidatePower } from "@/lib/power-gate";
 // gate (a captain or a Power & Lighting lead, lib/power-gate.ts), the Zod
 // boundary, then the facade with the actor's id alone. The gate answers the
 // screen; the rule itself is checked again inside each write's own
-// transaction (lockPowerEditor), which re-reads the actor's rank and led
+// transaction (lockAllowed, POWER_EDITOR), which re-reads the actor's rank and led
 // teams and never takes a team list from here.
 
 const RemoveLoadInput = z.object({

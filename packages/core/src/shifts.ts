@@ -7,7 +7,7 @@ import {
 import { CAPTAIN_ONLY, allowsRank, type Rule } from "./actor";
 import { clockText } from "./lounge";
 import { isComingThisYear } from "./participation";
-import { canEditTeamProgram } from "./team-programs";
+import { teamProgramEditor } from "./team-programs";
 
 // The shift roster (#248). Pure: no DB, no session, no next/*.
 //
@@ -33,6 +33,11 @@ import { canEditTeamProgram } from "./team-programs";
 /** The team whose leads set up the cleaning shifts. */
 export const CLEANING_TEAM = "sanitation_and_water";
 
+/** Who may set up `team`'s shifts: the team program's editors. */
+export function shiftKeeper(team: string): Rule {
+  return teamProgramEditor(team);
+}
+
 /**
  * Whether someone may set up `team`'s shifts: add, change or remove a shift
  * type, mark a day not needed, and put members on or take them off. A captain,
@@ -43,7 +48,7 @@ export function canManageShifts(
   ledTeams: readonly string[],
   team: string,
 ): boolean {
-  return canEditTeamProgram(rank, ledTeams, team);
+  return allowsRank(shiftKeeper(team), rank, ledTeams);
 }
 
 /** The teams, of `teams`, whose shifts someone may set up. */

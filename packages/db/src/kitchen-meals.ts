@@ -1,14 +1,14 @@
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import {
   campDayStart,
-  canAddPrepSteps,
-  canCheckMenuAllergens,
   mealPlates,
   prepDueDate,
   prepGoesOnBoard,
   prepTaskDetails,
   prepTaskTitle,
   type SheetPrepStep,
+  ALLERGEN_CHECKER,
+  PREP_EDITOR,
 } from "@camp404/core";
 import {
   ALLERGEN_PLAN_KINDS,
@@ -21,12 +21,11 @@ import {
   type MealOfTheDay,
   type PrepTiming,
 } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import { readMealPlan } from "./meal-plan";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 import { addTaskWithin } from "./tasks";
 
@@ -48,7 +47,7 @@ import { addTaskWithin } from "./tasks";
 //    person responsible (the owner).
 //
 // Every write re-reads and locks the actor's rank and led teams inside its own
-// transaction (lockSenderReach) and writes its audit row there. PGlite has ONE
+// transaction (lockActor) and writes its audit row there. PGlite has ONE
 // connection: everything inside a transaction goes through `tx`.
 
 export type MealWriteResult<T = object> =
@@ -118,17 +117,6 @@ async function write<T extends object>(
     if (error instanceof Refused) return { ok: false, error: error.sentence };
     throw error;
   }
-}
-
-/** The actor's rule, read and locked inside the write's transaction. */
-async function lockKitchenActor(
-  tx: DbOrTx,
-  actorId: string,
-  rule: (rank: string, led: readonly string[]) => boolean,
-): Promise<boolean> {
-  if (!UUID.test(actorId)) return false;
-  const reach = await lockSenderReach(tx, actorId);
-  return rule(reachRank(reach), reach ?? []);
 }
 
 /** A menu item of this year's menu, locked, with its recipe's title. */
@@ -280,7 +268,7 @@ export async function recordAllergenPlan(input: {
   expectedVersion: number;
 }): Promise<MealWriteResult<{ version: number }>> {
   return write(async (tx) => {
-    if (!(await lockKitchenActor(tx, input.actorId, canCheckMenuAllergens))) {
+    if (!(await lockAllowed(tx, input.actorId, ALLERGEN_CHECKER))) {
       refuse(NOT_A_MEAL_CHECKER);
     }
     const details = input.details.trim().slice(0, ALLERGEN_PLAN_MAX);
@@ -358,7 +346,7 @@ export async function correctRecipeAllergens(input: {
   expectedRevision: number;
 }): Promise<MealWriteResult<{ revision: number }>> {
   return write(async (tx) => {
-    if (!(await lockKitchenActor(tx, input.actorId, canCheckMenuAllergens))) {
+    if (!(await lockAllowed(tx, input.actorId, ALLERGEN_CHECKER))) {
       refuse(NOT_A_MEAL_CHECKER);
     }
     if (!UUID.test(input.recipeId) || !UUID.test(input.versionId)) {
@@ -446,7 +434,7 @@ export async function addPrepStep(input: {
   MealWriteResult<{ stepId: string; onBoard: boolean; due: string }>
 > {
   return write(async (tx) => {
-    if (!(await lockKitchenActor(tx, input.actorId, canAddPrepSteps))) {
+    if (!(await lockAllowed(tx, input.actorId, PREP_EDITOR))) {
       refuse(NOT_A_MEAL_CHECKER);
     }
     const what = input.what.trim().slice(0, PREP_WHAT_MAX);
@@ -524,7 +512,7 @@ export async function removePrepStep(input: {
   stepId: string;
 }): Promise<MealWriteResult> {
   return write(async (tx) => {
-    if (!(await lockKitchenActor(tx, input.actorId, canAddPrepSteps))) {
+    if (!(await lockAllowed(tx, input.actorId, PREP_EDITOR))) {
       refuse(NOT_A_MEAL_CHECKER);
     }
     if (!UUID.test(input.stepId)) refuse(PREP_STEP_GONE);

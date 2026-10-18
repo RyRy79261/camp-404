@@ -2,13 +2,13 @@ import "server-only";
 
 import {
   campDayKey,
-  canManageMoney,
   duesBalance,
   duesSettled,
   nextInstalment,
   paymentFigures,
   proposeRefund,
   splitEvenly,
+  MONEY_KEEPER,
 } from "@camp404/core";
 import {
   CHARGE_GONE,
@@ -41,7 +41,6 @@ import {
   type RefundProposal,
   type SettleUpCandidate,
 } from "@camp404/db/dues";
-import { reachRank } from "@camp404/db/power";
 import type {
   ChargeInput,
   ChargeKind,
@@ -57,7 +56,7 @@ import { testStore, type TestPayment } from "./test-store";
 
 // The in-memory twin of @camp404/db/dues (#240), for E2E_TEST_MODE. The same
 // rules, sentences and results as the database module, over the store's own
-// rows: only a captain or a Finance lead writes (the twin of lockMoneyKeeper),
+// rows: only a captain or a Finance lead writes (MONEY_KEEPER, as the real writes),
 // every decision is a compare-and-set, and a pledge becomes the fee when the
 // member is accepted. The store keeps no audit log. Kept apart from
 // test-store.ts, which calls in here only to reset, to charge a fee on
@@ -151,10 +150,9 @@ export function resetDuesStore(): void {
   d.refunds.length = 0;
 }
 
-/** A captain, or a lead of Finance this year (lockMoneyKeeper's twin). */
+/** A captain, or a lead of Finance this year (MONEY_KEEPER). */
 export function isMoneyKeeperInStore(actorId: string): boolean {
-  const reach = testStore.senderReach(actorId);
-  return canManageMoney(reachRank(reach), reach ?? []);
+  return MONEY_KEEPER.allows(testStore.actorInStore(actorId));
 }
 
 function liveCharges(userId: string, cycle: number): ChargeRow[] {

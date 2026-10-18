@@ -33,7 +33,6 @@ import {
   type SectionChapterChange,
   type PublishedDutyCard,
 } from "@camp404/db/documents";
-import { reachRank } from "@camp404/db/power";
 import {
   DutyCard,
   GUIDE_CATEGORIES,
@@ -119,11 +118,9 @@ const nameOf = (userId: string | null) =>
   (userId && testStore.findUserById(userId)?.displayName?.trim()) || null;
 
 function writer(actorId: string) {
-  if (!testStore.findUserById(actorId)) {
-    return { rank: "camp_member", led: [] as string[] };
-  }
-  const reach = testStore.senderReach(actorId);
-  return { rank: reachRank(reach), led: [...(reach ?? [])] };
+  const actor = testStore.actorInStore(actorId);
+  if (!actor) return { rank: "camp_member", led: [] as string[] };
+  return { rank: actor.rank, led: [...actor.ledTeams] };
 }
 
 function refusal(actorId: string, team: string | null): string | null {

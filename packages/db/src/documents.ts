@@ -17,8 +17,8 @@ import {
   GuideCategory,
   type DutyCardDraft,
 } from "@camp404/types";
+import { lockActor } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
@@ -33,7 +33,7 @@ import * as schema from "./schema";
 //    lead this year; a whole-camp chapter (no team) is a captain's
 //    (canEditGuideChapter in @camp404/core). Every write re-reads the actor's
 //    rank and led teams INSIDE its own transaction and locks them
-//    (lockSenderReach), so a lead removed a moment ago cannot still write. A
+//    (lockActor), so a lead removed a moment ago cannot still write. A
 //    caller passes only who is acting.
 //  - The public site (survival-guide.camp-404.com) shows a chapter only when it
 //    is published, its section is public (`guide_sections`) and it is not
@@ -133,13 +133,9 @@ async function lockWriter(
   tx: DbOrTx,
   actorId: string,
 ): Promise<{ rank: "captain" | "team_lead" | "camp_member"; led: string[] }> {
-  if (!UUID.test(actorId)) return { rank: "camp_member", led: [] };
-  const reach = await lockSenderReach(tx, actorId);
-  if (reach === undefined) return { rank: "captain", led: [] };
-  return {
-    rank: reach.length > 0 ? "team_lead" : "camp_member",
-    led: [...reach],
-  };
+  const actor = await lockActor(tx, actorId);
+  if (!actor) return { rank: "camp_member", led: [] };
+  return { rank: actor.rank, led: [...actor.ledTeams] };
 }
 
 /** The refusal for someone who may not write a chapter of `team`, or null. */

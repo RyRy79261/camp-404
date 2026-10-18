@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { canApproveClaim, CLAIM_MOVES } from "@camp404/core";
+import { canApproveClaim, CLAIM_MOVES, MONEY_KEEPER } from "@camp404/core";
 import {
   CLAIM_MAX_FILES,
   CLAIM_NEEDS_A_REASON,
@@ -8,11 +8,10 @@ import {
   type ClaimStatus,
   type Team,
 } from "@camp404/types";
+import { lockAllowed, lockActor } from "./actor";
 import { writeAuditEvent } from "./audit";
-import { lockSenderReach } from "./broadcasts";
-import { lockMoneyKeeper, MoneyRefused, type MoneyResult } from "./dues";
+import { MoneyRefused, type MoneyResult } from "./dues";
 import { createHttpDb, withTransaction, type Tx } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // Claims (#242): a member's claim for money they spent for a team, and its
@@ -28,7 +27,7 @@ import * as schema from "./schema";
 //    match). Paid is the end (owner, 2026-10-05).
 //
 // Every move re-reads the actor's rank and led teams INSIDE its own
-// transaction (lockSenderReach, lockMoneyKeeper), so a demotion that
+// transaction (lockActor; lockAllowed, MONEY_KEEPER), so a demotion that
 // committed first is seen. Every move is a compare-and-set on the status the
 // actor saw, and leaves its audit row in the same transaction. Nobody decides
 // or pays their own claim.
@@ -461,10 +460,10 @@ export async function decideClaim(input: {
   actorId: string;
 }): Promise<ClaimResult> {
   return write(async (tx) => {
-    if (!UUID.test(input.actorId)) refuse(NOT_THE_CLAIMS_TEAM);
-    const reach = await lockSenderReach(tx, input.actorId);
+    const actor = await lockActor(tx, input.actorId);
+    if (!actor) refuse(NOT_THE_CLAIMS_TEAM);
     const claim = await lockClaim(tx, input.claimId);
-    if (!canApproveClaim(reachRank(reach), reach ?? [], claim.team)) {
+    if (!canApproveClaim(actor.rank, actor.ledTeams, claim.team)) {
       refuse(NOT_THE_CLAIMS_TEAM);
     }
     if (claim.submitterId === input.actorId) refuse(OWN_CLAIM_DECISION);
@@ -494,7 +493,9 @@ export async function payClaim(input: {
     return { ok: false, error: CLAIM_NEEDS_A_REASON };
   }
   return write(async (tx) => {
-    if (!(await lockMoneyKeeper(tx, input.actorId))) refuse(CLAIM_NOT_FINANCE);
+    if (!(await lockAllowed(tx, input.actorId, MONEY_KEEPER))) {
+      refuse(CLAIM_NOT_FINANCE);
+    }
     const claim = await lockClaim(tx, input.claimId);
     if (claim.submitterId === input.actorId) refuse(OWN_CLAIM_PAYMENT);
     await move(tx, {

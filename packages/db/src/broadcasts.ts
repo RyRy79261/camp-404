@@ -11,6 +11,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { lockActor } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import {
   announcementNotification,
@@ -851,59 +852,20 @@ export async function getAnnouncementPinContext(
 }
 
 /**
- * Who this sender may address, read INSIDE the write's own transaction and held
- * there until it commits.
- *
- * The action reads the sender's rank and lead teams first, to answer the screen
- * fast. That read is a snapshot. Between it and the write, a captain could
- * remove the lead or demote the captain, and a write that trusted the snapshot
- * would still publish or pin on the old answer (CodeRabbit on #225; owner:
- * "fix it now"). So the write asks again here, and `FOR SHARE` holds every row
- * the answer rests on: the year (`camp_settings`), the rank (`users`) and the
- * lead flags (`team_memberships`). A demotion, a lead removal or a year
- * rollover that committed first is what this read sees. One that comes later
- * waits until this transaction commits. The check and the write cannot fall
- * out of step.
- *
- * Lock order is camp_settings, then users, then team_memberships. No cycle of
- * waits can form, because every other writer of these rows either takes
- * camp_settings first (the year rollover) or takes only one of the three
- * (`setLead` / `removeTeam` touch team_memberships; `setUserRank` and
- * `acceptCaptainPromotion` touch users).
+ * Who this sender may address, read and locked INSIDE the write's own
+ * transaction (`lockActor`: the year, the rank and the lead flags, held until
+ * it commits).
  *
  * `undefined` means a captain: every audience. Otherwise the teams this sender
- * leads this year, which may be none.
- *
- * The task board asks the same question with the same locks: which teams may
- * this person add tasks to, or manage tasks for (`packages/db/src/tasks.ts`).
+ * leads this year, which may be none (an id that is not a UUID too).
  */
 export async function lockSenderReach(
   tx: DbOrTx,
   senderId: string,
 ): Promise<readonly Team[] | undefined> {
-  await tx
-    .select({ id: schema.campSettings.id })
-    .from(schema.campSettings)
-    .for("share");
-  const cycle = await currentCycleNumber(tx);
-  const [sender] = await tx
-    .select({ rank: schema.users.rank })
-    .from(schema.users)
-    .where(eq(schema.users.id, senderId))
-    .for("share");
-  if (sender?.rank === "captain") return undefined;
-  const led = await tx
-    .select({ team: schema.teamMemberships.team })
-    .from(schema.teamMemberships)
-    .where(
-      and(
-        eq(schema.teamMemberships.userId, senderId),
-        eq(schema.teamMemberships.cycle, cycle),
-        eq(schema.teamMemberships.isLead, true),
-      ),
-    )
-    .for("share");
-  return led.map((r) => r.team);
+  const actor = await lockActor(tx, senderId);
+  if (actor?.rank === "captain") return undefined;
+  return actor?.ledTeams ?? [];
 }
 
 /**

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { canEditMealPlan } from "@camp404/core";
+import { MEAL_PLAN_EDITOR } from "@camp404/core";
 import {
   ALREADY_ON_MEAL,
   MEAL_IS_FULL,
@@ -21,7 +21,6 @@ import {
   type ShoppingFacts,
   type ShoppingTick,
 } from "@camp404/db/kitchen-menu";
-import { reachRank } from "@camp404/db/power";
 import {
   MAX_RECIPES_PER_MEAL,
   MAX_SNACKS,
@@ -70,8 +69,7 @@ let clock = 0;
 const tick = () => (clock += 1);
 
 function isEditor(actorId: string): boolean {
-  const reach = testStore.senderReach(actorId);
-  return canEditMealPlan(reachRank(reach), reach ?? []);
+  return MEAL_PLAN_EDITOR.allows(testStore.actorInStore(actorId));
 }
 
 const isMember = (userId: string) =>

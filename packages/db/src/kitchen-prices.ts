@@ -1,16 +1,15 @@
 import { and, eq } from "drizzle-orm";
-import { canPriceShoppingList, isCurrency } from "@camp404/core";
+import { isCurrency, SHOPPING_PRICER } from "@camp404/core";
 import {
   MAX_LINE_PRICE_CENTS,
   PRICE_KINDS,
   SHOP_NAME_MAX,
   type PriceKind,
 } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // The shopping list's shops and prices (#245; the owner approved Option A of
@@ -50,8 +49,6 @@ export interface ShoppingPrice {
   version: number;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 const isKind = (kind: string): kind is PriceKind =>
   (PRICE_KINDS as readonly string[]).includes(kind);
 
@@ -76,13 +73,6 @@ export async function readShoppingPrices(
   }));
 }
 
-/** Whether someone is a captain or a Kitchen lead now, read on the server. */
-export async function mayPrice(db: DbOrTx, viewerId: string): Promise<boolean> {
-  if (!UUID.test(viewerId)) return false;
-  const reach = await lockSenderReach(db, viewerId);
-  return canPriceShoppingList(reachRank(reach), reach ?? []);
-}
-
 /**
  * This year's prices for a viewer: every line's shop and price for a captain
  * or a Kitchen lead, and null for anyone else, who is never sent a price.
@@ -91,7 +81,7 @@ export async function getShoppingPricesFor(
   viewerId: string,
 ): Promise<ShoppingPrice[] | null> {
   const db = createHttpDb();
-  if (!(await mayPrice(db, viewerId))) return null;
+  if (!(await lockAllowed(db, viewerId, SHOPPING_PRICER))) return null;
   return readShoppingPrices(db, await currentCycleNumber(db));
 }
 
@@ -140,7 +130,7 @@ export async function setShoppingPrice(input: {
   const kind: PriceKind = isKind(input.kind) ? input.kind : "estimate";
   try {
     return await withTransaction(async (tx: Tx) => {
-      if (!(await mayPrice(tx, input.actorId))) {
+      if (!(await lockAllowed(tx, input.actorId, SHOPPING_PRICER))) {
         throw new Refused(NOT_A_PRICE_KEEPER);
       }
       const cycle = await currentCycleNumber(tx);

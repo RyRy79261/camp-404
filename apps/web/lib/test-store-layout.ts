@@ -3,10 +3,10 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import {
   arrivalDayCounts,
-  canEditLayout,
-  canShareLayout,
   neighbourView,
   type ArrivalDayCount,
+  LAYOUT_EDITOR,
+  LAYOUT_SHARER,
 } from "@camp404/core";
 import {
   ALREADY_HAS_LAYOUT,
@@ -23,7 +23,6 @@ import {
   type LayoutWriteResult,
   type SharedLayout,
 } from "@camp404/db/camp-layout";
-import { reachRank } from "@camp404/db/power";
 import { CampLayout, LAYOUT_NOTE_MAX } from "@camp404/types";
 import { testStore } from "./test-store";
 
@@ -65,12 +64,11 @@ function yearOf(cycle: number): TestLayoutYear {
 }
 
 function isEditor(actorId: string): boolean {
-  const reach = testStore.senderReach(actorId);
-  return canEditLayout(reachRank(reach), reach ?? []);
+  return LAYOUT_EDITOR.allows(testStore.actorInStore(actorId));
 }
 
 function isSharer(actorId: string): boolean {
-  return canShareLayout(reachRank(testStore.senderReach(actorId)));
+  return LAYOUT_SHARER.allows(testStore.actorInStore(actorId));
 }
 
 function nameOf(userId: string | null): string | null {

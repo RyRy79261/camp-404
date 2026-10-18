@@ -3,10 +3,10 @@ import {
   addDays,
   campDayStart,
   campOnSite,
-  canEditMealPlan,
   mealPlanPeaks,
   prepTaskDetails,
   type CampOnSite,
+  MEAL_PLAN_EDITOR,
 } from "@camp404/core";
 import {
   MEAL_PLAN_DEFAULT_DAYS,
@@ -14,11 +14,10 @@ import {
   MealPlanInput,
   type MealPlanDay,
 } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // The kitchen's meal plan (the owner's sketch, 2026-09-24): for the camp's
@@ -42,7 +41,7 @@ import * as schema from "./schema";
 //    defaultPlates).
 //  - A captain or a Kitchen lead saves it (canEditMealPlan). The save re-reads
 //    the actor's rank and the teams they lead this year INSIDE its own
-//    transaction (lockSenderReach), never trusting the caller, writes its
+//    transaction (lockActor), never trusting the caller, writes its
 //    audit row in the same transaction, and is a compare-and-set on
 //    `version`: a lost race says so in a sentence, never overwrites.
 //  - Year-scoped: the rows carry the camp's current burn year, read through
@@ -62,8 +61,6 @@ export const MEAL_PLAN_CHANGED =
 export const CHECK_MEAL_PLAN = "Check the meal plan and try again.";
 export const MEAL_PLAN_DAYS_MOVED =
   "The camp's dates changed in Logistics. Reload the page.";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A save as the caller sends it. */
 export type MealPlanSave = { actorId: string } & MealPlanInput;
@@ -132,19 +129,6 @@ class Refused extends Error {
 
 function refuse(sentence: string): never {
   throw new Refused(sentence);
-}
-
-/**
- * Whether the actor may change the meal plan, read and locked inside the
- * write's own transaction: a captain, or a lead of Kitchen this year.
- */
-export async function lockMealPlanEditor(
-  tx: DbOrTx,
-  actorId: string,
-): Promise<boolean> {
-  if (!UUID.test(actorId)) return false;
-  const reach = await lockSenderReach(tx, actorId);
-  return canEditMealPlan(reachRank(reach), reach ?? []);
 }
 
 // --- Reads -------------------------------------------------------------------
@@ -257,7 +241,7 @@ export async function setMealPlan(
   const { firstDay, days, expectedVersion } = parsed.data;
   try {
     return await withTransaction(async (tx: Tx) => {
-      if (!(await lockMealPlanEditor(tx, input.actorId))) {
+      if (!(await lockAllowed(tx, input.actorId, MEAL_PLAN_EDITOR))) {
         refuse(NOT_A_MEAL_PLAN_EDITOR);
       }
       const cycle = await currentCycleNumber(tx);

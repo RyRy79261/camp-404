@@ -8,12 +8,12 @@ import {
   attendanceIsOpen,
   campDayKey,
   campOnSite,
-  canAskForAttendance,
-  canEditLogistics,
   dayOneShift,
   isAskedForAttendance,
   type AttendanceEntry,
   type PhaseDays,
+  ATTENDANCE_ASKER,
+  LOGISTICS_EDITOR,
 } from "@camp404/core";
 import {
   ATTENDANCE_PHASES,
@@ -24,13 +24,12 @@ import {
   type AttendancePhase,
   type LogisticsPhase,
 } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import { redatePrepSteps } from "./meal-plan";
 import { openNudges, closeNudge } from "./nudges";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // The logistics calendar (#247): the year's pack, travel, build, burn, strike
@@ -39,7 +38,7 @@ import * as schema from "./schema";
 //  - Every member reads the days.
 //  - Only a captain or a Transport and Logistics lead writes
 //    (canEditLogistics). Every write re-reads the actor's rank and the teams
-//    they lead this year INSIDE its own transaction (lockSenderReach), so a
+//    they lead this year INSIDE its own transaction (lockActor), so a
 //    demotion that committed first is seen and one that comes later waits. A
 //    caller passes only who is acting, never a rank or a team list.
 //  - Every write is a compare-and-set on `version`: a lost race says so in a
@@ -133,9 +132,7 @@ async function write<T extends object>(
 }
 
 async function assertLogisticsEditor(tx: Tx, actorId: string): Promise<void> {
-  if (!UUID.test(actorId)) refuse(NOT_A_LOGISTICS_EDITOR);
-  const reach = await lockSenderReach(tx, actorId);
-  if (!canEditLogistics(reachRank(reach), reach ?? [])) {
+  if (!(await lockAllowed(tx, actorId, LOGISTICS_EDITOR))) {
     refuse(NOT_A_LOGISTICS_EDITOR);
   }
 }
@@ -608,9 +605,7 @@ export async function askForAttendance(input: {
   now?: Date;
 }): Promise<LogisticsWriteResult<{ asked: number; notified: number }>> {
   return write(async (tx) => {
-    if (!UUID.test(input.actorId)) refuse(NOT_AN_ATTENDANCE_ASKER);
-    const reach = await lockSenderReach(tx, input.actorId);
-    if (!canAskForAttendance(reachRank(reach))) {
+    if (!(await lockAllowed(tx, input.actorId, ATTENDANCE_ASKER))) {
       refuse(NOT_AN_ATTENDANCE_ASKER);
     }
     const cycle = await currentCycleNumber(tx);

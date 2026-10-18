@@ -6,10 +6,6 @@ import {
   campDayStart,
   nextCampDay,
   approvalNotification,
-  canEditPower,
-  canEditLogistics,
-  canRunLounge,
-  canEditTeamProgram,
   DEFAULT_TICKET,
   captainPromotionNotification,
   FOUNDER_CODE,
@@ -29,8 +25,6 @@ import {
   type PaymentStatus,
   QUESTIONNAIRE_REF_TYPE,
   sortPinned,
-  canApproveRecipe,
-  canRunProofread,
   canEditTransport,
   canManageCar,
   canRemoveRider,
@@ -48,6 +42,13 @@ import {
   meetingTextParts,
   recipeTextParts,
   type SearchTextPart,
+  type Actor,
+  LOUNGE_RUNNER,
+  POWER_EDITOR,
+  PROOFREADER,
+  KITCHEN_REVIEWER,
+  teamProgramEditor,
+  LOGISTICS_EDITOR,
 } from "@camp404/core";
 import {
   DRAFT_MISSING,
@@ -205,7 +206,6 @@ import {
   NOT_A_POWER_EDITOR,
   NOTHING_TO_COPY,
   PLAN_CHANGED,
-  reachRank,
   type GeneratorRow,
   type PowerInventoryItem,
   type PowerLoadRow,
@@ -1165,11 +1165,9 @@ function nextId(): string {
 
 // --- Lounge helpers (the twins of @camp404/db/lounge's private steps) -------
 
-/** A captain, or a Ministry of Vibes lead this year (lockLoungeRunner's twin). */
+/** A captain, or a Ministry of Vibes lead this year (LOUNGE_RUNNER). */
 function isLoungeRunner(userId: string): boolean {
-  if (!findUserById(userId)) return false;
-  const reach = testStore.senderReach(userId);
-  return canRunLounge(reachRank(reach), reach ?? []);
+  return LOUNGE_RUNNER.allows(testStore.actorInStore(userId));
 }
 
 /** The store's twin of the db module's write(): a refusal is a sentence. */
@@ -1209,20 +1207,19 @@ function loungeOfferFields(input: AddLoungeOfferArgs) {
 
 // --- Power helpers (the twins of @camp404/db/power's private steps) ---------
 
-/** A captain, or a lead of Power & Lighting this year (lockPowerEditor's twin). */
+/** A captain, or a lead of Power & Lighting this year (POWER_EDITOR). */
 function isPowerEditor(userId: string): boolean {
-  const reach = testStore.senderReach(userId);
-  return canEditPower(reachRank(reach), reach ?? []);
+  return POWER_EDITOR.allows(testStore.actorInStore(userId));
 }
 
 // --- Transport helpers (the twin of @camp404/db/transport's) ----------------
 
 /** The actor's rung, led teams and the year, as the db module's lockActor. */
 function transportActor(actorId: string) {
-  const reach = testStore.senderReach(actorId);
+  const actor = testStore.actorInStore(actorId);
   return {
-    rank: reachRank(reach),
-    ledTeams: reach ?? [],
+    rank: actor?.rank ?? ("camp_member" as const),
+    ledTeams: actor?.ledTeams ?? [],
     cycle: currentCycleNumber(),
   };
 }
@@ -1438,14 +1435,12 @@ function userName(id: string | null): string | null {
  * owner's decision 2A; the twin of the reviewer lock the queue takes).
  */
 function mayRunProofread(userId: string): boolean {
-  const reach = testStore.senderReach(userId);
-  return canRunProofread(reachRank(reach), reach ?? []);
+  return PROOFREADER.allows(testStore.actorInStore(userId));
 }
 
-/** A captain, or a lead of Kitchen this year (the twin of lockKitchenReviewer). */
+/** A captain, or a lead of Kitchen this year (KITCHEN_REVIEWER). */
 function isKitchenReviewer(userId: string): boolean {
-  const reach = testStore.senderReach(userId);
-  return canApproveRecipe(reachRank(reach), reach ?? []);
+  return KITCHEN_REVIEWER.allows(testStore.actorInStore(userId));
 }
 
 /** Only the tick on the suggestion counts, as in production. */
@@ -2432,13 +2427,30 @@ export const testStore = {
   },
 
   /**
+   * Twin of `lockActor` in @camp404/db/actor: a captain, a lead of the teams
+   * they lead this year, or a member; null for someone the store does not
+   * know (every rule refuses them). The store is one synchronous process, so
+   * there is no race to lock against.
+   */
+  actorInStore(userId: string): Actor | null {
+    const user = findUserById(userId);
+    if (!user) return null;
+    if (user.rank === "captain") return { rank: "captain", ledTeams: [] };
+    const ledTeams = testStore.getLeadTeams(userId);
+    return {
+      rank: ledTeams.length > 0 ? "team_lead" : "camp_member",
+      ledTeams,
+    };
+  },
+
+  /**
    * Twin of `lockSenderReach` in @camp404/db/broadcasts: undefined for a
-   * captain (every audience), else the teams they lead this year. The store is
-   * one synchronous process, so there is no race to lock against.
+   * captain (every audience), else the teams they lead this year.
    */
   senderReach(userId: string): readonly string[] | undefined {
-    if (findUserById(userId)?.rank === "captain") return undefined;
-    return testStore.getLeadTeams(userId);
+    const actor = testStore.actorInStore(userId);
+    if (actor?.rank === "captain") return undefined;
+    return actor?.ledTeams ?? [];
   },
 
   setBroadcastPinned(input: {
@@ -2778,8 +2790,8 @@ export const testStore = {
     expectedVersion: number;
   }): TeamProgramWriteResult {
     // Like the real write, the store reads the actor's reach itself.
-    const reach = testStore.senderReach(input.actorId);
-    if (!canEditTeamProgram(reachRank(reach), reach ?? [], input.team)) {
+    const actor = testStore.actorInStore(input.actorId);
+    if (!teamProgramEditor(input.team).allows(actor)) {
       return { ok: false, error: NOT_A_TEAM_EDITOR };
     }
     const current = S.teamPrograms.get(input.team);
@@ -4326,8 +4338,7 @@ export const testStore = {
     expectedVersion: number;
     newEventId: string;
   }): LogisticsWriteResult<{ row: LogisticsPhaseRow }> {
-    const reach = testStore.senderReach(input.actorId);
-    if (!canEditLogistics(reachRank(reach), reach ?? [])) {
+    if (!LOGISTICS_EDITOR.allows(testStore.actorInStore(input.actorId))) {
       return { ok: false, error: NOT_A_LOGISTICS_EDITOR };
     }
     const cycle = currentCycleNumber();
@@ -4361,8 +4372,7 @@ export const testStore = {
     phase: LogisticsPhase;
     expectedVersion: number;
   }): LogisticsWriteResult<{ row: LogisticsPhaseRow }> {
-    const reach = testStore.senderReach(input.actorId);
-    if (!canEditLogistics(reachRank(reach), reach ?? [])) {
+    if (!LOGISTICS_EDITOR.allows(testStore.actorInStore(input.actorId))) {
       return { ok: false, error: NOT_A_LOGISTICS_EDITOR };
     }
     const cycle = currentCycleNumber();

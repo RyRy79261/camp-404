@@ -4,9 +4,6 @@ import { randomUUID } from "node:crypto";
 import {
   addDays,
   campDayStart,
-  canAddPrepSteps,
-  canCheckMenuAllergens,
-  canPriceShoppingList,
   dayOneShift,
   isCurrency,
   mealPlates,
@@ -15,6 +12,10 @@ import {
   prepTaskDetails,
   prepTaskTitle,
   type SheetPrepStep,
+  type Rule,
+  SHOPPING_PRICER,
+  ALLERGEN_CHECKER,
+  PREP_EDITOR,
 } from "@camp404/core";
 import {
   ALLERGENS_CHANGED,
@@ -38,7 +39,6 @@ import {
   type PriceWriteResult,
   type ShoppingPrice,
 } from "@camp404/db/kitchen-prices";
-import { reachRank } from "@camp404/db/power";
 import {
   readAllergens,
   type AllergenPlanKind,
@@ -86,13 +86,8 @@ export function resetKitchenExtrasStore(): void {
   s.steps.length = 0;
 }
 
-const may = (
-  actorId: string,
-  rule: (rank: string, led: readonly string[]) => boolean,
-) => {
-  const reach = testStore.senderReach(actorId);
-  return rule(reachRank(reach), reach ?? []);
-};
+const may = (actorId: string, rule: Rule) =>
+  rule.allows(testStore.actorInStore(actorId));
 
 /** A menu item of this year's menu, with its recipe's title, or null. */
 function menuItem(itemId: string) {
@@ -153,7 +148,7 @@ export function storeRedatePrepSteps(
 export const kitchenExtrasTestStore = {
   /** The twin of getShoppingPricesFor. */
   getShoppingPricesFor(viewerId: string): ShoppingPrice[] | null {
-    if (!may(viewerId, canPriceShoppingList)) return null;
+    if (!may(viewerId, SHOPPING_PRICER)) return null;
     const cycle = testStore.currentCycleNumber();
     return [...state().prices.values()]
       .filter((p) => p.cycle === cycle)
@@ -178,7 +173,7 @@ export const kitchenExtrasTestStore = {
     ) {
       return { ok: false, error: PRICE_BAD_AMOUNT };
     }
-    if (!may(input.actorId, canPriceShoppingList)) {
+    if (!may(input.actorId, SHOPPING_PRICER)) {
       return { ok: false, error: NOT_A_PRICE_KEEPER };
     }
     const cycle = testStore.currentCycleNumber();
@@ -242,7 +237,7 @@ export const kitchenExtrasTestStore = {
     allergens: readonly string[];
     expectedVersion: number;
   }): MealWriteResult<{ version: number }> {
-    if (!may(input.actorId, canCheckMenuAllergens)) {
+    if (!may(input.actorId, ALLERGEN_CHECKER)) {
       return { ok: false, error: NOT_A_MEAL_CHECKER };
     }
     const details = input.details.trim();
@@ -271,7 +266,7 @@ export const kitchenExtrasTestStore = {
     allergens: readonly string[];
     expectedRevision: number;
   }): MealWriteResult<{ revision: number }> {
-    if (!may(input.actorId, canCheckMenuAllergens)) {
+    if (!may(input.actorId, ALLERGEN_CHECKER)) {
       return { ok: false, error: NOT_A_MEAL_CHECKER };
     }
     const book = testStore.kitchenMenuRecipes([input.recipeId])[input.recipeId];
@@ -298,7 +293,7 @@ export const kitchenExtrasTestStore = {
     when: PrepTiming;
     date: string | null;
   }): MealWriteResult<{ stepId: string; onBoard: boolean; due: string }> {
-    if (!may(input.actorId, canAddPrepSteps)) {
+    if (!may(input.actorId, PREP_EDITOR)) {
       return { ok: false, error: NOT_A_MEAL_CHECKER };
     }
     const what = input.what.trim();
@@ -348,7 +343,7 @@ export const kitchenExtrasTestStore = {
 
   /** The twin of removePrepStep. */
   removePrepStep(input: { actorId: string; stepId: string }): MealWriteResult {
-    if (!may(input.actorId, canAddPrepSteps)) {
+    if (!may(input.actorId, PREP_EDITOR)) {
       return { ok: false, error: NOT_A_MEAL_CHECKER };
     }
     const s = state();

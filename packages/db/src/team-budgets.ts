@@ -1,8 +1,9 @@
 import { and, asc, eq } from "drizzle-orm";
-import { budgetTotals, type BudgetTotals } from "@camp404/core";
+import { budgetTotals, type BudgetTotals, MONEY_KEEPER } from "@camp404/core";
 import type { Team } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent } from "./audit";
-import { lockMoneyKeeper, MoneyRefused, type MoneyResult } from "./dues";
+import { MoneyRefused, type MoneyResult } from "./dues";
 import { createHttpDb, withTransaction } from "./index";
 import { listClaimAmounts } from "./reimbursements";
 import * as schema from "./schema";
@@ -75,7 +76,7 @@ export async function setTeamBudget(input: {
   }
   try {
     await withTransaction(async (tx) => {
-      if (!(await lockMoneyKeeper(tx, input.actorId))) {
+      if (!(await lockAllowed(tx, input.actorId, MONEY_KEEPER))) {
         throw new MoneyRefused(BUDGET_NOT_FINANCE);
       }
       const where = and(

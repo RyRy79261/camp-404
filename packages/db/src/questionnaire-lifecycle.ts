@@ -14,6 +14,7 @@ import {
   requiredActionReminderNotification,
   validateQuestionnaireDefinition,
 } from "@camp404/core";
+import { lockActor } from "./actor";
 import { deliveryValues } from "./deliveries";
 import { safeParseStoredDefinition } from "@camp404/types";
 import { createHttpDb, withTransaction } from "./index";
@@ -25,7 +26,6 @@ import {
   type PooledTx,
 } from "./activations";
 import { carryOverFor, currentCycleNumber } from "./cycles";
-import { lockSenderReach } from "./broadcasts";
 import { writeAuditEvent } from "./audit";
 
 // Builder-questionnaire lifecycle: publish (snapshot + cosmetic-vs-version-bump),
@@ -488,18 +488,16 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
       // on the sender's rank and lead teams read under lock here, so a captain
       // demoted a moment ago cannot put a questionnaire in the whole camp's My
       // forms on the old answer.
-      const reach = await lockSenderReach(tx, input.activatedByUserId);
-      const actor =
-        reach === undefined
-          ? { rank: "captain" as const, leadTeams: [] }
-          : {
-              rank:
-                reach.length > 0
-                  ? ("team_lead" as const)
-                  : ("camp_member" as const),
-              leadTeams: reach,
-            };
-      if (!canSendToAudience(actor, { scope: "opt_in" })) return null;
+      const actor = await lockActor(tx, input.activatedByUserId);
+      if (
+        !actor ||
+        !canSendToAudience(
+          { rank: actor.rank, leadTeams: actor.ledTeams },
+          { scope: "opt_in" },
+        )
+      ) {
+        return null;
+      }
     }
     const [act] = await tx
       .insert(schema.questionnaireActivations)

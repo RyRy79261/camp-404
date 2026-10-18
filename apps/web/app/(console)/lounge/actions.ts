@@ -41,7 +41,7 @@ import { getLeadTeams } from "@/lib/users";
 // member's (the gate at camp_member); the write itself keeps a member to their
 // own offer. Deciding, placing and the music note are a captain's or a
 // Ministry of Vibes lead's: the gate answers the screen, and the rule is
-// checked again inside each write's own transaction (lockLoungeRunner), which
+// checked again inside each write's own transaction (lockAllowed, LOUNGE_RUNNER), which
 // re-reads the actor's rank and led teams and never takes a team list from
 // here.
 

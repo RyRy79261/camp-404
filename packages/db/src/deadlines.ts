@@ -2,13 +2,12 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import {
   afrikaburnDate,
   afrikaburnDateMayBeSkipped,
-  canManageDeadlines,
+  DEADLINE_KEEPER,
 } from "@camp404/core";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // The year's AfrikaBurn deadlines (owner, 2026-09-30: "Captains add however
@@ -17,7 +16,7 @@ import * as schema from "./schema";
 //
 //  - Every member reads them.
 //  - Only a captain writes (canManageDeadlines), re-read inside the write's
-//    own transaction (lockSenderReach), so a demotion that committed first is
+//    own transaction (lockActor), so a demotion that committed first is
 //    seen. A caller passes only who is acting.
 //  - Every change is a compare-and-set on `version` and audited in the same
 //    transaction: the deadlines go onto the camp's shared Google Calendar,
@@ -116,9 +115,9 @@ async function write<T extends object>(
 }
 
 async function assertKeeper(tx: Tx, actorId: string): Promise<void> {
-  if (!UUID.test(actorId)) refuse(NOT_A_DEADLINE_KEEPER);
-  const reach = await lockSenderReach(tx, actorId);
-  if (!canManageDeadlines(reachRank(reach))) refuse(NOT_A_DEADLINE_KEEPER);
+  if (!(await lockAllowed(tx, actorId, DEADLINE_KEEPER))) {
+    refuse(NOT_A_DEADLINE_KEEPER);
+  }
 }
 
 // --- Reads -------------------------------------------------------------------

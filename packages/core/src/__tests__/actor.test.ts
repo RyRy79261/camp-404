@@ -17,10 +17,15 @@ import {
 } from "../logistics";
 import { LOUNGE_RUNNER } from "../lounge";
 import { POWER_EDITOR } from "../power";
-import { KITCHEN_REVIEWER } from "../recipes";
+import { SHOPPING_PRICER } from "../kitchen-costing";
+import { ALLERGEN_CHECKER } from "../kitchen-dietary";
+import { PREP_EDITOR } from "../kitchen-prep";
+import { inventoryEditor } from "../inventory";
+import { KITCHEN_REVIEWER, MEAL_PLAN_EDITOR, PROOFREADER } from "../recipes";
 import { RENTAL_MANAGER } from "../rental";
-import { SHIFT_ASKER } from "../shifts";
-import { LEAD_PICKER } from "../team-roles";
+import { SHIFT_ASKER, shiftKeeper } from "../shifts";
+import { teamProgramEditor } from "../team-programs";
+import { LEAD_PICKER, roleKeeper } from "../team-roles";
 import { TRANSPORT_EDITOR } from "../transport";
 
 // Every named rule against the same five actors. A captain-or-lead rule names
@@ -42,6 +47,27 @@ const RULES: readonly { name: string; rule: Rule; team: Team | null }[] = [
   { name: "LOUNGE_RUNNER", rule: LOUNGE_RUNNER, team: "ministry_of_vibes" },
   { name: "LAYOUT_EDITOR", rule: LAYOUT_EDITOR, team: "structures" },
   { name: "KITCHEN_REVIEWER", rule: KITCHEN_REVIEWER, team: "kitchen" },
+  { name: "PROOFREADER", rule: PROOFREADER, team: "kitchen" },
+  { name: "MEAL_PLAN_EDITOR", rule: MEAL_PLAN_EDITOR, team: "kitchen" },
+  { name: "PREP_EDITOR", rule: PREP_EDITOR, team: "kitchen" },
+  { name: "ALLERGEN_CHECKER", rule: ALLERGEN_CHECKER, team: "kitchen" },
+  { name: "SHOPPING_PRICER", rule: SHOPPING_PRICER, team: "kitchen" },
+  {
+    name: "teamProgramEditor(structures)",
+    rule: teamProgramEditor("structures"),
+    team: "structures",
+  },
+  {
+    name: "inventoryEditor(kitchen)",
+    rule: inventoryEditor("kitchen"),
+    team: "kitchen",
+  },
+  {
+    name: "shiftKeeper(sanitation_and_water)",
+    rule: shiftKeeper("sanitation_and_water"),
+    team: "sanitation_and_water",
+  },
+  { name: "roleKeeper(finance)", rule: roleKeeper("finance"), team: "finance" },
   { name: "RENTAL_MANAGER", rule: RENTAL_MANAGER, team: null },
   { name: "LAYOUT_SHARER", rule: LAYOUT_SHARER, team: null },
   { name: "ATTENDANCE_ASKER", rule: ATTENDANCE_ASKER, team: null },

@@ -8,7 +8,6 @@ import {
   type BudgetTotals,
 } from "@camp404/core";
 import type { DecryptedField } from "@camp404/db/crypto";
-import { reachRank } from "@camp404/db/power";
 import {
   CLAIM_BAD_AMOUNT,
   CLAIM_CHANGED,
@@ -106,11 +105,11 @@ function nameOf(userId: string | null): string | null {
   return userId ? (testStore.findUserById(userId)?.displayName ?? null) : null;
 }
 
-/** The actor's rank and led teams, read now (lockSenderReach's twin). */
+/** The actor's rank and led teams, read now (lockActor's twin). */
 function reachOf(actorId: string): { rank: string; led: readonly string[] } {
-  if (!testStore.findUserById(actorId)) return { rank: "none", led: [] };
-  const reach = testStore.senderReach(actorId);
-  return { rank: reachRank(reach), led: reach ?? [] };
+  const actor = testStore.actorInStore(actorId);
+  if (!actor) return { rank: "none", led: [] };
+  return { rank: actor.rank, led: actor.ledTeams };
 }
 
 function isMoneyKeeper(actorId: string): boolean {

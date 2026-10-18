@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { canRunLounge } from "@camp404/core";
+import { LOUNGE_RUNNER } from "@camp404/core";
 import type {
   DecideLoungeOfferInput,
   EditLoungeOfferInput,
@@ -11,11 +11,10 @@ import type {
   LoungeOfferStatus,
   PlaceLoungeOfferInput,
 } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // The lounge programme (#269): the data layer.
@@ -26,7 +25,7 @@ import * as schema from "./schema";
 //  - Only a captain or a Ministry of Vibes lead decides offers, places them
 //    and writes the music note (canRunLounge). Every such write re-reads the
 //    actor's rank and the teams they lead this year INSIDE its own transaction
-//    (lockLoungeRunner, through lockSenderReach), so a demotion that committed
+//    (lockAllowed, LOUNGE_RUNNER), so a demotion that committed
 //    first is seen and one that comes later waits. A caller passes only who is
 //    acting, never a rank or a team list.
 //  - A decision is a compare-and-set on the status AND version the reviewer
@@ -214,22 +213,10 @@ async function write<T extends object>(
   }
 }
 
-/**
- * Whether the actor may run the lounge programme, read and locked inside the
- * write's own transaction: a captain, or a lead of the Ministry of Vibes this
- * year.
- */
-export async function lockLoungeRunner(
-  tx: DbOrTx,
-  actorId: string,
-): Promise<boolean> {
-  if (!UUID.test(actorId)) return false;
-  const reach = await lockSenderReach(tx, actorId);
-  return canRunLounge(reachRank(reach), reach ?? []);
-}
-
 async function assertLoungeRunner(tx: Tx, actorId: string): Promise<void> {
-  if (!(await lockLoungeRunner(tx, actorId))) refuse(NOT_A_LOUNGE_RUNNER);
+  if (!(await lockAllowed(tx, actorId, LOUNGE_RUNNER))) {
+    refuse(NOT_A_LOUNGE_RUNNER);
+  }
 }
 
 /** This year's offer, locked for the rest of the transaction, or a refusal. */

@@ -2,18 +2,17 @@ import { randomBytes } from "node:crypto";
 import { and, desc, eq, gte, isNotNull, lt, max } from "drizzle-orm";
 import {
   arrivalDayCounts,
-  canEditLayout,
-  canShareLayout,
   neighbourView,
   type ArrivalDayCount,
   type NeighbourLayout,
+  LAYOUT_EDITOR,
+  LAYOUT_SHARER,
 } from "@camp404/core";
 import { CampLayout, LAYOUT_NOTE_MAX } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // The camp layout (#271): the data layer.
@@ -21,7 +20,7 @@ import * as schema from "./schema";
 //  - Every member reads this year's plan, its versions and the arrival counts.
 //  - Only a captain or a Structures lead saves (canEditLayout). Every write
 //    re-reads the actor's rank and led teams INSIDE its own transaction
-//    (lockSenderReach), so a demotion that committed first is seen. A caller
+//    (lockActor), so a demotion that committed first is seen. A caller
 //    passes only who is acting, never a rank or a team list.
 //  - A save is a compare-and-set on camp_layouts.latest_version: a lost race
 //    says so in a sentence and never overwrites.
@@ -55,7 +54,6 @@ export const NOTHING_TO_SHARE =
   "Save a layout first, then share it with neighbours.";
 export const CHECK_LAYOUT = "Check the layout and try again.";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** A share token: 24 random bytes as base64url. */
 const TOKEN = /^[A-Za-z0-9_-]{32}$/;
 
@@ -124,25 +122,6 @@ async function write<T extends object>(
     if (error instanceof Refused) return { ok: false, error: error.sentence };
     throw error;
   }
-}
-
-/**
- * Whether the actor may save the plan, read and locked inside the write's own
- * transaction: a captain, or a lead of Structures this year.
- */
-export async function lockLayoutEditor(
-  tx: DbOrTx,
-  actorId: string,
-): Promise<boolean> {
-  if (!UUID.test(actorId)) return false;
-  const reach = await lockSenderReach(tx, actorId);
-  return canEditLayout(reachRank(reach), reach ?? []);
-}
-
-async function lockLayoutSharer(tx: DbOrTx, actorId: string) {
-  if (!UUID.test(actorId)) return false;
-  const reach = await lockSenderReach(tx, actorId);
-  return canShareLayout(reachRank(reach));
 }
 
 /**
@@ -426,7 +405,7 @@ export async function saveCampLayout(input: {
     };
   }
   return write(async (tx) => {
-    if (!(await lockLayoutEditor(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, LAYOUT_EDITOR))) {
       refuse(NOT_A_LAYOUT_EDITOR);
     }
     const cycle = await currentCycleNumber(tx);
@@ -448,7 +427,7 @@ export async function restoreLayoutVersion(input: {
   expectedVersion: number;
 }): Promise<LayoutWriteResult<{ version: number }>> {
   return write(async (tx) => {
-    if (!(await lockLayoutEditor(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, LAYOUT_EDITOR))) {
       refuse(NOT_A_LAYOUT_EDITOR);
     }
     const cycle = await currentCycleNumber(tx);
@@ -482,7 +461,7 @@ export async function copyLastYearLayout(input: {
   actorId: string;
 }): Promise<LayoutWriteResult<{ version: number; fromCycle: number }>> {
   return write(async (tx) => {
-    if (!(await lockLayoutEditor(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, LAYOUT_EDITOR))) {
       refuse(NOT_A_LAYOUT_EDITOR);
     }
     const cycle = await currentCycleNumber(tx);
@@ -528,7 +507,7 @@ export async function shareCampLayout(input: {
   actorId: string;
 }): Promise<LayoutWriteResult<{ token: string }>> {
   return write(async (tx) => {
-    if (!(await lockLayoutSharer(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, LAYOUT_SHARER))) {
       refuse(NOT_A_LAYOUT_SHARER);
     }
     const cycle = await currentCycleNumber(tx);
@@ -565,7 +544,7 @@ export async function unshareCampLayout(input: {
   actorId: string;
 }): Promise<LayoutWriteResult<{ changed: boolean }>> {
   return write(async (tx) => {
-    if (!(await lockLayoutSharer(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, LAYOUT_SHARER))) {
       refuse(NOT_A_LAYOUT_SHARER);
     }
     const cycle = await currentCycleNumber(tx);

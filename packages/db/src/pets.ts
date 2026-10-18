@@ -251,7 +251,7 @@ async function lockPet(tx: Tx, petId: string) {
  * Returns whether they review pets: a real (not system) captain, as the
  * database says now, never as the caller said.
  */
-async function lockActor(tx: DbOrTx, actorId: string): Promise<boolean> {
+async function lockPetActor(tx: DbOrTx, actorId: string): Promise<boolean> {
   if (!UUID.test(actorId)) refuse(PET_NO_ACTOR);
   const [row] = await tx
     .select({ rank: schema.users.rank, isSystem: schema.users.isSystem })
@@ -264,7 +264,7 @@ async function lockActor(tx: DbOrTx, actorId: string): Promise<boolean> {
 
 /** The actor is a captain, read and locked in this transaction, or refused. */
 async function lockReviewer(tx: DbOrTx, actorId: string): Promise<void> {
-  if (!(await lockActor(tx, actorId))) refuse(PET_NOT_A_REVIEWER);
+  if (!(await lockPetActor(tx, actorId))) refuse(PET_NOT_A_REVIEWER);
 }
 
 // --- The member's writes -----------------------------------------------------
@@ -281,7 +281,7 @@ export async function addPet(
   },
 ): Promise<PetWriteResult<{ id: string }>> {
   return write(async (tx) => {
-    await lockActor(tx, input.ownerId);
+    await lockPetActor(tx, input.ownerId);
     const [row] = await tx
       .insert(schema.pets)
       .values({
@@ -308,7 +308,7 @@ export async function setPetStupidThing(input: {
   stupidThing: string;
 }): Promise<PetWriteResult> {
   return write(async (tx) => {
-    const reviewer = await lockActor(tx, input.actorId);
+    const reviewer = await lockPetActor(tx, input.actorId);
     const pet = await lockPet(tx, input.petId);
     const own = pet.ownerId !== null && pet.ownerId === input.actorId;
     if (!own && !reviewer) refuse(PET_NOT_YOURS);

@@ -3,6 +3,7 @@ import {
   allergensMarked,
   recipeAllergens,
   type RecipeAllergen,
+  MEAL_PLAN_EDITOR,
 } from "@camp404/core";
 import {
   MAX_RECIPES_PER_MEAL,
@@ -12,10 +13,11 @@ import {
   type MealOfTheDay,
   type PlateLine,
 } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
-import { lockMealPlanEditor, readMealPlan, type MealPlan } from "./meal-plan";
+import { readMealPlan, type MealPlan } from "./meal-plan";
 import * as schema from "./schema";
 
 // The Kitchen's menu (#244) and shopping list (#245), the layouts the owner
@@ -25,7 +27,7 @@ import * as schema from "./schema";
 //    to a meal. The plates come from the meal plan, never stored here. A
 //    recipe is read at its book (accepted) version. A captain or a Kitchen
 //    lead adds and removes (canEditMealPlan, re-read and locked inside the
-//    write, lockMealPlanEditor), each change audited in the same
+//    write, lockAllowed, MEAL_PLAN_EDITOR), each change audited in the same
 //    transaction. A second add of the same recipe to a meal meets the unique
 //    index and says so; a removal that finds the row gone says so.
 //  - Snacks: the year's short list, a name and an amount as typed, edited by
@@ -450,7 +452,7 @@ export async function addMenuItem(input: {
   recipeId: string;
 }): Promise<KitchenMenuWriteResult<{ itemId: string }>> {
   return write(async (tx) => {
-    if (!(await lockMealPlanEditor(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, MEAL_PLAN_EDITOR))) {
       refuse(NOT_A_MENU_EDITOR);
     }
     if (!isMeal(input.meal) || !Number.isInteger(input.day)) {
@@ -535,7 +537,7 @@ export async function removeMenuItem(input: {
   itemId: string;
 }): Promise<KitchenMenuWriteResult> {
   return write(async (tx) => {
-    if (!(await lockMealPlanEditor(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, MEAL_PLAN_EDITOR))) {
       refuse(NOT_A_MENU_EDITOR);
     }
     if (!UUID.test(input.itemId)) refuse(MENU_ITEM_GONE);
@@ -601,7 +603,7 @@ export async function addSnack(input: {
   amount: string | null;
 }): Promise<KitchenMenuWriteResult<{ snackId: string }>> {
   return write(async (tx) => {
-    if (!(await lockMealPlanEditor(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, MEAL_PLAN_EDITOR))) {
       refuse(NOT_A_SNACK_KEEPER);
     }
     const cycle = await currentCycleNumber(tx);
@@ -634,7 +636,7 @@ export async function removeSnack(input: {
   snackId: string;
 }): Promise<KitchenMenuWriteResult> {
   return write(async (tx) => {
-    if (!(await lockMealPlanEditor(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, MEAL_PLAN_EDITOR))) {
       refuse(NOT_A_SNACK_KEEPER);
     }
     if (!UUID.test(input.snackId)) refuse(SNACK_GONE);

@@ -2,7 +2,6 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { canManageTeamRoles, canPickTeamLead } from "@camp404/core";
-import { reachRank } from "@camp404/db/power";
 import {
   KEEN_FULL,
   KEEN_HELD,
@@ -131,9 +130,9 @@ function run<T extends object>(fn: () => T): TeamRoleWriteResult<T> {
 }
 
 function actorOf(actorId: string): { rank: string; led: readonly string[] } {
-  if (!testStore.findUserById(actorId)) return { rank: "", led: [] };
-  const reach = testStore.senderReach(actorId);
-  return { rank: reachRank(reach), led: reach ?? [] };
+  const actor = testStore.actorInStore(actorId);
+  if (!actor) return { rank: "", led: [] };
+  return { rank: actor.rank, led: actor.ledTeams };
 }
 
 function assertKeeper(actorId: string, team: string): void {

@@ -1,9 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import {
-  canCheckMenuAllergens,
   dietaryCounts,
   isComingThisYear,
   type DietaryCounts,
+  ALLERGEN_CHECKER,
 } from "@camp404/core";
 import {
   readDiets,
@@ -11,10 +11,9 @@ import {
   type Diet,
   type FoodReactionEntry,
 } from "@camp404/types";
-import { lockSenderReach } from "./broadcasts";
+import { lockAllowed } from "./actor";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb } from "./index";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // The dietary pick-list (#245; the owner's answer, 2026-10-02) and the counts
@@ -146,8 +145,7 @@ export async function getMenuDietaryFor(
 ): Promise<MenuDietary | null> {
   if (!UUID.test(viewerId)) return null;
   const db = createHttpDb();
-  const reach = await lockSenderReach(db, viewerId);
-  if (!canCheckMenuAllergens(reachRank(reach), reach ?? [])) return null;
+  if (!(await lockAllowed(db, viewerId, ALLERGEN_CHECKER))) return null;
   const cycle = await currentCycleNumber(db);
   const rows = await db
     .select({

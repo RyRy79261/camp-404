@@ -3,11 +3,11 @@ import { alias } from "drizzle-orm/pg-core";
 import {
   campDayKey,
   campDayStart,
-  canApproveRecipe,
   sameSections,
   sectionText,
   sourceFromText,
   sourceText,
+  KITCHEN_REVIEWER,
 } from "@camp404/core";
 import {
   ADJUST_INSTRUCTION_MAX,
@@ -30,12 +30,11 @@ import {
   type RecipeSource,
   type RecipeStatus,
 } from "@camp404/types";
+import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
-import { lockSenderReach } from "./broadcasts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import { readMealPlanPeaks } from "./meal-plan";
-import { reachRank } from "./power";
 import * as schema from "./schema";
 
 // Recipes (#243, Kitchen 1): the data layer.
@@ -45,7 +44,7 @@ import * as schema from "./schema";
 //  - A Kitchen lead or a captain approves, rejects or asks for changes,
 //    retypes the text and accepts a proofread version (canApproveRecipe).
 //  - A captain or a Kitchen lead sends recipes to Claude (the owner's
-//    decision 2A; lockKitchenReviewer), with no daily limit (the owner's
+//    decision 2A; lockAllowed, KITCHEN_REVIEWER), with no daily limit (the owner's
 //    call, 2026-09-24). The plates per meal come from the year's meal plan
 //    (./meal-plan).
 //  - A recipe's source (recipe_sources) is what a reviewer edits and Claude
@@ -76,7 +75,7 @@ import * as schema from "./schema";
 //    (KitchenRecipe), checked by Zod on every write, and its own plate count
 //    as a recipe_plate_counts row written in the same transaction.
 //
-// Every write re-reads the actor inside its own transaction (lockSenderReach,
+// Every write re-reads the actor inside its own transaction (lockActor,
 // the announcements' rule), never trusting a rank or team list from the
 // caller, writes its audit row in the SAME transaction, and is compare-and-set:
 // the WHERE names the status it expects and `.returning()` decides. A refusal
@@ -84,8 +83,6 @@ import * as schema from "./schema";
 //
 // Nothing here fetches a recipe's link, and nothing here sends anything
 // anywhere: approving is only a status.
-
-type Team = (typeof schema.teamEnum.enumValues)[number];
 
 export type { RecipeStatus };
 
@@ -359,23 +356,10 @@ async function write<T extends object>(
   }
 }
 
-/**
- * Whether the actor may review recipes, read and locked inside the write's
- * own transaction: a captain, or a lead of Kitchen this year. The lock
- * (lockSenderReach) means a demotion that committed first is seen, and one
- * that comes later waits for this transaction.
- */
-export async function lockKitchenReviewer(
-  tx: DbOrTx,
-  actorId: string,
-): Promise<boolean> {
-  if (!UUID.test(actorId)) return false;
-  const reach = await lockSenderReach(tx, actorId);
-  return canApproveRecipe(reachRank(reach), (reach ?? []) as readonly Team[]);
-}
-
 async function assertKitchenReviewer(tx: Tx, actorId: string): Promise<void> {
-  if (!(await lockKitchenReviewer(tx, actorId))) refuse(NOT_A_KITCHEN_REVIEWER);
+  if (!(await lockAllowed(tx, actorId, KITCHEN_REVIEWER))) {
+    refuse(NOT_A_KITCHEN_REVIEWER);
+  }
 }
 
 /** An approved, current member, locked so an approval change waits. */
@@ -915,7 +899,7 @@ export async function queueProofread(input: {
   model: string;
 }): Promise<RecipeWriteResult<{ runIds: string[] }>> {
   return write(async (tx) => {
-    if (!(await lockKitchenReviewer(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, KITCHEN_REVIEWER))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
     // Sorted, so two batches that share recipes lock them in the same order
@@ -1079,7 +1063,7 @@ export async function sendSourceForProofreading(input: {
   model: string;
 }): Promise<RecipeWriteResult<{ runId: string; sourceId: string }>> {
   return write(async (tx) => {
-    if (!(await lockKitchenReviewer(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, KITCHEN_REVIEWER))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
     const plates = platesOrRefuse(input.plates);
@@ -1236,7 +1220,7 @@ export async function adjustVersion(input: {
   model: string;
 }): Promise<RecipeWriteResult<{ runId: string }>> {
   return write(async (tx) => {
-    if (!(await lockKitchenReviewer(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, KITCHEN_REVIEWER))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
     const instruction = input.instruction.trim();
@@ -1302,7 +1286,7 @@ export async function answerProofreadQuestions(input: {
   model: string;
 }): Promise<RecipeWriteResult<{ runId: string }>> {
   return write(async (tx) => {
-    if (!(await lockKitchenReviewer(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, KITCHEN_REVIEWER))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
     const answer = input.answer.trim();
@@ -1724,7 +1708,7 @@ export async function completeSourceRun(input: {
       .from(schema.recipeProofreadRuns)
       .where(eq(schema.recipeProofreadRuns.id, input.runId));
     const senderMayWrite = sent?.requestedBy
-      ? await lockKitchenReviewer(tx, sent.requestedBy)
+      ? await lockAllowed(tx, sent.requestedBy, KITCHEN_REVIEWER)
       : false;
     const [run] = await tx
       .update(schema.recipeProofreadRuns)
@@ -2112,7 +2096,7 @@ export async function queuePlateProofread(input: {
   model: string;
 }): Promise<RecipeWriteResult<{ runId: string }>> {
   return write(async (tx) => {
-    if (!(await lockKitchenReviewer(tx, input.actorId))) {
+    if (!(await lockAllowed(tx, input.actorId, KITCHEN_REVIEWER))) {
       refuse(ONLY_A_REVIEWER_SENDS);
     }
     const plates = platesOrRefuse(input.plates);
