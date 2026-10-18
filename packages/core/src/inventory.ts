@@ -112,6 +112,58 @@ export function bookableNow(item: BookableState): number {
   return Math.min(item.bookableCount, here);
 }
 
+export const NOT_BOOKABLE = "This item can't be booked.";
+export const FULLY_BOOKED =
+  "It's fully booked. Nobody else can book it this year.";
+export const ALREADY_BOOKED = "You've already booked this.";
+export const ITEM_BROKEN =
+  "It's marked broken, so it can't be booked until it's fixed.";
+export const NONE_FREE =
+  "None is free to book: the rest are lent to another camp.";
+export const LOAN_TOO_MANY = "You can't lend more than the camp has.";
+
+/** What a booking decides on, read under the item's lock. */
+export interface BookingAsk {
+  bookableCount: number | null;
+  quantity: number;
+  condition: string;
+  /** Whether the member already booked it this year. */
+  mine: boolean;
+  /** This year's bookings of it. */
+  taken: number;
+  /** Units lent to other camps and not back yet. */
+  lentOut: number;
+}
+
+/**
+ * Why a member may not book an item, in the order the database checks
+ * (bookInventoryItem, and the store's twin): not bookable, booked already,
+ * broken, fully booked, none free. Null when the booking may go ahead.
+ */
+export function bookingProblem(ask: BookingAsk): string | null {
+  if (ask.bookableCount === null) return NOT_BOOKABLE;
+  if (ask.mine) return ALREADY_BOOKED;
+  if (ask.condition === "broken") return ITEM_BROKEN;
+  if (ask.taken >= ask.bookableCount) return FULLY_BOOKED;
+  const free = bookableNow({
+    bookableCount: ask.bookableCount,
+    quantity: ask.quantity,
+    broken: false,
+    lentOut: ask.lentOut,
+  });
+  if (ask.taken >= free) return NONE_FREE;
+  return null;
+}
+
+/** Why `quantity` more may not be lent: more out than the camp has. */
+export function loanProblem(
+  owned: number,
+  lentOut: number,
+  quantity: number,
+): string | null {
+  return lentOut + quantity > owned ? LOAN_TOO_MANY : null;
+}
+
 // --- Maintenance -----------------------------------------------------------
 
 const DAY_MS = 24 * 60 * 60 * 1000;
