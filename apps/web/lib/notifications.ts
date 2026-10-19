@@ -1,55 +1,36 @@
 import "server-only";
 
-import {
-  acknowledgeDelivery as dbAcknowledgeDelivery,
-  claimPopups as dbClaimPopups,
-  countUnseenPopups as dbCountUnseenPopups,
-  countAnnouncementAudience as dbCountAnnouncementAudience,
-  countUnread as dbCountUnread,
-  countUnreadByTeam as dbCountUnreadByTeam,
-  countUnreadSplit as dbCountUnreadSplit,
-  explainDraftRefusal as dbExplainDraftRefusal,
-  createAnnouncementDraft as dbCreateDraft,
-  getAnnouncementPinContext as dbGetPinContext,
-  listPinnedForUser as dbListPinnedForUser,
-  setAnnouncementPinned as dbSetPinned,
-  deleteAnnouncementDraft as dbDeleteDraft,
-  getAnnouncementForMember as dbGetAnnouncementForMember,
-  getAnnouncementPickerData as dbGetAnnouncementPickerData,
-  getPendingAcknowledgements as dbGetPending,
-  listAnnouncements as dbListAnnouncements,
-  listInbox as dbListInbox,
-  markAllRead as dbMarkAllRead,
-  markRead as dbMarkRead,
-  publishAnnouncement as dbPublish,
-  unreadClearableCount as dbUnreadClearableCount,
-  updateAnnouncementDraft as dbUpdateDraft,
-  type AnnouncementPerson,
-  type AnnouncementPickerData,
-  type AnnouncementPresentation,
-  type AnnouncementReading,
-  type AnnouncementSummary,
-  type Audience,
-  type ClaimedPopup,
-  type InboxItem,
-  type AnnouncementPinContext,
-  type InboxPage,
-  type InboxSentTo,
-  type PendingAcknowledgement,
-  type PinnedAnnouncement,
-  type PinResult,
-  type PublishResult,
+import * as db from "@camp404/db/broadcasts";
+import type {
+  AnnouncementPerson,
+  AnnouncementPickerData,
+  AnnouncementPresentation,
+  AnnouncementReading,
+  AnnouncementSummary,
+  Audience,
+  ClaimedPopup,
+  InboxItem,
+  AnnouncementPinContext,
+  InboxPage,
+  InboxSentTo,
+  PendingAcknowledgement,
+  PinnedAnnouncement,
+  PinResult,
+  PublishResult,
 } from "@camp404/db/broadcasts";
 import type { InboxFilter } from "@camp404/types";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // Announcements / notifications facade. Routes every read and write through
 // the Neon-backed `@camp404/db/broadcasts` queries normally, and through the
 // in-memory test store under E2E_TEST_MODE — the same real-vs-test backend
 // split `lib/users.ts` uses so the app renders without a database during
-// Playwright runs. App code (pages, actions, route handlers) imports from
-// here, never from `@camp404/db/broadcasts` directly.
+// Playwright runs, picked once (twin). App code (pages, actions, route
+// handlers) imports from here, never from `@camp404/db/broadcasts` directly.
+// lib/__tests__/notifications-agreement.test.ts and
+// app/(console)/__tests__/inbox-count-agreement.test.tsx hold the two sides
+// equal.
 
 export type { InboxFilter };
 
@@ -77,50 +58,6 @@ export interface CountUnreadOptions {
   exceptActivationIds?: readonly string[];
 }
 
-interface NotificationsBackend {
-  countUnread(userId: string, options?: CountUnreadOptions): Promise<number>;
-  countUnreadByTeam(userId: string): Promise<Partial<Record<string, number>>>;
-  listInbox(
-    userId: string,
-    options?: { before?: string | null; limit?: number; filter?: InboxFilter },
-  ): Promise<InboxPage>;
-  markRead(userId: string, ids: string[]): Promise<void>;
-  markAllRead(userId: string): Promise<number>;
-  unreadClearableCount(userId: string): Promise<number>;
-  getAnnouncementForMember(
-    userId: string,
-    broadcastId: string,
-  ): Promise<AnnouncementReading | null>;
-  getPendingAcknowledgements(userId: string): Promise<PendingAcknowledgement[]>;
-  countUnseenPopups(userId: string): Promise<number>;
-  claimPopups(userId: string): Promise<ClaimedPopup[]>;
-  acknowledgeDelivery(input: {
-    deliveryId: string;
-    userId: string;
-  }): Promise<boolean>;
-  listAnnouncements(options?: {
-    senderId?: string;
-  }): Promise<AnnouncementSummary[]>;
-  createAnnouncementDraft(input: DraftFields): Promise<{ id: string }>;
-  updateAnnouncementDraft(
-    input: DraftFields & { id: string },
-  ): Promise<boolean>;
-  deleteAnnouncementDraft(input: {
-    id: string;
-    senderId: string;
-  }): Promise<boolean>;
-  publishAnnouncement(input: PublishInput): Promise<PublishResult>;
-  explainDraftRefusal(id: string, senderId: string): Promise<string>;
-  countAnnouncementAudience(
-    senderId: string,
-    audience: Audience,
-  ): Promise<number>;
-  getAnnouncementPickerData(senderId: string): Promise<AnnouncementPickerData>;
-  listPinnedForUser(userId: string): Promise<PinnedAnnouncement[]>;
-  getAnnouncementPinContext(id: string): Promise<AnnouncementPinContext | null>;
-  setAnnouncementPinned(input: PinInput): Promise<PinResult>;
-}
-
 interface DraftFields {
   senderId: string;
   title: string;
@@ -145,255 +82,149 @@ interface PinInput {
   pinned: boolean;
 }
 
-const realBackend: NotificationsBackend = {
-  countUnread: dbCountUnread,
-  countUnreadByTeam: dbCountUnreadByTeam,
-  listInbox: dbListInbox,
-  markRead: dbMarkRead,
-  markAllRead: dbMarkAllRead,
-  unreadClearableCount: dbUnreadClearableCount,
-  getAnnouncementForMember: dbGetAnnouncementForMember,
-  getPendingAcknowledgements: dbGetPending,
-  countUnseenPopups: dbCountUnseenPopups,
-  claimPopups: dbClaimPopups,
-  acknowledgeDelivery: dbAcknowledgeDelivery,
-  listAnnouncements: dbListAnnouncements,
-  createAnnouncementDraft: dbCreateDraft,
-  updateAnnouncementDraft: dbUpdateDraft,
-  deleteAnnouncementDraft: dbDeleteDraft,
-  publishAnnouncement: dbPublish,
-  explainDraftRefusal: dbExplainDraftRefusal,
-  countAnnouncementAudience: dbCountAnnouncementAudience,
-  getAnnouncementPickerData: dbGetAnnouncementPickerData,
-  listPinnedForUser: (userId) => dbListPinnedForUser(userId),
-  getAnnouncementPinContext: dbGetPinContext,
-  setAnnouncementPinned: dbSetPinned,
+// The store names some of these its own way; it also has no questionnaire
+// notices, so its split count is the plain count with nothing split out.
+const storeNotifications = {
+  countUnread: (userId: string, options?: CountUnreadOptions) =>
+    testStore.countUnread(userId, options),
+  countUnreadByTeam: (userId: string) => testStore.countUnreadByTeam(userId),
+  countUnreadSplit: (userId: string) => ({
+    total: testStore.countUnread(userId),
+    byQuestionnaire: new Map<string, number>(),
+  }),
+  listInbox: (
+    userId: string,
+    options?: { before?: string | null; limit?: number; filter?: InboxFilter },
+  ) => testStore.listInbox(userId, options),
+  markRead: (userId: string, ids: string[]) => testStore.markRead(userId, ids),
+  markAllRead: (userId: string) => testStore.markAllRead(userId),
+  unreadClearableCount: (userId: string) =>
+    testStore.unreadClearableCount(userId),
+  getAnnouncementForMember: (userId: string, broadcastId: string) =>
+    testStore.getAnnouncementForMember(userId, broadcastId),
+  getPendingAcknowledgements: (userId: string) =>
+    testStore.getPendingAcknowledgements(userId),
+  countUnseenPopups: (userId: string) => testStore.countUnseenPopups(userId),
+  claimPopups: (userId: string) => testStore.claimPopups(userId),
+  acknowledgeDelivery: (input: { deliveryId: string; userId: string }) =>
+    testStore.acknowledgeDelivery(input),
+  listAnnouncements: (options?: { senderId?: string }) =>
+    testStore.listBroadcasts(options),
+  createAnnouncementDraft: (input: DraftFields) =>
+    testStore.createBroadcastDraft(input),
+  updateAnnouncementDraft: (input: DraftFields & { id: string }) =>
+    testStore.updateBroadcastDraft(input),
+  deleteAnnouncementDraft: (input: { id: string; senderId: string }) =>
+    testStore.deleteBroadcastDraft(input),
+  publishAnnouncement: (input: PublishInput) =>
+    testStore.publishBroadcast(input),
+  explainDraftRefusal: (id: string, senderId: string) =>
+    testStore.explainDraftRefusal({ id, senderId }),
+  countAnnouncementAudience: (senderId: string, audience: Audience) =>
+    testStore.countAnnouncementAudience(senderId, audience),
+  getAnnouncementPickerData: (senderId: string) =>
+    testStore.getAnnouncementPickerData(senderId),
+  listPinnedForUser: (userId: string) => testStore.listPinnedForUser(userId),
+  getAnnouncementPinContext: (id: string) =>
+    testStore.getAnnouncementPinContext(id),
+  setAnnouncementPinned: (input: PinInput) =>
+    testStore.setBroadcastPinned(input),
 };
 
-const testBackend: NotificationsBackend = {
-  async countUnreadByTeam(userId) {
-    return testStore.countUnreadByTeam(userId);
-  },
-  async countUnread(userId, options) {
-    return testStore.countUnread(userId, options);
-  },
-  async listInbox(userId, options) {
-    return testStore.listInbox(userId, options);
-  },
-  async markRead(userId, ids) {
-    testStore.markRead(userId, ids);
-  },
-  async markAllRead(userId) {
-    return testStore.markAllRead(userId);
-  },
-  async unreadClearableCount(userId) {
-    return testStore.unreadClearableCount(userId);
-  },
-  async getAnnouncementForMember(userId, broadcastId) {
-    return testStore.getAnnouncementForMember(userId, broadcastId);
-  },
-  async countUnseenPopups(userId) {
-    return testStore.countUnseenPopups(userId);
-  },
-  async claimPopups(userId) {
-    return testStore.claimPopups(userId);
-  },
-  async getPendingAcknowledgements(userId) {
-    return testStore.getPendingAcknowledgements(userId);
-  },
-  async acknowledgeDelivery(input) {
-    return testStore.acknowledgeDelivery(input);
-  },
-  async listAnnouncements(options) {
-    return testStore.listBroadcasts(options);
-  },
-  async createAnnouncementDraft(input) {
-    return testStore.createBroadcastDraft(input);
-  },
-  async updateAnnouncementDraft(input) {
-    return testStore.updateBroadcastDraft(input);
-  },
-  async deleteAnnouncementDraft(input) {
-    return testStore.deleteBroadcastDraft(input);
-  },
-  async publishAnnouncement(input) {
-    return testStore.publishBroadcast(input);
-  },
-  async explainDraftRefusal(id, senderId) {
-    return testStore.explainDraftRefusal({ id, senderId });
-  },
-  async countAnnouncementAudience(senderId, audience) {
-    return testStore.countAnnouncementAudience(senderId, audience);
-  },
-  async getAnnouncementPickerData(senderId) {
-    return testStore.getAnnouncementPickerData(senderId);
-  },
-  async listPinnedForUser(userId) {
-    return testStore.listPinnedForUser(userId);
-  },
-  async getAnnouncementPinContext(id) {
-    return testStore.getAnnouncementPinContext(id);
-  },
-  async setAnnouncementPinned(input) {
-    return testStore.setBroadcastPinned(input);
-  },
-};
-
-function backend(): NotificationsBackend {
-  return usesTestStore() ? testBackend : realBackend;
-}
+const inbox = twin(db, storeNotifications, [
+  "countUnread",
+  "countUnreadByTeam",
+  "countUnreadSplit",
+  "listInbox",
+  "markRead",
+  "markAllRead",
+  "unreadClearableCount",
+  "getAnnouncementForMember",
+  "getPendingAcknowledgements",
+  "countUnseenPopups",
+  "claimPopups",
+  "acknowledgeDelivery",
+  "listAnnouncements",
+  "createAnnouncementDraft",
+  "updateAnnouncementDraft",
+  "deleteAnnouncementDraft",
+  "publishAnnouncement",
+  "explainDraftRefusal",
+  "countAnnouncementAudience",
+  "getAnnouncementPickerData",
+  "listPinnedForUser",
+  "getAnnouncementPinContext",
+  "setAnnouncementPinned",
+]);
 
 /** Unread announcements per team, for the team icons on Home. */
-export function countUnreadByTeam(
-  userId: string,
-): Promise<Partial<Record<string, number>>> {
-  return backend().countUnreadByTeam(userId);
-}
+export const countUnreadByTeam = inbox.countUnreadByTeam;
 
-export function countUnread(
-  userId: string,
-  options?: CountUnreadOptions,
-): Promise<number> {
-  return backend().countUnread(userId, options);
-}
+export const countUnread = inbox.countUnread;
 
-export function listInbox(
-  userId: string,
-  options?: { before?: string | null; limit?: number; filter?: InboxFilter },
-): Promise<InboxPage> {
-  return backend().listInbox(userId, options);
-}
+export const listInbox = inbox.listInbox;
 
-export function markRead(userId: string, ids: string[]): Promise<void> {
-  return backend().markRead(userId, ids);
-}
+export const markRead = inbox.markRead;
 
 /**
  * Clear every unread delivery in this member's inbox, and say how many that
  * was. The panel's "Mark all read" — the one way to clear the badge without
  * opening the inbox.
  */
-export function markAllRead(userId: string): Promise<number> {
-  return backend().markAllRead(userId);
-}
+export const markAllRead = inbox.markAllRead;
 
 /**
  * How many deliveries "Mark all read" would actually clear — the badge's count
  * minus the pop-ups it leaves for the pop-up poller to show.
  */
-export function unreadClearableCount(userId: string): Promise<number> {
-  return backend().unreadClearableCount(userId);
-}
+export const unreadClearableCount = inbox.unreadClearableCount;
 
-export function getPendingAcknowledgements(
-  userId: string,
-): Promise<PendingAcknowledgement[]> {
-  return backend().getPendingAcknowledgements(userId);
-}
+export const getPendingAcknowledgements = inbox.getPendingAcknowledgements;
 
-export function acknowledgeDelivery(input: {
-  deliveryId: string;
-  userId: string;
-}): Promise<boolean> {
-  return backend().acknowledgeDelivery(input);
-}
+export const acknowledgeDelivery = inbox.acknowledgeDelivery;
 
 /** Announcements, newest first: all of them, or one sender's. */
-export function listAnnouncements(
-  options: { senderId?: string } = {},
-): Promise<AnnouncementSummary[]> {
-  return backend().listAnnouncements(options);
-}
+export const listAnnouncements = inbox.listAnnouncements;
 
-export function createAnnouncementDraft(
-  input: DraftFields,
-): Promise<{ id: string }> {
-  return backend().createAnnouncementDraft(input);
-}
+export const createAnnouncementDraft = inbox.createAnnouncementDraft;
 
-export function updateAnnouncementDraft(
-  input: DraftFields & { id: string },
-): Promise<boolean> {
-  return backend().updateAnnouncementDraft(input);
-}
+export const updateAnnouncementDraft = inbox.updateAnnouncementDraft;
 
-export function deleteAnnouncementDraft(input: {
-  id: string;
-  senderId: string;
-}): Promise<boolean> {
-  return backend().deleteAnnouncementDraft(input);
-}
+export const deleteAnnouncementDraft = inbox.deleteAnnouncementDraft;
 
-export function publishAnnouncement(
-  input: PublishInput,
-): Promise<PublishResult> {
-  return backend().publishAnnouncement(input);
-}
+export const publishAnnouncement = inbox.publishAnnouncement;
 
-export function explainDraftRefusal(
-  id: string,
-  senderId: string,
-): Promise<string> {
-  return backend().explainDraftRefusal(id, senderId);
-}
+export const explainDraftRefusal = inbox.explainDraftRefusal;
 
-export function countAnnouncementAudience(
-  senderId: string,
-  audience: Audience,
-): Promise<number> {
-  return backend().countAnnouncementAudience(senderId, audience);
-}
+export const countAnnouncementAudience = inbox.countAnnouncementAudience;
 
 /**
  * Who a captain may pick for "specific people", and who "Drivers this year"
  * reaches now (#313). Captain-only data: gate the caller.
  */
-export function getAnnouncementPickerData(
-  senderId: string,
-): Promise<AnnouncementPickerData> {
-  return backend().getAnnouncementPickerData(senderId);
-}
+export const getAnnouncementPickerData = inbox.getAnnouncementPickerData;
 
-export function getAnnouncementForMember(
-  userId: string,
-  broadcastId: string,
-): Promise<AnnouncementReading | null> {
-  return backend().getAnnouncementForMember(userId, broadcastId);
-}
+export const getAnnouncementForMember = inbox.getAnnouncementForMember;
 
-export function countUnseenPopups(userId: string): Promise<number> {
-  return backend().countUnseenPopups(userId);
-}
+export const countUnseenPopups = inbox.countUnseenPopups;
 
 /**
  * The pinned announcements this member received, newest first — what the
  * console banner draws. The audience is the delivery join, never a fresh
  * resolution, so nothing here can widen who sees a pin.
  */
-export function listPinnedForUser(
-  userId: string,
-): Promise<PinnedAnnouncement[]> {
-  return backend().listPinnedForUser(userId);
-}
+export const listPinnedForUser = inbox.listPinnedForUser;
 
 /**
  * One announcement's stored audience, so the pin action can ask
  * `canSendToAudience` about it before it writes.
  */
-export function getAnnouncementPinContext(
-  id: string,
-): Promise<AnnouncementPinContext | null> {
-  return backend().getAnnouncementPinContext(id);
-}
+export const getAnnouncementPinContext = inbox.getAnnouncementPinContext;
 
 /** Pin or unpin a published announcement. Gate the caller. */
-export function setAnnouncementPinned(input: PinInput): Promise<PinResult> {
-  return backend().setAnnouncementPinned(input);
-}
+export const setAnnouncementPinned = inbox.setAnnouncementPinned;
 
-export function claimPopups(userId: string): Promise<ClaimedPopup[]> {
-  return backend().claimPopups(userId);
-}
+export const claimPopups = inbox.claimPopups;
 
 /**
  * Every unread delivery, with the unread questionnaire notices per activation
@@ -401,14 +232,4 @@ export function claimPopups(userId: string): Promise<ClaimedPopup[]> {
  * beside the waiting forms rather than after them. The test store models no
  * questionnaire notices, so its twin is the plain count and an empty split.
  */
-export async function countUnreadSplit(
-  userId: string,
-): Promise<{ total: number; byQuestionnaire: Map<string, number> }> {
-  if (usesTestStore()) {
-    return {
-      total: await testStore.countUnread(userId),
-      byQuestionnaire: new Map(),
-    };
-  }
-  return dbCountUnreadSplit(userId);
-}
+export const countUnreadSplit = inbox.countUnreadSplit;

@@ -2528,31 +2528,39 @@ export const testStore = {
     acknowledgedCount: number;
     readCount: number;
   }> {
-    return [...broadcasts]
-      .filter((b) => !options.senderId || b.senderId === options.senderId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map((b) => {
-        const own = deliveries.filter((d) => d.broadcastId === b.id);
-        return {
-          id: b.id,
-          title: b.title,
-          body: b.body,
-          presentation: b.presentation,
-          audience: b.audience,
-          senderId: b.senderId,
-          senderName: b.senderId
-            ? (findUserById(b.senderId)?.displayName ?? null)
-            : null,
-          publishedAt: b.publishedAt,
-          pinnedAt: b.pinnedAt,
-          pinOnPublish: b.pinOnPublish,
-          createdAt: b.createdAt,
-          recipientCount: own.length,
-          acknowledgedCount: own.filter((d) => d.acknowledgedAt !== null)
-            .length,
-          readCount: own.filter((d) => d.readAt !== null).length,
-        };
-      });
+    return (
+      [...broadcasts]
+        .filter((b) => !options.senderId || b.senderId === options.senderId)
+        // Newest first; Postgres stamps in microseconds, so two written in the
+        // same millisecond still come newest first (the later in the list).
+        .sort(
+          (a, b) =>
+            b.createdAt.getTime() - a.createdAt.getTime() ||
+            broadcasts.indexOf(b) - broadcasts.indexOf(a),
+        )
+        .map((b) => {
+          const own = deliveries.filter((d) => d.broadcastId === b.id);
+          return {
+            id: b.id,
+            title: b.title,
+            body: b.body,
+            presentation: b.presentation,
+            audience: b.audience,
+            senderId: b.senderId,
+            senderName: b.senderId
+              ? (findUserById(b.senderId)?.displayName ?? null)
+              : null,
+            publishedAt: b.publishedAt,
+            pinnedAt: b.pinnedAt,
+            pinOnPublish: b.pinOnPublish,
+            createdAt: b.createdAt,
+            recipientCount: own.length,
+            acknowledgedCount: own.filter((d) => d.acknowledgedAt !== null)
+              .length,
+            readCount: own.filter((d) => d.readAt !== null).length,
+          };
+        })
+    );
   },
   getPendingAcknowledgements(userId: string): Array<{
     deliveryId: string;
@@ -2675,9 +2683,13 @@ export const testStore = {
                   d.kind as (typeof ANNOUNCEMENT_NOTIFICATION_KINDS)[number],
                 ))),
       )
+      // Newest first, as production's microsecond clock always tells apart;
+      // the store's clock has milliseconds only, so a tie goes to the later
+      // delivery (the later in the list), then to the id.
       .sort(
         (a, b) =>
           b.createdAt.getTime() - a.createdAt.getTime() ||
+          deliveries.indexOf(b) - deliveries.indexOf(a) ||
           (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
       );
     let start = 0;

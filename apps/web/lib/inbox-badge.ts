@@ -1,8 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { countUnread, countUnreadSplit } from "./notifications";
-import { usesTestStore } from "./test-mode";
+import { countUnreadSplit } from "./notifications";
 import { getPendingQuestionnaires } from "./users";
 
 // The one count of "what is new in your inbox". The bell in the desktop's tray
@@ -36,25 +35,16 @@ export interface InboxBadge {
  * answered it leaves `waiting`, and an unread notice about it counts like any
  * other notice until it is read.
  *
- * Both halves have an E2E twin: `countUnread` routes to the test store, and
- * `getPendingQuestionnaires` returns [] under it, which is right — the test
- * store models no questionnaire activations, and the real query inner-joins
- * them.
+ * Both halves have an E2E twin: `countUnreadSplit` routes to the test store
+ * (its plain count, nothing split out), and `getPendingQuestionnaires`
+ * returns [] under it, which is right — the test store models no
+ * questionnaire activations, and the real query inner-joins them.
  *
  * Wrapped in React `cache`, so the header and the page share one read per
- * request. Against the database the two halves are read together; the test
- * store keeps the plain order (waiting list, then the count without it).
+ * request. The two halves are read together.
  */
 export const getInboxBadge = cache(
   async (userId: string): Promise<InboxBadge> => {
-    if (usesTestStore()) {
-      const pending = await getPendingQuestionnaires(userId);
-      const notices = await countUnread(userId, {
-        exceptActivationIds: pending.map((q) => q.activationId),
-      });
-      const waiting = pending.length;
-      return { notices, waiting, total: notices + waiting };
-    }
     // Both halves at once (the badge is on every console page): every unread
     // delivery, split by the questionnaire it points at, less the notices of
     // the forms still waiting. The same number as countUnread with those ids
