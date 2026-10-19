@@ -191,6 +191,63 @@ describe("the URL is the focused window", () => {
     ]);
   });
 
+  it("asks before closing or minimising the live window, and changes nothing on no", () => {
+    const state = opened("/inventory", "/tasks");
+    for (const type of ["close", "minimize"] as const) {
+      const mayLeave = vi.fn(() => false);
+      const out = step(
+        state,
+        { type, id: "tasks" },
+        ctx({ liveKey: "tasks", mayLeave }),
+      );
+      expect(out.refused).toBe(true);
+      expect(out.effects).toEqual([]);
+      expect(out.state).toBe(state);
+      expect(mayLeave).toHaveBeenCalledWith("tasks");
+    }
+  });
+
+  it("does not ask again when the window's own button already asked", () => {
+    const state = opened("/tasks");
+    for (const type of ["close", "minimize"] as const) {
+      const mayLeave = vi.fn(() => false);
+      const out = step(
+        state,
+        { type, id: "tasks", asked: true },
+        ctx({ liveKey: "tasks", mayLeave }),
+      );
+      expect(out.refused).toBe(false);
+      expect(mayLeave).not.toHaveBeenCalled();
+      expect(out.effects).toContainEqual({ kind: "replace", href: "/" });
+    }
+  });
+
+  it("never asks to close or minimise a background window, which has no live page", () => {
+    const state = opened("/inventory", "/tasks");
+    for (const type of ["close", "minimize"] as const) {
+      const mayLeave = vi.fn(() => false);
+      const out = step(
+        state,
+        { type, id: "inventory" },
+        ctx({ liveKey: "tasks", mayLeave }),
+      );
+      expect(out.refused).toBe(false);
+      expect(mayLeave).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a taskbar press on the live window on top asks before it minimises", () => {
+    const mayLeave = vi.fn(() => false);
+    const out = step(
+      opened("/tasks"),
+      { type: "taskbarToggle", id: "tasks" },
+      ctx({ liveKey: "tasks", mayLeave }),
+    );
+    expect(out.refused).toBe(true);
+    expect(win(out.state, "tasks")?.minimized).toBeFalsy();
+    expect(mayLeave).toHaveBeenCalledTimes(1);
+  });
+
   it("the Terminal's exit closes the live window only if its page may go", () => {
     const state = opened("/terminal");
     const asked = vi.fn(() => false);

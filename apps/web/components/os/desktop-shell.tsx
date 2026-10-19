@@ -701,10 +701,6 @@ function DesktopInner({
     (id: string) => void send({ type: "close", id }),
     [send],
   );
-  const minimizeWindow = useCallback(
-    (id: string) => void send({ type: "minimize", id }),
-    [send],
-  );
   const showDesktop = useCallback(
     () => void send({ type: "showDesktop" }),
     [send],
@@ -1650,8 +1646,13 @@ function DesktopInner({
                   focusWindow(w);
                 }
               }}
-              onClose={() => closeWindow(w.id)}
-              onMinimize={() => minimizeWindow(w.id)}
+              // The frame's buttons ask the leave guard themselves.
+              onClose={() =>
+                void send({ type: "close", id: w.id, asked: true })
+              }
+              onMinimize={() =>
+                void send({ type: "minimize", id: w.id, asked: true })
+              }
               onToggleMaximize={() =>
                 dispatch({ type: "toggleMaximize", id: w.id })
               }

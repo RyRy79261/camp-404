@@ -416,10 +416,14 @@ export type DesktopEvent =
   | { type: "openFolder"; key: string }
   /** Raise a window: a folder at once, a page by going to its address. */
   | { type: "focusWindow"; id: string }
-  | { type: "close"; id: string }
+  /**
+   * `asked`: the window's own button already asked the leave guard (the
+   * frame's close and minimise), so it is not asked twice.
+   */
+  | { type: "close"; id: string; asked?: boolean }
   /** A page asked to close its own window (the Terminal's exit). */
   | { type: "closeLive" }
-  | { type: "minimize"; id: string }
+  | { type: "minimize"; id: string; asked?: boolean }
   /** Minimise every window; the address goes to the desktop. */
   | { type: "showDesktop" }
   /** Home on a phone: every window put away, the address the home screen. */
@@ -590,6 +594,8 @@ export function decide(
     // earlier, fresh.
     case "close": {
       const { id } = event;
+      // The live page may hold unsaved input: ask first, unless asked.
+      if (id === liveKey && !event.asked && !ctx.mayLeave(id)) return REFUSED;
       // Closed on purpose (after the guard asked): no draft of it is kept,
       // in memory or in this tab's storage.
       const effects: Effect[] = [
@@ -613,10 +619,13 @@ export function decide(
       return { effects };
     }
     case "closeLive":
-      if (!liveKey || !ctx.mayLeave(liveKey)) return NOTHING;
+      if (!liveKey) return NOTHING;
       return decide(state, { type: "close", id: liveKey }, ctx);
     case "minimize": {
       const { id } = event;
+      // A taskbar press minimises the live window too: ask first, unless
+      // its own button already did.
+      if (id === liveKey && !event.asked && !ctx.mayLeave(id)) return REFUSED;
       const effects: Effect[] = [];
       if (id === liveKey) {
         const next = nextPageWindow(state, id);

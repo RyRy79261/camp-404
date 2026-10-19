@@ -4,6 +4,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_TEAMS } from "@camp404/db/camp-config";
@@ -378,6 +379,47 @@ describe("unsaved input in the live window", () => {
     const event = click(screen.getByRole("link", { name: "Go" }));
     expect(confirm).toHaveBeenCalledWith("Unsaved. Leave?");
     expect(event.defaultPrevented).toBe(true);
+    confirm.mockRestore();
+  });
+
+  it("asks before a taskbar press minimises the live window, and on no keeps the address and the window", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(
+      <Desktop {...props()}>
+        <Dirty href="/tasks" />
+      </Desktop>,
+    );
+    const bar = within(screen.getByRole("toolbar", { name: "Taskbar" }));
+    fireEvent.click(bar.getByRole("button", { name: "Tasks window" }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(nav.replace).not.toHaveBeenCalled();
+    expect(
+      document.querySelector<HTMLElement>('[data-window="tasks"]')?.hidden,
+    ).toBe(false);
+    confirm.mockRestore();
+  });
+
+  it("asks once, not twice, when the window's own Minimise or Close button is used", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const view = render(
+      <Desktop {...props()}>
+        <Dirty href="/tasks" />
+      </Desktop>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Minimise Tasks" }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(nav.replace).toHaveBeenCalledWith("/");
+    view.unmount();
+    confirm.mockClear();
+    nav.replace.mockClear();
+    render(
+      <Desktop {...props()}>
+        <Dirty href="/tasks" />
+      </Desktop>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close Tasks" }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(nav.replace).toHaveBeenCalledWith("/");
     confirm.mockRestore();
   });
 
