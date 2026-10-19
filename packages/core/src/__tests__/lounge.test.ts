@@ -7,6 +7,15 @@ import {
 import {
   DEFAULT_LOUNGE_DAYS,
   LOUNGE_TEAM,
+  NOT_YOUR_OFFER,
+  OFFER_CHANGED,
+  OFFER_DECIDED,
+  OFFER_GONE,
+  OFFER_NOT_ACCEPTED,
+  loungeDecisionNote,
+  loungeDecisionProblem,
+  loungeEditProblem,
+  loungePlaceProblem,
   bandOf,
   bandRange,
   canRunLounge,
@@ -308,5 +317,59 @@ describe("the input shapes", () => {
         startMinute: 24 * 60,
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("loungeEditProblem", () => {
+  const offered = { hostId: "host", status: "offered" as const, version: 2 };
+
+  it("lets the host change an undecided or sent-back offer they saw", () => {
+    expect(loungeEditProblem(offered, "host", 2)).toBeNull();
+    expect(
+      loungeEditProblem({ ...offered, status: "needs_changes" }, "host", 2),
+    ).toBeNull();
+  });
+
+  it("refuses in the database's order: gone, not theirs, decided, changed", () => {
+    expect(loungeEditProblem(null, "host", 2)).toBe(OFFER_GONE);
+    const decided = { ...offered, status: "accepted" as const, version: 9 };
+    expect(loungeEditProblem(decided, "someone", 2)).toBe(NOT_YOUR_OFFER);
+    expect(loungeEditProblem(decided, "host", 2)).toBe(OFFER_DECIDED);
+    expect(
+      loungeEditProblem({ ...decided, status: "declined" }, "host", 2),
+    ).toBe(OFFER_DECIDED);
+    expect(loungeEditProblem(offered, "host", 1)).toBe(OFFER_CHANGED);
+  });
+});
+
+describe("loungeDecisionProblem", () => {
+  const offered = { hostId: "host", status: "offered" as const, version: 2 };
+
+  it("lands only on the status and version the reviewer saw", () => {
+    expect(loungeDecisionProblem(offered, "offered", 2)).toBeNull();
+    expect(loungeDecisionProblem(null, "offered", 2)).toBe(OFFER_GONE);
+    expect(loungeDecisionProblem(offered, "needs_changes", 2)).toBe(
+      OFFER_CHANGED,
+    );
+    expect(loungeDecisionProblem(offered, "offered", 1)).toBe(OFFER_CHANGED);
+  });
+
+  it("keeps the reason only for a decline or a send-back", () => {
+    expect(loungeDecisionNote("accepted", "Nice")).toBeNull();
+    expect(loungeDecisionNote("declined", "Too loud")).toBe("Too loud");
+    expect(loungeDecisionNote("needs_changes", "Which mats?")).toBe(
+      "Which mats?",
+    );
+  });
+});
+
+describe("loungePlaceProblem", () => {
+  it("places only an accepted offer that is still there", () => {
+    const at = { hostId: "host", version: 1 };
+    expect(loungePlaceProblem({ ...at, status: "accepted" })).toBeNull();
+    expect(loungePlaceProblem({ ...at, status: "offered" })).toBe(
+      OFFER_NOT_ACCEPTED,
+    );
+    expect(loungePlaceProblem(null)).toBe(OFFER_GONE);
   });
 });

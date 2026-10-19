@@ -49,6 +49,10 @@ import {
   type SearchTextPart,
   type Actor,
   LOUNGE_RUNNER,
+  loungeDecisionNote,
+  loungeDecisionProblem,
+  loungeEditProblem,
+  loungePlaceProblem,
   POWER_EDITOR,
   copyLastYearProblem,
   planGeneratorProblem,
@@ -226,10 +230,7 @@ import {
   ALREADY_PLACED,
   NOT_A_LOUNGE_RUNNER,
   NOT_YOUR_OFFER,
-  OFFER_CHANGED,
-  OFFER_DECIDED,
   OFFER_GONE,
-  OFFER_NOT_ACCEPTED,
   SETTINGS_CHANGED,
   SLOT_GONE,
   hostNameOf,
@@ -4646,12 +4647,12 @@ export const testStore = {
       const row = loungeOffers.find(
         (o) => o.id === input.offerId && o.cycle === cycle,
       );
-      if (!row) return OFFER_GONE;
-      if (row.hostId !== input.actorId) return NOT_YOUR_OFFER;
-      if (row.status === "accepted" || row.status === "declined") {
-        return OFFER_DECIDED;
-      }
-      if (row.version !== input.expectedVersion) return OFFER_CHANGED;
+      const problem = loungeEditProblem(
+        row ?? null,
+        input.actorId,
+        input.expectedVersion,
+      );
+      if (problem || !row) return problem ?? OFFER_GONE;
       Object.assign(row, loungeOfferFields(input), {
         status: "offered",
         version: row.version + 1,
@@ -4687,16 +4688,15 @@ export const testStore = {
       const row = loungeOffers.find(
         (o) => o.id === input.offerId && o.cycle === cycle,
       );
-      if (!row) return OFFER_GONE;
-      if (
-        row.status !== input.expectedStatus ||
-        row.version !== input.expectedVersion
-      ) {
-        return OFFER_CHANGED;
-      }
+      const problem = loungeDecisionProblem(
+        row ?? null,
+        input.expectedStatus,
+        input.expectedVersion,
+      );
+      if (problem || !row) return problem ?? OFFER_GONE;
       Object.assign(row, {
         status: input.decision,
-        decisionNote: input.decision === "accepted" ? null : input.reason,
+        decisionNote: loungeDecisionNote(input.decision, input.reason),
         decidedAt: new Date(),
         version: row.version + 1,
         updatedAt: new Date(),
@@ -4720,8 +4720,8 @@ export const testStore = {
       const row = loungeOffers.find(
         (o) => o.id === input.offerId && o.cycle === cycle,
       );
-      if (!row) return OFFER_GONE;
-      if (row.status !== "accepted") return OFFER_NOT_ACCEPTED;
+      const problem = loungePlaceProblem(row ?? null);
+      if (problem) return problem;
       if (
         loungeSlots.some(
           (s) =>
