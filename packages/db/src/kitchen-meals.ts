@@ -8,13 +8,15 @@ import {
   prepTaskTitle,
   type SheetPrepStep,
   ALLERGEN_CHECKER,
+  allergenPlanInput,
+  PLAN_NEEDS_WORDS,
   PREP_EDITOR,
+  PREP_NEEDS_WORDS,
+  prepStepInput,
 } from "@camp404/core";
 import {
   ALLERGEN_PLAN_KINDS,
-  ALLERGEN_PLAN_MAX,
   PREP_TIMINGS,
-  PREP_WHAT_MAX,
   readAllergens,
   type AllergenPlanKind,
   type KitchenAllergen,
@@ -60,13 +62,14 @@ export const MEAL_ITEM_GONE =
   "That recipe is no longer on this meal. Reload the page.";
 export const PLAN_CHANGED =
   "Someone changed this plan first. Reload the page to see it.";
-export const PLAN_NEEDS_WORDS = "Say what exactly the kitchen will do.";
 export const ALLERGENS_CHANGED =
   "Someone corrected these allergens first. Reload the page to see them.";
 export const RECIPE_NEWER_VERSION =
   "This recipe has a newer version in the book now. Reload the page.";
 export const PREP_STEP_GONE = "That prep step is already off. Reload the page.";
-export const PREP_NEEDS_WORDS = "Say what to do.";
+// The sentences of the checks both stores share live with them in
+// @camp404/core; they are named here too, beside the rest.
+export { PLAN_NEEDS_WORDS, PREP_NEEDS_WORDS };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -271,11 +274,9 @@ export async function recordAllergenPlan(input: {
     if (!(await lockAllowed(tx, input.actorId, ALLERGEN_CHECKER))) {
       refuse(NOT_A_MEAL_CHECKER);
     }
-    const details = input.details.trim().slice(0, ALLERGEN_PLAN_MAX);
-    if (!details) refuse(PLAN_NEEDS_WORDS);
-    const kind: AllergenPlanKind = isPlanKind(input.kind)
-      ? input.kind
-      : "portion";
+    const plan = allergenPlanInput(input);
+    if (!plan.ok) refuse(plan.error);
+    const { details, kind } = plan;
     const allergens = readAllergens(input.allergens);
     const cycle = await currentCycleNumber(tx);
     const item = await lockMenuItem(tx, input.itemId, cycle);
@@ -437,9 +438,9 @@ export async function addPrepStep(input: {
     if (!(await lockAllowed(tx, input.actorId, PREP_EDITOR))) {
       refuse(NOT_A_MEAL_CHECKER);
     }
-    const what = input.what.trim().slice(0, PREP_WHAT_MAX);
-    if (!what) refuse(PREP_NEEDS_WORDS);
-    if (!isTiming(input.when)) refuse(PREP_NEEDS_WORDS);
+    const step = prepStepInput(input);
+    if (!step.ok) refuse(step.error);
+    const { what } = step;
     const cycle = await currentCycleNumber(tx);
     // Day 1 comes from Logistics: read it with a share lock BEFORE the menu
     // item, in the order a Logistics save that moves it takes them (phases,

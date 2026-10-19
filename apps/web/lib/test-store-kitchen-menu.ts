@@ -1,13 +1,11 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { MEAL_PLAN_EDITOR } from "@camp404/core";
+import { MEAL_PLAN_EDITOR, menuSlotProblem } from "@camp404/core";
 import {
   ALREADY_ON_MEAL,
   MEAL_IS_FULL,
-  MENU_DAY_NOT_ON_PLAN,
   MENU_ITEM_GONE,
-  MENU_MEAL_HAS_NO_PLATES,
   MENU_RECIPE_NOT_IN_BOOK,
   NOT_A_MENU_EDITOR,
   NOT_A_SNACK_KEEPER,
@@ -36,7 +34,9 @@ import { storeDropMenuItemExtras } from "./test-store-kitchen-extras";
 // recipe sits on a meal once, and a meal holds at most MAX_RECIPES_PER_MEAL.
 // The store keeps no audit log and is one synchronous process, so there is
 // nothing to lock. Kept apart from test-store.ts, which calls in here only to
-// reset.
+// reset. lib/kitchen-menu.ts reaches these through `kitchenMenuTestStore`
+// (below), named as @camp404/db/kitchen-menu names them, and
+// lib/__tests__/kitchen-menu-agreement.test.ts holds the two equal.
 
 interface KitchenMenuState {
   items: (KitchenMenuItem & { cycle: number; createdAt: number })[];
@@ -130,12 +130,8 @@ export function storeAddMenuItem(input: {
   if (!isEditor(input.actorId)) return { ok: false, error: NOT_A_MENU_EDITOR };
   const cycle = testStore.currentCycleNumber();
   const plan = testStore.getMealPlan(cycle);
-  if (input.day < 1 || input.day > plan.daysOnSite) {
-    return { ok: false, error: MENU_DAY_NOT_ON_PLAN };
-  }
-  if ((plan.days[input.day - 1]?.[input.meal] ?? 0) <= 0) {
-    return { ok: false, error: MENU_MEAL_HAS_NO_PLATES };
-  }
+  const slotProblem = menuSlotProblem(plan, input.day, input.meal);
+  if (slotProblem) return { ok: false, error: slotProblem };
   if (!testStore.recipeInBook(input.recipeId)) {
     return { ok: false, error: MENU_RECIPE_NOT_IN_BOOK };
   }
@@ -232,3 +228,16 @@ export function storeSetShoppingTicks(input: {
   }
   return { ok: true };
 }
+
+/** The twins under @camp404/db/kitchen-menu's names, for lib/kitchen-menu.ts. */
+export const kitchenMenuTestStore = {
+  getKitchenMenu: storeKitchenMenu,
+  listMenuBook: () => testStore.menuBook(),
+  getSnacks: storeSnacks,
+  getShoppingFacts: storeShoppingFacts,
+  addMenuItem: storeAddMenuItem,
+  removeMenuItem: storeRemoveMenuItem,
+  addSnack: storeAddSnack,
+  removeSnack: storeRemoveSnack,
+  setShoppingTicks: storeSetShoppingTicks,
+};

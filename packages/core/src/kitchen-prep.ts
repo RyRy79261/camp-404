@@ -1,4 +1,9 @@
-import type { MealOfTheDay, PrepTiming } from "@camp404/types";
+import {
+  PREP_TIMINGS,
+  PREP_WHAT_MAX,
+  type MealOfTheDay,
+  type PrepTiming,
+} from "@camp404/types";
 import { allowsRank, type Rule } from "./actor";
 import { MEAL_PLAN_EDITOR } from "./recipes";
 
@@ -18,6 +23,25 @@ import { MEAL_PLAN_EDITOR } from "./recipes";
 
 /** Who may add and remove prep steps: the meal plan's editors. */
 export const PREP_EDITOR: Rule = MEAL_PLAN_EDITOR;
+
+export const PREP_NEEDS_WORDS = "Say what to do.";
+
+/**
+ * A prep step as typed (the check both prep stores apply): refused when it
+ * says nothing or names no timing, else its words, trimmed and cut to
+ * PREP_WHAT_MAX.
+ */
+export function prepStepInput(input: {
+  what: string;
+  when: string;
+}): { ok: false; error: string } | { ok: true; what: string } {
+  const what = input.what.trim().slice(0, PREP_WHAT_MAX);
+  if (!what) return { ok: false, error: PREP_NEEDS_WORDS };
+  if (!(PREP_TIMINGS as readonly string[]).includes(input.when)) {
+    return { ok: false, error: PREP_NEEDS_WORDS };
+  }
+  return { ok: true, what };
+}
 
 /** Who may add and remove prep steps: a captain or a Kitchen lead. */
 export function canAddPrepSteps(

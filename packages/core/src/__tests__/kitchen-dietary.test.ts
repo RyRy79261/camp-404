@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { ALLERGEN_PLAN_MAX } from "@camp404/types";
 import {
+  PLAN_NEEDS_WORDS,
+  allergenPlanInput,
   allergenFlags,
   allergensMarked,
   canCheckMenuAllergens,
@@ -188,5 +191,36 @@ describe("foodsInWords", () => {
     expect(foodsInWords(["peanuts", "sesame", "tree_nuts"])).toBe(
       "peanuts, sesame and tree nuts",
     );
+  });
+});
+
+describe("allergenPlanInput", () => {
+  it("keeps the plan's words, trimmed and cut to the limit, and its kind", () => {
+    expect(
+      allergenPlanInput({
+        details: " Set a portion aside. ",
+        kind: "substitution",
+      }),
+    ).toEqual({
+      ok: true,
+      details: "Set a portion aside.",
+      kind: "substitution",
+    });
+    const long = allergenPlanInput({
+      details: "x".repeat(ALLERGEN_PLAN_MAX + 10),
+      kind: "unknown",
+    });
+    expect(long).toEqual({
+      ok: true,
+      details: "x".repeat(ALLERGEN_PLAN_MAX),
+      kind: "portion",
+    });
+  });
+
+  it("refuses a plan that says nothing", () => {
+    expect(allergenPlanInput({ details: "  ", kind: "portion" })).toEqual({
+      ok: false,
+      error: PLAN_NEEDS_WORDS,
+    });
   });
 });

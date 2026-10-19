@@ -4,6 +4,9 @@ import {
   recipeAllergens,
   type RecipeAllergen,
   MEAL_PLAN_EDITOR,
+  MENU_DAY_NOT_ON_PLAN,
+  MENU_MEAL_HAS_NO_PLATES,
+  menuSlotProblem,
 } from "@camp404/core";
 import {
   MAX_RECIPES_PER_MEAL,
@@ -49,10 +52,9 @@ export const NOT_A_MENU_EDITOR =
   "Only a Kitchen lead or a captain can change the menu.";
 export const MENU_RECIPE_NOT_IN_BOOK =
   "That recipe isn't in the recipe book. Reload the page.";
-export const MENU_DAY_NOT_ON_PLAN =
-  "That day isn't on the meal plan. Reload the page.";
-export const MENU_MEAL_HAS_NO_PLATES =
-  "Save some plates for that meal first, then add a recipe.";
+// The sentences of the check both menu stores share live with it in
+// @camp404/core; they are named here too, beside the rest.
+export { MENU_DAY_NOT_ON_PLAN, MENU_MEAL_HAS_NO_PLATES };
 export const ALREADY_ON_MEAL = "That recipe is already on this meal.";
 export const MEAL_IS_FULL = `A meal holds at most ${MAX_RECIPES_PER_MEAL} recipes.`;
 export const MENU_ITEM_GONE =
@@ -461,12 +463,8 @@ export async function addMenuItem(input: {
     if (!UUID.test(input.recipeId)) refuse(MENU_RECIPE_NOT_IN_BOOK);
     const cycle = await currentCycleNumber(tx);
     const plan = await readMealPlan(tx, cycle);
-    if (input.day < 1 || input.day > plan.daysOnSite) {
-      refuse(MENU_DAY_NOT_ON_PLAN);
-    }
-    if ((plan.days[input.day - 1]?.[input.meal] ?? 0) <= 0) {
-      refuse(MENU_MEAL_HAS_NO_PLATES);
-    }
+    const slotProblem = menuSlotProblem(plan, input.day, input.meal);
+    if (slotProblem) refuse(slotProblem);
     const [recipe] = await tx
       .select({
         title: schema.recipes.title,

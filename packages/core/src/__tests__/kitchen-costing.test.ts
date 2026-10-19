@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { MAX_LINE_PRICE_CENTS, SHOP_NAME_MAX } from "@camp404/types";
 import {
+  PRICE_BAD_AMOUNT,
+  PRICE_BAD_LINE,
+  PRICE_RANDS_ONLY,
+  isShoppingLineKey,
+  shoppingPriceInput,
   canPriceShoppingList,
   costBar,
   costPerPersonDay,
@@ -108,5 +114,61 @@ describe("costBar", () => {
     const cost = { paidCents: 1, estimatedCents: 0, totalCents: 1 };
     expect(costBar(cost, null)).toBeNull();
     expect(costBar(cost, 0)).toBeNull();
+  });
+});
+
+describe("shoppingPriceInput", () => {
+  const line = {
+    key: "red lentils|kg",
+    shop: " Makro ",
+    amountCents: 9_600,
+    kind: "paid",
+    currency: "ZAR",
+  };
+
+  it("keeps a priced line's shop trimmed and its kind", () => {
+    expect(shoppingPriceInput(line)).toEqual({
+      ok: true,
+      shop: "Makro",
+      kind: "paid",
+    });
+    expect(
+      shoppingPriceInput({
+        ...line,
+        shop: "M".repeat(SHOP_NAME_MAX + 5),
+        kind: "guess",
+        amountCents: null,
+      }),
+    ).toEqual({ ok: true, shop: "M".repeat(SHOP_NAME_MAX), kind: "estimate" });
+  });
+
+  it("refuses in order: rands only, then the amount, then the line", () => {
+    expect(
+      shoppingPriceInput({
+        ...line,
+        currency: "zar",
+        amountCents: 1.5,
+        key: "",
+      }),
+    ).toEqual({ ok: false, error: PRICE_RANDS_ONLY });
+    for (const amountCents of [1.5, -1, MAX_LINE_PRICE_CENTS + 1]) {
+      expect(shoppingPriceInput({ ...line, amountCents, key: "" })).toEqual({
+        ok: false,
+        error: PRICE_BAD_AMOUNT,
+      });
+    }
+    expect(shoppingPriceInput({ ...line, key: "lentils" })).toEqual({
+      ok: false,
+      error: PRICE_BAD_LINE,
+    });
+  });
+
+  it("knows a line key: an ingredient and its unit, or a snack", () => {
+    expect(isShoppingLineKey("salt|tbsp")).toBe(true);
+    expect(
+      isShoppingLineKey("snack:00000000-0000-4000-8000-000000000000"),
+    ).toBe(true);
+    expect(isShoppingLineKey("snack:1")).toBe(false);
+    expect(isShoppingLineKey(`${"x".repeat(300)}|kg`)).toBe(false);
   });
 });

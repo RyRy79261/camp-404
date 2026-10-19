@@ -3,14 +3,16 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import {
   addDays,
+  allergenPlanInput,
   campDayStart,
   dayOneShift,
-  isCurrency,
   mealPlates,
   prepDueDate,
   prepGoesOnBoard,
   prepTaskDetails,
+  prepStepInput,
   prepTaskTitle,
+  shoppingPriceInput,
   type SheetPrepStep,
   type Rule,
   SHOPPING_PRICER,
@@ -22,8 +24,6 @@ import {
   MEAL_ITEM_GONE,
   NOT_A_MEAL_CHECKER,
   PLAN_CHANGED,
-  PLAN_NEEDS_WORDS,
-  PREP_NEEDS_WORDS,
   PREP_STEP_GONE,
   RECIPE_NEWER_VERSION,
   type AllergenPlan,
@@ -33,9 +33,7 @@ import {
 } from "@camp404/db/kitchen-meals";
 import {
   NOT_A_PRICE_KEEPER,
-  PRICE_BAD_AMOUNT,
   PRICE_CHANGED,
-  PRICE_RANDS_ONLY,
   type PriceWriteResult,
   type ShoppingPrice,
 } from "@camp404/db/kitchen-prices";
@@ -56,6 +54,9 @@ import { storeKitchenMenu } from "./test-store-kitchen-menu";
 // compare-and-set; a prep step due before Day 1 is a Kitchen task on the
 // store's board, and taking it off takes the task off. The store keeps no
 // audit log. Kept apart from test-store.ts, which calls in here only to reset.
+// The input checks are @camp404/core's (shoppingPriceInput, allergenPlanInput,
+// prepStepInput), the same the database runs; lib/__tests__/
+// kitchen-extras-agreement.test.ts holds the rest equal.
 
 interface ExtrasState {
   prices: Map<string, ShoppingPrice & { cycle: number }>;
@@ -165,14 +166,8 @@ export const kitchenExtrasTestStore = {
     currency: string;
     expectedVersion: number;
   }): PriceWriteResult<{ version: number }> {
-    if (!isCurrency(input.currency))
-      return { ok: false, error: PRICE_RANDS_ONLY };
-    if (
-      input.amountCents !== null &&
-      (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0)
-    ) {
-      return { ok: false, error: PRICE_BAD_AMOUNT };
-    }
+    const checked = shoppingPriceInput(input);
+    if (!checked.ok) return checked;
     if (!may(input.actorId, SHOPPING_PRICER)) {
       return { ok: false, error: NOT_A_PRICE_KEEPER };
     }
@@ -186,9 +181,9 @@ export const kitchenExtrasTestStore = {
     state().prices.set(id, {
       cycle,
       key: input.key,
-      shop: input.shop?.trim() || null,
+      shop: checked.shop,
       amountCents: input.amountCents,
-      kind: input.kind,
+      kind: checked.kind,
       version,
     });
     return { ok: true, version };
@@ -240,8 +235,8 @@ export const kitchenExtrasTestStore = {
     if (!may(input.actorId, ALLERGEN_CHECKER)) {
       return { ok: false, error: NOT_A_MEAL_CHECKER };
     }
-    const details = input.details.trim();
-    if (!details) return { ok: false, error: PLAN_NEEDS_WORDS };
+    const plan = allergenPlanInput(input);
+    if (!plan.ok) return plan;
     if (!menuItem(input.itemId)) return { ok: false, error: MEAL_ITEM_GONE };
     const current = state().plans.get(input.itemId);
     if ((current?.version ?? 0) !== input.expectedVersion) {
@@ -250,8 +245,8 @@ export const kitchenExtrasTestStore = {
     const version = (current?.version ?? 0) + 1;
     state().plans.set(input.itemId, {
       menuItemId: input.itemId,
-      kind: input.kind,
-      details,
+      kind: plan.kind,
+      details: plan.details,
       allergens: readAllergens(input.allergens),
       version,
     });
@@ -296,8 +291,9 @@ export const kitchenExtrasTestStore = {
     if (!may(input.actorId, PREP_EDITOR)) {
       return { ok: false, error: NOT_A_MEAL_CHECKER };
     }
-    const what = input.what.trim();
-    if (!what) return { ok: false, error: PREP_NEEDS_WORDS };
+    const step = prepStepInput(input);
+    if (!step.ok) return step;
+    const { what } = step;
     const item = menuItem(input.itemId);
     if (!item) return { ok: false, error: MEAL_ITEM_GONE };
     const cycle = testStore.currentCycleNumber();
@@ -347,7 +343,11 @@ export const kitchenExtrasTestStore = {
       return { ok: false, error: NOT_A_MEAL_CHECKER };
     }
     const s = state();
-    const at = s.steps.findIndex((x) => x.id === input.stepId);
+    // This year's steps only, as the database's delete names the cycle.
+    const cycle = testStore.currentCycleNumber();
+    const at = s.steps.findIndex(
+      (x) => x.id === input.stepId && x.cycle === cycle,
+    );
     if (at < 0) return { ok: false, error: PREP_STEP_GONE };
     const [step] = s.steps.splice(at, 1);
     if (step?.taskId) {

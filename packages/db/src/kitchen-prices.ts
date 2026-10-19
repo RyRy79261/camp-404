@@ -1,11 +1,12 @@
 import { and, eq } from "drizzle-orm";
-import { isCurrency, SHOPPING_PRICER } from "@camp404/core";
 import {
-  MAX_LINE_PRICE_CENTS,
-  PRICE_KINDS,
-  SHOP_NAME_MAX,
-  type PriceKind,
-} from "@camp404/types";
+  PRICE_BAD_AMOUNT,
+  PRICE_BAD_LINE,
+  PRICE_RANDS_ONLY,
+  SHOPPING_PRICER,
+  shoppingPriceInput,
+} from "@camp404/core";
+import { PRICE_KINDS, type PriceKind } from "@camp404/types";
 import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { currentCycleNumber } from "./cycles";
@@ -35,9 +36,9 @@ export const NOT_A_PRICE_KEEPER =
   "Only a Kitchen lead or a captain can set shops and prices.";
 export const PRICE_CHANGED =
   "Someone changed this line first. Reload the page to see their shop and price.";
-export const PRICE_RANDS_ONLY = "Prices are in rands (ZAR) only.";
-export const PRICE_BAD_AMOUNT = "Type the price in rands, like 96,00.";
-export const PRICE_BAD_LINE = "That line isn't on the list. Reload the page.";
+// The sentences of the check both price stores share live with it in
+// @camp404/core; they are named here too, beside the rest.
+export { PRICE_BAD_AMOUNT, PRICE_BAD_LINE, PRICE_RANDS_ONLY };
 
 /** One line's shop and price. */
 export interface ShoppingPrice {
@@ -92,15 +93,6 @@ class Refused extends Error {
   }
 }
 
-/** A line's key names an ingredient and its unit, or a snack. */
-function isLineKey(key: string): boolean {
-  return (
-    key.length > 0 &&
-    key.length <= 300 &&
-    (key.includes("|") || /^snack:[0-9a-f-]{36}$/i.test(key))
-  );
-}
-
 /**
  * Sets a line's shop and price for this year. `expectedVersion` is the
  * version the editor saw (0: the line had none); a change someone made in
@@ -115,19 +107,9 @@ export async function setShoppingPrice(input: {
   currency: string;
   expectedVersion: number;
 }): Promise<PriceWriteResult<{ version: number }>> {
-  if (!isCurrency(input.currency))
-    return { ok: false, error: PRICE_RANDS_ONLY };
-  if (
-    input.amountCents !== null &&
-    (!Number.isSafeInteger(input.amountCents) ||
-      input.amountCents < 0 ||
-      input.amountCents > MAX_LINE_PRICE_CENTS)
-  ) {
-    return { ok: false, error: PRICE_BAD_AMOUNT };
-  }
-  if (!isLineKey(input.key)) return { ok: false, error: PRICE_BAD_LINE };
-  const shop = input.shop?.trim().slice(0, SHOP_NAME_MAX) || null;
-  const kind: PriceKind = isKind(input.kind) ? input.kind : "estimate";
+  const checked = shoppingPriceInput(input);
+  if (!checked.ok) return checked;
+  const { shop, kind } = checked;
   try {
     return await withTransaction(async (tx: Tx) => {
       if (!(await lockAllowed(tx, input.actorId, SHOPPING_PRICER))) {

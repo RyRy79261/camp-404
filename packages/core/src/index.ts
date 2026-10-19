@@ -134,21 +134,26 @@
 //     turnPiece, newPiece, resizePlot, overlappingPieces), and what a
 //     neighbour may see (neighbourView, arrivalDayCounts) (./camp-layout)
 //   - recipes: canApproveRecipe and canRunProofread (a captain or a Kitchen
-//     lead), RECIPE_TRANSITIONS/canMoveRecipe, groupLinesByCategory +
-//     groupStepsByPhase for the recipe page, defaultPlates, and the meal
+//     lead), RECIPE_TRANSITIONS/canMoveRecipe, the checks both recipe stores
+//     apply (RECIPE_QUEUEABLE, RECIPE_RETYPABLE, platesProblem,
+//     recipeDecisionProblem, rerunNoteProblem, adjustInstructionProblem,
+//     proofreadAnswerProblem, recipeTextProblem, runErrorText),
+//     groupLinesByCategory + groupStepsByPhase for the recipe page,
+//     defaultPlates, and the meal
 //     plan's canEditMealPlan, mealPlanPlateCounts, mealPlanPeaks and
 //     mealPlanDayLabel (./recipes)
 //   - kitchen menu and shopping list: canTickShoppingList (any member),
 //     buildShoppingList (the verified plate counts added up by shop area),
-//     shoppingKey, snackKey, sortMenu and mealPlates
-//     (./kitchen-menu)
+//     shoppingKey, snackKey, sortMenu, mealPlates and the check both menu
+//     stores apply (menuSlotProblem) (./kitchen-menu)
 //   - kitchen prices and food cost: canPriceShoppingList, foodCost,
-//     personDays, costPerPersonDay, costBar (./kitchen-costing)
+//     personDays, costPerPersonDay, costBar, and the check both price stores
+//     apply (shoppingPriceInput, isShoppingLineKey) (./kitchen-costing)
 //   - the dietary cross-check: canCheckMenuAllergens, dietaryCounts (counts
-//     only, never names), recipeAllergens, allergenFlags, planCovers
-//     (./kitchen-dietary)
+//     only, never names), recipeAllergens, allergenFlags, planCovers,
+//     allergenPlanInput (./kitchen-dietary)
 //   - prep steps: canAddPrepSteps, prepDueDate, prepGoesOnBoard,
-//     prepTaskTitle, prepSheetLines (./kitchen-prep)
+//     prepTaskTitle, prepSheetLines, prepStepInput (./kitchen-prep)
 //   - the Kitchen's prints (#249): shoppingByShop (shop totals), recipeBook
 //     (contents and page numbers), servedText, prepPlan (./kitchen-prints)
 //   - recipe sources: sourceText (the Markdown-like text Claude reads),
