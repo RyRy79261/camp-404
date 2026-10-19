@@ -25,7 +25,7 @@ import * as schema from "./schema";
 // - keep(reason): the rows stay and point at the Lost Cat stub.
 // - cascade(from): an ON DELETE CASCADE from a table erasure deletes takes
 //   them (the test checks the foreign key).
-// - undecided(recommend): nobody has decided yet; the rows stay. Pinned in
+// - undecided: nobody has decided yet (none today); the rows stay. Pinned in
 //   the test, so a new one cannot slip in quietly.
 // Erasure keeps the `users` row, so the users-level ON DELETE CASCADE never
 // fires: a `cascade` decision always names another table.
@@ -73,8 +73,6 @@ const scrub = (step: ScrubStep, does: string) =>
   ({ policy: "scrub", step, does }) as const;
 const keep = (reason: string) => ({ policy: "keep", reason }) as const;
 const cascade = (from: string) => ({ policy: "cascade", from }) as const;
-const undecided = (recommend: string) =>
-  ({ policy: "undecided", recommend }) as const;
 const byHand = (how: string): AdoptedByHand => ({
   byHand: "setFoundingYear",
   how,
@@ -515,8 +513,9 @@ export const TABLE_LIFECYCLE = {
   taskDeadlineReminders: {
     year: "none",
     erasure: {
-      userId: undecided(
-        "keep: a marker that the reminder went (no words of theirs); deleting it could send the Lost Cat the same reminder again",
+      // Owner, 2026-10-19: keep.
+      userId: keep(
+        "a marker that the reminder went (no words of theirs); deleting it could send the same reminder again",
       ),
     },
   },
@@ -530,9 +529,8 @@ export const TABLE_LIFECYCLE = {
   meetingNoteAttendees: {
     year: "none",
     erasure: {
-      userId: undecided(
-        "keep: the minutes say a Lost Cat was there, like an author link; or delete, as their own attendance",
-      ),
+      // Owner, 2026-10-19: keep.
+      userId: keep("the minutes say a Lost Cat was there, like an author link"),
     },
   },
   meetingNoteDecisions: { year: "none" },

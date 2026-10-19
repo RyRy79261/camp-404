@@ -180,9 +180,6 @@ describe("table lifecycle: erasure", () => {
       DECLARED.filter((d) => d.decision.policy === "undecided")
         .map((d) => `${d.table}.${d.column}`)
         .sort(),
-    ).toEqual([
-      "meeting_note_attendees.user_id",
-      "task_deadline_reminders.user_id",
-    ]);
+    ).toEqual([]);
   });
 });
