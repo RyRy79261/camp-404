@@ -9,9 +9,10 @@ import {
 import { Team } from "@camp404/types";
 import * as schema from "../schema";
 import {
+  YEAR_SCOPED_TABLES,
   YEAR_TABLES_ADOPTED_AS_IS,
   YEAR_TABLES_ADOPTED_BY_HAND,
-} from "../cycle-rollover";
+} from "../table-lifecycle";
 
 // The rules a careless column or index change can break without any other test
 // noticing. Nothing here touches a database: it reads the Drizzle declarations
@@ -349,77 +350,19 @@ describe("money columns", () => {
 });
 
 describe("year-scoped tables", () => {
-  // Every table with a `cycle` column, by name. A row written before the camp
-  // named its founding year carries the UNSET_CYCLE sentinel, and only
-  // setFoundingYear moves it into the real year; a table it skips keeps those
-  // rows on the sentinel, where no page reads them. A new year-scoped table
-  // fails the first test until it is listed here, and the second until
-  // setFoundingYear adopts it.
-  const YEAR_SCOPED = [
-    "adoptees",
-    "afrikaburn_deadlines",
-    "camp_events",
-    "camp_layout_versions",
-    "camp_layouts",
-    "camp_participations",
-    "camp_tickets",
-    "car_members",
-    "driver_profiles",
-    "dues_accounts",
-    "dues_charges",
-    "dues_instalments",
-    "dues_settle_ups",
-    "dues_years",
-    "fee_tiers",
-    "fuel_cans",
-    "generator_readiness_items",
-    "inventory_bookings",
-    "inventory_loans",
-    "inventory_needs",
-    "join_site_content",
-    "kitchen_meal_plan_days",
-    "kitchen_meal_plans",
-    "kitchen_menu_items",
-    "kitchen_prep_steps",
-    "kitchen_shopping_prices",
-    "kitchen_shopping_ticks",
-    "kitchen_snacks",
-    "lift_requests",
-    "logistics_attendance",
-    "logistics_phases",
-    "lounge_offers",
-    "lounge_settings",
-    "lounge_slots",
-    "meeting_notes",
-    "payment_refunds",
-    "payments",
-    "power_grid_nodes",
-    "power_loads",
-    "power_plans",
-    "power_sharing_agreements",
-    "power_work_plan_tasks",
-    "questionnaire_activations",
-    "questionnaire_responses",
-    "recipe_lessons",
-    "reimbursements",
-    "rental_items",
-    "rental_orders",
-    "shift_types",
-    "team_budgets",
-    "team_memberships",
-    "team_role_keen",
-    "team_role_settings",
-    "team_roles",
-    "transport_trailers",
-    "volunteer_shifts",
-  ];
-
-  it("are exactly the tables listed here", () => {
+  // A row written before the camp named its founding year carries the
+  // UNSET_CYCLE sentinel, and only setFoundingYear moves it into the real
+  // year; a table it skips keeps those rows on the sentinel, where no page
+  // reads them. Each table's `year` in table-lifecycle.ts says how it is
+  // adopted, and its type already refuses "none" on a table with a `cycle`
+  // property. These check the SQL column itself.
+  it("are exactly the tables with a cycle column", () => {
     const withCycle = configs
       .filter((config) => config.columns.some((c) => c.name === "cycle"))
       .map((config) => config.name)
       .sort();
-    expect(withCycle).toEqual(YEAR_SCOPED);
+    expect(withCycle.length).toBeGreaterThan(30);
+    expect(withCycle).toEqual(YEAR_SCOPED_TABLES);
   });
 
   it("are each adopted by setFoundingYear, once", () => {
@@ -428,6 +371,6 @@ describe("year-scoped tables", () => {
       ...YEAR_TABLES_ADOPTED_BY_HAND,
     ];
     expect(new Set(adopted).size).toBe(adopted.length);
-    expect(adopted.sort()).toEqual(YEAR_SCOPED);
+    expect(adopted.sort()).toEqual(YEAR_SCOPED_TABLES);
   });
 });
