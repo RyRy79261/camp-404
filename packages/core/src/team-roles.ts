@@ -1,3 +1,4 @@
+import { MAX_TEAM_ROLES } from "@camp404/types";
 import { CAPTAIN_ONLY, allowsRank, type Rule } from "./actor";
 import { teamProgramEditor } from "./team-programs";
 
@@ -59,6 +60,88 @@ export interface RoleFill {
 /** A role still has a place nobody fills. */
 export function isRoleOpen(role: RoleFill): boolean {
   return role.filled < role.places;
+}
+
+// --- The writes' checks ------------------------------------------------------
+// What a role write decides once it has read (and locked) what it needs, in
+// the order @camp404/db/team-roles checks it; the E2E store's twin calls the
+// same functions. Who may act (roleKeeper, LEAD_PICKER) is checked first, by
+// the caller, and the locks stay in the database.
+
+export const ROLE_CHANGED = "Someone changed this role first. Reload the page.";
+export const ROLE_GONE = "That role isn't there any more. Reload the page.";
+export const ROLE_FULL = "That role is full. Take someone off it first.";
+export const ROLE_HAS_PEOPLE =
+  "Take everyone off this role before removing it.";
+export const ROLE_PLACES_BELOW =
+  "More people fill this role than that. Take someone off it first.";
+export const LEAD_PLACES_BELOW =
+  "More people lead this team than that. Take a lead off first.";
+export const TOO_MANY_ROLES = `A team has ${MAX_TEAM_ROLES} roles at most.`;
+export const KEEN_FULL = "That role is full now.";
+export const KEEN_HELD = "You have this role already.";
+
+/** Why a team may not have another role: it has `count` this year. */
+export function newRoleProblem(count: number): string | null {
+  return count >= MAX_TEAM_ROLES ? TOO_MANY_ROLES : null;
+}
+
+/**
+ * Why a change to one of this year's roles is refused: it is another team's
+ * (as gone), someone changed it first, or it would have fewer places than the
+ * people who fill it.
+ */
+export function roleChangeProblem(input: {
+  /** The role's team, as stored. */
+  team: string;
+  /** The team the change names. */
+  askedTeam: string;
+  version: number;
+  expectedVersion: number;
+  places: number;
+  /** Who fills it, counted as the board lists them. */
+  filled: number;
+}): string | null {
+  if (input.team !== input.askedTeam) return ROLE_GONE;
+  if (input.version !== input.expectedVersion) return ROLE_CHANGED;
+  if (input.places < input.filled) return ROLE_PLACES_BELOW;
+  return null;
+}
+
+/** Why a role may not be removed: changed first, or someone fills it. */
+export function roleRemoveProblem(input: {
+  version: number;
+  expectedVersion: number;
+  filled: number;
+}): string | null {
+  if (input.version !== input.expectedVersion) return ROLE_CHANGED;
+  if (input.filled > 0) return ROLE_HAS_PEOPLE;
+  return null;
+}
+
+/** Why a team may not want `places` leads: more lead it already. */
+export function leadPlacesProblem(
+  places: number,
+  leads: number,
+): string | null {
+  return places < leads ? LEAD_PLACES_BELOW : null;
+}
+
+/** Why a role (Lead too) may not be given to one more person: it is full. */
+export function roleFullProblem(role: RoleFill): string | null {
+  return isRoleOpen(role) ? null : ROLE_FULL;
+}
+
+/**
+ * Why a member may not press "I'm keen" on a role: they fill it, or it is
+ * full. Undo is never refused.
+ */
+export function keenProblem(
+  input: RoleFill & { holds: boolean },
+): string | null {
+  if (input.holds) return KEEN_HELD;
+  if (!isRoleOpen(input)) return KEEN_FULL;
+  return null;
 }
 
 /** One team as the board counts it: its Lead, its other roles, and whether it is the viewer's. */

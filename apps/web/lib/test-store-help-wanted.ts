@@ -1,24 +1,25 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { canManageTeamRoles, canPickTeamLead } from "@camp404/core";
 import {
-  KEEN_FULL,
-  KEEN_HELD,
-  LEAD_PLACES_BELOW,
+  canManageTeamRoles,
+  canPickTeamLead,
+  keenProblem,
+  leadPlacesProblem,
+  newRoleProblem,
+  roleChangeProblem,
+  roleFullProblem,
+  roleRemoveProblem,
+} from "@camp404/core";
+import {
   NOT_A_LEAD_PICKER,
   NOT_A_ROLE_KEEPER,
   NO_ROLES_LAST_YEAR,
   ROLES_ALREADY_THERE,
   ROLE_ALREADY_HELD,
-  ROLE_CHANGED,
-  ROLE_FULL,
   ROLE_GONE,
-  ROLE_HAS_PEOPLE,
   ROLE_NOT_A_MEMBER,
   ROLE_NOT_HELD,
-  ROLE_PLACES_BELOW,
-  TOO_MANY_ROLES,
   type HelpWantedRead,
   type TeamRolePerson,
   type TeamRoleRow,
@@ -106,6 +107,16 @@ const tick = () => ++state().serial;
 
 const nameOf = (userId: string) =>
   testStore.findUserById(userId)?.displayName?.trim() || "Unnamed burner";
+
+/** Two people by their stored name, a missing one last (Postgres's order). */
+const byName = (a: string, b: string) => {
+  const x = testStore.findUserById(a)?.displayName ?? null;
+  const y = testStore.findUserById(b)?.displayName ?? null;
+  if (x === y) return 0;
+  if (x === null) return 1;
+  if (y === null) return -1;
+  return x.localeCompare(y);
+};
 
 const isMember = (userId: string) =>
   testStore.findUserById(userId)?.approvalStatus === "approved";
@@ -203,6 +214,30 @@ function dropKeen(userId: string, team: Team, roleId: string | null) {
 }
 
 export const helpWantedTestStore = {
+  /** Seed a role in a year directly (a spec's "last year"), nobody in it. */
+  seedTeamRole(input: {
+    cycle: number;
+    team: Team;
+    name: string;
+    places?: number;
+    note?: string | null;
+  }): TeamRoleRow {
+    const position = teamRoles(input.team, input.cycle).length;
+    const row: StoredRole = {
+      id: randomUUID(),
+      cycle: input.cycle,
+      team: input.team,
+      name: input.name,
+      places: input.places ?? 1,
+      note: input.note ?? null,
+      position,
+      version: 1,
+      at: tick(),
+    };
+    state().roles.push(row);
+    return roleRow(row);
+  },
+
   readHelpWanted(cycle: number): HelpWantedRead {
     const s = state();
     const roles = s.roles
@@ -228,14 +263,21 @@ export const helpWantedTestStore = {
           userId: h.userId,
           name: nameOf(h.userId),
         })),
-      members: TeamKeys.options.flatMap((team) =>
-        testStore.listTeamPeople(team).map((p) => ({
-          team,
-          isLead: p.isLead,
-          userId: p.id,
-          name: p.displayName,
-        })),
-      ),
+      // By name, then id, as the db orders them: listTeamPeople puts leads
+      // first, which would put a lead ahead of the team's other members.
+      members: TeamKeys.options
+        .flatMap((team) =>
+          testStore.listTeamPeople(team).map((p) => ({
+            team,
+            isLead: p.isLead,
+            userId: p.id,
+            name: p.displayName,
+          })),
+        )
+        .sort(
+          (a, b) =>
+            byName(a.userId, b.userId) || a.userId.localeCompare(b.userId),
+        ),
       keen: s.keen
         .filter((k) => k.cycle === cycle && isMember(k.userId))
         .sort((a, b) => a.at - b.at)
@@ -278,7 +320,8 @@ export const helpWantedTestStore = {
       if (!input.id) {
         assertKeeper(input.actorId, input.team);
         const mine = teamRoles(input.team, cycle);
-        if (mine.length >= MAX_TEAM_ROLES) refuse(TOO_MANY_ROLES);
+        const tooMany = newRoleProblem(mine.length);
+        if (tooMany) refuse(tooMany);
         const row: StoredRole = {
           id: randomUUID(),
           cycle,
@@ -296,9 +339,15 @@ export const helpWantedTestStore = {
       const found = roleOf(input.id, cycle);
       if (!found) refuse(ROLE_GONE);
       assertKeeper(input.actorId, found.team);
-      if (found.team !== input.team) refuse(ROLE_GONE);
-      if (found.version !== input.expectedVersion) refuse(ROLE_CHANGED);
-      if (input.places < holdersOf(found.id)) refuse(ROLE_PLACES_BELOW);
+      const problem = roleChangeProblem({
+        team: found.team,
+        askedTeam: input.team,
+        version: found.version,
+        expectedVersion: input.expectedVersion,
+        places: input.places,
+        filled: holdersOf(found.id),
+      });
+      if (problem) refuse(problem);
       found.name = input.name;
       found.places = input.places;
       found.note = input.note;
@@ -317,8 +366,12 @@ export const helpWantedTestStore = {
       const found = roleOf(input.id, cycleNow());
       if (!found) refuse(ROLE_GONE);
       assertKeeper(input.actorId, found.team);
-      if (found.version !== input.expectedVersion) refuse(ROLE_CHANGED);
-      if (holdersOf(found.id) > 0) refuse(ROLE_HAS_PEOPLE);
+      const problem = roleRemoveProblem({
+        version: found.version,
+        expectedVersion: input.expectedVersion,
+        filled: holdersOf(found.id),
+      });
+      if (problem) refuse(problem);
       s.roles = s.roles.filter((r) => r.id !== found.id);
       s.keen = s.keen.filter((k) => k.roleId !== found.id);
       return {};
@@ -333,7 +386,8 @@ export const helpWantedTestStore = {
     return run(() => {
       assertKeeper(input.actorId, input.team);
       const cycle = cycleNow();
-      if (input.places < leadsOf(input.team)) refuse(LEAD_PLACES_BELOW);
+      const below = leadPlacesProblem(input.places, leadsOf(input.team));
+      if (below) refuse(below);
       const s = state();
       const row = s.leadPlaces.find(
         (l) => l.team === input.team && l.cycle === cycle,
@@ -377,25 +431,28 @@ export const helpWantedTestStore = {
     return run(() => {
       if (!isMember(input.userId)) refuse(ROLE_NOT_A_MEMBER);
       const cycle = cycleNow();
-      let open: boolean;
+      let fill: { filled: number; places: number };
       let holds: boolean;
       if (input.roleId !== null) {
         const role = roleOf(input.roleId, cycle);
         if (!role || role.team !== input.team) refuse(ROLE_GONE);
-        open = holdersOf(role.id) < role.places;
+        fill = { filled: holdersOf(role.id), places: role.places };
         holds = state().holders.some(
           (h) => h.roleId === role.id && h.userId === input.userId,
         );
       } else {
-        open = leadsOf(input.team) < leadPlacesOf(input.team, cycle);
+        fill = {
+          filled: leadsOf(input.team),
+          places: leadPlacesOf(input.team, cycle),
+        };
         holds = testStore.getLeadTeams(input.userId).includes(input.team);
       }
       if (!input.keen) {
         dropKeen(input.userId, input.team, input.roleId);
         return {};
       }
-      if (holds) refuse(KEEN_HELD);
-      if (!open) refuse(KEEN_FULL);
+      const problem = keenProblem({ ...fill, holds });
+      if (problem) refuse(problem);
       const already = state().keen.some(
         (k) =>
           k.userId === input.userId &&
@@ -429,9 +486,11 @@ export const helpWantedTestStore = {
           refuse(NOT_A_LEAD_PICKER);
         }
         if (!isMember(input.userId)) refuse(ROLE_NOT_A_MEMBER);
-        if (leadsOf(input.team) >= leadPlacesOf(input.team, cycle)) {
-          refuse(ROLE_FULL);
-        }
+        const full = roleFullProblem({
+          filled: leadsOf(input.team),
+          places: leadPlacesOf(input.team, cycle),
+        });
+        if (full) refuse(full);
         const { created } = testStore.assignTeam({
           userId: input.userId,
           team: input.team,
@@ -449,7 +508,11 @@ export const helpWantedTestStore = {
       if (!role || role.team !== input.team) refuse(ROLE_GONE);
       assertKeeper(input.actorId, role.team);
       if (!isMember(input.userId)) refuse(ROLE_NOT_A_MEMBER);
-      if (holdersOf(role.id) >= role.places) refuse(ROLE_FULL);
+      const full = roleFullProblem({
+        filled: holdersOf(role.id),
+        places: role.places,
+      });
+      if (full) refuse(full);
       if (
         state().holders.some(
           (h) => h.roleId === role.id && h.userId === input.userId,

@@ -12,11 +12,7 @@ import {
   type RoleFill,
 } from "@camp404/core";
 import * as db from "@camp404/db/team-roles";
-import type {
-  HelpWantedRead,
-  TeamRolePerson,
-  TeamRoleWriteResult,
-} from "@camp404/db/team-roles";
+import type { TeamRoleWriteResult } from "@camp404/db/team-roles";
 import type {
   CopyTeamRolesInput,
   RemoveTeamRoleInput,
@@ -29,8 +25,8 @@ import type {
 } from "@camp404/types";
 import { getCampSettings } from "./camp-config";
 import { LEAD_NOTE } from "./help-wanted-copy";
-import { usesTestStore } from "./test-mode";
 import { helpWantedTestStore } from "./test-store-help-wanted";
+import { twin } from "./twin";
 
 // Help wanted (owner's pick A, 2026-10-09): from the database or, under E2E,
 // the test store. Every approved member reads every team's roles and who
@@ -44,6 +40,10 @@ import { helpWantedTestStore } from "./test-store-help-wanted";
 //    everyone reach only a viewer who runs at least one team's roles.
 //  - Lead is the first row of every team, built from the lead flag on
 //    team_memberships: there is no other record of who leads.
+//
+// The data functions pick the store once (twin below); the writes' checks
+// live once in @camp404/core (newRoleProblem, roleChangeProblem, keenProblem,
+// ...), and lib/__tests__/help-wanted-agreement.test.ts holds the rest equal.
 
 export type { TeamRoleWriteResult };
 
@@ -118,17 +118,17 @@ export interface HelpWantedView {
   picksLead: boolean;
 }
 
-async function read(cycle: number): Promise<HelpWantedRead> {
-  return usesTestStore()
-    ? helpWantedTestStore.readHelpWanted(cycle)
-    : db.readHelpWanted(cycle);
-}
-
-async function pickable(): Promise<TeamRolePerson[]> {
-  return usesTestStore()
-    ? helpWantedTestStore.listPickablePeople()
-    : db.listPickablePeople();
-}
+const roles = twin(db, helpWantedTestStore, [
+  "readHelpWanted",
+  "listPickablePeople",
+  "saveTeamRole",
+  "removeTeamRole",
+  "setLeadPlaces",
+  "copyLastYearsRoles",
+  "setKeen",
+  "giveTeamRole",
+  "takeTeamRole",
+]);
 
 /** The board as one viewer may see it. */
 export async function getHelpWantedView(viewer: {
@@ -138,7 +138,7 @@ export async function getHelpWantedView(viewer: {
   ledTeams: readonly string[];
 }): Promise<HelpWantedView> {
   const camp = await getCampSettings();
-  const data = await read(camp.cycleNumber);
+  const data = await roles.readHelpWanted(camp.cycleNumber);
   const picksLead = canPickTeamLead(viewer.rank);
   const active = [...camp.teams.teams]
     .filter((t) => !t.archived)
@@ -256,7 +256,7 @@ export async function getHelpWantedView(viewer: {
     for (const m of data.members) {
       teamsOf.set(m.userId, [...(teamsOf.get(m.userId) ?? []), m.team]);
     }
-    everyone = (await pickable()).map((p) => {
+    everyone = (await roles.listPickablePeople()).map((p) => {
       const keys = teamsOf.get(p.userId) ?? [];
       return {
         userId: p.userId,
@@ -285,10 +285,11 @@ export async function saveTeamRole(
   actorId: string,
   input: SaveTeamRoleInput,
 ): Promise<TeamRoleWriteResult> {
-  const args = { ...input, note: input.note ?? null, actorId };
-  const saved = usesTestStore()
-    ? helpWantedTestStore.saveTeamRole(args)
-    : await db.saveTeamRole(args);
+  const saved = await roles.saveTeamRole({
+    ...input,
+    note: input.note ?? null,
+    actorId,
+  });
   return saved.ok ? { ok: true } : saved;
 }
 
@@ -296,56 +297,40 @@ export async function removeTeamRole(
   actorId: string,
   input: RemoveTeamRoleInput,
 ): Promise<TeamRoleWriteResult> {
-  const args = { ...input, actorId };
-  return usesTestStore()
-    ? helpWantedTestStore.removeTeamRole(args)
-    : db.removeTeamRole(args);
+  return roles.removeTeamRole({ ...input, actorId });
 }
 
 export async function setLeadPlaces(
   actorId: string,
   input: SetLeadPlacesInput,
 ): Promise<TeamRoleWriteResult> {
-  const args = { ...input, actorId };
-  return usesTestStore()
-    ? helpWantedTestStore.setLeadPlaces(args)
-    : db.setLeadPlaces(args);
+  return roles.setLeadPlaces({ ...input, actorId });
 }
 
 export async function copyLastYearsRoles(
   actorId: string,
   input: CopyTeamRolesInput,
 ): Promise<TeamRoleWriteResult<{ copied: number }>> {
-  const args = { ...input, actorId };
-  return usesTestStore()
-    ? helpWantedTestStore.copyLastYearsRoles(args)
-    : db.copyLastYearsRoles(args);
+  return roles.copyLastYearsRoles({ ...input, actorId });
 }
 
 export async function setKeen(
   userId: string,
   input: TeamRoleKeenInput,
 ): Promise<TeamRoleWriteResult> {
-  const args = { ...input, userId };
-  return usesTestStore() ? helpWantedTestStore.setKeen(args) : db.setKeen(args);
+  return roles.setKeen({ ...input, userId });
 }
 
 export async function giveTeamRole(
   actorId: string,
   input: TeamRoleMemberInput,
 ): Promise<TeamRoleWriteResult<{ joinedTeam: boolean }>> {
-  const args = { ...input, actorId };
-  return usesTestStore()
-    ? helpWantedTestStore.giveTeamRole(args)
-    : db.giveTeamRole(args);
+  return roles.giveTeamRole({ ...input, actorId });
 }
 
 export async function takeTeamRole(
   actorId: string,
   input: TeamRoleMemberInput,
 ): Promise<TeamRoleWriteResult> {
-  const args = { ...input, actorId };
-  return usesTestStore()
-    ? helpWantedTestStore.takeTeamRole(args)
-    : db.takeTeamRole(args);
+  return roles.takeTeamRole({ ...input, actorId });
 }

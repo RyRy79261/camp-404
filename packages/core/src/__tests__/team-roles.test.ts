@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { Team } from "@camp404/types";
+import { MAX_TEAM_ROLES, Team } from "@camp404/types";
 import {
+  KEEN_FULL,
+  KEEN_HELD,
+  LEAD_PLACES_BELOW,
+  ROLE_CHANGED,
+  ROLE_FULL,
+  ROLE_GONE,
+  ROLE_HAS_PEOPLE,
+  ROLE_PLACES_BELOW,
+  TOO_MANY_ROLES,
+  keenProblem,
+  leadPlacesProblem,
+  newRoleProblem,
+  roleChangeProblem,
+  roleFullProblem,
+  roleRemoveProblem,
   canManageTeamRoles,
   canPickTeamLead,
   helpWantedSummary,
@@ -179,5 +194,61 @@ describe("pickerGroups", () => {
     expect(
       pickerGroups({ keen: ["gone"], team: ["left"], everyone: [], taken: [] }),
     ).toEqual({ keen: [], team: [], rest: [] });
+  });
+});
+
+describe("the writes' checks", () => {
+  it("lets a team have up to the most roles, and no more", () => {
+    expect(newRoleProblem(MAX_TEAM_ROLES - 1)).toBeNull();
+    expect(newRoleProblem(MAX_TEAM_ROLES)).toBe(TOO_MANY_ROLES);
+  });
+
+  it("refuses a role change in the database's order", () => {
+    const change = {
+      team: "kitchen",
+      askedTeam: "kitchen",
+      version: 2,
+      expectedVersion: 2,
+      places: 2,
+      filled: 2,
+    };
+    expect(roleChangeProblem(change)).toBeNull();
+    expect(
+      roleChangeProblem({
+        ...change,
+        askedTeam: "structures",
+        expectedVersion: 1,
+        places: 1,
+      }),
+    ).toBe(ROLE_GONE);
+    expect(
+      roleChangeProblem({ ...change, expectedVersion: 1, places: 1 }),
+    ).toBe(ROLE_CHANGED);
+    expect(roleChangeProblem({ ...change, places: 1 })).toBe(ROLE_PLACES_BELOW);
+  });
+
+  it("removes only a role nobody fills, at the version seen", () => {
+    const ask = { version: 1, expectedVersion: 1, filled: 0 };
+    expect(roleRemoveProblem(ask)).toBeNull();
+    expect(roleRemoveProblem({ ...ask, expectedVersion: 2, filled: 1 })).toBe(
+      ROLE_CHANGED,
+    );
+    expect(roleRemoveProblem({ ...ask, filled: 1 })).toBe(ROLE_HAS_PEOPLE);
+  });
+
+  it("never wants fewer leads than lead the team", () => {
+    expect(leadPlacesProblem(2, 2)).toBeNull();
+    expect(leadPlacesProblem(1, 2)).toBe(LEAD_PLACES_BELOW);
+  });
+
+  it("gives a role only while a place is open", () => {
+    expect(roleFullProblem({ filled: 1, places: 2 })).toBeNull();
+    expect(roleFullProblem({ filled: 2, places: 2 })).toBe(ROLE_FULL);
+  });
+
+  it("refuses I'm keen on a role the member fills, then on a full one", () => {
+    expect(keenProblem({ filled: 0, places: 1, holds: false })).toBeNull();
+    expect(keenProblem({ filled: 1, places: 1, holds: true })).toBe(KEEN_HELD);
+    expect(keenProblem({ filled: 1, places: 1, holds: false })).toBe(KEEN_FULL);
   });
 });
