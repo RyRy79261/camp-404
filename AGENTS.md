@@ -144,6 +144,15 @@ Traps that already cost real time:
   field (React mirrors it into the `value` attribute), so it lives in memory
   only and is dropped on a change of manifest version (what the member may
   open, never a count).
+  [CORRECTION 2026-10-19] What a URL change, a close, a minimise, Home, Show
+  desktop, a taskbar press, a phone's Back or a new manifest does to the
+  window stack and the address is decided in
+  `components/os/desktop-controller.ts` (no React, no DOM, nothing from
+  `next/*`; its tests are `desktop-controller.test.ts`): it answers each event
+  with plain effects (`push`, `replace`, `refresh`, a window change) that
+  `desktop-shell.tsx` runs. The shell still draws, holds the refs and the
+  copies, and reads the DOM. A new routing rule goes in the controller, with
+  a test there.
 - **Never `prefetch={true}` or `router.prefetch()` on a program URL.** A full
   prefetch renders the page on the server with no click: it marks the inbox
   and announcements read, runs `resetStaleRuns` and kicks due work. The
