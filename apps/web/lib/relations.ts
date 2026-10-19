@@ -2,20 +2,19 @@ import "server-only";
 
 import { deriveViewerRank, referralRosterForViewer } from "@camp404/core";
 import type { ReferralUser } from "@camp404/types";
-import { getReferralRoster as dbGetReferralRoster } from "@camp404/db/relations";
-import { usesTestStore } from "./test-mode";
+import * as db from "@camp404/db/relations";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 import { isTeamLead, type CampUser } from "./users";
 
 // The family tree's referral list, from the database normally and from the
 // in-memory test store under E2E_TEST_MODE, the same split lib/roster.ts uses,
 // so /family-tree renders during Playwright runs.
+// lib/__tests__/users-agreement.test.ts holds the two sides equal.
 
-export async function getReferralRoster(): Promise<ReferralUser[]> {
-  return usesTestStore()
-    ? testStore.getReferralRoster()
-    : dbGetReferralRoster();
-}
+const referrals = twin(db, testStore, ["getReferralRoster"]);
+
+export const getReferralRoster = referrals.getReferralRoster;
 
 /**
  * The family tree as `viewer` may read it. The codes are cut on the server

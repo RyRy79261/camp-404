@@ -23,7 +23,7 @@ describe("testStore required actions — the gate spine, mirrored", () => {
     testStore.ensureRequiredAction({ userId: "u1", ...GATE });
 
     expect(testStore.getPendingRequiredActions("u1")).toMatchObject([
-      { actionKey: "burner_profile", blocking: true, status: "pending" },
+      { actionKey: "burner_profile", blocking: true, type: "questionnaire" },
     ]);
     expect(testStore.getPendingRequiredActions("u2")).toEqual([]);
   });

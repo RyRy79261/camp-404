@@ -12,7 +12,9 @@ import {
   formatMemberRefCode,
   checkPaymentInput,
   isParticipationDecision,
+  approvalDecisionReason,
   isReviewTransition,
+  ticketPassNoChange,
   normalizeInviteCode,
   INTENT_IMPLIED_BY_STATUS,
   participationAfterIntent,
@@ -148,6 +150,7 @@ import {
 } from "./test-store-help-wanted";
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
+import type { PendingRequiredAction } from "@camp404/db/activations";
 import {
   CAR_EMPTY,
   CAR_MESSAGE_REFUSED,
@@ -1746,6 +1749,15 @@ function storePlateCounts(versionId: string): TestPlateCount[] {
     .sort((a, b) => a.plates - b.plates);
 }
 
+/**
+ * A team's place in the database enum's order (`Team.options`, which a test
+ * keeps equal to `teamEnum`): Postgres sorts an enum by its declared order,
+ * not by name.
+ */
+function teamOrder(team: Team): number {
+  return TeamKeys.options.indexOf(team);
+}
+
 export const testStore = {
   /** The camp team config (Phase 2). Backs the E2E-mode camp-config facade. */
   getTeamsConfig(): TeamsConfig {
@@ -1860,8 +1872,10 @@ export const testStore = {
         user.approvalStatus = input.to;
         user.approvalDecidedByUserId = input.decidedByUserId;
         user.approvalDecidedAt = new Date();
-        user.approvalDecisionReason =
-          input.to === "pending" ? null : input.reason?.trim() || null;
+        user.approvalDecisionReason = approvalDecisionReason(
+          input.to,
+          input.reason,
+        );
         user.updatedAt = new Date();
         // As in production: an approval tells the member, nothing else does.
         if (input.to === "approved") {
@@ -2038,13 +2052,26 @@ export const testStore = {
       }
     }
   },
-  /** Twin of getPendingRequiredActions: pending and blocking, oldest first. */
-  getPendingRequiredActions(userId: string): TestRequiredAction[] {
+  /**
+   * Twin of getPendingRequiredActions: pending and blocking, oldest first,
+   * with the columns the real query selects and no others.
+   */
+  getPendingRequiredActions(userId: string): PendingRequiredAction[] {
     return requiredActions
       .filter(
         (a) => a.userId === userId && a.status === "pending" && a.blocking,
       )
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((a) => ({
+        actionKey: a.actionKey,
+        type: a.type,
+        title: a.title,
+        version: a.version,
+        activationId: a.activationId,
+        blocking: a.blocking,
+        dueAt: a.dueAt,
+        createdAt: a.createdAt,
+      }));
   },
 
   // --- ID documents (raw in test mode — no crypto) ----------------------
@@ -2055,10 +2082,12 @@ export const testStore = {
   ): void {
     idDocsByUserId.set(userId, id);
   },
+  /** Null only when there is no such member, as in production. */
   getIdDocuments(
     userId: string,
   ): { idType: string | null; idNumber: string | null } | null {
-    return idDocsByUserId.get(userId) ?? null;
+    if (!findUserById(userId)) return null;
+    return idDocsByUserId.get(userId) ?? { idType: null, idNumber: null };
   },
   setEmergencyContacts(
     userId: string,
@@ -2945,11 +2974,10 @@ export const testStore = {
    */
   getTeamMemberships(userId: string): TeamMembership[] {
     const cycle = currentCycleNumber();
-    const order = (team: Team) => TeamKeys.options.indexOf(team);
     return teamMemberships
       .filter((m) => m.userId === userId && m.cycle === cycle)
       .map((m) => ({ team: m.team, isLead: m.isLead, cycle: m.cycle }))
-      .sort((a, b) => order(a.team) - order(b.team));
+      .sort((a, b) => teamOrder(a.team) - teamOrder(b.team));
   },
 
   /** Put a member on a team for THIS year. Idempotent; never sets the lead flag. */
@@ -3086,9 +3114,10 @@ export const testStore = {
       if (m.isLead) entry.leads += 1;
       byTeam.set(m.team, entry);
     }
+    // In the team enum's order, as the grouped query's ORDER BY team.
     return [...byTeam.entries()]
       .map(([team, counts]) => ({ team, ...counts, cycle }))
-      .sort((a, b) => a.team.localeCompare(b.team));
+      .sort((a, b) => teamOrder(a.team) - teamOrder(b.team));
   },
 
   /**
@@ -3312,9 +3341,8 @@ export const testStore = {
   setTicketPass(
     input: TicketPassChange & { userId: string; actorUserId: string },
   ): boolean {
-    if (input.from === input.to) {
-      throw new Error(`setTicketPass: ${input.pass} is already ${input.to}`);
-    }
+    const same = ticketPassNoChange(input);
+    if (same) throw new Error(same);
     const key = participationKey(input.userId, currentCycleNumber());
     const now = new Date();
     const row: TestTicket = tickets.get(key) ?? {
@@ -3386,11 +3414,14 @@ export const testStore = {
           rank: u.rank,
           approvalStatus: u.approvalStatus,
           isLead: mine.some((m) => m.isLead),
-          teams: mine.map((m) => m.team).sort((a, b) => a.localeCompare(b)),
+          // In the team enum's order, as the real query's array_agg.
+          teams: mine
+            .map((m) => m.team)
+            .sort((a, b) => teamOrder(a) - teamOrder(b)),
           leadTeams: mine
             .filter((m) => m.isLead)
             .map((m) => m.team)
-            .sort((a, b) => a.localeCompare(b)),
+            .sort((a, b) => teamOrder(a) - teamOrder(b)),
           duesPaid: settled.has(u.id),
           onboardingComplete: profile?.completedAt != null,
           pendingRequiredActions: owed.length,
@@ -3476,15 +3507,17 @@ export const testStore = {
 
   // --- captain-promotion handshake (mirrors @camp404/db/captain-promotion) ---
 
+  // Every answer is a copy, as a row read from the database is: a later
+  // decision does not change a request the caller already holds.
   getOpenPromotionForTarget(targetUserId: string): TestPromotionRequest | null {
-    return (
-      promotionRequests.find(
-        (r) => r.targetUserId === targetUserId && r.status === "sent",
-      ) ?? null
+    const row = promotionRequests.find(
+      (r) => r.targetUserId === targetUserId && r.status === "sent",
     );
+    return row ? { ...row } : null;
   },
   getPromotionRequestById(requestId: string): TestPromotionRequest | null {
-    return promotionRequests.find((r) => r.id === requestId) ?? null;
+    const row = promotionRequests.find((r) => r.id === requestId);
+    return row ? { ...row } : null;
   },
   sendCaptainPromotion(input: {
     targetUserId: string;
@@ -3503,7 +3536,7 @@ export const testStore = {
       createdAt: new Date(),
       decidedAt: null,
     };
-    promotionRequests.push(row);
+    promotionRequests.push({ ...row });
     // As in production: a new request tells the target who asked.
     pushDelivery(
       captainPromotionNotification({
@@ -3554,7 +3587,7 @@ export const testStore = {
     if (!row) return null;
     row.status = input.status;
     row.decidedAt = new Date();
-    return row;
+    return { ...row };
   },
   getIncomingPromotionsForUser(userId: string): IncomingPromotionRequest[] {
     return promotionRequests

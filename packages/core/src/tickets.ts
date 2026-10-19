@@ -88,6 +88,21 @@ export function mayRecordTicket(status: ParticipationStatus | null): boolean {
   return status !== null && status !== "not_attending";
 }
 
+/**
+ * Why a captain's DDT or WAP change is not a change at all (the value it
+ * moves to is the one it saw), or null. Both the database writer and the E2E
+ * store throw this sentence: no screen offers such a move.
+ */
+export function ticketPassNoChange(change: {
+  pass: string;
+  from: string;
+  to: string;
+}): string | null {
+  return change.from === change.to
+    ? `setTicketPass: ${change.pass} is already ${change.to}`
+    : null;
+}
+
 /** A member's ticket row as the counts need it; absent means the defaults. */
 export interface TicketFacts {
   ticketStatus: TicketStatus;

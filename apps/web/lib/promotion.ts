@@ -1,20 +1,13 @@
 import "server-only";
 
-import {
-  acceptCaptainPromotion as dbAccept,
-  decideCaptainPromotion as dbDecide,
-  getIncomingPromotionsForUser as dbGetIncoming,
-  getOpenPromotionForTarget as dbGetOpen,
-  getPromotionRequestById as dbGetById,
-  sendCaptainPromotion as dbSend,
-  type CaptainPromotionRequestRow,
-} from "@camp404/db/captain-promotion";
+import * as db from "@camp404/db/captain-promotion";
+import type { CaptainPromotionRequestRow } from "@camp404/db/captain-promotion";
 import type {
   IncomingPromotionRequest,
   PromotionRequestStatus,
 } from "@camp404/types";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // Captain-promotion data facade. Routes every read and write through the
 // Neon-backed `@camp404/db/captain-promotion` queries normally, and through the
@@ -22,7 +15,8 @@ import { testStore } from "./test-store";
 // `lib/users.ts` / `lib/notifications.ts` use so the app renders without a
 // database during Playwright runs. App code (actions, pages) imports from here,
 // never from `@camp404/db/captain-promotion` directly. The pure guards +
-// state-machine live in `@camp404/core`; this layer is just data access.
+// state-machine live in `@camp404/core`; this layer is just data access, and
+// lib/__tests__/promotion-agreement.test.ts holds the two sides equal.
 
 export type {
   CaptainPromotionRequestRow,
@@ -30,105 +24,24 @@ export type {
   PromotionRequestStatus,
 };
 
-interface PromotionBackend {
-  sendCaptainPromotion(input: {
-    targetUserId: string;
-    requestedByUserId: string;
-  }): Promise<CaptainPromotionRequestRow>;
-  decideCaptainPromotion(input: {
-    requestId: string;
-    status: "accepted" | "declined" | "cancelled";
-    actorUserId?: string;
-  }): Promise<CaptainPromotionRequestRow | null>;
-  acceptCaptainPromotion(input: {
-    requestId: string;
-    actorUserId: string;
-  }): Promise<CaptainPromotionRequestRow | null>;
-  getOpenPromotionForTarget(
-    targetUserId: string,
-  ): Promise<CaptainPromotionRequestRow | null>;
-  getPromotionRequestById(
-    requestId: string,
-  ): Promise<CaptainPromotionRequestRow | null>;
-  getIncomingPromotionsForUser(
-    userId: string,
-  ): Promise<IncomingPromotionRequest[]>;
-}
+const promotion = twin(db, testStore, [
+  "sendCaptainPromotion",
+  "decideCaptainPromotion",
+  "acceptCaptainPromotion",
+  "getOpenPromotionForTarget",
+  "getPromotionRequestById",
+  "getIncomingPromotionsForUser",
+]);
 
-const realBackend: PromotionBackend = {
-  sendCaptainPromotion: dbSend,
-  decideCaptainPromotion: dbDecide,
-  acceptCaptainPromotion: dbAccept,
-  getOpenPromotionForTarget: dbGetOpen,
-  getPromotionRequestById: dbGetById,
-  getIncomingPromotionsForUser: dbGetIncoming,
-};
-
-const testBackend: PromotionBackend = {
-  async sendCaptainPromotion(input) {
-    return testStore.sendCaptainPromotion(input);
-  },
-  async decideCaptainPromotion(input) {
-    return testStore.decideCaptainPromotion(input);
-  },
-  async acceptCaptainPromotion(input) {
-    return testStore.acceptCaptainPromotion(input);
-  },
-  async getOpenPromotionForTarget(targetUserId) {
-    return testStore.getOpenPromotionForTarget(targetUserId);
-  },
-  async getPromotionRequestById(requestId) {
-    return testStore.getPromotionRequestById(requestId);
-  },
-  async getIncomingPromotionsForUser(userId) {
-    return testStore.getIncomingPromotionsForUser(userId);
-  },
-};
-
-function backend(): PromotionBackend {
-  return usesTestStore() ? testBackend : realBackend;
-}
-
-export function sendCaptainPromotion(input: {
-  targetUserId: string;
-  requestedByUserId: string;
-}): Promise<CaptainPromotionRequestRow> {
-  return backend().sendCaptainPromotion(input);
-}
-
-export function decideCaptainPromotion(input: {
-  requestId: string;
-  status: "accepted" | "declined" | "cancelled";
-  actorUserId?: string;
-}): Promise<CaptainPromotionRequestRow | null> {
-  return backend().decideCaptainPromotion(input);
-}
+export const sendCaptainPromotion = promotion.sendCaptainPromotion;
+export const decideCaptainPromotion = promotion.decideCaptainPromotion;
 
 /**
  * The target accepts: status, rank and audit row in one transaction. Null when
  * the request is not open or the actor is not its target.
  */
-export function acceptCaptainPromotion(input: {
-  requestId: string;
-  actorUserId: string;
-}): Promise<CaptainPromotionRequestRow | null> {
-  return backend().acceptCaptainPromotion(input);
-}
-
-export function getOpenPromotionForTarget(
-  targetUserId: string,
-): Promise<CaptainPromotionRequestRow | null> {
-  return backend().getOpenPromotionForTarget(targetUserId);
-}
-
-export function getPromotionRequestById(
-  requestId: string,
-): Promise<CaptainPromotionRequestRow | null> {
-  return backend().getPromotionRequestById(requestId);
-}
-
-export function getIncomingPromotionsForUser(
-  userId: string,
-): Promise<IncomingPromotionRequest[]> {
-  return backend().getIncomingPromotionsForUser(userId);
-}
+export const acceptCaptainPromotion = promotion.acceptCaptainPromotion;
+export const getOpenPromotionForTarget = promotion.getOpenPromotionForTarget;
+export const getPromotionRequestById = promotion.getPromotionRequestById;
+export const getIncomingPromotionsForUser =
+  promotion.getIncomingPromotionsForUser;

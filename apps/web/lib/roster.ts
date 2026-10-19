@@ -1,147 +1,76 @@
 import "server-only";
 
-import {
-  getCampHeadcount as dbGetCampHeadcount,
-  getCampManagementRoster as dbGetCampManagementRoster,
-  type CampHeadcount,
-  getCampMemberDetail as dbGetCampMemberDetail,
-  type CampManagementMember,
-  type CampManagementRosterOptions,
-  type CampMemberDetail,
-  type CampMemberDetailOptions,
-} from "@camp404/db/roster";
-import {
-  assignTeam as dbAssignTeam,
-  getTeamCoverage as dbGetTeamCoverage,
-  getTeamMemberships as dbGetTeamMemberships,
-  listTeamPeople as dbListTeamPeople,
-  removeTeam as dbRemoveTeam,
-  setLead as dbSetLead,
-  type SetLeadResult,
-  type TeamCoverage,
-  type TeamMembership,
-  type TeamPerson,
-  type TeamWriteInput,
-  type Team,
+import * as rosterDb from "@camp404/db/roster";
+import type { CampHeadcount, CampManagementMember } from "@camp404/db/roster";
+import * as teams from "@camp404/db/team-memberships";
+import type {
+  SetLeadResult,
+  TeamCoverage,
+  TeamPerson,
+  TeamWriteInput,
 } from "@camp404/db/team-memberships";
-import { listMemberQuestionnaireGates as dbListMemberQuestionnaireGates } from "@camp404/db/activations";
-import {
-  listMemberNotes as dbListMemberNotes,
-  type MemberNote,
-} from "@camp404/db/member-notes";
-import { usesTestStore } from "./test-mode";
+import * as activations from "@camp404/db/activations";
+import * as notes from "@camp404/db/member-notes";
+import type { MemberNote } from "@camp404/db/member-notes";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
-// Camp-management roster data facade. Routes through the Neon-backed
-// `@camp404/db/roster` query normally, and through the in-memory test store under
-// E2E_TEST_MODE — the same real-vs-test split `lib/notifications.ts` /
-// `lib/promotion.ts` use, so the captain roster renders without a database during
-// Playwright runs. The captain pages import the read from here; the pure
-// view-models stay in `lib/camp-roster.ts`.
+// Camp-management roster data facade: the captain roster, the member panel's
+// reads and the team writes, from the database or, under E2E, the test store,
+// so the captain roster renders without a database during Playwright runs.
+// The captain pages import the reads from here; the pure view-models stay in
+// `lib/camp-roster.ts`. lib/__tests__/memberships-agreement.test.ts holds the
+// two sides equal.
 
 export type { CampHeadcount, CampManagementMember, TeamCoverage, TeamPerson };
 
-type QuestionnaireGate = Awaited<
-  ReturnType<typeof dbListMemberQuestionnaireGates>
->[number];
-
-interface RosterBackend {
-  getCampHeadcount(): Promise<CampHeadcount>;
-  getCampManagementRoster(
-    options?: CampManagementRosterOptions,
-  ): Promise<CampManagementMember[]>;
-  getTeamCoverage(): Promise<TeamCoverage[]>;
-  listTeamPeople(team: Team): Promise<TeamPerson[]>;
-  getCampMemberDetail(
-    userId: string,
-    options?: CampMemberDetailOptions,
-  ): Promise<CampMemberDetail | null>;
-  getTeamMemberships(userId: string): Promise<TeamMembership[]>;
-  listMemberNotes(userId: string): Promise<MemberNote[]>;
-  listMemberQuestionnaireGates(userId: string): Promise<QuestionnaireGate[]>;
-  assignTeam(
-    input: TeamWriteInput,
-  ): Promise<{ created: boolean; cycle: number }>;
-  removeTeam(
-    input: TeamWriteInput,
-  ): Promise<{ removed: boolean; cycle: number }>;
-  setLead(input: TeamWriteInput & { isLead: boolean }): Promise<SetLeadResult>;
-}
-
-// Each entry calls through at CALL time, so a unit test's vi.mock of the db
-// module still intercepts the read.
-const realBackend: RosterBackend = {
-  getCampHeadcount: () => dbGetCampHeadcount(),
-  getCampManagementRoster: (options) => dbGetCampManagementRoster(options),
-  getTeamCoverage: () => dbGetTeamCoverage(),
-  listTeamPeople: (team) => dbListTeamPeople(team),
-  getCampMemberDetail: (userId, options) =>
-    dbGetCampMemberDetail(userId, options),
-  getTeamMemberships: (userId) => dbGetTeamMemberships(userId),
-  listMemberNotes: (userId) => dbListMemberNotes(userId),
-  listMemberQuestionnaireGates: (userId) =>
-    dbListMemberQuestionnaireGates(userId),
-  assignTeam: (input) => dbAssignTeam(input),
-  removeTeam: (input) => dbRemoveTeam(input),
-  setLead: (input) => dbSetLead(input),
+// The store keeps no audit log, so the captain's id stops here; it models no
+// captain notes, so a panel opened in E2E has none.
+const storeTeams = {
+  getTeamCoverage: () => testStore.getTeamCoverage(),
+  listTeamPeople: (team: TeamWriteInput["team"]) =>
+    testStore.listTeamPeople(team),
+  getTeamMemberships: (userId: string) => testStore.getTeamMemberships(userId),
+  assignTeam: ({ userId, team }: TeamWriteInput) =>
+    testStore.assignTeam({ userId, team }),
+  removeTeam: ({ userId, team }: TeamWriteInput) =>
+    testStore.removeTeam({ userId, team }),
+  setLead: ({
+    userId,
+    team,
+    isLead,
+  }: TeamWriteInput & { isLead: boolean }): SetLeadResult =>
+    testStore.setLead({ userId, team, isLead }),
 };
 
-const testBackend: RosterBackend = {
-  async getCampHeadcount() {
-    return testStore.getCampHeadcount();
-  },
-  async getCampManagementRoster(options) {
-    return testStore.getCampManagementRoster(options);
-  },
-  async getTeamCoverage() {
-    return testStore.getTeamCoverage();
-  },
-  async listTeamPeople(team) {
-    return testStore.listTeamPeople(team);
-  },
-  async getCampMemberDetail(userId, options) {
-    return testStore.getCampMemberDetail(userId, options);
-  },
-  async getTeamMemberships(userId) {
-    return testStore.getTeamMemberships(userId);
-  },
-  // The store models no captain notes, so a panel opened in E2E has none.
-  async listMemberNotes() {
-    return [];
-  },
-  async listMemberQuestionnaireGates(userId) {
-    return testStore.listMemberQuestionnaireGates(userId);
-  },
-  // The store keeps no audit log, so the captain's id stops here.
-  async assignTeam({ userId, team }) {
-    return testStore.assignTeam({ userId, team });
-  },
-  async removeTeam({ userId, team }) {
-    return testStore.removeTeam({ userId, team });
-  },
-  async setLead({ userId, team, isLead }) {
-    return testStore.setLead({ userId, team, isLead });
-  },
-};
-
-function backend(): RosterBackend {
-  return usesTestStore() ? testBackend : realBackend;
-}
+const roster = twin(rosterDb, testStore, [
+  "getCampHeadcount",
+  "getCampManagementRoster",
+  "getCampMemberDetail",
+]);
+const team = twin(teams, storeTeams, [
+  "getTeamCoverage",
+  "listTeamPeople",
+  "getTeamMemberships",
+  "assignTeam",
+  "removeTeam",
+  "setLead",
+]);
+const gates = twin(activations, testStore, ["listMemberQuestionnaireGates"]);
+const captainNotes = twin(
+  notes,
+  { listMemberNotes: (_userId: string): MemberNote[] => [] },
+  ["listMemberNotes"],
+);
 
 /**
  * The camp's approved members and waiting sign-ups: the captain's Start menu
  * header. Captain-only; the console layout asks only for a captain.
  */
-export function getCampHeadcount(): Promise<CampHeadcount> {
-  return backend().getCampHeadcount();
-}
+export const getCampHeadcount = roster.getCampHeadcount;
 
 /** Pass `includeEmail` only for a captain viewer. */
-export function getCampManagementRoster(
-  options?: CampManagementRosterOptions,
-): Promise<CampManagementMember[]> {
-  return backend().getCampManagementRoster(options);
-}
+export const getCampManagementRoster = roster.getCampManagementRoster;
 
 /**
  * Head count and lead count per team for THIS year — the Overview's coverage
@@ -149,18 +78,14 @@ export function getCampManagementRoster(
  * configured teams and fills the missing ones in as empty, so a team with
  * nobody on it still shows.
  */
-export function getTeamCoverage(): Promise<TeamCoverage[]> {
-  return backend().getTeamCoverage();
-}
+export const getTeamCoverage = team.getTeamCoverage;
 
 /**
  * Everyone on one team this year, leads first — the team page's people. Only
  * what the member roster shows every approved member, so any approved member's
  * page may read it.
  */
-export function listTeamPeople(team: Team): Promise<TeamPerson[]> {
-  return backend().listTeamPeople(team);
-}
+export const listTeamPeople = team.listTeamPeople;
 
 // --- The captain member panel's reads ----------------------------------------
 // getMemberDetailAction reads these four. They route here so Playwright can
@@ -168,29 +93,16 @@ export function listTeamPeople(team: Team): Promise<TeamPerson[]> {
 // action, never by this module.
 
 /** One member's detail. Pass the include* options only for a captain viewer. */
-export function getCampMemberDetail(
-  userId: string,
-  options?: CampMemberDetailOptions,
-): Promise<CampMemberDetail | null> {
-  return backend().getCampMemberDetail(userId, options);
-}
+export const getCampMemberDetail = roster.getCampMemberDetail;
 
 /** This year's team memberships for one member. */
-export function getTeamMemberships(userId: string): Promise<TeamMembership[]> {
-  return backend().getTeamMemberships(userId);
-}
+export const getTeamMemberships = team.getTeamMemberships;
 
 /** Captain notes on one member, newest first. */
-export function listMemberNotes(userId: string): Promise<MemberNote[]> {
-  return backend().listMemberNotes(userId);
-}
+export const listMemberNotes = captainNotes.listMemberNotes;
 
 /** One member's questionnaire gates, oldest first. */
-export function listMemberQuestionnaireGates(
-  userId: string,
-): Promise<QuestionnaireGate[]> {
-  return backend().listMemberQuestionnaireGates(userId);
-}
+export const listMemberQuestionnaireGates = gates.listMemberQuestionnaireGates;
 
 // --- The captain member panel's team writes ----------------------------------
 // assignTeamAction, removeTeamAction and setTeamLeadAction write through these,
@@ -198,22 +110,10 @@ export function listMemberQuestionnaireGates(
 // gates them to captains and resolves the team key first; this module does not.
 
 /** Put a member on a team for THIS year. Idempotent; never sets the lead flag. */
-export function assignTeam(
-  input: TeamWriteInput,
-): Promise<{ created: boolean; cycle: number }> {
-  return backend().assignTeam(input);
-}
+export const assignTeam = team.assignTeam;
 
 /** Take a member off a team for THIS year. Idempotent; prior years survive. */
-export function removeTeam(
-  input: TeamWriteInput,
-): Promise<{ removed: boolean; cycle: number }> {
-  return backend().removeTeam(input);
-}
+export const removeTeam = team.removeTeam;
 
 /** Set or clear the lead flag on a membership that exists THIS year. */
-export function setLead(
-  input: TeamWriteInput & { isLead: boolean },
-): Promise<SetLeadResult> {
-  return backend().setLead(input);
-}
+export const setLead = team.setLead;

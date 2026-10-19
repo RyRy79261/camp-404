@@ -5,26 +5,25 @@ import {
   type ParticipationIntent,
   type ParticipationStatus,
 } from "@camp404/types";
-import { currentCycleNumber as dbCurrentCycleNumber } from "@camp404/db/cycles";
+import * as cycles from "@camp404/db/cycles";
+import * as db from "@camp404/db/participations";
 import {
   ATTENDANCE_EDIT_KEY,
-  decideParticipation as dbDecideParticipation,
-  getParticipation as dbGetParticipation,
-  saveParticipationIntent as dbSaveParticipationIntent,
   type AttendanceEdit,
   type AttendanceResponseRef,
   type ParticipationIntentResult,
-  type ParticipationRow,
 } from "@camp404/db/participations";
 import { ATTENDANCE_CHECK_KEY } from "./attendance-check";
 import { getBuilderDefinition } from "./questionnaire-definitions";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // Who is coming this year: the facade over `@camp404/db/participations`,
 // routed through the in-memory test store under E2E_TEST_MODE so Playwright
 // can drive the member form and the captain roster. Every caller gates the
-// viewer itself; this module gates nothing.
+// viewer itself; this module gates nothing. The rules both sides apply are
+// `participationAfterIntent` and `isParticipationDecision` in @camp404/core;
+// lib/__tests__/participations-agreement.test.ts holds the answers equal.
 
 export type { AttendanceEdit, ParticipationIntentResult };
 
@@ -36,42 +35,24 @@ export interface DecideParticipationInput {
   decidedByUserId: string;
 }
 
-interface ParticipationsBackend {
-  currentCycleNumber(): Promise<number>;
-  getParticipation(
-    userId: string,
-    cycle: number,
-  ): Promise<ParticipationRow | null>;
-  saveParticipationIntent(input: {
+const storeParticipations = {
+  getParticipation: (userId: string, cycle: number) =>
+    testStore.getParticipation(userId, cycle),
+  // The store has no transactions; the answer and its change-log entry are
+  // written one after the other, the same pair production commits together.
+  // It models no builder responses, so there is no stored answer to rewrite.
+  saveParticipationIntent({
+    userId,
+    cycle,
+    intent,
+    edit,
+  }: {
     userId: string;
     cycle: number;
     intent: ParticipationIntent;
     edit: AttendanceEdit | null;
     response?: AttendanceResponseRef | null;
-  }): Promise<ParticipationIntentResult>;
-  decideParticipation(input: DecideParticipationInput): Promise<boolean>;
-}
-
-// Each entry calls through at CALL time, so a unit test's vi.mock of the db
-// module still intercepts it.
-const realBackend: ParticipationsBackend = {
-  currentCycleNumber: () => dbCurrentCycleNumber(),
-  getParticipation: (userId, cycle) => dbGetParticipation(userId, cycle),
-  saveParticipationIntent: (input) => dbSaveParticipationIntent(input),
-  decideParticipation: (input) => dbDecideParticipation(input),
-};
-
-const testBackend: ParticipationsBackend = {
-  async currentCycleNumber() {
-    return testStore.currentCycleNumber();
-  },
-  async getParticipation(userId, cycle) {
-    return testStore.getParticipation(userId, cycle);
-  },
-  // The store has no transactions; the answer and its change-log entry are
-  // written one after the other, the same pair production commits together.
-  // It models no builder responses, so there is no stored answer to rewrite.
-  async saveParticipationIntent({ userId, cycle, intent, edit }) {
+  }): ParticipationIntentResult {
     const result = testStore.applyParticipationIntent({
       userId,
       cycle,
@@ -89,14 +70,16 @@ const testBackend: ParticipationsBackend = {
     return result;
   },
   // The store keeps no audit log, so the captain's id stops at the row.
-  async decideParticipation(input) {
-    return testStore.decideParticipation(input);
-  },
+  decideParticipation: (input: DecideParticipationInput) =>
+    testStore.decideParticipation(input),
 };
 
-function backend(): ParticipationsBackend {
-  return usesTestStore() ? testBackend : realBackend;
-}
+const places = twin(db, storeParticipations, [
+  "getParticipation",
+  "saveParticipationIntent",
+  "decideParticipation",
+]);
+const year = twin(cycles, testStore, ["currentCycleNumber"]);
 
 /** What a member may read of their own row. */
 export interface MyParticipation {
@@ -113,9 +96,8 @@ export interface MyParticipation {
 export async function getMyParticipation(
   userId: string,
 ): Promise<MyParticipation | null> {
-  const b = backend();
-  const cycle = await b.currentCycleNumber();
-  const row = await b.getParticipation(userId, cycle);
+  const cycle = await year.currentCycleNumber();
+  const row = await places.getParticipation(userId, cycle);
   // Only the member's own fields: never who decided or why.
   return row
     ? {
@@ -137,12 +119,11 @@ export async function saveAttendanceAnswer(input: {
   intent: ParticipationIntent;
   edit: AttendanceEdit | null;
 }): Promise<ParticipationIntentResult> {
-  const b = backend();
   // Both resolved before the write opens its transaction (the one-connection
   // rule).
-  const cycle = await b.currentCycleNumber();
+  const cycle = await year.currentCycleNumber();
   const response = await attendanceResponseRef();
-  return b.saveParticipationIntent({ ...input, cycle, response });
+  return places.saveParticipationIntent({ ...input, cycle, response });
 }
 
 /**
@@ -165,8 +146,4 @@ async function attendanceResponseRef(): Promise<AttendanceResponseRef | null> {
  * A captain accepts a member or puts them on the waiting list for this year.
  * False when the member's status had already moved from `from`.
  */
-export function decideParticipation(
-  input: DecideParticipationInput,
-): Promise<boolean> {
-  return backend().decideParticipation(input);
-}
+export const decideParticipation = places.decideParticipation;

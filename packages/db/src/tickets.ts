@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { DEFAULT_TICKET } from "@camp404/core";
+import { DEFAULT_TICKET, ticketPassNoChange } from "@camp404/core";
 import type {
   DdtStatus,
   WapStatus,
@@ -111,9 +111,8 @@ export type TicketPassChange =
 export async function setTicketPass(
   input: TicketPassChange & { userId: string; actorUserId: string },
 ): Promise<boolean> {
-  if (input.from === input.to) {
-    throw new Error(`setTicketPass: ${input.pass} is already ${input.to}`);
-  }
+  const same = ticketPassNoChange(input);
+  if (same) throw new Error(same);
   // Resolved BEFORE the transaction (see the module note).
   const cycle = await currentCycleNumber();
   return withTransaction(async (tx) => {

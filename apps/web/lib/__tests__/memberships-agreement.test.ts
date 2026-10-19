@@ -19,6 +19,7 @@ import {
 import { deriveViewerRank } from "@camp404/core";
 import { Rank, Team } from "@camp404/types";
 import { useTestDb } from "../../../../packages/db/src/__tests__/_harness";
+import { bothWays, outcome } from "./_agreement";
 import {
   makeMembership,
   makeUser,
@@ -47,6 +48,19 @@ import {
   isTeamLead,
 } from "../users";
 import { getCampSettings } from "../camp-config";
+import {
+  assignTeam as rosterAssignTeam,
+  getCampManagementRoster,
+  getCampMemberDetail,
+  getTeamCoverage,
+  getTeamMemberships as rosterGetTeamMemberships,
+  listMemberNotes,
+  listMemberQuestionnaireGates,
+  listTeamPeople,
+  removeTeam as rosterRemoveTeam,
+  setLead as rosterSetLead,
+} from "../roster";
+import { seedBurnerProfileAction } from "../users";
 import { buildProgramManifest } from "../programs";
 
 type DB = ReturnType<ReturnType<typeof useTestDb>["db"]>;
@@ -210,6 +224,175 @@ describe("the memberships read: the database and the test store agree", () => {
     expect(fromDb.memberships).toEqual([{ team: KITCHEN, isLead: false }]);
     expect(fromDb.isLead).toBe(false);
     expect(fromStore).toEqual(fromDb);
+  });
+});
+
+// The captain roster and the member panel's team writes, through lib/roster.ts:
+// the same writes give the same answers, refusals and rosters on both sides
+// (the bothWays pattern of _agreement.ts, with its personas).
+describe("the captain roster and team writes: the database and the test store agree", () => {
+  const h = useTestDb();
+  beforeEach(() => {
+    store.on = false;
+    testStore.reset();
+  });
+
+  it("puts a member on teams, makes and unmakes a lead, refuses a lead who is not on the team, and takes them off", async () => {
+    const { db, store: fromStore } = await bothWays(store, h, async (p) => {
+      const write = { userId: p.member, actorId: p.captain };
+      const first = await rosterAssignTeam({ ...write, team: FINANCE });
+      const again = await rosterAssignTeam({ ...write, team: FINANCE });
+      await rosterAssignTeam({ ...write, team: KITCHEN });
+      const notOnTeam = await rosterSetLead({
+        ...write,
+        team: SOUND,
+        isLead: true,
+      });
+      const made = await rosterSetLead({
+        ...write,
+        team: FINANCE,
+        isLead: true,
+      });
+      const same = await rosterSetLead({
+        ...write,
+        team: FINANCE,
+        isLead: true,
+      });
+      const before = {
+        mine: await rosterGetTeamMemberships(p.member),
+        coverage: await getTeamCoverage(),
+        finance: await listTeamPeople(FINANCE),
+      };
+      const removed = await rosterRemoveTeam({ ...write, team: FINANCE });
+      const removedAgain = await rosterRemoveTeam({ ...write, team: FINANCE });
+      const nobody = await outcome(() =>
+        rosterAssignTeam({
+          userId: "00000000-0000-4000-8000-000000000000",
+          team: KITCHEN,
+          actorId: p.captain,
+        }),
+      );
+      return {
+        first,
+        again,
+        notOnTeam,
+        made,
+        same,
+        before,
+        removed,
+        removedAgain,
+        nobodyRefused: "threw" in nobody,
+        after: {
+          mine: await rosterGetTeamMemberships(p.member),
+          coverage: await getTeamCoverage(),
+          finance: await listTeamPeople(FINANCE),
+        },
+      };
+    });
+    expect(db).toMatchObject({
+      first: { created: true, cycle: YEAR },
+      again: { created: false },
+      notOnTeam: { ok: false, reason: "not_a_member" },
+      made: { ok: true, changed: true },
+      same: { ok: true, changed: false },
+      before: {
+        mine: [
+          { team: KITCHEN, isLead: false },
+          { team: FINANCE, isLead: true },
+        ],
+        coverage: [
+          { team: KITCHEN, members: 2, leads: 1 },
+          { team: FINANCE, members: 2, leads: 2 },
+        ],
+      },
+      removed: { removed: true },
+      removedAgain: { removed: false },
+      nobodyRefused: true,
+      after: { mine: [{ team: KITCHEN, isLead: false }] },
+    });
+    expect(fromStore).toEqual(db);
+  });
+
+  it("lists the captain roster and one member's panel the same way", async () => {
+    const { db, store: fromStore } = await bothWays(
+      store,
+      h,
+      async (p, seed) => {
+        await seed.join(p.member, FINANCE);
+        await seed.lead(p.member, KITCHEN);
+        await seed.participation(p.member, "applied");
+        await seed.user("Late", { approval: "pending" });
+        await seedBurnerProfileAction(p.member);
+        const pick = (
+          m: Awaited<ReturnType<typeof getCampManagementRoster>>[number],
+        ) => ({
+          displayName: m.displayName,
+          rank: m.rank,
+          approvalStatus: m.approvalStatus,
+          isLead: m.isLead,
+          teams: m.teams,
+          leadTeams: m.leadTeams,
+          duesPaid: m.duesPaid,
+          onboardingComplete: m.onboardingComplete,
+          pendingRequiredActions: m.pendingRequiredActions,
+          pendingRequiredActionItems: m.pendingRequiredActionItems,
+          participation: m.participation,
+          participationIntent: m.participationIntent,
+          email: m.email,
+        });
+        const detail = await getCampMemberDetail(p.member, {
+          includeEmail: true,
+        });
+        return {
+          roster: (await getCampManagementRoster({ includeEmail: true })).map(
+            pick,
+          ),
+          detail: detail && {
+            displayName: detail.displayName,
+            rank: detail.rank,
+            approvalStatus: detail.approvalStatus,
+            onboardingComplete: detail.onboardingComplete,
+            responses: detail.responses,
+            email: detail.email,
+            isFounder: detail.isFounder,
+          },
+          noDetail: await getCampMemberDetail(
+            "00000000-0000-4000-8000-000000000000",
+          ),
+          notes: await listMemberNotes(p.member),
+          gates: (await listMemberQuestionnaireGates(p.member)).map((g) => ({
+            actionKey: g.actionKey,
+            status: g.status,
+            blocking: g.blocking,
+          })),
+        };
+      },
+    );
+    expect(db).toMatchObject({
+      roster: [
+        { displayName: "Cap", rank: "captain", teams: [] },
+        { displayName: "Cook", isLead: true, teams: [KITCHEN] },
+        { displayName: "Fin", isLead: true, teams: [FINANCE] },
+        { displayName: "Late", approvalStatus: "pending" },
+        {
+          displayName: "Nova",
+          isLead: true,
+          teams: [KITCHEN, FINANCE],
+          leadTeams: [KITCHEN],
+          pendingRequiredActions: 1,
+          participation: "applied",
+          participationIntent: "yes",
+        },
+        { displayName: "Zed" },
+      ],
+      detail: { displayName: "Nova", onboardingComplete: false },
+      noDetail: null,
+      notes: [],
+      gates: [
+        { actionKey: "burner_profile", status: "pending", blocking: true },
+      ],
+    });
+    expect(fromStore).toEqual(db);
   });
 });
 

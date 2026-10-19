@@ -2,17 +2,11 @@ import "server-only";
 
 import { DEFAULT_TICKET, type TicketFacts } from "@camp404/core";
 import type { TicketStatus } from "@camp404/types";
-import { currentCycleNumber as dbCurrentCycleNumber } from "@camp404/db/cycles";
-import {
-  getTicket as dbGetTicket,
-  listTickets as dbListTickets,
-  setOwnTicketStatus as dbSetOwnTicketStatus,
-  setTicketPass as dbSetTicketPass,
-  type TicketPassChange,
-  type TicketRow,
-} from "@camp404/db/tickets";
-import { usesTestStore } from "./test-mode";
+import * as cycles from "@camp404/db/cycles";
+import * as db from "@camp404/db/tickets";
+import type { TicketPassChange } from "@camp404/db/tickets";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // Tickets and WAP (#238): the facade over `@camp404/db/tickets`,
 // routed through the in-memory test store under E2E_TEST_MODE so Playwright
@@ -23,52 +17,14 @@ import { testStore } from "./test-store";
 
 export type { TicketFacts, TicketPassChange };
 
-interface TicketsBackend {
-  currentCycleNumber(): Promise<number>;
-  getTicket(userId: string, cycle: number): Promise<TicketRow | null>;
-  listTickets(cycle: number): Promise<TicketRow[]>;
-  setOwnTicketStatus(input: {
-    userId: string;
-    cycle: number;
-    ticketStatus: TicketStatus;
-  }): Promise<void>;
-  setTicketPass(
-    input: TicketPassChange & { userId: string; actorUserId: string },
-  ): Promise<boolean>;
-}
-
-// Each entry calls through at CALL time, so a unit test's vi.mock of the db
-// module still intercepts it.
-const realBackend: TicketsBackend = {
-  currentCycleNumber: () => dbCurrentCycleNumber(),
-  getTicket: (userId, cycle) => dbGetTicket(userId, cycle),
-  listTickets: (cycle) => dbListTickets(cycle),
-  setOwnTicketStatus: (input) => dbSetOwnTicketStatus(input),
-  setTicketPass: (input) => dbSetTicketPass(input),
-};
-
-const testBackend: TicketsBackend = {
-  async currentCycleNumber() {
-    return testStore.currentCycleNumber();
-  },
-  async getTicket(userId, cycle) {
-    return testStore.getTicket(userId, cycle);
-  },
-  async listTickets(cycle) {
-    return testStore.listTickets(cycle);
-  },
-  async setOwnTicketStatus(input) {
-    testStore.setOwnTicketStatus(input);
-  },
-  // The store keeps no audit log, so the captain's id stops at the row.
-  async setTicketPass(input) {
-    return testStore.setTicketPass(input);
-  },
-};
-
-function backend(): TicketsBackend {
-  return usesTestStore() ? testBackend : realBackend;
-}
+// The store keeps no audit log, so the captain's id stops at the row.
+const ticket = twin(db, testStore, [
+  "getTicket",
+  "listTickets",
+  "setOwnTicketStatus",
+  "setTicketPass",
+]);
+const year = twin(cycles, testStore, ["currentCycleNumber"]);
 
 /**
  * What a member reads of their OWN ticket record (owner, 2026-09-28): their
@@ -83,9 +39,8 @@ export type MyTicket = TicketFacts;
  * passes the signed-in member's own id, never another member's.
  */
 export async function getMyTicket(userId: string): Promise<MyTicket> {
-  const b = backend();
-  const cycle = await b.currentCycleNumber();
-  const row = await b.getTicket(userId, cycle);
+  const cycle = await year.currentCycleNumber();
+  const row = await ticket.getTicket(userId, cycle);
   return {
     ticketStatus: row?.ticketStatus ?? DEFAULT_TICKET.ticketStatus,
     ddt: row?.ddt ?? DEFAULT_TICKET.ddt,
@@ -98,9 +53,8 @@ export async function setMyTicketStatus(input: {
   userId: string;
   ticketStatus: TicketStatus;
 }): Promise<void> {
-  const b = backend();
-  const cycle = await b.currentCycleNumber();
-  await b.setOwnTicketStatus({ ...input, cycle });
+  const cycle = await year.currentCycleNumber();
+  await ticket.setOwnTicketStatus({ ...input, cycle });
 }
 
 /**
@@ -109,9 +63,8 @@ export async function setMyTicketStatus(input: {
  * Captain-only data: only a captain's page may call it.
  */
 export async function listTicketsThisYear(): Promise<Map<string, TicketFacts>> {
-  const b = backend();
-  const cycle = await b.currentCycleNumber();
-  const rows = await b.listTickets(cycle);
+  const cycle = await year.currentCycleNumber();
+  const rows = await ticket.listTickets(cycle);
   return new Map(
     rows.map((r) => [
       r.userId,
@@ -128,8 +81,4 @@ export async function listTicketsThisYear(): Promise<Map<string, TicketFacts>> {
  * A captain records a member's DDT or WAP for this
  * year. False when the value had already moved from `from`.
  */
-export function setTicketPass(
-  input: TicketPassChange & { userId: string; actorUserId: string },
-): Promise<boolean> {
-  return backend().setTicketPass(input);
-}
+export const setTicketPass = ticket.setTicketPass;

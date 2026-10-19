@@ -31,6 +31,18 @@ export function isReviewTransition(
   return ACTIONS_FROM[from].some((action) => REVIEW_TARGET[action] === to);
 }
 
+/**
+ * The reason a decision stores: none on a re-open (it belonged to the
+ * decision being undone), else the captain's words trimmed, blank as none.
+ * The database writer and the E2E store both keep it this way.
+ */
+export function approvalDecisionReason(
+  to: ApprovalStatus,
+  reason: string | null | undefined,
+): string | null {
+  return to === "pending" ? null : reason?.trim() || null;
+}
+
 /** The action that moves a member from `from` to `to`, or null when none does. */
 export function reviewActionFor(
   from: ApprovalStatus,
