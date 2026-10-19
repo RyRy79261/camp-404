@@ -520,6 +520,23 @@ With `NEON_LOCAL_PROXY=1`, both drivers go through the proxy for the
 
 Decisions baked into the schema — keep new code consistent with them:
 
+- **A new table declares its lifecycle once** ([CORRECTION 2026-10-19]: a
+  per-year table used to mean editing five to seven hand lists, and nothing
+  checked that a table pointing at a member had an erasure decision). Every
+  table in `schema.ts` has an entry in `TABLE_LIFECYCLE`
+  (`packages/db/src/table-lifecycle.ts`): its `year` (`"none"`, `"as-is"`
+  for one plain UPDATE in `setFoundingYear`, or `byHand(how)` with the hand
+  statements in `setFoundingYear`) and, for every column that references
+  `users.id` or Better Auth's `user.id`, its `erasure`: `del` (deleted in
+  `sanitiseAccount`'s loop), `scrub(step, does)` (a named hand step,
+  `SCRUB_STEPS` in `account.ts`), `keep(reason)`, `cascade(from)` or
+  `undecided` (pinned in the test; a question for the owner). Typecheck
+  fails on a missing table or a `"none"` year on a table with `cycle`;
+  `table-lifecycle.test.ts` fails on a member column with no decision, and
+  `schema-invariants.test.ts` on a `cycle` column the declaration does not
+  know. The founding lists (`YEAR_TABLES_ADOPTED_AS_IS`,
+  `YEAR_TABLES_ADOPTED_BY_HAND`) are derived from it. A blob folder an
+  erased member leaves is still listed by hand in `apps/web/lib/account.ts`.
 - **Ranks.** `users.rank` is only `captain` or `member`. Every other
   "role" is _derived_, never stored: a **team lead** is derived from
   `team_memberships.is_lead`; a **driver** from
@@ -1274,7 +1291,8 @@ never measured.
   plan). Encrypt at the write boundary — never store these plaintext.
 - Never store passport images, credit card numbers, or CVVs.
 - Account deletion sanitises to a `Lost Cat #N` stub to preserve
-  relational integrity. See `docs/brief.md`.
+  relational integrity. See `docs/brief.md`. What it does to each table is
+  that table's `erasure` in `packages/db/src/table-lifecycle.ts`.
 - No `PGCRYPTO_KEY` rotation is planned (owner's call, 2026-09-16). A stored
   value has no key id, so after a key change the old ciphertext cannot be
   read: the app shows it as unreadable and cannot recover it. Do not change
