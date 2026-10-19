@@ -3,14 +3,19 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import {
   arrivalDayCounts,
+  checkCampLayout,
+  copiedLayoutNote,
+  isLayoutShareToken,
+  layoutNote,
+  layoutVersionWanted,
   neighbourView,
+  restoredLayoutNote,
   type ArrivalDayCount,
   LAYOUT_EDITOR,
   LAYOUT_SHARER,
 } from "@camp404/core";
 import {
   ALREADY_HAS_LAYOUT,
-  CHECK_LAYOUT,
   LAYOUT_CHANGED,
   LAYOUT_VERSION_GONE,
   NOT_A_LAYOUT_EDITOR,
@@ -23,7 +28,7 @@ import {
   type LayoutWriteResult,
   type SharedLayout,
 } from "@camp404/db/camp-layout";
-import { CampLayout, LAYOUT_NOTE_MAX } from "@camp404/types";
+import type { CampLayout } from "@camp404/types";
 import { testStore } from "./test-store";
 
 // The camp layout's twin for E2E (#271): the same rules as
@@ -75,11 +80,6 @@ function nameOf(userId: string | null): string | null {
   return userId ? (testStore.findUserById(userId)?.displayName ?? null) : null;
 }
 
-function cleanNote(note: string | null | undefined): string | null {
-  const text = note?.trim() ?? "";
-  return text === "" ? null : text.slice(0, LAYOUT_NOTE_MAX);
-}
-
 function addVersion(
   cycle: number,
   layout: CampLayout,
@@ -117,13 +117,7 @@ export const testLayoutStore = {
     const year = cycle ?? testStore.currentCycleNumber();
     const head = years().get(year);
     const latest = head?.latestVersion ?? 0;
-    const wanted =
-      versionNumber !== undefined &&
-      Number.isInteger(versionNumber) &&
-      versionNumber >= 1 &&
-      versionNumber <= latest
-        ? versionNumber
-        : latest;
+    const wanted = layoutVersionWanted(latest, versionNumber);
     const row = head?.versions.find((v) => v.number === wanted);
     if (!row) {
       return {
@@ -180,7 +174,7 @@ export const testLayoutStore = {
   },
 
   getSharedLayout(token: string): SharedLayout | null {
-    if (!/^[A-Za-z0-9_-]{32}$/.test(token)) return null;
+    if (!isLayoutShareToken(token)) return null;
     const found = [...years().entries()].find(
       ([, y]) => y.shareToken === token,
     );
@@ -200,21 +194,16 @@ export const testLayoutStore = {
     expectedVersion: number;
     note?: string | null;
   }): LayoutWriteResult<{ version: number }> {
-    const parsed = CampLayout.safeParse(input.layout);
-    if (!parsed.success) {
-      return {
-        ok: false,
-        error: parsed.error.issues[0]?.message ?? CHECK_LAYOUT,
-      };
-    }
+    const checked = checkCampLayout(input.layout);
+    if (!checked.ok) return checked;
     if (!isEditor(input.actorId)) {
       return { ok: false, error: NOT_A_LAYOUT_EDITOR };
     }
     const out = addVersion(
       testStore.currentCycleNumber(),
-      parsed.data,
+      checked.layout,
       input.expectedVersion,
-      cleanNote(input.note),
+      layoutNote(input.note),
       input.actorId,
     );
     return typeof out === "string"
@@ -239,7 +228,7 @@ export const testLayoutStore = {
       cycle,
       old.body,
       input.expectedVersion,
-      `Brought back version ${input.number}`,
+      restoredLayoutNote(input.number),
       input.actorId,
     );
     return typeof out === "string"
@@ -273,7 +262,7 @@ export const testLayoutStore = {
       cycle,
       from.body,
       0,
-      `Copied from ${fromCycle}`,
+      copiedLayoutNote(fromCycle),
       input.actorId,
     );
     return typeof out === "string"

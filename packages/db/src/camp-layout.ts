@@ -2,13 +2,20 @@ import { randomBytes } from "node:crypto";
 import { and, desc, eq, gte, isNotNull, lt, max } from "drizzle-orm";
 import {
   arrivalDayCounts,
+  CHECK_LAYOUT,
+  checkCampLayout,
+  copiedLayoutNote,
+  isLayoutShareToken,
+  layoutNote,
+  layoutVersionWanted,
   neighbourView,
+  restoredLayoutNote,
   type ArrivalDayCount,
   type NeighbourLayout,
   LAYOUT_EDITOR,
   LAYOUT_SHARER,
 } from "@camp404/core";
-import { CampLayout, LAYOUT_NOTE_MAX } from "@camp404/types";
+import { CampLayout } from "@camp404/types";
 import { lockAllowed } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { currentCycleNumber } from "./cycles";
@@ -52,10 +59,8 @@ export const ALREADY_HAS_LAYOUT =
 export const NO_EARLIER_LAYOUT = "There is no earlier year's layout to copy.";
 export const NOTHING_TO_SHARE =
   "Save a layout first, then share it with neighbours.";
-export const CHECK_LAYOUT = "Check the layout and try again.";
-
-/** A share token: 24 random bytes as base64url. */
-const TOKEN = /^[A-Za-z0-9_-]{32}$/;
+// The plan's check lives with its sentence in @camp404/core (checkCampLayout).
+export { CHECK_LAYOUT };
 
 /** The neighbour link's audit target for a year. */
 export function layoutAuditTarget(cycle: number): string {
@@ -164,11 +169,6 @@ async function addVersion(
   return next;
 }
 
-function cleanNote(note: string | null | undefined): string | null {
-  const text = note?.trim() ?? "";
-  return text === "" ? null : text.slice(0, LAYOUT_NOTE_MAX);
-}
-
 // --- Reads -------------------------------------------------------------------
 
 /** A year's plan (this year by default): its latest version, or none. */
@@ -187,13 +187,7 @@ export async function getCampLayout(
     .where(eq(schema.campLayouts.cycle, year));
   const latest = head?.latestVersion ?? 0;
   const shared = head?.shareToken != null;
-  const wanted =
-    versionNumber !== undefined &&
-    Number.isInteger(versionNumber) &&
-    versionNumber >= 1 &&
-    versionNumber <= latest
-      ? versionNumber
-      : latest;
+  const wanted = layoutVersionWanted(latest, versionNumber);
   if (wanted === 0) {
     return {
       cycle: year,
@@ -356,7 +350,7 @@ export async function getLayoutShare(cycle?: number): Promise<LayoutShare> {
 export async function getSharedLayout(
   token: string,
 ): Promise<SharedLayout | null> {
-  if (!TOKEN.test(token)) return null;
+  if (!isLayoutShareToken(token)) return null;
   const db = createHttpDb();
   const [head] = await db
     .select({
@@ -397,13 +391,8 @@ export async function saveCampLayout(input: {
   expectedVersion: number;
   note?: string | null;
 }): Promise<LayoutWriteResult<{ version: number }>> {
-  const parsed = CampLayout.safeParse(input.layout);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? CHECK_LAYOUT,
-    };
-  }
+  const checked = checkCampLayout(input.layout);
+  if (!checked.ok) return checked;
   return write(async (tx) => {
     if (!(await lockAllowed(tx, input.actorId, LAYOUT_EDITOR))) {
       refuse(NOT_A_LAYOUT_EDITOR);
@@ -411,9 +400,9 @@ export async function saveCampLayout(input: {
     const cycle = await currentCycleNumber(tx);
     const version = await addVersion(tx, {
       cycle,
-      layout: parsed.data,
+      layout: checked.layout,
       expectedVersion: input.expectedVersion,
-      note: cleanNote(input.note),
+      note: layoutNote(input.note),
       actorId: input.actorId,
     });
     return { version };
@@ -446,7 +435,7 @@ export async function restoreLayoutVersion(input: {
       cycle,
       layout: parsed.data,
       expectedVersion: input.expectedVersion,
-      note: `Brought back version ${input.number}`,
+      note: restoredLayoutNote(input.number),
       actorId: input.actorId,
     });
     return { version };
@@ -492,7 +481,7 @@ export async function copyLastYearLayout(input: {
       cycle,
       layout: parsed.data,
       expectedVersion: 0,
-      note: `Copied from ${fromCycle}`,
+      note: copiedLayoutNote(fromCycle),
       actorId: input.actorId,
     });
     return { version, fromCycle };
