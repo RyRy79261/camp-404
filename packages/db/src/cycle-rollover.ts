@@ -4,6 +4,7 @@ import {
   burnDatesProblem,
   cyclesWithBurnDates,
   type AuditAction,
+  type AuditEvents,
 } from "@camp404/core";
 import { createHttpDb, withTransaction, type Database } from "./index";
 import * as schema from "./schema";
@@ -776,7 +777,7 @@ export async function setFoundingYear(input: {
           trailersStamped: trailers.length,
           liftRequestsStamped: liftRequests.length,
           ticketsStamped: tickets.length,
-        },
+        } satisfies AuditEvents["camp.cycle.founded"],
       })
       .returning({ id: schema.auditLog.id });
 
@@ -1034,7 +1035,7 @@ export async function advanceCycle(
     //    a cold path — and the metadata is deliberately the WHOLE plan plus
     //    what was executed, because §8.5's guarantee is not reversibility but
     //    that every change is enumerated and nothing was destroyed.
-    const metadata: Record<string, unknown> = {
+    const metadata: AuditEvents["camp.cycle.advanced"] = {
       from: plan.from,
       to,
       reGate: plan.reGate,

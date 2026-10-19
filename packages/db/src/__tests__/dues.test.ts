@@ -854,12 +854,35 @@ describe("dues", () => {
       ]);
       const dues = await getMemberDues(member.id, YEAR, { forFinance: true });
       const refund = dues!.payments[0]!.refund!;
+      const decided: AuditAction[] = [
+        "payment.refunded",
+        "payment.refund_declined",
+      ];
+      const audits = (
+        await h
+          .db()
+          .select({
+            action: schema.auditLog.action,
+            metadata: schema.auditLog.metadata,
+          })
+          .from(schema.auditLog)
+      ).filter((r) => (decided as string[]).includes(r.action));
+      const said = { reference: payment.reference, cycle: YEAR };
       if (refund.status === "refunded") {
         expect(dues!.balance.refundedCents).toBe(50_000);
         expect(dues!.balance.balanceCents).toBe(50_000);
+        expect(audits).toEqual([
+          {
+            action: "payment.refunded",
+            metadata: { ...said, amountCents: 50_000 },
+          },
+        ]);
       } else {
         expect(refund.declineReason).toBe("Too late");
         expect(dues!.balance.balanceCents).toBe(0);
+        expect(audits).toEqual([
+          { action: "payment.refund_declined", metadata: said },
+        ]);
       }
     });
 

@@ -103,7 +103,12 @@ describe("appendAuditEvents", () => {
         actorId: captain.id,
         action: "safety.allergies.view" as const,
         target,
-        metadata: { via: "questionnaire_csv" },
+        metadata: {
+          via: "questionnaire_csv" as const,
+          questionnaire: "dietary",
+          title: "Dietary",
+          cycle: 2026,
+        },
       })),
     );
     await appendAuditEvents([]);

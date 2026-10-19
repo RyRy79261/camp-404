@@ -724,7 +724,6 @@ export async function decideRecipe(
     if (problem) refuse(problem);
     const now = new Date();
     let set: Partial<typeof schema.recipes.$inferInsert>;
-    let detail: Record<string, unknown> = {};
     if (input.decision === "approve") {
       set = { status: "approved", approvedBy: input.actorId, approvedAt: now };
     } else if (input.decision === "reject") {
@@ -735,11 +734,9 @@ export async function decideRecipe(
         rejectedAt: now,
         rejectionReason: reason,
       };
-      detail = { reason };
     } else {
       const note = input.note.trim();
       set = { status: "changes_requested", changesNote: note };
-      detail = { note };
     }
     const [decided] = await tx
       .update(schema.recipes)
@@ -756,17 +753,24 @@ export async function decideRecipe(
         (await recipeExists(tx, input.recipeId)) ? RECIPE_DECIDED : RECIPE_GONE,
       );
     }
-    await writeAuditEvent(tx, {
-      actorId: input.actorId,
-      action:
-        input.decision === "approve"
-          ? "recipe.approved"
-          : input.decision === "reject"
-            ? "recipe.rejected"
-            : "recipe.changes_requested",
-      target: input.recipeId,
-      metadata: { title: decided.title ?? UNTITLED_RECIPE, ...detail },
-    });
+    const title = decided.title ?? UNTITLED_RECIPE;
+    const by = { actorId: input.actorId, target: input.recipeId };
+    await writeAuditEvent(
+      tx,
+      input.decision === "approve"
+        ? { ...by, action: "recipe.approved", metadata: { title } }
+        : input.decision === "reject"
+          ? {
+              ...by,
+              action: "recipe.rejected",
+              metadata: { title, reason: input.reason.trim() },
+            }
+          : {
+              ...by,
+              action: "recipe.changes_requested",
+              metadata: { title, note: input.note.trim() },
+            },
+    );
     return {};
   });
 }

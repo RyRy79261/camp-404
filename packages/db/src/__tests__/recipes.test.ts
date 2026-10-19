@@ -577,6 +577,23 @@ describe("recipes", () => {
       expect(await auditRows(REJECTED)).toHaveLength(0);
     });
 
+    it("records the reason a suggestion was turned down", async () => {
+      const { kitchenLead, member } = await people();
+      const id = await suggest(member.id);
+      await decideRecipe({
+        recipeId: id,
+        actorId: kitchenLead.id,
+        decision: "reject",
+        reason: " Too much chilli. ",
+      });
+      expect(await statusOf(id)).toBe("rejected");
+      const [audit] = await auditRows(REJECTED);
+      expect(audit?.metadata).toEqual({
+        title: expect.any(String),
+        reason: "Too much chilli.",
+      });
+    });
+
     it("sends a suggestion back for changes, and the submitter's edit makes it a suggestion again", async () => {
       const { kitchenLead, member } = await people();
       const id = await suggest(member.id);
@@ -587,6 +604,11 @@ describe("recipes", () => {
         note: "Say how many it feeds.",
       });
       expect(await statusOf(id)).toBe("changes_requested");
+      const [asked] = await auditRows("recipe.changes_requested");
+      expect(asked?.metadata).toEqual({
+        title: expect.any(String),
+        note: "Say how many it feeds.",
+      });
       const other = await makeUser(h.db());
       expect(
         (

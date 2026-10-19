@@ -1,4 +1,4 @@
-import type { AuditAction } from "@camp404/core";
+import type { AuditAction, AuditEvents } from "@camp404/core";
 import { alias } from "drizzle-orm/pg-core";
 import { and, desc, eq, sql } from "drizzle-orm";
 import {
@@ -22,16 +22,27 @@ import * as schema from "./schema";
 /** Any drizzle handle that can INSERT: a pooled/http db, or a transaction. */
 export type DbOrTx = Database | PooledDatabase["db"] | Tx;
 
-export interface AuditEvent {
-  /** The user who performed the action; null for system / cron actors. */
-  actorId?: string | null;
-  /** Stable dotted verb, e.g. "member.rank_changed". Each one has a label in core. */
-  action: AuditAction;
-  /** What was acted on — a user id, config key, etc. */
-  target?: string | null;
-  /** Free-form context. Never put decrypted PII or secrets in here. */
-  metadata?: Record<string, unknown>;
-}
+/**
+ * One audit row for one action, its metadata typed by `AuditEvents` in core.
+ * A wrong or missing key is a compile error here, at the writer. An action
+ * with no metadata may leave it out.
+ */
+export type AuditEvent<A extends AuditAction = AuditAction> = {
+  [K in A]: {
+    /** The user who performed the action; null for system / cron actors. */
+    actorId?: string | null;
+    /** Stable dotted verb, e.g. "member.rank_changed". Each one has a label in core. */
+    action: K;
+    /** What was acted on — a user id, config key, etc. */
+    target?: string | null;
+  } & AuditMetadata<K>;
+}[A];
+
+// Never put decrypted PII or secrets in metadata.
+type AuditMetadata<K extends AuditAction> =
+  Record<never, never> extends AuditEvents[K]
+    ? { metadata?: AuditEvents[K] }
+    : { metadata: AuditEvents[K] };
 
 /**
  * Append one row to `audit_log`. Pass the caller's `tx` inside a
@@ -42,9 +53,9 @@ export interface AuditEvent {
  * read path), this records privileged writes, and a silently missing row is
  * worse than a failed action.
  */
-export async function writeAuditEvent(
+export async function writeAuditEvent<A extends AuditAction>(
   db: DbOrTx,
-  event: AuditEvent,
+  event: AuditEvent<A>,
 ): Promise<void> {
   await db.insert(schema.auditLog).values({
     actorId: event.actorId ?? null,

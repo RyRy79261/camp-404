@@ -290,12 +290,40 @@ export async function setUserApproval(input: {
           ),
         )
         .returning({ slotId: schema.shiftSignups.slotId });
-      for (const removed of removedShifts) {
+      // The shift's name and day, so a captain reads which shift it was
+      // (owner, 2026-10-19), as when a lead takes a member off by hand.
+      const slots =
+        removedShifts.length === 0
+          ? []
+          : await tx
+              .select({
+                id: schema.shiftSlots.id,
+                name: schema.shiftTypes.name,
+                day: schema.shiftSlots.day,
+              })
+              .from(schema.shiftSlots)
+              .innerJoin(
+                schema.shiftTypes,
+                eq(schema.shiftTypes.id, schema.shiftSlots.typeId),
+              )
+              .where(
+                inArray(
+                  schema.shiftSlots.id,
+                  removedShifts.map((r) => r.slotId),
+                ),
+              );
+      for (const slot of slots) {
         await writeAuditEvent(tx, {
           actorId: input.decidedByUserId,
           action: "shifts.member_removed",
           target: input.userId,
-          metadata: { cycle, slotId: removed.slotId, because: input.to },
+          metadata: {
+            cycle,
+            slotId: slot.id,
+            name: slot.name,
+            day: slot.day,
+            because: input.to,
+          },
         });
       }
     }

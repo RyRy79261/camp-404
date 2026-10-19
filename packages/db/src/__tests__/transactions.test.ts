@@ -72,6 +72,14 @@ describe("withTransaction", () => {
 
 describe("writeAuditEvent", () => {
   const h = useTestDb();
+  // The shape captain-promotion.ts writes for this action.
+  const promoted = {
+    from: "member",
+    to: "captain",
+    via: "captain_promotion",
+    requestId: "00000000-0000-4000-8000-000000000001",
+    requestedByUserId: null,
+  } as const;
 
   it("commits with the change it records when given the caller's tx", async () => {
     const actor = await makeUser(h.db(), { rank: "captain" });
@@ -86,7 +94,7 @@ describe("writeAuditEvent", () => {
         actorId: actor.id,
         action: "member.rank_changed",
         target: subject.id,
-        metadata: { from: "member", to: "captain" },
+        metadata: promoted,
       });
     });
 
@@ -99,7 +107,7 @@ describe("writeAuditEvent", () => {
     });
     // The `$type<Record<string, unknown>>()` on the jsonb column: an object goes
     // in and an object — not a string — comes back.
-    expect(rows[0]?.metadata).toEqual({ from: "member", to: "captain" });
+    expect(rows[0]?.metadata).toEqual(promoted);
   });
 
   it("is rolled back with the change it records when the transaction fails", async () => {
@@ -116,6 +124,7 @@ describe("writeAuditEvent", () => {
           actorId: actor.id,
           action: "member.rank_changed",
           target: subject.id,
+          metadata: promoted,
         });
         throw new Error("later step failed");
       }),
@@ -133,7 +142,7 @@ describe("writeAuditEvent", () => {
   it("also accepts a plain db handle for non-transactional callers", async () => {
     await writeAuditEvent(createHttpDb(), {
       action: "member.team_assigned",
-      metadata: { team: "kitchen" },
+      metadata: { team: "kitchen", cycle: 1 },
     });
 
     const rows = await h.db().select().from(schema.auditLog);
