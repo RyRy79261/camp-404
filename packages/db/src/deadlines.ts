@@ -1,8 +1,10 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import {
-  afrikaburnDate,
-  afrikaburnDateMayBeSkipped,
+  afrikaburnDateToSave,
+  CANNOT_SKIP_DATE,
   DEADLINE_KEEPER,
+  NOT_AN_AFRIKABURN_DATE,
+  PICK_THE_DATE,
 } from "@camp404/core";
 import { lockAllowed } from "./actor";
 import { writeAuditEvent } from "./audit";
@@ -48,10 +50,10 @@ export const DEADLINE_CHANGED =
 export const MAX_DEADLINES = 60;
 export const TOO_MANY_DEADLINES = `A year holds at most ${MAX_DEADLINES} deadlines.`;
 export const DATE_SET_FIRST = "Someone set this date first. Reload the page.";
-export const NOT_AN_AFRIKABURN_DATE = "That isn't one of AfrikaBurn's dates.";
-export const CANNOT_SKIP_DATE =
-  "Only the second DDT round can be marked as no round this year.";
-export const PICK_THE_DATE = "Pick the date.";
+
+// The sentences of the checks the store shares live with them in
+// @camp404/core (afrikaburnDateToSave).
+export { CANNOT_SKIP_DATE, NOT_AN_AFRIKABURN_DATE, PICK_THE_DATE };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -236,13 +238,9 @@ export async function setAfrikaburnDate(input: {
 }): Promise<DeadlineWriteResult<{ row: DeadlineRow }>> {
   return write(async (tx) => {
     await assertKeeper(tx, input.actorId);
-    const standard = afrikaburnDate(input.kind);
-    if (!standard) refuse(NOT_AN_AFRIKABURN_DATE);
-    if (input.skipped && !afrikaburnDateMayBeSkipped(input.kind)) {
-      refuse(CANNOT_SKIP_DATE);
-    }
-    const dueDate = input.skipped ? null : input.dueDate;
-    if (!input.skipped && !dueDate) refuse(PICK_THE_DATE);
+    const checked = afrikaburnDateToSave(input);
+    if (!checked.ok) refuse(checked.error);
+    const { standard, dueDate } = checked;
     const cycle = await currentCycleNumber(tx);
     const d = schema.afrikaburnDeadlines;
     let row: DeadlineRow | undefined;

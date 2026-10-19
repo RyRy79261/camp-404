@@ -33,7 +33,7 @@ import {
   vehicleLabel,
   mealPlanPeaks,
   campOnSite,
-  dayOneShift,
+  dayOneMove,
   sameSections,
   sourceFromText,
   sourceText,
@@ -1561,20 +1561,16 @@ function followStoreDayOne<T>(
   },
   apply: () => T,
 ): T | { ok: false; error: string } {
-  const before = storeCampOnSite(cycle)?.firstDay ?? null;
-  const phases = LOGISTICS_PHASES.flatMap((phase) => {
-    if (phase === after.phase) return [after];
+  const before = LOGISTICS_PHASES.flatMap((phase) => {
     const row = logisticsPhases.get(`${cycle}:${phase}`);
     return row ? [row] : [];
   });
-  const to = campOnSite(phases, MEAL_PLAN_MAX_DAYS)?.firstDay ?? null;
-  if (before !== null && to === null && storeHasPrepSteps(cycle)) {
+  const { from, to, lost, shift } = dayOneMove(before, after);
+  if (lost && storeHasPrepSteps(cycle)) {
     return { ok: false, error: DAY_ONE_NEEDED_FOR_PREP };
   }
   const result = apply();
-  if (dayOneShift(before, to) !== null) {
-    storeRedatePrepSteps(cycle, before, to);
-  }
+  if (shift !== null) storeRedatePrepSteps(cycle, from, to);
   return result;
 }
 
