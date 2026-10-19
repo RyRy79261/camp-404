@@ -45,6 +45,9 @@ import {
   type Actor,
   LOUNGE_RUNNER,
   POWER_EDITOR,
+  copyLastYearProblem,
+  planGeneratorProblem,
+  powerPlanPatch,
   PROOFREADER,
   KITCHEN_REVIEWER,
   adjustInstructionProblem,
@@ -204,8 +207,6 @@ import {
   type TaskWriteResult,
 } from "@camp404/db/tasks";
 import {
-  ALREADY_HAS_LOADS,
-  ALREADY_HAS_PLAN,
   DEFAULT_POWER_PLAN,
   GENERATOR_CHANGED,
   GENERATOR_GONE,
@@ -213,7 +214,6 @@ import {
   LOAD_CHANGED,
   LOAD_GONE,
   NOT_A_POWER_EDITOR,
-  NOTHING_TO_COPY,
   PLAN_CHANGED,
   type GeneratorRow,
   type PowerInventoryItem,
@@ -1396,26 +1396,8 @@ function planGeneratorRefusal(
   generatorId: string | null | undefined,
   current: string | null,
 ): string | null {
-  if (generatorId === undefined || generatorId === null) return null;
-  const gen = generators.find((g) => g.id === generatorId);
-  if (!gen) return GENERATOR_GONE;
-  if (gen.archivedAt !== null && generatorId !== current) return GENERATOR_GONE;
-  return null;
-}
-
-const POWER_PLAN_KEYS = Object.keys(DEFAULT_POWER_PLAN).filter(
-  (key) => key !== "version",
-) as (keyof PowerPlanSettings)[];
-
-function planPatch(
-  patch: Partial<PowerPlanSettings>,
-): Partial<PowerPlanSettings> {
-  return Object.fromEntries(
-    POWER_PLAN_KEYS.filter((key) => patch[key] !== undefined).map((key) => [
-      key,
-      patch[key],
-    ]),
-  );
+  const gen = generators.find((g) => g.id === generatorId) ?? null;
+  return planGeneratorProblem(generatorId, gen, current);
 }
 
 // --- Recipe helpers (the twins of @camp404/db/recipes' private steps) -------
@@ -4927,9 +4909,13 @@ export const testStore = {
     actorId: string;
   }): PowerWriteResult<{ count: number }> {
     return powerWrite(input.actorId, (cycle) => {
-      if (powerLoads.some((l) => l.cycle === cycle)) return ALREADY_HAS_LOADS;
       const from = previousStoreLoadCycle(cycle);
-      if (from === null) return NOTHING_TO_COPY;
+      const problem = copyLastYearProblem(
+        "loads",
+        powerLoads.some((l) => l.cycle === cycle),
+        from,
+      );
+      if (problem || from === null) return problem!;
       const rows = loadsOf(from);
       const now = new Date();
       rows.forEach((row, i) => {
@@ -4957,7 +4943,7 @@ export const testStore = {
     expectedVersion: number;
   }): PowerWriteResult<{ version: number }> {
     return powerWrite(input.actorId, (cycle) => {
-      const patch = planPatch(input.patch);
+      const patch = powerPlanPatch(input.patch);
       const existing = powerPlans.get(cycle);
       if (input.expectedVersion === 0) {
         const refusal = planGeneratorRefusal(patch.generatorId, null);
@@ -4995,9 +4981,13 @@ export const testStore = {
     actorId: string;
   }): PowerWriteResult<{ fromCycle: number }> {
     return powerWrite(input.actorId, (cycle) => {
-      if (powerPlans.has(cycle)) return ALREADY_HAS_PLAN;
       const fromCycle = previousStorePlanCycle(cycle);
-      if (fromCycle === null) return NOTHING_TO_COPY;
+      const problem = copyLastYearProblem(
+        "plan",
+        powerPlans.has(cycle),
+        fromCycle,
+      );
+      if (problem || fromCycle === null) return problem!;
       const from = powerPlans.get(fromCycle)!;
       const gen = generators.find((g) => g.id === from.generatorId);
       powerPlans.set(cycle, {
