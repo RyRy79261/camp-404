@@ -78,7 +78,8 @@ import type {
 import {
   PROGRAM_TITLES,
   matchProgram,
-  type ProgramId,
+  programSize,
+  type OpeningSize,
 } from "@/lib/program-routes";
 import {
   allowedWindowPrograms,
@@ -177,89 +178,8 @@ const CAMP_FOLDER_SIZE: Record<string, { w: number; h: number }> = {
 function folderSize(key: string): { w: number; h: number } {
   return CAMP_FOLDER_SIZE[key] ?? FOLDER_SIZE;
 }
-/**
- * A page's opening size: `w` and `h` are the prototype's, the size it opens at
- * on the 1280 px screen it was drawn for. A page whose UI is a table, a board
- * or two columns side by side also `grow`s with a bigger screen (owner,
- * 2026-10-08: "there are a few apps that open smaller than their UI even
- * though there's ample space"): it takes that share of the room right of the
- * icons, never less than its own size. Still a window right of the icons,
- * never full screen (owner's approval of the prototype, 2026-09-26). Each is
- * cut to the room the screen has, and its page reflows to the window (the
- * page-* variants).
- */
-type OpeningSize = { w: number; h: number; grow?: number };
 /** The share of the room's height a growing page takes. */
 const GROW_HEIGHT = 0.9;
-const XL_SIZE: OpeningSize = { w: 1040, h: 660, grow: 0.8 };
-/** A page that reads or fills in one column: it keeps its size. */
-const L_SIZE: OpeningSize = { w: 880, h: 600 };
-/** A table, a board or two columns at L: it grows like XL, less far. */
-const L_WIDE: OpeningSize = { w: 880, h: 600, grow: 0.7 };
-const WRITE_SIZE: OpeningSize = { w: 1120, h: 800, grow: 0.9 };
-const PAGE_SIZE: Partial<Record<ProgramId, OpeningSize>> = {
-  // A team's page opens wide enough for its cards and its people side by side
-  // (audit, 2026-10-01: at M it was seven cards in one column).
-  team: XL_SIZE,
-  // The minutes editor writes its agenda and notes beside their previews.
-  minutes: L_WIDE,
-  tasks: XL_SIZE,
-  roster: XL_SIZE,
-  payments: XL_SIZE,
-  inventory: XL_SIZE,
-  // The lounge's offers table and its one-day programme (redesign A,
-  // 2026-10-01) are drawn for a wide window.
-  lounge: XL_SIZE,
-  applications: XL_SIZE,
-  // A spreadsheet: as wide as the screen allows, and it scrolls sideways
-  // inside its own frame past that.
-  "camp-sheet": WRITE_SIZE,
-  "edit-questionnaire": XL_SIZE,
-  "edit-recipe": XL_SIZE,
-  results: XL_SIZE,
-  "respondent-answers": XL_SIZE,
-  // The month, with the open event beside it (the approved mock-up).
-  calendar: WRITE_SIZE,
-  power: L_WIDE,
-  logistics: L_WIDE,
-  shifts: L_WIDE,
-  "help-wanted": L_WIDE,
-  "my-shifts": L_SIZE,
-  guide: L_SIZE,
-  "guide-chapter": L_SIZE,
-  "guide-version": L_SIZE,
-  // The guide's editor: writing and its preview side by side, as tall as
-  // the screen allows.
-  "new-guide-chapter": WRITE_SIZE,
-  "edit-guide-chapter": WRITE_SIZE,
-  // The site plan opens wide enough for the plan, its key and the rail side
-  // by side, the whole plot in view (the approved redesign, 2026-10-01).
-  "camp-layout": WRITE_SIZE,
-  transport: L_WIDE,
-  "my-dues": L_SIZE,
-  "my-gear": L_SIZE,
-  "gear-rental": XL_SIZE,
-  "my-claims": L_WIDE,
-  "claim-approvals": L_WIDE,
-  budgets: L_WIDE,
-  recipes: L_WIDE,
-  recipe: L_SIZE,
-  "meal-plan": XL_SIZE,
-  "shopping-list": L_WIDE,
-  "recipe-review": L_WIDE,
-  overview: L_WIDE,
-  questionnaires: L_WIDE,
-  announcements: L_WIDE,
-  // About reads in three columns, and the Join site editor shows its section
-  // list beside the open section, Write beside Preview (approved redesign,
-  // 2026-10-01; audit: at 720 wide About was one column 13 screens long).
-  about: { w: 1040, h: 800 },
-  "join-site": WRITE_SIZE,
-  audit: L_WIDE,
-  "report-screenshots": L_WIDE,
-  terminal: { w: 640, h: 420 },
-  inkblot: { w: 700, h: 440 },
-};
 /** A tab back after this long refreshes the desktop (an event, not a timer). */
 const STALE_AFTER_MS = 5 * 60_000;
 /** How long the desktop waits after the last icon move before it saves. */
@@ -362,8 +282,7 @@ export function pageSize(
   program: string | undefined,
   vp: Viewport,
 ): { w: number; h: number } {
-  const size: OpeningSize =
-    (program && PAGE_SIZE[program as ProgramId]) || DEFAULT_SIZE;
+  const size: OpeningSize = (program && programSize(program)) || DEFAULT_SIZE;
   const grow = size.grow;
   if (!grow) return { w: size.w, h: size.h };
   const room = {

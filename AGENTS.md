@@ -244,7 +244,16 @@ keyboard's way to them is the Terminal.
   window its URL opens, and its plain title in `PROGRAM_TITLES`) and an
   entry in `PROGRAM_REGISTRY` in `lib/programs.ts` (its icon, folder and the
   same rank bar as its page gate); `program-registry-drift.test.ts` and
-  `program-routes.test.ts` fail until both exist. A page still starts with
+  `program-routes.test.ts` fail until both exist. [CORRECTION 2026-10-18]
+  Each program is now one program definition in `PROGRAM_DEFINITIONS`
+  (`lib/program-routes.ts`): its title, file name, routes (the first is where
+  its icon opens), line drawing and opening `size`. `ProgramId`,
+  `PROGRAM_TITLES`, `PROGRAM_ROUTES` (sorted so a static segment wins), the
+  registry's label, file name, link and icon key, the desktop's opening sizes
+  and the icon map are read from it. A new page is a route on its program's
+  definition; a new program is a definition plus a `PROGRAM_REGISTRY` entry
+  that says only its place and its gate (rank bar, `requires`), which stay
+  on the server. A page still starts with
   `PageHeading` and owns no container: the window pads it. A window can be
   470px wide on a wide screen, so a page lays itself out by its WINDOW's
   width: use the kit's `page-sm:`/`page-md:`/`page-lg:`/`page-xl:` variants
@@ -260,7 +269,7 @@ keyboard's way to them is the Terminal.
   its own `max-w-*`. A page that should reach the window's bottom (the Camp
   sheet, the Camp layout) puts `data-fills-window` on its root, which makes
   the body give it the window's height. A wide program's opening size grows
-  with the screen (`grow` in `PAGE_SIZE`, `desktop-shell.tsx`). The E2E helper
+  with the screen (`grow` in its definition's `size`, `lib/program-routes.ts`). The E2E helper
   `tests/e2e/lib/console-nav.ts` drives the Start menu and folder windows on
   a desktop and the home screen and folder sheets on a phone
   (`openConsoleNav(page, "Captains")` opens the Captains folder; on a

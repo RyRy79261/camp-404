@@ -1,0 +1,7206 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`program census > gives every program the same title, drawing and opening size 1`] = `
+{
+  "about": {
+    "line": "readme",
+    "small": {
+      "h": 800,
+      "w": 1040,
+    },
+    "title": "About Camp 404",
+    "wide": {
+      "h": 800,
+      "w": 1040,
+    },
+  },
+  "account": {
+    "line": "account",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "My account",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "announcement": {
+    "line": "broadcast",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Announcement",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "announcements": {
+    "line": "broadcast",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Announcements",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "applications": {
+    "line": "tickets",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Applications",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "audit": {
+    "line": "audit",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Audit log",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "budgets": {
+    "line": "ledger",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Budgets",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "calendar": {
+    "line": "calendar",
+    "small": {
+      "h": 800,
+      "w": 1120,
+    },
+    "title": "Calendar",
+    "wide": {
+      "h": 950,
+      "w": 1404,
+    },
+  },
+  "camp-layout": {
+    "line": "siteplan",
+    "small": {
+      "h": 800,
+      "w": 1120,
+    },
+    "title": "Camp layout",
+    "wide": {
+      "h": 950,
+      "w": 1404,
+    },
+  },
+  "camp-settings": {
+    "line": "settings",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Camp settings",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "camp-sheet": {
+    "line": "ledger",
+    "small": {
+      "h": 800,
+      "w": 1120,
+    },
+    "title": "Camp sheet",
+    "wide": {
+      "h": 950,
+      "w": 1404,
+    },
+  },
+  "claim-approvals": {
+    "line": "receipt",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Claims to approve",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "desktop": {
+    "line": "folder",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Desktop",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "edit-guide-chapter": {
+    "line": "guide",
+    "small": {
+      "h": 800,
+      "w": 1120,
+    },
+    "title": "Edit chapter",
+    "wide": {
+      "h": 950,
+      "w": 1404,
+    },
+  },
+  "edit-questionnaire": {
+    "line": "forms",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Edit questionnaire",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "edit-recipe": {
+    "line": "cookbook",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Edit recipe",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "family-tree": {
+    "line": "lineage",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Family tree",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "form": {
+    "line": "myforms",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Form",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "form-answers": {
+    "line": "myforms",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Answers",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "gear-rental": {
+    "line": "tent",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Gear rental",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "guide": {
+    "line": "guide",
+    "small": {
+      "h": 600,
+      "w": 880,
+    },
+    "title": "Survival Guide",
+    "wide": {
+      "h": 600,
+      "w": 880,
+    },
+  },
+  "guide-chapter": {
+    "line": "guide",
+    "small": {
+      "h": 600,
+      "w": 880,
+    },
+    "title": "Chapter",
+    "wide": {
+      "h": 600,
+      "w": 880,
+    },
+  },
+  "guide-version": {
+    "line": "guide",
+    "small": {
+      "h": 600,
+      "w": 880,
+    },
+    "title": "Chapter version",
+    "wide": {
+      "h": 600,
+      "w": 880,
+    },
+  },
+  "help-wanted": {
+    "line": "helpwanted",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Help wanted",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "inbox": {
+    "line": "inbox",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Inbox",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "inkblot": {
+    "line": "cat",
+    "small": {
+      "h": 440,
+      "w": 700,
+    },
+    "title": "INKBLOT",
+    "wide": {
+      "h": 440,
+      "w": 700,
+    },
+  },
+  "inventory": {
+    "line": "inventory",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Inventory",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "invites": {
+    "line": "keygen",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Invites",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "join-site": {
+    "line": "joinsite",
+    "small": {
+      "h": 800,
+      "w": 1120,
+    },
+    "title": "Join site",
+    "wide": {
+      "h": 950,
+      "w": 1404,
+    },
+  },
+  "logistics": {
+    "line": "logistics",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Logistics",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "lounge": {
+    "line": "lounge",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Lounge",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "meal-plan": {
+    "line": "mealplan",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Meal plan",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "minutes": {
+    "line": "minutes",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Minutes",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "my-claims": {
+    "line": "receipt",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "My claims",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "my-dues": {
+    "line": "ledger",
+    "small": {
+      "h": 600,
+      "w": 880,
+    },
+    "title": "My dues",
+    "wide": {
+      "h": 600,
+      "w": 880,
+    },
+  },
+  "my-forms": {
+    "line": "myforms",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "My forms",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "my-gear": {
+    "line": "tent",
+    "small": {
+      "h": 600,
+      "w": 880,
+    },
+    "title": "My gear",
+    "wide": {
+      "h": 600,
+      "w": 880,
+    },
+  },
+  "my-lift": {
+    "line": "lift",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "My lift",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "my-shifts": {
+    "line": "shifts",
+    "small": {
+      "h": 600,
+      "w": 880,
+    },
+    "title": "My shifts",
+    "wide": {
+      "h": 600,
+      "w": 880,
+    },
+  },
+  "new-guide-chapter": {
+    "line": "guide",
+    "small": {
+      "h": 800,
+      "w": 1120,
+    },
+    "title": "New chapter",
+    "wide": {
+      "h": 950,
+      "w": 1404,
+    },
+  },
+  "new-recipe": {
+    "line": "cookbook",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "New recipe",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "overview": {
+    "line": "campstat",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Camp overview",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "payments": {
+    "line": "ledger",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Payments",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "pets": {
+    "line": "cat",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Camp pets",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "power": {
+    "line": "power",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Power",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "preview-questionnaire": {
+    "line": "forms",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Preview",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "questionnaire": {
+    "line": "myforms",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Questionnaire",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "questionnaires": {
+    "line": "forms",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Questionnaires",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "recipe": {
+    "line": "cookbook",
+    "small": {
+      "h": 600,
+      "w": 880,
+    },
+    "title": "Recipe",
+    "wide": {
+      "h": 600,
+      "w": 880,
+    },
+  },
+  "recipe-review": {
+    "line": "review",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Recipe review",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "recipe-source": {
+    "line": "cookbook",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Recipe source",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "recipe-version": {
+    "line": "cookbook",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Recipe version",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "recipes": {
+    "line": "cookbook",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Recipes",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "report-screenshots": {
+    "line": "review",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Report screenshots",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "respondent-answers": {
+    "line": "forms",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Answers",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "results": {
+    "line": "forms",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Results",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "roster": {
+    "line": "roster",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Roster",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "send-questionnaire": {
+    "line": "forms",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "Send questionnaire",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "shifts": {
+    "line": "shifts",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Shifts",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "shopping-list": {
+    "line": "basket",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Shopping list",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+  "system": {
+    "line": "sysmon",
+    "small": {
+      "h": 520,
+      "w": 720,
+    },
+    "title": "System status",
+    "wide": {
+      "h": 520,
+      "w": 720,
+    },
+  },
+  "tasks": {
+    "line": "tasks",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Tasks",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "team": {
+    "line": "folder",
+    "small": {
+      "h": 660,
+      "w": 1040,
+    },
+    "title": "Team",
+    "wide": {
+      "h": 950,
+      "w": 1248,
+    },
+  },
+  "terminal": {
+    "line": "terminal",
+    "small": {
+      "h": 420,
+      "w": 640,
+    },
+    "title": "Terminal",
+    "wide": {
+      "h": 420,
+      "w": 640,
+    },
+  },
+  "transport": {
+    "line": "lift",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Transport",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
+}
+`;
+
+exports[`program census > gives every program the same title, drawing and opening size 2`] = `
+{
+  "folder": "folder",
+  "kitchen": "folder",
+  "member-folder": "folder",
+  "nope": "folder",
+  "team": "folder",
+}
+`;
+
+exports[`program census > gives the applicant the same manifest 1`] = `
+{
+  "allowedChildren": [
+    "announcement",
+    "questionnaire",
+  ],
+  "desktop": [
+    {
+      "id": "inbox",
+      "kind": "program",
+    },
+  ],
+  "folders": [],
+  "mode": "restricted",
+  "pins": false,
+  "programs": [
+    {
+      "fileName": "INBOX.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/notifications",
+      "icon": "inbox",
+      "id": "inbox",
+      "label": "Inbox",
+    },
+  ],
+  "search": [
+    {
+      "id": "inbox",
+      "keywords": [
+        "Notifications",
+        "Unread",
+        "Announcements",
+      ],
+      "where": "Me",
+    },
+  ],
+  "startMenu": [
+    {
+      "group": "me",
+      "items": [
+        {
+          "id": "inbox",
+          "kind": "program",
+        },
+      ],
+      "label": "Me",
+    },
+  ],
+  "taskbarPins": [
+    "inbox",
+  ],
+  "teamFolders": [],
+  "tray": {
+    "balloon": "application_submitted",
+    "health": null,
+    "inbox": {
+      "count": 0,
+    },
+    "today": true,
+  },
+  "version": "31a588d7",
+}
+`;
+
+exports[`program census > gives the captain the same manifest 1`] = `
+{
+  "allowedChildren": [
+    "announcement",
+    "form",
+    "form-answers",
+    "minutes",
+    "guide-chapter",
+    "guide-version",
+    "new-guide-chapter",
+    "edit-guide-chapter",
+    "new-recipe",
+    "recipe",
+    "edit-recipe",
+    "recipe-version",
+    "recipe-source",
+    "edit-questionnaire",
+    "preview-questionnaire",
+    "send-questionnaire",
+    "results",
+    "respondent-answers",
+    "inkblot",
+    "questionnaire",
+  ],
+  "desktop": [
+    {
+      "id": "inbox",
+      "kind": "program",
+    },
+    {
+      "id": "tasks",
+      "kind": "program",
+    },
+    {
+      "id": "calendar",
+      "kind": "program",
+    },
+    {
+      "id": "my-forms",
+      "kind": "program",
+    },
+    {
+      "id": "invites",
+      "kind": "program",
+    },
+    {
+      "id": "account",
+      "kind": "program",
+    },
+    {
+      "id": "my-dues",
+      "kind": "program",
+    },
+    {
+      "id": "my-gear",
+      "kind": "program",
+    },
+    {
+      "id": "my-shifts",
+      "kind": "program",
+    },
+    {
+      "id": "my-claims",
+      "kind": "program",
+    },
+    {
+      "id": "roster",
+      "kind": "program",
+    },
+    {
+      "id": "teams",
+      "kind": "folder",
+    },
+    {
+      "id": "kitchen",
+      "kind": "folder",
+    },
+    {
+      "id": "power",
+      "kind": "program",
+    },
+    {
+      "id": "logistics",
+      "kind": "program",
+    },
+    {
+      "id": "shifts",
+      "kind": "program",
+    },
+    {
+      "id": "help-wanted",
+      "kind": "program",
+    },
+    {
+      "id": "camp-layout",
+      "kind": "program",
+    },
+    {
+      "id": "lounge",
+      "kind": "program",
+    },
+    {
+      "id": "inventory",
+      "kind": "program",
+    },
+    {
+      "id": "transport",
+      "kind": "program",
+    },
+    {
+      "id": "family-tree",
+      "kind": "program",
+    },
+    {
+      "id": "pets",
+      "kind": "program",
+    },
+    {
+      "id": "about",
+      "kind": "program",
+    },
+    {
+      "id": "guide",
+      "kind": "program",
+    },
+    {
+      "id": "captains",
+      "kind": "folder",
+    },
+    {
+      "id": "terminal",
+      "kind": "program",
+    },
+  ],
+  "folders": [
+    {
+      "group": "camp",
+      "icon": "folder",
+      "id": "teams",
+      "label": "Teams",
+      "programs": [
+        {
+          "fileName": "STRUCTURES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/structures",
+          "icon": "team",
+          "id": "team:structures",
+          "label": "Structures",
+          "mine": true,
+        },
+        {
+          "fileName": "KITCHEN.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/kitchen",
+          "icon": "team",
+          "id": "team:kitchen",
+          "label": "Kitchen",
+        },
+        {
+          "fileName": "POWER_AND_LIGHTING.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/power_and_lighting",
+          "icon": "team",
+          "id": "team:power_and_lighting",
+          "label": "Power and Lighting",
+        },
+        {
+          "fileName": "SANITATION_AND_WATER.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/sanitation_and_water",
+          "icon": "team",
+          "id": "team:sanitation_and_water",
+          "label": "Sanitation and MOOP",
+        },
+        {
+          "fileName": "HEALTH_AND_SAFETY.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/health_and_safety",
+          "icon": "team",
+          "id": "team:health_and_safety",
+          "label": "Safety",
+        },
+        {
+          "fileName": "ART_AND_ACTIVITIES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/art_and_activities",
+          "icon": "team",
+          "id": "team:art_and_activities",
+          "label": "Art and Activities",
+        },
+        {
+          "fileName": "MINISTRY_OF_MEMES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/ministry_of_memes",
+          "icon": "team",
+          "id": "team:ministry_of_memes",
+          "label": "Ministry of Memes",
+        },
+        {
+          "fileName": "MINISTRY_OF_VIBES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/ministry_of_vibes",
+          "icon": "team",
+          "id": "team:ministry_of_vibes",
+          "label": "Ministry of Vibes",
+        },
+        {
+          "fileName": "FINANCE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/finance",
+          "icon": "team",
+          "id": "team:finance",
+          "label": "Finance",
+        },
+        {
+          "fileName": "TRANSPORT_AND_LOGISTICS.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/transport_and_logistics",
+          "icon": "team",
+          "id": "team:transport_and_logistics",
+          "label": "Transport and Logistics",
+        },
+        {
+          "fileName": "COMMUNICATIONS_AND_HR.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/communications_and_hr",
+          "icon": "team",
+          "id": "team:communications_and_hr",
+          "label": "Communications & HR",
+        },
+        {
+          "fileName": "MUTANT_VEHICLE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/mutant_vehicle",
+          "icon": "team",
+          "id": "team:mutant_vehicle",
+          "label": "Mutant Vehicle",
+        },
+        {
+          "fileName": "SOUND.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/sound",
+          "icon": "team",
+          "id": "team:sound",
+          "label": "Sound",
+        },
+        {
+          "fileName": "WATER.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/water",
+          "icon": "team",
+          "id": "team:water",
+          "label": "Water",
+        },
+        {
+          "fileName": "BUDGETS.XLS",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/budgets",
+          "icon": "budgets",
+          "id": "budgets",
+          "label": "Budgets",
+        },
+      ],
+    },
+    {
+      "group": "camp",
+      "icon": "folder",
+      "id": "kitchen",
+      "label": "Kitchen",
+      "programs": [
+        {
+          "fileName": "COOKBOOK.EXE",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/recipes",
+          "icon": "recipes",
+          "id": "recipes",
+          "label": "Recipes",
+        },
+        {
+          "fileName": "MEALPLAN.XLS",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/meal-plan",
+          "icon": "meal-plan",
+          "id": "meal-plan",
+          "label": "Meal plan",
+        },
+        {
+          "fileName": "SHOPPING.LST",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/shopping",
+          "icon": "shopping-list",
+          "id": "shopping-list",
+          "label": "Shopping list",
+        },
+        {
+          "fileName": "REVIEW.EXE",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/recipes/review",
+          "icon": "recipe-review",
+          "id": "recipe-review",
+          "label": "Recipe review",
+        },
+      ],
+    },
+    {
+      "group": "captains",
+      "icon": "folder",
+      "id": "captains",
+      "label": "Captains",
+      "programs": [
+        {
+          "fileName": "CAMPSTAT.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/overview",
+          "icon": "overview",
+          "id": "overview",
+          "label": "Camp overview",
+        },
+        {
+          "fileName": "CAMP_SHEET.XLS",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/camp-sheet",
+          "icon": "camp-sheet",
+          "id": "camp-sheet",
+          "label": "Camp sheet",
+        },
+        {
+          "fileName": "INTAKE.DB",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/applications",
+          "icon": "applications",
+          "id": "applications",
+          "label": "Applications",
+        },
+        {
+          "fileName": "FORMS.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/questionnaires",
+          "icon": "questionnaires",
+          "id": "questionnaires",
+          "label": "Questionnaires",
+        },
+        {
+          "fileName": "BROADCAST.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/announcements",
+          "icon": "announcements",
+          "id": "announcements",
+          "label": "Announcements",
+        },
+        {
+          "fileName": "APPROVE.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/claims",
+          "icon": "claim-approvals",
+          "id": "claim-approvals",
+          "label": "Claims to approve",
+        },
+        {
+          "fileName": "LEDGER.DB",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/payments",
+          "icon": "payments",
+          "id": "payments",
+          "label": "Payments",
+        },
+        {
+          "fileName": "RENTAL.DB",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/gear-rental",
+          "icon": "gear-rental",
+          "id": "gear-rental",
+          "label": "Gear rental",
+        },
+        {
+          "fileName": "SETTINGS.CPL",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/camp-settings",
+          "icon": "camp-settings",
+          "id": "camp-settings",
+          "label": "Camp settings",
+        },
+        {
+          "fileName": "JOINSITE.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/join-site",
+          "icon": "join-site",
+          "id": "join-site",
+          "label": "Join site",
+        },
+        {
+          "fileName": "SCREENSHOTS.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/report-screenshots",
+          "icon": "report-screenshots",
+          "id": "report-screenshots",
+          "label": "Report screenshots",
+        },
+        {
+          "fileName": "AUDIT.LOG",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/audit",
+          "icon": "audit",
+          "id": "audit",
+          "label": "Audit log",
+        },
+        {
+          "fileName": "SYSMON.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/system",
+          "icon": "system",
+          "id": "system",
+          "label": "System status",
+        },
+      ],
+    },
+  ],
+  "mode": "full",
+  "pins": true,
+  "programs": [
+    {
+      "fileName": "INBOX.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/notifications",
+      "icon": "inbox",
+      "id": "inbox",
+      "label": "Inbox",
+    },
+    {
+      "fileName": "TASKS.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tasks",
+      "icon": "tasks",
+      "id": "tasks",
+      "label": "Tasks",
+    },
+    {
+      "fileName": "CALENDAR.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/calendar",
+      "icon": "calendar",
+      "id": "calendar",
+      "label": "Calendar",
+    },
+    {
+      "fileName": "MYFORMS.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tools/forms",
+      "icon": "my-forms",
+      "id": "my-forms",
+      "label": "My forms",
+    },
+    {
+      "fileName": "KEYGEN.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tools/invite",
+      "icon": "invites",
+      "id": "invites",
+      "label": "Invites",
+    },
+    {
+      "fileName": "MY_ACCOUNT.CPL",
+      "folder": null,
+      "group": "me",
+      "href": "/profile",
+      "icon": "account",
+      "id": "account",
+      "label": "My account",
+    },
+    {
+      "fileName": "MY_DUES.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/dues",
+      "icon": "my-dues",
+      "id": "my-dues",
+      "label": "My dues",
+    },
+    {
+      "fileName": "MY_GEAR.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/gear",
+      "icon": "my-gear",
+      "id": "my-gear",
+      "label": "My gear",
+    },
+    {
+      "fileName": "MY_SHIFTS.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/shifts/mine",
+      "icon": "my-shifts",
+      "id": "my-shifts",
+      "label": "My shifts",
+    },
+    {
+      "fileName": "CLAIMS.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/claims",
+      "icon": "my-claims",
+      "id": "my-claims",
+      "label": "My claims",
+    },
+    {
+      "fileName": "ROSTER.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/captains/camp-management",
+      "icon": "roster",
+      "id": "roster",
+      "label": "Roster",
+    },
+    {
+      "fileName": "POWER.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/power",
+      "icon": "power",
+      "id": "power",
+      "label": "Power",
+    },
+    {
+      "fileName": "LOGISTICS.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/logistics",
+      "icon": "logistics",
+      "id": "logistics",
+      "label": "Logistics",
+    },
+    {
+      "fileName": "ROSTER.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/shifts",
+      "icon": "shifts",
+      "id": "shifts",
+      "label": "Shifts",
+    },
+    {
+      "fileName": "HELPWANT.TXT",
+      "folder": null,
+      "group": "camp",
+      "href": "/help-wanted",
+      "icon": "help-wanted",
+      "id": "help-wanted",
+      "label": "Help wanted",
+    },
+    {
+      "fileName": "SITEPLAN.DWG",
+      "folder": null,
+      "group": "camp",
+      "href": "/camp-layout",
+      "icon": "camp-layout",
+      "id": "camp-layout",
+      "label": "Camp layout",
+    },
+    {
+      "fileName": "LOUNGE.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/lounge",
+      "icon": "lounge",
+      "id": "lounge",
+      "label": "Lounge",
+    },
+    {
+      "fileName": "INVENTRY.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/inventory",
+      "icon": "inventory",
+      "id": "inventory",
+      "label": "Inventory",
+    },
+    {
+      "fileName": "CARPOOL.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/transport",
+      "icon": "transport",
+      "id": "transport",
+      "label": "Transport",
+    },
+    {
+      "fileName": "LINEAGE.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/family-tree",
+      "icon": "family-tree",
+      "id": "family-tree",
+      "label": "Family tree",
+    },
+    {
+      "fileName": "PETS.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/pets",
+      "icon": "pets",
+      "id": "pets",
+      "label": "Camp pets",
+    },
+    {
+      "fileName": "README.TXT",
+      "folder": null,
+      "group": "camp",
+      "href": "/about",
+      "icon": "about",
+      "id": "about",
+      "label": "About Camp 404",
+    },
+    {
+      "fileName": "GUIDE.HLP",
+      "folder": null,
+      "group": "camp",
+      "href": "/guide",
+      "icon": "guide",
+      "id": "guide",
+      "label": "Survival Guide",
+    },
+    {
+      "fileName": "TERMINAL.EXE",
+      "folder": null,
+      "group": "captains",
+      "href": "/terminal",
+      "icon": "terminal",
+      "id": "terminal",
+      "label": "Terminal",
+    },
+  ],
+  "search": [
+    {
+      "id": "inbox",
+      "keywords": [
+        "Notifications",
+        "Unread",
+        "Announcements",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "tasks",
+      "keywords": [
+        "To do",
+        "Doing",
+        "Deadline",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "calendar",
+      "keywords": [
+        "Events",
+        "Coming up",
+        "Meetings",
+        "Minutes",
+        "Agenda",
+        "Decisions",
+        "Action items",
+        "New event",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-forms",
+      "keywords": [
+        "Dietary needs",
+        "Questionnaire",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "invites",
+      "keywords": [
+        "Invite code",
+        "Invite a member",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "account",
+      "keywords": [
+        "Profile",
+        "Ticket",
+        "Payment reference",
+        "Password",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-dues",
+      "keywords": [
+        "Payment plan",
+        "Charges",
+        "Refund",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-gear",
+      "keywords": [
+        "Tent",
+        "Bedding",
+        "Sharing a tent",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-shifts",
+      "keywords": [
+        "Volunteer shifts",
+        "AfrikaBurn shift",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-claims",
+      "keywords": [
+        "Receipts",
+        "Bank details",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "roster",
+      "keywords": [
+        "Members",
+        "Waiting list",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "team:structures",
+      "where": "Teams",
+    },
+    {
+      "id": "team:kitchen",
+      "where": "Teams",
+    },
+    {
+      "id": "team:power_and_lighting",
+      "where": "Teams",
+    },
+    {
+      "id": "team:sanitation_and_water",
+      "where": "Teams",
+    },
+    {
+      "id": "team:health_and_safety",
+      "where": "Teams",
+    },
+    {
+      "id": "team:art_and_activities",
+      "where": "Teams",
+    },
+    {
+      "id": "team:ministry_of_memes",
+      "where": "Teams",
+    },
+    {
+      "id": "team:ministry_of_vibes",
+      "where": "Teams",
+    },
+    {
+      "id": "team:finance",
+      "where": "Teams",
+    },
+    {
+      "id": "team:transport_and_logistics",
+      "where": "Teams",
+    },
+    {
+      "id": "team:communications_and_hr",
+      "where": "Teams",
+    },
+    {
+      "id": "team:mutant_vehicle",
+      "where": "Teams",
+    },
+    {
+      "id": "team:sound",
+      "where": "Teams",
+    },
+    {
+      "id": "team:water",
+      "where": "Teams",
+    },
+    {
+      "id": "budgets",
+      "keywords": [
+        "Team budgets",
+        "Spent",
+        "Over budget",
+      ],
+      "where": "Teams",
+    },
+    {
+      "id": "recipes",
+      "keywords": [
+        "Recipe book",
+        "Import a recipe",
+        "Dictate",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "meal-plan",
+      "keywords": [
+        "Menu",
+        "Snacks",
+        "Allergies",
+        "Prep plan",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "shopping-list",
+      "keywords": [
+        "Food cost",
+        "To buy",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "recipe-review",
+      "keywords": [
+        "Proofread",
+        "Suggestions",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "power",
+      "keywords": [
+        "Fuel cans",
+        "Generator",
+        "Loads",
+        "Grid",
+        "Refuelling",
+      ],
+      "where": "Power and Lighting",
+    },
+    {
+      "id": "logistics",
+      "keywords": [
+        "AfrikaBurn dates",
+        "Deadlines",
+        "Who can help",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "shifts",
+      "keywords": [
+        "Burn days",
+        "Duty card",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "help-wanted",
+      "keywords": [
+        "Team roles",
+        "Needs a lead",
+        "I'm keen",
+        "Volunteer",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "camp-layout",
+      "keywords": [
+        "Site plan",
+        "Our plot",
+        "Neighbours",
+        "Arrivals",
+      ],
+      "where": "Structures",
+    },
+    {
+      "id": "lounge",
+      "keywords": [
+        "Programme",
+        "Offers",
+        "Event guide",
+        "Music",
+      ],
+      "where": "Ministry of Vibes",
+    },
+    {
+      "id": "inventory",
+      "keywords": [
+        "Gear",
+        "Bookings",
+        "Lent out",
+        "Maintenance",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "transport",
+      "keywords": [
+        "Lifts",
+        "Fuel cans",
+        "Cars",
+        "Trailers",
+        "Seats",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "family-tree",
+      "keywords": [
+        "Invited by",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "pets",
+      "keywords": [
+        "Cats",
+        "Dogs",
+        "Add your pet",
+        "Hints",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "about",
+      "keywords": [
+        "Camp fee",
+        "Getting there",
+        "Where we are",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "guide",
+      "keywords": [
+        "Chapters",
+        "Duty cards",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "overview",
+      "keywords": [
+        "Camp ready",
+        "Team coverage",
+        "Tickets",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "camp-sheet",
+      "keywords": [
+        "Spreadsheet",
+        "Everyone",
+        "Emergency contacts",
+        "Allergies",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "applications",
+      "keywords": [
+        "Accept",
+        "Tickets",
+        "WAP",
+        "DDT",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "questionnaires",
+      "keywords": [
+        "Results",
+        "Responses",
+        "Publish",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "announcements",
+      "keywords": [
+        "Pop-up",
+        "Drafts",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "claim-approvals",
+      "keywords": [
+        "Approve claims",
+        "Turn down",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "payments",
+      "keywords": [
+        "Who owes what",
+        "Bank statement",
+        "Settle-up",
+        "Fee tiers",
+        "Proofs",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "gear-rental",
+      "keywords": [
+        "Tents",
+        "Catalogue",
+        "Orders",
+        "Supplier price",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "camp-settings",
+      "keywords": [
+        "Teams",
+        "New year",
+        "Rollover",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "join-site",
+      "keywords": [
+        "Fee levels",
+        "How to join",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "report-screenshots",
+      "keywords": [
+        "Bug reports",
+        "Feedback",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "audit",
+      "keywords": [
+        "History",
+        "Changes",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "system",
+      "keywords": [
+        "Core services",
+        "Background work",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "terminal",
+      "keywords": [
+        "Commands",
+        "Inkblot",
+      ],
+      "where": "Captains",
+    },
+  ],
+  "startMenu": [
+    {
+      "group": "me",
+      "items": [
+        {
+          "id": "inbox",
+          "kind": "program",
+        },
+        {
+          "id": "tasks",
+          "kind": "program",
+        },
+        {
+          "id": "calendar",
+          "kind": "program",
+        },
+        {
+          "id": "my-forms",
+          "kind": "program",
+        },
+        {
+          "id": "invites",
+          "kind": "program",
+        },
+        {
+          "id": "account",
+          "kind": "program",
+        },
+        {
+          "id": "my-dues",
+          "kind": "program",
+        },
+        {
+          "id": "my-gear",
+          "kind": "program",
+        },
+        {
+          "id": "my-shifts",
+          "kind": "program",
+        },
+        {
+          "id": "my-claims",
+          "kind": "program",
+        },
+      ],
+      "label": "Me",
+    },
+    {
+      "group": "camp",
+      "items": [
+        {
+          "id": "roster",
+          "kind": "program",
+        },
+        {
+          "id": "teams",
+          "kind": "folder",
+        },
+        {
+          "id": "kitchen",
+          "kind": "folder",
+        },
+        {
+          "id": "power",
+          "kind": "program",
+        },
+        {
+          "id": "logistics",
+          "kind": "program",
+        },
+        {
+          "id": "shifts",
+          "kind": "program",
+        },
+        {
+          "id": "help-wanted",
+          "kind": "program",
+        },
+        {
+          "id": "camp-layout",
+          "kind": "program",
+        },
+        {
+          "id": "lounge",
+          "kind": "program",
+        },
+        {
+          "id": "inventory",
+          "kind": "program",
+        },
+        {
+          "id": "transport",
+          "kind": "program",
+        },
+        {
+          "id": "family-tree",
+          "kind": "program",
+        },
+        {
+          "id": "pets",
+          "kind": "program",
+        },
+        {
+          "id": "about",
+          "kind": "program",
+        },
+        {
+          "id": "guide",
+          "kind": "program",
+        },
+      ],
+      "label": "Camp",
+    },
+    {
+      "group": "captains",
+      "items": [
+        {
+          "id": "captains",
+          "kind": "folder",
+        },
+        {
+          "id": "terminal",
+          "kind": "program",
+        },
+      ],
+      "label": "Captains",
+    },
+  ],
+  "taskbarPins": [
+    "inbox",
+  ],
+  "teamFolders": [
+    {
+      "label": "Structures team",
+      "lead": false,
+      "programs": [
+        {
+          "fileName": "STRUCTURES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/structures",
+          "icon": "team",
+          "id": "team:structures",
+          "label": "Structures page",
+          "mine": true,
+        },
+        {
+          "fileName": "CALENDAR.EXE",
+          "folder": null,
+          "group": "me",
+          "href": "/calendar?team=structures",
+          "icon": "calendar",
+          "id": "calendar:structures",
+          "label": "Structures calendar",
+        },
+        {
+          "fileName": "TASKS.EXE",
+          "folder": null,
+          "group": "me",
+          "href": "/tasks?team=structures",
+          "icon": "tasks",
+          "id": "tasks:structures",
+          "label": "Structures tasks",
+        },
+        {
+          "fileName": "SITEPLAN.DWG",
+          "folder": null,
+          "group": "camp",
+          "href": "/camp-layout",
+          "icon": "camp-layout",
+          "id": "camp-layout",
+          "label": "Camp layout",
+        },
+      ],
+      "team": "structures",
+    },
+  ],
+  "tray": {
+    "balloon": null,
+    "health": {
+      "href": "/captains/system",
+      "status": "ok",
+      "warnings": 0,
+    },
+    "inbox": {
+      "count": 0,
+    },
+    "today": true,
+  },
+  "version": "cd81c397",
+}
+`;
+
+exports[`program census > gives the financeLead the same manifest 1`] = `
+{
+  "allowedChildren": [
+    "announcement",
+    "form",
+    "form-answers",
+    "minutes",
+    "guide-chapter",
+    "guide-version",
+    "new-guide-chapter",
+    "edit-guide-chapter",
+    "new-recipe",
+    "recipe",
+    "recipe-version",
+    "recipe-source",
+    "edit-questionnaire",
+    "preview-questionnaire",
+    "send-questionnaire",
+    "inkblot",
+    "questionnaire",
+  ],
+  "desktop": [
+    {
+      "id": "inbox",
+      "kind": "program",
+    },
+    {
+      "id": "tasks",
+      "kind": "program",
+    },
+    {
+      "id": "calendar",
+      "kind": "program",
+    },
+    {
+      "id": "my-forms",
+      "kind": "program",
+    },
+    {
+      "id": "invites",
+      "kind": "program",
+    },
+    {
+      "id": "account",
+      "kind": "program",
+    },
+    {
+      "id": "my-dues",
+      "kind": "program",
+    },
+    {
+      "id": "my-gear",
+      "kind": "program",
+    },
+    {
+      "id": "my-shifts",
+      "kind": "program",
+    },
+    {
+      "id": "my-claims",
+      "kind": "program",
+    },
+    {
+      "id": "roster",
+      "kind": "program",
+    },
+    {
+      "id": "teams",
+      "kind": "folder",
+    },
+    {
+      "id": "kitchen",
+      "kind": "folder",
+    },
+    {
+      "id": "power",
+      "kind": "program",
+    },
+    {
+      "id": "logistics",
+      "kind": "program",
+    },
+    {
+      "id": "shifts",
+      "kind": "program",
+    },
+    {
+      "id": "help-wanted",
+      "kind": "program",
+    },
+    {
+      "id": "camp-layout",
+      "kind": "program",
+    },
+    {
+      "id": "lounge",
+      "kind": "program",
+    },
+    {
+      "id": "inventory",
+      "kind": "program",
+    },
+    {
+      "id": "transport",
+      "kind": "program",
+    },
+    {
+      "id": "family-tree",
+      "kind": "program",
+    },
+    {
+      "id": "pets",
+      "kind": "program",
+    },
+    {
+      "id": "about",
+      "kind": "program",
+    },
+    {
+      "id": "guide",
+      "kind": "program",
+    },
+    {
+      "id": "captains",
+      "kind": "folder",
+    },
+    {
+      "id": "terminal",
+      "kind": "program",
+    },
+  ],
+  "folders": [
+    {
+      "group": "camp",
+      "icon": "folder",
+      "id": "teams",
+      "label": "Teams",
+      "programs": [
+        {
+          "fileName": "FINANCE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/finance",
+          "icon": "team",
+          "id": "team:finance",
+          "label": "Finance",
+          "mine": true,
+        },
+        {
+          "fileName": "KITCHEN.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/kitchen",
+          "icon": "team",
+          "id": "team:kitchen",
+          "label": "Kitchen",
+        },
+        {
+          "fileName": "STRUCTURES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/structures",
+          "icon": "team",
+          "id": "team:structures",
+          "label": "Structures",
+        },
+        {
+          "fileName": "POWER_AND_LIGHTING.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/power_and_lighting",
+          "icon": "team",
+          "id": "team:power_and_lighting",
+          "label": "Power and Lighting",
+        },
+        {
+          "fileName": "SANITATION_AND_WATER.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/sanitation_and_water",
+          "icon": "team",
+          "id": "team:sanitation_and_water",
+          "label": "Sanitation and MOOP",
+        },
+        {
+          "fileName": "HEALTH_AND_SAFETY.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/health_and_safety",
+          "icon": "team",
+          "id": "team:health_and_safety",
+          "label": "Safety",
+        },
+        {
+          "fileName": "ART_AND_ACTIVITIES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/art_and_activities",
+          "icon": "team",
+          "id": "team:art_and_activities",
+          "label": "Art and Activities",
+        },
+        {
+          "fileName": "MINISTRY_OF_MEMES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/ministry_of_memes",
+          "icon": "team",
+          "id": "team:ministry_of_memes",
+          "label": "Ministry of Memes",
+        },
+        {
+          "fileName": "MINISTRY_OF_VIBES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/ministry_of_vibes",
+          "icon": "team",
+          "id": "team:ministry_of_vibes",
+          "label": "Ministry of Vibes",
+        },
+        {
+          "fileName": "TRANSPORT_AND_LOGISTICS.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/transport_and_logistics",
+          "icon": "team",
+          "id": "team:transport_and_logistics",
+          "label": "Transport and Logistics",
+        },
+        {
+          "fileName": "COMMUNICATIONS_AND_HR.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/communications_and_hr",
+          "icon": "team",
+          "id": "team:communications_and_hr",
+          "label": "Communications & HR",
+        },
+        {
+          "fileName": "MUTANT_VEHICLE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/mutant_vehicle",
+          "icon": "team",
+          "id": "team:mutant_vehicle",
+          "label": "Mutant Vehicle",
+        },
+        {
+          "fileName": "SOUND.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/sound",
+          "icon": "team",
+          "id": "team:sound",
+          "label": "Sound",
+        },
+        {
+          "fileName": "WATER.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/water",
+          "icon": "team",
+          "id": "team:water",
+          "label": "Water",
+        },
+        {
+          "fileName": "BUDGETS.XLS",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/budgets",
+          "icon": "budgets",
+          "id": "budgets",
+          "label": "Budgets",
+        },
+      ],
+    },
+    {
+      "group": "camp",
+      "icon": "folder",
+      "id": "kitchen",
+      "label": "Kitchen",
+      "programs": [
+        {
+          "fileName": "COOKBOOK.EXE",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/recipes",
+          "icon": "recipes",
+          "id": "recipes",
+          "label": "Recipes",
+        },
+        {
+          "fileName": "MEALPLAN.XLS",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/meal-plan",
+          "icon": "meal-plan",
+          "id": "meal-plan",
+          "label": "Meal plan",
+        },
+        {
+          "fileName": "SHOPPING.LST",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/shopping",
+          "icon": "shopping-list",
+          "id": "shopping-list",
+          "label": "Shopping list",
+        },
+      ],
+    },
+    {
+      "group": "captains",
+      "icon": "folder",
+      "id": "captains",
+      "label": "Captains",
+      "programs": [
+        {
+          "fileName": "INTAKE.DB",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/applications",
+          "icon": "applications",
+          "id": "applications",
+          "label": "Applications",
+        },
+        {
+          "fileName": "FORMS.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/questionnaires",
+          "icon": "questionnaires",
+          "id": "questionnaires",
+          "label": "Questionnaires",
+        },
+        {
+          "fileName": "BROADCAST.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/announcements",
+          "icon": "announcements",
+          "id": "announcements",
+          "label": "Announcements",
+        },
+        {
+          "fileName": "APPROVE.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/claims",
+          "icon": "claim-approvals",
+          "id": "claim-approvals",
+          "label": "Claims to approve",
+        },
+        {
+          "fileName": "LEDGER.DB",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/payments",
+          "icon": "payments",
+          "id": "payments",
+          "label": "Payments",
+        },
+      ],
+    },
+  ],
+  "mode": "full",
+  "pins": true,
+  "programs": [
+    {
+      "fileName": "INBOX.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/notifications",
+      "icon": "inbox",
+      "id": "inbox",
+      "label": "Inbox",
+    },
+    {
+      "fileName": "TASKS.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tasks",
+      "icon": "tasks",
+      "id": "tasks",
+      "label": "Tasks",
+    },
+    {
+      "fileName": "CALENDAR.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/calendar",
+      "icon": "calendar",
+      "id": "calendar",
+      "label": "Calendar",
+    },
+    {
+      "fileName": "MYFORMS.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tools/forms",
+      "icon": "my-forms",
+      "id": "my-forms",
+      "label": "My forms",
+    },
+    {
+      "fileName": "KEYGEN.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tools/invite",
+      "icon": "invites",
+      "id": "invites",
+      "label": "Invites",
+    },
+    {
+      "fileName": "MY_ACCOUNT.CPL",
+      "folder": null,
+      "group": "me",
+      "href": "/profile",
+      "icon": "account",
+      "id": "account",
+      "label": "My account",
+    },
+    {
+      "fileName": "MY_DUES.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/dues",
+      "icon": "my-dues",
+      "id": "my-dues",
+      "label": "My dues",
+    },
+    {
+      "fileName": "MY_GEAR.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/gear",
+      "icon": "my-gear",
+      "id": "my-gear",
+      "label": "My gear",
+    },
+    {
+      "fileName": "MY_SHIFTS.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/shifts/mine",
+      "icon": "my-shifts",
+      "id": "my-shifts",
+      "label": "My shifts",
+    },
+    {
+      "fileName": "CLAIMS.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/claims",
+      "icon": "my-claims",
+      "id": "my-claims",
+      "label": "My claims",
+    },
+    {
+      "fileName": "ROSTER.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/captains/camp-management",
+      "icon": "roster",
+      "id": "roster",
+      "label": "Roster",
+    },
+    {
+      "fileName": "POWER.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/power",
+      "icon": "power",
+      "id": "power",
+      "label": "Power",
+    },
+    {
+      "fileName": "LOGISTICS.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/logistics",
+      "icon": "logistics",
+      "id": "logistics",
+      "label": "Logistics",
+    },
+    {
+      "fileName": "ROSTER.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/shifts",
+      "icon": "shifts",
+      "id": "shifts",
+      "label": "Shifts",
+    },
+    {
+      "fileName": "HELPWANT.TXT",
+      "folder": null,
+      "group": "camp",
+      "href": "/help-wanted",
+      "icon": "help-wanted",
+      "id": "help-wanted",
+      "label": "Help wanted",
+    },
+    {
+      "fileName": "SITEPLAN.DWG",
+      "folder": null,
+      "group": "camp",
+      "href": "/camp-layout",
+      "icon": "camp-layout",
+      "id": "camp-layout",
+      "label": "Camp layout",
+    },
+    {
+      "fileName": "LOUNGE.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/lounge",
+      "icon": "lounge",
+      "id": "lounge",
+      "label": "Lounge",
+    },
+    {
+      "fileName": "INVENTRY.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/inventory",
+      "icon": "inventory",
+      "id": "inventory",
+      "label": "Inventory",
+    },
+    {
+      "fileName": "CARPOOL.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/transport",
+      "icon": "transport",
+      "id": "transport",
+      "label": "Transport",
+    },
+    {
+      "fileName": "LINEAGE.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/family-tree",
+      "icon": "family-tree",
+      "id": "family-tree",
+      "label": "Family tree",
+    },
+    {
+      "fileName": "PETS.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/pets",
+      "icon": "pets",
+      "id": "pets",
+      "label": "Camp pets",
+    },
+    {
+      "fileName": "README.TXT",
+      "folder": null,
+      "group": "camp",
+      "href": "/about",
+      "icon": "about",
+      "id": "about",
+      "label": "About Camp 404",
+    },
+    {
+      "fileName": "GUIDE.HLP",
+      "folder": null,
+      "group": "camp",
+      "href": "/guide",
+      "icon": "guide",
+      "id": "guide",
+      "label": "Survival Guide",
+    },
+    {
+      "fileName": "TERMINAL.EXE",
+      "folder": null,
+      "group": "captains",
+      "href": "/terminal",
+      "icon": "terminal",
+      "id": "terminal",
+      "label": "Terminal",
+    },
+  ],
+  "search": [
+    {
+      "id": "inbox",
+      "keywords": [
+        "Notifications",
+        "Unread",
+        "Announcements",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "tasks",
+      "keywords": [
+        "To do",
+        "Doing",
+        "Deadline",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "calendar",
+      "keywords": [
+        "Events",
+        "Coming up",
+        "Meetings",
+        "Minutes",
+        "Agenda",
+        "Decisions",
+        "Action items",
+        "New event",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-forms",
+      "keywords": [
+        "Dietary needs",
+        "Questionnaire",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "invites",
+      "keywords": [
+        "Invite code",
+        "Invite a member",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "account",
+      "keywords": [
+        "Profile",
+        "Ticket",
+        "Payment reference",
+        "Password",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-dues",
+      "keywords": [
+        "Payment plan",
+        "Charges",
+        "Refund",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-gear",
+      "keywords": [
+        "Tent",
+        "Bedding",
+        "Sharing a tent",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-shifts",
+      "keywords": [
+        "Volunteer shifts",
+        "AfrikaBurn shift",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-claims",
+      "keywords": [
+        "Receipts",
+        "Bank details",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "roster",
+      "keywords": [
+        "Members",
+        "Waiting list",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "team:finance",
+      "where": "Teams",
+    },
+    {
+      "id": "team:kitchen",
+      "where": "Teams",
+    },
+    {
+      "id": "team:structures",
+      "where": "Teams",
+    },
+    {
+      "id": "team:power_and_lighting",
+      "where": "Teams",
+    },
+    {
+      "id": "team:sanitation_and_water",
+      "where": "Teams",
+    },
+    {
+      "id": "team:health_and_safety",
+      "where": "Teams",
+    },
+    {
+      "id": "team:art_and_activities",
+      "where": "Teams",
+    },
+    {
+      "id": "team:ministry_of_memes",
+      "where": "Teams",
+    },
+    {
+      "id": "team:ministry_of_vibes",
+      "where": "Teams",
+    },
+    {
+      "id": "team:transport_and_logistics",
+      "where": "Teams",
+    },
+    {
+      "id": "team:communications_and_hr",
+      "where": "Teams",
+    },
+    {
+      "id": "team:mutant_vehicle",
+      "where": "Teams",
+    },
+    {
+      "id": "team:sound",
+      "where": "Teams",
+    },
+    {
+      "id": "team:water",
+      "where": "Teams",
+    },
+    {
+      "id": "budgets",
+      "keywords": [
+        "Team budgets",
+        "Spent",
+        "Over budget",
+      ],
+      "where": "Teams",
+    },
+    {
+      "id": "recipes",
+      "keywords": [
+        "Recipe book",
+        "Import a recipe",
+        "Dictate",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "meal-plan",
+      "keywords": [
+        "Menu",
+        "Snacks",
+        "Allergies",
+        "Prep plan",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "shopping-list",
+      "keywords": [
+        "Food cost",
+        "To buy",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "power",
+      "keywords": [
+        "Fuel cans",
+        "Generator",
+        "Loads",
+        "Grid",
+        "Refuelling",
+      ],
+      "where": "Power and Lighting",
+    },
+    {
+      "id": "logistics",
+      "keywords": [
+        "AfrikaBurn dates",
+        "Deadlines",
+        "Who can help",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "shifts",
+      "keywords": [
+        "Burn days",
+        "Duty card",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "help-wanted",
+      "keywords": [
+        "Team roles",
+        "Needs a lead",
+        "I'm keen",
+        "Volunteer",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "camp-layout",
+      "keywords": [
+        "Site plan",
+        "Our plot",
+        "Neighbours",
+        "Arrivals",
+      ],
+      "where": "Structures",
+    },
+    {
+      "id": "lounge",
+      "keywords": [
+        "Programme",
+        "Offers",
+        "Event guide",
+        "Music",
+      ],
+      "where": "Ministry of Vibes",
+    },
+    {
+      "id": "inventory",
+      "keywords": [
+        "Gear",
+        "Bookings",
+        "Lent out",
+        "Maintenance",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "transport",
+      "keywords": [
+        "Lifts",
+        "Fuel cans",
+        "Cars",
+        "Trailers",
+        "Seats",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "family-tree",
+      "keywords": [
+        "Invited by",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "pets",
+      "keywords": [
+        "Cats",
+        "Dogs",
+        "Add your pet",
+        "Hints",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "about",
+      "keywords": [
+        "Camp fee",
+        "Getting there",
+        "Where we are",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "guide",
+      "keywords": [
+        "Chapters",
+        "Duty cards",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "applications",
+      "keywords": [
+        "Accept",
+        "Tickets",
+        "WAP",
+        "DDT",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "questionnaires",
+      "keywords": [
+        "Results",
+        "Responses",
+        "Publish",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "announcements",
+      "keywords": [
+        "Pop-up",
+        "Drafts",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "claim-approvals",
+      "keywords": [
+        "Approve claims",
+        "Turn down",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "payments",
+      "keywords": [
+        "Who owes what",
+        "Bank statement",
+        "Settle-up",
+        "Fee tiers",
+        "Proofs",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "terminal",
+      "keywords": [
+        "Commands",
+        "Inkblot",
+      ],
+      "where": "Captains",
+    },
+  ],
+  "startMenu": [
+    {
+      "group": "me",
+      "items": [
+        {
+          "id": "inbox",
+          "kind": "program",
+        },
+        {
+          "id": "tasks",
+          "kind": "program",
+        },
+        {
+          "id": "calendar",
+          "kind": "program",
+        },
+        {
+          "id": "my-forms",
+          "kind": "program",
+        },
+        {
+          "id": "invites",
+          "kind": "program",
+        },
+        {
+          "id": "account",
+          "kind": "program",
+        },
+        {
+          "id": "my-dues",
+          "kind": "program",
+        },
+        {
+          "id": "my-gear",
+          "kind": "program",
+        },
+        {
+          "id": "my-shifts",
+          "kind": "program",
+        },
+        {
+          "id": "my-claims",
+          "kind": "program",
+        },
+      ],
+      "label": "Me",
+    },
+    {
+      "group": "camp",
+      "items": [
+        {
+          "id": "roster",
+          "kind": "program",
+        },
+        {
+          "id": "teams",
+          "kind": "folder",
+        },
+        {
+          "id": "kitchen",
+          "kind": "folder",
+        },
+        {
+          "id": "power",
+          "kind": "program",
+        },
+        {
+          "id": "logistics",
+          "kind": "program",
+        },
+        {
+          "id": "shifts",
+          "kind": "program",
+        },
+        {
+          "id": "help-wanted",
+          "kind": "program",
+        },
+        {
+          "id": "camp-layout",
+          "kind": "program",
+        },
+        {
+          "id": "lounge",
+          "kind": "program",
+        },
+        {
+          "id": "inventory",
+          "kind": "program",
+        },
+        {
+          "id": "transport",
+          "kind": "program",
+        },
+        {
+          "id": "family-tree",
+          "kind": "program",
+        },
+        {
+          "id": "pets",
+          "kind": "program",
+        },
+        {
+          "id": "about",
+          "kind": "program",
+        },
+        {
+          "id": "guide",
+          "kind": "program",
+        },
+      ],
+      "label": "Camp",
+    },
+    {
+      "group": "captains",
+      "items": [
+        {
+          "id": "captains",
+          "kind": "folder",
+        },
+        {
+          "id": "terminal",
+          "kind": "program",
+        },
+      ],
+      "label": "Captains",
+    },
+  ],
+  "taskbarPins": [
+    "inbox",
+  ],
+  "teamFolders": [
+    {
+      "label": "Finance team",
+      "lead": true,
+      "programs": [
+        {
+          "fileName": "FINANCE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/finance",
+          "icon": "team",
+          "id": "team:finance",
+          "label": "Finance page",
+          "mine": true,
+        },
+        {
+          "fileName": "CALENDAR.EXE",
+          "folder": null,
+          "group": "me",
+          "href": "/calendar?team=finance",
+          "icon": "calendar",
+          "id": "calendar:finance",
+          "label": "Finance calendar",
+        },
+        {
+          "fileName": "TASKS.EXE",
+          "folder": null,
+          "group": "me",
+          "href": "/tasks?team=finance",
+          "icon": "tasks",
+          "id": "tasks:finance",
+          "label": "Finance tasks",
+        },
+        {
+          "fileName": "LEDGER.DB",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/payments",
+          "icon": "payments",
+          "id": "payments",
+          "label": "Payments",
+        },
+      ],
+      "team": "finance",
+    },
+  ],
+  "tray": {
+    "balloon": null,
+    "health": {
+      "status": "ok",
+    },
+    "inbox": {
+      "count": 0,
+    },
+    "today": true,
+  },
+  "version": "8926e5c9",
+}
+`;
+
+exports[`program census > gives the held the same manifest 1`] = `
+{
+  "allowedChildren": [
+    "questionnaire",
+  ],
+  "desktop": [
+    {
+      "id": "inbox",
+      "kind": "program",
+    },
+    {
+      "id": "tasks",
+      "kind": "program",
+    },
+    {
+      "id": "calendar",
+      "kind": "program",
+    },
+    {
+      "id": "my-forms",
+      "kind": "program",
+    },
+    {
+      "id": "invites",
+      "kind": "program",
+    },
+    {
+      "id": "account",
+      "kind": "program",
+    },
+    {
+      "id": "my-dues",
+      "kind": "program",
+    },
+    {
+      "id": "my-gear",
+      "kind": "program",
+    },
+    {
+      "id": "my-shifts",
+      "kind": "program",
+    },
+    {
+      "id": "my-claims",
+      "kind": "program",
+    },
+    {
+      "id": "roster",
+      "kind": "program",
+    },
+    {
+      "id": "teams",
+      "kind": "folder",
+    },
+    {
+      "id": "kitchen",
+      "kind": "folder",
+    },
+    {
+      "id": "power",
+      "kind": "program",
+    },
+    {
+      "id": "logistics",
+      "kind": "program",
+    },
+    {
+      "id": "shifts",
+      "kind": "program",
+    },
+    {
+      "id": "help-wanted",
+      "kind": "program",
+    },
+    {
+      "id": "camp-layout",
+      "kind": "program",
+    },
+    {
+      "id": "lounge",
+      "kind": "program",
+    },
+    {
+      "id": "inventory",
+      "kind": "program",
+    },
+    {
+      "id": "transport",
+      "kind": "program",
+    },
+    {
+      "id": "family-tree",
+      "kind": "program",
+    },
+    {
+      "id": "pets",
+      "kind": "program",
+    },
+    {
+      "id": "about",
+      "kind": "program",
+    },
+    {
+      "id": "guide",
+      "kind": "program",
+    },
+    {
+      "id": "terminal",
+      "kind": "program",
+    },
+  ],
+  "folders": [
+    {
+      "group": "camp",
+      "icon": "folder",
+      "id": "teams",
+      "label": "Teams",
+      "programs": [
+        {
+          "fileName": "KITCHEN.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/kitchen",
+          "icon": "team",
+          "id": "team:kitchen",
+          "label": "Kitchen",
+        },
+        {
+          "fileName": "STRUCTURES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/structures",
+          "icon": "team",
+          "id": "team:structures",
+          "label": "Structures",
+        },
+        {
+          "fileName": "POWER_AND_LIGHTING.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/power_and_lighting",
+          "icon": "team",
+          "id": "team:power_and_lighting",
+          "label": "Power and Lighting",
+        },
+        {
+          "fileName": "SANITATION_AND_WATER.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/sanitation_and_water",
+          "icon": "team",
+          "id": "team:sanitation_and_water",
+          "label": "Sanitation and MOOP",
+        },
+        {
+          "fileName": "HEALTH_AND_SAFETY.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/health_and_safety",
+          "icon": "team",
+          "id": "team:health_and_safety",
+          "label": "Safety",
+        },
+        {
+          "fileName": "ART_AND_ACTIVITIES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/art_and_activities",
+          "icon": "team",
+          "id": "team:art_and_activities",
+          "label": "Art and Activities",
+        },
+        {
+          "fileName": "MINISTRY_OF_MEMES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/ministry_of_memes",
+          "icon": "team",
+          "id": "team:ministry_of_memes",
+          "label": "Ministry of Memes",
+        },
+        {
+          "fileName": "MINISTRY_OF_VIBES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/ministry_of_vibes",
+          "icon": "team",
+          "id": "team:ministry_of_vibes",
+          "label": "Ministry of Vibes",
+        },
+        {
+          "fileName": "FINANCE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/finance",
+          "icon": "team",
+          "id": "team:finance",
+          "label": "Finance",
+        },
+        {
+          "fileName": "TRANSPORT_AND_LOGISTICS.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/transport_and_logistics",
+          "icon": "team",
+          "id": "team:transport_and_logistics",
+          "label": "Transport and Logistics",
+        },
+        {
+          "fileName": "COMMUNICATIONS_AND_HR.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/communications_and_hr",
+          "icon": "team",
+          "id": "team:communications_and_hr",
+          "label": "Communications & HR",
+        },
+        {
+          "fileName": "MUTANT_VEHICLE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/mutant_vehicle",
+          "icon": "team",
+          "id": "team:mutant_vehicle",
+          "label": "Mutant Vehicle",
+        },
+        {
+          "fileName": "SOUND.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/sound",
+          "icon": "team",
+          "id": "team:sound",
+          "label": "Sound",
+        },
+        {
+          "fileName": "WATER.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/water",
+          "icon": "team",
+          "id": "team:water",
+          "label": "Water",
+        },
+        {
+          "fileName": "BUDGETS.XLS",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/budgets",
+          "icon": "budgets",
+          "id": "budgets",
+          "label": "Budgets",
+        },
+      ],
+    },
+    {
+      "group": "camp",
+      "icon": "folder",
+      "id": "kitchen",
+      "label": "Kitchen",
+      "programs": [
+        {
+          "fileName": "COOKBOOK.EXE",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/recipes",
+          "icon": "recipes",
+          "id": "recipes",
+          "label": "Recipes",
+        },
+        {
+          "fileName": "MEALPLAN.XLS",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/meal-plan",
+          "icon": "meal-plan",
+          "id": "meal-plan",
+          "label": "Meal plan",
+        },
+        {
+          "fileName": "SHOPPING.LST",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/shopping",
+          "icon": "shopping-list",
+          "id": "shopping-list",
+          "label": "Shopping list",
+        },
+      ],
+    },
+  ],
+  "mode": "held",
+  "pins": false,
+  "programs": [
+    {
+      "fileName": "INBOX.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/notifications",
+      "icon": "inbox",
+      "id": "inbox",
+      "label": "Inbox",
+    },
+    {
+      "fileName": "TASKS.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tasks",
+      "icon": "tasks",
+      "id": "tasks",
+      "label": "Tasks",
+    },
+    {
+      "fileName": "CALENDAR.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/calendar",
+      "icon": "calendar",
+      "id": "calendar",
+      "label": "Calendar",
+    },
+    {
+      "fileName": "MYFORMS.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tools/forms",
+      "icon": "my-forms",
+      "id": "my-forms",
+      "label": "My forms",
+    },
+    {
+      "fileName": "KEYGEN.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tools/invite",
+      "icon": "invites",
+      "id": "invites",
+      "label": "Invites",
+    },
+    {
+      "fileName": "MY_ACCOUNT.CPL",
+      "folder": null,
+      "group": "me",
+      "href": "/profile",
+      "icon": "account",
+      "id": "account",
+      "label": "My account",
+    },
+    {
+      "fileName": "MY_DUES.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/dues",
+      "icon": "my-dues",
+      "id": "my-dues",
+      "label": "My dues",
+    },
+    {
+      "fileName": "MY_GEAR.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/gear",
+      "icon": "my-gear",
+      "id": "my-gear",
+      "label": "My gear",
+    },
+    {
+      "fileName": "MY_SHIFTS.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/shifts/mine",
+      "icon": "my-shifts",
+      "id": "my-shifts",
+      "label": "My shifts",
+    },
+    {
+      "fileName": "CLAIMS.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/claims",
+      "icon": "my-claims",
+      "id": "my-claims",
+      "label": "My claims",
+    },
+    {
+      "fileName": "ROSTER.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/captains/camp-management",
+      "icon": "roster",
+      "id": "roster",
+      "label": "Roster",
+    },
+    {
+      "fileName": "POWER.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/power",
+      "icon": "power",
+      "id": "power",
+      "label": "Power",
+    },
+    {
+      "fileName": "LOGISTICS.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/logistics",
+      "icon": "logistics",
+      "id": "logistics",
+      "label": "Logistics",
+    },
+    {
+      "fileName": "ROSTER.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/shifts",
+      "icon": "shifts",
+      "id": "shifts",
+      "label": "Shifts",
+    },
+    {
+      "fileName": "HELPWANT.TXT",
+      "folder": null,
+      "group": "camp",
+      "href": "/help-wanted",
+      "icon": "help-wanted",
+      "id": "help-wanted",
+      "label": "Help wanted",
+    },
+    {
+      "fileName": "SITEPLAN.DWG",
+      "folder": null,
+      "group": "camp",
+      "href": "/camp-layout",
+      "icon": "camp-layout",
+      "id": "camp-layout",
+      "label": "Camp layout",
+    },
+    {
+      "fileName": "LOUNGE.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/lounge",
+      "icon": "lounge",
+      "id": "lounge",
+      "label": "Lounge",
+    },
+    {
+      "fileName": "INVENTRY.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/inventory",
+      "icon": "inventory",
+      "id": "inventory",
+      "label": "Inventory",
+    },
+    {
+      "fileName": "CARPOOL.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/transport",
+      "icon": "transport",
+      "id": "transport",
+      "label": "Transport",
+    },
+    {
+      "fileName": "LINEAGE.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/family-tree",
+      "icon": "family-tree",
+      "id": "family-tree",
+      "label": "Family tree",
+    },
+    {
+      "fileName": "PETS.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/pets",
+      "icon": "pets",
+      "id": "pets",
+      "label": "Camp pets",
+    },
+    {
+      "fileName": "README.TXT",
+      "folder": null,
+      "group": "camp",
+      "href": "/about",
+      "icon": "about",
+      "id": "about",
+      "label": "About Camp 404",
+    },
+    {
+      "fileName": "GUIDE.HLP",
+      "folder": null,
+      "group": "camp",
+      "href": "/guide",
+      "icon": "guide",
+      "id": "guide",
+      "label": "Survival Guide",
+    },
+    {
+      "fileName": "TERMINAL.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/terminal",
+      "icon": "terminal",
+      "id": "terminal",
+      "label": "Terminal",
+    },
+  ],
+  "search": [
+    {
+      "id": "inbox",
+      "keywords": [
+        "Notifications",
+        "Unread",
+        "Announcements",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "tasks",
+      "keywords": [
+        "To do",
+        "Doing",
+        "Deadline",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "calendar",
+      "keywords": [
+        "Events",
+        "Coming up",
+        "Meetings",
+        "Minutes",
+        "Agenda",
+        "Decisions",
+        "Action items",
+        "New event",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-forms",
+      "keywords": [
+        "Dietary needs",
+        "Questionnaire",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "invites",
+      "keywords": [
+        "Invite code",
+        "Invite a member",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "account",
+      "keywords": [
+        "Profile",
+        "Ticket",
+        "Payment reference",
+        "Password",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-dues",
+      "keywords": [
+        "Payment plan",
+        "Charges",
+        "Refund",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-gear",
+      "keywords": [
+        "Tent",
+        "Bedding",
+        "Sharing a tent",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-shifts",
+      "keywords": [
+        "Volunteer shifts",
+        "AfrikaBurn shift",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-claims",
+      "keywords": [
+        "Receipts",
+        "Bank details",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "roster",
+      "keywords": [
+        "Members",
+        "Waiting list",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "team:kitchen",
+      "where": "Teams",
+    },
+    {
+      "id": "team:structures",
+      "where": "Teams",
+    },
+    {
+      "id": "team:power_and_lighting",
+      "where": "Teams",
+    },
+    {
+      "id": "team:sanitation_and_water",
+      "where": "Teams",
+    },
+    {
+      "id": "team:health_and_safety",
+      "where": "Teams",
+    },
+    {
+      "id": "team:art_and_activities",
+      "where": "Teams",
+    },
+    {
+      "id": "team:ministry_of_memes",
+      "where": "Teams",
+    },
+    {
+      "id": "team:ministry_of_vibes",
+      "where": "Teams",
+    },
+    {
+      "id": "team:finance",
+      "where": "Teams",
+    },
+    {
+      "id": "team:transport_and_logistics",
+      "where": "Teams",
+    },
+    {
+      "id": "team:communications_and_hr",
+      "where": "Teams",
+    },
+    {
+      "id": "team:mutant_vehicle",
+      "where": "Teams",
+    },
+    {
+      "id": "team:sound",
+      "where": "Teams",
+    },
+    {
+      "id": "team:water",
+      "where": "Teams",
+    },
+    {
+      "id": "budgets",
+      "keywords": [
+        "Team budgets",
+        "Spent",
+        "Over budget",
+      ],
+      "where": "Teams",
+    },
+    {
+      "id": "recipes",
+      "keywords": [
+        "Recipe book",
+        "Import a recipe",
+        "Dictate",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "meal-plan",
+      "keywords": [
+        "Menu",
+        "Snacks",
+        "Allergies",
+        "Prep plan",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "shopping-list",
+      "keywords": [
+        "Food cost",
+        "To buy",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "power",
+      "keywords": [
+        "Fuel cans",
+        "Generator",
+        "Loads",
+        "Grid",
+        "Refuelling",
+      ],
+      "where": "Power and Lighting",
+    },
+    {
+      "id": "logistics",
+      "keywords": [
+        "AfrikaBurn dates",
+        "Deadlines",
+        "Who can help",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "shifts",
+      "keywords": [
+        "Burn days",
+        "Duty card",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "help-wanted",
+      "keywords": [
+        "Team roles",
+        "Needs a lead",
+        "I'm keen",
+        "Volunteer",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "camp-layout",
+      "keywords": [
+        "Site plan",
+        "Our plot",
+        "Neighbours",
+        "Arrivals",
+      ],
+      "where": "Structures",
+    },
+    {
+      "id": "lounge",
+      "keywords": [
+        "Programme",
+        "Offers",
+        "Event guide",
+        "Music",
+      ],
+      "where": "Ministry of Vibes",
+    },
+    {
+      "id": "inventory",
+      "keywords": [
+        "Gear",
+        "Bookings",
+        "Lent out",
+        "Maintenance",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "transport",
+      "keywords": [
+        "Lifts",
+        "Fuel cans",
+        "Cars",
+        "Trailers",
+        "Seats",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "family-tree",
+      "keywords": [
+        "Invited by",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "pets",
+      "keywords": [
+        "Cats",
+        "Dogs",
+        "Add your pet",
+        "Hints",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "about",
+      "keywords": [
+        "Camp fee",
+        "Getting there",
+        "Where we are",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "guide",
+      "keywords": [
+        "Chapters",
+        "Duty cards",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "terminal",
+      "keywords": [
+        "Commands",
+        "Inkblot",
+      ],
+      "where": "Camp",
+    },
+  ],
+  "startMenu": [],
+  "taskbarPins": [],
+  "teamFolders": [],
+  "tray": {
+    "balloon": null,
+    "health": null,
+    "inbox": null,
+    "today": false,
+  },
+  "version": "78ebd4df",
+}
+`;
+
+exports[`program census > gives the kitchenLead the same manifest 1`] = `
+{
+  "allowedChildren": [
+    "announcement",
+    "form",
+    "form-answers",
+    "minutes",
+    "guide-chapter",
+    "guide-version",
+    "new-guide-chapter",
+    "edit-guide-chapter",
+    "new-recipe",
+    "recipe",
+    "edit-recipe",
+    "recipe-version",
+    "recipe-source",
+    "edit-questionnaire",
+    "preview-questionnaire",
+    "send-questionnaire",
+    "inkblot",
+    "questionnaire",
+  ],
+  "desktop": [
+    {
+      "id": "inbox",
+      "kind": "program",
+    },
+    {
+      "id": "tasks",
+      "kind": "program",
+    },
+    {
+      "id": "calendar",
+      "kind": "program",
+    },
+    {
+      "id": "my-forms",
+      "kind": "program",
+    },
+    {
+      "id": "invites",
+      "kind": "program",
+    },
+    {
+      "id": "account",
+      "kind": "program",
+    },
+    {
+      "id": "my-dues",
+      "kind": "program",
+    },
+    {
+      "id": "my-gear",
+      "kind": "program",
+    },
+    {
+      "id": "my-shifts",
+      "kind": "program",
+    },
+    {
+      "id": "my-claims",
+      "kind": "program",
+    },
+    {
+      "id": "roster",
+      "kind": "program",
+    },
+    {
+      "id": "teams",
+      "kind": "folder",
+    },
+    {
+      "id": "kitchen",
+      "kind": "folder",
+    },
+    {
+      "id": "power",
+      "kind": "program",
+    },
+    {
+      "id": "logistics",
+      "kind": "program",
+    },
+    {
+      "id": "shifts",
+      "kind": "program",
+    },
+    {
+      "id": "help-wanted",
+      "kind": "program",
+    },
+    {
+      "id": "camp-layout",
+      "kind": "program",
+    },
+    {
+      "id": "lounge",
+      "kind": "program",
+    },
+    {
+      "id": "inventory",
+      "kind": "program",
+    },
+    {
+      "id": "transport",
+      "kind": "program",
+    },
+    {
+      "id": "family-tree",
+      "kind": "program",
+    },
+    {
+      "id": "pets",
+      "kind": "program",
+    },
+    {
+      "id": "about",
+      "kind": "program",
+    },
+    {
+      "id": "guide",
+      "kind": "program",
+    },
+    {
+      "id": "captains",
+      "kind": "folder",
+    },
+    {
+      "id": "terminal",
+      "kind": "program",
+    },
+  ],
+  "folders": [
+    {
+      "group": "camp",
+      "icon": "folder",
+      "id": "teams",
+      "label": "Teams",
+      "programs": [
+        {
+          "fileName": "KITCHEN.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/kitchen",
+          "icon": "team",
+          "id": "team:kitchen",
+          "label": "Kitchen",
+          "mine": true,
+        },
+        {
+          "fileName": "POWER_AND_LIGHTING.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/power_and_lighting",
+          "icon": "team",
+          "id": "team:power_and_lighting",
+          "label": "Power and Lighting",
+          "mine": true,
+        },
+        {
+          "fileName": "STRUCTURES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/structures",
+          "icon": "team",
+          "id": "team:structures",
+          "label": "Structures",
+        },
+        {
+          "fileName": "SANITATION_AND_WATER.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/sanitation_and_water",
+          "icon": "team",
+          "id": "team:sanitation_and_water",
+          "label": "Sanitation and MOOP",
+        },
+        {
+          "fileName": "HEALTH_AND_SAFETY.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/health_and_safety",
+          "icon": "team",
+          "id": "team:health_and_safety",
+          "label": "Safety",
+        },
+        {
+          "fileName": "ART_AND_ACTIVITIES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/art_and_activities",
+          "icon": "team",
+          "id": "team:art_and_activities",
+          "label": "Art and Activities",
+        },
+        {
+          "fileName": "MINISTRY_OF_MEMES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/ministry_of_memes",
+          "icon": "team",
+          "id": "team:ministry_of_memes",
+          "label": "Ministry of Memes",
+        },
+        {
+          "fileName": "MINISTRY_OF_VIBES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/ministry_of_vibes",
+          "icon": "team",
+          "id": "team:ministry_of_vibes",
+          "label": "Ministry of Vibes",
+        },
+        {
+          "fileName": "FINANCE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/finance",
+          "icon": "team",
+          "id": "team:finance",
+          "label": "Finance",
+        },
+        {
+          "fileName": "TRANSPORT_AND_LOGISTICS.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/transport_and_logistics",
+          "icon": "team",
+          "id": "team:transport_and_logistics",
+          "label": "Transport and Logistics",
+        },
+        {
+          "fileName": "COMMUNICATIONS_AND_HR.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/communications_and_hr",
+          "icon": "team",
+          "id": "team:communications_and_hr",
+          "label": "Communications & HR",
+        },
+        {
+          "fileName": "MUTANT_VEHICLE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/mutant_vehicle",
+          "icon": "team",
+          "id": "team:mutant_vehicle",
+          "label": "Mutant Vehicle",
+        },
+        {
+          "fileName": "SOUND.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/sound",
+          "icon": "team",
+          "id": "team:sound",
+          "label": "Sound",
+        },
+        {
+          "fileName": "WATER.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/water",
+          "icon": "team",
+          "id": "team:water",
+          "label": "Water",
+        },
+        {
+          "fileName": "BUDGETS.XLS",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/budgets",
+          "icon": "budgets",
+          "id": "budgets",
+          "label": "Budgets",
+        },
+      ],
+    },
+    {
+      "group": "camp",
+      "icon": "folder",
+      "id": "kitchen",
+      "label": "Kitchen",
+      "programs": [
+        {
+          "fileName": "COOKBOOK.EXE",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/recipes",
+          "icon": "recipes",
+          "id": "recipes",
+          "label": "Recipes",
+        },
+        {
+          "fileName": "MEALPLAN.XLS",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/meal-plan",
+          "icon": "meal-plan",
+          "id": "meal-plan",
+          "label": "Meal plan",
+        },
+        {
+          "fileName": "SHOPPING.LST",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/shopping",
+          "icon": "shopping-list",
+          "id": "shopping-list",
+          "label": "Shopping list",
+        },
+        {
+          "fileName": "REVIEW.EXE",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/recipes/review",
+          "icon": "recipe-review",
+          "id": "recipe-review",
+          "label": "Recipe review",
+        },
+      ],
+    },
+    {
+      "group": "captains",
+      "icon": "folder",
+      "id": "captains",
+      "label": "Captains",
+      "programs": [
+        {
+          "fileName": "INTAKE.DB",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/applications",
+          "icon": "applications",
+          "id": "applications",
+          "label": "Applications",
+        },
+        {
+          "fileName": "FORMS.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/questionnaires",
+          "icon": "questionnaires",
+          "id": "questionnaires",
+          "label": "Questionnaires",
+        },
+        {
+          "fileName": "BROADCAST.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/announcements",
+          "icon": "announcements",
+          "id": "announcements",
+          "label": "Announcements",
+        },
+        {
+          "fileName": "APPROVE.EXE",
+          "folder": "captains",
+          "group": "captains",
+          "href": "/captains/claims",
+          "icon": "claim-approvals",
+          "id": "claim-approvals",
+          "label": "Claims to approve",
+        },
+      ],
+    },
+  ],
+  "mode": "full",
+  "pins": true,
+  "programs": [
+    {
+      "fileName": "INBOX.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/notifications",
+      "icon": "inbox",
+      "id": "inbox",
+      "label": "Inbox",
+    },
+    {
+      "fileName": "TASKS.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tasks",
+      "icon": "tasks",
+      "id": "tasks",
+      "label": "Tasks",
+    },
+    {
+      "fileName": "CALENDAR.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/calendar",
+      "icon": "calendar",
+      "id": "calendar",
+      "label": "Calendar",
+    },
+    {
+      "fileName": "MYFORMS.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tools/forms",
+      "icon": "my-forms",
+      "id": "my-forms",
+      "label": "My forms",
+    },
+    {
+      "fileName": "KEYGEN.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tools/invite",
+      "icon": "invites",
+      "id": "invites",
+      "label": "Invites",
+    },
+    {
+      "fileName": "MY_ACCOUNT.CPL",
+      "folder": null,
+      "group": "me",
+      "href": "/profile",
+      "icon": "account",
+      "id": "account",
+      "label": "My account",
+    },
+    {
+      "fileName": "MY_DUES.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/dues",
+      "icon": "my-dues",
+      "id": "my-dues",
+      "label": "My dues",
+    },
+    {
+      "fileName": "MY_GEAR.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/gear",
+      "icon": "my-gear",
+      "id": "my-gear",
+      "label": "My gear",
+    },
+    {
+      "fileName": "MY_SHIFTS.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/shifts/mine",
+      "icon": "my-shifts",
+      "id": "my-shifts",
+      "label": "My shifts",
+    },
+    {
+      "fileName": "CLAIMS.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/claims",
+      "icon": "my-claims",
+      "id": "my-claims",
+      "label": "My claims",
+    },
+    {
+      "fileName": "ROSTER.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/captains/camp-management",
+      "icon": "roster",
+      "id": "roster",
+      "label": "Roster",
+    },
+    {
+      "fileName": "POWER.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/power",
+      "icon": "power",
+      "id": "power",
+      "label": "Power",
+    },
+    {
+      "fileName": "LOGISTICS.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/logistics",
+      "icon": "logistics",
+      "id": "logistics",
+      "label": "Logistics",
+    },
+    {
+      "fileName": "ROSTER.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/shifts",
+      "icon": "shifts",
+      "id": "shifts",
+      "label": "Shifts",
+    },
+    {
+      "fileName": "HELPWANT.TXT",
+      "folder": null,
+      "group": "camp",
+      "href": "/help-wanted",
+      "icon": "help-wanted",
+      "id": "help-wanted",
+      "label": "Help wanted",
+    },
+    {
+      "fileName": "SITEPLAN.DWG",
+      "folder": null,
+      "group": "camp",
+      "href": "/camp-layout",
+      "icon": "camp-layout",
+      "id": "camp-layout",
+      "label": "Camp layout",
+    },
+    {
+      "fileName": "LOUNGE.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/lounge",
+      "icon": "lounge",
+      "id": "lounge",
+      "label": "Lounge",
+    },
+    {
+      "fileName": "INVENTRY.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/inventory",
+      "icon": "inventory",
+      "id": "inventory",
+      "label": "Inventory",
+    },
+    {
+      "fileName": "CARPOOL.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/transport",
+      "icon": "transport",
+      "id": "transport",
+      "label": "Transport",
+    },
+    {
+      "fileName": "LINEAGE.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/family-tree",
+      "icon": "family-tree",
+      "id": "family-tree",
+      "label": "Family tree",
+    },
+    {
+      "fileName": "PETS.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/pets",
+      "icon": "pets",
+      "id": "pets",
+      "label": "Camp pets",
+    },
+    {
+      "fileName": "README.TXT",
+      "folder": null,
+      "group": "camp",
+      "href": "/about",
+      "icon": "about",
+      "id": "about",
+      "label": "About Camp 404",
+    },
+    {
+      "fileName": "GUIDE.HLP",
+      "folder": null,
+      "group": "camp",
+      "href": "/guide",
+      "icon": "guide",
+      "id": "guide",
+      "label": "Survival Guide",
+    },
+    {
+      "fileName": "TERMINAL.EXE",
+      "folder": null,
+      "group": "captains",
+      "href": "/terminal",
+      "icon": "terminal",
+      "id": "terminal",
+      "label": "Terminal",
+    },
+  ],
+  "search": [
+    {
+      "id": "inbox",
+      "keywords": [
+        "Notifications",
+        "Unread",
+        "Announcements",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "tasks",
+      "keywords": [
+        "To do",
+        "Doing",
+        "Deadline",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "calendar",
+      "keywords": [
+        "Events",
+        "Coming up",
+        "Meetings",
+        "Minutes",
+        "Agenda",
+        "Decisions",
+        "Action items",
+        "New event",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-forms",
+      "keywords": [
+        "Dietary needs",
+        "Questionnaire",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "invites",
+      "keywords": [
+        "Invite code",
+        "Invite a member",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "account",
+      "keywords": [
+        "Profile",
+        "Ticket",
+        "Payment reference",
+        "Password",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-dues",
+      "keywords": [
+        "Payment plan",
+        "Charges",
+        "Refund",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-gear",
+      "keywords": [
+        "Tent",
+        "Bedding",
+        "Sharing a tent",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-shifts",
+      "keywords": [
+        "Volunteer shifts",
+        "AfrikaBurn shift",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-claims",
+      "keywords": [
+        "Receipts",
+        "Bank details",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "roster",
+      "keywords": [
+        "Members",
+        "Waiting list",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "team:kitchen",
+      "where": "Teams",
+    },
+    {
+      "id": "team:power_and_lighting",
+      "where": "Teams",
+    },
+    {
+      "id": "team:structures",
+      "where": "Teams",
+    },
+    {
+      "id": "team:sanitation_and_water",
+      "where": "Teams",
+    },
+    {
+      "id": "team:health_and_safety",
+      "where": "Teams",
+    },
+    {
+      "id": "team:art_and_activities",
+      "where": "Teams",
+    },
+    {
+      "id": "team:ministry_of_memes",
+      "where": "Teams",
+    },
+    {
+      "id": "team:ministry_of_vibes",
+      "where": "Teams",
+    },
+    {
+      "id": "team:finance",
+      "where": "Teams",
+    },
+    {
+      "id": "team:transport_and_logistics",
+      "where": "Teams",
+    },
+    {
+      "id": "team:communications_and_hr",
+      "where": "Teams",
+    },
+    {
+      "id": "team:mutant_vehicle",
+      "where": "Teams",
+    },
+    {
+      "id": "team:sound",
+      "where": "Teams",
+    },
+    {
+      "id": "team:water",
+      "where": "Teams",
+    },
+    {
+      "id": "budgets",
+      "keywords": [
+        "Team budgets",
+        "Spent",
+        "Over budget",
+      ],
+      "where": "Teams",
+    },
+    {
+      "id": "recipes",
+      "keywords": [
+        "Recipe book",
+        "Import a recipe",
+        "Dictate",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "meal-plan",
+      "keywords": [
+        "Menu",
+        "Snacks",
+        "Allergies",
+        "Prep plan",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "shopping-list",
+      "keywords": [
+        "Food cost",
+        "To buy",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "recipe-review",
+      "keywords": [
+        "Proofread",
+        "Suggestions",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "power",
+      "keywords": [
+        "Fuel cans",
+        "Generator",
+        "Loads",
+        "Grid",
+        "Refuelling",
+      ],
+      "where": "Power and Lighting",
+    },
+    {
+      "id": "logistics",
+      "keywords": [
+        "AfrikaBurn dates",
+        "Deadlines",
+        "Who can help",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "shifts",
+      "keywords": [
+        "Burn days",
+        "Duty card",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "help-wanted",
+      "keywords": [
+        "Team roles",
+        "Needs a lead",
+        "I'm keen",
+        "Volunteer",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "camp-layout",
+      "keywords": [
+        "Site plan",
+        "Our plot",
+        "Neighbours",
+        "Arrivals",
+      ],
+      "where": "Structures",
+    },
+    {
+      "id": "lounge",
+      "keywords": [
+        "Programme",
+        "Offers",
+        "Event guide",
+        "Music",
+      ],
+      "where": "Ministry of Vibes",
+    },
+    {
+      "id": "inventory",
+      "keywords": [
+        "Gear",
+        "Bookings",
+        "Lent out",
+        "Maintenance",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "transport",
+      "keywords": [
+        "Lifts",
+        "Fuel cans",
+        "Cars",
+        "Trailers",
+        "Seats",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "family-tree",
+      "keywords": [
+        "Invited by",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "pets",
+      "keywords": [
+        "Cats",
+        "Dogs",
+        "Add your pet",
+        "Hints",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "about",
+      "keywords": [
+        "Camp fee",
+        "Getting there",
+        "Where we are",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "guide",
+      "keywords": [
+        "Chapters",
+        "Duty cards",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "applications",
+      "keywords": [
+        "Accept",
+        "Tickets",
+        "WAP",
+        "DDT",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "questionnaires",
+      "keywords": [
+        "Results",
+        "Responses",
+        "Publish",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "announcements",
+      "keywords": [
+        "Pop-up",
+        "Drafts",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "claim-approvals",
+      "keywords": [
+        "Approve claims",
+        "Turn down",
+      ],
+      "where": "Captains",
+    },
+    {
+      "id": "terminal",
+      "keywords": [
+        "Commands",
+        "Inkblot",
+      ],
+      "where": "Captains",
+    },
+  ],
+  "startMenu": [
+    {
+      "group": "me",
+      "items": [
+        {
+          "id": "inbox",
+          "kind": "program",
+        },
+        {
+          "id": "tasks",
+          "kind": "program",
+        },
+        {
+          "id": "calendar",
+          "kind": "program",
+        },
+        {
+          "id": "my-forms",
+          "kind": "program",
+        },
+        {
+          "id": "invites",
+          "kind": "program",
+        },
+        {
+          "id": "account",
+          "kind": "program",
+        },
+        {
+          "id": "my-dues",
+          "kind": "program",
+        },
+        {
+          "id": "my-gear",
+          "kind": "program",
+        },
+        {
+          "id": "my-shifts",
+          "kind": "program",
+        },
+        {
+          "id": "my-claims",
+          "kind": "program",
+        },
+      ],
+      "label": "Me",
+    },
+    {
+      "group": "camp",
+      "items": [
+        {
+          "id": "roster",
+          "kind": "program",
+        },
+        {
+          "id": "teams",
+          "kind": "folder",
+        },
+        {
+          "id": "kitchen",
+          "kind": "folder",
+        },
+        {
+          "id": "power",
+          "kind": "program",
+        },
+        {
+          "id": "logistics",
+          "kind": "program",
+        },
+        {
+          "id": "shifts",
+          "kind": "program",
+        },
+        {
+          "id": "help-wanted",
+          "kind": "program",
+        },
+        {
+          "id": "camp-layout",
+          "kind": "program",
+        },
+        {
+          "id": "lounge",
+          "kind": "program",
+        },
+        {
+          "id": "inventory",
+          "kind": "program",
+        },
+        {
+          "id": "transport",
+          "kind": "program",
+        },
+        {
+          "id": "family-tree",
+          "kind": "program",
+        },
+        {
+          "id": "pets",
+          "kind": "program",
+        },
+        {
+          "id": "about",
+          "kind": "program",
+        },
+        {
+          "id": "guide",
+          "kind": "program",
+        },
+      ],
+      "label": "Camp",
+    },
+    {
+      "group": "captains",
+      "items": [
+        {
+          "id": "captains",
+          "kind": "folder",
+        },
+        {
+          "id": "terminal",
+          "kind": "program",
+        },
+      ],
+      "label": "Captains",
+    },
+  ],
+  "taskbarPins": [
+    "inbox",
+  ],
+  "teamFolders": [
+    {
+      "label": "Kitchen team",
+      "lead": true,
+      "programs": [
+        {
+          "fileName": "KITCHEN.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/kitchen",
+          "icon": "team",
+          "id": "team:kitchen",
+          "label": "Kitchen page",
+          "mine": true,
+        },
+        {
+          "fileName": "CALENDAR.EXE",
+          "folder": null,
+          "group": "me",
+          "href": "/calendar?team=kitchen",
+          "icon": "calendar",
+          "id": "calendar:kitchen",
+          "label": "Kitchen calendar",
+        },
+        {
+          "fileName": "TASKS.EXE",
+          "folder": null,
+          "group": "me",
+          "href": "/tasks?team=kitchen",
+          "icon": "tasks",
+          "id": "tasks:kitchen",
+          "label": "Kitchen tasks",
+        },
+        {
+          "fileName": "COOKBOOK.EXE",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/recipes",
+          "icon": "recipes",
+          "id": "recipes",
+          "label": "Recipes",
+        },
+        {
+          "fileName": "MEALPLAN.XLS",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/meal-plan",
+          "icon": "meal-plan",
+          "id": "meal-plan",
+          "label": "Meal plan",
+        },
+        {
+          "fileName": "SHOPPING.LST",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/shopping",
+          "icon": "shopping-list",
+          "id": "shopping-list",
+          "label": "Shopping list",
+        },
+        {
+          "fileName": "REVIEW.EXE",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/recipes/review",
+          "icon": "recipe-review",
+          "id": "recipe-review",
+          "label": "Recipe review",
+        },
+      ],
+      "team": "kitchen",
+    },
+    {
+      "label": "Power and Lighting team",
+      "lead": false,
+      "programs": [
+        {
+          "fileName": "POWER_AND_LIGHTING.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/power_and_lighting",
+          "icon": "team",
+          "id": "team:power_and_lighting",
+          "label": "Power and Lighting page",
+          "mine": true,
+        },
+        {
+          "fileName": "CALENDAR.EXE",
+          "folder": null,
+          "group": "me",
+          "href": "/calendar?team=power_and_lighting",
+          "icon": "calendar",
+          "id": "calendar:power_and_lighting",
+          "label": "Power and Lighting calendar",
+        },
+        {
+          "fileName": "TASKS.EXE",
+          "folder": null,
+          "group": "me",
+          "href": "/tasks?team=power_and_lighting",
+          "icon": "tasks",
+          "id": "tasks:power_and_lighting",
+          "label": "Power and Lighting tasks",
+        },
+        {
+          "fileName": "POWER.EXE",
+          "folder": null,
+          "group": "camp",
+          "href": "/power",
+          "icon": "power",
+          "id": "power",
+          "label": "Power",
+        },
+      ],
+      "team": "power_and_lighting",
+    },
+  ],
+  "tray": {
+    "balloon": null,
+    "health": {
+      "status": "ok",
+    },
+    "inbox": {
+      "count": 0,
+    },
+    "today": true,
+  },
+  "version": "edab7ab9",
+}
+`;
+
+exports[`program census > gives the member the same manifest 1`] = `
+{
+  "allowedChildren": [
+    "announcement",
+    "form",
+    "form-answers",
+    "minutes",
+    "guide-chapter",
+    "guide-version",
+    "new-recipe",
+    "recipe",
+    "recipe-version",
+    "recipe-source",
+    "inkblot",
+    "questionnaire",
+  ],
+  "desktop": [
+    {
+      "id": "inbox",
+      "kind": "program",
+    },
+    {
+      "id": "tasks",
+      "kind": "program",
+    },
+    {
+      "id": "calendar",
+      "kind": "program",
+    },
+    {
+      "id": "my-forms",
+      "kind": "program",
+    },
+    {
+      "id": "invites",
+      "kind": "program",
+    },
+    {
+      "id": "account",
+      "kind": "program",
+    },
+    {
+      "id": "my-dues",
+      "kind": "program",
+    },
+    {
+      "id": "my-gear",
+      "kind": "program",
+    },
+    {
+      "id": "my-shifts",
+      "kind": "program",
+    },
+    {
+      "id": "my-claims",
+      "kind": "program",
+    },
+    {
+      "id": "my-lift",
+      "kind": "program",
+    },
+    {
+      "id": "roster",
+      "kind": "program",
+    },
+    {
+      "id": "teams",
+      "kind": "folder",
+    },
+    {
+      "id": "kitchen",
+      "kind": "folder",
+    },
+    {
+      "id": "power",
+      "kind": "program",
+    },
+    {
+      "id": "logistics",
+      "kind": "program",
+    },
+    {
+      "id": "shifts",
+      "kind": "program",
+    },
+    {
+      "id": "help-wanted",
+      "kind": "program",
+    },
+    {
+      "id": "camp-layout",
+      "kind": "program",
+    },
+    {
+      "id": "lounge",
+      "kind": "program",
+    },
+    {
+      "id": "inventory",
+      "kind": "program",
+    },
+    {
+      "id": "transport",
+      "kind": "program",
+    },
+    {
+      "id": "family-tree",
+      "kind": "program",
+    },
+    {
+      "id": "pets",
+      "kind": "program",
+    },
+    {
+      "id": "about",
+      "kind": "program",
+    },
+    {
+      "id": "guide",
+      "kind": "program",
+    },
+    {
+      "id": "terminal",
+      "kind": "program",
+    },
+  ],
+  "folders": [
+    {
+      "group": "camp",
+      "icon": "folder",
+      "id": "teams",
+      "label": "Teams",
+      "programs": [
+        {
+          "fileName": "TRANSPORT_AND_LOGISTICS.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/transport_and_logistics",
+          "icon": "team",
+          "id": "team:transport_and_logistics",
+          "label": "Transport and Logistics",
+          "mine": true,
+        },
+        {
+          "fileName": "KITCHEN.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/kitchen",
+          "icon": "team",
+          "id": "team:kitchen",
+          "label": "Kitchen",
+        },
+        {
+          "fileName": "STRUCTURES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/structures",
+          "icon": "team",
+          "id": "team:structures",
+          "label": "Structures",
+        },
+        {
+          "fileName": "POWER_AND_LIGHTING.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/power_and_lighting",
+          "icon": "team",
+          "id": "team:power_and_lighting",
+          "label": "Power and Lighting",
+        },
+        {
+          "fileName": "SANITATION_AND_WATER.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/sanitation_and_water",
+          "icon": "team",
+          "id": "team:sanitation_and_water",
+          "label": "Sanitation and MOOP",
+        },
+        {
+          "fileName": "HEALTH_AND_SAFETY.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/health_and_safety",
+          "icon": "team",
+          "id": "team:health_and_safety",
+          "label": "Safety",
+        },
+        {
+          "fileName": "ART_AND_ACTIVITIES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/art_and_activities",
+          "icon": "team",
+          "id": "team:art_and_activities",
+          "label": "Art and Activities",
+        },
+        {
+          "fileName": "MINISTRY_OF_MEMES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/ministry_of_memes",
+          "icon": "team",
+          "id": "team:ministry_of_memes",
+          "label": "Ministry of Memes",
+        },
+        {
+          "fileName": "MINISTRY_OF_VIBES.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/ministry_of_vibes",
+          "icon": "team",
+          "id": "team:ministry_of_vibes",
+          "label": "Ministry of Vibes",
+        },
+        {
+          "fileName": "FINANCE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/finance",
+          "icon": "team",
+          "id": "team:finance",
+          "label": "Finance",
+        },
+        {
+          "fileName": "COMMUNICATIONS_AND_HR.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/communications_and_hr",
+          "icon": "team",
+          "id": "team:communications_and_hr",
+          "label": "Communications & HR",
+        },
+        {
+          "fileName": "MUTANT_VEHICLE.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/mutant_vehicle",
+          "icon": "team",
+          "id": "team:mutant_vehicle",
+          "label": "Mutant Vehicle",
+        },
+        {
+          "fileName": "SOUND.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/sound",
+          "icon": "team",
+          "id": "team:sound",
+          "label": "Sound",
+        },
+        {
+          "fileName": "WATER.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/water",
+          "icon": "team",
+          "id": "team:water",
+          "label": "Water",
+        },
+        {
+          "fileName": "BUDGETS.XLS",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/budgets",
+          "icon": "budgets",
+          "id": "budgets",
+          "label": "Budgets",
+        },
+      ],
+    },
+    {
+      "group": "camp",
+      "icon": "folder",
+      "id": "kitchen",
+      "label": "Kitchen",
+      "programs": [
+        {
+          "fileName": "COOKBOOK.EXE",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/recipes",
+          "icon": "recipes",
+          "id": "recipes",
+          "label": "Recipes",
+        },
+        {
+          "fileName": "MEALPLAN.XLS",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/meal-plan",
+          "icon": "meal-plan",
+          "id": "meal-plan",
+          "label": "Meal plan",
+        },
+        {
+          "fileName": "SHOPPING.LST",
+          "folder": "kitchen",
+          "group": "camp",
+          "href": "/kitchen/shopping",
+          "icon": "shopping-list",
+          "id": "shopping-list",
+          "label": "Shopping list",
+        },
+      ],
+    },
+  ],
+  "mode": "full",
+  "pins": true,
+  "programs": [
+    {
+      "fileName": "INBOX.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/notifications",
+      "icon": "inbox",
+      "id": "inbox",
+      "label": "Inbox",
+    },
+    {
+      "fileName": "TASKS.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tasks",
+      "icon": "tasks",
+      "id": "tasks",
+      "label": "Tasks",
+    },
+    {
+      "fileName": "CALENDAR.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/calendar",
+      "icon": "calendar",
+      "id": "calendar",
+      "label": "Calendar",
+    },
+    {
+      "fileName": "MYFORMS.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tools/forms",
+      "icon": "my-forms",
+      "id": "my-forms",
+      "label": "My forms",
+    },
+    {
+      "fileName": "KEYGEN.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/tools/invite",
+      "icon": "invites",
+      "id": "invites",
+      "label": "Invites",
+    },
+    {
+      "fileName": "MY_ACCOUNT.CPL",
+      "folder": null,
+      "group": "me",
+      "href": "/profile",
+      "icon": "account",
+      "id": "account",
+      "label": "My account",
+    },
+    {
+      "fileName": "MY_DUES.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/dues",
+      "icon": "my-dues",
+      "id": "my-dues",
+      "label": "My dues",
+    },
+    {
+      "fileName": "MY_GEAR.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/gear",
+      "icon": "my-gear",
+      "id": "my-gear",
+      "label": "My gear",
+    },
+    {
+      "fileName": "MY_SHIFTS.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/shifts/mine",
+      "icon": "my-shifts",
+      "id": "my-shifts",
+      "label": "My shifts",
+    },
+    {
+      "fileName": "CLAIMS.TXT",
+      "folder": null,
+      "group": "me",
+      "href": "/claims",
+      "icon": "my-claims",
+      "id": "my-claims",
+      "label": "My claims",
+    },
+    {
+      "fileName": "MY_LIFT.EXE",
+      "folder": null,
+      "group": "me",
+      "href": "/lift",
+      "icon": "my-lift",
+      "id": "my-lift",
+      "label": "My lift",
+    },
+    {
+      "fileName": "ROSTER.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/captains/camp-management",
+      "icon": "roster",
+      "id": "roster",
+      "label": "Roster",
+    },
+    {
+      "fileName": "POWER.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/power",
+      "icon": "power",
+      "id": "power",
+      "label": "Power",
+    },
+    {
+      "fileName": "LOGISTICS.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/logistics",
+      "icon": "logistics",
+      "id": "logistics",
+      "label": "Logistics",
+    },
+    {
+      "fileName": "ROSTER.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/shifts",
+      "icon": "shifts",
+      "id": "shifts",
+      "label": "Shifts",
+    },
+    {
+      "fileName": "HELPWANT.TXT",
+      "folder": null,
+      "group": "camp",
+      "href": "/help-wanted",
+      "icon": "help-wanted",
+      "id": "help-wanted",
+      "label": "Help wanted",
+    },
+    {
+      "fileName": "SITEPLAN.DWG",
+      "folder": null,
+      "group": "camp",
+      "href": "/camp-layout",
+      "icon": "camp-layout",
+      "id": "camp-layout",
+      "label": "Camp layout",
+    },
+    {
+      "fileName": "LOUNGE.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/lounge",
+      "icon": "lounge",
+      "id": "lounge",
+      "label": "Lounge",
+    },
+    {
+      "fileName": "INVENTRY.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/inventory",
+      "icon": "inventory",
+      "id": "inventory",
+      "label": "Inventory",
+    },
+    {
+      "fileName": "CARPOOL.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/transport",
+      "icon": "transport",
+      "id": "transport",
+      "label": "Transport",
+    },
+    {
+      "fileName": "LINEAGE.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/family-tree",
+      "icon": "family-tree",
+      "id": "family-tree",
+      "label": "Family tree",
+    },
+    {
+      "fileName": "PETS.DB",
+      "folder": null,
+      "group": "camp",
+      "href": "/pets",
+      "icon": "pets",
+      "id": "pets",
+      "label": "Camp pets",
+    },
+    {
+      "fileName": "README.TXT",
+      "folder": null,
+      "group": "camp",
+      "href": "/about",
+      "icon": "about",
+      "id": "about",
+      "label": "About Camp 404",
+    },
+    {
+      "fileName": "GUIDE.HLP",
+      "folder": null,
+      "group": "camp",
+      "href": "/guide",
+      "icon": "guide",
+      "id": "guide",
+      "label": "Survival Guide",
+    },
+    {
+      "fileName": "TERMINAL.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/terminal",
+      "icon": "terminal",
+      "id": "terminal",
+      "label": "Terminal",
+    },
+  ],
+  "search": [
+    {
+      "id": "inbox",
+      "keywords": [
+        "Notifications",
+        "Unread",
+        "Announcements",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "tasks",
+      "keywords": [
+        "To do",
+        "Doing",
+        "Deadline",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "calendar",
+      "keywords": [
+        "Events",
+        "Coming up",
+        "Meetings",
+        "Minutes",
+        "Agenda",
+        "Decisions",
+        "Action items",
+        "New event",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-forms",
+      "keywords": [
+        "Dietary needs",
+        "Questionnaire",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "invites",
+      "keywords": [
+        "Invite code",
+        "Invite a member",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "account",
+      "keywords": [
+        "Profile",
+        "Ticket",
+        "Payment reference",
+        "Password",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-dues",
+      "keywords": [
+        "Payment plan",
+        "Charges",
+        "Refund",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-gear",
+      "keywords": [
+        "Tent",
+        "Bedding",
+        "Sharing a tent",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-shifts",
+      "keywords": [
+        "Volunteer shifts",
+        "AfrikaBurn shift",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-claims",
+      "keywords": [
+        "Receipts",
+        "Bank details",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "my-lift",
+      "keywords": [
+        "Driver",
+        "Riders",
+        "Ride",
+        "Your car",
+      ],
+      "where": "Me",
+    },
+    {
+      "id": "roster",
+      "keywords": [
+        "Members",
+        "Waiting list",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "team:transport_and_logistics",
+      "where": "Teams",
+    },
+    {
+      "id": "team:kitchen",
+      "where": "Teams",
+    },
+    {
+      "id": "team:structures",
+      "where": "Teams",
+    },
+    {
+      "id": "team:power_and_lighting",
+      "where": "Teams",
+    },
+    {
+      "id": "team:sanitation_and_water",
+      "where": "Teams",
+    },
+    {
+      "id": "team:health_and_safety",
+      "where": "Teams",
+    },
+    {
+      "id": "team:art_and_activities",
+      "where": "Teams",
+    },
+    {
+      "id": "team:ministry_of_memes",
+      "where": "Teams",
+    },
+    {
+      "id": "team:ministry_of_vibes",
+      "where": "Teams",
+    },
+    {
+      "id": "team:finance",
+      "where": "Teams",
+    },
+    {
+      "id": "team:communications_and_hr",
+      "where": "Teams",
+    },
+    {
+      "id": "team:mutant_vehicle",
+      "where": "Teams",
+    },
+    {
+      "id": "team:sound",
+      "where": "Teams",
+    },
+    {
+      "id": "team:water",
+      "where": "Teams",
+    },
+    {
+      "id": "budgets",
+      "keywords": [
+        "Team budgets",
+        "Spent",
+        "Over budget",
+      ],
+      "where": "Teams",
+    },
+    {
+      "id": "recipes",
+      "keywords": [
+        "Recipe book",
+        "Import a recipe",
+        "Dictate",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "meal-plan",
+      "keywords": [
+        "Menu",
+        "Snacks",
+        "Allergies",
+        "Prep plan",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "shopping-list",
+      "keywords": [
+        "Food cost",
+        "To buy",
+      ],
+      "where": "Kitchen",
+    },
+    {
+      "id": "power",
+      "keywords": [
+        "Fuel cans",
+        "Generator",
+        "Loads",
+        "Grid",
+        "Refuelling",
+      ],
+      "where": "Power and Lighting",
+    },
+    {
+      "id": "logistics",
+      "keywords": [
+        "AfrikaBurn dates",
+        "Deadlines",
+        "Who can help",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "shifts",
+      "keywords": [
+        "Burn days",
+        "Duty card",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "help-wanted",
+      "keywords": [
+        "Team roles",
+        "Needs a lead",
+        "I'm keen",
+        "Volunteer",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "camp-layout",
+      "keywords": [
+        "Site plan",
+        "Our plot",
+        "Neighbours",
+        "Arrivals",
+      ],
+      "where": "Structures",
+    },
+    {
+      "id": "lounge",
+      "keywords": [
+        "Programme",
+        "Offers",
+        "Event guide",
+        "Music",
+      ],
+      "where": "Ministry of Vibes",
+    },
+    {
+      "id": "inventory",
+      "keywords": [
+        "Gear",
+        "Bookings",
+        "Lent out",
+        "Maintenance",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "transport",
+      "keywords": [
+        "Lifts",
+        "Fuel cans",
+        "Cars",
+        "Trailers",
+        "Seats",
+      ],
+      "where": "Transport and Logistics",
+    },
+    {
+      "id": "family-tree",
+      "keywords": [
+        "Invited by",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "pets",
+      "keywords": [
+        "Cats",
+        "Dogs",
+        "Add your pet",
+        "Hints",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "about",
+      "keywords": [
+        "Camp fee",
+        "Getting there",
+        "Where we are",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "guide",
+      "keywords": [
+        "Chapters",
+        "Duty cards",
+      ],
+      "where": "Camp",
+    },
+    {
+      "id": "terminal",
+      "keywords": [
+        "Commands",
+        "Inkblot",
+      ],
+      "where": "Camp",
+    },
+  ],
+  "startMenu": [
+    {
+      "group": "me",
+      "items": [
+        {
+          "id": "inbox",
+          "kind": "program",
+        },
+        {
+          "id": "tasks",
+          "kind": "program",
+        },
+        {
+          "id": "calendar",
+          "kind": "program",
+        },
+        {
+          "id": "my-forms",
+          "kind": "program",
+        },
+        {
+          "id": "invites",
+          "kind": "program",
+        },
+        {
+          "id": "account",
+          "kind": "program",
+        },
+        {
+          "id": "my-dues",
+          "kind": "program",
+        },
+        {
+          "id": "my-gear",
+          "kind": "program",
+        },
+        {
+          "id": "my-shifts",
+          "kind": "program",
+        },
+        {
+          "id": "my-claims",
+          "kind": "program",
+        },
+        {
+          "id": "my-lift",
+          "kind": "program",
+        },
+      ],
+      "label": "Me",
+    },
+    {
+      "group": "camp",
+      "items": [
+        {
+          "id": "roster",
+          "kind": "program",
+        },
+        {
+          "id": "teams",
+          "kind": "folder",
+        },
+        {
+          "id": "kitchen",
+          "kind": "folder",
+        },
+        {
+          "id": "power",
+          "kind": "program",
+        },
+        {
+          "id": "logistics",
+          "kind": "program",
+        },
+        {
+          "id": "shifts",
+          "kind": "program",
+        },
+        {
+          "id": "help-wanted",
+          "kind": "program",
+        },
+        {
+          "id": "camp-layout",
+          "kind": "program",
+        },
+        {
+          "id": "lounge",
+          "kind": "program",
+        },
+        {
+          "id": "inventory",
+          "kind": "program",
+        },
+        {
+          "id": "transport",
+          "kind": "program",
+        },
+        {
+          "id": "family-tree",
+          "kind": "program",
+        },
+        {
+          "id": "pets",
+          "kind": "program",
+        },
+        {
+          "id": "about",
+          "kind": "program",
+        },
+        {
+          "id": "guide",
+          "kind": "program",
+        },
+        {
+          "id": "terminal",
+          "kind": "program",
+        },
+      ],
+      "label": "Camp",
+    },
+  ],
+  "taskbarPins": [
+    "inbox",
+  ],
+  "teamFolders": [
+    {
+      "label": "Transport and Logistics team",
+      "lead": false,
+      "programs": [
+        {
+          "fileName": "TRANSPORT_AND_LOGISTICS.TEAM",
+          "folder": "teams",
+          "group": "camp",
+          "href": "/teams/transport_and_logistics",
+          "icon": "team",
+          "id": "team:transport_and_logistics",
+          "label": "Transport and Logistics page",
+          "mine": true,
+        },
+        {
+          "fileName": "CALENDAR.EXE",
+          "folder": null,
+          "group": "me",
+          "href": "/calendar?team=transport_and_logistics",
+          "icon": "calendar",
+          "id": "calendar:transport_and_logistics",
+          "label": "Transport and Logistics calendar",
+        },
+        {
+          "fileName": "TASKS.EXE",
+          "folder": null,
+          "group": "me",
+          "href": "/tasks?team=transport_and_logistics",
+          "icon": "tasks",
+          "id": "tasks:transport_and_logistics",
+          "label": "Transport and Logistics tasks",
+        },
+        {
+          "fileName": "INVENTRY.DB",
+          "folder": null,
+          "group": "camp",
+          "href": "/inventory",
+          "icon": "inventory",
+          "id": "inventory",
+          "label": "Inventory",
+        },
+        {
+          "fileName": "CARPOOL.EXE",
+          "folder": null,
+          "group": "camp",
+          "href": "/transport",
+          "icon": "transport",
+          "id": "transport",
+          "label": "Transport",
+        },
+        {
+          "fileName": "LOGISTICS.EXE",
+          "folder": null,
+          "group": "camp",
+          "href": "/logistics",
+          "icon": "logistics",
+          "id": "logistics",
+          "label": "Logistics",
+        },
+      ],
+      "team": "transport_and_logistics",
+    },
+  ],
+  "tray": {
+    "balloon": null,
+    "health": {
+      "status": "ok",
+    },
+    "inbox": {
+      "count": 0,
+    },
+    "today": true,
+  },
+  "version": "4e5435ee",
+}
+`;
+
+exports[`program census > opens the same window for every console page 1`] = `
+[
+  [
+    "/",
+    {
+      "genericTitle": "DESKTOP",
+      "instanceKey": "desktop",
+      "programId": "desktop",
+    },
+  ],
+  [
+    "/about",
+    {
+      "genericTitle": "README.TXT",
+      "instanceKey": "about",
+      "programId": "about",
+    },
+  ],
+  [
+    "/announcements/[id]",
+    {
+      "genericTitle": "ANNOUNCE.TXT",
+      "instanceKey": "announcement:sample-id",
+      "programId": "announcement",
+    },
+  ],
+  [
+    "/calendar",
+    {
+      "genericTitle": "CALENDAR.EXE",
+      "instanceKey": "calendar",
+      "programId": "calendar",
+    },
+  ],
+  [
+    "/calendar/[eventId]/minutes",
+    {
+      "genericTitle": "MINUTES.TXT",
+      "instanceKey": "minutes:sample-eventId",
+      "programId": "minutes",
+    },
+  ],
+  [
+    "/camp-layout",
+    {
+      "genericTitle": "SITEPLAN.DWG",
+      "instanceKey": "camp-layout",
+      "programId": "camp-layout",
+    },
+  ],
+  [
+    "/captains/announcements",
+    {
+      "genericTitle": "BROADCAST.EXE",
+      "instanceKey": "announcements",
+      "programId": "announcements",
+    },
+  ],
+  [
+    "/captains/applications",
+    {
+      "genericTitle": "INTAKE.DB",
+      "instanceKey": "applications",
+      "programId": "applications",
+    },
+  ],
+  [
+    "/captains/audit",
+    {
+      "genericTitle": "AUDIT.LOG",
+      "instanceKey": "audit",
+      "programId": "audit",
+    },
+  ],
+  [
+    "/captains/calendar",
+    {
+      "genericTitle": "CALENDAR.EXE",
+      "instanceKey": "calendar",
+      "programId": "calendar",
+    },
+  ],
+  [
+    "/captains/camp-management",
+    {
+      "genericTitle": "ROSTER.DB",
+      "instanceKey": "roster",
+      "programId": "roster",
+    },
+  ],
+  [
+    "/captains/camp-settings",
+    {
+      "genericTitle": "SETTINGS.CPL",
+      "instanceKey": "camp-settings",
+      "programId": "camp-settings",
+    },
+  ],
+  [
+    "/captains/camp-settings/cycle",
+    {
+      "genericTitle": "SETTINGS.CPL",
+      "instanceKey": "camp-settings",
+      "programId": "camp-settings",
+    },
+  ],
+  [
+    "/captains/camp-sheet",
+    {
+      "genericTitle": "CAMP_SHEET.XLS",
+      "instanceKey": "camp-sheet",
+      "programId": "camp-sheet",
+    },
+  ],
+  [
+    "/captains/claims",
+    {
+      "genericTitle": "APPROVE.EXE",
+      "instanceKey": "claim-approvals",
+      "programId": "claim-approvals",
+    },
+  ],
+  [
+    "/captains/gear-rental",
+    {
+      "genericTitle": "RENTAL.DB",
+      "instanceKey": "gear-rental",
+      "programId": "gear-rental",
+    },
+  ],
+  [
+    "/captains/gear-rental/catalogue",
+    {
+      "genericTitle": "RENTAL.DB",
+      "instanceKey": "gear-rental",
+      "programId": "gear-rental",
+    },
+  ],
+  [
+    "/captains/gear-rental/orders/[userId]",
+    {
+      "genericTitle": "RENTAL.DB",
+      "instanceKey": "gear-rental",
+      "programId": "gear-rental",
+    },
+  ],
+  [
+    "/captains/gear-rental/summary",
+    {
+      "genericTitle": "RENTAL.DB",
+      "instanceKey": "gear-rental",
+      "programId": "gear-rental",
+    },
+  ],
+  [
+    "/captains/join-site",
+    {
+      "genericTitle": "JOINSITE.EXE",
+      "instanceKey": "join-site",
+      "programId": "join-site",
+    },
+  ],
+  [
+    "/captains/overview",
+    {
+      "genericTitle": "CAMPSTAT.EXE",
+      "instanceKey": "overview",
+      "programId": "overview",
+    },
+  ],
+  [
+    "/captains/payments",
+    {
+      "genericTitle": "LEDGER.DB",
+      "instanceKey": "payments",
+      "programId": "payments",
+    },
+  ],
+  [
+    "/captains/payments/budgets",
+    {
+      "genericTitle": "LEDGER.DB",
+      "instanceKey": "payments",
+      "programId": "payments",
+    },
+  ],
+  [
+    "/captains/payments/claims",
+    {
+      "genericTitle": "LEDGER.DB",
+      "instanceKey": "payments",
+      "programId": "payments",
+    },
+  ],
+  [
+    "/captains/payments/import",
+    {
+      "genericTitle": "LEDGER.DB",
+      "instanceKey": "payments",
+      "programId": "payments",
+    },
+  ],
+  [
+    "/captains/payments/members",
+    {
+      "genericTitle": "LEDGER.DB",
+      "instanceKey": "payments",
+      "programId": "payments",
+    },
+  ],
+  [
+    "/captains/payments/members/[userId]",
+    {
+      "genericTitle": "LEDGER.DB",
+      "instanceKey": "payments",
+      "programId": "payments",
+    },
+  ],
+  [
+    "/captains/payments/settings",
+    {
+      "genericTitle": "LEDGER.DB",
+      "instanceKey": "payments",
+      "programId": "payments",
+    },
+  ],
+  [
+    "/captains/payments/settle-up",
+    {
+      "genericTitle": "LEDGER.DB",
+      "instanceKey": "payments",
+      "programId": "payments",
+    },
+  ],
+  [
+    "/captains/questionnaires",
+    {
+      "genericTitle": "FORMS.EXE",
+      "instanceKey": "questionnaires",
+      "programId": "questionnaires",
+    },
+  ],
+  [
+    "/captains/questionnaires/[key]",
+    {
+      "genericTitle": "QBUILD.EXE",
+      "instanceKey": "edit-questionnaire:sample-key",
+      "programId": "edit-questionnaire",
+    },
+  ],
+  [
+    "/captains/questionnaires/[key]/metrics",
+    {
+      "genericTitle": "QSTATS.EXE",
+      "instanceKey": "results:sample-key",
+      "programId": "results",
+    },
+  ],
+  [
+    "/captains/questionnaires/[key]/preview",
+    {
+      "genericTitle": "QVIEW.EXE",
+      "instanceKey": "preview-questionnaire:sample-key",
+      "programId": "preview-questionnaire",
+    },
+  ],
+  [
+    "/captains/questionnaires/[key]/responses",
+    {
+      "genericTitle": "QSTATS.EXE",
+      "instanceKey": "results:sample-key",
+      "programId": "results",
+    },
+  ],
+  [
+    "/captains/questionnaires/[key]/responses/[userId]",
+    {
+      "genericTitle": "ANSWERS.TXT",
+      "instanceKey": "respondent-answers:sample-key:sample-userId",
+      "programId": "respondent-answers",
+    },
+  ],
+  [
+    "/captains/questionnaires/[key]/send",
+    {
+      "genericTitle": "QSEND.EXE",
+      "instanceKey": "send-questionnaire:sample-key",
+      "programId": "send-questionnaire",
+    },
+  ],
+  [
+    "/captains/report-screenshots",
+    {
+      "genericTitle": "SCREENSHOTS.EXE",
+      "instanceKey": "report-screenshots",
+      "programId": "report-screenshots",
+    },
+  ],
+  [
+    "/captains/system",
+    {
+      "genericTitle": "SYSMON.EXE",
+      "instanceKey": "system",
+      "programId": "system",
+    },
+  ],
+  [
+    "/captains/tools",
+    {
+      "genericTitle": "DESKTOP",
+      "instanceKey": "desktop",
+      "programId": "desktop",
+    },
+  ],
+  [
+    "/claims",
+    {
+      "genericTitle": "CLAIMS.TXT",
+      "instanceKey": "my-claims",
+      "programId": "my-claims",
+    },
+  ],
+  [
+    "/dues",
+    {
+      "genericTitle": "MY_DUES.TXT",
+      "instanceKey": "my-dues",
+      "programId": "my-dues",
+    },
+  ],
+  [
+    "/family-tree",
+    {
+      "genericTitle": "LINEAGE.EXE",
+      "instanceKey": "family-tree",
+      "programId": "family-tree",
+    },
+  ],
+  [
+    "/gear",
+    {
+      "genericTitle": "MY_GEAR.TXT",
+      "instanceKey": "my-gear",
+      "programId": "my-gear",
+    },
+  ],
+  [
+    "/guide",
+    {
+      "genericTitle": "GUIDE.HLP",
+      "instanceKey": "guide",
+      "programId": "guide",
+    },
+  ],
+  [
+    "/guide/[slug]",
+    {
+      "genericTitle": "CHAPTER.HLP",
+      "instanceKey": "guide-chapter:sample-slug",
+      "programId": "guide-chapter",
+    },
+  ],
+  [
+    "/guide/[slug]/edit",
+    {
+      "genericTitle": "CHAPTER.WRI",
+      "instanceKey": "edit-guide-chapter:sample-slug",
+      "programId": "edit-guide-chapter",
+    },
+  ],
+  [
+    "/guide/[slug]/versions/[version]",
+    {
+      "genericTitle": "CHAPTER.VER",
+      "instanceKey": "guide-version:sample-slug:sample-version",
+      "programId": "guide-version",
+    },
+  ],
+  [
+    "/guide/new",
+    {
+      "genericTitle": "CHAPTER.WRI",
+      "instanceKey": "new-guide-chapter",
+      "programId": "new-guide-chapter",
+    },
+  ],
+  [
+    "/help-wanted",
+    {
+      "genericTitle": "HELPWANT.TXT",
+      "instanceKey": "help-wanted",
+      "programId": "help-wanted",
+    },
+  ],
+  [
+    "/inventory",
+    {
+      "genericTitle": "INVENTRY.DB",
+      "instanceKey": "inventory",
+      "programId": "inventory",
+    },
+  ],
+  [
+    "/inventory/[id]",
+    {
+      "genericTitle": "INVENTRY.DB",
+      "instanceKey": "inventory",
+      "programId": "inventory",
+    },
+  ],
+  [
+    "/inventory/bookings",
+    {
+      "genericTitle": "INVENTRY.DB",
+      "instanceKey": "inventory",
+      "programId": "inventory",
+    },
+  ],
+  [
+    "/inventory/lent",
+    {
+      "genericTitle": "INVENTRY.DB",
+      "instanceKey": "inventory",
+      "programId": "inventory",
+    },
+  ],
+  [
+    "/inventory/needs",
+    {
+      "genericTitle": "INVENTRY.DB",
+      "instanceKey": "inventory",
+      "programId": "inventory",
+    },
+  ],
+  [
+    "/kitchen/meal-plan",
+    {
+      "genericTitle": "MEALPLAN.XLS",
+      "instanceKey": "meal-plan",
+      "programId": "meal-plan",
+    },
+  ],
+  [
+    "/kitchen/recipes",
+    {
+      "genericTitle": "COOKBOOK.EXE",
+      "instanceKey": "recipes",
+      "programId": "recipes",
+    },
+  ],
+  [
+    "/kitchen/recipes/[id]",
+    {
+      "genericTitle": "RECIPE.RCP",
+      "instanceKey": "recipe:sample-id",
+      "programId": "recipe",
+    },
+  ],
+  [
+    "/kitchen/recipes/[id]/edit",
+    {
+      "genericTitle": "RECIPE.WRI",
+      "instanceKey": "edit-recipe:sample-id",
+      "programId": "edit-recipe",
+    },
+  ],
+  [
+    "/kitchen/recipes/[id]/sources/[version]",
+    {
+      "genericTitle": "SOURCE.TXT",
+      "instanceKey": "recipe-source:sample-id:sample-version",
+      "programId": "recipe-source",
+    },
+  ],
+  [
+    "/kitchen/recipes/[id]/versions/[version]",
+    {
+      "genericTitle": "RECIPE.VER",
+      "instanceKey": "recipe-version:sample-id:sample-version",
+      "programId": "recipe-version",
+    },
+  ],
+  [
+    "/kitchen/recipes/new",
+    {
+      "genericTitle": "IMPORT.EXE",
+      "instanceKey": "new-recipe",
+      "programId": "new-recipe",
+    },
+  ],
+  [
+    "/kitchen/recipes/review",
+    {
+      "genericTitle": "REVIEW.EXE",
+      "instanceKey": "recipe-review",
+      "programId": "recipe-review",
+    },
+  ],
+  [
+    "/kitchen/shopping",
+    {
+      "genericTitle": "SHOPPING.LST",
+      "instanceKey": "shopping-list",
+      "programId": "shopping-list",
+    },
+  ],
+  [
+    "/lift",
+    {
+      "genericTitle": "MY_LIFT.EXE",
+      "instanceKey": "my-lift",
+      "programId": "my-lift",
+    },
+  ],
+  [
+    "/logistics",
+    {
+      "genericTitle": "LOGISTICS.EXE",
+      "instanceKey": "logistics",
+      "programId": "logistics",
+    },
+  ],
+  [
+    "/lounge",
+    {
+      "genericTitle": "LOUNGE.EXE",
+      "instanceKey": "lounge",
+      "programId": "lounge",
+    },
+  ],
+  [
+    "/meetings",
+    {
+      "genericTitle": "CALENDAR.EXE",
+      "instanceKey": "calendar",
+      "programId": "calendar",
+    },
+  ],
+  [
+    "/meetings/[id]",
+    {
+      "genericTitle": "CALENDAR.EXE",
+      "instanceKey": "calendar",
+      "programId": "calendar",
+    },
+  ],
+  [
+    "/meetings/[id]/edit",
+    {
+      "genericTitle": "CALENDAR.EXE",
+      "instanceKey": "calendar",
+      "programId": "calendar",
+    },
+  ],
+  [
+    "/meetings/new",
+    {
+      "genericTitle": "CALENDAR.EXE",
+      "instanceKey": "calendar",
+      "programId": "calendar",
+    },
+  ],
+  [
+    "/notifications",
+    {
+      "genericTitle": "INBOX.EXE",
+      "instanceKey": "inbox",
+      "programId": "inbox",
+    },
+  ],
+  [
+    "/pets",
+    {
+      "genericTitle": "PETS.DB",
+      "instanceKey": "pets",
+      "programId": "pets",
+    },
+  ],
+  [
+    "/power",
+    {
+      "genericTitle": "POWER.EXE",
+      "instanceKey": "power",
+      "programId": "power",
+    },
+  ],
+  [
+    "/power/fuel",
+    {
+      "genericTitle": "POWER.EXE",
+      "instanceKey": "power",
+      "programId": "power",
+    },
+  ],
+  [
+    "/power/grid",
+    {
+      "genericTitle": "POWER.EXE",
+      "instanceKey": "power",
+      "programId": "power",
+    },
+  ],
+  [
+    "/power/loads",
+    {
+      "genericTitle": "POWER.EXE",
+      "instanceKey": "power",
+      "programId": "power",
+    },
+  ],
+  [
+    "/power/readiness",
+    {
+      "genericTitle": "POWER.EXE",
+      "instanceKey": "power",
+      "programId": "power",
+    },
+  ],
+  [
+    "/power/refuelling",
+    {
+      "genericTitle": "POWER.EXE",
+      "instanceKey": "power",
+      "programId": "power",
+    },
+  ],
+  [
+    "/power/sharing",
+    {
+      "genericTitle": "POWER.EXE",
+      "instanceKey": "power",
+      "programId": "power",
+    },
+  ],
+  [
+    "/profile",
+    {
+      "genericTitle": "MY_ACCOUNT.CPL",
+      "instanceKey": "account",
+      "programId": "account",
+    },
+  ],
+  [
+    "/profile/display",
+    {
+      "genericTitle": "MY_ACCOUNT.CPL",
+      "instanceKey": "account",
+      "programId": "account",
+    },
+  ],
+  [
+    "/profile/edit",
+    {
+      "genericTitle": "MY_ACCOUNT.CPL",
+      "instanceKey": "account",
+      "programId": "account",
+    },
+  ],
+  [
+    "/profile/security",
+    {
+      "genericTitle": "MY_ACCOUNT.CPL",
+      "instanceKey": "account",
+      "programId": "account",
+    },
+  ],
+  [
+    "/questionnaires/[activationId]",
+    {
+      "genericTitle": "FORM.FRM",
+      "instanceKey": "questionnaire:sample-activationId",
+      "programId": "questionnaire",
+    },
+  ],
+  [
+    "/questionnaires/[activationId]/complete",
+    {
+      "genericTitle": "FORM.FRM",
+      "instanceKey": "questionnaire:sample-activationId",
+      "programId": "questionnaire",
+    },
+  ],
+  [
+    "/shifts",
+    {
+      "genericTitle": "ROSTER.EXE",
+      "instanceKey": "shifts",
+      "programId": "shifts",
+    },
+  ],
+  [
+    "/shifts/mine",
+    {
+      "genericTitle": "MY_SHIFTS.TXT",
+      "instanceKey": "my-shifts",
+      "programId": "my-shifts",
+    },
+  ],
+  [
+    "/tasks",
+    {
+      "genericTitle": "TASKS.EXE",
+      "instanceKey": "tasks",
+      "programId": "tasks",
+    },
+  ],
+  [
+    "/teams/[key]",
+    {
+      "genericTitle": "TEAM.EXE",
+      "instanceKey": "team:sample-key",
+      "programId": "team",
+    },
+  ],
+  [
+    "/teams/budgets",
+    {
+      "genericTitle": "BUDGETS.XLS",
+      "instanceKey": "budgets",
+      "programId": "budgets",
+    },
+  ],
+  [
+    "/terminal",
+    {
+      "genericTitle": "TERMINAL.EXE",
+      "instanceKey": "terminal",
+      "programId": "terminal",
+    },
+  ],
+  [
+    "/terminal/inkblot",
+    {
+      "genericTitle": "INKBLOT.EXE",
+      "instanceKey": "inkblot",
+      "programId": "inkblot",
+    },
+  ],
+  [
+    "/tools",
+    {
+      "genericTitle": "DESKTOP",
+      "instanceKey": "desktop",
+      "programId": "desktop",
+    },
+  ],
+  [
+    "/tools/forms",
+    {
+      "genericTitle": "MYFORMS.EXE",
+      "instanceKey": "my-forms",
+      "programId": "my-forms",
+    },
+  ],
+  [
+    "/tools/forms/[key]",
+    {
+      "genericTitle": "FORM.DOC",
+      "instanceKey": "form:sample-key",
+      "programId": "form",
+    },
+  ],
+  [
+    "/tools/forms/answers/[key]/[cycle]",
+    {
+      "genericTitle": "ANSWERS.TXT",
+      "instanceKey": "form-answers:sample-key:sample-cycle",
+      "programId": "form-answers",
+    },
+  ],
+  [
+    "/tools/forms/dietary",
+    {
+      "genericTitle": "FORM.DOC",
+      "instanceKey": "form:dietary",
+      "programId": "form",
+    },
+  ],
+  [
+    "/tools/invite",
+    {
+      "genericTitle": "KEYGEN.EXE",
+      "instanceKey": "invites",
+      "programId": "invites",
+    },
+  ],
+  [
+    "/transport",
+    {
+      "genericTitle": "CARPOOL.EXE",
+      "instanceKey": "transport",
+      "programId": "transport",
+    },
+  ],
+]
+`;

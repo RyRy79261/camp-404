@@ -16,3 +16,9 @@ its caller. A screen's gate hands back the same shape to answer the screen
 or `CAPTAIN_ONLY`, and named once beside its domain (`MONEY_KEEPER`,
 `POWER_EDITOR`, `KITCHEN_REVIEWER`, ...). Change a rule in its constant,
 never at a call site.
+
+**Program definition.** One 404 OS program as every browser may know it: its
+plain title, generic file name, routes, line drawing and window size, in
+`PROGRAM_DEFINITIONS` (`apps/web/lib/program-routes.ts`). Never who may open
+it: that is its registry entry's gate (`PROGRAM_REGISTRY`,
+`apps/web/lib/programs.ts`, server-only).

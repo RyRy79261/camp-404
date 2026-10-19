@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ViewerRank } from "@camp404/types";
-import { PROGRAM_ROUTES, matchProgram } from "../program-routes";
+import { PROGRAM_ROUTES } from "../program-routes";
 import { PROGRAM_REGISTRY } from "../programs";
 
 // Each program carries the lowest rank its page clears. Hiding an icon is
@@ -215,19 +215,5 @@ describe("the registry against the routes", () => {
     );
     const registered = new Set(PROGRAM_REGISTRY.map((e) => e.id));
     expect([...routed].sort()).toEqual([...registered].sort());
-  });
-
-  it("points every icon at a page of its own program", () => {
-    for (const entry of PROGRAM_REGISTRY) {
-      if (!entry.href) continue;
-      expect(matchProgram(entry.href)?.programId, entry.id).toBe(entry.id);
-    }
-  });
-
-  it("gives an icon to every program with a place, and a place to every icon", () => {
-    for (const entry of PROGRAM_REGISTRY) {
-      if (entry.perTeam) continue;
-      expect(Boolean(entry.href), entry.id).toBe(entry.place !== null);
-    }
   });
 });
