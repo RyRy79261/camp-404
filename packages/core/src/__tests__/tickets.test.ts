@@ -17,6 +17,7 @@ import {
   myDdtLabel,
   stillNeedsTicket,
   type TicketFacts,
+  ticketPassNoChange,
 } from "../tickets";
 
 const ticket = (over: Partial<TicketFacts> = {}): TicketFacts => ({
@@ -145,5 +146,16 @@ describe("mayRecordTicket", () => {
       expect(mayRecordTicket(status)).toBe(status !== "not_attending");
     }
     expect(mayRecordTicket(null)).toBe(false);
+  });
+});
+
+describe("ticketPassNoChange", () => {
+  it("names a move to the value already there, and nothing else", () => {
+    expect(ticketPassNoChange({ pass: "ddt", from: "none", to: "none" })).toBe(
+      "setTicketPass: ddt is already none",
+    );
+    expect(
+      ticketPassNoChange({ pass: "wap", from: "not_needed", to: "requested" }),
+    ).toBeNull();
   });
 });

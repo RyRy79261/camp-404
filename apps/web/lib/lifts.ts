@@ -1,10 +1,24 @@
 import "server-only";
 
 import { cache } from "react";
-import { getMyLift as dbGetMyLift, type MyLift } from "@camp404/db/cars";
+import * as cars from "@camp404/db/cars";
+import type { MyLift } from "@camp404/db/cars";
 import { getCampSettings } from "./camp-config";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
+
+// The year comes from the request's one settings read on the database side;
+// the store reads its own year.
+const lift = twin(
+  {
+    getMyLift: async (userId: string): Promise<MyLift | null> => {
+      const { cycleNumber } = await getCampSettings();
+      return cars.getMyLift(userId, cycleNumber);
+    },
+  },
+  testStore,
+  ["getMyLift"],
+);
 
 /**
  * The signed-in member's own lift this year (driving, riding, or neither).
@@ -18,10 +32,4 @@ import { testStore } from "./test-store";
  * get My lift?) and the page that shows the lift share one read per request.
  * The year comes from the request's one settings read.
  */
-export const getMyLift = cache(
-  async (userId: string): Promise<MyLift | null> => {
-    if (usesTestStore()) return testStore.getMyLift(userId);
-    const { cycleNumber } = await getCampSettings();
-    return dbGetMyLift(userId, cycleNumber);
-  },
-);
+export const getMyLift = cache(lift.getMyLift);

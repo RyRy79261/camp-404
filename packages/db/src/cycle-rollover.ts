@@ -1,5 +1,10 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { announcementNotification, type AuditAction } from "@camp404/core";
+import {
+  announcementNotification,
+  burnDatesProblem,
+  cyclesWithBurnDates,
+  type AuditAction,
+} from "@camp404/core";
 import { createHttpDb, withTransaction, type Database } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
@@ -17,7 +22,6 @@ import {
   currentCycle,
   foundingCycles,
   isCycleYear,
-  isIsoDate,
   MAX_CYCLE_NAME_LENGTH,
   MAX_CYCLE_YEAR,
   renameCycle,
@@ -1218,17 +1222,9 @@ export async function setCycleBurnDates(input: {
   burnEnd: string | null;
   actorUserId: string | null;
 }): Promise<SetBurnDatesResult> {
-  const clearing = input.burnStart === null && input.burnEnd === null;
-  if (
-    !clearing &&
-    !(
-      isIsoDate(input.burnStart) &&
-      isIsoDate(input.burnEnd) &&
-      input.burnStart <= input.burnEnd
-    )
-  ) {
-    return { ok: false, reason: "invalid-dates" };
-  }
+  // The dates are checked before anything is locked, the year after.
+  const problem = burnDatesProblem(input);
+  if (problem) return { ok: false, reason: problem };
 
   return await withTransaction(async (tx) => {
     await tx
@@ -1245,24 +1241,9 @@ export async function setCycleBurnDates(input: {
       locked?.config && typeof locked.config === "object"
         ? (locked.config as CampConfig)
         : ({} as CampConfig);
-    const cycles = resolveCycles(stored);
-    if (!cycles.some((c) => c.year === input.year)) {
-      return { ok: false as const, reason: "unknown-year" as const };
-    }
-
-    const next = cycles.map((c) => {
-      if (c.year !== input.year) return c;
-      const without = { ...c };
-      delete without.burnStart;
-      delete without.burnEnd;
-      return clearing
-        ? without
-        : {
-            ...without,
-            burnStart: input.burnStart!,
-            burnEnd: input.burnEnd!,
-          };
-    });
+    const set = cyclesWithBurnDates(resolveCycles(stored), input);
+    if (!set.ok) return set;
+    const next = set.cycles;
     await tx
       .update(schema.campSettings)
       .set({ config: { ...stored, cycles: next }, updatedAt: new Date() })

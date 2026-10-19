@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   REVIEW_REFUSAL,
+  approvalDecisionReason,
   availableReviewActions,
   isReviewTransition,
   reviewActionFor,
@@ -93,5 +94,16 @@ describe("isReviewTransition", () => {
     expect(isReviewTransition("pending", "pending")).toBe(false);
     expect(isReviewTransition("approved", "approved")).toBe(false);
     expect(isReviewTransition("rejected", "rejected")).toBe(false);
+  });
+});
+
+describe("approvalDecisionReason", () => {
+  it("keeps the captain's words trimmed, a blank as none, and none on a re-open", () => {
+    expect(approvalDecisionReason("rejected", "  Not this year ")).toBe(
+      "Not this year",
+    );
+    expect(approvalDecisionReason("approved", "   ")).toBeNull();
+    expect(approvalDecisionReason("approved", undefined)).toBeNull();
+    expect(approvalDecisionReason("pending", "Kept?")).toBeNull();
   });
 });

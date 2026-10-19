@@ -9,6 +9,8 @@ import {
   promotionStepState,
   type PromotionAction,
   type PromotionParticipants,
+  lostCatName,
+  nextLostCatNumber,
 } from "../promotion";
 
 const STATUSES: PromotionRequestStatus[] = [
@@ -290,5 +292,13 @@ describe("canLeaveCamp", () => {
         ok: true,
       });
     }
+  });
+});
+
+describe("the erased account's name", () => {
+  it("is Lost Cat #N, one past the highest N given out", () => {
+    expect(lostCatName(3)).toBe("Lost Cat #3");
+    expect(nextLostCatNumber(null)).toBe(1);
+    expect(nextLostCatNumber(4)).toBe(5);
   });
 });

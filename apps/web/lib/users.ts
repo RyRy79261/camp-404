@@ -1,26 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import {
-  createCampUser,
-  findOrCreateCampUser,
-  findUserByAuthId,
-  findUserById,
-  getBurnerProfileByUserId,
-  setUserApproval,
-  setUserApprovalStatus,
-  setUserDisplayName,
-  setUserInviteCode,
-  setUserProfileImage,
-  setUserRank,
-  upsertBurnerProfile as upsertBurnerProfileDb,
-  getIdDocumentColumns,
-  setIdDocumentColumns,
-  getEmergencyContactsColumn,
-  setEmergencyContactsColumn,
-  setTelegramHandleColumn,
-  saveBurnerProfileReplay as dbSaveBurnerProfileReplay,
-} from "@camp404/db/burner-profile";
+import * as profiles from "@camp404/db/burner-profile";
 import type {
   EmergencyContact,
   QuestionnaireFieldChange,
@@ -28,15 +9,11 @@ import type {
 } from "@camp404/types";
 import { encrypt, decryptOrNull } from "@camp404/db/crypto";
 import { idColumnsFor } from "@camp404/db/id-documents";
-import { getTeamMembershipsEveryYear as dbGetTeamMembershipsEveryYear } from "@camp404/db/team-memberships";
-import {
-  ensureRequiredAction,
-  satisfyRequiredAction as dbSatisfyRequiredAction,
-  getPendingRequiredActions as dbGetPendingRequiredActions,
-  listPendingQuestionnaires as dbListPendingQuestionnaires,
-  reconcileOpenActivations,
-  type PendingQuestionnaire,
-  type PendingRequiredAction,
+import * as memberships from "@camp404/db/team-memberships";
+import * as activations from "@camp404/db/activations";
+import type {
+  PendingQuestionnaire,
+  PendingRequiredAction,
 } from "@camp404/db/activations";
 import { claimInviteCode, isGodEmail } from "./access-control";
 import {
@@ -46,9 +23,18 @@ import {
 import { getCampSettings } from "./camp-config";
 import { QUESTIONNAIRE_VERSION } from "./questionnaire";
 import type { AuthenticatedUser } from "./auth";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 import { deliverAfterResponse } from "./background-work";
+
+// The camp's people: their rows, burner profiles, ID numbers, emergency
+// contacts, the gate spine and this year's memberships, from the database or,
+// under E2E, the test store. The facade picks its backend once per domain
+// (`people`, `gates` below, through twin()): each side maps its own rows to the
+// shapes here, and lib/__tests__/users-agreement.test.ts and
+// memberships-agreement.test.ts hold the answers equal. The rule a captain's
+// approval shares with the store (what reason is kept) is
+// `approvalDecisionReason` in @camp404/core.
 
 type Rank = "captain" | "member";
 type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -69,6 +55,378 @@ export interface CampUser {
   approvalDecisionReason: string | null;
 }
 
+export interface BurnerProfileSummary {
+  responses: Record<string, unknown>;
+  completedAt: Date | null;
+  updatedAt: Date | null;
+  version: string | null;
+}
+
+export interface BurnerProfileReplayInput {
+  userId: string;
+  version: string;
+  /** Answers with the ID number and emergency contacts split out. */
+  responses: Record<string, unknown>;
+  /** The ID number to store, or null to leave it alone. */
+  id: { idType: string | null; idNumber: string } | null;
+  emergencyContacts: readonly EmergencyContact[];
+  /** The Telegram username, or null to clear it; undefined leaves it alone. */
+  telegramHandle?: string | null;
+  /** The change-log row, or null when nothing changed. */
+  edit: {
+    questionnaireKey: string;
+    editedByUserId: string | null;
+    changes: QuestionnaireFieldChange[];
+  } | null;
+}
+
+/** One team a member is on this year, and whether they lead it. */
+export interface MyMembership {
+  team: Team;
+  isLead: boolean;
+}
+
+interface NewCampUser {
+  authUserId: string;
+  displayName: string | null;
+  inviteCode: string | null;
+  rank: Rank;
+  approvalStatus: ApprovalStatus;
+}
+
+type IdDocument = { idType: string | null; idNumber: string | null };
+
+/** The burner-profile gate every new member starts with. */
+const BURNER_PROFILE_GATE = {
+  actionKey: "burner_profile",
+  title: "Complete your burner profile",
+  version: QUESTIONNAIRE_VERSION,
+} as const;
+
+// --- The two backends ----------------------------------------------------
+// The database side encrypts and decrypts ID numbers at this boundary; the
+// store keeps the raw value in memory, so tests need no key. Each side names
+// the same methods, and twin() picks one at call time.
+
+const realPeople = {
+  async findUserByAuthId(authUserId: string): Promise<CampUser | null> {
+    const row = await profiles.findUserByAuthId(authUserId);
+    return row ? toCampUser(row) : null;
+  },
+  async findUserById(userId: string): Promise<CampUser | null> {
+    const row = await profiles.findUserById(userId);
+    return row ? toCampUser(row) : null;
+  },
+  async createUser(input: NewCampUser): Promise<CampUser> {
+    return toCampUser(await profiles.createCampUser(input));
+  },
+  /**
+   * Create the row unless one exists for the auth id; never throws on a race.
+   * The row starts with the burner-profile gate, written with it.
+   */
+  async findOrCreateUser(
+    input: NewCampUser,
+  ): Promise<{ user: CampUser; created: boolean }> {
+    const { user, created } = await profiles.findOrCreateCampUser(input, {
+      type: "questionnaire",
+      ...BURNER_PROFILE_GATE,
+    });
+    return { user: toCampUser(user), created };
+  },
+  async setUserInviteCode(userId: string, code: string): Promise<void> {
+    await profiles.setUserInviteCode(userId, code);
+  },
+  async setUserRank(userId: string, rank: Rank): Promise<void> {
+    await profiles.setUserRank(userId, rank);
+  },
+  async setUserApprovalStatus(
+    userId: string,
+    status: ApprovalStatus,
+  ): Promise<void> {
+    await profiles.setUserApprovalStatus(userId, status);
+  },
+  async setUserApproval(input: {
+    userId: string;
+    from: ApprovalStatus;
+    to: ApprovalStatus;
+    decidedByUserId: string;
+    reason?: string | null;
+  }): Promise<boolean> {
+    return profiles.setUserApproval(input);
+  },
+  async setProfileImage(userId: string, url: string | null): Promise<void> {
+    await profiles.setUserProfileImage(userId, url);
+  },
+  async setTelegramHandle(
+    userId: string,
+    handle: string | null,
+  ): Promise<void> {
+    await profiles.setTelegramHandleColumn(userId, handle);
+  },
+  async setDisplayName(userId: string, name: string | null): Promise<void> {
+    await profiles.setUserDisplayName(userId, name);
+  },
+  async getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null> {
+    const row = await profiles.getBurnerProfileByUserId(userId);
+    if (!row) return null;
+    return {
+      responses: (row.responses as Record<string, unknown>) ?? {},
+      completedAt: row.completedAt,
+      updatedAt: row.updatedAt,
+      version: row.version,
+    };
+  },
+  async upsertBurnerProfile(input: {
+    userId: string;
+    version: string;
+    responses: Record<string, unknown>;
+    markComplete: boolean;
+  }): Promise<void> {
+    await profiles.upsertBurnerProfile(input);
+  },
+  async setIdDocuments(userId: string, id: IdDocument): Promise<void> {
+    await profiles.setIdDocumentColumns(
+      userId,
+      idColumnsFor(id.idType, id.idNumber ? encrypt(id.idNumber) : null),
+    );
+  },
+  async getIdDocuments(userId: string): Promise<IdDocument | null> {
+    const cols = await profiles.getIdDocumentColumns(userId);
+    if (!cols) return null;
+    const passport = decryptOrNull(cols.passportEncrypted);
+    const saId = decryptOrNull(cols.saIdEncrypted);
+    if (passport) return { idType: "passport", idNumber: passport };
+    if (saId) return { idType: "sa_id", idNumber: saId };
+    return { idType: null, idNumber: null };
+  },
+  async setEmergencyContacts(
+    userId: string,
+    contacts: readonly EmergencyContact[],
+  ): Promise<void> {
+    await profiles.setEmergencyContactsColumn(userId, contacts);
+  },
+  async getEmergencyContacts(
+    userId: string,
+  ): Promise<EmergencyContact[] | null> {
+    return profiles.getEmergencyContactsColumn(userId);
+  },
+  async saveBurnerProfileReplay(
+    input: BurnerProfileReplayInput,
+  ): Promise<void> {
+    await profiles.saveBurnerProfileReplay({
+      userId: input.userId,
+      version: input.version,
+      responses: input.responses,
+      // Encrypt before the transaction opens, so a key problem fails the save
+      // before anything is written.
+      idColumns: input.id
+        ? idColumnsFor(input.id.idType, encrypt(input.id.idNumber))
+        : null,
+      emergencyContacts: input.emergencyContacts,
+      telegramHandle: input.telegramHandle,
+      edit: input.edit,
+    });
+  },
+};
+
+const storePeople = {
+  findUserByAuthId(authUserId: string): CampUser | null {
+    const row = testStore.findUserByAuthId(authUserId);
+    return row ? toCampUser(row) : null;
+  },
+  findUserById(userId: string): CampUser | null {
+    const row = testStore.findUserById(userId);
+    return row ? toCampUser(row) : null;
+  },
+  createUser(input: NewCampUser): CampUser {
+    return toCampUser(testStore.createUser(input));
+  },
+  findOrCreateUser(input: NewCampUser): { user: CampUser; created: boolean } {
+    // Synchronous, so two requests cannot interleave between the read and
+    // the write.
+    const existing = testStore.findUserByAuthId(input.authUserId);
+    const user = existing ?? testStore.createUser(input);
+    testStore.ensureRequiredAction({ userId: user.id, ...BURNER_PROFILE_GATE });
+    return { user: toCampUser(user), created: !existing };
+  },
+  setUserInviteCode(userId: string, code: string): void {
+    testStore.setUserInviteCode(userId, code);
+  },
+  setUserRank(userId: string, rank: Rank): void {
+    testStore.setUserRank(userId, rank);
+  },
+  setUserApprovalStatus(userId: string, status: ApprovalStatus): void {
+    testStore.setUserApprovalStatus(userId, status);
+  },
+  setUserApproval(input: {
+    userId: string;
+    from: ApprovalStatus;
+    to: ApprovalStatus;
+    decidedByUserId: string;
+    reason?: string | null;
+  }): boolean {
+    return testStore.setUserApproval(input);
+  },
+  setProfileImage(userId: string, url: string | null): void {
+    testStore.setProfileImage(userId, url);
+  },
+  setTelegramHandle(userId: string, handle: string | null): void {
+    testStore.setTelegramHandle(userId, handle);
+  },
+  setDisplayName(userId: string, name: string | null): void {
+    testStore.setDisplayName(userId, name);
+  },
+  getBurnerProfile(userId: string): BurnerProfileSummary | null {
+    const row = testStore.getProfile(userId);
+    if (!row) return null;
+    return {
+      responses: row.responses,
+      completedAt: row.completedAt,
+      updatedAt: row.updatedAt,
+      version: row.version,
+    };
+  },
+  upsertBurnerProfile(input: {
+    userId: string;
+    version: string;
+    responses: Record<string, unknown>;
+    markComplete: boolean;
+  }): void {
+    testStore.upsertProfile(input);
+  },
+  setIdDocuments(userId: string, id: IdDocument): void {
+    testStore.setIdDocuments(userId, id);
+  },
+  getIdDocuments(userId: string): IdDocument | null {
+    return testStore.getIdDocuments(userId);
+  },
+  setEmergencyContacts(
+    userId: string,
+    contacts: readonly EmergencyContact[],
+  ): void {
+    testStore.setEmergencyContacts(userId, contacts);
+  },
+  getEmergencyContacts(userId: string): EmergencyContact[] | null {
+    return testStore.getEmergencyContacts(userId);
+  },
+  saveBurnerProfileReplay(input: BurnerProfileReplayInput): void {
+    // The in-memory store cannot fail part-way, so plain writes stand in for
+    // the transaction.
+    testStore.upsertProfile({
+      userId: input.userId,
+      version: input.version,
+      responses: input.responses,
+      markComplete: true,
+    });
+    if (input.id) testStore.setIdDocuments(input.userId, input.id);
+    testStore.setEmergencyContacts(input.userId, input.emergencyContacts);
+    if (input.telegramHandle !== undefined) {
+      testStore.setTelegramHandle(input.userId, input.telegramHandle);
+    }
+    // A re-submit also re-satisfies the gate, as in the real backend.
+    testStore.satisfyRequiredAction(input.userId, "burner_profile");
+    if (input.edit && input.edit.changes.length > 0) {
+      testStore.recordQuestionnaireEdit({
+        userId: input.userId,
+        version: input.version,
+        ...input.edit,
+      });
+    }
+  },
+};
+
+const people = twin(realPeople, storePeople, [
+  "findUserByAuthId",
+  "findUserById",
+  "createUser",
+  "findOrCreateUser",
+  "setUserInviteCode",
+  "setUserRank",
+  "setUserApprovalStatus",
+  "setUserApproval",
+  "setProfileImage",
+  "setTelegramHandle",
+  "setDisplayName",
+  "getBurnerProfile",
+  "upsertBurnerProfile",
+  "setIdDocuments",
+  "getIdDocuments",
+  "setEmergencyContacts",
+  "getEmergencyContacts",
+  "saveBurnerProfileReplay",
+]);
+
+// The gate spine and this year's memberships. The store sends no
+// questionnaires, so it has no open sends to reconcile and none pending.
+const realGates = {
+  async seedBurnerProfileAction(userId: string): Promise<void> {
+    await activations.ensureRequiredAction({
+      userId,
+      type: "questionnaire",
+      ...BURNER_PROFILE_GATE,
+    });
+  },
+  async satisfyBurnerProfileAction(userId: string): Promise<void> {
+    await activations.satisfyRequiredAction(
+      userId,
+      "burner_profile",
+      QUESTIONNAIRE_VERSION,
+    );
+  },
+  syncOpenGates(userId: string): Promise<number> {
+    return activations.reconcileOpenActivations(userId);
+  },
+  getPendingQuestionnaires(userId: string): Promise<PendingQuestionnaire[]> {
+    return activations.listPendingQuestionnaires(userId);
+  },
+  getPendingRequiredActions(userId: string): Promise<PendingRequiredAction[]> {
+    return activations.getPendingRequiredActions(userId);
+  },
+  async getMyMemberships(userId: string): Promise<MyMembership[]> {
+    // Read beside the settings, not after them: every year's rows (a few),
+    // kept to this year's. One database wait instead of two.
+    const [{ cycleNumber }, rows] = await Promise.all([
+      getCampSettings(),
+      memberships.getTeamMembershipsEveryYear(userId),
+    ]);
+    return rows
+      .filter((m) => m.cycle === cycleNumber)
+      .map((m) => ({ team: m.team, isLead: m.isLead }));
+  },
+};
+
+const storeGates = {
+  seedBurnerProfileAction(userId: string): void {
+    testStore.ensureRequiredAction({ userId, ...BURNER_PROFILE_GATE });
+  },
+  satisfyBurnerProfileAction(userId: string): void {
+    testStore.satisfyRequiredAction(userId, "burner_profile");
+  },
+  syncOpenGates(_userId: string): number {
+    return 0;
+  },
+  getPendingQuestionnaires(_userId: string): PendingQuestionnaire[] {
+    return [];
+  },
+  getPendingRequiredActions(userId: string): PendingRequiredAction[] {
+    return testStore.getPendingRequiredActions(userId);
+  },
+  getMyMemberships(userId: string): MyMembership[] {
+    return testStore
+      .getTeamMemberships(userId)
+      .map((m) => ({ team: m.team, isLead: m.isLead }));
+  },
+};
+
+const gates = twin(realGates, storeGates, [
+  "seedBurnerProfileAction",
+  "satisfyBurnerProfileAction",
+  "syncOpenGates",
+  "getPendingQuestionnaires",
+  "getPendingRequiredActions",
+  "getMyMemberships",
+]);
+
 /**
  * Resolve the camp user row for the given authenticated user (Better Auth or
  * test). A row is only ever persisted for someone who has earned access: a
@@ -86,8 +444,7 @@ export async function ensureCampUser(
   preRead?: Promise<CampUser | null>,
 ): Promise<CampUser> {
   const god = isGodEmail(authUser.primaryEmail);
-  const store = usesTestStore() ? testBackend : realBackend;
-  const existing = await (preRead ?? store.findUserByAuthId(authUser.id));
+  const existing = await (preRead ?? people.findUserByAuthId(authUser.id));
   if (existing) return existing;
 
   // God accounts bypass the invite gate entirely — give them a real,
@@ -98,7 +455,7 @@ export async function ensureCampUser(
   // finds the row above (and returns it at once) always finds the gate too;
   // every caller here seeds it again as well (idempotent) before going on.
   if (god) {
-    const { user } = await store.findOrCreateUser({
+    const { user } = await people.findOrCreateUser({
       authUserId: authUser.id,
       displayName: authUser.displayName ?? authUser.primaryEmail,
       inviteCode: null,
@@ -133,10 +490,8 @@ export async function ensureCampUser(
  * the row and then asks again in a LATER request reads it fresh.
  */
 export const peekCampUser = cache(
-  async (authUserId: string): Promise<CampUser | null> => {
-    const store = usesTestStore() ? testBackend : realBackend;
-    return store.findUserByAuthId(authUserId);
-  },
+  (authUserId: string): Promise<CampUser | null> =>
+    people.findUserByAuthId(authUserId),
 );
 
 export type RedeemInviteResult = { ok: true } | { ok: false; error: string };
@@ -160,8 +515,7 @@ export async function redeemInviteForUser(
   const code = rawCode.trim();
   if (!code) return { ok: false, error: "Please enter an invite code." };
 
-  const store = usesTestStore() ? testBackend : realBackend;
-  const existing = await store.findUserByAuthId(authUser.id);
+  const existing = await people.findUserByAuthId(authUser.id);
 
   // Already past the gate (god or a code on file) — don't spend another use.
   if (isGodEmail(authUser.primaryEmail) || existing?.inviteCode) {
@@ -172,13 +526,13 @@ export async function redeemInviteForUser(
   if (!claimed) return { ok: false, error: "That invite code isn't valid." };
 
   if (existing) {
-    await store.setUserInviteCode(existing.id, claimed.code);
+    await people.setUserInviteCode(existing.id, claimed.code);
     if (claimed.assignedRank && claimed.assignedRank !== existing.rank) {
-      await store.setUserRank(existing.id, claimed.assignedRank);
+      await people.setUserRank(existing.id, claimed.assignedRank);
     }
     // A vetting-required code only ever tightens access into the queue.
     if (claimed.requiresApproval && existing.approvalStatus !== "pending") {
-      await store.setUserApprovalStatus(existing.id, "pending");
+      await people.setUserApprovalStatus(existing.id, "pending");
     }
     return { ok: true };
   }
@@ -188,7 +542,7 @@ export async function redeemInviteForUser(
   // `pending` (blocked after onboarding until a captain decides).
   let created: CampUser;
   try {
-    created = await store.createUser({
+    created = await people.createUser({
       authUserId: authUser.id,
       displayName: authUser.displayName ?? authUser.primaryEmail,
       inviteCode: claimed.code,
@@ -201,7 +555,7 @@ export async function redeemInviteForUser(
     // The member DID join, so say so instead of throwing them onto an error
     // page. The second request's use of the code is spent; the claim and the
     // insert are separate statements, and a lost use is the cheaper failure.
-    const winner = await store.findUserByAuthId(authUser.id);
+    const winner = await people.findUserByAuthId(authUser.id);
     if (!winner) throw err;
     console.warn(
       "redeemInviteForUser: a concurrent redeem already created this member; one extra use of the code was spent",
@@ -212,94 +566,34 @@ export async function redeemInviteForUser(
   return { ok: true };
 }
 
-export interface BurnerProfileSummary {
-  responses: Record<string, unknown>;
-  completedAt: Date | null;
-  updatedAt: Date | null;
-  version: string | null;
-}
-
-export async function getBurnerProfile(
-  campUserId: string,
-): Promise<BurnerProfileSummary | null> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  return store.getBurnerProfile(campUserId);
-}
+export const getBurnerProfile = people.getBurnerProfile;
 
 /**
  * Read-only lookup of the camp user for an auth session — no cookie handling
  * or invite-code writes (unlike {@link ensureCampUser}). For hot paths that
  * just need the existing row, e.g. gating the avatar proxy on every image load.
  */
-export async function findCampUserByAuthId(
-  authUserId: string,
-): Promise<CampUser | null> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  return store.findUserByAuthId(authUserId);
-}
+export const findCampUserByAuthId = people.findUserByAuthId;
 
 /** The camp user with this id (not the auth id), or null. */
-export async function findCampUserById(
-  userId: string,
-): Promise<CampUser | null> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  return store.findUserById(userId);
-}
+export const findCampUserById = people.findUserById;
 
-/**
- * Whether this user is allowed past the signup gate (god account or has
- * redeemed a valid invite code). Note this is the *invite* gate only — a
- * member can be camp-active but still awaiting captain approval; use
- * {@link isApproved} for the full "can use the app" check.
- */
 /**
  * required_actions gating helpers. Under E2E_TEST_MODE they write the test
  * store's twin rows, so the member ladder gates E2E users the same way.
  */
-export async function seedBurnerProfileAction(userId: string): Promise<void> {
-  if (usesTestStore()) {
-    testStore.ensureRequiredAction({
-      userId,
-      actionKey: "burner_profile",
-      title: "Complete your burner profile",
-      version: QUESTIONNAIRE_VERSION,
-    });
-    return;
-  }
-  await ensureRequiredAction({
-    userId,
-    type: "questionnaire",
-    actionKey: "burner_profile",
-    title: "Complete your burner profile",
-    version: QUESTIONNAIRE_VERSION,
-  });
-}
+export const seedBurnerProfileAction = gates.seedBurnerProfileAction;
 
 /** Satisfy the burner-profile gate when the profile is completed. */
-export async function satisfyBurnerProfileAction(
-  userId: string,
-): Promise<void> {
-  if (usesTestStore()) {
-    testStore.satisfyRequiredAction(userId, "burner_profile");
-    return;
-  }
-  await dbSatisfyRequiredAction(
-    userId,
-    "burner_profile",
-    QUESTIONNAIRE_VERSION,
-  );
-}
+export const satisfyBurnerProfileAction = gates.satisfyBurnerProfileAction;
 
 /**
  * Give this member the gates of every open send they belong to but joined
  * after it opened: a new member, a new team member, or a newly picked one.
  * Call it before reading the gate spine. No-op under E2E test mode, where
- * there are no required actions at all.
+ * there are no questionnaire sends at all.
  */
-export async function syncOpenGates(userId: string): Promise<number> {
-  if (usesTestStore()) return 0;
-  return reconcileOpenActivations(userId);
-}
+export const syncOpenGates = gates.syncOpenGates;
 
 /**
  * Every questionnaire the member still has to answer from an open send,
@@ -307,21 +601,17 @@ export async function syncOpenGates(userId: string): Promise<number> {
  * inbox's "Needs your answer" section reads this, and so does getInboxBadge
  * (lib/inbox-badge.ts), the count on the bell and the Notifications tile.
  */
-export async function getPendingQuestionnaires(
-  userId: string,
-): Promise<PendingQuestionnaire[]> {
-  if (usesTestStore()) return [];
-  return dbListPendingQuestionnaires(userId);
-}
+export const getPendingQuestionnaires = gates.getPendingQuestionnaires;
 
 /** The user's pending blocking required actions, oldest first. */
-export async function getPendingRequiredActions(
-  userId: string,
-): Promise<PendingRequiredAction[]> {
-  if (usesTestStore()) return testStore.getPendingRequiredActions(userId);
-  return dbGetPendingRequiredActions(userId);
-}
+export const getPendingRequiredActions = gates.getPendingRequiredActions;
 
+/**
+ * Whether this user is allowed past the signup gate (god account or has
+ * redeemed a valid invite code). Note this is the *invite* gate only — a
+ * member can be camp-active but still awaiting captain approval; use
+ * {@link isApproved} for the full "can use the app" check.
+ */
 export function hasCampAccess(
   user: { inviteCode: string | null },
   email: string | null,
@@ -339,12 +629,6 @@ export function isApproved(
   email: string | null,
 ): boolean {
   return coreIsApproved(user, isGodEmail(email));
-}
-
-/** One team a member is on this year, and whether they lead it. */
-export interface MyMembership {
-  team: Team;
-  isLead: boolean;
 }
 
 /**
@@ -368,24 +652,7 @@ export interface MyMembership {
  * the same rules (lib/__tests__/test-store-teams.test.ts), in the same team
  * order as the database (lib/__tests__/memberships-agreement.test.ts).
  */
-export const getMyMemberships = cache(
-  async (userId: string): Promise<MyMembership[]> => {
-    if (usesTestStore()) {
-      return testStore
-        .getTeamMemberships(userId)
-        .map((m) => ({ team: m.team, isLead: m.isLead }));
-    }
-    // Read beside the settings, not after them: every year's rows (a few),
-    // kept to this year's. One database wait instead of two.
-    const [{ cycleNumber }, rows] = await Promise.all([
-      getCampSettings(),
-      dbGetTeamMembershipsEveryYear(userId),
-    ]);
-    return rows
-      .filter((m) => m.cycle === cycleNumber)
-      .map((m) => ({ team: m.team, isLead: m.isLead }));
-  },
-);
+export const getMyMemberships = cache(gates.getMyMemberships);
 
 /**
  * Whether a user leads at least one team THIS YEAR — the derived `team_lead`
@@ -442,8 +709,7 @@ export async function decideUserApproval(input: {
   /** Shown to the member on /pending-approval; blank means none. */
   reason?: string | null;
 }): Promise<boolean> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  const changed = await store.setUserApproval(input);
+  const changed = await people.setUserApproval(input);
   // An approval writes the member a notice; send it now, not on a schedule.
   if (changed) deliverAfterResponse();
   return changed;
@@ -455,375 +721,50 @@ export async function decideUserApproval(input: {
  * accepts — the one explicit, app-orchestrated rank write (the db promotion
  * module never touches `users.rank`).
  */
-export async function setCampUserRank(
-  userId: string,
-  rank: Rank,
-): Promise<void> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  await store.setUserRank(userId, rank);
-}
-
-// --- Backends -----------------------------------------------------------
-
-interface UserBackend {
-  findUserByAuthId(authUserId: string): Promise<CampUser | null>;
-  findUserById(userId: string): Promise<CampUser | null>;
-  createUser(input: {
-    authUserId: string;
-    displayName: string | null;
-    inviteCode: string | null;
-    rank: Rank;
-    approvalStatus: ApprovalStatus;
-  }): Promise<CampUser>;
-  /**
-   * Create the row unless one exists for the auth id; never throws on a race.
-   * The row starts with the burner-profile gate, written with it.
-   */
-  findOrCreateUser(input: {
-    authUserId: string;
-    displayName: string | null;
-    inviteCode: string | null;
-    rank: Rank;
-    approvalStatus: ApprovalStatus;
-  }): Promise<{ user: CampUser; created: boolean }>;
-  setUserInviteCode(userId: string, code: string): Promise<void>;
-  setUserRank(userId: string, rank: Rank): Promise<void>;
-  setUserApprovalStatus(userId: string, status: ApprovalStatus): Promise<void>;
-  setUserApproval(input: {
-    userId: string;
-    from: ApprovalStatus;
-    to: ApprovalStatus;
-    decidedByUserId: string;
-    reason?: string | null;
-  }): Promise<boolean>;
-  setUserProfileImage(userId: string, url: string | null): Promise<void>;
-  setTelegramHandle(userId: string, handle: string | null): Promise<void>;
-  setUserDisplayName(userId: string, name: string | null): Promise<void>;
-  getBurnerProfile(userId: string): Promise<BurnerProfileSummary | null>;
-  upsertBurnerProfile(input: {
-    userId: string;
-    version: string;
-    responses: Record<string, unknown>;
-    markComplete: boolean;
-  }): Promise<void>;
-  setIdDocuments(
-    userId: string,
-    id: { idType: string | null; idNumber: string | null },
-  ): Promise<void>;
-  getIdDocuments(
-    userId: string,
-  ): Promise<{ idType: string | null; idNumber: string | null } | null>;
-  setEmergencyContacts(
-    userId: string,
-    contacts: readonly EmergencyContact[],
-  ): Promise<void>;
-  getEmergencyContacts(userId: string): Promise<EmergencyContact[] | null>;
-  saveBurnerProfileReplay(input: BurnerProfileReplayInput): Promise<void>;
-}
-
-export interface BurnerProfileReplayInput {
-  userId: string;
-  version: string;
-  /** Answers with the ID number and emergency contacts split out. */
-  responses: Record<string, unknown>;
-  /** The ID number to store, or null to leave it alone. */
-  id: { idType: string | null; idNumber: string } | null;
-  emergencyContacts: readonly EmergencyContact[];
-  /** The Telegram username, or null to clear it; undefined leaves it alone. */
-  telegramHandle?: string | null;
-  /** The change-log row, or null when nothing changed. */
-  edit: {
-    questionnaireKey: string;
-    editedByUserId: string | null;
-    changes: QuestionnaireFieldChange[];
-  } | null;
-}
+export const setCampUserRank = people.setUserRank;
 
 /**
  * Save a My forms replay of the burner profile: answers, ID number, emergency
  * contacts, gate and change-log row, all or nothing (one transaction in the
  * real backend).
  */
-export async function saveBurnerProfileReplay(
-  input: BurnerProfileReplayInput,
-): Promise<void> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  await store.saveBurnerProfileReplay(input);
-}
+export const saveBurnerProfileReplay = people.saveBurnerProfileReplay;
 
-export async function upsertBurnerProfile(input: {
-  userId: string;
-  version: string;
-  responses: Record<string, unknown>;
-  markComplete: boolean;
-}): Promise<void> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  await store.upsertBurnerProfile(input);
-}
+export const upsertBurnerProfile = people.upsertBurnerProfile;
 
 /** Persist the member's Telegram username (bare, or null to clear it). */
-export async function setTelegramHandle(
-  userId: string,
-  handle: string | null,
-): Promise<void> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  await store.setTelegramHandle(userId, handle);
-}
+export const setTelegramHandle = people.setTelegramHandle;
 
 /** Persist the member's profile photo URL (or null to clear it). */
-export async function setProfileImage(
-  userId: string,
-  url: string | null,
-): Promise<void> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  await store.setUserProfileImage(userId, url);
-}
+export const setProfileImage = people.setProfileImage;
 
 /** Update the member's display name. */
-export async function setDisplayName(
-  userId: string,
-  name: string | null,
-): Promise<void> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  await store.setUserDisplayName(userId, name);
-}
+export const setDisplayName = people.setDisplayName;
 
 /**
  * Persist the member's government ID number. Encrypted on write in the real
  * backend (AES-256-GCM via PGCRYPTO_KEY); the E2E test backend keeps the raw
  * value in memory so tests need no key.
  */
-export async function setIdDocuments(
-  userId: string,
-  id: { idType: string | null; idNumber: string | null },
-): Promise<void> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  await store.setIdDocuments(userId, id);
-}
+export const setIdDocuments = people.setIdDocuments;
 
 /**
  * Store the member's emergency contacts (split out of their burner profile
  * answers by question role). An empty list clears them.
  */
-export async function setEmergencyContacts(
-  userId: string,
-  contacts: readonly EmergencyContact[],
-): Promise<void> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  await store.setEmergencyContacts(userId, contacts);
-}
+export const setEmergencyContacts = people.setEmergencyContacts;
 
 /**
  * Read a member's emergency contacts, or null when none are on file. The
  * caller authorises: the member's own form, or resolveSafetyDataForViewer.
  */
-export async function getEmergencyContacts(
-  userId: string,
-): Promise<EmergencyContact[] | null> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  return store.getEmergencyContacts(userId);
-}
+export const getEmergencyContacts = people.getEmergencyContacts;
 
-/** Read + decrypt the member's government ID number (owner/captain gated by
- * the caller). Returns null when the user has no row. */
-export async function getIdDocuments(
-  userId: string,
-): Promise<{ idType: string | null; idNumber: string | null } | null> {
-  const store = usesTestStore() ? testBackend : realBackend;
-  return store.getIdDocuments(userId);
-}
-
-const realBackend: UserBackend = {
-  async findUserByAuthId(authUserId) {
-    const row = await findUserByAuthId(authUserId);
-    return row ? toCampUser(row) : null;
-  },
-  async findUserById(userId) {
-    const row = await findUserById(userId);
-    return row ? toCampUser(row) : null;
-  },
-  async createUser(input) {
-    const row = await createCampUser(input);
-    return toCampUser(row);
-  },
-  async findOrCreateUser(input) {
-    const { user, created } = await findOrCreateCampUser(input, {
-      type: "questionnaire",
-      actionKey: "burner_profile",
-      title: "Complete your burner profile",
-      version: QUESTIONNAIRE_VERSION,
-    });
-    return { user: toCampUser(user), created };
-  },
-  async setUserInviteCode(userId, code) {
-    await setUserInviteCode(userId, code);
-  },
-  async setUserRank(userId, rank) {
-    await setUserRank(userId, rank);
-  },
-  async setUserApprovalStatus(userId, status) {
-    await setUserApprovalStatus(userId, status);
-  },
-  async setUserApproval(input) {
-    return setUserApproval(input);
-  },
-  async setUserProfileImage(userId, url) {
-    await setUserProfileImage(userId, url);
-  },
-  async setTelegramHandle(userId, handle) {
-    await setTelegramHandleColumn(userId, handle);
-  },
-  async setUserDisplayName(userId, name) {
-    await setUserDisplayName(userId, name);
-  },
-  async getBurnerProfile(userId) {
-    const row = await getBurnerProfileByUserId(userId);
-    if (!row) return null;
-    return {
-      responses: (row.responses as Record<string, unknown>) ?? {},
-      completedAt: row.completedAt,
-      updatedAt: row.updatedAt,
-      version: row.version,
-    };
-  },
-  async upsertBurnerProfile(input) {
-    await upsertBurnerProfileDb(input);
-  },
-  async setIdDocuments(userId, id) {
-    await setIdDocumentColumns(
-      userId,
-      idColumnsFor(id.idType, id.idNumber ? encrypt(id.idNumber) : null),
-    );
-  },
-  async setEmergencyContacts(userId, contacts) {
-    await setEmergencyContactsColumn(userId, contacts);
-  },
-  async getEmergencyContacts(userId) {
-    return getEmergencyContactsColumn(userId);
-  },
-  async saveBurnerProfileReplay(input) {
-    await dbSaveBurnerProfileReplay({
-      userId: input.userId,
-      version: input.version,
-      responses: input.responses,
-      // Encrypt before the transaction opens, so a key problem fails the save
-      // before anything is written.
-      idColumns: input.id
-        ? idColumnsFor(input.id.idType, encrypt(input.id.idNumber))
-        : null,
-      emergencyContacts: input.emergencyContacts,
-      telegramHandle: input.telegramHandle,
-      edit: input.edit,
-    });
-  },
-  async getIdDocuments(userId) {
-    const cols = await getIdDocumentColumns(userId);
-    if (!cols) return null;
-    const passport = decryptOrNull(cols.passportEncrypted);
-    const saId = decryptOrNull(cols.saIdEncrypted);
-    if (passport) return { idType: "passport", idNumber: passport };
-    if (saId) return { idType: "sa_id", idNumber: saId };
-    return { idType: null, idNumber: null };
-  },
-};
-
-const testBackend: UserBackend = {
-  async findUserByAuthId(authUserId) {
-    const row = testStore.findUserByAuthId(authUserId);
-    return row ? toCampUser(row) : null;
-  },
-  async findUserById(userId) {
-    const row = testStore.findUserById(userId);
-    return row ? toCampUser(row) : null;
-  },
-  async createUser(input) {
-    const row = testStore.createUser(input);
-    return toCampUser(row);
-  },
-  async findOrCreateUser(input) {
-    // Synchronous, so two requests cannot interleave between the read and
-    // the write.
-    const existing = testStore.findUserByAuthId(input.authUserId);
-    const user = existing ?? testStore.createUser(input);
-    testStore.ensureRequiredAction({
-      userId: user.id,
-      actionKey: "burner_profile",
-      title: "Complete your burner profile",
-      version: QUESTIONNAIRE_VERSION,
-    });
-    return { user: toCampUser(user), created: !existing };
-  },
-  async setUserInviteCode(userId, code) {
-    testStore.setUserInviteCode(userId, code);
-  },
-  async setUserRank(userId, rank) {
-    testStore.setUserRank(userId, rank);
-  },
-  async setUserApprovalStatus(userId, status) {
-    testStore.setUserApprovalStatus(userId, status);
-  },
-  async setUserApproval(input) {
-    return testStore.setUserApproval(input);
-  },
-  async setUserProfileImage(userId, url) {
-    testStore.setProfileImage(userId, url);
-  },
-  async setTelegramHandle(userId, handle) {
-    testStore.setTelegramHandle(userId, handle);
-  },
-  async setUserDisplayName(userId, name) {
-    testStore.setDisplayName(userId, name);
-  },
-  async getBurnerProfile(userId) {
-    const row = testStore.getProfile(userId);
-    if (!row) return null;
-    return {
-      responses: row.responses,
-      completedAt: row.completedAt,
-      updatedAt: row.updatedAt,
-      version: row.version,
-    };
-  },
-  async upsertBurnerProfile(input) {
-    testStore.upsertProfile(input);
-  },
-  async setIdDocuments(userId, id) {
-    testStore.setIdDocuments(userId, id);
-  },
-  async getIdDocuments(userId) {
-    return testStore.getIdDocuments(userId);
-  },
-  async setEmergencyContacts(userId, contacts) {
-    testStore.setEmergencyContacts(userId, contacts);
-  },
-  async getEmergencyContacts(userId) {
-    return testStore.getEmergencyContacts(userId);
-  },
-  async saveBurnerProfileReplay(input) {
-    // The in-memory store cannot fail part-way, so plain writes stand in for
-    // the transaction.
-    testStore.upsertProfile({
-      userId: input.userId,
-      version: input.version,
-      responses: input.responses,
-      markComplete: true,
-    });
-    if (input.id) testStore.setIdDocuments(input.userId, input.id);
-    testStore.setEmergencyContacts(input.userId, input.emergencyContacts);
-    if (input.telegramHandle !== undefined) {
-      testStore.setTelegramHandle(input.userId, input.telegramHandle);
-    }
-    // A re-submit also re-satisfies the gate, as in the real backend.
-    testStore.satisfyRequiredAction(input.userId, "burner_profile");
-    if (input.edit && input.edit.changes.length > 0) {
-      testStore.recordQuestionnaireEdit({
-        userId: input.userId,
-        version: input.version,
-        ...input.edit,
-      });
-    }
-  },
-};
+/**
+ * Read + decrypt the member's government ID number (owner/captain gated by
+ * the caller). Returns null when the user has no row.
+ */
+export const getIdDocuments = people.getIdDocuments;
 
 function toCampUser(row: {
   id: string;

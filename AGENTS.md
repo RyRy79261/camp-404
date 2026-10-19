@@ -84,8 +84,21 @@ Traps that already cost real time:
   audit rows stay in `packages/db`. Each such domain has an agreement suite,
   `apps/web/lib/__tests__/<domain>-agreement.test.ts` (shared half:
   `_agreement.ts`), that runs the facade on PGlite and on the store and
-  compares the answers; a new data function in it gets a case there. Other
-  domains still switch per function until they move.
+  compares the answers; a new data function in it gets a case there.
+  [CORRECTION 2026-10-19] Every other facade moved too (members, the
+  roster, places, tickets, promotion, account erasure, dietary needs, the
+  Survival Guide, meeting notes, team programs, the desktop, the join site
+  and camp config, notifications, pets, report screenshots, power on site,
+  My forms and the catalogue, search, the calendar and its mirror, the
+  daily sheet, invite codes, push). The store's erasure now does what
+  `sanitiseAccount` does to the rows it holds, and an erased member
+  (`sanitised`) drops out of its reads. A read the store does not model
+  (builder questionnaires, sends, push tokens) is a twin whose store side
+  answers "none". What still asks `usesTestStore()` outside `twin.ts` is a
+  mode, not a data switch: the real-database E2E run's no-op erasure,
+  the store standing in as a set-up camp (`bootstrap.ts`), a connected
+  calendar, the database probe, Better Auth's session, and the audit rows
+  of the member export and the Camp sheet.
 - **A `"use server"` file may export only async functions.** A `const`
   export breaks the page under `next dev`, and neither typecheck nor lint
   catches it. Put shared constants in a plain module.

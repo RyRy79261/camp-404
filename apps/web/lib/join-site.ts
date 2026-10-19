@@ -3,9 +3,6 @@ import "server-only";
 import {
   DEFAULT_JOIN_CONTENT,
   DEFAULT_TEAM_DESCRIPTIONS,
-  JOIN_SECTION_KEYS,
-  JoinSections,
-  resolveJoinContent,
   type JoinSectionKey,
   type JoinSiteContent,
 } from "@camp404/types";
@@ -13,28 +10,33 @@ import {
   activeTeams,
   currentCycle,
   describeTeam as describeTeamPure,
-  getCampConfig,
-  isIsoDate,
   resolveCycles,
   UNSET_CYCLE,
 } from "@camp404/db/camp-config";
-import { setCycleBurnDates } from "@camp404/db/cycle-rollover";
-import {
-  getCampBlurb as dbGetCampBlurb,
-  getJoinSiteContent,
-  JoinSectionInvalidError,
-  saveJoinSiteSections,
-  setCampBlurb as dbSetCampBlurb,
-  type CampBlurb,
-} from "@camp404/db/join-site";
+import * as campConfig from "@camp404/db/camp-config";
+import * as rollover from "@camp404/db/cycle-rollover";
+import * as db from "@camp404/db/join-site";
+import { JoinSectionInvalidError, type CampBlurb } from "@camp404/db/join-site";
 import { mutateTeamsConfig } from "./camp-config";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // The app's side of join.camp-404.com: what the Join site editor reads and
 // writes, and each member's "what I am in camp" blurb. Real writes go through
 // @camp404/db/join-site (audited in the same transaction); under E2E_TEST_MODE
-// the in-memory test store stands in, like lib/camp-config.ts.
+// the in-memory test store stands in, picked once (twin). The checks both
+// sides make live once in @camp404/core (parseJoinSections, campBlurbToSave,
+// cyclesWithBurnDates); lib/__tests__/join-site-agreement.test.ts holds the
+// answers equal.
+
+const join = twin(db, testStore, [
+  "getJoinSiteContent",
+  "saveJoinSiteSections",
+  "getCampBlurb",
+  "setCampBlurb",
+]);
+const year = twin(campConfig, testStore, ["getCampConfig"]);
+const burn = twin(rollover, testStore, ["setCycleBurnDates"]);
 
 export type { CampBlurb };
 export { JoinSectionInvalidError };
@@ -59,16 +61,12 @@ export type JoinEditorData = {
 };
 
 export async function getJoinEditorData(): Promise<JoinEditorData> {
-  const config = usesTestStore()
-    ? testStore.getTeamsConfig()
-    : await getCampConfig();
+  const config = await year.getCampConfig();
   const cycle = currentCycle(resolveCycles(config));
-  const year = cycle?.year ?? UNSET_CYCLE;
-  const content = usesTestStore()
-    ? resolveJoinContent(testStore.getJoinContent(year))
-    : (await getJoinSiteContent(year)).content;
+  const editing = cycle?.year ?? UNSET_CYCLE;
+  const { content } = await join.getJoinSiteContent(editing);
   return {
-    year,
+    year: editing,
     yearIsSet: cycle !== null,
     yearName: cycle?.name ?? null,
     burn:
@@ -94,27 +92,7 @@ export async function saveJoinSections(input: {
   sections: Partial<Record<JoinSectionKey, unknown>>;
   actorUserId: string;
 }): Promise<void> {
-  if (!usesTestStore()) {
-    await saveJoinSiteSections(input);
-    return;
-  }
-  const parsed: Partial<Record<JoinSectionKey, unknown>> = {};
-  for (const key of JOIN_SECTION_KEYS) {
-    if (!(key in input.sections)) continue;
-    const result = JoinSections[key].safeParse(input.sections[key]);
-    if (!result.success) {
-      throw new JoinSectionInvalidError(
-        result.error.issues.map((i) => i.message),
-        key,
-      );
-    }
-    parsed[key] = result.data;
-  }
-  const base = resolveJoinContent(testStore.getJoinContent(input.year));
-  testStore.setJoinContent(input.year, {
-    ...base,
-    ...parsed,
-  } as JoinSiteContent);
+  await join.saveJoinSiteSections(input);
 }
 
 export type BurnDatesResult =
@@ -128,39 +106,8 @@ export async function setBurnDates(input: {
   burnEnd: string | null;
   actorUserId: string;
 }): Promise<BurnDatesResult> {
-  if (!usesTestStore()) {
-    const res = await setCycleBurnDates(input);
-    return res.ok ? { ok: true } : res;
-  }
-  const clearing = input.burnStart === null && input.burnEnd === null;
-  if (
-    !clearing &&
-    !(
-      isIsoDate(input.burnStart) &&
-      isIsoDate(input.burnEnd) &&
-      input.burnStart <= input.burnEnd
-    )
-  ) {
-    return { ok: false, reason: "invalid-dates" };
-  }
-  const config = testStore.getTeamsConfig();
-  const cycles = resolveCycles(config);
-  if (!cycles.some((c) => c.year === input.year)) {
-    return { ok: false, reason: "unknown-year" };
-  }
-  testStore.setTeamsConfig({
-    ...config,
-    cycles: cycles.map((c) => {
-      if (c.year !== input.year) return c;
-      const rest = { ...c };
-      delete rest.burnStart;
-      delete rest.burnEnd;
-      return clearing
-        ? rest
-        : { ...rest, burnStart: input.burnStart!, burnEnd: input.burnEnd! };
-    }),
-  } as typeof config);
-  return { ok: true };
+  const res = await burn.setCycleBurnDates(input);
+  return res.ok ? { ok: true } : res;
 }
 
 /** Say what a team does on the join site. Blank goes back to the default. */
@@ -180,26 +127,9 @@ export async function describeTeam(input: {
   );
 }
 
-export async function getCampBlurb(userId: string): Promise<CampBlurb> {
-  return usesTestStore()
-    ? testStore.getCampBlurb(userId)
-    : dbGetCampBlurb(userId);
-}
+export const getCampBlurb = join.getCampBlurb;
 
-export async function setCampBlurb(
-  userId: string,
-  blurb: CampBlurb,
-): Promise<void> {
-  if (usesTestStore()) {
-    const clean = (v: string | null) => (v ?? "").trim() || null;
-    testStore.setCampBlurb(userId, {
-      title: clean(blurb.title),
-      blurb: clean(blurb.blurb),
-      showOnJoin: blurb.showOnJoin,
-    });
-    return;
-  }
-  await dbSetCampBlurb(userId, blurb);
-}
+/** Stored trimmed and cut to its limits (campBlurbToSave). */
+export const setCampBlurb = join.setCampBlurb;
 
 export { DEFAULT_JOIN_CONTENT };

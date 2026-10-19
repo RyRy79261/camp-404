@@ -103,6 +103,13 @@ export function resetHelpWantedStore(): void {
   s.serial = 0;
 }
 
+/** Account erasure's part: the roles the member holds and is keen on. */
+export function eraseTeamRolesOf(userId: string): void {
+  const s = state();
+  s.holders = s.holders.filter((h) => h.userId !== userId);
+  s.keen = s.keen.filter((k) => k.userId !== userId);
+}
+
 const tick = () => ++state().serial;
 
 const nameOf = (userId: string) =>
@@ -118,8 +125,7 @@ const byName = (a: string, b: string) => {
   return x.localeCompare(y);
 };
 
-const isMember = (userId: string) =>
-  testStore.findUserById(userId)?.approvalStatus === "approved";
+const isMember = (userId: string) => testStore.isApprovedMember(userId);
 
 class Refused extends Error {
   constructor(readonly sentence: string) {
@@ -301,7 +307,7 @@ export const helpWantedTestStore = {
   listPickablePeople(): TeamRolePerson[] {
     return testStore
       .allUsers()
-      .filter((u) => u.approvalStatus === "approved")
+      .filter((u) => !u.sanitised && u.approvalStatus === "approved")
       .map((u) => ({ userId: u.id, name: nameOf(u.id) }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },

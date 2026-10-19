@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ALLERGEN_CHECKER } from "@camp404/core";
+import { ALLERGEN_CHECKER, oldDietaryAnswer } from "@camp404/core";
 import {
   DIETARY_NOT_A_MEMBER,
   menuDietary,
@@ -20,7 +20,7 @@ import { testStore } from "./test-store";
 // pick-list, saved by the member's own form) and the same reads: the member's
 // own row, and the meal plan's counts for a captain or a Kitchen lead, counts
 // only. The daily sheet's twin reads its allergy line from here too. Kept
-// apart from test-store.ts, which calls in here only to reset.
+// apart from test-store.ts, which calls in here only to reset and to erase.
 
 interface DietaryRow {
   allergies: string | null;
@@ -42,6 +42,11 @@ function state(): Map<string, DietaryRow> {
 /** Forget every row (testStore.reset calls this). */
 export function resetDietaryStore(): void {
   state().clear();
+}
+
+/** Account erasure's part: the member's dietary row goes. */
+export function eraseDietaryOf(userId: string): void {
+  state().delete(userId);
 }
 
 const blank = (): DietaryRow => ({
@@ -72,16 +77,11 @@ export const dietaryTestStore = {
   getMyDietary(userId: string): MyDietary {
     const row = state().get(userId);
     if (!row) return { foods: [], diets: [], savedAt: null, old: null };
-    const allergies = row.allergies?.trim() || null;
-    const notes = row.notes?.trim() || null;
     return {
       foods: row.foods,
       diets: row.diets,
       savedAt: row.foodsSavedAt,
-      old:
-        allergies || notes || row.isAnaphylactic
-          ? { allergies, isAnaphylactic: row.isAnaphylactic, notes }
-          : null,
+      old: oldDietaryAnswer(row),
     };
   },
 
@@ -91,8 +91,11 @@ export const dietaryTestStore = {
     foods: readonly FoodReactionEntry[];
     diets: readonly Diet[];
   }): { ok: true; savedAt: Date } | { ok: false; error: string } {
+    // An erased stub is no member, as the database's read of `users` says.
     const user = testStore.findUserById(input.userId);
-    if (!user) return { ok: false, error: DIETARY_NOT_A_MEMBER };
+    if (!user || user.sanitised) {
+      return { ok: false, error: DIETARY_NOT_A_MEMBER };
+    }
     const now = new Date();
     const row = state().get(input.userId) ?? blank();
     state().set(input.userId, {
@@ -111,7 +114,9 @@ export const dietaryTestStore = {
     return menuDietary(
       [...state().entries()].flatMap(([userId, row]) => {
         const user = testStore.findUserById(userId);
-        if (!user || user.approvalStatus !== "approved") return [];
+        if (!user || user.sanitised || user.approvalStatus !== "approved") {
+          return [];
+        }
         return [
           {
             status: testStore.getParticipation(userId, cycle)?.status ?? null,

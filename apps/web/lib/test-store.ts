@@ -12,7 +12,15 @@ import {
   formatMemberRefCode,
   checkPaymentInput,
   isParticipationDecision,
+  approvalDecisionReason,
+  campBlurbToSave,
+  canLeaveCamp,
+  cyclesWithBurnDates,
+  parseJoinSections,
   isReviewTransition,
+  lostCatName,
+  nextLostCatNumber,
+  ticketPassNoChange,
   normalizeInviteCode,
   INTENT_IMPLIED_BY_STATUS,
   participationAfterIntent,
@@ -121,11 +129,14 @@ import {
   chargeFeeOnAccept,
   duesSettledInStore,
   isMoneyKeeperInStore,
+  eraseDuesOf,
   refundStatusOf,
   resetDuesStore,
 } from "./test-store-dues";
-import { resetClaimsStore } from "./test-store-claims";
-import { resetPetsStore } from "./test-store-pets";
+import { eraseClaimsOf, resetClaimsStore } from "./test-store-claims";
+import { petsTestStore, resetPetsStore } from "./test-store-pets";
+import { eraseDietaryOf } from "./test-store-dietary";
+import { eraseInventoryOf } from "./test-store-inventory";
 import { resetVoiceStore } from "./test-store-voice";
 import { resetKitchenMenuStore } from "./test-store-kitchen-menu";
 import {
@@ -134,20 +145,30 @@ import {
   storeHasPrepSteps,
   storeRedatePrepSteps,
 } from "./test-store-kitchen-extras";
-import { resetRentalStore } from "./test-store-rental";
+import { eraseRentalOf, resetRentalStore } from "./test-store-rental";
 import { resetGuideStore } from "./test-store-guide";
 import {
   adoptLogisticsSentinel,
+  eraseAttendanceOf,
   resetLogisticsStore,
 } from "./test-store-logistics";
-import { dropMemberShifts, resetShiftsStore } from "./test-store-shifts";
+import {
+  dropMemberShifts,
+  eraseShiftsOf,
+  resetShiftsStore,
+} from "./test-store-shifts";
 import { resetCampEventsStore } from "./test-store-camp-events";
 import {
   dropTeamRolesOf,
+  eraseTeamRolesOf,
   resetHelpWantedStore,
 } from "./test-store-help-wanted";
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
+import type { PendingRequiredAction } from "@camp404/db/activations";
+import { computeAudience } from "@camp404/db/audience";
+import type { AuditEvent } from "@camp404/db/audit";
+import { JoinSectionInvalidError } from "@camp404/db/join-site";
 import {
   CAR_EMPTY,
   CAR_MESSAGE_REFUSED,
@@ -385,6 +406,7 @@ import {
 import {
   ROLLOVER_UNTOUCHED,
   type RolloverPlan,
+  type SetBurnDatesResult,
   type SetFoundingYearResult,
 } from "@camp404/db/cycle-rollover";
 // Type-only: the store's three team operations return the SAME shapes the
@@ -396,14 +418,17 @@ import type {
   TeamMembership,
   TeamPerson,
 } from "@camp404/db/team-memberships";
-import type {
-  EmergencyContact,
-  IncomingPromotionRequest,
-  JoinSiteContent,
-  ParticipationIntent,
-  ParticipationStatus,
-  QuestionnaireFieldChange,
-  Team,
+import {
+  DEFAULT_JOIN_CONTENT,
+  resolveJoinContent,
+  type EmergencyContact,
+  type IncomingPromotionRequest,
+  type JoinSectionKey,
+  type JoinSiteContent,
+  type ParticipationIntent,
+  type ParticipationStatus,
+  type QuestionnaireFieldChange,
+  type Team,
 } from "@camp404/types";
 
 import {
@@ -442,6 +467,9 @@ interface TestUser {
   approvalDecidedByUserId: string | null;
   approvalDecidedAt: Date | null;
   approvalDecisionReason: string | null;
+  /** Erased to a "Lost Cat #N" stub (sanitiseAccount), and which N. */
+  sanitised: boolean;
+  lostCatNumber: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -1249,7 +1277,7 @@ function transportSeatIn(input: {
     driverUserId,
     memberUserId,
     car: car ?? null,
-    memberApproved: findUserById(memberUserId)?.approvalStatus === "approved",
+    memberApproved: isApprovedMember(memberUserId),
     memberDrives: transportDriving(memberUserId, cycle),
     seated: transportSeat(memberUserId, cycle),
     riders: transportRiders(driverUserId, cycle),
@@ -1746,6 +1774,21 @@ function storePlateCounts(versionId: string): TestPlateCount[] {
     .sort((a, b) => a.plates - b.plates);
 }
 
+/**
+ * A team's place in the database enum's order (`Team.options`, which a test
+ * keeps equal to `teamEnum`): Postgres sorts an enum by its declared order,
+ * not by name.
+ */
+function teamOrder(team: Team): number {
+  return TeamKeys.options.indexOf(team);
+}
+
+/** An approved, current member: never an erased stub (as notMembers reads). */
+function isApprovedMember(userId: string): boolean {
+  const user = findUserById(userId);
+  return !!user && !user.sanitised && user.approvalStatus === "approved";
+}
+
 export const testStore = {
   /** The camp team config (Phase 2). Backs the E2E-mode camp-config facade. */
   getTeamsConfig(): TeamsConfig {
@@ -1754,6 +1797,22 @@ export const testStore = {
   /** Persist a (whole) new team config — the facade passes the transformed value. */
   setTeamsConfig(config: TeamsConfig): void {
     globalState().teamsConfig = config;
+  },
+  /** Twin of getCampConfig: the whole camp config, its years included. */
+  getCampConfig(): CampConfig {
+    return globalState().teamsConfig as CampConfig;
+  },
+  /**
+   * Twin of mutateTeamsConfig: the same pure transform over the store's
+   * config. The store keeps no audit log, so the audit event stops here.
+   */
+  mutateTeamsConfig(
+    transform: (current: TeamsConfig) => TeamsConfig,
+    _audit?: AuditEvent,
+  ): TeamsConfig {
+    const next = transform(globalState().teamsConfig);
+    globalState().teamsConfig = next;
+    return next;
   },
   findUserByAuthId(authUserId: string): TestUser | null {
     return usersByAuthId.get(authUserId) ?? null;
@@ -1778,6 +1837,8 @@ export const testStore = {
       approvalDecidedByUserId: null,
       approvalDecidedAt: null,
       approvalDecisionReason: null,
+      sanitised: false,
+      lostCatNumber: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -1787,11 +1848,20 @@ export const testStore = {
   findUserById(userId: string): TestUser | null {
     return findUserById(userId);
   },
+  /**
+   * An approved, current member, as every database read of "approved"
+   * means it: never an erased stub (`users.sanitised`).
+   */
+  isApprovedMember(userId: string): boolean {
+    return isApprovedMember(userId);
+  },
   /** Approved members and sign-ups waiting (getCampHeadcount's twin). */
   getCampHeadcount(): { members: number; waiting: number } {
     let members = 0;
     let waiting = 0;
     for (const user of usersByAuthId.values()) {
+      // The same people the roster lists: never an erased stub.
+      if (user.sanitised) continue;
       if (user.approvalStatus === "approved") members++;
       else if (user.approvalStatus === "pending") waiting++;
     }
@@ -1801,7 +1871,7 @@ export const testStore = {
   countCaptains(): number {
     let count = 0;
     for (const user of usersByAuthId.values()) {
-      if (user.rank === "captain") count++;
+      if (user.rank === "captain" && !user.sanitised) count++;
     }
     return count;
   },
@@ -1860,8 +1930,10 @@ export const testStore = {
         user.approvalStatus = input.to;
         user.approvalDecidedByUserId = input.decidedByUserId;
         user.approvalDecidedAt = new Date();
-        user.approvalDecisionReason =
-          input.to === "pending" ? null : input.reason?.trim() || null;
+        user.approvalDecisionReason = approvalDecisionReason(
+          input.to,
+          input.reason,
+        );
         user.updatedAt = new Date();
         // As in production: an approval tells the member, nothing else does.
         if (input.to === "approved") {
@@ -2038,13 +2110,26 @@ export const testStore = {
       }
     }
   },
-  /** Twin of getPendingRequiredActions: pending and blocking, oldest first. */
-  getPendingRequiredActions(userId: string): TestRequiredAction[] {
+  /**
+   * Twin of getPendingRequiredActions: pending and blocking, oldest first,
+   * with the columns the real query selects and no others.
+   */
+  getPendingRequiredActions(userId: string): PendingRequiredAction[] {
     return requiredActions
       .filter(
         (a) => a.userId === userId && a.status === "pending" && a.blocking,
       )
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((a) => ({
+        actionKey: a.actionKey,
+        type: a.type,
+        title: a.title,
+        version: a.version,
+        activationId: a.activationId,
+        blocking: a.blocking,
+        dueAt: a.dueAt,
+        createdAt: a.createdAt,
+      }));
   },
 
   // --- ID documents (raw in test mode — no crypto) ----------------------
@@ -2055,10 +2140,12 @@ export const testStore = {
   ): void {
     idDocsByUserId.set(userId, id);
   },
+  /** Null only when there is no such member, as in production. */
   getIdDocuments(
     userId: string,
   ): { idType: string | null; idNumber: string | null } | null {
-    return idDocsByUserId.get(userId) ?? null;
+    if (!findUserById(userId)) return null;
+    return idDocsByUserId.get(userId) ?? { idType: null, idNumber: null };
   },
   setEmergencyContacts(
     userId: string,
@@ -2273,43 +2360,39 @@ export const testStore = {
    * members of one team but the sender. (The store has no approval filter for
    * "everyone"; production reaches approved members only.)
    */
+  /**
+   * Twin of the database's audience read: the same rows handed to the same
+   * pure rule (computeAudience): real members only (never a system actor or
+   * an erased stub), a group audience approved members only, this year's
+   * teams, leads and drivers, never the sender.
+   */
   announcementRecipients(senderId: string, audience: Audience): TestUser[] {
-    const everyone = [...usersByAuthId.values()].filter(
-      (u) => u.id !== senderId,
-    );
-    if (audience.scope === "everyone") return everyone;
     const cycle = currentCycleNumber();
-    // #313: this year's drivers (the read Transport makes), or exactly the
-    // people a captain picked — computeAudience's two captain-only cases.
-    if (audience.scope === "drivers") {
-      const driving = new Set(
-        driverProfiles
+    const ids = computeAudience(
+      {
+        scope: audience.scope,
+        team: audience.scope === "team" ? audience.team : null,
+      },
+      {
+        members: [...usersByAuthId.values()].map((u) => ({
+          id: u.id,
+          isSystem: false,
+          sanitised: u.sanitised,
+          approvalStatus: u.approvalStatus,
+        })),
+        memberships: teamMemberships.filter((m) => m.cycle === cycle),
+        driverUserIds: driverProfiles
           .filter((d) => d.cycle === cycle && d.intendsToDrive)
           .map((d) => d.userId),
-      );
-      return everyone.filter(
-        (u) => u.approvalStatus === "approved" && driving.has(u.id),
-      );
-    }
-    if (audience.scope === "individual") {
-      const chosen = new Set(audience.userIds);
-      return everyone.filter((u) => chosen.has(u.id));
-    }
-    // This year's leads of any team, or this year's members of one team —
-    // the same year-scoped reads @camp404/db's resolveAudience makes.
-    const chosen = new Set(
-      teamMemberships
-        .filter(
-          (m) =>
-            m.cycle === cycle &&
-            (audience.scope === "team_leads"
-              ? m.isLead
-              : m.team === audience.team),
-        )
-        .map((m) => m.userId),
+        targetUserIds:
+          audience.scope === "individual" ? [...audience.userIds] : [],
+      },
+      senderId,
     );
-    return everyone.filter((u) => chosen.has(u.id));
+    const wanted = new Set(ids);
+    return [...usersByAuthId.values()].filter((u) => wanted.has(u.id));
   },
+
   countAnnouncementAudience(
     senderId: string,
     audience: Audience = { scope: "everyone" },
@@ -2320,7 +2403,10 @@ export const testStore = {
   getAnnouncementPickerData(senderId: string): AnnouncementPickerData {
     const cycle = currentCycleNumber();
     const people = [...usersByAuthId.values()]
-      .filter((u) => u.id !== senderId && u.approvalStatus === "approved")
+      .filter(
+        (u) =>
+          u.id !== senderId && !u.sanitised && u.approvalStatus === "approved",
+      )
       .map((u) => ({
         id: u.id,
         name: u.displayName?.trim() || "Member with no name",
@@ -2449,31 +2535,39 @@ export const testStore = {
     acknowledgedCount: number;
     readCount: number;
   }> {
-    return [...broadcasts]
-      .filter((b) => !options.senderId || b.senderId === options.senderId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map((b) => {
-        const own = deliveries.filter((d) => d.broadcastId === b.id);
-        return {
-          id: b.id,
-          title: b.title,
-          body: b.body,
-          presentation: b.presentation,
-          audience: b.audience,
-          senderId: b.senderId,
-          senderName: b.senderId
-            ? (findUserById(b.senderId)?.displayName ?? null)
-            : null,
-          publishedAt: b.publishedAt,
-          pinnedAt: b.pinnedAt,
-          pinOnPublish: b.pinOnPublish,
-          createdAt: b.createdAt,
-          recipientCount: own.length,
-          acknowledgedCount: own.filter((d) => d.acknowledgedAt !== null)
-            .length,
-          readCount: own.filter((d) => d.readAt !== null).length,
-        };
-      });
+    return (
+      [...broadcasts]
+        .filter((b) => !options.senderId || b.senderId === options.senderId)
+        // Newest first; Postgres stamps in microseconds, so two written in the
+        // same millisecond still come newest first (the later in the list).
+        .sort(
+          (a, b) =>
+            b.createdAt.getTime() - a.createdAt.getTime() ||
+            broadcasts.indexOf(b) - broadcasts.indexOf(a),
+        )
+        .map((b) => {
+          const own = deliveries.filter((d) => d.broadcastId === b.id);
+          return {
+            id: b.id,
+            title: b.title,
+            body: b.body,
+            presentation: b.presentation,
+            audience: b.audience,
+            senderId: b.senderId,
+            senderName: b.senderId
+              ? (findUserById(b.senderId)?.displayName ?? null)
+              : null,
+            publishedAt: b.publishedAt,
+            pinnedAt: b.pinnedAt,
+            pinOnPublish: b.pinOnPublish,
+            createdAt: b.createdAt,
+            recipientCount: own.length,
+            acknowledgedCount: own.filter((d) => d.acknowledgedAt !== null)
+              .length,
+            readCount: own.filter((d) => d.readAt !== null).length,
+          };
+        })
+    );
   },
   getPendingAcknowledgements(userId: string): Array<{
     deliveryId: string;
@@ -2596,9 +2690,13 @@ export const testStore = {
                   d.kind as (typeof ANNOUNCEMENT_NOTIFICATION_KINDS)[number],
                 ))),
       )
+      // Newest first, as production's microsecond clock always tells apart;
+      // the store's clock has milliseconds only, so a tie goes to the later
+      // delivery (the later in the list), then to the id.
       .sort(
         (a, b) =>
           b.createdAt.getTime() - a.createdAt.getTime() ||
+          deliveries.indexOf(b) - deliveries.indexOf(a) ||
           (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
       );
     let start = 0;
@@ -2945,11 +3043,10 @@ export const testStore = {
    */
   getTeamMemberships(userId: string): TeamMembership[] {
     const cycle = currentCycleNumber();
-    const order = (team: Team) => TeamKeys.options.indexOf(team);
     return teamMemberships
       .filter((m) => m.userId === userId && m.cycle === cycle)
       .map((m) => ({ team: m.team, isLead: m.isLead, cycle: m.cycle }))
-      .sort((a, b) => order(a.team) - order(b.team));
+      .sort((a, b) => teamOrder(a.team) - teamOrder(b.team));
   },
 
   /** Put a member on a team for THIS year. Idempotent; never sets the lead flag. */
@@ -3080,15 +3177,17 @@ export const testStore = {
       if (m.cycle !== cycle) continue;
       // The production query joins `users`, so a membership whose member is
       // gone is not counted; the store's writers keep the same invariant.
-      if (!findUserById(m.userId)) continue;
+      const member = findUserById(m.userId);
+      if (!member || member.sanitised) continue;
       const entry = byTeam.get(m.team) ?? { members: 0, leads: 0 };
       entry.members += 1;
       if (m.isLead) entry.leads += 1;
       byTeam.set(m.team, entry);
     }
+    // In the team enum's order, as the grouped query's ORDER BY team.
     return [...byTeam.entries()]
       .map(([team, counts]) => ({ team, ...counts, cycle }))
-      .sort((a, b) => a.team.localeCompare(b.team));
+      .sort((a, b) => teamOrder(a.team) - teamOrder(b.team));
   },
 
   /**
@@ -3102,7 +3201,9 @@ export const testStore = {
       .filter((m) => m.team === team && m.cycle === cycle)
       .flatMap((m) => {
         const user = findUserById(m.userId);
-        if (!user || user.approvalStatus === "rejected") return [];
+        if (!user || user.sanitised || user.approvalStatus === "rejected") {
+          return [];
+        }
         return [
           {
             id: user.id,
@@ -3312,9 +3413,8 @@ export const testStore = {
   setTicketPass(
     input: TicketPassChange & { userId: string; actorUserId: string },
   ): boolean {
-    if (input.from === input.to) {
-      throw new Error(`setTicketPass: ${input.pass} is already ${input.to}`);
-    }
+    const same = ticketPassNoChange(input);
+    if (same) throw new Error(same);
     const key = participationKey(input.userId, currentCycleNumber());
     const now = new Date();
     const row: TestTicket = tickets.get(key) ?? {
@@ -3371,6 +3471,7 @@ export const testStore = {
         ),
     );
     return Array.from(usersByAuthId.values())
+      .filter((u) => !u.sanitised)
       .map((u): CampManagementMember => {
         const mine = thisYear.filter((m) => m.userId === u.id);
         const owed = this.getPendingRequiredActions(u.id);
@@ -3386,11 +3487,14 @@ export const testStore = {
           rank: u.rank,
           approvalStatus: u.approvalStatus,
           isLead: mine.some((m) => m.isLead),
-          teams: mine.map((m) => m.team).sort((a, b) => a.localeCompare(b)),
+          // In the team enum's order, as the real query's array_agg.
+          teams: mine
+            .map((m) => m.team)
+            .sort((a, b) => teamOrder(a) - teamOrder(b)),
           leadTeams: mine
             .filter((m) => m.isLead)
             .map((m) => m.team)
-            .sort((a, b) => a.localeCompare(b)),
+            .sort((a, b) => teamOrder(a) - teamOrder(b)),
           duesPaid: settled.has(u.id),
           onboardingComplete: profile?.completedAt != null,
           pendingRequiredActions: owed.length,
@@ -3476,15 +3580,17 @@ export const testStore = {
 
   // --- captain-promotion handshake (mirrors @camp404/db/captain-promotion) ---
 
+  // Every answer is a copy, as a row read from the database is: a later
+  // decision does not change a request the caller already holds.
   getOpenPromotionForTarget(targetUserId: string): TestPromotionRequest | null {
-    return (
-      promotionRequests.find(
-        (r) => r.targetUserId === targetUserId && r.status === "sent",
-      ) ?? null
+    const row = promotionRequests.find(
+      (r) => r.targetUserId === targetUserId && r.status === "sent",
     );
+    return row ? { ...row } : null;
   },
   getPromotionRequestById(requestId: string): TestPromotionRequest | null {
-    return promotionRequests.find((r) => r.id === requestId) ?? null;
+    const row = promotionRequests.find((r) => r.id === requestId);
+    return row ? { ...row } : null;
   },
   sendCaptainPromotion(input: {
     targetUserId: string;
@@ -3503,7 +3609,7 @@ export const testStore = {
       createdAt: new Date(),
       decidedAt: null,
     };
-    promotionRequests.push(row);
+    promotionRequests.push({ ...row });
     // As in production: a new request tells the target who asked.
     pushDelivery(
       captainPromotionNotification({
@@ -3554,7 +3660,7 @@ export const testStore = {
     if (!row) return null;
     row.status = input.status;
     row.decidedAt = new Date();
-    return row;
+    return { ...row };
   },
   getIncomingPromotionsForUser(userId: string): IncomingPromotionRequest[] {
     return promotionRequests
@@ -3581,7 +3687,9 @@ export const testStore = {
   /** lockTeamWork's twin: rank and this year's teams, or null if not approved. */
   teamWork(userId: string): TeamWork | null {
     const user = findUserById(userId);
-    if (!user || user.approvalStatus !== "approved") return null;
+    if (!user || user.sanitised || user.approvalStatus !== "approved") {
+      return null;
+    }
     const mine = testStore.getTeamMemberships(userId);
     return {
       rank:
@@ -3626,10 +3734,14 @@ export const testStore = {
             n.heldAt >= input.heldFrom &&
             n.heldAt < input.heldTo),
       )
+      // Newest held first, then newest written: Postgres stamps each note in
+      // microseconds, so two written in the same millisecond still come
+      // newest first; here the later one in the list is the newer.
       .sort(
         (a, b) =>
           b.heldAt.getTime() - a.heldAt.getTime() ||
-          b.createdAt.getTime() - a.createdAt.getTime(),
+          b.createdAt.getTime() - a.createdAt.getTime() ||
+          meetingNotes.indexOf(b) - meetingNotes.indexOf(a),
       )
       .map((n) => ({
         id: n.id,
@@ -3810,15 +3922,7 @@ export const testStore = {
     if (input.calendarEvent && input.calendarEvent.title === null) {
       return { ok: false, error: EVENT_NOT_ON_CALENDAR };
     }
-    // One note per calendar event, as meeting_notes_calendar_event_uniq.
-    if (
-      input.calendarEvent &&
-      meetingNotes.some((n) => n.calendarEventId === input.calendarEvent?.id)
-    ) {
-      return { ok: false, error: MINUTES_STARTED };
-    }
-    const approved = (id: string) =>
-      findUserById(id)?.approvalStatus === "approved";
+    const approved = (id: string) => isApprovedMember(id);
     if (!input.attendeeIds.every(approved)) {
       return { ok: false, error: ATTENDEE_NOT_A_MEMBER };
     }
@@ -3828,6 +3932,14 @@ export const testStore = {
     }
     if (!actionItems.every((i) => teamFiles(i, input.activeTeams))) {
       return { ok: false, error: TEAM_NOT_ACTIVE };
+    }
+    // One note per calendar event, as meeting_notes_calendar_event_uniq: the
+    // database finds out at the insert, after every check above.
+    if (
+      input.calendarEvent &&
+      meetingNotes.some((n) => n.calendarEventId === input.calendarEvent?.id)
+    ) {
+      return { ok: false, error: MINUTES_STARTED };
     }
     const now = new Date();
     const id = crypto.randomUUID();
@@ -3910,8 +4022,7 @@ export const testStore = {
         return { ok: false, error: EVENT_NOT_ON_CALENDAR };
       }
     }
-    const approved = (id: string) =>
-      findUserById(id)?.approvalStatus === "approved";
+    const approved = (id: string) => isApprovedMember(id);
     if (
       !input.attendeeIds.every(
         (id) => note.attendeeIds.includes(id) || approved(id),
@@ -4056,7 +4167,7 @@ export const testStore = {
 
   listAssignableMembers(): AssignableMember[] {
     return [...usersByAuthId.values()]
-      .filter((u) => u.approvalStatus === "approved")
+      .filter((u) => !u.sanitised && u.approvalStatus === "approved")
       .map((u) => ({
         id: u.id,
         displayName: u.displayName ?? "Unnamed member",
@@ -4078,10 +4189,7 @@ export const testStore = {
       input.team,
     );
     if (added) return { ok: false, error: added };
-    if (
-      input.assigneeId &&
-      findUserById(input.assigneeId)?.approvalStatus !== "approved"
-    ) {
+    if (input.assigneeId && !isApprovedMember(input.assigneeId)) {
       return { ok: false, error: NOT_A_MEMBER };
     }
     const id = crypto.randomUUID();
@@ -4127,7 +4235,7 @@ export const testStore = {
     if (
       input.assigneeId &&
       input.assigneeId !== task.assigneeId &&
-      findUserById(input.assigneeId)?.approvalStatus !== "approved"
+      !isApprovedMember(input.assigneeId)
     ) {
       return { ok: false, error: NOT_A_MEMBER };
     }
@@ -5029,7 +5137,7 @@ export const testStore = {
       return user
         ? {
             displayName: user.displayName ?? null,
-            approved: user.approvalStatus === "approved",
+            approved: !user.sanitised && user.approvalStatus === "approved",
           }
         : null;
     },
@@ -5118,7 +5226,7 @@ export const testStore = {
     aiConsent: boolean;
     now: Date;
   }): RecipeWriteResult<{ id: string }> {
-    if (findUserById(input.submitterId)?.approvalStatus !== "approved") {
+    if (!isApprovedMember(input.submitterId)) {
       return { ok: false, error: NOT_AN_APPROVED_MEMBER };
     }
     const tooLong = recipeTextProblem(input.text);
@@ -5168,7 +5276,7 @@ export const testStore = {
     aiConsent: boolean;
     now?: Date;
   }): RecipeWriteResult {
-    if (findUserById(input.actorId)?.approvalStatus !== "approved") {
+    if (!isApprovedMember(input.actorId)) {
       return { ok: false, error: NOT_AN_APPROVED_MEMBER };
     }
     const recipe = findRecipe(input.recipeId);
@@ -6264,7 +6372,7 @@ export const testStore = {
     authorId: string;
     body: string;
   }): RecipeWriteResult<{ id: string }> {
-    if (findUserById(input.authorId)?.approvalStatus !== "approved") {
+    if (!isApprovedMember(input.authorId)) {
       return { ok: false, error: NOT_AN_APPROVED_MEMBER };
     }
     const body = input.body.trim();
@@ -6903,6 +7011,110 @@ export const testStore = {
     reportScreenshots.splice(at, 1);
     return true;
   },
+  /**
+   * Twin of @camp404/db/account sanitiseAccount, for the tables the store
+   * holds: refuses the camp's last captain (canLeaveCamp), turns the row into
+   * the next "Lost Cat #N" stub with its login severed, and deletes or clears
+   * what production deletes or clears. The row stays, so who invited whom and
+   * every authorship still resolve. KNOWN BOUNDARY: the store keeps no audit
+   * log, push tokens, questionnaire responses, MCP rows, Telegram invites,
+   * workshop RSVPs, document reads or fuel cans, so there is nothing of those
+   * to erase.
+   */
+  sanitiseAccount(
+    userId: string,
+  ):
+    | { ok: true; lostCatNumber: number }
+    | { ok: false; reason: "sole_captain" } {
+    const everyone = [...usersByAuthId.values()];
+    const captains = everyone.filter(
+      (u) => u.rank === "captain" && !u.sanitised,
+    );
+    const leave = canLeaveCamp({
+      isCaptain: captains.some((c) => c.id === userId),
+      captainCount: captains.length,
+    });
+    if (!leave.ok) return leave;
+    const lostCatNumber = nextLostCatNumber(
+      everyone.reduce<number | null>(
+        (max, u) =>
+          u.lostCatNumber === null ? max : Math.max(max ?? 0, u.lostCatNumber),
+        null,
+      ),
+    );
+    const user = findUserById(userId);
+    if (user) {
+      usersByAuthId.delete(user.authUserId);
+      Object.assign(user, {
+        displayName: lostCatName(lostCatNumber),
+        authUserId: `deleted:${userId}`,
+        rank: "member",
+        profileImageUrl: null,
+        telegramHandle: null,
+        approvalDecisionReason: null,
+        sanitised: true,
+        lostCatNumber,
+        updatedAt: new Date(),
+      } satisfies Partial<TestUser>);
+      usersByAuthId.set(user.authUserId, user);
+    }
+    const drop = <T>(rows: T[], gone: (row: T) => boolean) => {
+      for (let n = rows.length - 1; n >= 0; n--) {
+        if (gone(rows[n]!)) rows.splice(n, 1);
+      }
+    };
+    const dropKeyed = <T extends { userId: string }>(rows: Map<string, T>) => {
+      for (const [key, row] of [...rows]) {
+        if (row.userId === userId) rows.delete(key);
+      }
+    };
+    S.campBlurbs.delete(userId);
+    profilesByUserId.delete(userId);
+    idDocsByUserId.delete(userId);
+    emergencyContactsByUserId.delete(userId);
+    eraseDietaryOf(userId);
+    drop(driverProfiles, (d) => d.userId === userId);
+    this.deleteDesktopLayout(userId);
+    this.deleteInkblotRuns(userId);
+    drop(deliveries, (d) => d.userId === userId);
+    drop(questionnaireEdits, (e) => e.userId === userId);
+    drop(requiredActions, (a) => a.userId === userId);
+    drop(teamMemberships, (m) => m.userId === userId);
+    dropKeyed(participations);
+    dropKeyed(tickets);
+    drop(
+      carMembers,
+      (c) => c.driverUserId === userId || c.memberUserId === userId,
+    );
+    drop(liftRequests, (r) => r.userId === userId);
+    for (const r of liftRequests) {
+      if (r.driverUserId === userId) r.driverUserId = null;
+    }
+    for (const t of transportTrailers) {
+      if (t.towedByUserId === userId) t.towedByUserId = null;
+    }
+    petsTestStore.deletePetsOf(userId);
+    const offers = new Set(
+      loungeOffers.filter((o) => o.hostId === userId).map((o) => o.id),
+    );
+    drop(loungeOffers, (o) => offers.has(o.id));
+    drop(loungeSlots, (slot) => offers.has(slot.offerId));
+    eraseInventoryOf(userId);
+    for (const p of payments) {
+      if (p.userId !== userId) continue;
+      p.note = null;
+      p.proofPathname = null;
+      p.proofContentType = null;
+    }
+    eraseDuesOf(userId);
+    this.deleteReportScreenshotsOf(userId);
+    eraseAttendanceOf(userId);
+    eraseShiftsOf(userId);
+    eraseTeamRolesOf(userId);
+    eraseRentalOf(userId);
+    eraseClaimsOf(userId);
+    return { ok: true, lostCatNumber };
+  },
   deleteReportScreenshotsOf(userId: string): void {
     for (let i = reportScreenshots.length - 1; i >= 0; i--) {
       if (reportScreenshots[i]!.userId === userId)
@@ -7179,6 +7391,7 @@ export const testStore = {
       .filter(
         (x): x is { p: (typeof x)["p"]; u: TestUser } =>
           !!x.u &&
+          !x.u.sanitised &&
           x.u.approvalStatus === "approved" &&
           !transportDriving(x.u.id, cycle) &&
           !transportSeat(x.u.id, cycle),
@@ -7286,8 +7499,7 @@ export const testStore = {
     const problem = liftRequestProblem({
       actorId: input.actorId,
       driverUserId: input.driverUserId,
-      memberApproved:
-        findUserById(input.actorId)?.approvalStatus === "approved",
+      memberApproved: isApprovedMember(input.actorId),
       drives: transportDriving(input.actorId, cycle),
       seated: transportSeat(input.actorId, cycle),
       carDrives:
@@ -7460,7 +7672,7 @@ export const testStore = {
           c.driverUserId === input.senderId &&
           c.cycle === actor.cycle &&
           c.memberUserId !== input.senderId &&
-          findUserById(c.memberUserId)?.approvalStatus === "approved",
+          isApprovedMember(c.memberUserId),
       )
       .map((c) => c.memberUserId);
     if (riders.length === 0) return { ok: false, error: CAR_EMPTY };
@@ -7478,15 +7690,69 @@ export const testStore = {
   },
 
   // --- join.camp-404.com (the twin of @camp404/db/join-site) --------------
-  getJoinContent(year: number): Partial<JoinSiteContent> | null {
-    let best: number | null = null;
-    for (const y of S.joinContent.keys()) {
-      if (y <= year && (best === null || y > best)) best = y;
-    }
-    return best === null ? null : S.joinContent.get(best)!;
-  },
+
   setJoinContent(year: number, content: JoinSiteContent): void {
     S.joinContent.set(year, structuredClone(content));
+  },
+  /**
+   * Twin of getJoinSiteContent: the year's own words, else the latest earlier
+   * year's, else the defaults (any year at all when `year` is null).
+   */
+  getJoinSiteContent(year: number | null): {
+    content: JoinSiteContent;
+    from: number | null;
+  } {
+    let best: number | null = null;
+    for (const y of S.joinContent.keys()) {
+      if ((year === null || y <= year) && (best === null || y > best)) {
+        best = y;
+      }
+    }
+    return best === null
+      ? { content: DEFAULT_JOIN_CONTENT, from: null }
+      : {
+          content: resolveJoinContent(S.joinContent.get(best)!),
+          from: best,
+        };
+  },
+  /**
+   * Twin of saveJoinSiteSections: every section checked first
+   * (parseJoinSections), so one bad section saves none; the rest of the
+   * year's words are kept.
+   */
+  saveJoinSiteSections(input: {
+    year: number;
+    sections: Partial<Record<JoinSectionKey, unknown>>;
+    actorUserId: string;
+  }): JoinSiteContent {
+    const checked = parseJoinSections(input.sections);
+    if (!checked.ok) {
+      throw new JoinSectionInvalidError(checked.issues, checked.section);
+    }
+    const base = this.getJoinSiteContent(input.year).content;
+    if (Object.keys(checked.parsed).length === 0) return base;
+    const next = { ...base, ...checked.parsed } as JoinSiteContent;
+    this.setJoinContent(input.year, next);
+    return structuredClone(next);
+  },
+  /** Twin of setCycleBurnDates, by the same rule (cyclesWithBurnDates). */
+  setCycleBurnDates(input: {
+    year: number;
+    burnStart: string | null;
+    burnEnd: string | null;
+    actorUserId: string | null;
+  }): SetBurnDatesResult {
+    const config = globalState().teamsConfig;
+    const set = cyclesWithBurnDates(resolveCycles(config), input);
+    if (!set.ok) return set;
+    globalState().teamsConfig = {
+      ...config,
+      cycles: set.cycles,
+    } as typeof config;
+    return {
+      ok: true,
+      cycle: set.cycles.find((c) => c.year === input.year)!,
+    };
   },
   getCampBlurb(userId: string): TestCampBlurb {
     return (
@@ -7497,8 +7763,9 @@ export const testStore = {
       }
     );
   },
+  /** Stored as the database stores it: trimmed and cut (campBlurbToSave). */
   setCampBlurb(userId: string, blurb: TestCampBlurb): void {
-    S.campBlurbs.set(userId, { ...blurb });
+    S.campBlurbs.set(userId, campBlurbToSave(blurb));
   },
   /**
    * Twin of `searchEntries` / `resolveEntries` in @camp404/db/search (#326),
@@ -7609,7 +7876,9 @@ export const testStore = {
       });
     }
     for (const u of usersByAuthId.values()) {
-      if (u.approvalStatus !== "approved" || !u.displayName) continue;
+      if (u.sanitised || u.approvalStatus !== "approved" || !u.displayName) {
+        continue;
+      }
       const mine = teamMemberships.filter(
         (m) => m.userId === u.id && m.cycle === cycle,
       );
@@ -7657,7 +7926,8 @@ export const testStore = {
     for (const user of usersByAuthId.values()) {
       const card = S.campBlurbs.get(user.id);
       const name = (user.displayName ?? "").trim();
-      if (user.rank !== "captain" || !card?.showOnJoin || name === "") continue;
+      if (user.rank !== "captain" || user.sanitised) continue;
+      if (!card?.showOnJoin || name === "") continue;
       out.push({
         name,
         title: (card.title ?? "").trim() || "Captain",

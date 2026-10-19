@@ -9,8 +9,8 @@ import {
   type CalendarRange,
   type CalendarResult,
 } from "./google-calendar";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // The camp's shared Google Calendar as the pages read it: Google, or under E2E
 // the test store, which stands in for a connected calendar that starts empty.
@@ -18,6 +18,18 @@ import { testStore } from "./test-store";
 // (./camp-events), mirrored onto Google by ./calendar-mirror.
 
 export type { CalendarResult };
+
+const calendar = twin(
+  {
+    listCalendarEvents: (now: Date, range?: CalendarRange) =>
+      readGoogleCalendar(process.env, now, undefined, range),
+    listCalendarRange: (range: { from: string; to: string }) =>
+      readCalendarRange(range),
+    getCalendarEvent: (eventId: string) => readCalendarEvent(eventId),
+  },
+  testStore,
+  ["listCalendarEvents", "listCalendarRange", "getCalendarEvent"],
+);
 
 /**
  * The next events on the camp calendar: by default Home's "Coming up" (the
@@ -27,10 +39,7 @@ export type { CalendarResult };
 export async function getUpcomingEvents(
   range: CalendarRange = HOME_RANGE,
 ): Promise<CalendarResult> {
-  const now = new Date();
-  return usesTestStore()
-    ? testStore.listCalendarEvents(now, range)
-    : readGoogleCalendar(process.env, now, undefined, range);
+  return calendar.listCalendarEvents(new Date(), range);
 }
 
 /**
@@ -41,16 +50,12 @@ export async function getCalendarRange(range: {
   from: string;
   to: string;
 }): Promise<CalendarResult> {
-  return usesTestStore()
-    ? testStore.listCalendarRange(range)
-    : readCalendarRange(range);
+  return calendar.listCalendarRange(range);
 }
 
 /** One event on the camp calendar by its id, for a link to it. */
 export async function getCalendarEventById(
   eventId: string,
 ): Promise<CalendarEvent | null | "unavailable"> {
-  return usesTestStore()
-    ? testStore.getCalendarEvent(eventId)
-    : readCalendarEvent(eventId);
+  return calendar.getCalendarEvent(eventId);
 }

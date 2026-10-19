@@ -3,18 +3,15 @@ import "server-only";
 import { errorLogText } from "@camp404/core";
 import { cache } from "react";
 import { cookies } from "next/headers";
-import {
-  getDesktopPreferences as dbGetDesktopPreferences,
-  markWelcomeSeen as dbMarkWelcomeSeen,
-  saveDesktopPreferences as dbSaveDesktopPreferences,
-} from "@camp404/db/desktop-layouts";
+import * as db from "@camp404/db/desktop-layouts";
 import {
   defaultDesktopPreferences,
   type DesktopPreferences,
 } from "@camp404/types";
 import { resolveMemberState } from "./member-gate";
-import { isE2ETestMode, TEST_USER_COOKIE, usesTestStore } from "./test-mode";
+import { isE2ETestMode, TEST_USER_COOKIE } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // The member's 404 OS display preferences (issues #289 and #290): the theme,
 // "Bigger text", "Effects off", "Open with one click", and whether they have
@@ -22,6 +19,14 @@ import { testStore } from "./test-store";
 // choice follows them to a new device. The console layout reads them with
 // the manifest and writes the theme on the desktop root, so the first paint
 // is already in it. Written through app/(console)/desktop-preferences-actions.ts.
+// From the database or, under E2E, the test store, picked once (twin);
+// lib/__tests__/desktop-agreement.test.ts holds the two sides equal.
+
+const prefs = twin(db, testStore, [
+  "getDesktopPreferences",
+  "saveDesktopPreferences",
+  "markWelcomeSeen",
+]);
 
 /**
  * A stand-in for "seen" in the E2E harness. Every spec signs a fresh member
@@ -50,8 +55,7 @@ async function e2eWantsWelcome(): Promise<boolean> {
 const readPreferences = cache(
   async (userId: string): Promise<DesktopPreferences> => {
     try {
-      if (usesTestStore()) return testStore.getDesktopPreferences(userId);
-      return await dbGetDesktopPreferences(userId);
+      return await prefs.getDesktopPreferences(userId);
     } catch (err) {
       // Never a reason for the desktop not to draw: the default look.
       console.error(
@@ -71,15 +75,15 @@ export const getMyDesktopPreferences = cache(
   async (): Promise<DesktopPreferences> => {
     const state = await resolveMemberState();
     if (state.kind !== "member") return defaultDesktopPreferences();
-    const prefs = await readPreferences(state.campUser.id);
+    const mine = await readPreferences(state.campUser.id);
     if (
       isE2ETestMode() &&
-      prefs.welcomeSeenAt === null &&
+      mine.welcomeSeenAt === null &&
       !(await e2eWantsWelcome())
     ) {
-      return { ...prefs, welcomeSeenAt: E2E_WELCOME_SEEN_AT };
+      return { ...mine, welcomeSeenAt: E2E_WELCOME_SEEN_AT };
     }
-    return prefs;
+    return mine;
   },
 );
 
@@ -89,18 +93,7 @@ export const getMyDesktopPreferences = cache(
  * `DesktopPreferencesInvalidError` for anything but a change of theme, the
  * switches or one click.
  */
-export async function saveDesktopPreferencesFor(
-  userId: string,
-  patch: unknown,
-): Promise<DesktopPreferences> {
-  if (usesTestStore()) return testStore.saveDesktopPreferences(userId, patch);
-  return dbSaveDesktopPreferences(userId, patch);
-}
+export const saveDesktopPreferencesFor = prefs.saveDesktopPreferences;
 
 /** The member closed the welcome wizard: it does not open by itself again. */
-export async function markWelcomeSeenFor(
-  userId: string,
-): Promise<DesktopPreferences> {
-  if (usesTestStore()) return testStore.markWelcomeSeen(userId);
-  return dbMarkWelcomeSeen(userId);
-}
+export const markWelcomeSeenFor = prefs.markWelcomeSeen;

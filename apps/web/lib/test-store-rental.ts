@@ -124,6 +124,18 @@ export function resetRentalStore(): void {
   r.orders.length = 0;
 }
 
+/**
+ * Account erasure's part: the member's gear orders go, and so does their
+ * place in anyone else's tent.
+ */
+export function eraseRentalOf(userId: string): void {
+  const r = state();
+  r.orders = r.orders.filter((o) => o.userId !== userId);
+  for (const o of r.orders) {
+    o.sharerIds = o.sharerIds.filter((id) => id !== userId);
+  }
+}
+
 /** A captain (RENTAL_MANAGER). */
 function isManager(actorId: string): boolean {
   return RENTAL_MANAGER.allows(testStore.actorInStore(actorId));
@@ -267,7 +279,7 @@ function orderOf(userId: string, cycle: number): OrderRow | undefined {
 function unansweredRows(cycle: number) {
   return testStore
     .allUsers()
-    .filter((u) => u.approvalStatus === "approved")
+    .filter((u) => !u.sanitised && u.approvalStatus === "approved")
     .flatMap((u) => {
       const place = testStore.getParticipation(u.id, cycle)?.status ?? null;
       const order = orderOf(u.id, cycle);
@@ -306,11 +318,7 @@ function storeOrder(
     return refuse(RENTAL_NO_SUCH_MEMBER);
   }
   const sharerIds = checked.tent?.sharerIds ?? [];
-  if (
-    sharerIds.some(
-      (id) => testStore.findUserById(id)?.approvalStatus !== "approved",
-    )
-  ) {
+  if (sharerIds.some((id) => !testStore.isApprovedMember(id))) {
     return refuse(RENTAL_SHARER_GONE);
   }
   if (input.submit) {
@@ -526,7 +534,10 @@ export const rentalTestStore = {
   listRentalSharerChoices(userId: string): { id: string; name: string }[] {
     return testStore
       .allUsers()
-      .filter((u) => u.approvalStatus === "approved" && u.id !== userId)
+      .filter(
+        (u) =>
+          !u.sanitised && u.approvalStatus === "approved" && u.id !== userId,
+      )
       .map((u) => ({ id: u.id, name: nameOf(u.id) }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
@@ -571,7 +582,9 @@ export const rentalTestStore = {
     participation: ParticipationStatus | null;
   } | null {
     const user = testStore.findUserById(userId);
-    if (!user || user.approvalStatus !== "approved") return null;
+    if (!user || user.sanitised || user.approvalStatus !== "approved") {
+      return null;
+    }
     return {
       userId,
       name: nameOf(userId),

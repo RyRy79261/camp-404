@@ -1,5 +1,9 @@
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { approvalNotification, isReviewTransition } from "@camp404/core";
+import {
+  approvalDecisionReason,
+  approvalNotification,
+  isReviewTransition,
+} from "@camp404/core";
 import type {
   ApprovalStatus,
   EmergencyContact,
@@ -202,7 +206,7 @@ export async function setUserApproval(input: {
     );
   }
   // A re-open clears the reason: it belonged to the decision being undone.
-  const reason = input.to === "pending" ? null : input.reason?.trim() || null;
+  const reason = approvalDecisionReason(input.to, input.reason);
   // Resolved BEFORE the transaction: currentCycleNumber() reads camp_settings
   // on its own handle (see team-memberships.ts).
   const leaving = input.from === "approved";

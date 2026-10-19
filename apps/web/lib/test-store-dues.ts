@@ -153,6 +153,20 @@ export function resetDuesStore(): void {
   d.refunds.length = 0;
 }
 
+/**
+ * Account erasure's part (@camp404/db/account sanitiseAccount): the charges
+ * and refunds stay for the books, without the words written about the member.
+ */
+export function eraseDuesOf(userId: string): void {
+  const d = state();
+  for (const c of d.charges) if (c.userId === userId) c.concessionReason = null;
+  for (const r of d.refunds) {
+    if (r.userId !== userId) continue;
+    r.note = null;
+    r.declineReason = null;
+  }
+}
+
 /** A captain, or a lead of Finance this year (MONEY_KEEPER). */
 export function isMoneyKeeperInStore(actorId: string): boolean {
   return MONEY_KEEPER.allows(testStore.actorInStore(actorId));
@@ -667,7 +681,7 @@ export const duesTestStore = {
   listDuesAccounts(cycle: number, today: string): DuesAccountRow[] {
     return testStore
       .allUsers()
-      .filter((u) => u.approvalStatus === "approved")
+      .filter((u) => !u.sanitised && u.approvalStatus === "approved")
       .map((u) => {
         const dues = this.getMemberDues(u.id, cycle, {
           forFinance: true,

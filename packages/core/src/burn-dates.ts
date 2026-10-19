@@ -59,3 +59,67 @@ export function burnDatesLabel(burn: {
     new Date(end * DAY_MS).getUTCFullYear();
   return `${format(start, !sameYear)} – ${format(end, true)}`;
 }
+
+/** A real calendar day as YYYY-MM-DD: the platform Date round-trips it. */
+export function isIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const [y, m, d] = value.split("-").map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return (
+    date.getUTCFullYear() === y &&
+    date.getUTCMonth() === m - 1 &&
+    date.getUTCDate() === d
+  );
+}
+
+/**
+ * Why a pair of Burn dates cannot be saved, or null: both null clears them,
+ * else they must be two real days, the first not after the last.
+ */
+export function burnDatesProblem(input: {
+  burnStart: string | null;
+  burnEnd: string | null;
+}): "invalid-dates" | null {
+  if (input.burnStart === null && input.burnEnd === null) return null;
+  return isIsoDate(input.burnStart) &&
+    isIsoDate(input.burnEnd) &&
+    input.burnStart <= input.burnEnd
+    ? null
+    : "invalid-dates";
+}
+
+/**
+ * The camp's years with one year's Burn dates set (both days) or cleared
+ * (both null), or why not: "invalid-dates" for a pair that is not two real
+ * days in order, checked first; "unknown-year" for a year the camp does not
+ * have. The database writer and the E2E store both save what this returns.
+ */
+export function cyclesWithBurnDates<
+  C extends { year: number; burnStart?: string; burnEnd?: string },
+>(
+  cycles: readonly C[],
+  input: { year: number; burnStart: string | null; burnEnd: string | null },
+):
+  | { ok: true; cycles: C[] }
+  | { ok: false; reason: "invalid-dates" | "unknown-year" } {
+  const problem = burnDatesProblem(input);
+  if (problem) return { ok: false, reason: problem };
+  const clearing = input.burnStart === null && input.burnEnd === null;
+  if (!cycles.some((c) => c.year === input.year)) {
+    return { ok: false, reason: "unknown-year" };
+  }
+  return {
+    ok: true,
+    cycles: cycles.map((c) => {
+      if (c.year !== input.year) return c;
+      const without = { ...c };
+      delete without.burnStart;
+      delete without.burnEnd;
+      return clearing
+        ? without
+        : { ...without, burnStart: input.burnStart!, burnEnd: input.burnEnd! };
+    }),
+  };
+}

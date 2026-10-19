@@ -72,8 +72,7 @@ function isEditor(actorId: string): boolean {
   return MEAL_PLAN_EDITOR.allows(testStore.actorInStore(actorId));
 }
 
-const isMember = (userId: string) =>
-  testStore.findUserById(userId)?.approvalStatus === "approved";
+const isMember = (userId: string) => testStore.isApprovedMember(userId);
 
 /** A year's menu (the twin of getKitchenMenu). */
 export function storeKitchenMenu(cycle?: number): KitchenMenu {

@@ -1,12 +1,15 @@
 import { and, asc, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
-  canEditGuideChapter,
+  NOT_A_CAMP_CHAPTER_WRITER,
+  NOT_A_CHAPTER_WRITER,
+  NOTHING_TO_PUBLISH,
   canSetGuideChapterMembersOnly,
   canSetGuideSectionPublic,
-  chapterTextProblem,
-  dutyCardProblem,
+  chapterPublishProblem,
   guideChapterIsPublic,
+  guideChapterRefusal,
+  sameChapterText,
   membersOnlyPartCount,
   toPublicChapter,
   type PublicGuideChapter,
@@ -61,17 +64,15 @@ export type GuideWriteResult<T = object> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 
-export const NOT_A_CHAPTER_WRITER =
-  "Only captains and this team's leads can write its chapters.";
-export const NOT_A_CAMP_CHAPTER_WRITER =
-  "Only captains can write whole-camp chapters.";
+// Who may write a chapter, and what may be published, are decided once in
+// @camp404/core (guideChapterRefusal, chapterPublishProblem); their
+// sentences are exported here by their old names too.
+export { NOT_A_CHAPTER_WRITER, NOT_A_CAMP_CHAPTER_WRITER, NOTHING_TO_PUBLISH };
 export const CHAPTER_GONE = "That chapter isn't there any more.";
 export const CHAPTER_EDITED =
   "Someone else saved this chapter while you were editing. Open it again to see their changes.";
 export const CHAPTER_SLUG_TAKEN =
   "A chapter with that name already exists. Pick another title.";
-export const NOTHING_TO_PUBLISH =
-  "Write something in the chapter before you publish it.";
 export const CHAPTER_NOT_PUBLISHED = "Publish the chapter first.";
 export const NOT_A_MEMBERS_ONLY_MARKER =
   "Only captains can keep a chapter members only, or let it go public.";
@@ -111,19 +112,6 @@ async function write<T extends object>(
   }
 }
 
-/** JSON with its keys sorted, so two equal cards compare equal as text. */
-function canonical(value: unknown): string {
-  return JSON.stringify(value, (_key, v: unknown) =>
-    v && typeof v === "object" && !Array.isArray(v)
-      ? Object.fromEntries(
-          Object.entries(v as Record<string, unknown>).sort(([a], [b]) =>
-            a < b ? -1 : a > b ? 1 : 0,
-          ),
-        )
-      : v,
-  );
-}
-
 const displayName = (name: string | null | undefined) => name?.trim() || null;
 
 // --- The write rule ------------------------------------------------------------
@@ -139,13 +127,7 @@ async function lockWriter(
 }
 
 /** The refusal for someone who may not write a chapter of `team`, or null. */
-export function chapterRefusal(
-  writer: { rank: string; led: readonly string[] },
-  team: string | null,
-): string | null {
-  if (canEditGuideChapter(writer.rank, writer.led, team)) return null;
-  return team === null ? NOT_A_CAMP_CHAPTER_WRITER : NOT_A_CHAPTER_WRITER;
-}
+export const chapterRefusal = guideChapterRefusal;
 
 /** The chapter's row, locked for the rest of the transaction. */
 async function lockChapter(tx: Tx, slug: string): Promise<DocumentRow> {
@@ -504,12 +486,7 @@ async function readDrafts(where: SQL | undefined): Promise<GuideDraft[]> {
       cycleReviewed: doc.cycleReviewed,
       updatedAt: doc.updatedAt,
       changedSincePublish:
-        !last?.version ||
-        last.title !== doc.title ||
-        last.category !== doc.category ||
-        last.team !== doc.team ||
-        last.markdown !== doc.markdown ||
-        canonical(last.card ?? null) !== canonical(doc.card ?? null),
+        !last?.version || !sameChapterText({ ...last, kind: doc.kind }, doc),
     }),
   );
 }
@@ -709,16 +686,9 @@ export async function publishGuideChapter(input: {
       refuse(CHAPTER_EDITED);
     }
 
-    let card: DutyCard | null = null;
-    if (doc.kind === "duty_card") {
-      const problem = dutyCardProblem(doc.card, doc.markdown);
-      if (problem) refuse(problem);
-      card = DutyCard.parse(doc.card);
-    } else if (doc.markdown.trim() === "") {
-      refuse(NOTHING_TO_PUBLISH);
-    }
-    const textProblem = chapterTextProblem(doc.markdown);
-    if (textProblem) refuse(textProblem);
+    const problem = chapterPublishProblem(doc);
+    if (problem) refuse(problem);
+    const card = doc.kind === "duty_card" ? DutyCard.parse(doc.card) : null;
 
     const [last] = await tx
       .select()
@@ -726,14 +696,7 @@ export async function publishGuideChapter(input: {
       .where(eq(schema.documentVersions.documentId, doc.id))
       .orderBy(desc(schema.documentVersions.version))
       .limit(1);
-    const same =
-      last !== undefined &&
-      last.title === doc.title &&
-      last.category === doc.category &&
-      last.team === doc.team &&
-      last.kind === doc.kind &&
-      last.markdown === doc.markdown &&
-      canonical(last.card ?? null) === canonical(card);
+    const same = last !== undefined && sameChapterText(last, { ...doc, card });
     const version = same ? last.version : (last?.version ?? 0) + 1;
     if (!same) {
       await tx.insert(schema.documentVersions).values({

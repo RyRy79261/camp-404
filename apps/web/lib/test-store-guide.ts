@@ -2,21 +2,18 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
-  canEditGuideChapter,
   canSetGuideChapterMembersOnly,
   canSetGuideSectionPublic,
-  chapterTextProblem,
-  dutyCardProblem,
+  chapterPublishProblem,
+  guideChapterRefusal,
   membersOnlyPartCount,
+  sameChapterText,
 } from "@camp404/core";
 import {
   CHAPTER_EDITED,
   CHAPTER_GONE,
   CHAPTER_NOT_PUBLISHED,
   CHAPTER_SLUG_TAKEN,
-  NOTHING_TO_PUBLISH,
-  NOT_A_CAMP_CHAPTER_WRITER,
-  NOT_A_CHAPTER_WRITER,
   NOT_A_MEMBERS_ONLY_MARKER,
   NOT_A_SECTION,
   NOT_A_SECTION_SWITCHER,
@@ -124,9 +121,7 @@ function writer(actorId: string) {
 }
 
 function refusal(actorId: string, team: string | null): string | null {
-  const w = writer(actorId);
-  if (canEditGuideChapter(w.rank, w.led, team)) return null;
-  return team === null ? NOT_A_CAMP_CHAPTER_WRITER : NOT_A_CHAPTER_WRITER;
+  return guideChapterRefusal(writer(actorId), team);
 }
 
 function run<T extends object>(fn: () => T | string): GuideWriteResult<T> {
@@ -135,17 +130,6 @@ function run<T extends object>(fn: () => T | string): GuideWriteResult<T> {
     ? { ok: false, error: out }
     : { ok: true, ...out };
 }
-
-const canonical = (v: unknown) =>
-  JSON.stringify(v, (_k, x: unknown) =>
-    x && typeof x === "object" && !Array.isArray(x)
-      ? Object.fromEntries(
-          Object.entries(x as Record<string, unknown>).sort(([a], [b]) =>
-            a < b ? -1 : 1,
-          ),
-        )
-      : x,
-  );
 
 function versionsOf(id: string): StoredVersion[] {
   return state()
@@ -307,13 +291,7 @@ export const guideTestStore = {
           liveMembersOnlyParts: current
             ? membersOnlyPartCount(current.markdown)
             : 0,
-          changedSincePublish:
-            !last ||
-            last.title !== c.title ||
-            last.category !== c.category ||
-            last.team !== c.team ||
-            last.markdown !== c.markdown ||
-            canonical(last.card) !== canonical(c.card),
+          changedSincePublish: !last || !sameChapterText(last, c),
         };
       })
       .map(({ createdAt: _createdAt, ...rest }) => rest)
@@ -432,24 +410,12 @@ export const guideTestStore = {
       ) {
         return CHAPTER_EDITED;
       }
-      let card: DutyCard | null = null;
-      if (c.kind === "duty_card") {
-        const problem = dutyCardProblem(c.card, c.markdown);
-        if (problem) return problem;
-        card = DutyCard.parse(c.card);
-      } else if (c.markdown.trim() === "") {
-        return NOTHING_TO_PUBLISH;
-      }
-      const textProblem = chapterTextProblem(c.markdown);
-      if (textProblem) return textProblem;
+      const problem = chapterPublishProblem(c);
+      if (problem) return problem;
+      const card: DutyCard | null =
+        c.kind === "duty_card" ? DutyCard.parse(c.card) : null;
       const last = versionsOf(c.id)[0];
-      const same =
-        !!last &&
-        last.title === c.title &&
-        last.category === c.category &&
-        last.team === c.team &&
-        last.markdown === c.markdown &&
-        canonical(last.card) === canonical(card);
+      const same = !!last && sameChapterText(last, { ...c, card });
       const version = same ? last.version : (last?.version ?? 0) + 1;
       if (!same) {
         state().versions.push({

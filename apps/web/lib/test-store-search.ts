@@ -7,6 +7,7 @@ import {
   type SearchTextPart,
 } from "@camp404/core";
 import {
+  SEARCH_KINDS,
   SEARCH_LIMIT_PER_KIND,
   searchWords,
   type SearchEntryRow,
@@ -151,7 +152,13 @@ export function testSearchEntries(input: {
       perKindText.set(r.kind, n);
       return n <= SEARCH_TEXT_LIMIT ? [{ ...r, match }] : [];
     });
-  return [...titleHits, ...textHits];
+  // As the database's union answers: kind by kind (SEARCH_KINDS, the order
+  // of its branches), each kind's title hits before its text hits.
+  const kindOrder = (r: SearchEntryRow) => SEARCH_KINDS.indexOf(r.kind);
+  return [...titleHits, ...textHits]
+    .map((r, n) => ({ r, n }))
+    .sort((a, b) => kindOrder(a.r) - kindOrder(b.r) || a.n - b.n)
+    .map(({ r }) => r);
 }
 
 export function testResolveEntries(input: {

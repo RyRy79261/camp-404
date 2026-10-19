@@ -1,27 +1,38 @@
 import "server-only";
 
-import {
-  upsertPushToken as dbUpsertPushToken,
-  deletePushTokenForUser as dbDeletePushTokenForUser,
-} from "@camp404/db/push";
-import { usesTestStore } from "./test-mode";
+import * as db from "@camp404/db/push";
+import { twin } from "./twin";
 
 type Platform = "web" | "ios" | "android";
 
-// Server-only facade over the push-token data layer with the real-vs-test
-// split, so the registration route works under Playwright without a DB
-// (mirrors lib/users.ts / lib/notifications.ts). Route handlers import here,
-// never @camp404/db/push directly.
-
-/** Register / refresh a device token. No-op under E2E test mode (no DB). */
-export async function registerPushToken(input: {
+interface PushTokenInput {
   userId: string;
   token: string;
   platform: Platform;
   topics?: string[];
-}): Promise<void> {
-  if (usesTestStore()) return;
-  await dbUpsertPushToken(input);
+}
+
+// Server-only facade over the push-token data layer, so the registration
+// route works under Playwright without a DB. Route handlers import here,
+// never @camp404/db/push directly. The test store keeps no device tokens (it
+// sends no push), so under E2E both writes do nothing; the switch is picked
+// once (twin).
+const tokens = twin(
+  {
+    upsertPushToken: (input: PushTokenInput) => db.upsertPushToken(input),
+    deletePushTokenForUser: (userId: string, token: string) =>
+      db.deletePushTokenForUser(userId, token),
+  },
+  {
+    upsertPushToken: (_input: PushTokenInput) => undefined,
+    deletePushTokenForUser: (_userId: string, _token: string) => undefined,
+  },
+  ["upsertPushToken", "deletePushTokenForUser"],
+);
+
+/** Register / refresh a device token. No-op under E2E test mode (no DB). */
+export async function registerPushToken(input: PushTokenInput): Promise<void> {
+  await tokens.upsertPushToken(input);
 }
 
 /** Unregister a token, scoped to its owner. No-op under E2E test mode. */
@@ -29,6 +40,5 @@ export async function unregisterPushToken(
   userId: string,
   token: string,
 ): Promise<void> {
-  if (usesTestStore()) return;
-  await dbDeletePushTokenForUser(userId, token);
+  await tokens.deletePushTokenForUser(userId, token);
 }

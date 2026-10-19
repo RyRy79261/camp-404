@@ -95,6 +95,13 @@ export function resetShiftsStore(): void {
   s.serial = 0;
 }
 
+/** Account erasure's part: the member's shift places, every year. */
+export function eraseShiftsOf(userId: string): void {
+  const s = state();
+  s.signups = s.signups.filter((row) => row.userId !== userId);
+  s.volunteers = s.volunteers.filter((row) => row.userId !== userId);
+}
+
 /**
  * As setUserApproval in production: a member who leaves approved comes off
  * the year's shifts, so their places are free again.
@@ -116,8 +123,7 @@ export function dropMemberShifts(userId: string, cycle: number): void {
 const nameOf = (userId: string) =>
   testStore.findUserById(userId)?.displayName?.trim() || "Unnamed burner";
 
-const isMember = (userId: string) =>
-  testStore.findUserById(userId)?.approvalStatus === "approved";
+const isMember = (userId: string) => testStore.isApprovedMember(userId);
 
 function keeperOf(actorId: string): { rank: string; led: readonly string[] } {
   const actor = testStore.actorInStore(actorId);
@@ -311,7 +317,7 @@ export const shiftsTestStore = {
   listShiftMembers(): { userId: string; name: string }[] {
     return testStore
       .allUsers()
-      .filter((u) => u.approvalStatus === "approved")
+      .filter((u) => !u.sanitised && u.approvalStatus === "approved")
       .map((u) => ({ userId: u.id, name: nameOf(u.id) }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
@@ -321,6 +327,7 @@ export const shiftsTestStore = {
       .allUsers()
       .filter(
         (u) =>
+          !u.sanitised &&
           u.approvalStatus === "approved" &&
           isAskedForShifts(
             testStore.getParticipation(u.id, cycle)?.status ?? null,

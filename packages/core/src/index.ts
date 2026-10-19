@@ -193,6 +193,10 @@
 //   - Help wanted: canManageTeamRoles (a captain, or a lead of that team),
 //     canPickTeamLead (a captain), the board's counts, filters and the
 //     picker's groups (./team-roles)
+//   - join.camp-404.com: parseJoinSections (one bad section saves none) and
+//     campBlurbToSave (a captain's card, trimmed and cut) (./join-site); the
+//     Burn's dates a captain saves: burnDatesProblem, cyclesWithBurnDates,
+//     isIsoDate (./burn-dates)
 // Deliberately NOT here: isAuthorizedCron (needs node:crypto/Buffer — core has
 // no @types/node by design so it stays runtime-neutral for ui/mobile) and
 // rateLimit (module-level mutable state).
@@ -238,6 +242,7 @@ export * from "./notification-days";
 export * from "./notification-email";
 export * from "./time-zone";
 export * from "./burn-dates";
+export * from "./join-site";
 export * from "./questionnaire-status";
 export * from "./password";
 export * from "./participation";
