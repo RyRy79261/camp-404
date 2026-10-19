@@ -1773,6 +1773,12 @@ function teamOrder(team: Team): number {
   return TeamKeys.options.indexOf(team);
 }
 
+/** An approved, current member: never an erased stub (as notMembers reads). */
+function isApprovedMember(userId: string): boolean {
+  const user = findUserById(userId);
+  return !!user && !user.sanitised && user.approvalStatus === "approved";
+}
+
 export const testStore = {
   /** The camp team config (Phase 2). Backs the E2E-mode camp-config facade. */
   getTeamsConfig(): TeamsConfig {
@@ -3682,10 +3688,14 @@ export const testStore = {
             n.heldAt >= input.heldFrom &&
             n.heldAt < input.heldTo),
       )
+      // Newest held first, then newest written: Postgres stamps each note in
+      // microseconds, so two written in the same millisecond still come
+      // newest first; here the later one in the list is the newer.
       .sort(
         (a, b) =>
           b.heldAt.getTime() - a.heldAt.getTime() ||
-          b.createdAt.getTime() - a.createdAt.getTime(),
+          b.createdAt.getTime() - a.createdAt.getTime() ||
+          meetingNotes.indexOf(b) - meetingNotes.indexOf(a),
       )
       .map((n) => ({
         id: n.id,
@@ -3866,15 +3876,7 @@ export const testStore = {
     if (input.calendarEvent && input.calendarEvent.title === null) {
       return { ok: false, error: EVENT_NOT_ON_CALENDAR };
     }
-    // One note per calendar event, as meeting_notes_calendar_event_uniq.
-    if (
-      input.calendarEvent &&
-      meetingNotes.some((n) => n.calendarEventId === input.calendarEvent?.id)
-    ) {
-      return { ok: false, error: MINUTES_STARTED };
-    }
-    const approved = (id: string) =>
-      findUserById(id)?.approvalStatus === "approved";
+    const approved = (id: string) => isApprovedMember(id);
     if (!input.attendeeIds.every(approved)) {
       return { ok: false, error: ATTENDEE_NOT_A_MEMBER };
     }
@@ -3884,6 +3886,14 @@ export const testStore = {
     }
     if (!actionItems.every((i) => teamFiles(i, input.activeTeams))) {
       return { ok: false, error: TEAM_NOT_ACTIVE };
+    }
+    // One note per calendar event, as meeting_notes_calendar_event_uniq: the
+    // database finds out at the insert, after every check above.
+    if (
+      input.calendarEvent &&
+      meetingNotes.some((n) => n.calendarEventId === input.calendarEvent?.id)
+    ) {
+      return { ok: false, error: MINUTES_STARTED };
     }
     const now = new Date();
     const id = crypto.randomUUID();
@@ -3966,8 +3976,7 @@ export const testStore = {
         return { ok: false, error: EVENT_NOT_ON_CALENDAR };
       }
     }
-    const approved = (id: string) =>
-      findUserById(id)?.approvalStatus === "approved";
+    const approved = (id: string) => isApprovedMember(id);
     if (
       !input.attendeeIds.every(
         (id) => note.attendeeIds.includes(id) || approved(id),

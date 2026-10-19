@@ -1,21 +1,19 @@
 import "server-only";
 
-import {
-  createMeetingNote as dbCreateMeetingNote,
-  editMeetingNote as dbEditMeetingNote,
-  getMeetingNote as dbGetMeetingNote,
-  getMeetingNoteByEvent as dbGetMeetingNoteByEvent,
-  listMeetingNotes as dbListMeetingNotes,
-  type MeetingNote,
-  type MeetingNoteActionItem,
-  type MeetingNoteSummary,
-  type MeetingNoteWriteResult,
+import * as db from "@camp404/db/meeting-notes";
+import type {
+  MeetingNote,
+  MeetingNoteActionItem,
+  MeetingNoteSummary,
+  MeetingNoteWriteResult,
 } from "@camp404/db/meeting-notes";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // Meeting notes' data (#268), from the database or, under E2E, the test
-// store. The rules live in @camp404/db/meeting-notes; the store repeats them.
+// store, picked once (twin). Who may write a team's notes is
+// meetingNoteRefusal (canWorkInTeam, @camp404/core), which both sides call;
+// lib/__tests__/meeting-notes-agreement.test.ts holds the rest equal.
 
 export type {
   MeetingNote,
@@ -24,43 +22,19 @@ export type {
   MeetingNoteWriteResult,
 };
 
-export async function listMeetingNotes(
-  input: Parameters<typeof dbListMeetingNotes>[0] = {},
-): Promise<MeetingNoteSummary[]> {
-  return usesTestStore()
-    ? testStore.listMeetingNotes(input)
-    : dbListMeetingNotes(input);
-}
+const notes = twin(db, testStore, [
+  "listMeetingNotes",
+  "getMeetingNote",
+  "getMeetingNoteByEvent",
+  "createMeetingNote",
+  "editMeetingNote",
+]);
 
-export async function getMeetingNote(
-  noteId: string,
-): Promise<MeetingNote | null> {
-  return usesTestStore()
-    ? testStore.getMeetingNote(noteId)
-    : dbGetMeetingNote(noteId);
-}
+export const listMeetingNotes = notes.listMeetingNotes;
+export const getMeetingNote = notes.getMeetingNote;
 
 /** The note of the meeting whose calendar event is `calendarEventId`. */
-export async function getMeetingNoteByEvent(
-  calendarEventId: string,
-): Promise<MeetingNote | null> {
-  return usesTestStore()
-    ? testStore.getMeetingNoteByEvent(calendarEventId)
-    : dbGetMeetingNoteByEvent(calendarEventId);
-}
+export const getMeetingNoteByEvent = notes.getMeetingNoteByEvent;
 
-export async function createMeetingNote(
-  input: Parameters<typeof dbCreateMeetingNote>[0],
-): Promise<MeetingNoteWriteResult<{ id: string }>> {
-  return usesTestStore()
-    ? testStore.createMeetingNote(input)
-    : dbCreateMeetingNote(input);
-}
-
-export async function editMeetingNote(
-  input: Parameters<typeof dbEditMeetingNote>[0],
-): Promise<MeetingNoteWriteResult<{ version: number }>> {
-  return usesTestStore()
-    ? testStore.editMeetingNote(input)
-    : dbEditMeetingNote(input);
-}
+export const createMeetingNote = notes.createMeetingNote;
+export const editMeetingNote = notes.editMeetingNote;
