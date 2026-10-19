@@ -1,9 +1,13 @@
 import { and, desc, eq, lte, sql } from "drizzle-orm";
 import {
+  MAX_CAMP_BLURB_LENGTH,
+  MAX_CAMP_TITLE_LENGTH,
+  campBlurbToSave,
+  parseJoinSections,
+} from "@camp404/core";
+import {
   DEFAULT_JOIN_CONTENT,
   DEFAULT_TEAM_DESCRIPTIONS,
-  JOIN_SECTION_KEYS,
-  JoinSections,
   resolveJoinContent,
   type JoinSectionKey,
   type JoinSiteContent,
@@ -112,18 +116,11 @@ export async function saveJoinSiteSections(input: {
   sections: Partial<Record<JoinSectionKey, unknown>>;
   actorUserId: string;
 }): Promise<JoinSiteContent> {
-  const parsed: Partial<Record<JoinSectionKey, unknown>> = {};
-  for (const key of JOIN_SECTION_KEYS) {
-    if (!(key in input.sections)) continue;
-    const result = JoinSections[key].safeParse(input.sections[key]);
-    if (!result.success) {
-      throw new JoinSectionInvalidError(
-        result.error.issues.map((i) => i.message),
-        key,
-      );
-    }
-    parsed[key] = result.data;
+  const checked = parseJoinSections(input.sections);
+  if (!checked.ok) {
+    throw new JoinSectionInvalidError(checked.issues, checked.section);
   }
+  const { parsed } = checked;
   const keys = Object.keys(parsed) as JoinSectionKey[];
 
   return await withTransaction(async (tx) => {
@@ -258,8 +255,8 @@ export type CampBlurb = {
   showOnJoin: boolean;
 };
 
-export const MAX_CAMP_TITLE_LENGTH = 60;
-export const MAX_CAMP_BLURB_LENGTH = 280;
+/** The card's limits (@camp404/core), kept here by their names. */
+export { MAX_CAMP_BLURB_LENGTH, MAX_CAMP_TITLE_LENGTH };
 
 export async function getCampBlurb(
   userId: string,
@@ -286,16 +283,13 @@ export async function setCampBlurb(
   input: CampBlurb,
   db: DbOrTx = createHttpDb(),
 ): Promise<void> {
-  const clean = (v: string | null, max: number) => {
-    const t = (v ?? "").trim().slice(0, max);
-    return t === "" ? null : t;
-  };
+  const card = campBlurbToSave(input);
   await db
     .update(schema.users)
     .set({
-      campTitle: clean(input.title, MAX_CAMP_TITLE_LENGTH),
-      campBlurb: clean(input.blurb, MAX_CAMP_BLURB_LENGTH),
-      showOnJoin: input.showOnJoin,
+      campTitle: card.title,
+      campBlurb: card.blurb,
+      showOnJoin: card.showOnJoin,
       updatedAt: new Date(),
     })
     .where(eq(schema.users.id, userId));

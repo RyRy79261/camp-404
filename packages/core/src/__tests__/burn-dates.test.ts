@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { burnDatesLabel, burnPhase } from "../burn-dates";
+import {
+  burnDatesLabel,
+  burnPhase,
+  burnDatesProblem,
+  cyclesWithBurnDates,
+  isIsoDate,
+} from "../burn-dates";
 
 const BURN = { start: "2027-04-26", end: "2027-05-02" };
 
@@ -42,5 +48,45 @@ describe("burnDatesLabel", () => {
 
   it("says nothing for a date that does not parse", () => {
     expect(burnDatesLabel({ start: "someday", end: "2027-05-02" })).toBeNull();
+  });
+});
+
+describe("the Burn's dates a captain saves", () => {
+  const cycles = [
+    { year: 2027, burnStart: "2027-04-27", burnEnd: "2027-05-03" },
+  ];
+  it("wants two real days in order, or none", () => {
+    expect(isIsoDate("2027-02-29")).toBe(false);
+    expect(isIsoDate("2028-02-29")).toBe(true);
+    expect(burnDatesProblem({ burnStart: null, burnEnd: null })).toBeNull();
+    expect(
+      burnDatesProblem({ burnStart: "2027-05-03", burnEnd: "2027-04-27" }),
+    ).toBe("invalid-dates");
+    expect(burnDatesProblem({ burnStart: "2027-04-27", burnEnd: null })).toBe(
+      "invalid-dates",
+    );
+  });
+  it("sets or clears one year's days, and only a year the camp has", () => {
+    expect(
+      cyclesWithBurnDates(cycles, {
+        year: 2027,
+        burnStart: null,
+        burnEnd: null,
+      }),
+    ).toEqual({ ok: true, cycles: [{ year: 2027 }] });
+    expect(
+      cyclesWithBurnDates(cycles, {
+        year: 2028,
+        burnStart: "2028-04-27",
+        burnEnd: "2028-05-01",
+      }),
+    ).toEqual({ ok: false, reason: "unknown-year" });
+    expect(
+      cyclesWithBurnDates(cycles, {
+        year: 2028,
+        burnStart: "2028-05-01",
+        burnEnd: "2028-04-27",
+      }),
+    ).toEqual({ ok: false, reason: "invalid-dates" });
   });
 });

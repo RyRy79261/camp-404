@@ -1,5 +1,10 @@
 import { eq } from "drizzle-orm";
-import { defaultTeamLabel, slugify, type AudienceScope } from "@camp404/core";
+import {
+  defaultTeamLabel,
+  isIsoDate,
+  slugify,
+  type AudienceScope,
+} from "@camp404/core";
 import { writeAuditEvent, type AuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
 import { campSettings } from "./schema";
@@ -205,19 +210,8 @@ function withCleanName(entry: CycleEntry): CycleEntry {
   return name ? { ...next, name, ...dates } : { ...next, ...dates };
 }
 
-/** A real calendar day as YYYY-MM-DD: the platform Date round-trips it. */
-export function isIsoDate(value: unknown): value is string {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
-  }
-  const [y, m, d] = value.split("-").map(Number) as [number, number, number];
-  const date = new Date(Date.UTC(y, m - 1, d));
-  return (
-    date.getUTCFullYear() === y &&
-    date.getUTCMonth() === m - 1 &&
-    date.getUTCDate() === d
-  );
-}
+/** A real calendar day as YYYY-MM-DD (@camp404/core), kept here by its name. */
+export { isIsoDate };
 
 /**
  * Whether a questionnaire's answers survive a rollover.

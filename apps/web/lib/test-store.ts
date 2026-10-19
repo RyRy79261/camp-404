@@ -13,7 +13,10 @@ import {
   checkPaymentInput,
   isParticipationDecision,
   approvalDecisionReason,
+  campBlurbToSave,
   canLeaveCamp,
+  cyclesWithBurnDates,
+  parseJoinSections,
   isReviewTransition,
   lostCatName,
   nextLostCatNumber,
@@ -163,6 +166,8 @@ import {
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
 import type { PendingRequiredAction } from "@camp404/db/activations";
+import type { AuditEvent } from "@camp404/db/audit";
+import { JoinSectionInvalidError } from "@camp404/db/join-site";
 import {
   CAR_EMPTY,
   CAR_MESSAGE_REFUSED,
@@ -400,6 +405,7 @@ import {
 import {
   ROLLOVER_UNTOUCHED,
   type RolloverPlan,
+  type SetBurnDatesResult,
   type SetFoundingYearResult,
 } from "@camp404/db/cycle-rollover";
 // Type-only: the store's three team operations return the SAME shapes the
@@ -411,14 +417,17 @@ import type {
   TeamMembership,
   TeamPerson,
 } from "@camp404/db/team-memberships";
-import type {
-  EmergencyContact,
-  IncomingPromotionRequest,
-  JoinSiteContent,
-  ParticipationIntent,
-  ParticipationStatus,
-  QuestionnaireFieldChange,
-  Team,
+import {
+  DEFAULT_JOIN_CONTENT,
+  resolveJoinContent,
+  type EmergencyContact,
+  type IncomingPromotionRequest,
+  type JoinSectionKey,
+  type JoinSiteContent,
+  type ParticipationIntent,
+  type ParticipationStatus,
+  type QuestionnaireFieldChange,
+  type Team,
 } from "@camp404/types";
 
 import {
@@ -1787,6 +1796,22 @@ export const testStore = {
   /** Persist a (whole) new team config — the facade passes the transformed value. */
   setTeamsConfig(config: TeamsConfig): void {
     globalState().teamsConfig = config;
+  },
+  /** Twin of getCampConfig: the whole camp config, its years included. */
+  getCampConfig(): CampConfig {
+    return globalState().teamsConfig as CampConfig;
+  },
+  /**
+   * Twin of mutateTeamsConfig: the same pure transform over the store's
+   * config. The store keeps no audit log, so the audit event stops here.
+   */
+  mutateTeamsConfig(
+    transform: (current: TeamsConfig) => TeamsConfig,
+    _audit?: AuditEvent,
+  ): TeamsConfig {
+    const next = transform(globalState().teamsConfig);
+    globalState().teamsConfig = next;
+    return next;
   },
   findUserByAuthId(authUserId: string): TestUser | null {
     return usersByAuthId.get(authUserId) ?? null;
@@ -7647,15 +7672,69 @@ export const testStore = {
   },
 
   // --- join.camp-404.com (the twin of @camp404/db/join-site) --------------
-  getJoinContent(year: number): Partial<JoinSiteContent> | null {
-    let best: number | null = null;
-    for (const y of S.joinContent.keys()) {
-      if (y <= year && (best === null || y > best)) best = y;
-    }
-    return best === null ? null : S.joinContent.get(best)!;
-  },
+
   setJoinContent(year: number, content: JoinSiteContent): void {
     S.joinContent.set(year, structuredClone(content));
+  },
+  /**
+   * Twin of getJoinSiteContent: the year's own words, else the latest earlier
+   * year's, else the defaults (any year at all when `year` is null).
+   */
+  getJoinSiteContent(year: number | null): {
+    content: JoinSiteContent;
+    from: number | null;
+  } {
+    let best: number | null = null;
+    for (const y of S.joinContent.keys()) {
+      if ((year === null || y <= year) && (best === null || y > best)) {
+        best = y;
+      }
+    }
+    return best === null
+      ? { content: DEFAULT_JOIN_CONTENT, from: null }
+      : {
+          content: resolveJoinContent(S.joinContent.get(best)!),
+          from: best,
+        };
+  },
+  /**
+   * Twin of saveJoinSiteSections: every section checked first
+   * (parseJoinSections), so one bad section saves none; the rest of the
+   * year's words are kept.
+   */
+  saveJoinSiteSections(input: {
+    year: number;
+    sections: Partial<Record<JoinSectionKey, unknown>>;
+    actorUserId: string;
+  }): JoinSiteContent {
+    const checked = parseJoinSections(input.sections);
+    if (!checked.ok) {
+      throw new JoinSectionInvalidError(checked.issues, checked.section);
+    }
+    const base = this.getJoinSiteContent(input.year).content;
+    if (Object.keys(checked.parsed).length === 0) return base;
+    const next = { ...base, ...checked.parsed } as JoinSiteContent;
+    this.setJoinContent(input.year, next);
+    return structuredClone(next);
+  },
+  /** Twin of setCycleBurnDates, by the same rule (cyclesWithBurnDates). */
+  setCycleBurnDates(input: {
+    year: number;
+    burnStart: string | null;
+    burnEnd: string | null;
+    actorUserId: string | null;
+  }): SetBurnDatesResult {
+    const config = globalState().teamsConfig;
+    const set = cyclesWithBurnDates(resolveCycles(config), input);
+    if (!set.ok) return set;
+    globalState().teamsConfig = {
+      ...config,
+      cycles: set.cycles,
+    } as typeof config;
+    return {
+      ok: true,
+      cycle: set.cycles.find((c) => c.year === input.year)!,
+    };
   },
   getCampBlurb(userId: string): TestCampBlurb {
     return (
@@ -7666,8 +7745,9 @@ export const testStore = {
       }
     );
   },
+  /** Stored as the database stores it: trimmed and cut (campBlurbToSave). */
   setCampBlurb(userId: string, blurb: TestCampBlurb): void {
-    S.campBlurbs.set(userId, { ...blurb });
+    S.campBlurbs.set(userId, campBlurbToSave(blurb));
   },
   /**
    * Twin of `searchEntries` / `resolveEntries` in @camp404/db/search (#326),
@@ -7826,7 +7906,8 @@ export const testStore = {
     for (const user of usersByAuthId.values()) {
       const card = S.campBlurbs.get(user.id);
       const name = (user.displayName ?? "").trim();
-      if (user.rank !== "captain" || !card?.showOnJoin || name === "") continue;
+      if (user.rank !== "captain" || user.sanitised) continue;
+      if (!card?.showOnJoin || name === "") continue;
       out.push({
         name,
         title: (card.title ?? "").trim() || "Captain",

@@ -1,9 +1,8 @@
 import "server-only";
 
 import { cache } from "react";
+import * as db from "@camp404/db/camp-config";
 import {
-  getCampConfig as dbGetCampConfig,
-  mutateTeamsConfig as dbMutateTeamsConfig,
   activeTeams,
   audienceLabel,
   currentCycle,
@@ -18,9 +17,8 @@ import {
   type TeamsConfig,
   type TeamConfigEntry,
 } from "@camp404/db/camp-config";
-import type { AuditEvent } from "@camp404/db/audit";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // Camp-config data facade. Routes reads/writes through the Neon-backed
 // `@camp404/db/camp-config` normally, and through the in-memory test store under
@@ -28,6 +26,8 @@ import { testStore } from "./test-store";
 // split lib/roster.ts / lib/notifications.ts use. The store seeds with the same
 // DEFAULT_CAMP_CONFIG the column default seeds, so reads match Phase-1 behaviour
 // while now also reflecting edits made via mutateTeamsConfig in the same run.
+// The backend is picked once (twin); the resolvers below are the same pure
+// functions on both sides.
 // The pure shaping helpers (activeTeams/teamLabelMap/audienceLabel) are
 // re-exported so server pages compute serialisable lists/maps to pass into
 // client islands; the @camp404/db module is never imported client-side (it
@@ -72,12 +72,12 @@ export interface CampSettings {
  * `mutateTeamsConfig`, which reads the row itself); the re-render that
  * `revalidateManifest()` asks for is a new render and reads fresh.
  *
- * The E2E branch runs the same pure resolvers over the test store's config.
+ * Under E2E the same pure resolvers run over the test store's config.
  */
+const config = twin(db, testStore, ["getCampConfig", "mutateTeamsConfig"]);
+
 export const getCampSettings = cache(async (): Promise<CampSettings> => {
-  const raw: unknown = usesTestStore()
-    ? testStore.getTeamsConfig()
-    : await dbGetCampConfig();
+  const raw: unknown = await config.getCampConfig();
   const cycles = resolveCycles(raw);
   const current = currentCycle(cycles);
   return {
@@ -98,17 +98,7 @@ export async function getTeamsConfig(): Promise<TeamsConfig> {
  * the @camp404/db/camp-config helpers (renameTeam / moveTeam / setTeamArchived)
  * so the key set stays stable. Returns the persisted config.
  */
-export function mutateTeamsConfig(
-  transform: (current: TeamsConfig) => TeamsConfig,
-  audit?: AuditEvent,
-): Promise<TeamsConfig> {
-  if (usesTestStore()) {
-    const next = transform(testStore.getTeamsConfig());
-    testStore.setTeamsConfig(next);
-    return Promise.resolve(next);
-  }
-  return dbMutateTeamsConfig(transform, audit);
-}
+export const mutateTeamsConfig = config.mutateTeamsConfig;
 
 /**
  * The year the camp is in — the namespace an activation is stamped with at Send.
