@@ -13,16 +13,12 @@ import {
   type QuestionnaireFieldChange,
   type QuestionnaireResponses,
 } from "@camp404/types";
-import { listQuestionnaireEdits as listEditsDb } from "@camp404/db/questionnaire-edits";
+import * as edits from "@camp404/db/questionnaire-edits";
 import { splitIdNumber, mergeIdNumber } from "@camp404/db/id-documents";
-import {
-  listCompletedQuestionnaireAnswers as listCompletedAnswersDb,
-  type CompletedQuestionnaireAnswers,
-} from "@camp404/db/questionnaire-responses";
-import {
-  getActivationById,
-  listOptionalQuestionnaires as listOptionalDb,
-} from "@camp404/db/activations";
+import * as responses from "@camp404/db/questionnaire-responses";
+import type { CompletedQuestionnaireAnswers } from "@camp404/db/questionnaire-responses";
+import * as activations from "@camp404/db/activations";
+import type { OptionalQuestionnaire } from "@camp404/db/activations";
 import {
   validateBurnerProfileReplay,
   type ReplayValidation,
@@ -40,8 +36,8 @@ import {
   getIdDocuments,
   saveBurnerProfileReplay,
 } from "./users";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // Registry of questionnaires a user can "replay" — revisit and update after
 // they have already completed them. Keyed by the same stable questionnaire
@@ -273,6 +269,71 @@ export async function listCompletedForms(
 
 export type { CompletedQuestionnaireAnswers };
 
+/** One row of a form's change log, as My forms shows it. */
+export interface FormEdit {
+  id: string;
+  version: string;
+  editedByUserId: string | null;
+  changes: QuestionnaireFieldChange[];
+  createdAt: Date;
+}
+
+const toFormEdit = (e: FormEdit): FormEdit => ({
+  id: e.id,
+  version: e.version,
+  editedByUserId: e.editedByUserId,
+  changes: e.changes,
+  createdAt: e.createdAt,
+});
+
+// Builder questionnaires' answers, sends and the forms' change log, from the
+// database or, under E2E, the test store (twin). The store keeps the change
+// log but models no builder questionnaire, so it has no answers, no optional
+// sends and no activation to name: each of those reads answers "none".
+const builder = twin(
+  {
+    listCompletedQuestionnaireAnswers: (
+      userId: string,
+      filter?: { definitionKey?: string; cycle?: number },
+    ) => responses.listCompletedQuestionnaireAnswers(userId, filter),
+    listOptionalQuestionnaires: (userId: string) =>
+      activations.listOptionalQuestionnaires(userId),
+    getActivationById: (id: string) => activations.getActivationById(id),
+    listFormEdits: async (
+      userId: string,
+      questionnaireKey: string,
+      limit: number,
+    ): Promise<FormEdit[]> =>
+      (await edits.listQuestionnaireEdits(userId, questionnaireKey, limit)).map(
+        toFormEdit,
+      ),
+  },
+  {
+    listCompletedQuestionnaireAnswers: (
+      _userId: string,
+      _filter?: { definitionKey?: string; cycle?: number },
+    ): CompletedQuestionnaireAnswers[] => [],
+    listOptionalQuestionnaires: (
+      _userId: string,
+    ): OptionalQuestionnaire[] => [],
+    getActivationById: (_id: string) => null,
+    listFormEdits: (
+      userId: string,
+      questionnaireKey: string,
+      limit: number,
+    ): FormEdit[] =>
+      testStore
+        .listQuestionnaireEdits(userId, questionnaireKey, limit)
+        .map(toFormEdit),
+  },
+  [
+    "listCompletedQuestionnaireAnswers",
+    "listOptionalQuestionnaires",
+    "getActivationById",
+    "listFormEdits",
+  ],
+);
+
 /**
  * Every builder questionnaire this member has finished, newest first, except
  * "Coming this year?": its answer is the editable attendance form above, and a
@@ -281,9 +342,7 @@ export type { CompletedQuestionnaireAnswers };
 export async function listAnsweredQuestionnaires(
   userId: string,
 ): Promise<CompletedQuestionnaireAnswers[]> {
-  // The E2E store models no builder responses.
-  if (usesTestStore()) return [];
-  const answered = await listCompletedAnswersDb(userId);
+  const answered = await builder.listCompletedQuestionnaireAnswers(userId);
   return answered.filter((a) => a.definitionKey !== ATTENDANCE_CHECK_KEY);
 }
 
@@ -293,8 +352,7 @@ export async function getAnsweredQuestionnaire(
   definitionKey: string,
   cycle: number,
 ): Promise<CompletedQuestionnaireAnswers | null> {
-  if (usesTestStore()) return null;
-  const [answers] = await listCompletedAnswersDb(userId, {
+  const [answers] = await builder.listCompletedQuestionnaireAnswers(userId, {
     definitionKey,
     cycle,
   });
@@ -339,9 +397,7 @@ export function optionalFormDescription(
 export async function listOptionalForms(
   userId: string,
 ): Promise<OptionalForm[]> {
-  // The E2E store models no builder questionnaires, so nothing is optional.
-  if (usesTestStore()) return [];
-  const rows = await listOptionalDb(userId);
+  const rows = await builder.listOptionalQuestionnaires(userId);
   return rows.map((row) => ({
     activationId: row.activationId,
     title: row.title,
@@ -359,9 +415,9 @@ export async function getJustAnswered(
   userId: string,
   activationId: string | undefined,
 ): Promise<{ title: string; answersHref: string } | null> {
-  if (!activationId || usesTestStore()) return null;
+  if (!activationId) return null;
   if (!/^[0-9a-f-]{36}$/i.test(activationId)) return null;
-  const activation = await getActivationById(activationId);
+  const activation = await builder.getActivationById(activationId);
   if (!activation || activation.scope !== "opt_in") return null;
   const answers = await getAnsweredQuestionnaire(
     userId,
@@ -376,39 +432,11 @@ export async function getJustAnswered(
 }
 
 // --- Edit change log ----------------------------------------------------
-// Routed through the in-memory test store under E2E_TEST_MODE, mirroring
-// the user / burner-profile helpers.
 
-export interface FormEdit {
-  id: string;
-  version: string;
-  editedByUserId: string | null;
-  changes: QuestionnaireFieldChange[];
-  createdAt: Date;
-}
-
-export async function listFormEdits(
+export function listFormEdits(
   userId: string,
   questionnaireKey: string,
   limit = 20,
 ): Promise<FormEdit[]> {
-  if (usesTestStore()) {
-    return testStore
-      .listQuestionnaireEdits(userId, questionnaireKey, limit)
-      .map((e) => ({
-        id: e.id,
-        version: e.version,
-        editedByUserId: e.editedByUserId,
-        changes: e.changes,
-        createdAt: e.createdAt,
-      }));
-  }
-  const rows = await listEditsDb(userId, questionnaireKey, limit);
-  return rows.map((r) => ({
-    id: r.id,
-    version: r.version,
-    editedByUserId: r.editedByUserId,
-    changes: r.changes,
-    createdAt: r.createdAt,
-  }));
+  return builder.listFormEdits(userId, questionnaireKey, limit);
 }

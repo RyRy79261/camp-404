@@ -16,25 +16,21 @@ import {
   type QuestionnaireTemplateKey,
 } from "@camp404/core";
 import type { GridRow } from "@camp404/types";
+import * as definitions from "@camp404/db/questionnaire-definitions";
 import {
   RESERVED_DEFINITION_KEYS,
   definitionKeyExists,
   deleteDraftDefinitionRow,
   getDefinitionRowForClone,
-  getQuestionnaireDefinitionRow,
-  getQuestionnaireVersionRow,
   insertDefinitionDraft,
-  listDefinitionRows,
   updateDefinitionRow,
 } from "@camp404/db/questionnaire-definitions";
-import { listOpenSendBlocking as dbListOpenSendBlocking } from "@camp404/db/questionnaire-lifecycle";
-import {
-  listOpenSendGates as dbListOpenSendGates,
-  type OpenSendGateRow,
-} from "@camp404/db/questionnaire-results";
+import * as lifecycle from "@camp404/db/questionnaire-lifecycle";
+import * as results from "@camp404/db/questionnaire-results";
+import type { OpenSendGateRow } from "@camp404/db/questionnaire-results";
 import { ATTENDANCE_CHECK_KEY } from "./attendance-check";
 import { BURNER_PROFILE_TEMPLATE, readStoredDefinition } from "./questionnaire";
-import { usesTestStore } from "./test-mode";
+import { twin } from "./twin";
 
 // Questionnaire-definition data facade. Reads the stored catalogue from the
 // Neon-backed `questionnaire_definitions` / `questionnaire_versions` tables.
@@ -47,6 +43,36 @@ import { usesTestStore } from "./test-mode";
 // it serves the template directly. Team-bound questions are NOT resolved here;
 // the caller (questionnaire-config.ts) injects the live teams via
 // resolveTeamBindings.
+
+// The reads that differ by backend, picked once (twin). The test store models
+// no builder questionnaire and no send, so under E2E each answers "none": no
+// stored row (a code questionnaire then reads as its template), no list, no
+// open send.
+const stored = twin(
+  {
+    getQuestionnaireDefinitionRow: (key: string) =>
+      definitions.getQuestionnaireDefinitionRow(key),
+    getQuestionnaireVersionRow: (key: string, version: string) =>
+      definitions.getQuestionnaireVersionRow(key, version),
+    listDefinitionRows: () => definitions.listDefinitionRows(),
+    listOpenSendBlocking: () => lifecycle.listOpenSendBlocking(),
+    listOpenSendGates: () => results.listOpenSendGates(),
+  },
+  {
+    getQuestionnaireDefinitionRow: (_key: string) => null,
+    getQuestionnaireVersionRow: (_key: string, _version: string) => null,
+    listDefinitionRows: () => [],
+    listOpenSendBlocking: () => new Map<string, boolean>(),
+    listOpenSendGates: (): OpenSendGateRow[] => [],
+  },
+  [
+    "getQuestionnaireDefinitionRow",
+    "getQuestionnaireVersionRow",
+    "listDefinitionRows",
+    "listOpenSendBlocking",
+    "listOpenSendGates",
+  ],
+);
 
 // The code-defined questionnaires, served until a captain edits them in-app.
 // Today just the burner profile; new keys join as their templates land.
@@ -62,9 +88,7 @@ export async function getQuestionnaireDefinition(
   key: string,
 ): Promise<Questionnaire | null> {
   const template = TEMPLATES[key] ?? null;
-  if (usesTestStore()) return template;
-
-  const row = await getQuestionnaireDefinitionRow(key);
+  const row = await stored.getQuestionnaireDefinitionRow(key);
   if (!row) return template;
 
   return readStoredDefinition(row.definition, template);
@@ -83,11 +107,10 @@ export async function getBuilderDefinition(
   key: string,
   version?: string,
 ): Promise<Questionnaire | null> {
-  if (usesTestStore()) return null;
   if (RESERVED_DEFINITION_KEYS.has(key)) return null;
   const raw = version
-    ? (await getQuestionnaireVersionRow(key, version))?.definition
-    : (await getQuestionnaireDefinitionRow(key))?.definition;
+    ? (await stored.getQuestionnaireVersionRow(key, version))?.definition
+    : (await stored.getQuestionnaireDefinitionRow(key))?.definition;
   if (raw == null) return null;
   return safeParseStoredDefinition(raw);
 }
@@ -275,8 +298,7 @@ export async function listDefinitionsForViewer(viewer: {
 }): Promise<DefinitionSummary[]> {
   // The test store models no builder questionnaires: in E2E the hub opens
   // empty, honestly, rather than failing on a database that is not there.
-  if (usesTestStore()) return [];
-  const rows = await listDefinitionRows();
+  const rows = await stored.listDefinitionRows();
   return rows
     .filter((r) => canViewBuilderDefinition(viewer, r))
     .map((r) => {
@@ -297,10 +319,7 @@ export async function listDefinitionsForViewer(viewer: {
  * Whether each questionnaire's open send is blocking, for the hub. Empty in
  * E2E, where no sends are modelled.
  */
-export async function listOpenSendBlocking(): Promise<Map<string, boolean>> {
-  if (usesTestStore()) return new Map();
-  return dbListOpenSendBlocking();
-}
+export const listOpenSendBlocking = stored.listOpenSendBlocking;
 
 /**
  * Every open send's gates, one row per gate — what the Overview turns into
@@ -311,7 +330,4 @@ export async function listOpenSendBlocking(): Promise<Map<string, boolean>> {
  * the panel that renders this withholds itself under the test store instead of
  * printing zeroes (see the Overview's captain panels).
  */
-export async function listOpenSendGates(): Promise<OpenSendGateRow[]> {
-  if (usesTestStore()) return [];
-  return dbListOpenSendGates();
-}
+export const listOpenSendGates = stored.listOpenSendGates;
