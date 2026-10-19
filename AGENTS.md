@@ -1217,6 +1217,14 @@ LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
   `audit_log` row through `writeAuditEvent` (`packages/db/src/audit.ts`) in the
   SAME transaction as the change. An audit row that can commit without its
   change, or miss it, is worse than none.
+  [CORRECTION 2026-10-19] A new audit action is two entries in core: its
+  label in `AUDIT_ACTION_LABELS` (`packages/core/src/audit-actions.ts`) and
+  its metadata shape in `AuditEvents` (`packages/core/src/audit-events.ts`).
+  `writeAuditEvent` refuses a wrong or missing key at compile time, and
+  `auditDetail` may read only keys in that shape (or, for rows written before
+  today's writers, in `OlderAuditRows`). An action no longer written is
+  `Retired`, so nothing can write it again. Stored rows keep their old JSON:
+  the reader still checks every value.
 - A decision write is a compare-and-set: its `WHERE` names the status it
   expects to change (for example `approval_status = 'pending'`), and
   `.returning()` tells the caller whether it won. A lost race returns a
