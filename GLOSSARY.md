@@ -34,3 +34,13 @@ twice, on real Postgres (PGlite) and on the test store, with the same people
 seeded both ways (`apps/web/lib/__tests__/_agreement.ts`), and requires the
 same answers and refusals once ids and clocks are taken out. One per twinned
 domain: `apps/web/lib/__tests__/<domain>-agreement.test.ts`.
+
+**Table lifecycle.** What happens to a table's rows when the camp names its
+founding year and when a member is erased, declared once per table in
+`TABLE_LIFECYCLE` (`packages/db/src/table-lifecycle.ts`). `year` is `"none"`,
+`"as-is"` (one plain UPDATE in `setFoundingYear`) or `byHand(how)`.
+`erasure`, per column that references a member, is `del` (the delete loop in
+`sanitiseAccount`), `scrub(step)` (a named hand step, `SCRUB_STEPS` in
+`account.ts`), `keep(reason)`, `cascade(from)` or `undecided` (waiting on the
+owner). The founding lists and the year-scoped list are derived from it, and
+`table-lifecycle.test.ts` fails on a member column with no decision.

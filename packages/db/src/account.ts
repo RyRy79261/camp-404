@@ -2,8 +2,9 @@ import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { canLeaveCamp, lostCatName, nextLostCatNumber } from "@camp404/core";
 import { writeAuditEvent } from "./audit";
 import { isRealCaptain } from "./bootstrap";
-import { withTransaction } from "./index";
+import { withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
+import { ERASURE_DELETES, type ScrubStep } from "./table-lifecycle";
 
 // Account erasure ("right to be forgotten"). We do NOT hard-delete the users
 // row — that would break referral lineage and every audit/authorship FK.
@@ -67,6 +68,143 @@ export function sanitisedUserPatch(
   } satisfies Partial<typeof schema.users.$inferInsert>;
 }
 
+/** Who is being erased, as each hand step needs it. */
+type ErasedMember = {
+  userId: string;
+  /** Their Better Auth `user.id`, read before the patch rewrites it. */
+  authUserId: string | null;
+  lostCatNumber: number;
+  now: Date;
+};
+
+/**
+ * The hand steps of an erasure: the `scrub` decisions in table-lifecycle.ts,
+ * by name. Everything a step does not touch is either a plain `del` (the loop
+ * in sanitiseAccount), cascades from a row a step or the loop deletes, or is
+ * kept on purpose. Run in this order, in the erasure's transaction.
+ */
+const SCRUB_STEPS: {
+  readonly [S in ScrubStep]: (tx: Tx, member: ErasedMember) => Promise<void>;
+} = {
+  usersRow: async (tx, { userId, lostCatNumber, now }) => {
+    await tx
+      .update(schema.users)
+      .set(sanitisedUserPatch(userId, lostCatNumber, now))
+      .where(eq(schema.users.id, userId));
+  },
+  // The sign-in identity goes entirely: email, password hash, sessions,
+  // second factors and passkeys (the last four cascade from `user`). Under
+  // Neon Auth this lived on a service erasure could not reach, so an erased
+  // member's email and login outlived them.
+  signInIdentity: async (tx, { authUserId }) => {
+    if (authUserId === null) return;
+    await tx.delete(schema.user).where(eq(schema.user.id, authUserId));
+  },
+  // Transport (#270): a request that named their car becomes "any car",
+  // since its rider still needs a lift (their own requests are a `del`).
+  liftRequestDriver: async (tx, { userId }) => {
+    await tx
+      .update(schema.liftRequests)
+      .set({ driverUserId: null })
+      .where(eq(schema.liftRequests.driverUserId, userId));
+  },
+  // A trailer they towed stays the camp's, with no car.
+  trailerTower: async (tx, { userId }) => {
+    await tx
+      .update(schema.transportTrailers)
+      .set({ towedByUserId: null })
+      .where(eq(schema.transportTrailers.towedByUserId, userId));
+  },
+  // The fuel cans (#255): a can they owned becomes the camp's, and a can in
+  // their car goes on no car; the can stays on the sheet.
+  fuelCans: async (tx, { userId }) => {
+    await tx
+      .update(schema.fuelCans)
+      .set({ ownerUserId: null })
+      .where(eq(schema.fuelCans.ownerUserId, userId));
+    await tx
+      .update(schema.fuelCans)
+      .set({ travelsWithUserId: null })
+      .where(eq(schema.fuelCans.travelsWithUserId, userId));
+  },
+  // Their pets (Camp pets): a pet they sent in (it has photos) is their own
+  // words and photos, so it goes; the photo folder goes with the erasure in
+  // apps/web (lib/account.ts). A pet with no photos is one of the camp's
+  // seeded cats a founder linked to them: it stays, linked to nobody.
+  pets: async (tx, { userId }) => {
+    await tx
+      .delete(schema.pets)
+      .where(
+        and(
+          eq(schema.pets.ownerId, userId),
+          or(
+            isNotNull(schema.pets.frontPhotoPath),
+            isNotNull(schema.pets.sidePhotoPath),
+          ),
+        ),
+      );
+    await tx
+      .update(schema.pets)
+      .set({ ownerId: null })
+      .where(eq(schema.pets.ownerId, userId));
+  },
+  // The Claude connector's log of their calls stays, like audit_log (which
+  // tool, when, and whether it worked), but what they passed in and the
+  // error text go: either can hold their own answers.
+  connectorLog: async (tx, { userId }) => {
+    await tx
+      .update(schema.mcpAuditLog)
+      .set({ argsJson: null, errorMessage: null })
+      .where(eq(schema.mcpAuditLog.userId, userId));
+  },
+  // The dues ledger stays for accounting, like reimbursements below, but the
+  // captain's free-text note may name the person, so it goes. Their
+  // proof-of-payment files go too (the web app deletes the files themselves
+  // after the erasure commits).
+  paymentNotes: async (tx, { userId }) => {
+    await tx
+      .update(schema.payments)
+      .set({ note: null, proofPathname: null, proofContentType: null })
+      .where(eq(schema.payments.userId, userId));
+  },
+  // The words the Finance team wrote about them: a concession's reason...
+  chargeReasons: async (tx, { userId }) => {
+    await tx
+      .update(schema.duesCharges)
+      .set({ concessionReason: null })
+      .where(eq(schema.duesCharges.userId, userId));
+  },
+  // ...and a refund's note and reason.
+  refundNotes: async (tx, { userId }) => {
+    await tx
+      .update(schema.paymentRefunds)
+      .set({ note: null, declineReason: null })
+      .where(eq(schema.paymentRefunds.userId, userId));
+  },
+  // Scrub encrypted bank details (NOT NULL → empty string, not null) while
+  // keeping the reimbursement record for accounting, and the reason a lead or
+  // the Finance team wrote about a claim, which may name them. Their claims'
+  // receipt rows go too (the web app deletes the files themselves after the
+  // erasure commits, like the proof-of-payment files).
+  claims: async (tx, { userId }) => {
+    await tx
+      .update(schema.reimbursements)
+      .set({ accountDetailsEncrypted: "", decisionNote: null })
+      .where(eq(schema.reimbursements.submitterId, userId));
+    await tx
+      .delete(schema.reimbursementFiles)
+      .where(
+        inArray(
+          schema.reimbursementFiles.reimbursementId,
+          tx
+            .select({ id: schema.reimbursements.id })
+            .from(schema.reimbursements)
+            .where(eq(schema.reimbursements.submitterId, userId)),
+        ),
+      );
+  },
+};
+
 export type SanitiseResult =
   | { ok: true; lostCatNumber: number }
   | { ok: false; reason: "sole_captain" };
@@ -118,266 +256,28 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
         max: sql<number | null>`max(${schema.users.lostCatNumber})`,
       })
       .from(schema.users);
-    const lostCatNumber = nextLostCatNumber(row?.max ?? null);
-    const now = new Date();
+    const member: ErasedMember = {
+      userId,
+      authUserId: identity?.authUserId ?? null,
+      lostCatNumber: nextLostCatNumber(row?.max ?? null),
+      now: new Date(),
+    };
+    const { lostCatNumber } = member;
 
-    await tx
-      .update(schema.users)
-      .set(sanitisedUserPatch(userId, lostCatNumber, now))
-      .where(eq(schema.users.id, userId));
-
-    // The sign-in identity goes entirely: email, password hash, sessions,
-    // second factors and passkeys (the last four cascade from `user`). Under
-    // Neon Auth this lived on a service erasure could not reach, so an erased
-    // member's email and login outlived them.
-    if (identity) {
-      await tx
-        .delete(schema.user)
-        .where(eq(schema.user.id, identity.authUserId));
+    // The hand steps first, in SCRUB_STEPS' order (the users row and the
+    // sign-in identity lead), then every `del` column of table-lifecycle.ts.
+    // Order between the two does not matter: nothing restricts a delete, and
+    // every foreign key into a deleted row cascades.
+    for (const step of Object.values(SCRUB_STEPS)) {
+      await step(tx, member);
     }
-
-    // Personal owned rows — explicit deletes (the kept users row means the
-    // CASCADE never fires).
-    await tx
-      .delete(schema.burnerProfiles)
-      .where(eq(schema.burnerProfiles.userId, userId));
-    await tx
-      .delete(schema.dietaryRequirements)
-      .where(eq(schema.dietaryRequirements.userId, userId));
-    await tx
-      .delete(schema.driverProfiles)
-      .where(eq(schema.driverProfiles.userId, userId));
-    await tx
-      .delete(schema.pushTokens)
-      .where(eq(schema.pushTokens.userId, userId));
-    // Their desktop: icon cells and the folder names they typed.
-    await tx
-      .delete(schema.desktopLayouts)
-      .where(eq(schema.desktopLayouts.userId, userId));
-    // Their INKBLOT runs: the initials they typed on the board.
-    await tx
-      .delete(schema.inkblotScores)
-      .where(eq(schema.inkblotScores.userId, userId));
-    await tx
-      .delete(schema.notificationDeliveries)
-      .where(eq(schema.notificationDeliveries.userId, userId));
-    await tx
-      .delete(schema.questionnaireEdits)
-      .where(eq(schema.questionnaireEdits.userId, userId));
-    // The generic builder-questionnaire answer store. The bespoke
-    // questionnaires keep their own domain tables (burner_profiles,
-    // dietary_requirements, driver_profiles) and are deleted above; this is
-    // where every other answer the member ever gave lives.
-    await tx
-      .delete(schema.questionnaireResponses)
-      .where(eq(schema.questionnaireResponses.userId, userId));
-    await tx
-      .delete(schema.requiredActions)
-      .where(eq(schema.requiredActions.userId, userId));
-    // Deliberately NOT year-scoped, unlike every read of these tables:
-    // erasure is erasure, so every year's memberships, attendance answers
-    // (with the captains' decisions on them), tickets, seats and driver profiles go.
-    // (driver_profiles above cascades to this user's car seats.)
-    await tx
-      .delete(schema.teamMemberships)
-      .where(eq(schema.teamMemberships.userId, userId));
-    await tx
-      .delete(schema.campParticipations)
-      .where(eq(schema.campParticipations.userId, userId));
-    await tx
-      .delete(schema.campTickets)
-      .where(eq(schema.campTickets.userId, userId));
-    // car_members is a join table — remove the user whether they were the
-    // driver or a passenger.
-    await tx
-      .delete(schema.carMembers)
-      .where(
-        or(
-          eq(schema.carMembers.driverUserId, userId),
-          eq(schema.carMembers.memberUserId, userId),
-        ),
-      );
-    // Transport (#270): their lift requests go; a request that named their
-    // car becomes "any car", since its rider still needs a lift; a trailer
-    // they towed stays the camp's, with no car.
-    await tx
-      .delete(schema.liftRequests)
-      .where(eq(schema.liftRequests.userId, userId));
-    await tx
-      .update(schema.liftRequests)
-      .set({ driverUserId: null })
-      .where(eq(schema.liftRequests.driverUserId, userId));
-    await tx
-      .update(schema.transportTrailers)
-      .set({ towedByUserId: null })
-      .where(eq(schema.transportTrailers.towedByUserId, userId));
-    // The fuel cans (#255): a can they owned becomes the camp's, and a can
-    // in their car goes on no car; the can stays on the sheet.
-    await tx
-      .update(schema.fuelCans)
-      .set({ ownerUserId: null })
-      .where(eq(schema.fuelCans.ownerUserId, userId));
-    await tx
-      .update(schema.fuelCans)
-      .set({ travelsWithUserId: null })
-      .where(eq(schema.fuelCans.travelsWithUserId, userId));
-    await tx
-      .delete(schema.workshopRsvps)
-      .where(eq(schema.workshopRsvps.userId, userId));
-    // Which Survival Guide chapters they opened (#250): their own reading.
-    await tx
-      .delete(schema.documentReads)
-      .where(eq(schema.documentReads.userId, userId));
-    // Their pets (Camp pets): a pet they sent in (it has photos) is their own
-    // words and photos, so it goes; the photo folder goes with the erasure in
-    // apps/web (lib/account.ts). A pet with no photos is one of the camp's
-    // seeded cats a founder linked to them: it stays, linked to nobody.
-    await tx
-      .delete(schema.pets)
-      .where(
-        and(
-          eq(schema.pets.ownerId, userId),
-          or(
-            isNotNull(schema.pets.frontPhotoPath),
-            isNotNull(schema.pets.sidePhotoPath),
-          ),
-        ),
-      );
-    await tx
-      .update(schema.pets)
-      .set({ ownerId: null })
-      .where(eq(schema.pets.ownerId, userId));
-    // Lounge offers are the member's own words; their slots go with them.
-    await tx
-      .delete(schema.loungeOffers)
-      .where(eq(schema.loungeOffers.hostId, userId));
-    // Gear the member booked or pledged to bring (#246) names them, so it
-    // goes. Items kept at their home keep pointing at the tombstone row.
-    await tx
-      .delete(schema.inventoryBookings)
-      .where(eq(schema.inventoryBookings.userId, userId));
-    await tx
-      .delete(schema.inventoryPledges)
-      .where(eq(schema.inventoryPledges.userId, userId));
-    // Captains' notes ABOUT the member are about the person, so they go.
-    // Notes the member wrote about others stay; their author link is kept to
-    // the tombstone row.
-    await tx
-      .delete(schema.memberNotes)
-      .where(eq(schema.memberNotes.userId, userId));
-    await tx
-      .delete(schema.broadcastTargets)
-      .where(eq(schema.broadcastTargets.userId, userId));
-    await tx
-      .delete(schema.questionnaireActivationTargets)
-      .where(eq(schema.questionnaireActivationTargets.userId, userId));
-
-    // Live access grants. All three declare `onDelete: "cascade"` on
-    // users.id, but erasure KEEPS the users row — it anonymises it — so the
-    // cascade never fires and the grant outlives the account. Without these
-    // an issued MCP access token (and its refresh token) keeps answering for
-    // the member until it expires, and a pending Telegram invite stays
-    // redeemable. Revoking access is the part of "erase my account" a member
-    // would assume happened first.
-    await tx
-      .delete(schema.mcpAccessTokens)
-      .where(eq(schema.mcpAccessTokens.userId, userId));
-    await tx
-      .delete(schema.mcpAuthCodes)
-      .where(eq(schema.mcpAuthCodes.userId, userId));
-    await tx
-      .delete(schema.telegramInvites)
-      .where(eq(schema.telegramInvites.userId, userId));
-
-    // The Claude connector's log of their calls stays, like audit_log (which
-    // tool, when, and whether it worked), but what they passed in and the
-    // error text go: either can hold their own answers.
-    await tx
-      .update(schema.mcpAuditLog)
-      .set({ argsJson: null, errorMessage: null })
-      .where(eq(schema.mcpAuditLog.userId, userId));
-
-    // The dues ledger stays for accounting, like reimbursements below, but the
-    // captain's free-text note may name the person, so it goes.
-    // Their proof-of-payment files go too (the web app deletes the files
-    // themselves after the erasure commits), and the words the Finance team
-    // wrote about them: a concession's reason, a refund's note and reason.
-    await tx
-      .update(schema.payments)
-      .set({ note: null, proofPathname: null, proofContentType: null })
-      .where(eq(schema.payments.userId, userId));
-    await tx
-      .update(schema.duesCharges)
-      .set({ concessionReason: null })
-      .where(eq(schema.duesCharges.userId, userId));
-    await tx
-      .update(schema.paymentRefunds)
-      .set({ note: null, declineReason: null })
-      .where(eq(schema.paymentRefunds.userId, userId));
-
-    // Screenshots they attached to bug reports (#313): their rows go, and the
-    // web app deletes the pictures themselves after the erasure commits. The
-    // public issues stay; they never held the picture.
-    await tx
-      .delete(schema.reportScreenshots)
-      .where(eq(schema.reportScreenshots.userId, userId));
-
-    // Logistics attendance: their answers go. Whether they could help on a
-    // pack day is about them, and nothing else hangs off it.
-    await tx
-      .delete(schema.logisticsAttendance)
-      .where(eq(schema.logisticsAttendance.userId, userId));
-
-    // Shift roster (#248): they come off every shift, and their own
-    // AfrikaBurn volunteer shifts go. Both are about them alone.
-    await tx
-      .delete(schema.shiftSignups)
-      .where(eq(schema.shiftSignups.userId, userId));
-    await tx
-      .delete(schema.volunteerShifts)
-      .where(eq(schema.volunteerShifts.userId, userId));
-
-    // Help wanted: they leave every team role and their "I'm keen" flags
-    // go. Both are about them alone; the lead flag goes with their
-    // memberships.
-    await tx
-      .delete(schema.teamRoleHolders)
-      .where(eq(schema.teamRoleHolders.userId, userId));
-    await tx
-      .delete(schema.teamRoleKeen)
-      .where(eq(schema.teamRoleKeen.userId, userId));
-
-    // Gear rental (#241): their orders go (the lines and sharers cascade),
-    // and they leave every tent another member put them in. The rental charge
-    // stays on the dues ledger for accounting, like the rest of it.
-    await tx
-      .delete(schema.rentalOrders)
-      .where(eq(schema.rentalOrders.userId, userId));
-    await tx
-      .delete(schema.rentalOrderSharers)
-      .where(eq(schema.rentalOrderSharers.userId, userId));
-
-    // Scrub encrypted bank details (NOT NULL → empty string, not null) while
-    // keeping the reimbursement record for accounting, and the reason a lead
-    // or the Finance team wrote about a claim, which may name them. Their
-    // claims' receipt
-    // rows go too (the web app deletes the files themselves after the erasure
-    // commits, like the proof-of-payment files).
-    await tx
-      .update(schema.reimbursements)
-      .set({ accountDetailsEncrypted: "", decisionNote: null })
-      .where(eq(schema.reimbursements.submitterId, userId));
-    await tx
-      .delete(schema.reimbursementFiles)
-      .where(
-        inArray(
-          schema.reimbursementFiles.reimbursementId,
-          tx
-            .select({ id: schema.reimbursements.id })
-            .from(schema.reimbursements)
-            .where(eq(schema.reimbursements.submitterId, userId)),
-        ),
-      );
+    // Personal owned rows, explicit deletes (the kept users row means the
+    // users-level CASCADE never fires). Deliberately NOT year-scoped, unlike
+    // every read of the per-year tables: erasure is erasure, so every year's
+    // memberships, answers, tickets, seats and orders go.
+    for (const { table, column } of ERASURE_DELETES) {
+      await tx.delete(table).where(eq(column, userId));
+    }
 
     // The proof row. Without it a finished erasure and a data-loss incident
     // look the same afterwards. It names only the tombstone number: the row

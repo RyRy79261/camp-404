@@ -16,6 +16,7 @@ import {
 } from "./activations";
 import { closeActivationTx } from "./questionnaire-lifecycle";
 import { writeAuditEvent } from "./audit";
+import { YEAR_TABLES_ADOPTED_AS_IS } from "./table-lifecycle";
 import { deliveryValues } from "./deliveries";
 import {
   advanceCycles,
@@ -538,91 +539,6 @@ export async function planRollover(): Promise<RolloverPlan> {
 }
 
 /**
- * The year-scoped tables setFoundingYear moves off the sentinel with one plain
- * UPDATE each: rows written before the camp had a year. The tables it handles
- * one by one (counted for the receipt, or with rows that point at each other)
- * are in YEAR_TABLES_ADOPTED_BY_HAND. schema-invariants.test.ts fails when a
- * table with a `cycle` column is in neither list, so a new one cannot be left
- * stranded on the sentinel.
- */
-export const YEAR_TABLES_ADOPTED_AS_IS = [
-  // Inventory (#246): needs (their pledges ride along), bookings and loans.
-  schema.inventoryNeeds,
-  schema.inventoryBookings,
-  schema.inventoryLoans,
-  // Claims (#242).
-  schema.reimbursements,
-  // Dues and payments (#241, the ledger): a gear order's charge moves with
-  // the order, so the two stay in the same year.
-  schema.duesYears,
-  schema.feeTiers,
-  schema.duesAccounts,
-  schema.duesCharges,
-  schema.duesInstalments,
-  schema.duesSettleUps,
-  schema.payments,
-  schema.paymentRefunds,
-  // Gear rental (#241).
-  schema.rentalItems,
-  schema.rentalOrders,
-  // Logistics (#247) and the shift roster (#248).
-  schema.logisticsPhases,
-  schema.logisticsAttendance,
-  schema.afrikaburnDeadlines,
-  schema.shiftTypes,
-  schema.volunteerShifts,
-  // Help wanted: team roles, how many leads a team wants, and keen flags.
-  schema.teamRoles,
-  schema.teamRoleSettings,
-  schema.teamRoleKeen,
-  // The Kitchen (#244, #245) beyond the meal plan.
-  schema.kitchenMenuItems,
-  schema.kitchenSnacks,
-  schema.kitchenShoppingTicks,
-  schema.kitchenShoppingPrices,
-  schema.kitchenPrepSteps,
-  schema.recipeLessons,
-  // Power (#52, #298).
-  schema.powerLoads,
-  schema.powerPlans,
-  schema.powerSharingAgreements,
-  schema.powerGridNodes,
-  schema.powerWorkPlanTasks,
-  schema.fuelCans,
-  schema.generatorReadinessItems,
-  // The lounge programme (#301), meeting notes and the join site.
-  schema.loungeSettings,
-  schema.loungeOffers,
-  schema.loungeSlots,
-  schema.meetingNotes,
-  schema.joinSiteContent,
-  // The Calendar's own events and meetings (2026-10-10).
-  schema.campEvents,
-] as const;
-
-/**
- * The year-scoped tables setFoundingYear adopts one by one, by SQL name: see
- * YEAR_TABLES_ADOPTED_AS_IS.
- */
-export const YEAR_TABLES_ADOPTED_BY_HAND: readonly string[] = [
-  "questionnaire_activations",
-  "questionnaire_responses",
-  "driver_profiles",
-  "car_members",
-  "team_memberships",
-  "team_budgets",
-  "adoptees",
-  "camp_participations",
-  "kitchen_meal_plans",
-  "kitchen_meal_plan_days",
-  "camp_layouts",
-  "camp_layout_versions",
-  "transport_trailers",
-  "lift_requests",
-  "camp_tickets",
-];
-
-/**
  * Name the camp's founding year — the one-time write that turns the year
  * namespace on.
  *
@@ -768,7 +684,8 @@ export async function setFoundingYear(input: {
           .where(eq(schema.campLayouts.cycle, input.year));
       }
     }
-    // Every other year-scoped table. Nothing can hold the founding year yet
+    // Every other year-scoped table (`year: "as-is"` in table-lifecycle.ts;
+    // the `byHand` ones are around it). Nothing can hold the founding year yet
     // (every write stamps the current year, which was the sentinel), so
     // moving them cannot collide.
     for (const table of YEAR_TABLES_ADOPTED_AS_IS) {
