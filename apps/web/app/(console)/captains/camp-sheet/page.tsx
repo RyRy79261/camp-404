@@ -2,7 +2,7 @@ import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ExportCsvButton } from "@/components/export-csv-button";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { buildCampSheet } from "@/lib/camp-sheet";
 import { CampSheetGrid } from "./camp-sheet-grid";
 
@@ -18,7 +18,7 @@ export const metadata = { title: "Camp sheet — Camp 404" };
 // sheet is drawn (lib/camp-sheet.ts), because it shows ID numbers.
 
 export default async function CampSheetPage() {
-  const { cleared, campUser } = await captainPageGate("captain");
+  const { cleared, campUser } = await programPage("camp-sheet");
 
   if (!cleared) {
     return (

@@ -19,7 +19,7 @@ import {
 } from "@/components/layout/layout-controls";
 import { LayoutWorkspace } from "@/components/layout/layout-editor";
 import { BlockLocator } from "@/components/layout/layout-plan";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   getCampLayout,
   getLayoutShare,
@@ -67,7 +67,7 @@ export default async function CampLayoutPage({
   searchParams: Promise<{ version?: string }>;
 }) {
   // Every approved member reads the plan.
-  const { rank, actor } = await captainPageGate("camp_member");
+  const { rank, actor } = await programPage("camp-layout");
   const { version: asked } = await searchParams;
   const leadTeams = actor.ledTeams;
   const canEdit = canEditLayout(rank, leadTeams);

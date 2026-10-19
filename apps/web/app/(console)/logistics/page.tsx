@@ -25,7 +25,7 @@ import { AskAttendance } from "@/components/logistics/ask-attendance";
 import { AttendancePicker } from "@/components/logistics/attendance-picker";
 import { PhaseEditButton } from "@/components/logistics/phase-editor";
 import { getCurrentCycle } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   getAttendanceView,
   isAskedForAttendance,
@@ -467,7 +467,7 @@ function Deadlines({
 
 export default async function LogisticsPage() {
   // Every approved member reads the days.
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("logistics");
   const leadTeams = actor.ledTeams;
   const [rows, cycle, year, deadlines, asked] = await Promise.all([
     listLogisticsPhases(),

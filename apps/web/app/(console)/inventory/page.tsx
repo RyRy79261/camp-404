@@ -42,7 +42,7 @@ import {
   suggestionDiff,
   whereText,
 } from "@/lib/inventory-copy";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { inventoryViewer } from "@/lib/inventory-viewer";
 import { listAssignableMembers } from "@/lib/tasks";
 
@@ -117,7 +117,7 @@ export default async function InventoryPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const viewer = await inventoryViewer(await captainPageGate("camp_member"));
+  const viewer = await inventoryViewer(await programPage("inventory"));
   const params = await searchParams;
   const filters: Filters = {
     q: pick(params.q),

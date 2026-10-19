@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { campDayKey } from "@camp404/core";
 import { getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { calendarHref, WHOLE_CAMP } from "@/lib/calendar-month";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function MeetingsPage({
 }: {
   searchParams: Promise<{ team?: string }>;
 }) {
-  await captainPageGate("camp_member");
+  await programPage("calendar");
   const [{ team }, config] = await Promise.all([
     searchParams,
     getTeamsConfig(),

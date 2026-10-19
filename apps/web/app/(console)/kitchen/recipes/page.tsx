@@ -23,7 +23,7 @@ import {
   type ResponsiveColumn,
 } from "@camp404/ui/components/responsive-data-table";
 import { RecipeStatusBadge } from "@/components/recipes/recipe-status-badge";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   MEAL_PLAN_PATH,
   RECIPE_BOOK_PRINT_PATH,
@@ -112,7 +112,7 @@ const BOOK_COLUMNS: ResponsiveColumn<RecipeBookEntry>[] = [
 
 export default async function RecipeBookPage() {
   // Every approved member; the gate resolves the lead flag for the review link.
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("recipes");
   const leadTeams = actor.ledTeams;
   const reviewer = canApproveRecipe(rank, leadTeams);
   // No cron: a run that stopped, or never started, is handed back here.

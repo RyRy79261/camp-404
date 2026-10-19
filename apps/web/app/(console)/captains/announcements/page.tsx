@@ -5,7 +5,7 @@ import {
   listAnnouncements,
 } from "@/lib/notifications";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   AnnouncementsManager,
   type AudienceOption,
@@ -26,7 +26,7 @@ export default async function AnnouncementsPage({
 }: {
   searchParams: Promise<{ audience?: string }>;
 }) {
-  const gate = await captainPageGate("team_lead");
+  const gate = await programPage("announcements");
   const { audience: asked } = await searchParams;
   const { campUser } = gate;
   const isCaptain = gate.rank === "captain";

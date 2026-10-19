@@ -5,7 +5,7 @@ import {
   planCovers,
   type DietaryCounts,
 } from "@camp404/core";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { dailySheetHref } from "@/lib/daily-sheet-copy";
 import {
   getKitchenMenu,
@@ -104,7 +104,7 @@ function checkView(
 }
 
 export default async function MealPlanPage() {
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("meal-plan");
   const leadTeams = actor.ledTeams;
   const canEdit = canEditMealPlan(rank, leadTeams);
   const [plan, menu, snacks, book, dietary, checks] = await Promise.all([

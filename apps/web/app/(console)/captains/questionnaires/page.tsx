@@ -1,7 +1,7 @@
 import { CAMP_TIME_ZONE } from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   listDefinitionsForViewer,
   listOpenSendBlocking,
@@ -40,7 +40,7 @@ export default async function QuestionnairesPage() {
     campUser,
     rank,
     cleared: canAuthor,
-  } = await captainPageGate("team_lead");
+  } = await programPage("questionnaires");
 
   const [definitions, openSends] = canAuthor
     ? await Promise.all([

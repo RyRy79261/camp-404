@@ -12,7 +12,7 @@ import {
   type AudienceOption,
   type MemberOption,
 } from "@/components/questionnaires/activation-form";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   audienceLabel,
   getCurrentCycle,
@@ -50,7 +50,7 @@ export default async function SendPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { key } = await params;
-  const { cleared, rank, actor } = await captainPageGate("team_lead");
+  const { cleared, rank, actor } = await programPage("send-questionnaire");
   const isCaptain = rank === "captain";
   const chrome = (children: ReactNode, title: string, description?: string) => (
     <div className="flex flex-col">

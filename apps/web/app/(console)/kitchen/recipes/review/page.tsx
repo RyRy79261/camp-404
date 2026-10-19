@@ -1,10 +1,5 @@
 import Link from "next/link";
-import {
-  canApproveRecipe,
-  canRunProofread,
-  defaultPlates,
-  mealPlanPeaks,
-} from "@camp404/core";
+import { canRunProofread, defaultPlates, mealPlanPeaks } from "@camp404/core";
 import { MEALS } from "@camp404/types";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import {
@@ -20,7 +15,7 @@ import {
   type ResponsiveColumn,
 } from "@camp404/ui/components/responsive-data-table";
 import { RecipeStatusBadge } from "@/components/recipes/recipe-status-badge";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { REVIEW_REFUSAL, recipePath } from "@/lib/recipe-copy";
 import {
   SOURCE_LABEL,
@@ -57,9 +52,10 @@ export const metadata = { title: "Review recipes — Camp 404" };
 // decision 2A). The token usage goes to captains alone, and is neither read
 // nor sent for anyone else. There is no daily limit on runs.
 //
-// The rank gate is team_lead (clearance is global); canApproveRecipe then
-// narrows it to a captain or a lead of Kitchen, so a lead of Structures sees a
-// refusal and no rows.
+// The rank gate is team_lead (clearance is global); the program's rule
+// (KITCHEN_REVIEWER, the one canApproveRecipe asks) then narrows it to a
+// captain or a lead of Kitchen, so a lead of Structures sees a refusal and no
+// rows.
 
 const RUN_OUTCOME: Record<ProofreadRunRow["outcome"], string> = {
   queued: "Queued",
@@ -253,7 +249,7 @@ function Section({
 }
 
 export default async function RecipeReviewPage() {
-  const { rank, cleared, actor } = await captainPageGate("team_lead");
+  const { rank, cleared, allowed, actor } = await programPage("recipe-review");
   const now = new Date();
   // No cron: a run that stopped, or was queued and never started, goes back
   // to its recipe with the reason every time a Kitchen page loads.
@@ -279,8 +275,7 @@ export default async function RecipeReviewPage() {
     );
   }
 
-  const leadTeams = actor.ledTeams;
-  if (!canApproveRecipe(rank, leadTeams)) {
+  if (!allowed) {
     return (
       <div className="flex flex-col">
         {heading}
@@ -293,6 +288,7 @@ export default async function RecipeReviewPage() {
     );
   }
 
+  const leadTeams = actor.ledTeams;
   const isCaptain = rank === "captain";
   const canRun = canRunProofread(rank, leadTeams);
   const [queue, ready, awaiting, peaks, captainData] = await Promise.all([

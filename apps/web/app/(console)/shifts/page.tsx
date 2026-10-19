@@ -9,7 +9,7 @@ import { AskShifts } from "@/components/shifts/shift-controls";
 import { ShiftDay } from "@/components/shifts/shift-day";
 import { ShiftTypesTable } from "@/components/shifts/shift-types-table";
 import { SearchFocus } from "@/components/search/search-focus";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   getShiftsView,
   isAskedForShifts,
@@ -164,7 +164,7 @@ export default async function ShiftsPage({
   searchParams: Promise<{ day?: string; shift?: string }>;
 }) {
   // Every approved member reads the roster and signs up.
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("shifts");
   const ledTeams = actor.ledTeams;
   const [params, asked] = await Promise.all([
     searchParams,

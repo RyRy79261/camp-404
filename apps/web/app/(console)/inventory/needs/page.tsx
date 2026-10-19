@@ -35,7 +35,7 @@ import {
   inventoryItemPath,
 } from "@/lib/inventory-copy";
 import { Team } from "@camp404/types";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { inventoryViewer, type InventoryViewer } from "@/lib/inventory-viewer";
 import { listTeamPeople } from "@/lib/roster";
 
@@ -139,7 +139,7 @@ export default async function InventoryNeedsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const viewer = await inventoryViewer(await captainPageGate("camp_member"));
+  const viewer = await inventoryViewer(await programPage("inventory"));
   const params = await searchParams;
   const teamFilter = typeof params.team === "string" ? params.team : "";
   const show = typeof params.show === "string" ? params.show : "";

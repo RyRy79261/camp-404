@@ -1,8 +1,7 @@
 import { PaymentsFrame } from "@/components/dues/payments-frame";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { PAYMENTS_IMPORT_PATH } from "@/lib/dues-copy";
 import { StatementImport } from "./statement-import";
-import { MONEY_KEEPER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +16,8 @@ export const metadata = { title: "Bank statement — Camp 404" };
 // is written until a line is confirmed.
 
 export default async function StatementImportPage() {
-  const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
+  const gate = await programPage("payments");
+  const cleared = gate.allowed;
   return (
     <PaymentsFrame
       active={PAYMENTS_IMPORT_PATH}

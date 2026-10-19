@@ -7,7 +7,7 @@ import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { BuilderPreview } from "@/components/questionnaire/builder-preview";
@@ -26,7 +26,9 @@ export default async function BuilderPreviewPage({
   params: Promise<{ key: string }>;
 }) {
   const { key } = await params;
-  const { campUser, rank, cleared } = await captainPageGate("team_lead");
+  const { campUser, rank, cleared } = await programPage(
+    "preview-questionnaire",
+  );
   const chrome = (title: string, children: ReactNode, actions?: ReactNode) => (
     <div className="flex flex-col">
       <PageHeading

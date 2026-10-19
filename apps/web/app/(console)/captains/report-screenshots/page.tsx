@@ -2,7 +2,7 @@ import { errorLogText } from "@camp404/core";
 import { after } from "next/server";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   clearStaleUnfiledScreenshots,
   listReportScreenshots,
@@ -21,7 +21,7 @@ export const metadata = { title: "Report screenshots — Camp 404" };
 // never filed, a day on, as this page loads (there is no cron).
 
 export default async function ReportScreenshotsPage() {
-  const { cleared } = await captainPageGate("captain");
+  const { cleared } = await programPage("report-screenshots");
   const screenshots = cleared ? await listReportScreenshots() : [];
   if (cleared) {
     after(async () => {

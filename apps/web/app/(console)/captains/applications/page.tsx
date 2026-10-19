@@ -1,7 +1,7 @@
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { applicationRows } from "@/lib/applications";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getCampManagementRoster } from "@/lib/roster";
 import { listTicketsThisYear } from "@/lib/tickets";
 import { ApplicationsBoard } from "./applications-board";
@@ -18,7 +18,7 @@ export const metadata = { title: "Applications — Camp 404" };
 // Anyone else sees the heading and a lock, and nothing is read.
 
 export default async function ApplicationsPage() {
-  const { cleared, rank } = await captainPageGate("team_lead");
+  const { cleared, rank } = await programPage("applications");
   const isCaptain = cleared && rank === "captain";
 
   const rows = cleared

@@ -24,7 +24,7 @@ import {
   bookingState,
   inventoryItemPath,
 } from "@/lib/inventory-copy";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { inventoryViewer } from "@/lib/inventory-viewer";
 
 export const dynamic = "force-dynamic";
@@ -67,7 +67,7 @@ function YouHaveOne() {
 }
 
 export default async function InventoryBookingsPage() {
-  const viewer = await inventoryViewer(await captainPageGate("camp_member"));
+  const viewer = await inventoryViewer(await programPage("inventory"));
   const items = await listBookableItems(viewer.userId);
   const mine = items.filter((i) => i.myBookingId !== null).length;
   const note = (

@@ -1,8 +1,8 @@
-import { campDayKey, MONEY_KEEPER } from "@camp404/core";
+import { campDayKey } from "@camp404/core";
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
 import { DuesStats, duesStatsFigures } from "@/components/dues/dues-stats";
 import { PaymentsFrame } from "@/components/dues/payments-frame";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getDuesYear, listDuesAccounts } from "@/lib/dues";
 import { PAYMENTS_PATH } from "@/lib/dues-copy";
 import { ledgerCycle, listPayments } from "@/lib/payments";
@@ -31,8 +31,8 @@ export const metadata = { title: "Payments — Camp 404" };
 // dialog.
 
 export default async function PaymentsPage() {
-  const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
+  const gate = await programPage("payments");
+  const cleared = gate.allowed;
 
   const data = cleared
     ? await (async () => {

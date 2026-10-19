@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { campDayKey } from "@camp404/core";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { calendarHref } from "@/lib/calendar-month";
 import { getMeetingNote } from "@/lib/meeting-notes";
 
@@ -15,7 +15,7 @@ export default async function MeetingNotePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await captainPageGate("camp_member");
+  await programPage("calendar");
   const { id } = await params;
   const note = await getMeetingNote(id);
   const today = campDayKey(new Date());

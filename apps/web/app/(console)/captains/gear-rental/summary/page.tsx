@@ -1,10 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, Printer } from "lucide-react";
-import {
-  formatMoney,
-  RENTAL_SOURCE_LABELS,
-  RENTAL_MANAGER,
-} from "@camp404/core";
+import { formatMoney, RENTAL_SOURCE_LABELS } from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import {
   Card,
@@ -18,7 +14,7 @@ import {
   type ResponsiveColumn,
 } from "@camp404/ui/components/responsive-data-table";
 import { RentalFrame } from "@/components/rental/rental-frame";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { ledgerCycle } from "@/lib/payments";
 import { getRentalOverview } from "@/lib/rental";
 import {
@@ -170,8 +166,8 @@ const TENT_COLUMNS: ResponsiveColumn<TentRow>[] = [
 // and nothing is exported to a spreadsheet.
 
 export default async function GearRentalSummaryPage() {
-  const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && RENTAL_MANAGER.allows(gate.actor);
+  const gate = await programPage("gear-rental");
+  const cleared = gate.allowed;
   const overview = cleared
     ? await getRentalOverview(await ledgerCycle())
     : null;

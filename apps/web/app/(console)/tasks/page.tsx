@@ -1,6 +1,6 @@
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { presentTask } from "@/lib/task-board";
 import { listAssignableMembers, listBoardTasks } from "@/lib/tasks";
 import { TaskBoard, type TeamOption } from "./task-board";
@@ -22,7 +22,7 @@ export default async function TasksPage({
 }: {
   searchParams: Promise<{ team?: string; add?: string; task?: string }>;
 }) {
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("tasks");
   const { team: askedTeam, add, task: askedTask } = await searchParams;
   const isCaptain = rank === "captain";
   const leadTeams: readonly string[] = actor.ledTeams;

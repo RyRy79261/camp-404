@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { campDayKey } from "@camp404/core";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { calendarHref } from "@/lib/calendar-month";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 // write checks it again.
 
 export default async function AddEventPage() {
-  await captainPageGate("camp_member");
+  await programPage("calendar");
   const today = campDayKey(new Date());
   redirect(
     calendarHref({

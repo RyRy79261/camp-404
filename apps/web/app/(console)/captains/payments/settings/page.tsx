@@ -1,10 +1,9 @@
 import { PaymentsFrame } from "@/components/dues/payments-frame";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getDuesYear, listFeeTiers } from "@/lib/dues";
 import { PAYMENTS_SETTINGS_PATH } from "@/lib/dues-copy";
 import { ledgerCycle } from "@/lib/payments";
 import { DuesSettings } from "./dues-settings";
-import { MONEY_KEEPER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +16,8 @@ export const metadata = { title: "Fees and dates — Camp 404" };
 // Camp settings, keep them with the captains.
 
 export default async function DuesSettingsPage() {
-  const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
+  const gate = await programPage("payments");
+  const cleared = gate.allowed;
   const data = cleared
     ? await (async () => {
         const cycle = await ledgerCycle();

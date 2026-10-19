@@ -5,7 +5,7 @@ import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { MinutesEditor } from "@/components/calendar/minutes-editor";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { calendarHref, entryWhen } from "@/lib/calendar-month";
 import { findCalendarEntry } from "@/lib/calendar-page";
 import { listTeamPeople } from "@/lib/roster";
@@ -32,7 +32,7 @@ export default async function MinutesPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
-  const { campUser, rank } = await captainPageGate("camp_member");
+  const { campUser, rank } = await programPage("minutes");
   const { eventId } = await params;
   // The param is already decoded; an id that is not an event's is no page.
   if (!CALENDAR_EVENT_ID.test(eventId)) notFound();

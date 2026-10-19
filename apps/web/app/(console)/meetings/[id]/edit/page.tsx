@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getMeetingNote } from "@/lib/meeting-notes";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export default async function EditMeetingPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await captainPageGate("camp_member");
+  await programPage("calendar");
   const { id } = await params;
   const note = await getMeetingNote(id);
   if (!note?.calendarEventId) notFound();

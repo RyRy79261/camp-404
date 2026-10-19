@@ -1,9 +1,8 @@
 import { PaymentsFrame } from "@/components/dues/payments-frame";
 import { loadBudgetRows } from "@/lib/budget-rows";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { BUDGETS_REFUSAL, PAYMENTS_BUDGETS_PATH } from "@/lib/claims-copy";
 import { BudgetsManager } from "./budgets-manager";
-import { MONEY_KEEPER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +14,8 @@ export const metadata = { title: "Budgets — Camp 404" };
 // member reads the same table, without the pencils, at /teams/budgets.
 
 export default async function BudgetsPage() {
-  const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
+  const gate = await programPage("payments");
+  const cleared = gate.allowed;
   const data = cleared ? await loadBudgetRows() : null;
 
   return (

@@ -6,7 +6,7 @@ import {
   NeedsSeatSection,
   TrailersSection,
 } from "@/components/transport/transport-board";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getMyLift } from "@/lib/lifts";
 import {
   getTransportBoard,
@@ -42,7 +42,7 @@ export const metadata = { title: "Transport — Camp 404" };
 // never gets its controls.
 
 export default async function TransportPage() {
-  const { campUser, rank, actor } = await captainPageGate("camp_member");
+  const { campUser, rank, actor } = await programPage("transport");
   const leadTeams = actor.ledTeams;
   const canEdit = canEditTransport(rank, leadTeams);
   const me = campUser.id;

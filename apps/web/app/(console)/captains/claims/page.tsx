@@ -13,7 +13,7 @@ import {
 } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { listBudgetTotals, listClaimsForApproval } from "@/lib/claims";
 import { APPROVALS_REFUSAL, MY_CLAIMS_PATH } from "@/lib/claims-copy";
 import { BudgetStats } from "@/components/teams/budget-stats";
@@ -37,7 +37,7 @@ export const metadata = { title: "Claims to approve — Camp 404" };
 const EYEBROW = "Teams / Claims to approve";
 
 export default async function ClaimApprovalsPage() {
-  const gate = await captainPageGate("team_lead");
+  const gate = await programPage("claim-approvals");
   const data = gate.cleared
     ? await (async () => {
         const cycle = await ledgerCycle();

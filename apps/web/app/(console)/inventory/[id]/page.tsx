@@ -40,7 +40,7 @@ import {
   suggestionDiff,
   whereText,
 } from "@/lib/inventory-copy";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { inventoryViewer } from "@/lib/inventory-viewer";
 import { listAssignableMembers } from "@/lib/tasks";
 
@@ -137,7 +137,7 @@ export default async function InventoryItemPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const viewer = await inventoryViewer(await captainPageGate("camp_member"));
+  const viewer = await inventoryViewer(await programPage("inventory"));
   const { id } = await params;
   const item = await getInventoryItem(id);
   if (!item) notFound();

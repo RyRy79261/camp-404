@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Printer } from "lucide-react";
 import {
-  canEditAnyGuideChapter,
   canEditGuideChapter,
   canSetGuideChapterMembersOnly,
 } from "@camp404/core";
@@ -13,7 +12,7 @@ import { PageHeading } from "@camp404/ui/components/page-heading";
 import { ChapterEditor, WHOLE_CAMP } from "@/components/guide/chapter-editor";
 import { VersionsCard } from "@/components/guide/versions-card";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import {
   getGuideDraft,
   listChapterVersions,
@@ -36,7 +35,7 @@ export default async function EditGuideChapterPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { rank, cleared, actor } = await captainPageGate("team_lead");
+  const { rank, allowed, actor } = await programPage("edit-guide-chapter");
   const { slug } = await params;
   const leadTeams = actor.ledTeams;
   const lock = (message: string) => (
@@ -48,7 +47,7 @@ export default async function EditGuideChapterPage({
       />
     </div>
   );
-  if (!cleared || !canEditAnyGuideChapter(rank, leadTeams)) {
+  if (!allowed) {
     return lock(
       "Captains write the Survival Guide, and each team's leads write their team's chapters.",
     );

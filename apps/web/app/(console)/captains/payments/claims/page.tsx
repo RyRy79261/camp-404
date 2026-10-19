@@ -1,12 +1,11 @@
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
 import { PaymentsFrame } from "@/components/dues/payments-frame";
 import { getTeamsConfig, teamLabelMap } from "@/lib/camp-config";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { listClaimsForFinance } from "@/lib/claims";
 import { PAYMENTS_CLAIMS_PATH } from "@/lib/claims-copy";
 import { ledgerCycle } from "@/lib/payments";
 import { ClaimsPayManager, type FinanceClaim } from "./claims-pay-manager";
-import { MONEY_KEEPER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +19,8 @@ export const metadata = { title: "Claims — Camp 404" };
 // else sees the heading and a lock, and no claim is read.
 
 export default async function FinanceClaimsPage() {
-  const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
+  const gate = await programPage("payments");
+  const cleared = gate.allowed;
   const data = cleared
     ? await (async () => {
         const cycle = await ledgerCycle();

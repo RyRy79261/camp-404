@@ -1,10 +1,9 @@
 import { PaymentsFrame } from "@/components/dues/payments-frame";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { settleUpCandidates } from "@/lib/dues";
 import { PAYMENTS_SETTLE_UP_PATH } from "@/lib/dues-copy";
 import { ledgerCycle } from "@/lib/payments";
 import { SettleUpForm } from "./settle-up-form";
-import { MONEY_KEEPER } from "@camp404/core";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +16,8 @@ export const metadata = { title: "Settle-up — Camp 404" };
 // transaction with its audit row. Members with a concession can be left out.
 
 export default async function SettleUpPage() {
-  const gate = await captainPageGate("team_lead");
-  const cleared = gate.cleared && MONEY_KEEPER.allows(gate.actor);
+  const gate = await programPage("payments");
+  const cleared = gate.allowed;
   const candidates = cleared
     ? await settleUpCandidates(await ledgerCycle())
     : [];

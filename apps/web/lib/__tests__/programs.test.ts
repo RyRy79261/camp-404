@@ -605,6 +605,7 @@ const SERVER_ONLY: Record<
 > = {
   place: true,
   rank: true,
+  rule: true,
   requires: true,
   applicants: true,
   perTeam: true,

@@ -2,7 +2,7 @@ import { Eye } from "lucide-react";
 import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { captainPageGate } from "@/lib/captain-gate";
+import { programPage } from "@/lib/program-page";
 import { getJoinEditorData } from "@/lib/join-site";
 import { JoinSiteEditor } from "./join-site-editor";
 
@@ -16,7 +16,7 @@ export const metadata = { title: "Join site — Camp 404" };
 // sees the heading and a lock, and nothing is read for them.
 
 export default async function JoinSitePage() {
-  const { cleared } = await captainPageGate("captain");
+  const { cleared } = await programPage("join-site");
   const data = cleared ? await getJoinEditorData() : null;
 
   return (
