@@ -9,25 +9,38 @@ import {
   campStockTaken,
   canManageRental,
   checkRentalOrder,
+  confirmTentProblem,
+  filledOrderLocked,
   GEAR_ORDER_ACTION_TITLE,
   GEAR_ORDER_REF_TYPE,
   hostedElsewhere,
   isAskedForGear,
+  memberOrderLocked,
   noPriceFrom,
   notEnoughCampStock,
   priceRentalOrder,
   RENTAL_ITEM_GONE,
+  RENTAL_NOTHING_TO_SEND,
   RENTAL_NOT_WITH_YOURSELF,
+  RENTAL_ORDER_CHANGED,
+  RENTAL_ORDER_CONFIRMED,
+  RENTAL_ORDER_MOVED,
+  RENTAL_ORDER_SENT,
+  RENTAL_PICK_A_TENT,
+  RENTAL_REOPEN_FIRST,
   RENTAL_PICK_EVERY_SOURCE,
   rentalChargeDescription,
   rentalEstimate,
+  rentalItemValues,
   rentalOrderState,
+  rentalSendProblem,
   rentalSources,
   rentalSummary,
   tentConflict,
   tentRoom,
   tentSleepsEnough,
   tooManySharers,
+  withdrawLocked,
   type RentalPricedItem,
 } from "../rental";
 
@@ -656,5 +669,47 @@ describe("the audit trail's words", () => {
     expect(
       auditDetail("rental.tent_labelled", { name: "Tent", label: null }),
     ).toBe("Tent, label removed");
+  });
+});
+
+describe("the rules both rental stores apply", () => {
+  it("stores anything but a tent as sleeping one", () => {
+    const item = {
+      name: "Mattress",
+      isTent: false,
+      sleeps: 4,
+      campPriceCents: null,
+      campStockCount: null,
+      supplierPriceCents: 100,
+      reserveCount: 0,
+      reserveSource: RENTAL_SOURCES[1],
+    };
+    expect(rentalItemValues(item).sleeps).toBe(1);
+    expect(rentalItemValues({ ...item, isTent: true }).sleeps).toBe(4);
+  });
+
+  it("refuses to send an order that says nothing", () => {
+    expect(rentalSendProblem(true, { tent: null, lines: [] })).toBe(
+      RENTAL_NOTHING_TO_SEND,
+    );
+    expect(rentalSendProblem(false, { tent: null, lines: [] })).toBeNull();
+    expect(rentalSendProblem(true, { tent: null, lines: [1] })).toBeNull();
+  });
+
+  it("says why a compare-and-set was lost, by the order's state now", () => {
+    expect(memberOrderLocked("submitted")).toBe(RENTAL_ORDER_SENT);
+    expect(memberOrderLocked("confirmed")).toBe(RENTAL_ORDER_CONFIRMED);
+    expect(memberOrderLocked(undefined)).toBe(RENTAL_ORDER_CHANGED);
+    expect(filledOrderLocked("confirmed")).toBe(RENTAL_REOPEN_FIRST);
+    expect(filledOrderLocked(undefined)).toBe(RENTAL_ORDER_MOVED);
+    expect(withdrawLocked("confirmed")).toBe(RENTAL_ORDER_CONFIRMED);
+    expect(withdrawLocked("draft")).toBe(RENTAL_ORDER_CHANGED);
+  });
+
+  it("wants a tent picked exactly when the member needs one", () => {
+    expect(confirmTentProblem("need", null)).toBe(RENTAL_PICK_A_TENT);
+    expect(confirmTentProblem("need", { itemId: "t" })).toBeNull();
+    expect(confirmTentProblem("own", { itemId: "t" })).toBe(RENTAL_ORDER_MOVED);
+    expect(confirmTentProblem(null, null)).toBeNull();
   });
 });

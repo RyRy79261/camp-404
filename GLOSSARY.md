@@ -22,3 +22,15 @@ plain title, generic file name, routes, line drawing and window size, in
 `PROGRAM_DEFINITIONS` (`apps/web/lib/program-routes.ts`). Never who may open
 it: that is its registry entry's gate (`PROGRAM_REGISTRY`,
 `apps/web/lib/programs.ts`, server-only).
+
+**Twin.** The E2E test store's stand-in for a domain's database functions.
+A domain's facade picks between the two once, with `twin(real, store, keys)`
+(`apps/web/lib/twin.ts`): each named function asks `usesTestStore()` when it
+is called. The store only stores; a rule both sides apply is one function in
+`packages/core`.
+
+**Agreement suite.** A test that runs one scenario through a domain's facade
+twice, on real Postgres (PGlite) and on the test store, with the same people
+seeded both ways (`apps/web/lib/__tests__/_agreement.ts`), and requires the
+same answers and refusals once ids and clocks are taken out. One per twinned
+domain: `apps/web/lib/__tests__/<domain>-agreement.test.ts`.

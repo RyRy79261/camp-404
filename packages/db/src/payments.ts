@@ -1,12 +1,12 @@
 import { and, count, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
+  checkPaymentInput,
   type Currency,
   formatMemberRefCode,
-  isCurrency,
+  memberPaymentAllowed,
   paymentReference,
   type PaymentStatus,
-  UnknownCurrencyError,
   MONEY_KEEPER,
 } from "@camp404/core";
 import type { PaymentMethod, PaymentSource } from "@camp404/types";
@@ -120,26 +120,14 @@ export async function recordPayment(
 ): Promise<{ id: string; reference: string }> {
   // Checked here as well as at the action: the database is the last caller's
   // guard, and a payment in another currency would be added to a rand total.
-  if (!isCurrency(input.currency)) {
-    throw new UnknownCurrencyError(input.currency);
-  }
-  if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0) {
-    throw new Error(
-      "recordPayment: the amount must be whole cents, not negative",
-    );
-  }
+  checkPaymentInput(input);
   const refCode = await ensureMemberRefCode(input.userId);
   if (!refCode) throw new Error("recordPayment: no such member");
   // Resolved before the transaction; see team-memberships.ts.
   const cycle = await currentCycleNumber();
   const note = input.note?.trim() || null;
   const source = input.source ?? "captain";
-  if (
-    source === "member" &&
-    (input.recordedByUserId !== input.userId || input.status !== "pending")
-  ) {
-    throw new MoneyRefused(NOT_A_MONEY_KEEPER);
-  }
+  if (!memberPaymentAllowed(input)) throw new MoneyRefused(NOT_A_MONEY_KEEPER);
 
   for (let attempt = 0; attempt < RETRIES; attempt++) {
     try {

@@ -48,10 +48,13 @@
 //   - member export: MEMBER_EXPORT_COLUMNS, memberExportColumnsFor — the
 //     roster CSV's columns by rank, from the field list (./member-export)
 //   - payment references: formatMemberRefCode, paymentReference,
-//     PAYMENT_STATUSES, paymentSettlesDues (./payment-references)
+//     PAYMENT_STATUSES, paymentSettlesDues, and the ledger's input checks
+//     (checkPaymentInput, memberPaymentAllowed) (./payment-references)
 //   - dues: canManageMoney (captains and Finance leads), duesBalance,
-//     duesSettled, nextInstalment, splitEvenly, proposeRefund and the
-//     statement import (parseStatement, proposeStatementMatches) (./dues)
+//     duesSettled, nextInstalment, splitEvenly, proposeRefund, the rules both
+//     dues stores apply (resolvePledge, feeStandardCents, isFeeConcession,
+//     settleUpCharges, refundAmount) and the statement import
+//     (parseStatement, proposeStatementMatches) (./dues)
 //   - money: CURRENCIES, DEFAULT_CURRENCY, isCurrency, UnknownCurrencyError,
 //     formatMoney, parseMoneyToMinor, decimalToMinor, sumMinor — money is in
 //     rands (ZAR) only, with one formatter; formatForeignEquivalent (and
@@ -123,6 +126,9 @@
 //     and nudge (./shifts)
 //   - gear rental: canManageRental (a captain), checkRentalOrder, tentConflict,
 //     rentalEstimate, priceRentalOrder and rentalSummary (./rental)
+//   - budgets and claims: canApproveClaim, budgetTotals, and the checks both
+//     claim stores apply (claimInputProblem, claimMayMove, claimMoveStamp,
+//     budgetAmountProblem) (./claims)
 //   - camp layout: canEditLayout (a captain or a Structures lead),
 //     canShareLayout (a captain), the grid helpers (keepOnPlot, movePiece,
 //     turnPiece, newPiece, resizePlot, overlappingPieces), and what a

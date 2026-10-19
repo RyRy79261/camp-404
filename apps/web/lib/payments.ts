@@ -1,120 +1,51 @@
 import "server-only";
 
-import type { PaymentStatus } from "@camp404/core";
-import { currentCycleNumber as dbCurrentCycleNumber } from "@camp404/db/cycles";
-import {
-  ensureMemberRefCode as dbEnsureMemberRefCode,
-  listPayments as dbListPayments,
-  receivedTotal as dbReceivedTotal,
-  recordPayment as dbRecordPayment,
-  setPaymentStatus as dbSetPaymentStatus,
-  type PaymentRow,
-  type RecordPaymentInput,
-} from "@camp404/db/payments";
-import { usesTestStore } from "./test-mode";
+import * as cycles from "@camp404/db/cycles";
+import * as db from "@camp404/db/payments";
+import type { PaymentRow } from "@camp404/db/payments";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // Payments ledger facade. Routes through `@camp404/db/payments` normally, and
 // through the in-memory test store's ledger twin under E2E_TEST_MODE, so
 // Playwright can drive the payments screen and the Overview's "Dues paid".
 // Every caller gates on the Finance rule first (captains and Finance leads);
-// the writes check it again themselves and throw MoneyRefused.
+// the writes check it again themselves and throw MoneyRefused. The rules the
+// two sides share (the input checks, in order) are `checkPaymentInput` in
+// @camp404/core; lib/__tests__/payments-agreement.test.ts holds them equal.
 
 export type { PaymentRow };
 
-interface PaymentsBackend {
-  currentCycleNumber(): Promise<number>;
-  ensureMemberRefCode(userId: string): Promise<string | null>;
-  listPayments(cycle: number): Promise<PaymentRow[]>;
-  recordPayment(
-    input: RecordPaymentInput,
-  ): Promise<{ id: string; reference: string }>;
-  setPaymentStatus(input: {
-    paymentId: string;
-    from: PaymentStatus;
-    to: PaymentStatus;
-    actorId: string;
-  }): Promise<boolean>;
-  receivedTotal(cycle: number): Promise<number>;
-}
-
-// Each entry calls through at CALL time, so a unit test's vi.mock of the db
-// module still intercepts it.
-const realBackend: PaymentsBackend = {
-  currentCycleNumber: () => dbCurrentCycleNumber(),
-  ensureMemberRefCode: (userId) => dbEnsureMemberRefCode(userId),
-  listPayments: (cycle) => dbListPayments(cycle),
-  recordPayment: (input) => dbRecordPayment(input),
-  setPaymentStatus: (input) => dbSetPaymentStatus(input),
-  receivedTotal: (cycle) => dbReceivedTotal(cycle),
-};
-
-const testBackend: PaymentsBackend = {
-  async currentCycleNumber() {
-    return testStore.currentCycleNumber();
-  },
-  async ensureMemberRefCode(userId) {
-    return testStore.ensureMemberRefCode(userId);
-  },
-  async listPayments(cycle) {
-    return testStore.listPayments(cycle);
-  },
-  async recordPayment(input) {
-    return testStore.recordPayment(input);
-  },
-  // The store keeps no audit log; the actor's id decides who may move it.
-  async setPaymentStatus(input) {
-    return testStore.setPaymentStatus(input);
-  },
-  async receivedTotal(cycle) {
-    return testStore.receivedTotal(cycle);
-  },
-};
-
-function backend(): PaymentsBackend {
-  return usesTestStore() ? testBackend : realBackend;
-}
+const ledger = twin(db, testStore, [
+  "ensureMemberRefCode",
+  "listPayments",
+  "recordPayment",
+  "setPaymentStatus",
+  "receivedTotal",
+]);
+const year = twin(cycles, testStore, ["currentCycleNumber"]);
 
 /** The burn year the ledger records into and reads by default. */
-export function ledgerCycle(): Promise<number> {
-  return backend().currentCycleNumber();
-}
+export const ledgerCycle = year.currentCycleNumber;
 
 /**
  * The member's own payment reference, for their profile. Given out the first
  * time it is needed.
  */
-export function getMemberRefCode(userId: string): Promise<string | null> {
-  return backend().ensureMemberRefCode(userId);
-}
+export const getMemberRefCode = ledger.ensureMemberRefCode;
 
 /** Every payment in one burn year, newest first. */
-export function listPayments(cycle: number): Promise<PaymentRow[]> {
-  return backend().listPayments(cycle);
-}
+export const listPayments = ledger.listPayments;
 
 /**
  * Record a payment for this year. Refuses any currency but ZAR, and throws
  * MoneyRefused for anyone but the Finance team (or a member's own pending
  * payment with a proof file).
  */
-export function recordPayment(
-  input: RecordPaymentInput,
-): Promise<{ id: string; reference: string }> {
-  return backend().recordPayment(input);
-}
+export const recordPayment = ledger.recordPayment;
 
 /** Compare-and-set on the status the captain saw: false when it had moved. */
-export function setPaymentStatus(input: {
-  paymentId: string;
-  from: PaymentStatus;
-  to: PaymentStatus;
-  actorId: string;
-}): Promise<boolean> {
-  return backend().setPaymentStatus(input);
-}
+export const setPaymentStatus = ledger.setPaymentStatus;
 
 /** Rands received in one year, in cents. */
-export function receivedTotal(cycle: number): Promise<number> {
-  return backend().receivedTotal(cycle);
-}
+export const receivedTotal = ledger.receivedTotal;

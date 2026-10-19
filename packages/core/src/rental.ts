@@ -1,6 +1,7 @@
 import {
   type ParticipationStatus,
   type RentalChoice,
+  type RentalItemInput,
   type RentalOrderStatus,
   type RentalTentChoice,
   type RentalSource,
@@ -605,4 +606,87 @@ export function rentalSummary(
     supplierCents,
     chargedCents: campCents + supplierCents,
   };
+}
+
+// --- The rules both rental stores apply -------------------------------------
+//
+// @camp404/db/rental and the E2E test store (apps/web/lib/test-store-rental.ts)
+// both call these, so the sentences and the order of the checks are written
+// once. Locks, SQL and audit rows stay in the database module.
+
+export const TOO_MANY_RENTAL_ITEMS = "A year has at most 30 rental items.";
+export const RENTAL_ORDER_CHANGED =
+  "Your order changed somewhere else. Reload the page.";
+export const RENTAL_ORDER_SENT =
+  "Your order is already sent. Take it back to change it.";
+export const RENTAL_ORDER_CONFIRMED =
+  "Your order is confirmed. Ask a captain to reopen it if it needs to change.";
+export const RENTAL_NOTHING_TO_SEND =
+  "Say what you need, or that you have your own, before you send it.";
+export const RENTAL_ORDER_MOVED =
+  "This order changed since you opened it. Reload the page.";
+export const RENTAL_REOPEN_FIRST =
+  "This order is confirmed. Reopen it before you change it.";
+
+/** The most live items one year's catalogue may have. */
+export const MAX_RENTAL_ITEMS = 30;
+
+/** A catalogue item as it is stored: anything but a tent sleeps one. */
+export function rentalItemValues(item: RentalItemInput) {
+  return {
+    name: item.name,
+    isTent: item.isTent,
+    sleeps: item.isTent ? item.sleeps : 1,
+    campPriceCents: item.campPriceCents,
+    campStockCount: item.campStockCount,
+    supplierPriceCents: item.supplierPriceCents,
+    reserveCount: item.reserveCount,
+    reserveSource: item.reserveSource,
+  };
+}
+
+/** An order sent with no tent answer and no line says nothing: refused. */
+export function rentalSendProblem(
+  submit: boolean,
+  checked: { tent: unknown; lines: readonly unknown[] },
+): string | null {
+  return submit && checked.tent === null && checked.lines.length === 0
+    ? RENTAL_NOTHING_TO_SEND
+    : null;
+}
+
+/**
+ * Why a member's own save lost its compare-and-set, by the state their order
+ * is in now (undefined: it is a draft whose version moved, or it is gone).
+ */
+export function memberOrderLocked(
+  status: RentalOrderStatus | undefined,
+): string {
+  if (status === "submitted") return RENTAL_ORDER_SENT;
+  if (status === "confirmed") return RENTAL_ORDER_CONFIRMED;
+  return RENTAL_ORDER_CHANGED;
+}
+
+/** Why a captain's fill-in lost its compare-and-set, by the order's state now. */
+export function filledOrderLocked(
+  status: RentalOrderStatus | undefined,
+): string {
+  return status === "confirmed" ? RENTAL_REOPEN_FIRST : RENTAL_ORDER_MOVED;
+}
+
+/** Why a member could not take their sent order back, by its state now. */
+export function withdrawLocked(status: RentalOrderStatus | undefined): string {
+  return status === "confirmed" ? RENTAL_ORDER_CONFIRMED : RENTAL_ORDER_CHANGED;
+}
+
+/**
+ * A confirmation names a tent exactly when the member said they need one:
+ * missing, it asks for the pick; given for anyone else, the order moved.
+ */
+export function confirmTentProblem(
+  tentChoice: RentalTentChoice | null,
+  pick: unknown,
+): string | null {
+  if ((tentChoice === "need") === (pick !== null)) return null;
+  return tentChoice === "need" ? RENTAL_PICK_A_TENT : RENTAL_ORDER_MOVED;
 }

@@ -4,7 +4,18 @@ import {
   canManageMoney,
   duesBalance,
   duesSettled,
+  feeStandardCents,
   FINANCE_TEAM,
+  isFeeConcession,
+  NO_TIERS_YET,
+  PLEDGE_NOT_BELOW,
+  refundAmount,
+  REFUND_TOO_LARGE,
+  resolvePledge,
+  SETTLE_UP_CHANGED,
+  SETTLE_UP_NOBODY,
+  settleUpCharges,
+  TIER_GONE,
   findMemberRef,
   nextInstalment,
   paymentFigures,
@@ -479,5 +490,108 @@ describe("proposeStatementMatches", () => {
       ]);
       expect(promised!.member).toBeNull();
     }
+  });
+});
+
+describe("the rules both dues stores apply", () => {
+  const tiers = [
+    { id: "low", amountCents: 100 },
+    { id: "high", amountCents: 300 },
+  ];
+
+  it("resolves a pledge to a live tier or an amount below the lowest", () => {
+    expect(resolvePledge({ kind: "tier", tierId: "x" }, [])).toBe(NO_TIERS_YET);
+    expect(resolvePledge({ kind: "tier", tierId: "high" }, tiers)).toEqual({
+      tierId: "high",
+      amountCents: 300,
+    });
+    expect(resolvePledge({ kind: "tier", tierId: "gone" }, tiers)).toBe(
+      TIER_GONE,
+    );
+    expect(resolvePledge({ kind: "below", amountCents: 99 }, tiers)).toEqual({
+      tierId: null,
+      amountCents: 99,
+    });
+    expect(resolvePledge({ kind: "below", amountCents: 100 }, tiers)).toBe(
+      PLEDGE_NOT_BELOW,
+    );
+  });
+
+  it("calls a fee a concession when it has a reason or sits below its standard", () => {
+    const fee = {
+      kind: "fee" as const,
+      amountCents: 100,
+      standardAmountCents: 200,
+      concessionReason: null,
+    };
+    expect(isFeeConcession(fee)).toBe(true);
+    expect(isFeeConcession({ ...fee, standardAmountCents: 100 })).toBe(false);
+    expect(
+      isFeeConcession({
+        ...fee,
+        standardAmountCents: null,
+        concessionReason: "x",
+      }),
+    ).toBe(true);
+    expect(isFeeConcession({ ...fee, kind: "rental" })).toBe(false);
+  });
+
+  it("takes a fee's standard from the pledge, else the fee it replaces", () => {
+    const live = { standardAmountCents: 5, amountCents: 7 };
+    expect(feeStandardCents(3, live)).toBe(3);
+    expect(feeStandardCents(null, live)).toBe(5);
+    expect(
+      feeStandardCents(undefined, { ...live, standardAmountCents: null }),
+    ).toBe(7);
+    expect(feeStandardCents(null, null)).toBeNull();
+  });
+
+  it("shares a settle-up only across the members previewed, leaving out a share of nothing", () => {
+    const candidates = [
+      { userId: "b", concession: false },
+      { userId: "a", concession: true },
+    ];
+    const base = {
+      candidates,
+      skipConcessions: false,
+      previewedUserIds: ["a", "b", "b"],
+      totalCents: 1,
+      direction: "refund" as const,
+    };
+    expect(settleUpCharges(base)).toEqual({
+      userIds: ["a", "b"],
+      charges: [{ userId: "a", amountCents: -1 }],
+    });
+    expect(settleUpCharges({ ...base, skipConcessions: true })).toBe(
+      SETTLE_UP_CHANGED,
+    );
+    expect(settleUpCharges({ ...base, candidates: [] })).toBe(SETTLE_UP_NOBODY);
+  });
+
+  it("pays back what Finance named, else the schedule, else the payment, never more", () => {
+    expect(
+      refundAmount({ requestedCents: 5, proposedCents: 3, paymentCents: 10 }),
+    ).toBe(5);
+    expect(
+      refundAmount({
+        requestedCents: null,
+        proposedCents: 3,
+        paymentCents: 10,
+      }),
+    ).toBe(3);
+    expect(
+      refundAmount({
+        requestedCents: null,
+        proposedCents: null,
+        paymentCents: 10,
+      }),
+    ).toBe(10);
+    expect(
+      refundAmount({
+        requestedCents: 11,
+        proposedCents: null,
+        paymentCents: 10,
+      }),
+    ).toBe(REFUND_TOO_LARGE);
   });
 });

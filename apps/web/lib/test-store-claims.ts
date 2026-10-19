@@ -1,22 +1,22 @@
 import "server-only";
 
 import {
+  budgetAmountProblem,
   budgetTotals,
   canApproveClaim,
   canManageMoney,
-  CLAIM_MOVES,
+  claimInputProblem,
+  claimMayMove,
+  claimMoveStamp,
   type BudgetTotals,
 } from "@camp404/core";
 import type { DecryptedField } from "@camp404/db/crypto";
 import {
-  CLAIM_BAD_AMOUNT,
   CLAIM_CHANGED,
   CLAIM_NEEDS_A_REASON,
-  CLAIM_NEEDS_A_RECEIPT,
   CLAIM_NO_SUCH_MEMBER,
   CLAIM_NOT_FINANCE,
   CLAIM_NOT_FOUND,
-  CLAIM_TOO_MANY_FILES,
   NOT_THE_CLAIMS_TEAM,
   OWN_CLAIM_DECISION,
   OWN_CLAIM_PAYMENT,
@@ -27,13 +27,8 @@ import {
   type MyClaim,
   type SubmitClaimInput,
 } from "@camp404/db/reimbursements";
+import { BUDGET_CHANGED, BUDGET_NOT_FINANCE } from "@camp404/db/team-budgets";
 import {
-  BUDGET_BAD_AMOUNT,
-  BUDGET_CHANGED,
-  BUDGET_NOT_FINANCE,
-} from "@camp404/db/team-budgets";
-import {
-  CLAIM_MAX_FILES,
   Team as TeamKeys,
   type ClaimAccountType,
   type ClaimStatus,
@@ -43,7 +38,9 @@ import { testStore } from "./test-store";
 
 // The in-memory twin of @camp404/db/reimbursements and team-budgets (#242),
 // for E2E_TEST_MODE. The same rules, sentences and results over the store's
-// own rows: a lead of the claim's team or a captain says yes (canApproveClaim,
+// own rows (the input checks, the move and its stamp are the same functions,
+// in @camp404/core; the rest is held equal by
+// lib/__tests__/claims-agreement.test.ts): a lead of the claim's team or a captain says yes (canApproveClaim,
 // with the store's lead flags read at the moment of the write), the Finance
 // team pays (canManageMoney), nobody decides or pays their own claim, and each
 // move is a compare-and-set on the status the actor saw. The store keeps no
@@ -142,19 +139,12 @@ function move(
   note: string | null,
 ): string | null {
   if (!c) return CLAIM_NOT_FOUND;
-  if (c.status !== from || !CLAIM_MOVES[from].includes(to))
-    return CLAIM_CHANGED;
-  const now = new Date();
+  if (!claimMayMove(c.status, from, to)) return CLAIM_CHANGED;
+  Object.assign(
+    c,
+    claimMoveStamp({ from, to, actorId, note, now: new Date() }),
+  );
   c.status = to;
-  if (from === "submitted") {
-    c.approverId = actorId;
-    c.approvedAt = now;
-    c.decisionNote = note;
-  } else if (to === "paid") {
-    c.paidAt = now;
-  } else if (to === "rejected") {
-    c.decisionNote = note;
-  }
   return null;
 }
 
@@ -266,14 +256,8 @@ export const claimsTestStore = {
       accountDetails: string;
     },
   ): ClaimResult<{ id: string }> {
-    if (input.files.length === 0)
-      return { ok: false, error: CLAIM_NEEDS_A_RECEIPT };
-    if (input.files.length > CLAIM_MAX_FILES) {
-      return { ok: false, error: CLAIM_TOO_MANY_FILES };
-    }
-    if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) {
-      return { ok: false, error: CLAIM_BAD_AMOUNT };
-    }
+    const problem = claimInputProblem(input);
+    if (problem) return { ok: false, error: problem };
     if (!testStore.findUserById(input.submitterId)) {
       return { ok: false, error: CLAIM_NO_SUCH_MEMBER };
     }
@@ -362,12 +346,8 @@ export const claimsTestStore = {
     expectedCents: number | null;
     actorId: string;
   }): ClaimResult {
-    if (
-      input.amountCents !== null &&
-      (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0)
-    ) {
-      return { ok: false, error: BUDGET_BAD_AMOUNT };
-    }
+    const problem = budgetAmountProblem(input.amountCents);
+    if (problem) return { ok: false, error: problem };
     if (!isMoneyKeeper(input.actorId)) {
       return { ok: false, error: BUDGET_NOT_FINANCE };
     }

@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { CLAIM_STATUSES } from "@camp404/types";
+import { CLAIM_MAX_FILES, CLAIM_STATUSES } from "@camp404/types";
 import {
+  BUDGET_BAD_AMOUNT,
+  budgetAmountProblem,
   budgetSpentPercent,
   budgetTotals,
   canApproveClaim,
   claimApprovalScope,
   claimReviewScope,
+  CLAIM_BAD_AMOUNT,
+  claimInputProblem,
+  claimMayMove,
+  claimMoveStamp,
   CLAIM_MOVES,
+  CLAIM_NEEDS_A_RECEIPT,
   CLAIM_STATUS_LABELS,
+  CLAIM_TOO_MANY_FILES,
 } from "../claims";
 import { FINANCE_TEAM } from "../dues";
 
@@ -134,5 +142,65 @@ describe("claim scopes", () => {
       "power_and_lighting",
     ]);
     expect(claimReviewScope(member)).toEqual([]);
+  });
+});
+
+describe("the checks both claim stores apply", () => {
+  it("wants a receipt, at most the file limit, and whole cents above R0, in that order", () => {
+    expect(claimInputProblem({ files: [], amountCents: 0 })).toBe(
+      CLAIM_NEEDS_A_RECEIPT,
+    );
+    expect(
+      claimInputProblem({
+        files: Array.from({ length: CLAIM_MAX_FILES + 1 }),
+        amountCents: 0,
+      }),
+    ).toBe(CLAIM_TOO_MANY_FILES);
+    expect(claimInputProblem({ files: [1], amountCents: 0 })).toBe(
+      CLAIM_BAD_AMOUNT,
+    );
+    expect(claimInputProblem({ files: [1], amountCents: 0.5 })).toBe(
+      CLAIM_BAD_AMOUNT,
+    );
+    expect(claimInputProblem({ files: [1], amountCents: 1 })).toBeNull();
+  });
+
+  it("moves a claim only from the status the actor saw, along CLAIM_MOVES", () => {
+    expect(claimMayMove("submitted", "submitted", "approved")).toBe(true);
+    expect(claimMayMove("approved", "submitted", "approved")).toBe(false);
+    expect(claimMayMove("submitted", "submitted", "paid")).toBe(false);
+    expect(claimMayMove("paid", "paid", "rejected")).toBe(false);
+  });
+
+  it("stamps the team's decision, the payment, or Finance's no", () => {
+    const now = new Date(0);
+    expect(
+      claimMoveStamp({
+        from: "submitted",
+        to: "rejected",
+        actorId: "a",
+        note: "x",
+        now,
+      }),
+    ).toEqual({ approverId: "a", approvedAt: now, decisionNote: "x" });
+    expect(
+      claimMoveStamp({ from: "approved", to: "paid", actorId: "a", now }),
+    ).toEqual({ paidById: "a", paidAt: now });
+    expect(
+      claimMoveStamp({
+        from: "approved",
+        to: "rejected",
+        actorId: "a",
+        note: "y",
+        now,
+      }),
+    ).toEqual({ decisionNote: "y" });
+  });
+
+  it("takes a budget of whole cents, R0 or more, or none", () => {
+    expect(budgetAmountProblem(null)).toBeNull();
+    expect(budgetAmountProblem(0)).toBeNull();
+    expect(budgetAmountProblem(-1)).toBe(BUDGET_BAD_AMOUNT);
+    expect(budgetAmountProblem(1.5)).toBe(BUDGET_BAD_AMOUNT);
   });
 });

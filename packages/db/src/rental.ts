@@ -3,17 +3,30 @@ import {
   campStockInUse,
   campStockTaken,
   checkRentalOrder,
+  confirmTentProblem,
+  filledOrderLocked,
   GEAR_ORDER_ACTION_KEY,
   GEAR_ORDER_ACTION_TITLE,
   GEAR_ORDER_REF_TYPE,
   gearOrderAskNotification,
   isAskedForGear,
+  MAX_RENTAL_ITEMS,
+  memberOrderLocked,
   priceRentalOrder,
   RENTAL_NOT_A_TENT,
-  RENTAL_PICK_A_TENT,
   rentalChargeDescription,
+  rentalItemValues,
+  rentalSendProblem,
   rentalSummary,
+  RENTAL_NOTHING_TO_SEND,
+  RENTAL_ORDER_CHANGED,
+  RENTAL_ORDER_CONFIRMED,
+  RENTAL_ORDER_MOVED,
+  RENTAL_ORDER_SENT,
+  RENTAL_REOPEN_FIRST,
   tentConflict,
+  TOO_MANY_RENTAL_ITEMS,
+  withdrawLocked,
   type RentalLineDraft,
   type RentalSummary,
   type RentalTentDraft,
@@ -74,22 +87,20 @@ export type RentalResult<T = object> =
 export const NOT_A_RENTAL_MANAGER = "Only captains can run gear rental.";
 export const RENTAL_ITEM_MISSING =
   "That item isn't on the list any more. Reload the page.";
-export const TOO_MANY_RENTAL_ITEMS = "A year has at most 30 rental items.";
 export const RENTAL_NO_SUCH_MEMBER = "That member isn't in the camp.";
 export const RENTAL_SHARER_GONE =
   "One of the people you picked isn't a camp member. Pick again.";
-export const RENTAL_ORDER_CHANGED =
-  "Your order changed somewhere else. Reload the page.";
-export const RENTAL_ORDER_SENT =
-  "Your order is already sent. Take it back to change it.";
-export const RENTAL_ORDER_CONFIRMED =
-  "Your order is confirmed. Ask a captain to reopen it if it needs to change.";
-export const RENTAL_NOTHING_TO_SEND =
-  "Say what you need, or that you have your own, before you send it.";
-export const RENTAL_ORDER_MOVED =
-  "This order changed since you opened it. Reload the page.";
-export const RENTAL_REOPEN_FIRST =
-  "This order is confirmed. Reopen it before you change it.";
+// The sentences of the rules both rental stores share live with those rules
+// in @camp404/core; they are named here too, beside the rest.
+export {
+  RENTAL_NOTHING_TO_SEND,
+  RENTAL_ORDER_CHANGED,
+  RENTAL_ORDER_CONFIRMED,
+  RENTAL_ORDER_MOVED,
+  RENTAL_ORDER_SENT,
+  RENTAL_REOPEN_FIRST,
+  TOO_MANY_RENTAL_ITEMS,
+};
 export const RENTAL_KIND_IN_USE =
   "Orders already have this item, so it can't change between a tent and not a tent. Add a new item instead.";
 export const RENTAL_TENT_NOT_CONFIRMED =
@@ -190,19 +201,6 @@ export async function listRentalItems(
   return rows.map(toItem);
 }
 
-function itemValues(item: RentalItemInput) {
-  return {
-    name: item.name,
-    isTent: item.isTent,
-    sleeps: item.isTent ? item.sleeps : 1,
-    campPriceCents: item.campPriceCents,
-    campStockCount: item.campStockCount,
-    supplierPriceCents: item.supplierPriceCents,
-    reserveCount: item.reserveCount,
-    reserveSource: item.reserveSource,
-  };
-}
-
 /**
  * How many of each item confirmed orders took from camp stock, this year.
  * `exceptOrderId` leaves one order out (the one being confirmed). Call it with
@@ -257,10 +255,10 @@ export async function addRentalItem(input: {
   return write(async (tx) => {
     await assertRentalManager(tx, input.actorId);
     const live = await listRentalItems(input.cycle, {}, tx);
-    if (live.length >= 30) refuse(TOO_MANY_RENTAL_ITEMS);
+    if (live.length >= MAX_RENTAL_ITEMS) refuse(TOO_MANY_RENTAL_ITEMS);
     const [row] = await tx
       .insert(schema.rentalItems)
-      .values({ cycle: input.cycle, ...itemValues(input.item) })
+      .values({ cycle: input.cycle, ...rentalItemValues(input.item) })
       .returning({ id: schema.rentalItems.id });
     await writeAuditEvent(tx, {
       actorId: input.actorId,
@@ -304,7 +302,7 @@ export async function editRentalItem(input: {
     }
     const rows = await tx
       .update(schema.rentalItems)
-      .set({ ...itemValues(input.item), updatedAt: new Date() })
+      .set({ ...rentalItemValues(input.item), updatedAt: new Date() })
       .where(
         and(
           eq(schema.rentalItems.id, input.itemId),
@@ -1080,9 +1078,8 @@ async function storeOrder(
   const items = await listRentalItems(input.cycle, {}, tx);
   const checked = checkRentalOrder(items, input, input.userId);
   if (!checked.ok) refuse(checked.error);
-  if (input.submit && checked.tent === null && checked.lines.length === 0) {
-    refuse(RENTAL_NOTHING_TO_SEND);
-  }
+  const nothing = rentalSendProblem(input.submit, checked);
+  if (nothing) refuse(nothing);
   const sharerIds = checked.tent?.sharerIds ?? [];
   if (sharerIds.some((id) => !UUID.test(id))) refuse(RENTAL_SHARER_GONE);
 
@@ -1270,12 +1267,7 @@ export async function saveRentalOrder(
       ...input,
       from: ["draft"],
       filledBy: null,
-      locked: (status) =>
-        status === "submitted"
-          ? RENTAL_ORDER_SENT
-          : status === "confirmed"
-            ? RENTAL_ORDER_CONFIRMED
-            : RENTAL_ORDER_CHANGED,
+      locked: memberOrderLocked,
     });
     return { version: saved.version, status: saved.status };
   });
@@ -1318,11 +1310,7 @@ export async function withdrawRentalOrder(input: {
           ),
         )
         .limit(1);
-      refuse(
-        current?.status === "confirmed"
-          ? RENTAL_ORDER_CONFIRMED
-          : RENTAL_ORDER_CHANGED,
-      );
+      refuse(withdrawLocked(current?.status));
     }
     return { version: next };
   });
@@ -1357,8 +1345,7 @@ export async function fillRentalOrderFor(
       expectedVersion: input.expectedVersion,
       from: ["draft", "submitted"],
       filledBy: input.actorId,
-      locked: (status) =>
-        status === "confirmed" ? RENTAL_REOPEN_FIRST : RENTAL_ORDER_MOVED,
+      locked: filledOrderLocked,
     });
     await writeAuditEvent(tx, {
       actorId: input.actorId,
@@ -1474,11 +1461,8 @@ export async function confirmRentalOrder(input: {
       });
     if (!order) refuse(RENTAL_ORDER_MOVED);
     const pick = input.tent ?? null;
-    if ((order.tentChoice === "need") !== (pick !== null)) {
-      refuse(
-        order.tentChoice === "need" ? RENTAL_PICK_A_TENT : RENTAL_ORDER_MOVED,
-      );
-    }
+    const tentProblem = confirmTentProblem(order.tentChoice, pick);
+    if (tentProblem) refuse(tentProblem);
 
     // Archived items too: an order keeps an item taken off the list.
     const items = await listRentalItems(

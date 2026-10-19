@@ -4,8 +4,20 @@ import {
   duesBalance,
   nextInstalment,
   paymentFigures,
+  feeStandardCents,
+  isFeeConcession,
+  MAX_FEE_TIERS,
+  NO_TIERS_YET,
+  PLEDGE_NOT_BELOW,
   proposeRefund,
-  splitEvenly,
+  refundAmount,
+  REFUND_TOO_LARGE,
+  resolvePledge,
+  SETTLE_UP_CHANGED,
+  SETTLE_UP_NOBODY,
+  settleUpCharges,
+  TIER_GONE,
+  TOO_MANY_TIERS,
   type DuesBalance,
   type NextInstalment,
   type PaymentFigures,
@@ -58,12 +70,17 @@ export const NOT_A_MONEY_KEEPER =
   "Only captains and Finance leads can change the camp's dues.";
 export const YEAR_CHANGED =
   "Someone changed this year's dues dates first. Reload the page.";
-export const TIER_GONE = "That fee tier isn't there any more. Reload the page.";
-export const TOO_MANY_TIERS = "A year has at most 12 fee tiers.";
-export const NO_TIERS_YET =
-  "The Finance team hasn't set this year's fees yet. Check back soon.";
-export const PLEDGE_NOT_BELOW =
-  "A pledge below the lowest tier must be less than it. Otherwise pick a tier.";
+// The sentences of the rules both dues stores share live with those rules in
+// @camp404/core; they are named here too, beside the rest.
+export {
+  NO_TIERS_YET,
+  PLEDGE_NOT_BELOW,
+  REFUND_TOO_LARGE,
+  SETTLE_UP_CHANGED,
+  SETTLE_UP_NOBODY,
+  TIER_GONE,
+  TOO_MANY_TIERS,
+};
 export const FEE_ALREADY_SET =
   "Your camp fee is already set. Ask the Finance team if it needs to change.";
 export const FEE_CHANGED =
@@ -73,15 +90,10 @@ export const CHARGE_GONE =
 export const PLAN_CHANGED =
   "Someone changed this member's plan first. Reload the page.";
 export const NO_SUCH_MEMBER = "That member isn't in the camp.";
-export const SETTLE_UP_CHANGED =
-  "The members to share it across changed. Preview it again.";
-export const SETTLE_UP_NOBODY =
-  "Nobody has a camp fee this year to share it across.";
 export const REFUND_NOT_RECEIVED =
   "Only a payment the camp has received can be refunded.";
 export const REFUND_ALREADY_OPEN =
   "This payment already has a refund. Reload the page.";
-export const REFUND_TOO_LARGE = "A refund can't be more than the payment.";
 export const REFUND_CHANGED =
   "Someone already decided this refund. Reload the page.";
 export const REFUND_HOLDS_PAYMENT =
@@ -293,7 +305,7 @@ export async function addFeeTier(
   return write(async (tx) => {
     await assertMoneyKeeper(tx, input.actorId);
     const live = await listFeeTiers(input.cycle, {}, tx);
-    if (live.length >= 12) refuse(TOO_MANY_TIERS);
+    if (live.length >= MAX_FEE_TIERS) refuse(TOO_MANY_TIERS);
     const [row] = await tx
       .insert(schema.feeTiers)
       .values({
@@ -462,18 +474,6 @@ export interface MemberDues {
   next: NextInstalment | null;
 }
 
-function isConcession(c: {
-  kind: ChargeKind;
-  standardAmountCents: number | null;
-  amountCents: number;
-  concessionReason: string | null;
-}): boolean {
-  if (c.kind !== "fee") return false;
-  return (
-    c.concessionReason !== null ||
-    (c.standardAmountCents !== null && c.amountCents < c.standardAmountCents)
-  );
-}
 
 /**
  * One member's dues for a year, or null when there is no such member. A
@@ -601,7 +601,7 @@ export async function getMemberDues(
     currency: c.currency,
     standardAmountCents: options.forFinance ? c.standardAmountCents : null,
     concessionReason: options.forFinance ? c.concessionReason : null,
-    concession: options.forFinance ? isConcession(c) : false,
+    concession: options.forFinance ? isFeeConcession(c) : false,
     cancelled: c.cancelledAt !== null,
     createdAt: c.createdAt,
   }));
@@ -730,22 +730,12 @@ export async function savePledge(input: {
 }): Promise<MoneyResult<{ charged: boolean }>> {
   return write(async (tx) => {
     await assertMember(tx, input.userId);
-    const tiers = await listFeeTiers(input.cycle, {}, tx);
-    if (tiers.length === 0) refuse(NO_TIERS_YET);
-    let tierId: string | null = null;
-    let amountCents: number;
-    const pledge = input.pledge;
-    if (pledge.kind === "tier") {
-      const tier = tiers.find((t) => t.id === pledge.tierId);
-      if (!tier) refuse(TIER_GONE);
-      tierId = tier.id;
-      amountCents = tier.amountCents;
-    } else {
-      if (pledge.amountCents >= tiers[0]!.amountCents) {
-        refuse(PLEDGE_NOT_BELOW);
-      }
-      amountCents = pledge.amountCents;
-    }
+    const pledged = resolvePledge(
+      input.pledge,
+      await listFeeTiers(input.cycle, {}, tx),
+    );
+    if (typeof pledged === "string") refuse(pledged);
+    const { tierId, amountCents } = pledged;
     const [fee] = await tx
       .select({ id: schema.duesCharges.id })
       .from(schema.duesCharges)
@@ -862,11 +852,7 @@ export async function setFee(
     }
     // What the fee would be without a concession: the pledge, else the fee
     // this one replaces.
-    const standard =
-      account?.pledged ??
-      live?.standardAmountCents ??
-      live?.amountCents ??
-      null;
+    const standard = feeStandardCents(account?.pledged, live);
     const [row] = await tx
       .insert(schema.duesCharges)
       .values({
@@ -1176,7 +1162,7 @@ export async function listDuesAccounts(
           account?.amountCents != null ? (account.label ?? null) : null,
         pledgeCents: account?.amountCents ?? null,
         feeCents: fee?.amountCents ?? null,
-        concession: fee ? isConcession(fee) : false,
+        concession: fee ? isFeeConcession(fee) : false,
         balance,
         next: nextInstalment(plansOf.get(m.id) ?? [], balance.paidCents, today),
         pendingProofs: paid.filter(
@@ -1225,7 +1211,7 @@ async function settleUpCandidatesIn(
     .map((r) => ({
       userId: r.userId,
       name: r.name?.trim() || "Unnamed burner",
-      concession: isConcession(r),
+      concession: isFeeConcession(r),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -1251,15 +1237,13 @@ export async function publishSettleUp(
 ): Promise<MoneyResult<{ id: string; members: number }>> {
   return write(async (tx) => {
     await assertMoneyKeeper(tx, input.actorId);
-    const candidates = (await settleUpCandidatesIn(tx, input.cycle)).filter(
-      (c) => !(input.skipConcessions && c.concession),
-    );
-    const ids = candidates.map((c) => c.userId).sort();
-    const previewed = [...new Set(input.previewedUserIds)].sort();
-    if (ids.length === 0) refuse(SETTLE_UP_NOBODY);
-    if (ids.join(",") !== previewed.join(",")) refuse(SETTLE_UP_CHANGED);
+    const split = settleUpCharges({
+      ...input,
+      candidates: await settleUpCandidatesIn(tx, input.cycle),
+    });
+    if (typeof split === "string") refuse(split);
+    const ids = split.userIds;
     const sign = input.direction === "refund" ? -1 : 1;
-    const shares = splitEvenly(input.totalCents, ids);
     const [batch] = await tx
       .insert(schema.duesSettleUps)
       .values({
@@ -1270,17 +1254,15 @@ export async function publishSettleUp(
         createdByUserId: input.actorId,
       })
       .returning({ id: schema.duesSettleUps.id });
-    const values = [...shares.entries()]
-      .filter(([, cents]) => cents > 0)
-      .map(([userId, cents]) => ({
-        userId,
-        cycle: input.cycle,
-        kind: "settle_up" as const,
-        description: input.description,
-        amountCents: sign * cents,
-        settleUpId: batch!.id,
-        createdByUserId: input.actorId,
-      }));
+    const values = split.charges.map(({ userId, amountCents }) => ({
+      userId,
+      cycle: input.cycle,
+      kind: "settle_up" as const,
+      description: input.description,
+      amountCents,
+      settleUpId: batch!.id,
+      createdByUserId: input.actorId,
+    }));
     if (values.length > 0) await tx.insert(schema.duesCharges).values(values);
     await writeAuditEvent(tx, {
       actorId: input.actorId,
@@ -1373,10 +1355,12 @@ export async function requestRefund(input: {
     }
     if (payment.status !== "reconciled") refuse(REFUND_NOT_RECEIVED);
     const proposal = await proposalFor(tx, payment, input.today);
-    const amountCents = asMember
-      ? (proposal.amountCents ?? payment.amountCents)
-      : input.amountCents!;
-    if (amountCents > payment.amountCents) refuse(REFUND_TOO_LARGE);
+    const amountCents = refundAmount({
+      requestedCents: input.amountCents,
+      proposedCents: proposal.amountCents,
+      paymentCents: payment.amountCents,
+    });
+    if (typeof amountCents === "string") refuse(amountCents);
     const [row] = await tx
       .insert(schema.paymentRefunds)
       .values({

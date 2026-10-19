@@ -11,6 +11,8 @@
 // Camp 404 is one camp, so the prefix is a constant rather than something
 // derived from a camp name the config does not hold. Pure.
 
+import { isCurrency, UnknownCurrencyError } from "./money";
+
 /** The prefix every Camp 404 reference starts with. */
 export const MEMBER_REF_PREFIX = "C404";
 
@@ -52,4 +54,40 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 /** A payment counts toward "dues paid" once it is seen in the bank or waived. */
 export function paymentSettlesDues(status: PaymentStatus): boolean {
   return status === "reconciled" || status === "waived";
+}
+
+/**
+ * The ledger's own checks on a payment to record, before any read or write,
+ * in the order recordPayment applies them: any currency but ZAR throws
+ * UnknownCurrencyError, then an amount that is not whole, non-negative cents
+ * throws. The database's recordPayment and the E2E store's both call this.
+ */
+export function checkPaymentInput(input: {
+  currency: unknown;
+  amountCents: number;
+}): void {
+  if (!isCurrency(input.currency)) {
+    throw new UnknownCurrencyError(input.currency);
+  }
+  if (!Number.isSafeInteger(input.amountCents) || input.amountCents < 0) {
+    throw new Error(
+      "recordPayment: the amount must be whole cents, not negative",
+    );
+  }
+}
+
+/**
+ * Whether a payment a MEMBER puts on the ledger (`source: "member"`) may go
+ * on: only their own, and only pending (it waits for a proof check). False
+ * refuses it with the Finance team's sentence. A payment from any other
+ * source passes here and is held to the Finance rule (MONEY_KEEPER) instead.
+ */
+export function memberPaymentAllowed(input: {
+  source?: string;
+  userId: string;
+  recordedByUserId: string;
+  status: PaymentStatus;
+}): boolean {
+  if ((input.source ?? "captain") !== "member") return true;
+  return input.recordedByUserId === input.userId && input.status === "pending";
 }
