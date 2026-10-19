@@ -70,6 +70,10 @@ import {
   runErrorText,
   teamProgramEditor,
   LOGISTICS_EDITOR,
+  taskAddProblem,
+  taskEditProblem,
+  taskMoveProblem,
+  taskRemoveProblem,
 } from "@camp404/core";
 import {
   DRAFT_MISSING,
@@ -185,18 +189,10 @@ import type {
 } from "@camp404/db/participations";
 import type { TicketPassChange, TicketRow } from "@camp404/db/tickets";
 import {
-  CANNOT_EDIT,
-  CANNOT_MOVE,
-  CANNOT_REMOVE,
   DONE_VISIBLE_DAYS,
   NOT_A_MEMBER,
-  NOT_A_TASK_AUTHOR,
-  NOT_YOUR_TEAM,
-  NOT_YOUR_TEAM_TO_MOVE,
-  PICK_YOUR_TEAM,
   TASK_EDITED,
   TASK_GONE,
-  TASK_MOVED,
   TEAM_NOT_ACTIVE,
   type AssignableMember,
   type BoardTask,
@@ -4077,14 +4073,11 @@ export const testStore = {
     assigneeId: string | null;
     dueAt: Date | null;
   }): TaskWriteResult<{ id: string }> {
-    const reach = testStore.senderReach(input.creatorId);
-    if (reach !== undefined) {
-      if (reach.length === 0) return { ok: false, error: NOT_A_TASK_AUTHOR };
-      if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
-      if (!reach.includes(input.team)) {
-        return { ok: false, error: NOT_YOUR_TEAM };
-      }
-    }
+    const added = taskAddProblem(
+      testStore.senderReach(input.creatorId),
+      input.team,
+    );
+    if (added) return { ok: false, error: added };
     if (
       input.assigneeId &&
       findUserById(input.assigneeId)?.approvalStatus !== "approved"
@@ -4123,23 +4116,14 @@ export const testStore = {
       (t) => t.id === input.taskId && t.status !== "cancelled",
     );
     if (!task) return { ok: false, error: TASK_GONE };
-    const reach = testStore.senderReach(input.actorId);
-    const leads =
-      reach === undefined || (task.team !== null && reach.includes(task.team));
-    if (!leads && task.createdById !== input.actorId) {
-      return { ok: false, error: CANNOT_EDIT };
-    }
-    if (input.team !== task.team) {
-      if (reach !== undefined) {
-        if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
-        if (!reach.includes(input.team)) {
-          return { ok: false, error: NOT_YOUR_TEAM_TO_MOVE };
-        }
-      }
-      if (input.team && !input.activeTeams.includes(input.team)) {
-        return { ok: false, error: TEAM_NOT_ACTIVE };
-      }
-    }
+    const edited = taskEditProblem({
+      reach: testStore.senderReach(input.actorId),
+      actorId: input.actorId,
+      task,
+      team: input.team,
+      activeTeams: input.activeTeams,
+    });
+    if (edited) return { ok: false, error: edited };
     if (
       input.assigneeId &&
       input.assigneeId !== task.assigneeId &&
@@ -4168,17 +4152,13 @@ export const testStore = {
       (t) => t.id === input.taskId && t.status !== "cancelled",
     );
     if (!task) return { ok: false, error: TASK_GONE };
-    const reach = testStore.senderReach(input.actorId);
-    const leads =
-      reach === undefined || (task.team !== null && reach.includes(task.team));
-    if (
-      !leads &&
-      task.assigneeId !== input.actorId &&
-      task.createdById !== input.actorId
-    ) {
-      return { ok: false, error: CANNOT_MOVE };
-    }
-    if (task.status !== input.from) return { ok: false, error: TASK_MOVED };
+    const moved = taskMoveProblem({
+      reach: testStore.senderReach(input.actorId),
+      actorId: input.actorId,
+      task,
+      from: input.from,
+    });
+    if (moved) return { ok: false, error: moved };
     if (input.from === input.to) return { ok: true };
     task.status = input.to;
     task.completedAt = input.to === "done" ? new Date() : null;
@@ -4206,12 +4186,12 @@ export const testStore = {
       (t) => t.id === input.taskId && t.status !== "cancelled",
     );
     if (!task) return { ok: false, error: TASK_GONE };
-    const reach = testStore.senderReach(input.actorId);
-    const leads =
-      reach === undefined || (task.team !== null && reach.includes(task.team));
-    if (!leads && task.createdById !== input.actorId) {
-      return { ok: false, error: CANNOT_REMOVE };
-    }
+    const removed = taskRemoveProblem({
+      reach: testStore.senderReach(input.actorId),
+      actorId: input.actorId,
+      task,
+    });
+    if (removed) return { ok: false, error: removed };
     task.status = "cancelled";
     return { ok: true };
   },
