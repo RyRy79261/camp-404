@@ -16,10 +16,7 @@ import {
 } from "./activations";
 import { closeActivationTx } from "./questionnaire-lifecycle";
 import { writeAuditEvent } from "./audit";
-import {
-  YEAR_TABLES_ADOPTED_AS_IS,
-  YEAR_TABLES_ADOPTED_BY_HAND,
-} from "./table-lifecycle";
+import { YEAR_TABLES_ADOPTED_AS_IS } from "./table-lifecycle";
 import { deliveryValues } from "./deliveries";
 import {
   advanceCycles,
@@ -541,11 +538,6 @@ export async function planRollover(): Promise<RolloverPlan> {
   return plan;
 }
 
-// Which year-scoped tables setFoundingYear adopts with one plain UPDATE
-// (YEAR_TABLES_ADOPTED_AS_IS) and which it handles one by one below
-// (YEAR_TABLES_ADOPTED_BY_HAND) is each table's `year` in table-lifecycle.ts.
-export { YEAR_TABLES_ADOPTED_AS_IS, YEAR_TABLES_ADOPTED_BY_HAND };
-
 /**
  * Name the camp's founding year — the one-time write that turns the year
  * namespace on.
@@ -692,7 +684,8 @@ export async function setFoundingYear(input: {
           .where(eq(schema.campLayouts.cycle, input.year));
       }
     }
-    // Every other year-scoped table. Nothing can hold the founding year yet
+    // Every other year-scoped table (`year: "as-is"` in table-lifecycle.ts;
+    // the `byHand` ones are around it). Nothing can hold the founding year yet
     // (every write stamps the current year, which was the sentinel), so
     // moving them cannot collide.
     for (const table of YEAR_TABLES_ADOPTED_AS_IS) {
