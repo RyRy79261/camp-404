@@ -94,8 +94,7 @@ export function eraseAttendanceOf(userId: string): void {
 const nameOf = (userId: string) =>
   testStore.findUserById(userId)?.displayName?.trim() || "Unnamed burner";
 
-const isMember = (userId: string) =>
-  testStore.findUserById(userId)?.approvalStatus === "approved";
+const isMember = (userId: string) => testStore.isApprovedMember(userId);
 
 function answersOf(cycle: number): AttendanceEntry[] {
   const out: AttendanceEntry[] = [];
@@ -116,6 +115,7 @@ function comingOf(cycle: number): { userId: string; name: string }[] {
     .allUsers()
     .filter(
       (u) =>
+        !u.sanitised &&
         u.approvalStatus === "approved" &&
         isAskedForAttendance(
           testStore.getParticipation(u.id, cycle)?.status ?? null,
@@ -186,6 +186,7 @@ export const logisticsTestStore = {
       .allUsers()
       .filter(
         (u) =>
+          !u.sanitised &&
           u.approvalStatus === "approved" &&
           testStore.getParticipation(u.id, cycle)?.status === "accepted",
       ).length;

@@ -168,7 +168,7 @@ function liveItem(itemId: string): StoreItem | null {
 
 function custodianOk(userId: string | null | undefined): boolean {
   if (!userId) return true;
-  return testStore.findUserById(userId)?.approvalStatus === "approved";
+  return testStore.isApprovedMember(userId);
 }
 
 function rowOf(item: StoreItem): InventoryItemRow {

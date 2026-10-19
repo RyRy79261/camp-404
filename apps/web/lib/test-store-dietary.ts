@@ -114,7 +114,9 @@ export const dietaryTestStore = {
     return menuDietary(
       [...state().entries()].flatMap(([userId, row]) => {
         const user = testStore.findUserById(userId);
-        if (!user || user.approvalStatus !== "approved") return [];
+        if (!user || user.sanitised || user.approvalStatus !== "approved") {
+          return [];
+        }
         return [
           {
             status: testStore.getParticipation(userId, cycle)?.status ?? null,

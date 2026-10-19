@@ -681,7 +681,7 @@ export const duesTestStore = {
   listDuesAccounts(cycle: number, today: string): DuesAccountRow[] {
     return testStore
       .allUsers()
-      .filter((u) => u.approvalStatus === "approved")
+      .filter((u) => !u.sanitised && u.approvalStatus === "approved")
       .map((u) => {
         const dues = this.getMemberDues(u.id, cycle, {
           forFinance: true,

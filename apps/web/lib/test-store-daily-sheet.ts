@@ -29,7 +29,9 @@ export const dailySheetTestStore = {
   listSheetAllergies(cycle: number): SheetAllergyRow[] {
     return dietaryTestStore.rows().flatMap(([userId, a]) => {
       const user = testStore.findUserById(userId);
-      if (!user || user.approvalStatus !== "approved") return [];
+      if (!user || user.sanitised || user.approvalStatus !== "approved") {
+        return [];
+      }
       const status = testStore.getParticipation(userId, cycle)?.status ?? null;
       if (!isComingThisYear(status)) return [];
       const foods = a.foodsSavedAt ? a.foods : null;

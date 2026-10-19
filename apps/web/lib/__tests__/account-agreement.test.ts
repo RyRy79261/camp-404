@@ -2,7 +2,8 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { lostCatName } from "@camp404/core";
 import { DIETARY_NOT_A_MEMBER } from "@camp404/db/dietary";
-import { DIETS, Team, type EmergencyContact } from "@camp404/types";
+import { NOT_A_MEMBER } from "@camp404/db/tasks";
+import { DIETS, Team, ViewerRank, type EmergencyContact } from "@camp404/types";
 import { useTestDb } from "../../../../packages/db/src/__tests__/_harness";
 import { bothWays } from "./_agreement";
 
@@ -29,6 +30,13 @@ vi.mock("../pet-photos", () => ({ deletePetPhotoBlobs: vi.fn() }));
 vi.mock("../background-work", () => ({ deliverAfterResponse: vi.fn() }));
 
 import { testStore } from "../test-store";
+import {
+  createAnnouncementDraft,
+  getAnnouncementPickerData,
+  publishAnnouncement,
+} from "../notifications";
+import { searchCamp } from "../search";
+import { addTask, listAssignableMembers } from "../tasks";
 import { deleteAccount } from "../account";
 import { getMyDietary, saveMyDietary } from "../dietary";
 import { getMyParticipation } from "../participations";
@@ -191,6 +199,54 @@ describe("account erasure: the database and the test store agree", () => {
       headcount: { members: 3, waiting: 0 },
       roster: ["Cap", "Cook", "Fin"],
       tree: ["Cap", "Cook", "Fin", lostCatName(1), lostCatName(2)],
+    });
+    expect(store).toEqual(db);
+  });
+
+  it("keeps an erased member out of search, task assignees, announcement audiences and the people picker", async () => {
+    const { db, store } = await bothWays(mode, h, async (p, seed) => {
+      await seed.user("Late", { approval: "pending" });
+      await deleteAccount({ userId: p.member, authUserId: "x" });
+      const captain = {
+        userId: p.captain,
+        rank: ViewerRank.enum.captain,
+        runsLounge: true,
+        reviewsRecipes: true,
+      };
+      const sent = await createAnnouncementDraft({
+        senderId: p.captain,
+        title: "Gate opens",
+        body: "At nine.",
+        presentation: "feed",
+        audience: { scope: "everyone" },
+        pinned: false,
+      });
+      return {
+        search: (await searchCamp(captain, lostCatName(1))).map((e) => e.kind),
+        assignable: (await listAssignableMembers()).map((m) => m.displayName),
+        assign: await addTask({
+          creatorId: p.captain,
+          title: "Fix the gate",
+          description: null,
+          team: null,
+          assigneeId: p.member,
+          dueAt: null,
+        }),
+        picker: (await getAnnouncementPickerData(p.captain)).people.map(
+          (m) => m.name,
+        ),
+        everyone: await publishAnnouncement({
+          id: sent.id,
+          senderId: p.captain,
+        }),
+      };
+    });
+    expect(db).toEqual({
+      search: [],
+      assignable: ["Cap", "Cook", "Fin", "Zed"],
+      assign: { ok: false, error: NOT_A_MEMBER },
+      picker: ["Cook", "Fin", "Zed"],
+      everyone: { ok: true, recipientCount: 3 },
     });
     expect(store).toEqual(db);
   });

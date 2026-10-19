@@ -166,6 +166,7 @@ import {
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
 import type { PendingRequiredAction } from "@camp404/db/activations";
+import { computeAudience } from "@camp404/db/audience";
 import type { AuditEvent } from "@camp404/db/audit";
 import { JoinSectionInvalidError } from "@camp404/db/join-site";
 import {
@@ -1276,7 +1277,7 @@ function transportSeatIn(input: {
     driverUserId,
     memberUserId,
     car: car ?? null,
-    memberApproved: findUserById(memberUserId)?.approvalStatus === "approved",
+    memberApproved: isApprovedMember(memberUserId),
     memberDrives: transportDriving(memberUserId, cycle),
     seated: transportSeat(memberUserId, cycle),
     riders: transportRiders(driverUserId, cycle),
@@ -1847,6 +1848,13 @@ export const testStore = {
   findUserById(userId: string): TestUser | null {
     return findUserById(userId);
   },
+  /**
+   * An approved, current member, as every database read of "approved"
+   * means it: never an erased stub (`users.sanitised`).
+   */
+  isApprovedMember(userId: string): boolean {
+    return isApprovedMember(userId);
+  },
   /** Approved members and sign-ups waiting (getCampHeadcount's twin). */
   getCampHeadcount(): { members: number; waiting: number } {
     let members = 0;
@@ -2352,43 +2360,39 @@ export const testStore = {
    * members of one team but the sender. (The store has no approval filter for
    * "everyone"; production reaches approved members only.)
    */
+  /**
+   * Twin of the database's audience read: the same rows handed to the same
+   * pure rule (computeAudience): real members only (never a system actor or
+   * an erased stub), a group audience approved members only, this year's
+   * teams, leads and drivers, never the sender.
+   */
   announcementRecipients(senderId: string, audience: Audience): TestUser[] {
-    const everyone = [...usersByAuthId.values()].filter(
-      (u) => u.id !== senderId,
-    );
-    if (audience.scope === "everyone") return everyone;
     const cycle = currentCycleNumber();
-    // #313: this year's drivers (the read Transport makes), or exactly the
-    // people a captain picked — computeAudience's two captain-only cases.
-    if (audience.scope === "drivers") {
-      const driving = new Set(
-        driverProfiles
+    const ids = computeAudience(
+      {
+        scope: audience.scope,
+        team: audience.scope === "team" ? audience.team : null,
+      },
+      {
+        members: [...usersByAuthId.values()].map((u) => ({
+          id: u.id,
+          isSystem: false,
+          sanitised: u.sanitised,
+          approvalStatus: u.approvalStatus,
+        })),
+        memberships: teamMemberships.filter((m) => m.cycle === cycle),
+        driverUserIds: driverProfiles
           .filter((d) => d.cycle === cycle && d.intendsToDrive)
           .map((d) => d.userId),
-      );
-      return everyone.filter(
-        (u) => u.approvalStatus === "approved" && driving.has(u.id),
-      );
-    }
-    if (audience.scope === "individual") {
-      const chosen = new Set(audience.userIds);
-      return everyone.filter((u) => chosen.has(u.id));
-    }
-    // This year's leads of any team, or this year's members of one team —
-    // the same year-scoped reads @camp404/db's resolveAudience makes.
-    const chosen = new Set(
-      teamMemberships
-        .filter(
-          (m) =>
-            m.cycle === cycle &&
-            (audience.scope === "team_leads"
-              ? m.isLead
-              : m.team === audience.team),
-        )
-        .map((m) => m.userId),
+        targetUserIds:
+          audience.scope === "individual" ? [...audience.userIds] : [],
+      },
+      senderId,
     );
-    return everyone.filter((u) => chosen.has(u.id));
+    const wanted = new Set(ids);
+    return [...usersByAuthId.values()].filter((u) => wanted.has(u.id));
   },
+
   countAnnouncementAudience(
     senderId: string,
     audience: Audience = { scope: "everyone" },
@@ -2399,7 +2403,10 @@ export const testStore = {
   getAnnouncementPickerData(senderId: string): AnnouncementPickerData {
     const cycle = currentCycleNumber();
     const people = [...usersByAuthId.values()]
-      .filter((u) => u.id !== senderId && u.approvalStatus === "approved")
+      .filter(
+        (u) =>
+          u.id !== senderId && !u.sanitised && u.approvalStatus === "approved",
+      )
       .map((u) => ({
         id: u.id,
         name: u.displayName?.trim() || "Member with no name",
@@ -3680,7 +3687,9 @@ export const testStore = {
   /** lockTeamWork's twin: rank and this year's teams, or null if not approved. */
   teamWork(userId: string): TeamWork | null {
     const user = findUserById(userId);
-    if (!user || user.approvalStatus !== "approved") return null;
+    if (!user || user.sanitised || user.approvalStatus !== "approved") {
+      return null;
+    }
     const mine = testStore.getTeamMemberships(userId);
     return {
       rank:
@@ -4158,7 +4167,7 @@ export const testStore = {
 
   listAssignableMembers(): AssignableMember[] {
     return [...usersByAuthId.values()]
-      .filter((u) => u.approvalStatus === "approved")
+      .filter((u) => !u.sanitised && u.approvalStatus === "approved")
       .map((u) => ({
         id: u.id,
         displayName: u.displayName ?? "Unnamed member",
@@ -4180,10 +4189,7 @@ export const testStore = {
       input.team,
     );
     if (added) return { ok: false, error: added };
-    if (
-      input.assigneeId &&
-      findUserById(input.assigneeId)?.approvalStatus !== "approved"
-    ) {
+    if (input.assigneeId && !isApprovedMember(input.assigneeId)) {
       return { ok: false, error: NOT_A_MEMBER };
     }
     const id = crypto.randomUUID();
@@ -4229,7 +4235,7 @@ export const testStore = {
     if (
       input.assigneeId &&
       input.assigneeId !== task.assigneeId &&
-      findUserById(input.assigneeId)?.approvalStatus !== "approved"
+      !isApprovedMember(input.assigneeId)
     ) {
       return { ok: false, error: NOT_A_MEMBER };
     }
@@ -5131,7 +5137,7 @@ export const testStore = {
       return user
         ? {
             displayName: user.displayName ?? null,
-            approved: user.approvalStatus === "approved",
+            approved: !user.sanitised && user.approvalStatus === "approved",
           }
         : null;
     },
@@ -5220,7 +5226,7 @@ export const testStore = {
     aiConsent: boolean;
     now: Date;
   }): RecipeWriteResult<{ id: string }> {
-    if (findUserById(input.submitterId)?.approvalStatus !== "approved") {
+    if (!isApprovedMember(input.submitterId)) {
       return { ok: false, error: NOT_AN_APPROVED_MEMBER };
     }
     const tooLong = recipeTextProblem(input.text);
@@ -5270,7 +5276,7 @@ export const testStore = {
     aiConsent: boolean;
     now?: Date;
   }): RecipeWriteResult {
-    if (findUserById(input.actorId)?.approvalStatus !== "approved") {
+    if (!isApprovedMember(input.actorId)) {
       return { ok: false, error: NOT_AN_APPROVED_MEMBER };
     }
     const recipe = findRecipe(input.recipeId);
@@ -6366,7 +6372,7 @@ export const testStore = {
     authorId: string;
     body: string;
   }): RecipeWriteResult<{ id: string }> {
-    if (findUserById(input.authorId)?.approvalStatus !== "approved") {
+    if (!isApprovedMember(input.authorId)) {
       return { ok: false, error: NOT_AN_APPROVED_MEMBER };
     }
     const body = input.body.trim();
@@ -7385,6 +7391,7 @@ export const testStore = {
       .filter(
         (x): x is { p: (typeof x)["p"]; u: TestUser } =>
           !!x.u &&
+          !x.u.sanitised &&
           x.u.approvalStatus === "approved" &&
           !transportDriving(x.u.id, cycle) &&
           !transportSeat(x.u.id, cycle),
@@ -7492,8 +7499,7 @@ export const testStore = {
     const problem = liftRequestProblem({
       actorId: input.actorId,
       driverUserId: input.driverUserId,
-      memberApproved:
-        findUserById(input.actorId)?.approvalStatus === "approved",
+      memberApproved: isApprovedMember(input.actorId),
       drives: transportDriving(input.actorId, cycle),
       seated: transportSeat(input.actorId, cycle),
       carDrives:
@@ -7666,7 +7672,7 @@ export const testStore = {
           c.driverUserId === input.senderId &&
           c.cycle === actor.cycle &&
           c.memberUserId !== input.senderId &&
-          findUserById(c.memberUserId)?.approvalStatus === "approved",
+          isApprovedMember(c.memberUserId),
       )
       .map((c) => c.memberUserId);
     if (riders.length === 0) return { ok: false, error: CAR_EMPTY };
@@ -7870,7 +7876,9 @@ export const testStore = {
       });
     }
     for (const u of usersByAuthId.values()) {
-      if (u.approvalStatus !== "approved" || !u.displayName) continue;
+      if (u.sanitised || u.approvalStatus !== "approved" || !u.displayName) {
+        continue;
+      }
       const mine = teamMemberships.filter(
         (m) => m.userId === u.id && m.cycle === cycle,
       );

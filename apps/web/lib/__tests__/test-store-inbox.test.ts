@@ -13,6 +13,8 @@ import { testStore } from "../test-store";
 // real queries (packages/db/src/__tests__/inbox-filter.test.ts): the tab narrows
 // the set the cursor walks, and mark-all touches only the caller's rows.
 
+// Approved members: a camp-wide announcement reaches approved members only,
+// as computeAudience says (a pending sign-up is not in the camp yet).
 function seed() {
   const captain = testStore.createUser({
     authUserId: "auth-captain",
@@ -25,13 +27,13 @@ function seed() {
     authUserId: "auth-member",
     displayName: "Member",
     inviteCode: "seed",
-    approvalStatus: "pending",
+    approvalStatus: "approved",
   });
   const other = testStore.createUser({
     authUserId: "auth-other",
     displayName: "Other",
     inviteCode: "seed",
-    approvalStatus: "pending",
+    approvalStatus: "approved",
   });
   return { captain, member, other };
 }
@@ -54,6 +56,7 @@ describe("testStore inbox filters — the db's WHERE, mirrored", () => {
   it("narrows the list to unread, and to announcements", () => {
     const { captain, member } = seed();
     // An approval decision: a personal event, NOT an announcement kind.
+    testStore.setUserApprovalStatus(member.id, "pending");
     testStore.setUserApproval({
       userId: member.id,
       from: "pending",
