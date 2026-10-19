@@ -1,11 +1,29 @@
 import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
-  canEditTransport,
+  ALREADY_SEATED,
+  ALREADY_TOWING,
+  CANNOT_TOW,
+  CAR_FULL,
+  IS_DRIVING,
+  LIFT_REQUEST_CHANGED,
+  LIFT_REQUEST_GONE,
+  NOT_DRIVING,
+  NOT_YOUR_CAR,
+  OWN_CAR,
+  SEATS_BELOW_RIDERS,
+  TRANSPORT_NOT_A_MEMBER,
+  YOU_ARE_DRIVING,
+  YOU_HAVE_A_SEAT,
   canManageCar,
   canRemoveRider,
   canSendToAudience,
   carMessageNotification,
+  liftAnswerProblem,
+  liftRequestProblem,
+  seatProblem,
+  seatsOfferedProblem,
+  towProblem,
   vehicleLabel,
   type Actor,
   TRANSPORT_EDITOR,
@@ -43,33 +61,33 @@ export type TransportResult<T = object> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 
+// The seat, lift, seats and towing sentences live with their checks in
+// @camp404/core (seatProblem, liftRequestProblem, liftAnswerProblem,
+// seatsOfferedProblem, towProblem).
+export {
+  ALREADY_SEATED,
+  ALREADY_TOWING,
+  CANNOT_TOW,
+  CAR_FULL,
+  IS_DRIVING,
+  NOT_DRIVING,
+  NOT_YOUR_CAR,
+  OWN_CAR,
+  SEATS_BELOW_RIDERS,
+  YOU_ARE_DRIVING,
+  YOU_HAVE_A_SEAT,
+  LIFT_REQUEST_CHANGED as REQUEST_CHANGED,
+  LIFT_REQUEST_GONE as REQUEST_GONE,
+  TRANSPORT_NOT_A_MEMBER as NOT_A_MEMBER,
+};
+
 export const NOT_A_TRANSPORT_EDITOR =
   "Only captains and Transport & Logistics leads can do that.";
-export const NOT_YOUR_CAR =
-  "Only the driver, a captain or a Transport & Logistics lead can change this car.";
-export const NOT_DRIVING =
-  "That car isn't driving this year any more. Reload the page.";
-export const NOT_A_MEMBER = "That person isn't an approved camp member.";
-export const OWN_CAR = "A driver can't ride in their own car.";
-export const IS_DRIVING = "They're driving their own car this year.";
-export const CAR_FULL = "That car is full: every seat offered is taken.";
-export const ALREADY_SEATED = "They already have a seat in a car this year.";
 export const NOT_IN_CAR = "They aren't in that car any more. Reload the page.";
-export const SEATS_BELOW_RIDERS =
-  "More people already ride in this car. Take someone out first.";
-export const REQUEST_GONE =
-  "That lift request isn't there any more. Reload the page.";
-export const REQUEST_CHANGED =
-  "They changed their lift request since you looked. Reload the page to see it.";
-export const YOU_ARE_DRIVING =
-  "You're driving this year, so you don't need a lift.";
-export const YOU_HAVE_A_SEAT = "You already have a seat in a car this year.";
 export const TRAILER_GONE =
   "That trailer isn't there any more. Reload the page.";
 export const TRAILER_CHANGED =
   "Someone changed this trailer first. Reload the page.";
-export const CANNOT_TOW = "That car can't tow a trailer.";
-export const ALREADY_TOWING = "That car already tows a trailer.";
 export const CAR_MESSAGE_REFUSED =
   "Only a driver can write to their car, and only while they're driving this year.";
 export const CAR_EMPTY =
@@ -235,9 +253,10 @@ async function seat(
   const { driverUserId, memberUserId, cycle } = input;
   if (driverUserId === memberUserId) refuse(OWN_CAR);
   const driver = await lockDrivingProfile(tx, driverUserId, cycle);
-  if (!driver) refuse(NOT_DRIVING);
-  if (!(await approvedMember(tx, memberUserId, true))) refuse(NOT_A_MEMBER);
-  if (await isDriving(tx, memberUserId, cycle)) refuse(IS_DRIVING);
+  const memberApproved = Boolean(
+    driver && (await approvedMember(tx, memberUserId, true)),
+  );
+  const memberDrives = await isDriving(tx, memberUserId, cycle);
   // A seat in a car whose driver stopped driving is no seat: every read
   // (seatOf, the board, the unseated list) already ignores it, and nobody can
   // see that car to take the member out. Drop it here, so the member can be
@@ -254,13 +273,16 @@ async function seat(
         )`,
     ),
   );
-  if (await seatOf(tx, memberUserId, cycle)) refuse(ALREADY_SEATED);
-  if (
-    driver.seatsOffered !== null &&
-    (await ridersIn(tx, driverUserId, cycle)) >= driver.seatsOffered
-  ) {
-    refuse(CAR_FULL);
-  }
+  const problem = seatProblem({
+    driverUserId,
+    memberUserId,
+    car: driver,
+    memberApproved,
+    memberDrives,
+    seated: Boolean(await seatOf(tx, memberUserId, cycle)),
+    riders: await ridersIn(tx, driverUserId, cycle),
+  });
+  if (problem) refuse(problem);
   await tx
     .insert(schema.carMembers)
     .values({ driverUserId, memberUserId, cycle });
@@ -631,12 +653,12 @@ export async function setSeatsOffered(input: {
       input.driverUserId,
       actor.cycle,
     );
-    if (!driver) refuse(NOT_DRIVING);
-    if (
-      (await ridersIn(tx, input.driverUserId, actor.cycle)) > input.seatsOffered
-    ) {
-      refuse(SEATS_BELOW_RIDERS);
-    }
+    const tooFew = seatsOfferedProblem(
+      driver !== null,
+      await ridersIn(tx, input.driverUserId, actor.cycle),
+      input.seatsOffered,
+    );
+    if (tooFew || !driver) refuse(tooFew ?? NOT_DRIVING);
     await tx
       .update(schema.driverProfiles)
       .set({ seatsOffered: input.seatsOffered, updatedAt: new Date() })
@@ -673,16 +695,17 @@ export async function requestLift(input: {
 }): Promise<TransportResult> {
   return write(async (tx) => {
     const actor = await lockTransportActor(tx, input.actorId);
-    if (!(await approvedMember(tx, input.actorId))) refuse(NOT_A_MEMBER);
-    if (await isDriving(tx, input.actorId, actor.cycle))
-      refuse(YOU_ARE_DRIVING);
-    if (await seatOf(tx, input.actorId, actor.cycle)) refuse(YOU_HAVE_A_SEAT);
-    if (input.driverUserId !== null) {
-      if (input.driverUserId === input.actorId) refuse(OWN_CAR);
-      if (!(await isDriving(tx, input.driverUserId, actor.cycle))) {
-        refuse(NOT_DRIVING);
-      }
-    }
+    const problem = liftRequestProblem({
+      actorId: input.actorId,
+      driverUserId: input.driverUserId,
+      memberApproved: Boolean(await approvedMember(tx, input.actorId)),
+      drives: await isDriving(tx, input.actorId, actor.cycle),
+      seated: Boolean(await seatOf(tx, input.actorId, actor.cycle)),
+      carDrives:
+        input.driverUserId !== null &&
+        (await isDriving(tx, input.driverUserId, actor.cycle)),
+    });
+    if (problem) refuse(problem);
     await tx
       .insert(schema.liftRequests)
       .values({
@@ -724,7 +747,7 @@ export async function withdrawLiftRequest(input: {
         ),
       )
       .returning({ userId: schema.liftRequests.userId });
-    if (gone.length === 0) refuse(REQUEST_GONE);
+    if (gone.length === 0) refuse(LIFT_REQUEST_GONE);
     return {};
   });
 }
@@ -747,7 +770,7 @@ export async function answerLiftRequest(input: {
 }): Promise<TransportResult> {
   return write(async (tx) => {
     const actor = await lockTransportActor(tx, input.actorId);
-    if (!UUID.test(input.memberUserId)) refuse(REQUEST_GONE);
+    if (!UUID.test(input.memberUserId)) refuse(LIFT_REQUEST_GONE);
     const [request] = await tx
       .select({
         driverUserId: schema.liftRequests.driverUserId,
@@ -761,20 +784,16 @@ export async function answerLiftRequest(input: {
         ),
       )
       .for("update");
-    if (!request) refuse(REQUEST_GONE);
-    // Both sides are read through a JS Date, so both are whole milliseconds.
-    if (request.createdAt.getTime() !== new Date(input.requestedAt).getTime()) {
-      refuse(REQUEST_CHANGED);
-    }
-    const editor = canEditTransport(actor.rank, actor.ledTeams);
+    const problem = liftAnswerProblem({
+      actor: { id: input.actorId, rank: actor.rank, ledTeams: actor.ledTeams },
+      request: request ?? null,
+      requestedAt: input.requestedAt,
+      accept: input.accept,
+    });
+    if (problem || !request) refuse(problem ?? LIFT_REQUEST_GONE);
     const car = request.driverUserId;
-    const mayAnswer =
-      car !== null
-        ? canManageCar(actor.rank, actor.ledTeams, input.actorId, car)
-        : editor;
-    if (!mayAnswer) refuse(NOT_YOUR_CAR);
     if (input.accept) {
-      if (car === null) refuse(REQUEST_GONE);
+      if (car === null) refuse(LIFT_REQUEST_GONE);
       // seat() spends the request in the same transaction.
       await seat(tx, {
         actorId: input.actorId,
@@ -896,8 +915,6 @@ export async function setTrailerTow(input: {
         input.driverUserId,
         actor.cycle,
       );
-      if (!driver) refuse(NOT_DRIVING);
-      if (!driver.canTow) refuse(CANNOT_TOW);
       const [other] = await tx
         .select({ id: schema.transportTrailers.id })
         .from(schema.transportTrailers)
@@ -908,7 +925,8 @@ export async function setTrailerTow(input: {
             ne(schema.transportTrailers.id, input.trailerId),
           ),
         );
-      if (other) refuse(ALREADY_TOWING);
+      const problem = towProblem(driver, Boolean(other));
+      if (problem) refuse(problem);
     }
     const rows = await tx
       .update(schema.transportTrailers)

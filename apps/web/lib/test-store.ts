@@ -28,6 +28,11 @@ import {
   canEditTransport,
   canManageCar,
   canRemoveRider,
+  liftAnswerProblem,
+  liftRequestProblem,
+  seatProblem,
+  seatsOfferedProblem,
+  towProblem,
   canSendToAudience,
   carMessageNotification,
   vehicleLabel,
@@ -136,26 +141,15 @@ import {
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
 import {
-  ALREADY_SEATED,
-  ALREADY_TOWING,
-  CANNOT_TOW,
   CAR_EMPTY,
-  CAR_FULL,
   CAR_MESSAGE_REFUSED,
-  IS_DRIVING,
-  NOT_A_MEMBER as TRANSPORT_NOT_A_MEMBER,
   NOT_A_TRANSPORT_EDITOR,
   NOT_DRIVING,
   NOT_IN_CAR,
   NOT_YOUR_CAR,
-  OWN_CAR,
-  REQUEST_CHANGED,
   REQUEST_GONE,
-  SEATS_BELOW_RIDERS,
   TRAILER_CHANGED,
   TRAILER_GONE,
-  YOU_ARE_DRIVING,
-  YOU_HAVE_A_SEAT,
   type LiftRequestRow,
   type TrailerRow,
   type TransportBoard,
@@ -1251,19 +1245,21 @@ function transportSeatIn(input: {
   cycle: number;
 }): TransportResult {
   const { driverUserId, memberUserId, cycle } = input;
-  if (driverUserId === memberUserId) return { ok: false, error: OWN_CAR };
   const car = driverProfiles.find(
     (d) => d.userId === driverUserId && d.cycle === cycle && d.intendsToDrive,
   );
-  if (!car) return { ok: false, error: NOT_DRIVING };
-  if (findUserById(memberUserId)?.approvalStatus !== "approved") {
-    return { ok: false, error: TRANSPORT_NOT_A_MEMBER };
-  }
-  if (transportDriving(memberUserId, cycle)) {
-    return { ok: false, error: IS_DRIVING };
-  }
+  const problem = seatProblem({
+    driverUserId,
+    memberUserId,
+    car: car ?? null,
+    memberApproved: findUserById(memberUserId)?.approvalStatus === "approved",
+    memberDrives: transportDriving(memberUserId, cycle),
+    seated: transportSeat(memberUserId, cycle),
+    riders: transportRiders(driverUserId, cycle),
+  });
+  if (problem) return { ok: false, error: problem };
   // As the db: a seat in a car whose driver stopped driving is dropped, and
-  // only a seat in a car that still drives refuses.
+  // only a seat in a car that still drives refuses (above).
   for (let i = carMembers.length - 1; i >= 0; i--) {
     const c = carMembers[i]!;
     if (
@@ -1273,17 +1269,6 @@ function transportSeatIn(input: {
     ) {
       carMembers.splice(i, 1);
     }
-  }
-  if (
-    carMembers.some((c) => c.memberUserId === memberUserId && c.cycle === cycle)
-  ) {
-    return { ok: false, error: ALREADY_SEATED };
-  }
-  if (
-    car.seatsOffered !== null &&
-    transportRiders(driverUserId, cycle) >= car.seatsOffered
-  ) {
-    return { ok: false, error: CAR_FULL };
   }
   carMembers.push({ driverUserId, memberUserId, cycle, createdAt: new Date() });
   const idx = liftRequests.findIndex(
@@ -7303,10 +7288,12 @@ export const testStore = {
         d.cycle === actor.cycle &&
         d.intendsToDrive,
     );
-    if (!car) return { ok: false, error: NOT_DRIVING };
-    if (transportRiders(input.driverUserId, actor.cycle) > input.seatsOffered) {
-      return { ok: false, error: SEATS_BELOW_RIDERS };
-    }
+    const tooFew = seatsOfferedProblem(
+      car !== undefined,
+      transportRiders(input.driverUserId, actor.cycle),
+      input.seatsOffered,
+    );
+    if (tooFew || !car) return { ok: false, error: tooFew ?? NOT_DRIVING };
     car.seatsOffered = input.seatsOffered;
     return { ok: true };
   },
@@ -7316,23 +7303,18 @@ export const testStore = {
     driverUserId: string | null;
   }): TransportResult {
     const cycle = currentCycleNumber();
-    if (findUserById(input.actorId)?.approvalStatus !== "approved") {
-      return { ok: false, error: TRANSPORT_NOT_A_MEMBER };
-    }
-    if (transportDriving(input.actorId, cycle)) {
-      return { ok: false, error: YOU_ARE_DRIVING };
-    }
-    if (transportSeat(input.actorId, cycle)) {
-      return { ok: false, error: YOU_HAVE_A_SEAT };
-    }
-    if (input.driverUserId !== null) {
-      if (input.driverUserId === input.actorId) {
-        return { ok: false, error: OWN_CAR };
-      }
-      if (!transportDriving(input.driverUserId, cycle)) {
-        return { ok: false, error: NOT_DRIVING };
-      }
-    }
+    const problem = liftRequestProblem({
+      actorId: input.actorId,
+      driverUserId: input.driverUserId,
+      memberApproved:
+        findUserById(input.actorId)?.approvalStatus === "approved",
+      drives: transportDriving(input.actorId, cycle),
+      seated: transportSeat(input.actorId, cycle),
+      carDrives:
+        input.driverUserId !== null &&
+        transportDriving(input.driverUserId, cycle),
+    });
+    if (problem) return { ok: false, error: problem };
     const existing = liftRequests.find(
       (r) => r.userId === input.actorId && r.cycle === cycle,
     );
@@ -7373,18 +7355,17 @@ export const testStore = {
     const request = liftRequests.find(
       (r) => r.userId === input.memberUserId && r.cycle === actor.cycle,
     );
-    if (!request) return { ok: false, error: REQUEST_GONE };
-    if (request.createdAt.getTime() !== new Date(input.requestedAt).getTime()) {
-      return { ok: false, error: REQUEST_CHANGED };
+    const problem = liftAnswerProblem({
+      actor: { id: input.actorId, rank: actor.rank, ledTeams: actor.ledTeams },
+      request: request ?? null,
+      requestedAt: input.requestedAt,
+      accept: input.accept,
+    });
+    if (problem || !request) {
+      return { ok: false, error: problem ?? REQUEST_GONE };
     }
     const car = request.driverUserId;
-    const mayAnswer =
-      car !== null
-        ? canManageCar(actor.rank, actor.ledTeams, input.actorId, car)
-        : canEditTransport(actor.rank, actor.ledTeams);
-    if (!mayAnswer) return { ok: false, error: NOT_YOUR_CAR };
-    if (input.accept) {
-      if (car === null) return { ok: false, error: REQUEST_GONE };
+    if (input.accept && car !== null) {
       return transportSeatIn({
         driverUserId: car,
         memberUserId: input.memberUserId,
@@ -7448,18 +7429,16 @@ export const testStore = {
           d.cycle === actor.cycle &&
           d.intendsToDrive,
       );
-      if (!car) return { ok: false, error: NOT_DRIVING };
-      if (!car.canTow) return { ok: false, error: CANNOT_TOW };
-      if (
+      const problem = towProblem(
+        car ?? null,
         transportTrailers.some(
           (t) =>
             t.cycle === actor.cycle &&
             t.towedByUserId === input.driverUserId &&
             t.id !== input.trailerId,
-        )
-      ) {
-        return { ok: false, error: ALREADY_TOWING };
-      }
+        ),
+      );
+      if (problem) return { ok: false, error: problem };
     }
     const found = transportTrailerClaim(input);
     if (typeof found === "string") return { ok: false, error: found };
