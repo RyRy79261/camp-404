@@ -9,7 +9,7 @@ import {
   matchProgram,
   type ProgramId,
 } from "@/lib/program-routes";
-import { pageSize } from "../desktop-shell";
+import { pageSize } from "../desktop-controller";
 import { iconFor } from "../program-icons";
 
 // The census of every program as a member meets it: the manifest each kind of

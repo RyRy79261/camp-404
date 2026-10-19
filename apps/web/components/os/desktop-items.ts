@@ -2,7 +2,7 @@ import {
   EMPTY_LAYOUT,
   type DefaultSpec,
   type DesktopLayout,
-} from "@camp404/os";
+} from "@camp404/os/icon-grid";
 import {
   desktopFolderKey,
   desktopTeamFolderKey,

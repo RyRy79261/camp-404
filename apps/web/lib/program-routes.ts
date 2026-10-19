@@ -27,8 +27,9 @@
  * that open smaller than their UI even though there's ample space"): it takes
  * that share of the room right of the icons, never less than its own size.
  * Still a window right of the icons, never full screen. Each is cut to the
- * room the screen has (`pageSize` in components/os/desktop-shell.tsx), and its
- * page reflows to the window (the page-* variants). No size is M, the default.
+ * room the screen has (`pageSize` in components/os/desktop-controller.ts),
+ * and its page reflows to the window (the page-* variants). No size is M, the
+ * default.
  */
 export type OpeningSize = { w: number; h: number; grow?: number };
 const XL_SIZE: OpeningSize = { w: 1040, h: 660, grow: 0.8 };
