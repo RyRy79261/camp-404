@@ -120,12 +120,18 @@ function find(petId: string): PetStoreRow | undefined {
 
 const refused = (error: string) => ({ ok: false as const, error });
 
+/** A camp member who has not been erased, as the database reads one. */
+function liveMember(userId: string) {
+  const user = testStore.findUserById(userId);
+  return user && !user.sanitised ? user : null;
+}
+
 /**
  * The actor, read now (lockActor's twin): null when there is no such member,
  * else whether they review pets (a captain).
  */
 function actorReviews(actorId: string): boolean | null {
-  const actor = testStore.findUserById(actorId);
+  const actor = liveMember(actorId);
   if (!actor) return null;
   return canReviewPets({ isCaptain: actor.rank === "captain" });
 }
@@ -178,6 +184,7 @@ export const petsTestStore = {
   listPetOwnerChoices(): { id: string; name: string }[] {
     return testStore
       .allUsers()
+      .filter((u) => !u.sanitised)
       .map((u) => ({ id: u.id, name: ownerNameOf(u.displayName) }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
@@ -189,7 +196,7 @@ export const petsTestStore = {
       sidePhotoPath: string;
     },
   ): PetWriteResult<{ id: string }> {
-    if (!testStore.findUserById(input.ownerId)) return refused(PET_NO_ACTOR);
+    if (!liveMember(input.ownerId)) return refused(PET_NO_ACTOR);
     const id = crypto.randomUUID();
     state().pets.push({
       id,
@@ -277,7 +284,7 @@ export const petsTestStore = {
     if (p.frontPhotoPath !== null || p.sidePhotoPath !== null) {
       return refused(PET_SENT_WITH_PHOTOS);
     }
-    if (input.ownerId !== null && !testStore.findUserById(input.ownerId)) {
+    if (input.ownerId !== null && !liveMember(input.ownerId)) {
       return refused(PET_NO_SUCH_MEMBER);
     }
     p.ownerId = input.ownerId;
