@@ -3,7 +3,18 @@ import {
   AUDIT_ACTION_LABELS,
   auditActionLabel,
   auditDetail,
+  type AuditAction,
 } from "../audit-actions";
+import type { AuditEvents } from "../audit-events";
+
+// A row as today's writers write it, so a fixture's keys are checked against
+// AuditEvents (a made-up key does not compile). Old and odd rows go straight
+// to auditDetail.
+const detail = <A extends AuditAction>(
+  action: A,
+  metadata: Partial<AuditEvents[A]>,
+  teamLabel?: (key: string) => string,
+) => auditDetail(action, metadata, teamLabel);
 
 describe("auditActionLabel", () => {
   it("labels a known action and leaves an unknown one as stored", () => {
@@ -27,38 +38,38 @@ describe("auditDetail", () => {
 
   it("says which logistics phase changed, and to which days", () => {
     expect(
-      auditDetail("logistics.phase_set", {
+      detail("logistics.phase_set", {
         phase: "build",
         startDate: "2027-04-24",
         endDate: "2027-04-26",
       }),
     ).toBe("Build, 2027-04-24 to 2027-04-26");
-    expect(auditDetail("logistics.phase_cleared", { phase: "strike" })).toBe(
+    expect(detail("logistics.phase_cleared", { phase: "strike" })).toBe(
       "Strike",
     );
-    expect(auditDetail("logistics.phase_set", { phase: "party" })).toBeNull();
+    expect(detail("logistics.phase_set", { phase: "party" })).toBeNull();
   });
 
   it("counts the members on an export and on an opened camp sheet", () => {
     expect(auditActionLabel("member.sheet_viewed")).toBe(
       "Opened the camp sheet",
     );
-    expect(auditDetail("member.sheet_viewed", { rows: 12 })).toBe("12 members");
-    expect(auditDetail("member.export", { rows: 1 })).toBe("1 member");
+    expect(detail("member.sheet_viewed", { rows: 12 })).toBe("12 members");
+    expect(detail("member.export", { rows: 1 })).toBe("1 member");
   });
 
   it("says where a member's allergies were read", () => {
-    expect(auditDetail("safety.allergies.view", { via: "daily_sheet" })).toBe(
+    expect(detail("safety.allergies.view", { via: "daily_sheet" })).toBe(
       "On the daily site sheet",
     );
     expect(
-      auditDetail("safety.allergies.view", {
+      detail("safety.allergies.view", {
         via: "questionnaire_results",
         title: "Dietary",
       }),
     ).toBe("In the answers to Dietary");
     expect(
-      auditDetail("safety.allergies.view", {
+      detail("safety.allergies.view", {
         via: "questionnaire_csv",
         title: "Dietary",
       }),
@@ -70,25 +81,23 @@ describe("auditDetail", () => {
       "Put a member on a shift",
     );
     expect(
-      auditDetail("shifts.member_placed", {
+      detail("shifts.member_placed", {
         name: "Morning clean",
         day: "2027-04-29",
       }),
     ).toBe("Morning clean, 2027-04-29");
     expect(
-      auditDetail("shifts.slot_needed_set", {
+      detail("shifts.slot_needed_set", {
         name: "Ice run",
         day: "2027-04-30",
         needed: false,
       }),
     ).toBe("Ice run, 2027-04-30, not needed");
-    expect(auditDetail("shifts.type_added", { name: "Brunch: cooks" })).toBe(
+    expect(detail("shifts.type_added", { name: "Brunch: cooks" })).toBe(
       "Brunch: cooks",
     );
-    expect(auditDetail("shifts.asked", { asked: 1 })).toBe("1 member");
-    expect(
-      auditDetail("shifts.member_removed", { name: "Ice run" }),
-    ).toBeNull();
+    expect(detail("shifts.asked", { asked: 1 })).toBe("1 member");
+    expect(detail("shifts.member_removed", { name: "Ice run" })).toBeNull();
   });
 
   it("labels and says a captain's decision on a member's place", () => {
@@ -96,14 +105,14 @@ describe("auditDetail", () => {
       "Decided a member's place this year",
     );
     expect(
-      auditDetail("participation.decided", {
+      detail("participation.decided", {
         cycle: 2027,
         from: "applied",
         to: "accepted",
       }),
     ).toBe("Accepted for 2027");
     expect(
-      auditDetail("participation.decided", {
+      detail("participation.decided", {
         cycle: 2027,
         from: "accepted",
         to: "waitlisted",
@@ -111,12 +120,12 @@ describe("auditDetail", () => {
     ).toBe("Put on the waiting list for 2027");
     // A status that is not a decision, or no status at all, adds nothing.
     expect(
-      auditDetail("participation.decided", { cycle: 2027, to: "maybe" }),
+      detail("participation.decided", { cycle: 2027, to: "maybe" }),
     ).toBeNull();
     expect(
-      auditDetail("participation.decided", { cycle: 2027, to: "toString" }),
+      detail("participation.decided", { cycle: 2027, to: "toString" }),
     ).toBeNull();
-    expect(auditDetail("participation.decided", { to: "accepted" })).toBe(
+    expect(detail("participation.decided", { to: "accepted" })).toBe(
       "Accepted",
     );
   });
@@ -126,16 +135,16 @@ describe("auditDetail", () => {
       "Withdrew from this year",
     );
     expect(
-      auditDetail("participation.withdrawn", { cycle: 2027, from: "accepted" }),
+      detail("participation.withdrawn", { cycle: 2027, from: "accepted" }),
     ).toBe("Gave up a place for 2027");
     expect(
-      auditDetail("participation.withdrawn", {
+      detail("participation.withdrawn", {
         cycle: 2027,
         from: "waitlisted",
       }),
     ).toBe("Left the waiting list for 2027");
     expect(
-      auditDetail("participation.withdrawn", { cycle: 2027, from: "maybe" }),
+      detail("participation.withdrawn", { cycle: 2027, from: "maybe" }),
     ).toBeNull();
   });
 
@@ -144,7 +153,7 @@ describe("auditDetail", () => {
       "Changed a member's ticket, DDT or WAP",
     );
     expect(
-      auditDetail("ticket.pass_changed", {
+      detail("ticket.pass_changed", {
         cycle: 2027,
         pass: "ticket",
         from: "unknown",
@@ -152,7 +161,7 @@ describe("auditDetail", () => {
       }),
     ).toBe("Ticket: has ticket for 2027");
     expect(
-      auditDetail("ticket.pass_changed", {
+      detail("ticket.pass_changed", {
         cycle: 2027,
         pass: "wap",
         from: "requested",
@@ -160,7 +169,7 @@ describe("auditDetail", () => {
       }),
     ).toBe("WAP: issued for 2027");
     expect(
-      auditDetail("ticket.pass_changed", {
+      detail("ticket.pass_changed", {
         pass: "ddt",
         from: "none",
         to: "can_transfer",
@@ -169,16 +178,16 @@ describe("auditDetail", () => {
     // A value of the other pass, an unknown pass, or a prototype key adds
     // nothing.
     expect(
-      auditDetail("ticket.pass_changed", {
+      detail("ticket.pass_changed", {
         pass: "wap",
         to: "allocated",
       }),
     ).toBeNull();
     expect(
-      auditDetail("ticket.pass_changed", { pass: "vehicle", to: "issued" }),
+      detail("ticket.pass_changed", { pass: "vehicle", to: "issued" }),
     ).toBeNull();
     expect(
-      auditDetail("ticket.pass_changed", {
+      detail("ticket.pass_changed", {
         pass: "wap",
         to: "toString",
       }),
@@ -187,36 +196,32 @@ describe("auditDetail", () => {
 
   it("says how an application was decided", () => {
     expect(
-      auditDetail("member.approval_decided", {
+      detail("member.approval_decided", {
         from: "pending",
         status: "rejected",
         withReason: true,
       }),
     ).toBe("Rejected, with a reason");
-    expect(auditDetail("member.approval_decided", { status: "approved" })).toBe(
+    expect(detail("member.approval_decided", { status: "approved" })).toBe(
       "Approved",
     );
   });
 
   it("says a rank change and a team change in words", () => {
     expect(
-      auditDetail("member.rank_changed", { from: "member", to: "captain" }),
+      detail("member.rank_changed", { from: "member", to: "captain" }),
     ).toBe("member to captain");
     expect(
-      auditDetail(
-        "member.team_lead_set",
-        { team: "kitchen", isLead: false },
-        teams,
-      ),
+      detail("member.team_lead_set", { team: "kitchen", isLead: false }, teams),
     ).toBe("No longer leads Kitchen");
-    expect(
-      auditDetail("member.team_assigned", { team: "kitchen" }, teams),
-    ).toBe("Kitchen");
+    expect(detail("member.team_assigned", { team: "kitchen" }, teams)).toBe(
+      "Kitchen",
+    );
   });
 
   it("uses the payments page's words for a status", () => {
     expect(
-      auditDetail("payment.status_changed", {
+      detail("payment.status_changed", {
         reference: "C404-M017-2027-1",
         from: "pending",
         to: "reconciled",
@@ -267,12 +272,12 @@ describe("auditDetail", () => {
         currency: "EUR",
       }),
     ).toBe("EUR not money, submitted to approved");
-    expect(auditDetail("team_budget.set", { team: "kitchen" }, teams)).toBe(
+    expect(detail("team_budget.set", { team: "kitchen" }, teams)).toBe(
       "Kitchen",
     );
     // Claims and budgets since #242 keep whole cents.
     expect(
-      auditDetail("reimbursement.status_changed", {
+      detail("reimbursement.status_changed", {
         from: "approved",
         to: "paid",
         amountCents: 45050,
@@ -280,60 +285,61 @@ describe("auditDetail", () => {
       }),
     ).toMatch(/^R[\s\u00a0\u202f]?450,50, approved to paid$/);
     expect(
-      auditDetail(
+      detail(
         "team_budget.set",
         { team: "kitchen", amountCents: 500000, fromCents: null },
         teams,
       ),
     ).toMatch(/^Kitchen: R[\s\u00a0\u202f]?5[\s\u00a0\u202f]?000,00$/);
     expect(
-      auditDetail(
+      detail(
         "team_budget.set",
         { team: "kitchen", amountCents: null, fromCents: 100 },
         teams,
       ),
     ).toBe("Kitchen: no budget");
     expect(
-      auditDetail("reimbursement.receipt_viewed", { team: "kitchen" }, teams),
+      detail("reimbursement.receipt_viewed", { team: "kitchen" }, teams),
     ).toBe("Kitchen");
-    expect(
-      auditDetail("team.program_changed", { team: "kitchen" }, teams),
-    ).toBe("Kitchen");
+    expect(detail("team.program_changed", { team: "kitchen" }, teams)).toBe(
+      "Kitchen",
+    );
   });
 
   it("names a Survival Guide chapter, its version and whether it is public", () => {
-    expect(auditDetail("document.published", { title: "Kitchen safety" })).toBe(
+    expect(detail("document.published", { title: "Kitchen safety" })).toBe(
       "Kitchen safety",
     );
     expect(
-      auditDetail("document.published", {
+      detail("document.published", {
         title: "Kitchen safety",
         version: 3,
       }),
     ).toBe("Kitchen safety, version 3");
-    expect(auditDetail("document.updated", { title: "Dishes" })).toBe("Dishes");
+    expect(detail("document.updated", { title: "Dishes" })).toBe("Dishes");
+    // No longer written: a row from before 2026-10-04 still reads.
     expect(
       auditDetail("document.public_set", { title: "Drive in", public: true }),
     ).toBe("Drive in: public");
     expect(
       auditDetail("document.public_set", { title: "Drive in", public: false }),
     ).toBe("Drive in: members only");
-    expect(auditDetail("document.reviewed", { title: "MOOP" })).toBe("MOOP");
+    expect(detail("document.reviewed", { title: "MOOP" })).toBe("MOOP");
     expect(
-      auditDetail("document.published", {
+      detail("document.published", {
         title: "Kitchen safety",
         version: 3,
         public: true,
       }),
     ).toBe("Kitchen safety, version 3, on the public site");
     expect(
-      auditDetail("document.members_only_set", {
+      detail("document.members_only_set", {
         title: "Medical plan",
         membersOnly: true,
       }),
     ).toBe("Medical plan: members only");
     expect(
-      auditDetail("document.members_only_set", {
+      detail("document.members_only_set", {
         title: "Medical plan",
         membersOnly: false,
       }),
@@ -342,7 +348,7 @@ describe("auditDetail", () => {
 
   it("names a guide section and how many chapters went with it", () => {
     expect(
-      auditDetail("guide.section_public_set", {
+      detail("guide.section_public_set", {
         category: "safety",
         public: true,
         chapters: [
@@ -352,18 +358,20 @@ describe("auditDetail", () => {
       }),
     ).toBe("Safety: public, 2 chapters");
     expect(
-      auditDetail("guide.section_public_set", {
+      detail("guide.section_public_set", {
         category: "kitchen",
         public: false,
         chapters: [{ slug: "washing-up", title: "Washing up" }],
       }),
     ).toBe("Kitchen: members only, 1 chapter");
     expect(
-      auditDetail("guide.section_public_set", { category: "manual" }),
+      detail("guide.section_public_set", { category: "manual" }),
     ).toBeNull();
   });
 
   it("marks a private read made through Claude", () => {
+    // Only emergency contacts are still read through Claude; ID and bank rows
+    // from before #353 say so too.
     for (const action of [
       "member.id_document.viewed",
       "member.bank_details.viewed",
@@ -379,54 +387,54 @@ describe("auditDetail", () => {
   it("names whose screen a pin was put on, or taken off", () => {
     // A pin's receipt is about the audience: that is what made the pin
     // allowed, and what says how far the message carried.
-    expect(auditDetail("announcement.pinned", { scope: "everyone" })).toBe(
+    expect(detail("announcement.pinned", { scope: "everyone" })).toBe(
       "The whole camp",
     );
     expect(
-      auditDetail(
+      detail(
         "announcement.unpinned",
         { scope: "team", team: "kitchen" },
         teams,
       ),
     ).toBe("Kitchen");
     // A team scope with no team says nothing rather than guessing.
-    expect(auditDetail("announcement.pinned", { scope: "team" })).toBeNull();
+    expect(detail("announcement.pinned", { scope: "team" })).toBeNull();
   });
 
   it("names a calendar event and, when it has one, its team", () => {
     expect(
-      auditDetail(
+      detail(
         "calendar.event_created",
         { title: "Kitchen briefing", team: "kitchen", date: "2026-10-01" },
         teams,
       ),
     ).toBe("Kitchen briefing · Kitchen");
     expect(
-      auditDetail("calendar.event_created", {
+      detail("calendar.event_created", {
         title: "Build day",
         team: null,
         allDay: true,
       }),
     ).toBe("Build day");
-    expect(auditDetail("calendar.event_created", { team: "kitchen" })).toBe(
-      null,
-    );
+    expect(detail("calendar.event_created", { team: "kitchen" })).toBe(null);
     expect(
-      auditDetail(
+      detail(
         "calendar.event_changed",
         { title: "Budget round 2", team: "kitchen" },
         teams,
       ),
     ).toBe("Budget round 2 · Kitchen");
-    expect(
-      auditDetail("calendar.event_removed", { title: "Old meeting" }),
-    ).toBe("Old meeting");
+    expect(detail("calendar.event_removed", { title: "Old meeting" })).toBe(
+      "Old meeting",
+    );
   });
 
   it("shows nothing for a shape it does not know", () => {
     expect(auditDetail("member.rank_changed", { to: 42 })).toBeNull();
     expect(auditDetail("member.approval_decided", null)).toBeNull();
     expect(auditDetail("member.notes.viewed", { secret: "x" })).toBeNull();
+    expect(auditDetail("cron.old_job", { name: "x" })).toBeNull();
+    expect(auditDetail("toString", { name: "x" })).toBeNull();
   });
 });
 
@@ -451,17 +459,18 @@ describe("recipe audit rows", () => {
   });
 
   it("name the recipe, and the version where one was written", () => {
-    expect(auditDetail("recipe.rejected", { title: "Dhal" })).toBe("Dhal");
+    expect(detail("recipe.rejected", { title: "Dhal" })).toBe("Dhal");
     expect(
-      auditDetail("recipe.rerun_requested", { title: "Dhal", note: "Grams" }),
+      detail("recipe.rerun_requested", { title: "Dhal", note: "Grams" }),
     ).toBe("Dhal");
-    expect(auditDetail("recipe.accepted", { title: "Dhal", version: 2 })).toBe(
+    expect(detail("recipe.accepted", { title: "Dhal", version: 2 })).toBe(
       "Dhal, version 2",
     );
+    // No longer written: an old row still reads.
     expect(auditDetail("recipe.version_added", { version: 3 })).toBe(
       "Version 3",
     );
-    expect(auditDetail("recipe.approved", {})).toBeNull();
+    expect(detail("recipe.approved", {})).toBeNull();
   });
 
   it("label and describe the source editor's rows", () => {
@@ -474,60 +483,58 @@ describe("recipe audit rows", () => {
     expect(auditActionLabel("recipe.written_by_claude")).toBe(
       "Had Claude write a recipe version",
     );
-    expect(
-      auditDetail("recipe.source_saved", { title: "Dhal", version: 2 }),
-    ).toBe("Dhal, text version 2");
-    expect(auditDetail("recipe.source_saved", { version: 2 })).toBe(
+    expect(detail("recipe.source_saved", { title: "Dhal", version: 2 })).toBe(
+      "Dhal, text version 2",
+    );
+    expect(detail("recipe.source_saved", { version: 2 })).toBe(
       "Text version 2",
     );
-    expect(auditDetail("recipe.source_saved", { title: "Dhal" })).toBe("Dhal");
+    expect(detail("recipe.source_saved", { title: "Dhal" })).toBe("Dhal");
     expect(
-      auditDetail("recipe.questions_answered", {
+      detail("recipe.questions_answered", {
         title: "Dhal",
-        answer: "2 kg",
+        round: 1,
       }),
     ).toBe("Dhal");
     expect(
-      auditDetail("recipe.written_by_claude", {
+      detail("recipe.written_by_claude", {
         title: "Dhal",
         version: 3,
         runId: "r",
       }),
     ).toBe("Dhal, version 3");
-    expect(auditDetail("recipe.written_by_claude", {})).toBeNull();
+    expect(detail("recipe.written_by_claude", {})).toBeNull();
   });
 
   it("name the plate count a recipe was proofread for", () => {
-    expect(
-      auditDetail("recipe.plates_queued", { title: "Dhal", plates: 45 }),
-    ).toBe("Dhal, 45 plates");
-    expect(auditDetail("recipe.plates_queued", { plates: 45 })).toBe(
-      "45 plates",
+    expect(detail("recipe.plates_queued", { title: "Dhal", plates: 45 })).toBe(
+      "Dhal, 45 plates",
     );
-    expect(auditDetail("recipe.plates_queued", { title: "Dhal" })).toBe("Dhal");
+    expect(detail("recipe.plates_queued", { plates: 45 })).toBe("45 plates");
+    expect(detail("recipe.plates_queued", { title: "Dhal" })).toBe("Dhal");
   });
 
   it("names the questionnaire, and which way its year policy went", () => {
     expect(
-      auditDetail("questionnaire.unpublished", { title: "Coming this year?" }),
+      detail("questionnaire.unpublished", { title: "Coming this year?" }),
     ).toBe("Coming this year?");
+    expect(detail("questionnaire.send_closed", { title: "Tent check" })).toBe(
+      "Tent check",
+    );
     expect(
-      auditDetail("questionnaire.send_closed", { title: "Tent check" }),
-    ).toBe("Tent check");
-    expect(
-      auditDetail("questionnaire.carry_over_set", {
+      detail("questionnaire.carry_over_set", {
         title: "Dietary needs",
         carryOver: true,
       }),
     ).toBe("Dietary needs: answers kept next year");
     expect(
-      auditDetail("questionnaire.carry_over_set", {
+      detail("questionnaire.carry_over_set", {
         title: "Dietary needs",
         carryOver: false,
       }),
     ).toBe("Dietary needs: asked again next year");
     expect(
-      auditDetail("questionnaire.carry_over_set", { title: "Dietary needs" }),
+      detail("questionnaire.carry_over_set", { title: "Dietary needs" }),
     ).toBe("Dietary needs");
   });
 });
