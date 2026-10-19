@@ -26,9 +26,9 @@ import { getKitchenMenu, listSheetPrepSteps } from "./kitchen-menu";
 import { getLoungeProgramme } from "./lounge";
 import { buildProgramme, dayItems } from "./lounge-view";
 import { getMealPlan } from "./meal-plan";
-import { usesTestStore } from "./test-mode";
 import { dailySheetTestStore } from "./test-store-daily-sheet";
 import { shiftsTestStore } from "./test-store-shifts";
+import { twin } from "./twin";
 
 // The daily site sheet (#249), put together for one day or every day of the
 // Burn. Called only by the print page, after its team-lead gate: the
@@ -36,7 +36,14 @@ import { shiftsTestStore } from "./test-store-shifts";
 // page records the read. Everything else on it every member may read
 // elsewhere: the shift roster, the menu, the lounge programme, the calendar.
 // People are printed by first name only (sheetNames), and nothing else about
-// anyone: no shift notes, no hosts, no contact details.
+// anyone: no shift notes, no hosts, no contact details. Each read comes from
+// the database or, under E2E, the test store, picked once (twin).
+
+const allergies = twin(db, dailySheetTestStore, ["listSheetAllergies"]);
+const shifts = twin(shiftsDb, shiftsTestStore, [
+  "readShiftRoster",
+  "readBurnDays",
+]);
 
 const KITCHEN = "kitchen";
 
@@ -83,9 +90,7 @@ const CLOCK = new Intl.DateTimeFormat("en-GB", {
 });
 
 async function readAllergies(cycle: number): Promise<SheetAllergyRow[]> {
-  return usesTestStore()
-    ? dailySheetTestStore.listSheetAllergies(cycle)
-    : db.listSheetAllergies(cycle);
+  return allergies.listSheetAllergies(cycle);
 }
 
 /**
@@ -109,12 +114,8 @@ export async function getDailySheets(
     calendar,
     prepSteps,
   ] = await Promise.all([
-    usesTestStore()
-      ? shiftsTestStore.readShiftRoster(cycle)
-      : shiftsDb.readShiftRoster(cycle),
-    usesTestStore()
-      ? shiftsTestStore.readBurnDays(cycle)
-      : shiftsDb.readBurnDays(cycle),
+    shifts.readShiftRoster(cycle),
+    shifts.readBurnDays(cycle),
     getMealPlan(cycle),
     getKitchenMenu(),
     readAllergies(cycle),

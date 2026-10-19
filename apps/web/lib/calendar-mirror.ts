@@ -9,6 +9,7 @@ import {
 } from "./google-calendar";
 import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // Making the camp's shared Google Calendar match a row the app saved: a
 // logistics phase, an AfrikaBurn date (#247), or an event made in the
@@ -49,13 +50,32 @@ export function isCampCalendarWritable(): boolean {
   return usesTestStore() || calendarWriteConfig(process.env) !== null;
 }
 
+// Google's two writes, or the store's event list standing in for them.
+const google = twin(
+  {
+    putEvent: (input: {
+      id: string;
+      body: CalendarEventBody;
+      actorId: string;
+    }) => putCalendarEvent(process.env, input.id, input.body),
+    removeEvent: (id: string) => deleteCalendarEvent(process.env, id),
+  },
+  {
+    putEvent: (input: {
+      id: string;
+      body: CalendarEventBody;
+      actorId: string;
+    }) => testStore.putCalendarEvent(input),
+    removeEvent: (id: string) => testStore.deleteCalendarEvent(id),
+  },
+  ["putEvent", "removeEvent"],
+);
+
 /** How many times a sync follows a newer save before it gives up. */
 const MAX_SYNC_ROUNDS = 3;
 
 async function removeEvent(id: string): Promise<boolean> {
-  return usesTestStore()
-    ? testStore.deleteCalendarEvent(id)
-    : deleteCalendarEvent(process.env, id);
+  return google.removeEvent(id);
 }
 
 /**
@@ -79,15 +99,11 @@ export async function mirror(
   try {
     let marked = true;
     if (step === "put" && eventId && target.event) {
-      if (usesTestStore()) {
-        testStore.putCalendarEvent({
-          id: eventId,
-          body: target.event.body,
-          actorId: actorId ?? "",
-        });
-      } else {
-        await putCalendarEvent(process.env, eventId, target.event.body);
-      }
+      await google.putEvent({
+        id: eventId,
+        body: target.event.body,
+        actorId: actorId ?? "",
+      });
       marked = await target.mark(false);
     } else if (step === "remove" && eventId) {
       if (!(await removeEvent(eventId))) return "failed";

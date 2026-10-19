@@ -1,21 +1,24 @@
 import "server-only";
 
-import {
-  resolveEntries as dbResolveEntries,
-  searchEntries as dbSearchEntries,
-  type SearchRef,
-  type SearchViewer,
-} from "@camp404/db/search";
+import * as db from "@camp404/db/search";
+import type { SearchRef, SearchViewer } from "@camp404/db/search";
 import { getTeamsConfig } from "./camp-config";
 import type { SearchEntry } from "./program-search";
 import { presentEntry } from "./search-entries";
-import { usesTestStore } from "./test-mode";
 import { testResolveEntries, testSearchEntries } from "./test-store-search";
+import { twin } from "./twin";
 
 // Ctrl+K's camp entries (#326, step 2), from the database or, under E2E, the
-// test store. The rules live in @camp404/db/search; the store repeats them.
+// test store, picked once (twin). The rules live in @camp404/db/search; the
+// store repeats them.
 // Rows become what the box shows (a detail line and an address) here, with
 // the camp's own team names.
+
+const entries = twin(
+  db,
+  { searchEntries: testSearchEntries, resolveEntries: testResolveEntries },
+  ["searchEntries", "resolveEntries"],
+);
 
 async function teamLabels(): Promise<Record<string, string>> {
   const config = await getTeamsConfig();
@@ -31,9 +34,7 @@ export async function searchCamp(
   query: string,
 ): Promise<SearchEntry[]> {
   const [rows, labels] = await Promise.all([
-    usesTestStore()
-      ? testSearchEntries({ viewer, query })
-      : dbSearchEntries({ viewer, query }),
+    entries.searchEntries({ viewer, query }),
     teamLabels(),
   ]);
   return rows.map((row) => presentEntry(row, labels));
@@ -45,9 +46,7 @@ export async function resolveRecent(
   refs: readonly SearchRef[],
 ): Promise<SearchEntry[]> {
   const [rows, labels] = await Promise.all([
-    usesTestStore()
-      ? testResolveEntries({ viewer, refs })
-      : dbResolveEntries({ viewer, refs }),
+    entries.resolveEntries({ viewer, refs }),
     teamLabels(),
   ]);
   return rows.map((row) => presentEntry(row, labels));

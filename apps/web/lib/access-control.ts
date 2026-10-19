@@ -1,17 +1,19 @@
 import "server-only";
 
-import {
-  consumeInviteCode as dbConsumeInviteCode,
-  type AssignedRank,
-} from "@camp404/db/invite-codes";
+import * as invites from "@camp404/db/invite-codes";
+import type { AssignedRank } from "@camp404/db/invite-codes";
 import { normalizeInviteCode } from "@camp404/core";
 import {
   envList,
   founderEmails,
   MIN_PREAPPROVED_ENV_CODE_LENGTH,
 } from "./integration-config";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
+
+// A stored invite code is spent in the database or, under E2E, the test store
+// (twin); the env codes and the founder list are read the same way on both.
+const codes = twin(invites, testStore, ["consumeInviteCode"]);
 
 export interface ClaimedInvite {
   code: string;
@@ -75,9 +77,6 @@ function isEnvCode(code: string): boolean {
     .includes(code);
 }
 
-async function consumeDbCode(code: string) {
-  if (usesTestStore()) {
-    return testStore.consumeInviteCode(code);
-  }
-  return dbConsumeInviteCode(code);
+function consumeDbCode(code: string) {
+  return codes.consumeInviteCode(code);
 }
