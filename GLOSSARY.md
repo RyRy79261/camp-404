@@ -47,8 +47,10 @@ owner). The founding lists and the year-scoped list are derived from it, and
 
 **Audit event.** One `audit_log` row: an action (`AuditAction`, labelled in
 `AUDIT_ACTION_LABELS`), who did it, what it was about, and metadata whose shape
-is `AuditEvents[action]` (`packages/core/src/audit-events.ts`). Written only
-through `writeAuditEvent` and its read twins in `packages/db/src/audit.ts`;
+is `AuditEvents[action]` (`packages/core/src/audit-events.ts`). Written through
+`writeAuditEvent` (or `appendAuditEvent(s)`) in `packages/db/src/audit.ts`; the
+year rollover (`setFoundingYear`, `advanceCycle`) inserts its two rows
+directly, checked with `satisfies`;
 worded for a captain by `auditDetail`, which reads a stored row's keys by that
 shape and checks each value, because an old row keeps the JSON it was written
 with.
