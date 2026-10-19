@@ -95,6 +95,13 @@ export function resetShiftsStore(): void {
   s.serial = 0;
 }
 
+/** Account erasure's part: the member's shift places, every year. */
+export function eraseShiftsOf(userId: string): void {
+  const s = state();
+  s.signups = s.signups.filter((row) => row.userId !== userId);
+  s.volunteers = s.volunteers.filter((row) => row.userId !== userId);
+}
+
 /**
  * As setUserApproval in production: a member who leaves approved comes off
  * the year's shifts, so their places are free again.

@@ -103,6 +103,13 @@ export function resetHelpWantedStore(): void {
   s.serial = 0;
 }
 
+/** Account erasure's part: the roles the member holds and is keen on. */
+export function eraseTeamRolesOf(userId: string): void {
+  const s = state();
+  s.holders = s.holders.filter((h) => h.userId !== userId);
+  s.keen = s.keen.filter((k) => k.userId !== userId);
+}
+
 const tick = () => ++state().serial;
 
 const nameOf = (userId: string) =>

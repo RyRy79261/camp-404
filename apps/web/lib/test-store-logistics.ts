@@ -83,6 +83,14 @@ export function resetLogisticsStore(): void {
   s.deadlines.length = 0;
 }
 
+/** Account erasure's part: the member's attendance answers, every year. */
+export function eraseAttendanceOf(userId: string): void {
+  const answers = state().answers;
+  for (const key of [...answers.keys()]) {
+    if (key.split(":")[2] === userId) answers.delete(key);
+  }
+}
+
 const nameOf = (userId: string) =>
   testStore.findUserById(userId)?.displayName?.trim() || "Unnamed burner";
 

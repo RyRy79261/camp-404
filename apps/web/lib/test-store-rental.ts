@@ -124,6 +124,18 @@ export function resetRentalStore(): void {
   r.orders.length = 0;
 }
 
+/**
+ * Account erasure's part: the member's gear orders go, and so does their
+ * place in anyone else's tent.
+ */
+export function eraseRentalOf(userId: string): void {
+  const r = state();
+  r.orders = r.orders.filter((o) => o.userId !== userId);
+  for (const o of r.orders) {
+    o.sharerIds = o.sharerIds.filter((id) => id !== userId);
+  }
+}
+
 /** A captain (RENTAL_MANAGER). */
 function isManager(actorId: string): boolean {
   return RENTAL_MANAGER.allows(testStore.actorInStore(actorId));

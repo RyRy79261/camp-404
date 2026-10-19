@@ -146,3 +146,13 @@ export function canLeaveCamp(params: {
   }
   return { ok: true };
 }
+
+/** The name an erased account goes by: "Lost Cat #N". */
+export function lostCatName(n: number): string {
+  return `Lost Cat #${n}`;
+}
+
+/** The next erased account's N: one past the highest given out so far. */
+export function nextLostCatNumber(highest: number | null): number {
+  return (highest ?? 0) + 1;
+}

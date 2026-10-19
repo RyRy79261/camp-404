@@ -283,3 +283,26 @@ export function foodsInWords(foods: readonly KitchenAllergen[]): string {
   if (words.length <= 1) return words[0] ?? "";
   return `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
 }
+
+/** What the old (free-text) dietary form holds, when it holds anything. */
+export interface OldDietaryAnswer {
+  allergies: string | null;
+  isAnaphylactic: boolean;
+  notes: string | null;
+}
+
+/**
+ * The old form's words as a member reads them back: trimmed, blanks as none,
+ * and null when it says nothing at all. The database read and the E2E store
+ * both answer it this way.
+ */
+export function oldDietaryAnswer(row: {
+  allergies: string | null;
+  isAnaphylactic: boolean;
+  notes: string | null;
+}): OldDietaryAnswer | null {
+  const allergies = row.allergies?.trim() || null;
+  const notes = row.notes?.trim() || null;
+  if (!allergies && !notes && !row.isAnaphylactic) return null;
+  return { allergies, isAnaphylactic: row.isAnaphylactic, notes };
+}

@@ -1,7 +1,8 @@
 import "server-only";
 
 import { errorLogText } from "@camp404/core";
-import { sanitiseAccount, type SanitiseResult } from "@camp404/db/account";
+import * as account from "@camp404/db/account";
+import type { SanitiseResult } from "@camp404/db/account";
 import { deleteAvatarBlobs } from "./avatar-blob";
 import { deleteClaimReceiptBlobs } from "./claim-receipts";
 import { deletePaymentProofBlobs } from "./payment-proof";
@@ -9,13 +10,30 @@ import { deletePetPhotoBlobs } from "./pet-photos";
 import { deleteReportScreenshotBlobs } from "./report-screenshots";
 import { isE2ETestMode, usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
-import { petsTestStore } from "./test-store-pets";
+import { twin } from "./twin";
+
+// The erasure itself, from the database or, under E2E, the test store, which
+// erases what it holds the same way (lib/__tests__/account-agreement.test.ts).
+// Who may leave is canLeaveCamp and the stub's name lostCatName, both in
+// @camp404/core. The store keeps its files in memory, so it has no blob
+// folders to sweep afterwards.
+const erasure = twin(
+  {
+    sanitiseAccount: (userId: string) => account.sanitiseAccount(userId),
+    sweepBlobs: (input: { userId: string; authUserId: string }) =>
+      sweepBlobs(input),
+  },
+  {
+    sanitiseAccount: (userId: string) => testStore.sanitiseAccount(userId),
+    sweepBlobs: (_input: { userId: string; authUserId: string }) => undefined,
+  },
+  ["sanitiseAccount", "sweepBlobs"],
+);
 
 /**
- * Erase a member's account (anonymise to a "Lost Cat #N" stub). No-op under
- * E2E test mode (no DB) — account erasure isn't exercised by Playwright —
- * except that the test store's twin of `desktop_layouts` goes, as the real
- * erasure deletes the row.
+ * Erase a member's account (anonymise to a "Lost Cat #N" stub). Under E2E with
+ * the test store it erases the store's rows the same way; in the real-database
+ * E2E run (no blob store, nothing a spec drives) it does nothing.
  *
  * Anonymisation nulls `profileImageUrl` in the DB but the avatar blob object
  * outlives the row, so delete it here too. Best-effort: the DB scrub is the
@@ -34,17 +52,20 @@ export async function deleteAccount(input: {
   userId: string;
   authUserId: string;
 }): Promise<SanitiseResult> {
-  if (isE2ETestMode()) {
-    if (usesTestStore()) {
-      testStore.deleteDesktopLayout(input.userId);
-      testStore.deleteInkblotRuns(input.userId);
-      testStore.deleteReportScreenshotsOf(input.userId);
-      petsTestStore.deletePetsOf(input.userId);
-    }
+  if (isE2ETestMode() && !usesTestStore()) {
     return { ok: true, lostCatNumber: 0 };
   }
-  const result = await sanitiseAccount(input.userId);
+  const result = await erasure.sanitiseAccount(input.userId);
   if (!result.ok) return result;
+  await erasure.sweepBlobs(input);
+  return result;
+}
+
+/** Every blob folder an erased member leaves, each best-effort. */
+async function sweepBlobs(input: {
+  userId: string;
+  authUserId: string;
+}): Promise<void> {
   try {
     await deleteAvatarBlobs(input.authUserId);
   } catch (err) {
@@ -80,5 +101,4 @@ export async function deleteAccount(input: {
       errorLogText(err, process.env),
     );
   }
-  return result;
 }

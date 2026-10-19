@@ -8,6 +8,7 @@ import {
   canCheckMenuAllergens,
   dietaryCounts,
   foodsInWords,
+  oldDietaryAnswer,
   planCovers,
   recipeAllergens,
   type DietaryAnswers,
@@ -222,5 +223,23 @@ describe("allergenPlanInput", () => {
       ok: false,
       error: PLAN_NEEDS_WORDS,
     });
+  });
+});
+
+describe("oldDietaryAnswer", () => {
+  it("reads the old form's words back trimmed, and none when it says nothing", () => {
+    expect(
+      oldDietaryAnswer({
+        allergies: " nuts ",
+        isAnaphylactic: false,
+        notes: " ",
+      }),
+    ).toEqual({ allergies: "nuts", isAnaphylactic: false, notes: null });
+    expect(
+      oldDietaryAnswer({ allergies: null, isAnaphylactic: true, notes: null }),
+    ).toEqual({ allergies: null, isAnaphylactic: true, notes: null });
+    expect(
+      oldDietaryAnswer({ allergies: "  ", isAnaphylactic: false, notes: null }),
+    ).toBeNull();
   });
 });

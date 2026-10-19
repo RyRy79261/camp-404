@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { canLeaveCamp, lostCatName, nextLostCatNumber } from "@camp404/core";
 import { writeAuditEvent } from "./audit";
 import { isRealCaptain } from "./bootstrap";
 import { withTransaction } from "./index";
@@ -10,9 +11,8 @@ import * as schema from "./schema";
 // auth link, and delete the personal data hanging off it, preserving relational
 // integrity (AGENTS.md / brief).
 
-export function lostCatName(n: number): string {
-  return `Lost Cat #${n}`;
-}
+/** "Lost Cat #N", from @camp404/core; exported here by its old name too. */
+export { lostCatName };
 
 /**
  * The `users`-row patch that anonymises an account. Pure (no DB) so it is
@@ -100,9 +100,11 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
       .from(schema.users)
       .where(isRealCaptain)
       .for("update");
-    if (captains.length <= 1 && captains.some((c) => c.id === userId)) {
-      return { ok: false as const, reason: "sole_captain" as const };
-    }
+    const leave = canLeaveCamp({
+      isCaptain: captains.some((c) => c.id === userId),
+      captainCount: captains.length,
+    });
+    if (!leave.ok) return leave;
 
     // The login this member signs in with. Read before the patch below
     // rewrites `auth_user_id` to its `deleted:` tombstone.
@@ -116,7 +118,7 @@ export async function sanitiseAccount(userId: string): Promise<SanitiseResult> {
         max: sql<number | null>`max(${schema.users.lostCatNumber})`,
       })
       .from(schema.users);
-    const lostCatNumber = (row?.max ?? 0) + 1;
+    const lostCatNumber = nextLostCatNumber(row?.max ?? null);
     const now = new Date();
 
     await tx

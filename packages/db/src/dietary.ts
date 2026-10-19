@@ -4,6 +4,8 @@ import {
   isComingThisYear,
   type DietaryCounts,
   ALLERGEN_CHECKER,
+  oldDietaryAnswer,
+  type OldDietaryAnswer,
 } from "@camp404/core";
 import {
   readDiets,
@@ -31,12 +33,8 @@ import * as schema from "./schema";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** What the old (free-text) form holds, when it holds anything. */
-export interface OldDietaryAnswer {
-  allergies: string | null;
-  isAnaphylactic: boolean;
-  notes: string | null;
-}
+/** What the old (free-text) form holds (@camp404/core). */
+export type { OldDietaryAnswer };
 
 /** A member's own dietary needs. */
 export interface MyDietary {
@@ -54,17 +52,6 @@ export const DIETARY_PICK_LIST_VERSION = "dietary-pick-list@1";
 export const DIETARY_NOT_A_MEMBER =
   "Only a camp member can save dietary needs.";
 
-function oldAnswer(row: {
-  allergies: string | null;
-  isAnaphylactic: boolean;
-  notes: string | null;
-}): OldDietaryAnswer | null {
-  const allergies = row.allergies?.trim() || null;
-  const notes = row.notes?.trim() || null;
-  if (!allergies && !notes && !row.isAnaphylactic) return null;
-  return { allergies, isAnaphylactic: row.isAnaphylactic, notes };
-}
-
 /** A member's own dietary needs: the pick-list and the old form's words. */
 export async function getMyDietary(userId: string): Promise<MyDietary> {
   const empty: MyDietary = { foods: [], diets: [], savedAt: null, old: null };
@@ -79,7 +66,7 @@ export async function getMyDietary(userId: string): Promise<MyDietary> {
     foods: readFoodReactions(row.foodReactions),
     diets: readDiets(row.diets),
     savedAt: row.foodsSavedAt,
-    old: oldAnswer(row),
+    old: oldDietaryAnswer(row),
   };
 }
 
@@ -203,7 +190,7 @@ export function menuDietary(
       })),
     ),
     oldOnly: coming.filter(
-      (r) => r.foodsSavedAt === null && oldAnswer(r) !== null,
+      (r) => r.foodsSavedAt === null && oldDietaryAnswer(r) !== null,
     ).length,
   };
 }

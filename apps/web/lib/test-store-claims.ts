@@ -96,6 +96,19 @@ export function resetClaimsStore(): void {
   s.serial = 0;
 }
 
+/**
+ * Account erasure's part (@camp404/db/account sanitiseAccount): a claim stays
+ * for the books, without its bank details, its note or its receipt files.
+ */
+export function eraseClaimsOf(userId: string): void {
+  for (const claim of state().claims) {
+    if (claim.submitterId !== userId) continue;
+    claim.accountDetails = "";
+    claim.decisionNote = null;
+    claim.files = [];
+  }
+}
+
 const budgetKey = (team: Team, cycle: number) => `${team}:${cycle}`;
 
 function nameOf(userId: string | null): string | null {

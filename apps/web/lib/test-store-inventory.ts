@@ -132,6 +132,13 @@ export function resetInventoryStore(): void {
   s.tick = 0;
 }
 
+/** Account erasure's part: the member's bookings and pledges go. */
+export function eraseInventoryOf(userId: string): void {
+  const s = state();
+  s.bookings = s.bookings.filter((b) => b.userId !== userId);
+  s.pledges = s.pledges.filter((p) => p.userId !== userId);
+}
+
 /** A strictly later time than the last one, so orders are stable. */
 function now(): Date {
   const s = state();

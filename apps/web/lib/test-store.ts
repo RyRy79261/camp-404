@@ -13,7 +13,10 @@ import {
   checkPaymentInput,
   isParticipationDecision,
   approvalDecisionReason,
+  canLeaveCamp,
   isReviewTransition,
+  lostCatName,
+  nextLostCatNumber,
   ticketPassNoChange,
   normalizeInviteCode,
   INTENT_IMPLIED_BY_STATUS,
@@ -123,11 +126,14 @@ import {
   chargeFeeOnAccept,
   duesSettledInStore,
   isMoneyKeeperInStore,
+  eraseDuesOf,
   refundStatusOf,
   resetDuesStore,
 } from "./test-store-dues";
-import { resetClaimsStore } from "./test-store-claims";
-import { resetPetsStore } from "./test-store-pets";
+import { eraseClaimsOf, resetClaimsStore } from "./test-store-claims";
+import { petsTestStore, resetPetsStore } from "./test-store-pets";
+import { eraseDietaryOf } from "./test-store-dietary";
+import { eraseInventoryOf } from "./test-store-inventory";
 import { resetVoiceStore } from "./test-store-voice";
 import { resetKitchenMenuStore } from "./test-store-kitchen-menu";
 import {
@@ -136,16 +142,22 @@ import {
   storeHasPrepSteps,
   storeRedatePrepSteps,
 } from "./test-store-kitchen-extras";
-import { resetRentalStore } from "./test-store-rental";
+import { eraseRentalOf, resetRentalStore } from "./test-store-rental";
 import { resetGuideStore } from "./test-store-guide";
 import {
   adoptLogisticsSentinel,
+  eraseAttendanceOf,
   resetLogisticsStore,
 } from "./test-store-logistics";
-import { dropMemberShifts, resetShiftsStore } from "./test-store-shifts";
+import {
+  dropMemberShifts,
+  eraseShiftsOf,
+  resetShiftsStore,
+} from "./test-store-shifts";
 import { resetCampEventsStore } from "./test-store-camp-events";
 import {
   dropTeamRolesOf,
+  eraseTeamRolesOf,
   resetHelpWantedStore,
 } from "./test-store-help-wanted";
 import { resetDailySheetStore } from "./test-store-daily-sheet";
@@ -445,6 +457,9 @@ interface TestUser {
   approvalDecidedByUserId: string | null;
   approvalDecidedAt: Date | null;
   approvalDecisionReason: string | null;
+  /** Erased to a "Lost Cat #N" stub (sanitiseAccount), and which N. */
+  sanitised: boolean;
+  lostCatNumber: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -1790,6 +1805,8 @@ export const testStore = {
       approvalDecidedByUserId: null,
       approvalDecidedAt: null,
       approvalDecisionReason: null,
+      sanitised: false,
+      lostCatNumber: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -1804,6 +1821,8 @@ export const testStore = {
     let members = 0;
     let waiting = 0;
     for (const user of usersByAuthId.values()) {
+      // The same people the roster lists: never an erased stub.
+      if (user.sanitised) continue;
       if (user.approvalStatus === "approved") members++;
       else if (user.approvalStatus === "pending") waiting++;
     }
@@ -1813,7 +1832,7 @@ export const testStore = {
   countCaptains(): number {
     let count = 0;
     for (const user of usersByAuthId.values()) {
-      if (user.rank === "captain") count++;
+      if (user.rank === "captain" && !user.sanitised) count++;
     }
     return count;
   },
@@ -3108,7 +3127,8 @@ export const testStore = {
       if (m.cycle !== cycle) continue;
       // The production query joins `users`, so a membership whose member is
       // gone is not counted; the store's writers keep the same invariant.
-      if (!findUserById(m.userId)) continue;
+      const member = findUserById(m.userId);
+      if (!member || member.sanitised) continue;
       const entry = byTeam.get(m.team) ?? { members: 0, leads: 0 };
       entry.members += 1;
       if (m.isLead) entry.leads += 1;
@@ -3131,7 +3151,9 @@ export const testStore = {
       .filter((m) => m.team === team && m.cycle === cycle)
       .flatMap((m) => {
         const user = findUserById(m.userId);
-        if (!user || user.approvalStatus === "rejected") return [];
+        if (!user || user.sanitised || user.approvalStatus === "rejected") {
+          return [];
+        }
         return [
           {
             id: user.id,
@@ -3399,6 +3421,7 @@ export const testStore = {
         ),
     );
     return Array.from(usersByAuthId.values())
+      .filter((u) => !u.sanitised)
       .map((u): CampManagementMember => {
         const mine = thisYear.filter((m) => m.userId === u.id);
         const owed = this.getPendingRequiredActions(u.id);
@@ -6935,6 +6958,110 @@ export const testStore = {
     if (at === -1) return false;
     reportScreenshots.splice(at, 1);
     return true;
+  },
+  /**
+   * Twin of @camp404/db/account sanitiseAccount, for the tables the store
+   * holds: refuses the camp's last captain (canLeaveCamp), turns the row into
+   * the next "Lost Cat #N" stub with its login severed, and deletes or clears
+   * what production deletes or clears. The row stays, so who invited whom and
+   * every authorship still resolve. KNOWN BOUNDARY: the store keeps no audit
+   * log, push tokens, questionnaire responses, MCP rows, Telegram invites,
+   * workshop RSVPs, document reads or fuel cans, so there is nothing of those
+   * to erase.
+   */
+  sanitiseAccount(
+    userId: string,
+  ):
+    | { ok: true; lostCatNumber: number }
+    | { ok: false; reason: "sole_captain" } {
+    const everyone = [...usersByAuthId.values()];
+    const captains = everyone.filter(
+      (u) => u.rank === "captain" && !u.sanitised,
+    );
+    const leave = canLeaveCamp({
+      isCaptain: captains.some((c) => c.id === userId),
+      captainCount: captains.length,
+    });
+    if (!leave.ok) return leave;
+    const lostCatNumber = nextLostCatNumber(
+      everyone.reduce<number | null>(
+        (max, u) =>
+          u.lostCatNumber === null ? max : Math.max(max ?? 0, u.lostCatNumber),
+        null,
+      ),
+    );
+    const user = findUserById(userId);
+    if (user) {
+      usersByAuthId.delete(user.authUserId);
+      Object.assign(user, {
+        displayName: lostCatName(lostCatNumber),
+        authUserId: `deleted:${userId}`,
+        rank: "member",
+        profileImageUrl: null,
+        telegramHandle: null,
+        approvalDecisionReason: null,
+        sanitised: true,
+        lostCatNumber,
+        updatedAt: new Date(),
+      } satisfies Partial<TestUser>);
+      usersByAuthId.set(user.authUserId, user);
+    }
+    const drop = <T>(rows: T[], gone: (row: T) => boolean) => {
+      for (let n = rows.length - 1; n >= 0; n--) {
+        if (gone(rows[n]!)) rows.splice(n, 1);
+      }
+    };
+    const dropKeyed = <T extends { userId: string }>(rows: Map<string, T>) => {
+      for (const [key, row] of [...rows]) {
+        if (row.userId === userId) rows.delete(key);
+      }
+    };
+    S.campBlurbs.delete(userId);
+    profilesByUserId.delete(userId);
+    idDocsByUserId.delete(userId);
+    emergencyContactsByUserId.delete(userId);
+    eraseDietaryOf(userId);
+    drop(driverProfiles, (d) => d.userId === userId);
+    this.deleteDesktopLayout(userId);
+    this.deleteInkblotRuns(userId);
+    drop(deliveries, (d) => d.userId === userId);
+    drop(questionnaireEdits, (e) => e.userId === userId);
+    drop(requiredActions, (a) => a.userId === userId);
+    drop(teamMemberships, (m) => m.userId === userId);
+    dropKeyed(participations);
+    dropKeyed(tickets);
+    drop(
+      carMembers,
+      (c) => c.driverUserId === userId || c.memberUserId === userId,
+    );
+    drop(liftRequests, (r) => r.userId === userId);
+    for (const r of liftRequests) {
+      if (r.driverUserId === userId) r.driverUserId = null;
+    }
+    for (const t of transportTrailers) {
+      if (t.towedByUserId === userId) t.towedByUserId = null;
+    }
+    petsTestStore.deletePetsOf(userId);
+    const offers = new Set(
+      loungeOffers.filter((o) => o.hostId === userId).map((o) => o.id),
+    );
+    drop(loungeOffers, (o) => offers.has(o.id));
+    drop(loungeSlots, (slot) => offers.has(slot.offerId));
+    eraseInventoryOf(userId);
+    for (const p of payments) {
+      if (p.userId !== userId) continue;
+      p.note = null;
+      p.proofPathname = null;
+      p.proofContentType = null;
+    }
+    eraseDuesOf(userId);
+    this.deleteReportScreenshotsOf(userId);
+    eraseAttendanceOf(userId);
+    eraseShiftsOf(userId);
+    eraseTeamRolesOf(userId);
+    eraseRentalOf(userId);
+    eraseClaimsOf(userId);
+    return { ok: true, lostCatNumber };
   },
   deleteReportScreenshotsOf(userId: string): void {
     for (let i = reportScreenshots.length - 1; i >= 0; i--) {
