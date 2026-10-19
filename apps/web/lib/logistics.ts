@@ -43,14 +43,18 @@ import {
   listCampEventsToSync,
 } from "./camp-events";
 import { newCalendarEventId, type CalendarEventBody } from "./google-calendar";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
 import { logisticsTestStore } from "./test-store-logistics";
+import { twin } from "./twin";
 
 // The logistics calendar (#247): the year's pack, travel, build, burn, strike
 // and unpack days; who can help on the days that need hands; and the year's
-// AfrikaBurn deadlines. From the database or, under E2E, the test store; and
-// each phase and each dated deadline mirrored onto the camp's shared Google
+// AfrikaBurn deadlines. From the database or, under E2E, the test store's
+// twin (one per db module, below); the checks both sides share live once in
+// @camp404/core (attendanceAnswerProblem, openAttendancePhases,
+// attendanceAskTargets, afrikaburnDateToSave, dayOneMove), and
+// lib/__tests__/logistics-agreement.test.ts holds the rest equal. And each
+// phase and each dated deadline mirrored onto the camp's shared Google
 // Calendar (owner, 2026-09-28: the calendar stays on Google).
 //
 // THE ORDER. The row is saved first (the rule, the compare-and-set and the
@@ -86,11 +90,33 @@ export function isLogisticsCalendarConnected(): boolean {
   return isCampCalendarWritable();
 }
 
-export async function listLogisticsPhases(): Promise<LogisticsPhaseRow[]> {
-  return usesTestStore()
-    ? testStore.listLogisticsPhases()
-    : db.listLogisticsPhases();
-}
+const phases = twin(db, testStore, [
+  "listLogisticsPhases",
+  "setLogisticsPhase",
+  "clearLogisticsPhase",
+  "markLogisticsCalendarSynced",
+]);
+
+const attendance = twin(db, logisticsTestStore, [
+  "listAttendance",
+  "countAcceptedMembers",
+  "hasOpenAttendanceAsk",
+  "setMyAttendance",
+  "askForAttendance",
+]);
+
+const deadlines = twin(deadlinesDb, logisticsTestStore, [
+  "listDeadlines",
+  "addDeadline",
+  "editDeadline",
+  "setAfrikaburnDate",
+  "setDeadlineDone",
+  "removeDeadline",
+  "markDeadlineCalendarSynced",
+]);
+
+/** This year's phases that have a row (another year's for `cycle`). */
+export const listLogisticsPhases = phases.listLogisticsPhases;
 
 const APP_NOTE = (where: string) =>
   `Set in the Camp 404 app, under ${where}. Change it there.`;
@@ -146,17 +172,13 @@ export function deadlineEventBody(
 
 /** A phase as a mirror target. */
 function phaseTarget(row: LogisticsPhaseRow): MirrorTarget {
-  const mark = (removed: boolean) => {
-    const args = {
+  const mark = (removed: boolean) =>
+    phases.markLogisticsCalendarSynced({
       cycle: row.cycle,
       phase: row.phase,
       version: row.version,
       removed,
-    };
-    return usesTestStore()
-      ? testStore.markLogisticsCalendarSynced(args)
-      : db.markLogisticsCalendarSynced(args);
-  };
+    });
   return {
     step: logisticsCalendarStep(row),
     eventId: row.calendarEventId,
@@ -172,9 +194,7 @@ function phaseTarget(row: LogisticsPhaseRow): MirrorTarget {
         : null,
     mark,
     latest: async () => {
-      const rows = usesTestStore()
-        ? testStore.listLogisticsPhases(row.cycle)
-        : await db.listLogisticsPhases(row.cycle);
+      const rows = await listLogisticsPhases(row.cycle);
       const now = rows.find((r) => r.phase === row.phase);
       return now ? phaseTarget(now) : undefined;
     },
@@ -191,16 +211,16 @@ function deadlineTarget(row: DeadlineRow): MirrorTarget {
       row.dueDate && !removed
         ? { body: deadlineEventBody({ ...row, dueDate: row.dueDate }) }
         : null,
-    mark: (gone: boolean) => {
-      const args = { id: row.id, version: row.version, removed: gone };
-      return usesTestStore()
-        ? logisticsTestStore.markDeadlineCalendarSynced(args)
-        : deadlinesDb.markDeadlineCalendarSynced(args);
-    },
+    mark: (gone: boolean) =>
+      deadlines.markDeadlineCalendarSynced({
+        id: row.id,
+        version: row.version,
+        removed: gone,
+      }),
     latest: async () => {
-      const rows = usesTestStore()
-        ? logisticsTestStore.listDeadlines(row.cycle, { withRemoved: true })
-        : await deadlinesDb.listDeadlines(row.cycle, { withRemoved: true });
+      const rows = await deadlines.listDeadlines(row.cycle, {
+        withRemoved: true,
+      });
       const now = rows.find((r) => r.id === row.id);
       return now ? deadlineTarget(now) : undefined;
     },
@@ -232,16 +252,14 @@ export async function catchUpCampCalendar(): Promise<{
   // every environment), so the Calendar shows it and Google gets it below.
   await linkUnlinkedMeetingNotes();
   if (!isLogisticsCalendarConnected()) return { tried: 0, synced: 0 };
-  const [phases, deadlines, events] = await Promise.all([
+  const [phaseRows, deadlineRows, events] = await Promise.all([
     listLogisticsPhases(),
-    usesTestStore()
-      ? logisticsTestStore.listDeadlines(undefined, { withRemoved: true })
-      : deadlinesDb.listDeadlines(undefined, { withRemoved: true }),
+    deadlines.listDeadlines(undefined, { withRemoved: true }),
     listCampEventsToSync(),
   ]);
   const targets = [
-    ...phases.map((row) => ({ row, target: phaseTarget(row) })),
-    ...deadlines.map((row) => ({ row, target: deadlineTarget(row) })),
+    ...phaseRows.map((row) => ({ row, target: phaseTarget(row) })),
+    ...deadlineRows.map((row) => ({ row, target: deadlineTarget(row) })),
     ...(await campEventTargets(events)),
   ].filter(({ row, target }) => needsSync(row, target.step));
   let synced = 0;
@@ -261,10 +279,11 @@ export async function saveLogisticsPhase(
   actorId: string,
   input: SetLogisticsPhaseInput,
 ): Promise<LogisticsWriteResult<{ calendar: LogisticsCalendarOutcome }>> {
-  const args = { ...input, actorId, newEventId: newCalendarEventId() };
-  const saved = usesTestStore()
-    ? testStore.setLogisticsPhase(args)
-    : await db.setLogisticsPhase(args);
+  const saved = await phases.setLogisticsPhase({
+    ...input,
+    actorId,
+    newEventId: newCalendarEventId(),
+  });
   if (!saved.ok) return saved;
   return { ok: true, calendar: await mirror(phaseTarget(saved.row), actorId) };
 }
@@ -277,10 +296,7 @@ export async function clearLogisticsPhase(
   actorId: string,
   input: ClearLogisticsPhaseInput,
 ): Promise<LogisticsWriteResult<{ calendar: LogisticsCalendarOutcome }>> {
-  const args = { ...input, actorId };
-  const cleared = usesTestStore()
-    ? testStore.clearLogisticsPhase(args)
-    : await db.clearLogisticsPhase(args);
+  const cleared = await phases.clearLogisticsPhase({ ...input, actorId });
   if (!cleared.ok) return cleared;
   return {
     ok: true,
@@ -312,9 +328,7 @@ export async function getAttendanceView(viewer: {
   rank: ViewerRank;
   cycle: number;
 }): Promise<AttendanceView> {
-  const read = usesTestStore()
-    ? logisticsTestStore.listAttendance(viewer.cycle)
-    : await db.listAttendance(viewer.cycle);
+  const read = await attendance.listAttendance(viewer.cycle);
   const board = attendanceBoard(read.entries, read.coming);
   const names = viewer.rank !== "camp_member";
   const mine: AttendanceView["mine"] = {};
@@ -332,47 +346,33 @@ export async function getAttendanceView(viewer: {
 }
 
 /** How many members the captains accepted this year: a count, never names. */
-export async function countAcceptedMembers(cycle: number): Promise<number> {
-  return usesTestStore()
-    ? logisticsTestStore.countAcceptedMembers(cycle)
-    : db.countAcceptedMembers(cycle);
-}
+export const countAcceptedMembers = attendance.countAcceptedMembers;
 
 /** Whether a captain's "Ask everyone" is still open for this member. */
-export async function isAskedForAttendance(userId: string): Promise<boolean> {
-  return usesTestStore()
-    ? logisticsTestStore.hasOpenAttendanceAsk(userId)
-    : db.hasOpenAttendanceAsk(userId);
-}
+export const isAskedForAttendance = attendance.hasOpenAttendanceAsk;
+
+// The writes stay functions because they take who is acting apart from the
+// form's input; the rule is checked inside the write.
 
 /** The signed-in member's own answer for one phase. */
 export async function setMyAttendance(
   userId: string,
   input: SetAttendanceInput,
 ): Promise<LogisticsWriteResult<{ answer: AttendanceAnswer }>> {
-  const args = { ...input, userId };
-  return usesTestStore()
-    ? logisticsTestStore.setMyAttendance(args)
-    : db.setMyAttendance(args);
+  return attendance.setMyAttendance({ ...input, userId });
 }
 
 /** "Ask everyone", as `actorId`, if they may. */
 export async function askForAttendance(
   actorId: string,
 ): Promise<LogisticsWriteResult<{ asked: number; notified: number }>> {
-  return usesTestStore()
-    ? logisticsTestStore.askForAttendance({ actorId })
-    : db.askForAttendance({ actorId });
+  return attendance.askForAttendance({ actorId });
 }
 
 // --- AfrikaBurn deadlines ----------------------------------------------------
 
 /** This year's deadlines, soonest first. Every member reads them. */
-export async function listDeadlines(): Promise<DeadlineRow[]> {
-  return usesTestStore()
-    ? logisticsTestStore.listDeadlines()
-    : deadlinesDb.listDeadlines();
-}
+export const listDeadlines = deadlines.listDeadlines;
 
 type DeadlineSaved = DeadlineWriteResult<{
   calendar: LogisticsCalendarOutcome;
@@ -394,10 +394,11 @@ export async function addDeadline(
   actorId: string,
   input: AddDeadlineInput,
 ): Promise<DeadlineSaved> {
-  const args = { ...input, actorId, newEventId: newCalendarEventId() };
-  const saved = usesTestStore()
-    ? logisticsTestStore.addDeadline(args)
-    : await deadlinesDb.addDeadline(args);
+  const saved = await deadlines.addDeadline({
+    ...input,
+    actorId,
+    newEventId: newCalendarEventId(),
+  });
   return afterDeadlineWrite(saved, actorId);
 }
 
@@ -406,10 +407,11 @@ export async function editDeadline(
   actorId: string,
   input: EditDeadlineInput,
 ): Promise<DeadlineSaved> {
-  const args = { ...input, actorId, newEventId: newCalendarEventId() };
-  const saved = usesTestStore()
-    ? logisticsTestStore.editDeadline(args)
-    : await deadlinesDb.editDeadline(args);
+  const saved = await deadlines.editDeadline({
+    ...input,
+    actorId,
+    newEventId: newCalendarEventId(),
+  });
   return afterDeadlineWrite(saved, actorId);
 }
 
@@ -421,10 +423,11 @@ export async function setAfrikaburnDate(
   actorId: string,
   input: SetAfrikaburnDateInput,
 ): Promise<DeadlineSaved> {
-  const args = { ...input, actorId, newEventId: newCalendarEventId() };
-  const saved = usesTestStore()
-    ? logisticsTestStore.setAfrikaburnDate(args)
-    : await deadlinesDb.setAfrikaburnDate(args);
+  const saved = await deadlines.setAfrikaburnDate({
+    ...input,
+    actorId,
+    newEventId: newCalendarEventId(),
+  });
   return afterDeadlineWrite(saved, actorId);
 }
 
@@ -433,10 +436,7 @@ export async function setDeadlineDone(
   actorId: string,
   input: SetDeadlineDoneInput,
 ): Promise<DeadlineSaved> {
-  const args = { ...input, actorId };
-  const saved = usesTestStore()
-    ? logisticsTestStore.setDeadlineDone(args)
-    : await deadlinesDb.setDeadlineDone(args);
+  const saved = await deadlines.setDeadlineDone({ ...input, actorId });
   return afterDeadlineWrite(saved, actorId);
 }
 
@@ -445,10 +445,7 @@ export async function removeDeadline(
   actorId: string,
   input: RemoveDeadlineInput,
 ): Promise<DeadlineSaved> {
-  const args = { ...input, actorId };
-  const saved = usesTestStore()
-    ? logisticsTestStore.removeDeadline(args)
-    : await deadlinesDb.removeDeadline(args);
+  const saved = await deadlines.removeDeadline({ ...input, actorId });
   return afterDeadlineWrite(saved, actorId);
 }
 

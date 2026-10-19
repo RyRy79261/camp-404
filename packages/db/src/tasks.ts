@@ -14,8 +14,21 @@ import { alias } from "drizzle-orm/pg-core";
 import {
   campDayKey,
   campDayStart,
+  CANNOT_EDIT_TASK,
+  CANNOT_MOVE_TASK,
+  CANNOT_REMOVE_TASK,
   nextCampDay,
+  NOT_A_TASK_AUTHOR,
+  NOT_YOUR_TASK_TEAM,
+  NOT_YOUR_TEAM_TO_MOVE_TASK,
+  TASK_MOVED,
+  TASK_PICK_YOUR_TEAM,
+  TASK_TEAM_NOT_ACTIVE,
+  taskAddProblem,
   taskDeadlineNotification,
+  taskEditProblem,
+  taskMoveProblem,
+  taskRemoveProblem,
 } from "@camp404/core";
 import { TASK_EDITED } from "@camp404/types";
 import type { DbOrTx } from "./audit";
@@ -28,7 +41,8 @@ import * as schema from "./schema";
 // task, in three columns — To do, Doing, Done — with its team, the person
 // responsible and the deadline.
 //
-// Who may do what:
+// Who may do what (the rules live once in @camp404/core: taskAddProblem,
+// taskMoveProblem, taskRemoveProblem, taskEditProblem):
 //  - Add: a captain, for any team or none; a team lead, only for a team they
 //    lead this year. Nobody else.
 //  - Move between columns: the person responsible, whoever added it, a lead of
@@ -208,23 +222,21 @@ export type TaskWriteResult<T = object> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 
-export const NOT_A_TASK_AUTHOR = "Only captains and team leads can add tasks.";
-export const PICK_YOUR_TEAM = "Pick a team you lead.";
-export const NOT_YOUR_TEAM = "You can add tasks only for a team you lead.";
 export const NOT_A_MEMBER = "That person isn't an approved camp member.";
 export const TASK_GONE = "That task was removed.";
-export const TASK_MOVED =
-  "Someone else moved this task. The board now shows where it is.";
-export const CANNOT_MOVE =
-  "Only the person responsible, whoever added it, its team's lead or a captain can move this task.";
-export const CANNOT_REMOVE =
-  "Only whoever added this task, its team's lead or a captain can remove it.";
-export const CANNOT_EDIT =
-  "Only whoever added this task, its team's lead or a captain can edit it.";
-export const NOT_YOUR_TEAM_TO_MOVE =
-  "You can move a task only to a team you lead.";
-export const TEAM_NOT_ACTIVE =
-  "That team isn't active any more. Pick another team.";
+
+// The checks' sentences live with them in @camp404/core.
+export {
+  CANNOT_EDIT_TASK as CANNOT_EDIT,
+  CANNOT_MOVE_TASK as CANNOT_MOVE,
+  CANNOT_REMOVE_TASK as CANNOT_REMOVE,
+  NOT_A_TASK_AUTHOR,
+  NOT_YOUR_TASK_TEAM as NOT_YOUR_TEAM,
+  NOT_YOUR_TEAM_TO_MOVE_TASK as NOT_YOUR_TEAM_TO_MOVE,
+  TASK_MOVED,
+  TASK_PICK_YOUR_TEAM as PICK_YOUR_TEAM,
+  TASK_TEAM_NOT_ACTIVE as TEAM_NOT_ACTIVE,
+};
 export { TASK_EDITED };
 
 /**
@@ -278,13 +290,8 @@ export async function addTaskWithin(
   input: AddTaskInput,
 ): Promise<TaskWriteResult<{ id: string }>> {
   const reach = await lockSenderReach(tx, input.creatorId);
-  if (reach !== undefined) {
-    if (reach.length === 0) return { ok: false, error: NOT_A_TASK_AUTHOR };
-    if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
-    if (!reach.includes(input.team)) {
-      return { ok: false, error: NOT_YOUR_TEAM };
-    }
-  }
+  const problem = taskAddProblem(reach, input.team);
+  if (problem) return { ok: false, error: problem };
   return insertTaskWithin(tx, input);
 }
 
@@ -333,14 +340,6 @@ async function lockTask(tx: DbOrTx, taskId: string) {
   return task && task.status !== "cancelled" ? task : null;
 }
 
-/** Whether the actor leads the task's team (a captain's reach is everything). */
-function leadsTaskTeam(
-  reach: readonly Team[] | undefined,
-  team: Team | null,
-): boolean {
-  return reach === undefined || (team !== null && reach.includes(team));
-}
-
 /**
  * Move a task to another column. `from` is the column the actor saw it in; if
  * someone moved it first, nothing changes and the actor is told.
@@ -355,14 +354,13 @@ export async function moveTask(input: {
     const reach = await lockSenderReach(tx, input.actorId);
     const task = await lockTask(tx, input.taskId);
     if (!task) return { ok: false, error: TASK_GONE };
-    const allowed =
-      leadsTaskTeam(reach, task.team) ||
-      task.assigneeId === input.actorId ||
-      task.createdById === input.actorId;
-    if (!allowed) return { ok: false, error: CANNOT_MOVE };
-    // The column the actor saw must still be the task's, even for a move to
-    // the same column: otherwise a stale read would be told it succeeded.
-    if (task.status !== input.from) return { ok: false, error: TASK_MOVED };
+    const problem = taskMoveProblem({
+      reach,
+      actorId: input.actorId,
+      task,
+      from: input.from,
+    });
+    if (problem) return { ok: false, error: problem };
     if (input.from === input.to) return { ok: true };
 
     const moved = await tx
@@ -391,9 +389,8 @@ export async function removeTask(input: {
     const reach = await lockSenderReach(tx, input.actorId);
     const task = await lockTask(tx, input.taskId);
     if (!task) return { ok: false, error: TASK_GONE };
-    const allowed =
-      leadsTaskTeam(reach, task.team) || task.createdById === input.actorId;
-    if (!allowed) return { ok: false, error: CANNOT_REMOVE };
+    const problem = taskRemoveProblem({ reach, actorId: input.actorId, task });
+    if (problem) return { ok: false, error: problem };
 
     const removed = await tx
       .update(schema.tasks)
@@ -433,21 +430,14 @@ export async function editTask(input: {
     const reach = await lockSenderReach(tx, input.actorId);
     const task = await lockTask(tx, input.taskId);
     if (!task) return { ok: false, error: TASK_GONE };
-    const allowed =
-      leadsTaskTeam(reach, task.team) || task.createdById === input.actorId;
-    if (!allowed) return { ok: false, error: CANNOT_EDIT };
-
-    if (input.team !== task.team) {
-      if (reach !== undefined) {
-        if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
-        if (!reach.includes(input.team)) {
-          return { ok: false, error: NOT_YOUR_TEAM_TO_MOVE };
-        }
-      }
-      if (input.team && !input.activeTeams.includes(input.team)) {
-        return { ok: false, error: TEAM_NOT_ACTIVE };
-      }
-    }
+    const problem = taskEditProblem({
+      reach,
+      actorId: input.actorId,
+      task,
+      team: input.team,
+      activeTeams: input.activeTeams,
+    });
+    if (problem) return { ok: false, error: problem };
     // Like the team, the person responsible is checked only when it changes:
     // a task may keep someone who has since left the approved list (erased,
     // or sent back to pending), so a title fix still saves.

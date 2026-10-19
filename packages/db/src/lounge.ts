@@ -1,5 +1,16 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { LOUNGE_RUNNER } from "@camp404/core";
+import {
+  LOUNGE_RUNNER,
+  NOT_YOUR_OFFER,
+  OFFER_CHANGED,
+  OFFER_DECIDED,
+  OFFER_GONE,
+  OFFER_NOT_ACCEPTED,
+  loungeDecisionNote,
+  loungeDecisionProblem,
+  loungeEditProblem,
+  loungePlaceProblem,
+} from "@camp404/core";
 import type {
   DecideLoungeOfferInput,
   EditLoungeOfferInput,
@@ -50,14 +61,15 @@ export type LoungeWriteResult<T = object> =
 
 export const NOT_A_LOUNGE_RUNNER =
   "Only captains and Ministry of Vibes leads can run the lounge programme.";
-export const OFFER_GONE = "That offer isn't there any more. Reload the page.";
-export const OFFER_CHANGED =
-  "Someone changed this offer first. Reload the page.";
-export const NOT_YOUR_OFFER = "You can only change your own offers.";
-export const OFFER_DECIDED =
-  "This offer has already been accepted or declined, so it can't be changed. Ask a Ministry of Vibes lead.";
-export const OFFER_NOT_ACCEPTED =
-  "Only an accepted offer can go on the programme. Accept it first.";
+// The offer sentences live with their checks in @camp404/core
+// (loungeEditProblem, loungeDecisionProblem, loungePlaceProblem).
+export {
+  NOT_YOUR_OFFER,
+  OFFER_CHANGED,
+  OFFER_DECIDED,
+  OFFER_GONE,
+  OFFER_NOT_ACCEPTED,
+};
 export const ALREADY_PLACED = "It's already on the programme at that time.";
 export const SLOT_GONE =
   "That item isn't on the programme any more. Reload the page.";
@@ -219,9 +231,9 @@ async function assertLoungeRunner(tx: Tx, actorId: string): Promise<void> {
   }
 }
 
-/** This year's offer, locked for the rest of the transaction, or a refusal. */
+/** This year's offer, locked for the rest of the transaction, or null. */
 async function lockOffer(tx: Tx, offerId: string, cycle: number) {
-  if (!UUID.test(offerId)) refuse(OFFER_GONE);
+  if (!UUID.test(offerId)) return null;
   const [row] = await tx
     .select({
       id: schema.loungeOffers.id,
@@ -238,8 +250,7 @@ async function lockOffer(tx: Tx, offerId: string, cycle: number) {
       ),
     )
     .for("update");
-  if (!row) refuse(OFFER_GONE);
-  return row;
+  return row ?? null;
 }
 
 function offerValues(input: LoungeOfferInput) {
@@ -402,10 +413,12 @@ export async function updateLoungeOffer(
   return write(async (tx) => {
     const cycle = await currentCycleNumber(tx);
     const current = await lockOffer(tx, input.offerId, cycle);
-    if (current.hostId !== input.actorId) refuse(NOT_YOUR_OFFER);
-    if (current.status === "accepted" || current.status === "declined") {
-      refuse(OFFER_DECIDED);
-    }
+    const problem = loungeEditProblem(
+      current,
+      input.actorId,
+      input.expectedVersion,
+    );
+    if (problem) refuse(problem);
     const [row] = await tx
       .update(schema.loungeOffers)
       .set({
@@ -436,6 +449,7 @@ export async function withdrawLoungeOffer(input: {
   return write(async (tx) => {
     const cycle = await currentCycleNumber(tx);
     const current = await lockOffer(tx, input.offerId, cycle);
+    if (!current) refuse(OFFER_GONE);
     if (current.hostId !== input.actorId) refuse(NOT_YOUR_OFFER);
     await tx
       .delete(schema.loungeOffers)
@@ -458,11 +472,17 @@ export async function decideLoungeOffer(
     await assertLoungeRunner(tx, input.actorId);
     const cycle = await currentCycleNumber(tx);
     const current = await lockOffer(tx, input.offerId, cycle);
+    const problem = loungeDecisionProblem(
+      current,
+      input.expectedStatus,
+      input.expectedVersion,
+    );
+    if (problem || !current) refuse(problem ?? OFFER_GONE);
     const [row] = await tx
       .update(schema.loungeOffers)
       .set({
         status: input.decision,
-        decisionNote: input.decision === "accepted" ? null : input.reason,
+        decisionNote: loungeDecisionNote(input.decision, input.reason),
         decidedByUserId: input.actorId,
         decidedAt: new Date(),
         version: sql`${schema.loungeOffers.version} + 1`,
@@ -511,7 +531,8 @@ export async function placeLoungeOffer(
     const cycle = await currentCycleNumber(tx);
     // Locked, so a decline that lands meanwhile waits and then clears this.
     const offer = await lockOffer(tx, input.offerId, cycle);
-    if (offer.status !== "accepted") refuse(OFFER_NOT_ACCEPTED);
+    const problem = loungePlaceProblem(offer);
+    if (problem || !offer) refuse(problem ?? OFFER_GONE);
     const [row] = await tx
       .insert(schema.loungeSlots)
       .values({

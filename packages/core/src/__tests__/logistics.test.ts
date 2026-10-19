@@ -13,9 +13,19 @@ import {
   afrikaburnDate,
   afrikaburnDateGroups,
   afrikaburnDateMayBeSkipped,
+  afrikaburnDateToSave,
   afrikaburnEventTitle,
   attendanceAnswered,
+  attendanceAnswerProblem,
   attendanceAskNotification,
+  attendanceAskTargets,
+  attendanceClosed,
+  ATTENDANCE_NOT_A_MEMBER,
+  CANNOT_SKIP_DATE,
+  dayOneMove,
+  NOT_AN_AFRIKABURN_DATE,
+  openAttendancePhases,
+  PICK_THE_DATE,
   attendanceBoard,
   attendanceIsOpen,
   campOnSite,
@@ -389,5 +399,156 @@ describe("afrikaburnDateGroups", () => {
       }),
     ]);
     expect(afrikaburnDateGroups([])).toEqual([]);
+  });
+});
+
+describe("dayOneMove", () => {
+  const build = {
+    phase: "build" as const,
+    startDate: "2027-04-20",
+    endDate: "2027-04-25",
+  };
+  const burn = {
+    phase: "burn" as const,
+    startDate: "2027-04-26",
+    endDate: "2027-05-02",
+  };
+  const cleared = (phase: "build" | "burn") => ({
+    phase,
+    startDate: null,
+    endDate: null,
+  });
+
+  it("says how many days Day 1 moves when Build moves", () => {
+    expect(
+      dayOneMove([build, burn], { ...build, startDate: "2027-04-22" }),
+    ).toEqual({ from: "2027-04-20", to: "2027-04-22", lost: false, shift: 2 });
+  });
+
+  it("falls back to the Burn's first day when Build is cleared", () => {
+    expect(dayOneMove([build, burn], cleared("build"))).toEqual({
+      from: "2027-04-20",
+      to: "2027-04-26",
+      lost: false,
+      shift: 6,
+    });
+  });
+
+  it("says Day 1 is lost when the last phase that gave it is cleared", () => {
+    expect(dayOneMove([burn], cleared("burn"))).toEqual({
+      from: "2027-04-26",
+      to: null,
+      lost: true,
+      shift: null,
+    });
+  });
+
+  it("does not move Day 1 for a phase that does not set it, or from nothing", () => {
+    const pack = {
+      phase: "pack" as const,
+      startDate: "2027-04-10",
+      endDate: "2027-04-12",
+    };
+    expect(dayOneMove([build], pack)).toMatchObject({
+      lost: false,
+      shift: null,
+    });
+    expect(dayOneMove([], build)).toEqual({
+      from: null,
+      to: "2027-04-20",
+      lost: false,
+      shift: null,
+    });
+  });
+});
+
+describe("openAttendancePhases", () => {
+  it("keeps the attendance phases that have not started, and ignores the rest", () => {
+    const open = openAttendancePhases(
+      [
+        { phase: "pack", startDate: "2027-04-10" },
+        { phase: "build", startDate: "2027-04-20" },
+        { phase: "burn", startDate: "2027-04-01" },
+      ],
+      "2027-04-11",
+    );
+    expect([...open]).toEqual(["build", "strike", "unpack"]);
+  });
+});
+
+describe("attendanceAnswerProblem", () => {
+  const open = new Set(["build"] as const);
+  it("lets a member answer for an open phase", () => {
+    expect(
+      attendanceAnswerProblem({ member: true, phase: "build", open }),
+    ).toBeNull();
+  });
+  it("refuses in the database's order: not a member, then closed", () => {
+    expect(
+      attendanceAnswerProblem({ member: false, phase: "pack", open }),
+    ).toBe(ATTENDANCE_NOT_A_MEMBER);
+    expect(attendanceAnswerProblem({ member: true, phase: "pack", open })).toBe(
+      attendanceClosed("pack"),
+    );
+  });
+});
+
+describe("attendanceAskTargets", () => {
+  it("asks only the coming members with an open phase unanswered", () => {
+    const coming = [{ userId: "a" }, { userId: "b" }, { userId: "c" }];
+    const open = new Set(["build", "strike"] as const);
+    const answers = [
+      { userId: "a", phase: "build" },
+      { userId: "a", phase: "strike" },
+      { userId: "b", phase: "build" },
+      { userId: "x", phase: "build" },
+    ];
+    expect(attendanceAskTargets(coming, answers, open)).toEqual([
+      { userId: "b" },
+      { userId: "c" },
+    ]);
+  });
+});
+
+describe("afrikaburnDateToSave", () => {
+  it("saves a standard date's day, and no day for a skipped second DDT round", () => {
+    expect(
+      afrikaburnDateToSave({
+        kind: "registration_closes",
+        skipped: false,
+        dueDate: "2027-02-01",
+      }),
+    ).toMatchObject({
+      ok: true,
+      standard: { kind: "registration_closes" },
+      dueDate: "2027-02-01",
+    });
+    expect(
+      afrikaburnDateToSave({
+        kind: "second_ddt_round",
+        skipped: true,
+        dueDate: "2027-02-01",
+      }),
+    ).toMatchObject({ ok: true, dueDate: null });
+  });
+
+  it("refuses in the database's order", () => {
+    expect(
+      afrikaburnDateToSave({ kind: "party", skipped: true, dueDate: null }),
+    ).toEqual({ ok: false, error: NOT_AN_AFRIKABURN_DATE });
+    expect(
+      afrikaburnDateToSave({
+        kind: "registration_closes",
+        skipped: true,
+        dueDate: null,
+      }),
+    ).toEqual({ ok: false, error: CANNOT_SKIP_DATE });
+    expect(
+      afrikaburnDateToSave({
+        kind: "registration_closes",
+        skipped: false,
+        dueDate: null,
+      }),
+    ).toEqual({ ok: false, error: PICK_THE_DATE });
   });
 });

@@ -4,22 +4,23 @@ import {
   ATTENDANCE_ACTION_TITLE,
   ATTENDANCE_REF_TYPE,
   attendanceAnswered,
+  attendanceAnswerProblem,
   attendanceAskNotification,
-  attendanceIsOpen,
+  attendanceAskTargets,
+  attendanceClosed,
   campDayKey,
-  campOnSite,
-  dayOneShift,
+  dayOneMove,
   isAskedForAttendance,
+  openAttendancePhases,
   type AttendanceEntry,
   type PhaseDays,
   ATTENDANCE_ASKER,
+  ATTENDANCE_NOT_A_MEMBER,
   LOGISTICS_EDITOR,
 } from "@camp404/core";
 import {
   ATTENDANCE_PHASES,
   DAY_ONE_NEEDED_FOR_PREP,
-  LOGISTICS_PHASE_LABELS,
-  MEAL_PLAN_MAX_DAYS,
   type AttendanceAnswer,
   type AttendancePhase,
   type LogisticsPhase,
@@ -69,13 +70,12 @@ export const PHASE_CHANGED =
   "Someone changed these days first. Reload the page.";
 export const NOT_AN_ATTENDANCE_ASKER =
   "Only captains can ask everyone about the logistics days.";
-export const ATTENDANCE_NOT_A_MEMBER = "Only approved camp members can answer.";
 export const ATTENDANCE_CHANGED =
   "Your answer changed somewhere else. Reload the page.";
-/** A phase that has started takes no more answers. */
-export function attendanceClosed(phase: AttendancePhase): string {
-  return `${LOGISTICS_PHASE_LABELS[phase]} has started, so answers are closed.`;
-}
+
+// The sentences of the checks the store shares live with them in
+// @camp404/core (attendanceAnswerProblem).
+export { ATTENDANCE_NOT_A_MEMBER, attendanceClosed };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -168,13 +168,8 @@ async function followDayOne(
     row: PhaseDays;
   },
 ): Promise<void> {
-  const after = [
-    ...input.before.filter((p) => p.phase !== input.row.phase),
-    input.row,
-  ];
-  const from = campOnSite(input.before, MEAL_PLAN_MAX_DAYS)?.firstDay ?? null;
-  const to = campOnSite(after, MEAL_PLAN_MAX_DAYS)?.firstDay ?? null;
-  if (from !== null && to === null) {
+  const { from, to, lost, shift } = dayOneMove(input.before, input.row);
+  if (lost) {
     const [step] = await tx
       .select({ id: schema.kitchenPrepSteps.id })
       .from(schema.kitchenPrepSteps)
@@ -184,7 +179,6 @@ async function followDayOne(
     if (step) refuse(DAY_ONE_NEEDED_FOR_PREP);
     return;
   }
-  const shift = dayOneShift(from, to);
   if (shift === null) return;
   await redatePrepSteps(tx, {
     actorId: input.actorId,
@@ -512,10 +506,7 @@ async function openPhases(
       ),
     )
     .for("share");
-  const starts = new Map(rows.map((r) => [r.phase, r.startDate]));
-  return new Set(
-    ATTENDANCE_PHASES.filter((p) => attendanceIsOpen(starts.get(p), today)),
-  );
+  return openAttendancePhases(rows, today);
 }
 
 /**
@@ -538,11 +529,15 @@ export async function setMyAttendance(input: {
       .from(schema.users)
       .where(and(eq(schema.users.id, input.userId), realMember))
       .for("share");
-    if (!member) refuse(ATTENDANCE_NOT_A_MEMBER);
     const cycle = await currentCycleNumber(tx);
     const now = input.now ?? new Date();
     const open = await openPhases(tx, cycle, campDayKey(now));
-    if (!open.has(input.phase)) refuse(attendanceClosed(input.phase));
+    const problem = attendanceAnswerProblem({
+      member: member !== undefined,
+      phase: input.phase,
+      open,
+    });
+    if (problem) refuse(problem);
 
     const key = and(
       eq(schema.logisticsAttendance.cycle, cycle),
@@ -619,15 +614,7 @@ export async function askForAttendance(input: {
       })
       .from(schema.logisticsAttendance)
       .where(eq(schema.logisticsAttendance.cycle, cycle));
-    const answered = new Map<string, Set<AttendancePhase>>();
-    for (const a of answers) {
-      const set = answered.get(a.userId) ?? new Set<AttendancePhase>();
-      set.add(a.phase as AttendancePhase);
-      answered.set(a.userId, set);
-    }
-    const targets = coming.filter(
-      (m) => !attendanceAnswered(answered.get(m.userId) ?? new Set(), open),
-    );
+    const targets = attendanceAskTargets(coming, answers, open);
     const notified = await openNudges(tx, {
       userIds: targets.map((t) => t.userId),
       actionKey: ATTENDANCE_ACTION_KEY,

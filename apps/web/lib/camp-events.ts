@@ -29,8 +29,8 @@ import {
   TEAM_PROPERTY,
   type CalendarEventBody,
 } from "./google-calendar";
-import { usesTestStore } from "./test-mode";
 import { campEventsTestStore } from "./test-store-camp-events";
+import { twin } from "./twin";
 
 // The Calendar's own events and meetings (owner, 2026-10-10: "you make events
 // in the calendar app"), from the database or, under E2E, the test store; each
@@ -39,8 +39,24 @@ import { campEventsTestStore } from "./test-store-camp-events";
 // audit row and its claimed Google id) first, then Google with no transaction
 // open, then the mark. A Google failure loses nothing: the catch-up on a later
 // page load puts it right under the same id. Only production writes to Google.
+// Who may manage an event (campEventRefusal, campEventChangeRefusal), what an
+// event is (campEventKindFor), its stored days (storedCampEventWhen) and
+// whether a meeting has minutes (hasMinutes) live once in @camp404/core;
+// lib/__tests__/camp-events-agreement.test.ts holds the rest equal.
 
 export type { CampEventRow, CampEventWriteResult };
+
+const events = twin(db, campEventsTestStore, [
+  "listCampEvents",
+  "getCampEvent",
+  "getCampEventRow",
+  "listCampEventsToSync",
+  "linkUnlinkedMeetingNotes",
+  "markCampEventCalendarSynced",
+  "createCampEvent",
+  "editCampEvent",
+  "removeCampEvent",
+]);
 
 const APP_NOTE =
   "Made in the Camp 404 app, under Calendar. Change it there, not here.";
@@ -144,19 +160,17 @@ function target(
             row.team ? (labels[row.team] ?? null) : null,
           ),
         },
-    mark: (gone: boolean) => {
-      const args = { id: row.id, version: row.version, removed: gone };
-      return usesTestStore()
-        ? campEventsTestStore.markCampEventCalendarSynced(args)
-        : db.markCampEventCalendarSynced(args);
-    },
+    mark: (gone: boolean) =>
+      events.markCampEventCalendarSynced({
+        id: row.id,
+        version: row.version,
+        removed: gone,
+      }),
     // The row as it stands, synced or not, removed or not: a newer save that
     // another step already put on Google is put again (the mark matches it),
     // never mistaken for a row that is gone.
     latest: async () => {
-      const now = usesTestStore()
-        ? campEventsTestStore.getCampEventRow(row.id)
-        : await db.getCampEventRow(row.id);
+      const now = await events.getCampEventRow(row.id);
       return now ? target(now, labels) : undefined;
     },
   };
@@ -174,41 +188,20 @@ export async function campEventTargets(
 // --- Reads -------------------------------------------------------------------
 
 /** The events the app made that touch the camp days `from`..`to`. */
-export async function listCampEvents(range: {
-  from: string;
-  to: string;
-}): Promise<CampEventRow[]> {
-  return usesTestStore()
-    ? campEventsTestStore.listCampEvents(range)
-    : db.listCampEvents(range);
-}
+export const listCampEvents = events.listCampEvents;
 
 /** One event the app made, by its Google id. */
-export async function getCampEvent(
-  calendarEventId: string,
-): Promise<CampEventRow | null> {
-  return usesTestStore()
-    ? campEventsTestStore.getCampEvent(calendarEventId)
-    : db.getCampEvent(calendarEventId);
-}
+export const getCampEvent = events.getCampEvent;
 
 /**
  * Give every meeting note with no calendar event its own meeting event (as
  * migration 0108 did), so a note written while a deploy rolled out still
  * shows in the Calendar. The catch-up runs it first.
  */
-export async function linkUnlinkedMeetingNotes(): Promise<number> {
-  return usesTestStore()
-    ? campEventsTestStore.linkUnlinkedMeetingNotes()
-    : db.linkUnlinkedMeetingNotes();
-}
+export const linkUnlinkedMeetingNotes = events.linkUnlinkedMeetingNotes;
 
 /** The events the camp calendar may not match yet, for the catch-up. */
-export async function listCampEventsToSync(): Promise<CampEventRow[]> {
-  return usesTestStore()
-    ? campEventsTestStore.listCampEventsToSync()
-    : db.listCampEventsToSync();
-}
+export const listCampEventsToSync = events.listCampEventsToSync;
 
 // --- Writes ------------------------------------------------------------------
 
@@ -272,9 +265,7 @@ export async function createCampEvent(
     agenda: input.agenda,
     newEventId: newCalendarEventId(),
   };
-  const saved = usesTestStore()
-    ? campEventsTestStore.createCampEvent(args)
-    : await db.createCampEvent(args);
+  const saved = await events.createCampEvent(args);
   return afterWrite(saved, actorId);
 }
 
@@ -289,9 +280,7 @@ export async function editCampEvent(
     calendarEventId: input.eventId,
     expectedVersion: input.version,
   };
-  const saved = usesTestStore()
-    ? campEventsTestStore.editCampEvent(args)
-    : await db.editCampEvent(args);
+  const saved = await events.editCampEvent(args);
   return afterWrite(saved, actorId);
 }
 
@@ -305,8 +294,6 @@ export async function removeCampEvent(
     calendarEventId: input.eventId,
     expectedVersion: input.version,
   };
-  const saved = usesTestStore()
-    ? campEventsTestStore.removeCampEvent(args)
-    : await db.removeCampEvent(args);
+  const saved = await events.removeCampEvent(args);
   return afterWrite(saved, actorId);
 }

@@ -28,12 +28,17 @@ import {
   canEditTransport,
   canManageCar,
   canRemoveRider,
+  liftAnswerProblem,
+  liftRequestProblem,
+  seatProblem,
+  seatsOfferedProblem,
+  towProblem,
   canSendToAudience,
   carMessageNotification,
   vehicleLabel,
   mealPlanPeaks,
   campOnSite,
-  dayOneShift,
+  dayOneMove,
   sameSections,
   sourceFromText,
   sourceText,
@@ -44,7 +49,14 @@ import {
   type SearchTextPart,
   type Actor,
   LOUNGE_RUNNER,
+  loungeDecisionNote,
+  loungeDecisionProblem,
+  loungeEditProblem,
+  loungePlaceProblem,
   POWER_EDITOR,
+  copyLastYearProblem,
+  planGeneratorProblem,
+  powerPlanPatch,
   PROOFREADER,
   KITCHEN_REVIEWER,
   adjustInstructionProblem,
@@ -58,6 +70,10 @@ import {
   runErrorText,
   teamProgramEditor,
   LOGISTICS_EDITOR,
+  taskAddProblem,
+  taskEditProblem,
+  taskMoveProblem,
+  taskRemoveProblem,
 } from "@camp404/core";
 import {
   DRAFT_MISSING,
@@ -133,26 +149,15 @@ import {
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
 import {
-  ALREADY_SEATED,
-  ALREADY_TOWING,
-  CANNOT_TOW,
   CAR_EMPTY,
-  CAR_FULL,
   CAR_MESSAGE_REFUSED,
-  IS_DRIVING,
-  NOT_A_MEMBER as TRANSPORT_NOT_A_MEMBER,
   NOT_A_TRANSPORT_EDITOR,
   NOT_DRIVING,
   NOT_IN_CAR,
   NOT_YOUR_CAR,
-  OWN_CAR,
-  REQUEST_CHANGED,
   REQUEST_GONE,
-  SEATS_BELOW_RIDERS,
   TRAILER_CHANGED,
   TRAILER_GONE,
-  YOU_ARE_DRIVING,
-  YOU_HAVE_A_SEAT,
   type LiftRequestRow,
   type TrailerRow,
   type TransportBoard,
@@ -184,18 +189,10 @@ import type {
 } from "@camp404/db/participations";
 import type { TicketPassChange, TicketRow } from "@camp404/db/tickets";
 import {
-  CANNOT_EDIT,
-  CANNOT_MOVE,
-  CANNOT_REMOVE,
   DONE_VISIBLE_DAYS,
   NOT_A_MEMBER,
-  NOT_A_TASK_AUTHOR,
-  NOT_YOUR_TEAM,
-  NOT_YOUR_TEAM_TO_MOVE,
-  PICK_YOUR_TEAM,
   TASK_EDITED,
   TASK_GONE,
-  TASK_MOVED,
   TEAM_NOT_ACTIVE,
   type AssignableMember,
   type BoardTask,
@@ -204,8 +201,6 @@ import {
   type TaskWriteResult,
 } from "@camp404/db/tasks";
 import {
-  ALREADY_HAS_LOADS,
-  ALREADY_HAS_PLAN,
   DEFAULT_POWER_PLAN,
   GENERATOR_CHANGED,
   GENERATOR_GONE,
@@ -213,7 +208,6 @@ import {
   LOAD_CHANGED,
   LOAD_GONE,
   NOT_A_POWER_EDITOR,
-  NOTHING_TO_COPY,
   PLAN_CHANGED,
   type GeneratorRow,
   type PowerInventoryItem,
@@ -232,10 +226,7 @@ import {
   ALREADY_PLACED,
   NOT_A_LOUNGE_RUNNER,
   NOT_YOUR_OFFER,
-  OFFER_CHANGED,
-  OFFER_DECIDED,
   OFFER_GONE,
-  OFFER_NOT_ACCEPTED,
   SETTINGS_CHANGED,
   SLOT_GONE,
   hostNameOf,
@@ -1251,19 +1242,21 @@ function transportSeatIn(input: {
   cycle: number;
 }): TransportResult {
   const { driverUserId, memberUserId, cycle } = input;
-  if (driverUserId === memberUserId) return { ok: false, error: OWN_CAR };
   const car = driverProfiles.find(
     (d) => d.userId === driverUserId && d.cycle === cycle && d.intendsToDrive,
   );
-  if (!car) return { ok: false, error: NOT_DRIVING };
-  if (findUserById(memberUserId)?.approvalStatus !== "approved") {
-    return { ok: false, error: TRANSPORT_NOT_A_MEMBER };
-  }
-  if (transportDriving(memberUserId, cycle)) {
-    return { ok: false, error: IS_DRIVING };
-  }
+  const problem = seatProblem({
+    driverUserId,
+    memberUserId,
+    car: car ?? null,
+    memberApproved: findUserById(memberUserId)?.approvalStatus === "approved",
+    memberDrives: transportDriving(memberUserId, cycle),
+    seated: transportSeat(memberUserId, cycle),
+    riders: transportRiders(driverUserId, cycle),
+  });
+  if (problem) return { ok: false, error: problem };
   // As the db: a seat in a car whose driver stopped driving is dropped, and
-  // only a seat in a car that still drives refuses.
+  // only a seat in a car that still drives refuses (above).
   for (let i = carMembers.length - 1; i >= 0; i--) {
     const c = carMembers[i]!;
     if (
@@ -1273,17 +1266,6 @@ function transportSeatIn(input: {
     ) {
       carMembers.splice(i, 1);
     }
-  }
-  if (
-    carMembers.some((c) => c.memberUserId === memberUserId && c.cycle === cycle)
-  ) {
-    return { ok: false, error: ALREADY_SEATED };
-  }
-  if (
-    car.seatsOffered !== null &&
-    transportRiders(driverUserId, cycle) >= car.seatsOffered
-  ) {
-    return { ok: false, error: CAR_FULL };
   }
   carMembers.push({ driverUserId, memberUserId, cycle, createdAt: new Date() });
   const idx = liftRequests.findIndex(
@@ -1396,26 +1378,8 @@ function planGeneratorRefusal(
   generatorId: string | null | undefined,
   current: string | null,
 ): string | null {
-  if (generatorId === undefined || generatorId === null) return null;
-  const gen = generators.find((g) => g.id === generatorId);
-  if (!gen) return GENERATOR_GONE;
-  if (gen.archivedAt !== null && generatorId !== current) return GENERATOR_GONE;
-  return null;
-}
-
-const POWER_PLAN_KEYS = Object.keys(DEFAULT_POWER_PLAN).filter(
-  (key) => key !== "version",
-) as (keyof PowerPlanSettings)[];
-
-function planPatch(
-  patch: Partial<PowerPlanSettings>,
-): Partial<PowerPlanSettings> {
-  return Object.fromEntries(
-    POWER_PLAN_KEYS.filter((key) => patch[key] !== undefined).map((key) => [
-      key,
-      patch[key],
-    ]),
-  );
+  const gen = generators.find((g) => g.id === generatorId) ?? null;
+  return planGeneratorProblem(generatorId, gen, current);
 }
 
 // --- Recipe helpers (the twins of @camp404/db/recipes' private steps) -------
@@ -1561,20 +1525,16 @@ function followStoreDayOne<T>(
   },
   apply: () => T,
 ): T | { ok: false; error: string } {
-  const before = storeCampOnSite(cycle)?.firstDay ?? null;
-  const phases = LOGISTICS_PHASES.flatMap((phase) => {
-    if (phase === after.phase) return [after];
+  const before = LOGISTICS_PHASES.flatMap((phase) => {
     const row = logisticsPhases.get(`${cycle}:${phase}`);
     return row ? [row] : [];
   });
-  const to = campOnSite(phases, MEAL_PLAN_MAX_DAYS)?.firstDay ?? null;
-  if (before !== null && to === null && storeHasPrepSteps(cycle)) {
+  const { from, to, lost, shift } = dayOneMove(before, after);
+  if (lost && storeHasPrepSteps(cycle)) {
     return { ok: false, error: DAY_ONE_NEEDED_FOR_PREP };
   }
   const result = apply();
-  if (dayOneShift(before, to) !== null) {
-    storeRedatePrepSteps(cycle, before, to);
-  }
+  if (shift !== null) storeRedatePrepSteps(cycle, from, to);
   return result;
 }
 
@@ -4113,14 +4073,11 @@ export const testStore = {
     assigneeId: string | null;
     dueAt: Date | null;
   }): TaskWriteResult<{ id: string }> {
-    const reach = testStore.senderReach(input.creatorId);
-    if (reach !== undefined) {
-      if (reach.length === 0) return { ok: false, error: NOT_A_TASK_AUTHOR };
-      if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
-      if (!reach.includes(input.team)) {
-        return { ok: false, error: NOT_YOUR_TEAM };
-      }
-    }
+    const added = taskAddProblem(
+      testStore.senderReach(input.creatorId),
+      input.team,
+    );
+    if (added) return { ok: false, error: added };
     if (
       input.assigneeId &&
       findUserById(input.assigneeId)?.approvalStatus !== "approved"
@@ -4159,23 +4116,14 @@ export const testStore = {
       (t) => t.id === input.taskId && t.status !== "cancelled",
     );
     if (!task) return { ok: false, error: TASK_GONE };
-    const reach = testStore.senderReach(input.actorId);
-    const leads =
-      reach === undefined || (task.team !== null && reach.includes(task.team));
-    if (!leads && task.createdById !== input.actorId) {
-      return { ok: false, error: CANNOT_EDIT };
-    }
-    if (input.team !== task.team) {
-      if (reach !== undefined) {
-        if (!input.team) return { ok: false, error: PICK_YOUR_TEAM };
-        if (!reach.includes(input.team)) {
-          return { ok: false, error: NOT_YOUR_TEAM_TO_MOVE };
-        }
-      }
-      if (input.team && !input.activeTeams.includes(input.team)) {
-        return { ok: false, error: TEAM_NOT_ACTIVE };
-      }
-    }
+    const edited = taskEditProblem({
+      reach: testStore.senderReach(input.actorId),
+      actorId: input.actorId,
+      task,
+      team: input.team,
+      activeTeams: input.activeTeams,
+    });
+    if (edited) return { ok: false, error: edited };
     if (
       input.assigneeId &&
       input.assigneeId !== task.assigneeId &&
@@ -4204,17 +4152,13 @@ export const testStore = {
       (t) => t.id === input.taskId && t.status !== "cancelled",
     );
     if (!task) return { ok: false, error: TASK_GONE };
-    const reach = testStore.senderReach(input.actorId);
-    const leads =
-      reach === undefined || (task.team !== null && reach.includes(task.team));
-    if (
-      !leads &&
-      task.assigneeId !== input.actorId &&
-      task.createdById !== input.actorId
-    ) {
-      return { ok: false, error: CANNOT_MOVE };
-    }
-    if (task.status !== input.from) return { ok: false, error: TASK_MOVED };
+    const moved = taskMoveProblem({
+      reach: testStore.senderReach(input.actorId),
+      actorId: input.actorId,
+      task,
+      from: input.from,
+    });
+    if (moved) return { ok: false, error: moved };
     if (input.from === input.to) return { ok: true };
     task.status = input.to;
     task.completedAt = input.to === "done" ? new Date() : null;
@@ -4242,12 +4186,12 @@ export const testStore = {
       (t) => t.id === input.taskId && t.status !== "cancelled",
     );
     if (!task) return { ok: false, error: TASK_GONE };
-    const reach = testStore.senderReach(input.actorId);
-    const leads =
-      reach === undefined || (task.team !== null && reach.includes(task.team));
-    if (!leads && task.createdById !== input.actorId) {
-      return { ok: false, error: CANNOT_REMOVE };
-    }
+    const removed = taskRemoveProblem({
+      reach: testStore.senderReach(input.actorId),
+      actorId: input.actorId,
+      task,
+    });
+    if (removed) return { ok: false, error: removed };
     task.status = "cancelled";
     return { ok: true };
   },
@@ -4683,12 +4627,12 @@ export const testStore = {
       const row = loungeOffers.find(
         (o) => o.id === input.offerId && o.cycle === cycle,
       );
-      if (!row) return OFFER_GONE;
-      if (row.hostId !== input.actorId) return NOT_YOUR_OFFER;
-      if (row.status === "accepted" || row.status === "declined") {
-        return OFFER_DECIDED;
-      }
-      if (row.version !== input.expectedVersion) return OFFER_CHANGED;
+      const problem = loungeEditProblem(
+        row ?? null,
+        input.actorId,
+        input.expectedVersion,
+      );
+      if (problem || !row) return problem ?? OFFER_GONE;
       Object.assign(row, loungeOfferFields(input), {
         status: "offered",
         version: row.version + 1,
@@ -4724,16 +4668,15 @@ export const testStore = {
       const row = loungeOffers.find(
         (o) => o.id === input.offerId && o.cycle === cycle,
       );
-      if (!row) return OFFER_GONE;
-      if (
-        row.status !== input.expectedStatus ||
-        row.version !== input.expectedVersion
-      ) {
-        return OFFER_CHANGED;
-      }
+      const problem = loungeDecisionProblem(
+        row ?? null,
+        input.expectedStatus,
+        input.expectedVersion,
+      );
+      if (problem || !row) return problem ?? OFFER_GONE;
       Object.assign(row, {
         status: input.decision,
-        decisionNote: input.decision === "accepted" ? null : input.reason,
+        decisionNote: loungeDecisionNote(input.decision, input.reason),
         decidedAt: new Date(),
         version: row.version + 1,
         updatedAt: new Date(),
@@ -4757,8 +4700,8 @@ export const testStore = {
       const row = loungeOffers.find(
         (o) => o.id === input.offerId && o.cycle === cycle,
       );
-      if (!row) return OFFER_GONE;
-      if (row.status !== "accepted") return OFFER_NOT_ACCEPTED;
+      const problem = loungePlaceProblem(row ?? null);
+      if (problem) return problem;
       if (
         loungeSlots.some(
           (s) =>
@@ -4931,9 +4874,13 @@ export const testStore = {
     actorId: string;
   }): PowerWriteResult<{ count: number }> {
     return powerWrite(input.actorId, (cycle) => {
-      if (powerLoads.some((l) => l.cycle === cycle)) return ALREADY_HAS_LOADS;
       const from = previousStoreLoadCycle(cycle);
-      if (from === null) return NOTHING_TO_COPY;
+      const problem = copyLastYearProblem(
+        "loads",
+        powerLoads.some((l) => l.cycle === cycle),
+        from,
+      );
+      if (problem || from === null) return problem!;
       const rows = loadsOf(from);
       const now = new Date();
       rows.forEach((row, i) => {
@@ -4961,7 +4908,7 @@ export const testStore = {
     expectedVersion: number;
   }): PowerWriteResult<{ version: number }> {
     return powerWrite(input.actorId, (cycle) => {
-      const patch = planPatch(input.patch);
+      const patch = powerPlanPatch(input.patch);
       const existing = powerPlans.get(cycle);
       if (input.expectedVersion === 0) {
         const refusal = planGeneratorRefusal(patch.generatorId, null);
@@ -4999,9 +4946,13 @@ export const testStore = {
     actorId: string;
   }): PowerWriteResult<{ fromCycle: number }> {
     return powerWrite(input.actorId, (cycle) => {
-      if (powerPlans.has(cycle)) return ALREADY_HAS_PLAN;
       const fromCycle = previousStorePlanCycle(cycle);
-      if (fromCycle === null) return NOTHING_TO_COPY;
+      const problem = copyLastYearProblem(
+        "plan",
+        powerPlans.has(cycle),
+        fromCycle,
+      );
+      if (problem || fromCycle === null) return problem!;
       const from = powerPlans.get(fromCycle)!;
       const gen = generators.find((g) => g.id === from.generatorId);
       powerPlans.set(cycle, {
@@ -7317,10 +7268,12 @@ export const testStore = {
         d.cycle === actor.cycle &&
         d.intendsToDrive,
     );
-    if (!car) return { ok: false, error: NOT_DRIVING };
-    if (transportRiders(input.driverUserId, actor.cycle) > input.seatsOffered) {
-      return { ok: false, error: SEATS_BELOW_RIDERS };
-    }
+    const tooFew = seatsOfferedProblem(
+      car !== undefined,
+      transportRiders(input.driverUserId, actor.cycle),
+      input.seatsOffered,
+    );
+    if (tooFew || !car) return { ok: false, error: tooFew ?? NOT_DRIVING };
     car.seatsOffered = input.seatsOffered;
     return { ok: true };
   },
@@ -7330,23 +7283,18 @@ export const testStore = {
     driverUserId: string | null;
   }): TransportResult {
     const cycle = currentCycleNumber();
-    if (findUserById(input.actorId)?.approvalStatus !== "approved") {
-      return { ok: false, error: TRANSPORT_NOT_A_MEMBER };
-    }
-    if (transportDriving(input.actorId, cycle)) {
-      return { ok: false, error: YOU_ARE_DRIVING };
-    }
-    if (transportSeat(input.actorId, cycle)) {
-      return { ok: false, error: YOU_HAVE_A_SEAT };
-    }
-    if (input.driverUserId !== null) {
-      if (input.driverUserId === input.actorId) {
-        return { ok: false, error: OWN_CAR };
-      }
-      if (!transportDriving(input.driverUserId, cycle)) {
-        return { ok: false, error: NOT_DRIVING };
-      }
-    }
+    const problem = liftRequestProblem({
+      actorId: input.actorId,
+      driverUserId: input.driverUserId,
+      memberApproved:
+        findUserById(input.actorId)?.approvalStatus === "approved",
+      drives: transportDriving(input.actorId, cycle),
+      seated: transportSeat(input.actorId, cycle),
+      carDrives:
+        input.driverUserId !== null &&
+        transportDriving(input.driverUserId, cycle),
+    });
+    if (problem) return { ok: false, error: problem };
     const existing = liftRequests.find(
       (r) => r.userId === input.actorId && r.cycle === cycle,
     );
@@ -7387,18 +7335,17 @@ export const testStore = {
     const request = liftRequests.find(
       (r) => r.userId === input.memberUserId && r.cycle === actor.cycle,
     );
-    if (!request) return { ok: false, error: REQUEST_GONE };
-    if (request.createdAt.getTime() !== new Date(input.requestedAt).getTime()) {
-      return { ok: false, error: REQUEST_CHANGED };
+    const problem = liftAnswerProblem({
+      actor: { id: input.actorId, rank: actor.rank, ledTeams: actor.ledTeams },
+      request: request ?? null,
+      requestedAt: input.requestedAt,
+      accept: input.accept,
+    });
+    if (problem || !request) {
+      return { ok: false, error: problem ?? REQUEST_GONE };
     }
     const car = request.driverUserId;
-    const mayAnswer =
-      car !== null
-        ? canManageCar(actor.rank, actor.ledTeams, input.actorId, car)
-        : canEditTransport(actor.rank, actor.ledTeams);
-    if (!mayAnswer) return { ok: false, error: NOT_YOUR_CAR };
-    if (input.accept) {
-      if (car === null) return { ok: false, error: REQUEST_GONE };
+    if (input.accept && car !== null) {
       return transportSeatIn({
         driverUserId: car,
         memberUserId: input.memberUserId,
@@ -7462,18 +7409,16 @@ export const testStore = {
           d.cycle === actor.cycle &&
           d.intendsToDrive,
       );
-      if (!car) return { ok: false, error: NOT_DRIVING };
-      if (!car.canTow) return { ok: false, error: CANNOT_TOW };
-      if (
+      const problem = towProblem(
+        car ?? null,
         transportTrailers.some(
           (t) =>
             t.cycle === actor.cycle &&
             t.towedByUserId === input.driverUserId &&
             t.id !== input.trailerId,
-        )
-      ) {
-        return { ok: false, error: ALREADY_TOWING };
-      }
+        ),
+      );
+      if (problem) return { ok: false, error: problem };
     }
     const found = transportTrailerClaim(input);
     if (typeof found === "string") return { ok: false, error: found };

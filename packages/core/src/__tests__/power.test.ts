@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { POWER_PLAN_DEFAULTS, PowerPlanInput } from "@camp404/types";
 import {
+  ALREADY_HAS_LOADS,
+  ALREADY_HAS_PLAN,
+  GENERATOR_GONE,
+  NOTHING_TO_COPY,
+  POWER_PLAN_KEYS,
   POWER_TEAM,
+  copyLastYearProblem,
+  planGeneratorProblem,
+  powerPlanPatch,
   activeOnDay,
   amps,
   apparentKva,
@@ -649,5 +658,66 @@ describe("legacyFuelEstimate", () => {
       schedule: FULL_DAY,
     });
     expect(old - fuel.burnLitres).toBeCloseTo(4.9, 1);
+  });
+});
+
+describe("powerPlanPatch", () => {
+  it("names every setting of the plan form, and nothing else", () => {
+    const parsed = PowerPlanInput.parse({
+      generatorId: null,
+      expectedVersion: 0,
+    });
+    const { expectedVersion: _v, ...settings } = parsed;
+    expect([...POWER_PLAN_KEYS].sort()).toEqual(Object.keys(settings).sort());
+  });
+
+  it("keeps only the plan's own settings that are set", () => {
+    expect(
+      powerPlanPatch({
+        daysOnSite: 9,
+        cansOwned: undefined,
+        generatorId: null,
+        // Whatever else the caller's object carries is dropped.
+        ...({ expectedVersion: 3, actorId: "x" } as object),
+      }),
+    ).toEqual({ daysOnSite: 9, generatorId: null });
+    expect(
+      powerPlanPatch({ powerFactor: POWER_PLAN_DEFAULTS.powerFactor }),
+    ).toEqual({ powerFactor: POWER_PLAN_DEFAULTS.powerFactor });
+  });
+});
+
+describe("planGeneratorProblem", () => {
+  const live = { archivedAt: null };
+  const retired = { archivedAt: new Date("2027-01-01T00:00:00Z") };
+
+  it("lets a plan name no generator, or one in service", () => {
+    expect(planGeneratorProblem(undefined, null, null)).toBeNull();
+    expect(planGeneratorProblem(null, null, "g1")).toBeNull();
+    expect(planGeneratorProblem("g1", live, null)).toBeNull();
+  });
+
+  it("refuses one that does not exist", () => {
+    expect(planGeneratorProblem("g1", null, "g1")).toBe(GENERATOR_GONE);
+  });
+
+  it("keeps a retired one only where the plan already names it", () => {
+    expect(planGeneratorProblem("g1", retired, "g1")).toBeNull();
+    expect(planGeneratorProblem("g1", retired, "g2")).toBe(GENERATOR_GONE);
+    expect(planGeneratorProblem("g1", retired, null)).toBe(GENERATOR_GONE);
+  });
+});
+
+describe("copyLastYearProblem", () => {
+  it("refuses when this year has its own first, then when there is no earlier year", () => {
+    expect(copyLastYearProblem("loads", true, null)).toBe(ALREADY_HAS_LOADS);
+    expect(copyLastYearProblem("plan", true, 2026)).toBe(ALREADY_HAS_PLAN);
+    expect(copyLastYearProblem("loads", false, null)).toBe(NOTHING_TO_COPY);
+    expect(copyLastYearProblem("plan", false, null)).toBe(NOTHING_TO_COPY);
+  });
+
+  it("lets an empty year copy the latest earlier one", () => {
+    expect(copyLastYearProblem("loads", false, 2026)).toBeNull();
+    expect(copyLastYearProblem("plan", false, 2026)).toBeNull();
   });
 });

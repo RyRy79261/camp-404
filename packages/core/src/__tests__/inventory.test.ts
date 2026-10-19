@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { Team } from "@camp404/types";
 import {
+  ALREADY_BOOKED,
   bookableNow,
+  bookingProblem,
+  FULLY_BOOKED,
+  ITEM_BROKEN,
+  LOAN_TOO_MANY,
+  loanProblem,
+  NONE_FREE,
+  NOT_BOOKABLE,
   bookingsLeft,
   canEditAnyInventory,
   canEditInventory,
@@ -150,5 +158,41 @@ describe("maintenance", () => {
       ),
     ).toBe(false);
     expect(nextMaintenanceDue(false, 30, now)).toBeNull();
+  });
+});
+
+describe("bookingProblem", () => {
+  const ask = {
+    bookableCount: 2,
+    quantity: 3,
+    condition: "good",
+    mine: false,
+    taken: 0,
+    lentOut: 0,
+  };
+
+  it("lets a member book while one is free", () => {
+    expect(bookingProblem(ask)).toBeNull();
+  });
+
+  it("refuses in the database's order", () => {
+    expect(bookingProblem({ ...ask, bookableCount: null, mine: true })).toBe(
+      NOT_BOOKABLE,
+    );
+    expect(
+      bookingProblem({ ...ask, mine: true, condition: "broken", taken: 2 }),
+    ).toBe(ALREADY_BOOKED);
+    expect(bookingProblem({ ...ask, condition: "broken", taken: 2 })).toBe(
+      ITEM_BROKEN,
+    );
+    expect(bookingProblem({ ...ask, taken: 2, lentOut: 3 })).toBe(FULLY_BOOKED);
+    expect(bookingProblem({ ...ask, taken: 1, lentOut: 2 })).toBe(NONE_FREE);
+  });
+});
+
+describe("loanProblem", () => {
+  it("lends up to what the camp has, and no more", () => {
+    expect(loanProblem(3, 1, 2)).toBeNull();
+    expect(loanProblem(3, 1, 3)).toBe(LOAN_TOO_MANY);
   });
 });

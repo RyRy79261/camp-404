@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { CampLayout, Team, type LayoutPiece } from "@camp404/types";
 import {
+  CampLayout,
+  LAYOUT_NOTE_MAX,
+  Team,
+  type LayoutPiece,
+} from "@camp404/types";
+import {
+  CHECK_LAYOUT,
   DEFAULT_PLOT,
   LAYOUT_KIND_LABELS,
   LAYOUT_KIND_SIZES,
@@ -21,6 +27,12 @@ import {
   pieceName,
   resizePlot,
   turnPiece,
+  checkCampLayout,
+  copiedLayoutNote,
+  isLayoutShareToken,
+  layoutNote,
+  layoutVersionWanted,
+  restoredLayoutNote,
 } from "../camp-layout";
 
 const PLOT = { ...DEFAULT_PLOT, widthM: 20, depthM: 10 };
@@ -284,5 +296,51 @@ describe("numbering", () => {
       ["kitchen", "1"],
       ["tent", "2"],
     ]);
+  });
+});
+
+describe("saving a plan", () => {
+  it("checks the plan by the schema and names the first problem", () => {
+    const plan = emptyLayout();
+    expect(checkCampLayout(plan)).toEqual({ ok: true, layout: plan });
+    const bad = checkCampLayout({ ...plan, pieces: "nope" });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) {
+      expect(bad.error).not.toBe("");
+      expect(bad.error).toBe(
+        CampLayout.safeParse({ ...plan, pieces: "nope" }).error?.issues[0]
+          ?.message ?? CHECK_LAYOUT,
+      );
+    }
+  });
+
+  it("stores a note trimmed and cut to its limit, a blank one as none", () => {
+    expect(layoutNote(undefined)).toBeNull();
+    expect(layoutNote("   ")).toBeNull();
+    expect(layoutNote("  Moved the kitchen ")).toBe("Moved the kitchen");
+    expect(layoutNote("x".repeat(LAYOUT_NOTE_MAX + 5))).toHaveLength(
+      LAYOUT_NOTE_MAX,
+    );
+  });
+
+  it("names a brought-back and a copied version", () => {
+    expect(restoredLayoutNote(2)).toBe("Brought back version 2");
+    expect(copiedLayoutNote(2026)).toBe("Copied from 2026");
+  });
+
+  it("reads the version asked for only when it was saved", () => {
+    expect(layoutVersionWanted(3)).toBe(3);
+    expect(layoutVersionWanted(3, 2)).toBe(2);
+    expect(layoutVersionWanted(3, 4)).toBe(3);
+    expect(layoutVersionWanted(3, 0)).toBe(3);
+    expect(layoutVersionWanted(3, 1.5)).toBe(3);
+    expect(layoutVersionWanted(0, 1)).toBe(0);
+  });
+
+  it("takes only a token of the share link's shape", () => {
+    expect(isLayoutShareToken("a".repeat(32))).toBe(true);
+    expect(isLayoutShareToken("a-_B".repeat(8))).toBe(true);
+    expect(isLayoutShareToken("a".repeat(31))).toBe(false);
+    expect(isLayoutShareToken(`${"a".repeat(31)}/`)).toBe(false);
   });
 });

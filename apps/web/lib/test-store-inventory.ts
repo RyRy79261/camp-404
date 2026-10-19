@@ -1,25 +1,20 @@
 import { randomUUID } from "node:crypto";
 import {
-  bookableNow,
+  bookingProblem,
+  loanProblem,
   nextMaintenanceDue,
   inventoryEditor,
 } from "@camp404/core";
 import {
-  ALREADY_BOOKED,
   BOOKING_GONE,
   CUSTODIAN_UNKNOWN,
-  FULLY_BOOKED,
-  ITEM_BROKEN,
   ITEM_CHANGED,
   ITEM_GONE,
   LOAN_GONE,
   LOAN_RETURNED,
-  LOAN_TOO_MANY,
   NEED_CHANGED,
   NEED_GONE,
-  NONE_FREE,
   NOT_AN_INVENTORY_EDITOR,
-  NOT_BOOKABLE,
   NOT_YOUR_BOOKING,
   PROPOSAL_DECIDED,
   PROPOSAL_GONE,
@@ -626,23 +621,19 @@ export const inventoryStore = {
   ): InventoryWriteResult<{ id: string }> {
     const item = liveItem(input.itemId);
     if (!item) return refuseOr(ITEM_GONE);
-    if (item.bookableCount === null) return refuseOr(NOT_BOOKABLE);
     const year = cycle();
     const bookings = state().bookings.filter(
       (b) => b.itemId === item.id && b.cycle === year,
     );
-    if (bookings.some((b) => b.userId === input.actorId)) {
-      return refuseOr(ALREADY_BOOKED);
-    }
-    if (item.condition === "broken") return refuseOr(ITEM_BROKEN);
-    if (bookings.length >= item.bookableCount) return refuseOr(FULLY_BOOKED);
-    const free = bookableNow({
+    const problem = bookingProblem({
       bookableCount: item.bookableCount,
       quantity: item.quantity,
-      broken: false,
+      condition: item.condition,
+      mine: bookings.some((b) => b.userId === input.actorId),
+      taken: bookings.length,
       lentOut: lentOutOf(item.id),
     });
-    if (bookings.length >= free) return refuseOr(NONE_FREE);
+    if (problem) return refuseOr(problem);
     const id = randomUUID();
     state().bookings.push({
       id,
@@ -680,8 +671,12 @@ export const inventoryStore = {
     if (!item) return refuseOr(ITEM_GONE);
     if (!isEditor(input.actorId, item.team))
       return refuseOr(NOT_AN_INVENTORY_EDITOR);
-    const out = lentOutOf(item.id);
-    if (out + input.quantity > item.quantity) return refuseOr(LOAN_TOO_MANY);
+    const tooMany = loanProblem(
+      item.quantity,
+      lentOutOf(item.id),
+      input.quantity,
+    );
+    if (tooMany) return refuseOr(tooMany);
     const id = randomUUID();
     state().loans.push({
       id,

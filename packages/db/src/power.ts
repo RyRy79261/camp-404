@@ -1,5 +1,15 @@
 import { and, asc, count, eq, isNull, lt, max, sql } from "drizzle-orm";
-import { type PowerWindow, POWER_EDITOR } from "@camp404/core";
+import {
+  ALREADY_HAS_LOADS,
+  ALREADY_HAS_PLAN,
+  copyLastYearProblem,
+  GENERATOR_GONE,
+  NOTHING_TO_COPY,
+  planGeneratorProblem,
+  powerPlanPatch,
+  type PowerWindow,
+  POWER_EDITOR,
+} from "@camp404/core";
 import {
   POWER_PLAN_DEFAULTS,
   type CurrentKind,
@@ -43,6 +53,10 @@ export type PowerWriteResult<T = object> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 
+// The plan's generator and the copy refusals live with their checks in
+// @camp404/core.
+export { ALREADY_HAS_LOADS, ALREADY_HAS_PLAN, GENERATOR_GONE, NOTHING_TO_COPY };
+
 export const NOT_A_POWER_EDITOR =
   "Only captains and Power & Lighting leads can change the power plan.";
 export const LOAD_GONE =
@@ -50,17 +64,10 @@ export const LOAD_GONE =
 export const LOAD_CHANGED = "Someone changed this load first. Reload the page.";
 export const PLAN_CHANGED =
   "Someone changed this year's plan first. Reload the page.";
-export const GENERATOR_GONE =
-  "That generator isn't there any more. Reload the page.";
 export const GENERATOR_CHANGED =
   "Someone changed this generator first. Reload the page.";
 export const INVENTORY_ITEM_GONE =
   "That inventory item isn't there any more. Reload the page.";
-export const ALREADY_HAS_LOADS =
-  "This year already has loads, so last year's list wasn't copied.";
-export const ALREADY_HAS_PLAN =
-  "This year already has a plan, so last year's wasn't copied.";
-export const NOTHING_TO_COPY = "There is no earlier year to copy from.";
 
 export const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -215,22 +222,6 @@ function planOf(row: PlanRow): PowerPlan {
     version: row.version,
     updatedAt: row.updatedAt,
   };
-}
-
-const PLAN_KEYS = Object.keys(DEFAULT_POWER_PLAN).filter(
-  (key) => key !== "version",
-) as (keyof PowerPlanSettings)[];
-
-/** Only the plan's own settings, whatever else the caller's object carries. */
-function settingsPatch(
-  patch: Partial<PowerPlanSettings>,
-): Partial<PowerPlanSettings> {
-  return Object.fromEntries(
-    PLAN_KEYS.filter((key) => patch[key] !== undefined).map((key) => [
-      key,
-      patch[key],
-    ]),
-  );
 }
 
 // --- Transactions ------------------------------------------------------------
@@ -527,8 +518,9 @@ export async function copyLastYearLoads(input: {
       .select({ n: count() })
       .from(schema.powerLoads)
       .where(eq(schema.powerLoads.cycle, cycle));
-    if ((here?.n ?? 0) > 0) refuse(ALREADY_HAS_LOADS);
     const from = await previousCycleWithLoads(tx, cycle);
+    const problem = copyLastYearProblem("loads", (here?.n ?? 0) > 0, from);
+    if (problem) refuse(problem);
     if (from === null) refuse(NOTHING_TO_COPY);
     const rows = await tx
       .select(LOAD_COLUMNS)
@@ -580,10 +572,8 @@ async function assertPlanGenerator(
     .select({ archivedAt: schema.generators.archivedAt })
     .from(schema.generators)
     .where(eq(schema.generators.id, generatorId));
-  if (!row) refuse(GENERATOR_GONE);
-  if (row.archivedAt !== null && generatorId !== current) {
-    refuse(GENERATOR_GONE);
-  }
+  const problem = planGeneratorProblem(generatorId, row ?? null, current);
+  if (problem) refuse(problem);
 }
 
 /**
@@ -599,7 +589,7 @@ export async function setPowerPlan(input: {
   return write(async (tx) => {
     await assertPowerEditor(tx, input.actorId);
     const cycle = await currentCycleNumber(tx);
-    const patch = settingsPatch(input.patch);
+    const patch = powerPlanPatch(input.patch);
     const now = new Date();
     if (input.expectedVersion === 0) {
       await assertPlanGenerator(tx, patch.generatorId, null);
@@ -663,8 +653,13 @@ export async function copyLastYearPlan(input: {
       .select({ cycle: schema.powerPlans.cycle })
       .from(schema.powerPlans)
       .where(eq(schema.powerPlans.cycle, cycle));
-    if (here) refuse(ALREADY_HAS_PLAN);
     const from = await previousPlan(tx, cycle);
+    const problem = copyLastYearProblem(
+      "plan",
+      Boolean(here),
+      from?.cycle ?? null,
+    );
+    if (problem) refuse(problem);
     if (!from) refuse(NOTHING_TO_COPY);
     let generatorId = from.generatorId;
     if (generatorId !== null) {

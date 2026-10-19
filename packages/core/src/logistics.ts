@@ -4,6 +4,7 @@ import {
   ATTENDANCE_PHASES,
   LOGISTICS_PHASES,
   LOGISTICS_PHASE_LABELS,
+  MEAL_PLAN_MAX_DAYS,
   type AfrikaburnDateKind,
   type AttendanceAnswer,
   type AttendancePhase,
@@ -12,6 +13,7 @@ import {
   type ParticipationStatus,
 } from "@camp404/types";
 import { CAPTAIN_ONLY, allowsRank, captainOrLeadOf, type Rule } from "./actor";
+import { dayOneShift } from "./kitchen-prep";
 import { isComingThisYear } from "./participation";
 
 // The logistics calendar (#247): the year's pack, travel, build, burn, strike
@@ -150,6 +152,39 @@ export function campOnSite(
   };
 }
 
+/** How Day 1 moves when one phase's days change, the store's and the db's. */
+export interface DayOneMove {
+  /** Day 1 before the change and after it (YYYY-MM-DD), or null for none. */
+  from: string | null;
+  to: string | null;
+  /**
+   * The change leaves no Day 1 where there was one: refused while the meal
+   * plan has prep steps (DAY_ONE_NEEDED_FOR_PREP).
+   */
+  lost: boolean;
+  /** Whole days the prep steps move by; null when Day 1 stays put. */
+  shift: number | null;
+}
+
+/**
+ * How Day 1 moves when `row` replaces its phase among the year's `before`
+ * days (followDayOne in @camp404/db/logistics, and the store's twin).
+ */
+export function dayOneMove(
+  before: readonly PhaseDays[],
+  row: PhaseDays,
+): DayOneMove {
+  const after = [...before.filter((p) => p.phase !== row.phase), row];
+  const from = campOnSite(before, MEAL_PLAN_MAX_DAYS)?.firstDay ?? null;
+  const to = campOnSite(after, MEAL_PLAN_MAX_DAYS)?.firstDay ?? null;
+  return {
+    from,
+    to,
+    lost: from !== null && to === null,
+    shift: dayOneShift(from, to),
+  };
+}
+
 // --- Attendance --------------------------------------------------------------
 
 /** Who may press "Ask everyone" for attendance: a captain. */
@@ -203,6 +238,65 @@ export function attendanceAnswered(
   open: ReadonlySet<AttendancePhase>,
 ): boolean {
   return ATTENDANCE_PHASES.every((p) => !open.has(p) || answered.has(p));
+}
+
+/**
+ * The attendance phases that still take answers on `today`, from the year's
+ * phase start days (rows for other phases are ignored).
+ */
+export function openAttendancePhases(
+  starts: readonly { phase: string; startDate: string | null }[],
+  today: string,
+): Set<AttendancePhase> {
+  const byPhase = new Map(starts.map((r) => [r.phase, r.startDate]));
+  return new Set(
+    ATTENDANCE_PHASES.filter((p) => attendanceIsOpen(byPhase.get(p), today)),
+  );
+}
+
+// --- Refusals the database and the store share ---------------------------------
+
+export const ATTENDANCE_NOT_A_MEMBER = "Only approved camp members can answer.";
+
+/** A phase that has started takes no more answers. */
+export function attendanceClosed(phase: AttendancePhase): string {
+  return `${LOGISTICS_PHASE_LABELS[phase]} has started, so answers are closed.`;
+}
+
+/**
+ * Why a member may not answer for `phase`, in the database's order
+ * (setMyAttendance in @camp404/db/logistics, and the store's twin): not an
+ * approved member, the phase has started. Null when they may; the
+ * compare-and-set on the answer they saw comes after.
+ */
+export function attendanceAnswerProblem(ask: {
+  member: boolean;
+  phase: AttendancePhase;
+  open: ReadonlySet<AttendancePhase>;
+}): string | null {
+  if (!ask.member) return ATTENDANCE_NOT_A_MEMBER;
+  if (!ask.open.has(ask.phase)) return attendanceClosed(ask.phase);
+  return null;
+}
+
+/**
+ * Who "Ask everyone" reaches: each member who is coming and has not answered
+ * every phase that is still open.
+ */
+export function attendanceAskTargets<T extends { userId: string }>(
+  coming: readonly T[],
+  answers: readonly { userId: string; phase: string }[],
+  open: ReadonlySet<AttendancePhase>,
+): T[] {
+  const answered = new Map<string, Set<AttendancePhase>>();
+  for (const a of answers) {
+    const set = answered.get(a.userId) ?? new Set<AttendancePhase>();
+    set.add(a.phase as AttendancePhase);
+    answered.set(a.userId, set);
+  }
+  return coming.filter(
+    (m) => !attendanceAnswered(answered.get(m.userId) ?? new Set(), open),
+  );
 }
 
 /** The notice "Ask everyone" sends. It opens Logistics. */
@@ -469,6 +563,34 @@ export function afrikaburnDateGroups<T extends DatedDeadline>(
 /** Whether a year may say "No round this year" for this date. Fails closed. */
 export function afrikaburnDateMayBeSkipped(kind: string): boolean {
   return afrikaburnDate(kind)?.mayBeSkipped === true;
+}
+
+export const NOT_AN_AFRIKABURN_DATE = "That isn't one of AfrikaBurn's dates.";
+export const CANNOT_SKIP_DATE =
+  "Only the second DDT round can be marked as no round this year.";
+export const PICK_THE_DATE = "Pick the date.";
+
+/**
+ * What setting one of AfrikaBurn's standard dates saves, or why it may not,
+ * in the database's order (setAfrikaburnDate in @camp404/db/deadlines, and
+ * the store's twin): not a standard date, "No round this year" for a date
+ * that always has one, no day picked. A skipped date saves no day.
+ */
+export function afrikaburnDateToSave(input: {
+  kind: string;
+  skipped: boolean;
+  dueDate: string | null;
+}):
+  | { ok: true; standard: AfrikaburnDate; dueDate: string | null }
+  | { ok: false; error: string } {
+  const standard = afrikaburnDate(input.kind);
+  if (!standard) return { ok: false, error: NOT_AN_AFRIKABURN_DATE };
+  if (input.skipped && !afrikaburnDateMayBeSkipped(input.kind)) {
+    return { ok: false, error: CANNOT_SKIP_DATE };
+  }
+  const dueDate = input.skipped ? null : input.dueDate;
+  if (!input.skipped && !dueDate) return { ok: false, error: PICK_THE_DATE };
+  return { ok: true, standard, dueDate };
 }
 
 /** The plain words for a skipped date, on every page. */

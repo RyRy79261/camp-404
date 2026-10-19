@@ -1,4 +1,10 @@
-import { LOUNGE_BANDS, MAX_LOUNGE_DAYS, type LoungeBand } from "@camp404/types";
+import {
+  LOUNGE_BANDS,
+  MAX_LOUNGE_DAYS,
+  type LoungeBand,
+  type LoungeDecision,
+  type LoungeOfferStatus,
+} from "@camp404/types";
 import { allowsRank, captainOrLeadOf, type Rule } from "./actor";
 import { campDayKey } from "./notification-days";
 
@@ -35,6 +41,74 @@ export function canRunLounge(
   ledTeams: readonly string[],
 ): boolean {
   return allowsRank(LOUNGE_RUNNER, rank, ledTeams);
+}
+
+// --- Write checks (the db's and the store's twin) ----------------------------
+
+export const OFFER_GONE = "That offer isn't there any more. Reload the page.";
+export const OFFER_CHANGED =
+  "Someone changed this offer first. Reload the page.";
+export const NOT_YOUR_OFFER = "You can only change your own offers.";
+export const OFFER_DECIDED =
+  "This offer has already been accepted or declined, so it can't be changed. Ask a Ministry of Vibes lead.";
+export const OFFER_NOT_ACCEPTED =
+  "Only an accepted offer can go on the programme. Accept it first.";
+
+/** This year's offer, as a write reads it under its lock. */
+export interface LoungeOfferState {
+  hostId: string;
+  status: LoungeOfferStatus;
+  version: number;
+}
+
+/**
+ * Why a host may not change their offer, in the database's order: it is
+ * gone, it is someone else's, it is already accepted or declined, or it
+ * changed since they opened it. Null when the edit may go ahead (and the
+ * offer goes back to waiting for a decision).
+ */
+export function loungeEditProblem(
+  offer: LoungeOfferState | null,
+  actorId: string,
+  expectedVersion: number,
+): string | null {
+  if (!offer) return OFFER_GONE;
+  if (offer.hostId !== actorId) return NOT_YOUR_OFFER;
+  if (offer.status === "accepted" || offer.status === "declined") {
+    return OFFER_DECIDED;
+  }
+  return offer.version === expectedVersion ? null : OFFER_CHANGED;
+}
+
+/**
+ * Why a reviewer's decision may not land: the offer is gone, or its status
+ * or version is no longer the one they saw.
+ */
+export function loungeDecisionProblem(
+  offer: LoungeOfferState | null,
+  expectedStatus: LoungeOfferStatus,
+  expectedVersion: number,
+): string | null {
+  if (!offer) return OFFER_GONE;
+  return offer.status === expectedStatus && offer.version === expectedVersion
+    ? null
+    : OFFER_CHANGED;
+}
+
+/** The note the host reads with a decision: none when it is accepted. */
+export function loungeDecisionNote(
+  decision: LoungeDecision,
+  reason: string | null,
+): string | null {
+  return decision === "accepted" ? null : reason;
+}
+
+/** Why an offer may not go on the programme: gone, or not accepted. */
+export function loungePlaceProblem(
+  offer: LoungeOfferState | null,
+): string | null {
+  if (!offer) return OFFER_GONE;
+  return offer.status === "accepted" ? null : OFFER_NOT_ACCEPTED;
 }
 
 // --- Time ----------------------------------------------------------------------

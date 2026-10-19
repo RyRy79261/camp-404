@@ -1,4 +1,8 @@
-import { type LoadCategory, type LoadSchedule } from "@camp404/types";
+import {
+  type LoadCategory,
+  type LoadSchedule,
+  type PowerPlanInput,
+} from "@camp404/types";
 import { allowsRank, captainOrLeadOf, type Rule } from "./actor";
 
 // Power and fuel (#253 load list and calculator, #254 generators and fuel).
@@ -32,6 +36,82 @@ export function canEditPower(
   ledTeams: readonly string[],
 ): boolean {
   return allowsRank(POWER_EDITOR, rank, ledTeams);
+}
+
+// --- Write checks (the db's and the store's twin) ----------------------------
+
+export const GENERATOR_GONE =
+  "That generator isn't there any more. Reload the page.";
+export const ALREADY_HAS_LOADS =
+  "This year already has loads, so last year's list wasn't copied.";
+export const ALREADY_HAS_PLAN =
+  "This year already has a plan, so last year's wasn't copied.";
+export const NOTHING_TO_COPY = "There is no earlier year to copy from.";
+
+/** The settings a year's plan holds: the plan form's fields. */
+export type PowerPlanFields = Omit<PowerPlanInput, "expectedVersion">;
+
+/** Every setting of the year's plan, in the form's order. */
+export const POWER_PLAN_KEYS = [
+  "generatorId",
+  "secondGeneratorNote",
+  "powerFactor",
+  "daysOnSite",
+  "firstPoweredDay",
+  "runFromHour",
+  "runToHour",
+  "lowLoadFactor",
+  "safetyMarginPct",
+  "canLitres",
+  "cansOwned",
+  "lowFuelDays",
+] as const satisfies readonly (keyof PowerPlanFields)[];
+
+/** Only the plan's own settings, whatever else the caller's object carries. */
+export function powerPlanPatch(
+  patch: Partial<PowerPlanFields>,
+): Partial<PowerPlanFields> {
+  return Object.fromEntries(
+    POWER_PLAN_KEYS.filter((key) => patch[key] !== undefined).map((key) => [
+      key,
+      patch[key],
+    ]),
+  );
+}
+
+/**
+ * Why the plan may not name `generatorId`: it does not exist (`found` is
+ * null), or it is archived and is not the one the plan already names (so
+ * saving the rest of the plan does not force a new choice). Null when it may,
+ * or when the patch names none.
+ */
+export function planGeneratorProblem(
+  generatorId: string | null | undefined,
+  found: { archivedAt: Date | null } | null,
+  current: string | null,
+): string | null {
+  if (generatorId === undefined || generatorId === null) return null;
+  if (!found) return GENERATOR_GONE;
+  if (found.archivedAt !== null && generatorId !== current) {
+    return GENERATOR_GONE;
+  }
+  return null;
+}
+
+/**
+ * Why last year's loads or plan may not be copied into this one, in the
+ * order the database checks: this year has its own already, or there is no
+ * earlier year to copy from.
+ */
+export function copyLastYearProblem(
+  what: "loads" | "plan",
+  thisYearHasOne: boolean,
+  fromCycle: number | null,
+): string | null {
+  if (thisYearHasOne) {
+    return what === "loads" ? ALREADY_HAS_LOADS : ALREADY_HAS_PLAN;
+  }
+  return fromCycle === null ? NOTHING_TO_COPY : null;
 }
 
 // --- Shapes ----------------------------------------------------------------

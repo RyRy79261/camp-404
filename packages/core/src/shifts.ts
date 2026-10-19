@@ -81,6 +81,125 @@ export function shiftChangesOpen(day: string, today: string): boolean {
   return today < day;
 }
 
+// --- Refusals the database and the store share ---------------------------------
+
+export const SHIFT_TYPE_CHANGED =
+  "Someone changed this shift first. Reload the page.";
+export const SHIFT_SLOT_CHANGED =
+  "Someone changed this day first. Reload the page.";
+export const SHIFT_FULL = "That shift is full. Pick another one.";
+export const SHIFT_NOT_NEEDED = "That shift isn't needed that day.";
+export const SHIFT_ALREADY_ON = "You're already on this shift.";
+export const SHIFT_MEMBER_ALREADY_ON = "They're already on this shift.";
+export const SHIFT_CLOSED =
+  "That day has started. Change the printed roster instead.";
+export const SHIFT_NOT_A_MEMBER = "Only approved camp members can take shifts.";
+export const SHIFT_HAS_PEOPLE =
+  "People are on this shift. Take them off first.";
+export const SHIFT_DAY_HAS_PEOPLE =
+  "People are on this day. Take them off first.";
+
+/** Fewer places than people already on one of its days. */
+export function placesBelowTaken(taken: number): string {
+  return `${taken} people are already on one of its days. Keep at least ${taken} places, or take someone off first.`;
+}
+
+/** What taking a place decides on, read under the slot's lock. */
+export interface PlaceAsk {
+  /** The slot's day and the camp's today (YYYY-MM-DD). */
+  day: string;
+  today: string;
+  status: string;
+  /** The person is an approved camp member. */
+  member: boolean;
+  /** They are on this slot already. */
+  already: boolean;
+  /** A lead or a captain is putting them on (not their own sign-up). */
+  placed: boolean;
+  /** Who is on it now, and how many it takes. */
+  taken: number;
+  places: number;
+}
+
+/**
+ * Why a place on a slot may not be taken, in the order the database checks
+ * (takePlace in @camp404/db/shifts, and the store's twin): the day has
+ * started, the day is not needed, not a member, on it already, full. Null
+ * when the place may be taken.
+ */
+export function placeProblem(ask: PlaceAsk): string | null {
+  if (!shiftChangesOpen(ask.day, ask.today)) return SHIFT_CLOSED;
+  if (ask.status !== "open") return SHIFT_NOT_NEEDED;
+  if (!ask.member) return SHIFT_NOT_A_MEMBER;
+  if (ask.already)
+    return ask.placed ? SHIFT_MEMBER_ALREADY_ON : SHIFT_ALREADY_ON;
+  if (ask.taken >= ask.places) return SHIFT_FULL;
+  return null;
+}
+
+/**
+ * Why a day's slot may not be marked needed or not needed, in the database's
+ * order: someone changed it first, its day has started, people are on it
+ * (only for "not needed"). Null when the change may go ahead.
+ */
+export function slotNeededProblem(ask: {
+  version: number;
+  expectedVersion: number;
+  day: string;
+  today: string;
+  needed: boolean;
+  taken: number;
+}): string | null {
+  if (ask.version !== ask.expectedVersion) return SHIFT_SLOT_CHANGED;
+  if (!shiftChangesOpen(ask.day, ask.today)) return SHIFT_CLOSED;
+  if (!ask.needed && ask.taken > 0) return SHIFT_DAY_HAS_PEOPLE;
+  return null;
+}
+
+/** What changing or removing a shift type decides on, read under its lock. */
+export interface ShiftTypeAsk {
+  version: number;
+  expectedVersion: number;
+  /** The days it has a slot on. */
+  days: readonly string[];
+  today: string;
+}
+
+function typeLocked(ask: ShiftTypeAsk): string | null {
+  if (ask.version !== ask.expectedVersion) return SHIFT_TYPE_CHANGED;
+  // A change reaches every day of the shift, and a day that has started is
+  // on paper now: the printed roster is the record.
+  if (ask.days.some((day) => !shiftChangesOpen(day, ask.today))) {
+    return SHIFT_CLOSED;
+  }
+  return null;
+}
+
+/**
+ * Why a shift type may not be changed to `places`, in the database's order:
+ * someone changed it first, one of its days has started, more people are on
+ * one of its days (`mostOnADay`) than the new places. Null when it may.
+ */
+export function shiftTypeChangeProblem(
+  ask: ShiftTypeAsk & { places: number; mostOnADay: number },
+): string | null {
+  const locked = typeLocked(ask);
+  if (locked) return locked;
+  if (ask.mostOnADay > ask.places) return placesBelowTaken(ask.mostOnADay);
+  return null;
+}
+
+/**
+ * Why a shift type may not be removed, in the database's order: someone
+ * changed it first, one of its days has started, people are on it. Null when
+ * it may.
+ */
+export function shiftTypeRemoveProblem(
+  ask: ShiftTypeAsk & { people: number },
+): string | null {
+  return typeLocked(ask) ?? (ask.people > 0 ? SHIFT_HAS_PEOPLE : null);
+}
+
 // --- Days and times ------------------------------------------------------------
 
 const DAY_MS = 86_400_000;

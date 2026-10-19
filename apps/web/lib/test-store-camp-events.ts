@@ -2,10 +2,12 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
+  campEventChangeRefusal,
   campEventKindFor,
   campEventRefusal,
   hasMinutes,
   MEETING_HAS_MINUTES,
+  storedCampEventWhen,
   type CampEventKind,
 } from "@camp404/core";
 import {
@@ -53,19 +55,29 @@ export const campEventsTestStore = {
     to: string;
     withRemoved?: boolean;
   }): CampEventRow[] {
-    return rows()
-      .filter(
-        (r) =>
-          r.startDate <= input.to &&
-          r.endDate >= input.from &&
-          (input.withRemoved || r.removedAt === null),
-      )
-      .sort(
-        (a, b) =>
-          a.startDate.localeCompare(b.startDate) ||
-          (a.startTime ?? "").localeCompare(b.startTime ?? ""),
-      )
-      .map(copy);
+    return (
+      rows()
+        .filter(
+          (r) =>
+            r.startDate <= input.to &&
+            r.endDate >= input.from &&
+            (input.withRemoved || r.removedAt === null),
+        )
+        // Postgres's order: a day, then its start time with an all-day event
+        // (no time) after the timed ones (ASC, NULLS LAST), then the order made.
+        .sort(
+          (a, b) =>
+            a.startDate.localeCompare(b.startDate) ||
+            (a.startTime === b.startTime
+              ? 0
+              : a.startTime === null
+                ? 1
+                : b.startTime === null
+                  ? -1
+                  : a.startTime.localeCompare(b.startTime)),
+        )
+        .map(copy)
+    );
   },
 
   getCampEvent(calendarEventId: string): CampEventRow | null {
@@ -83,6 +95,7 @@ export const campEventsTestStore = {
   listCampEventsToSync(): CampEventRow[] {
     return rows()
       .filter((r) => r.calendarSyncedVersion !== r.version)
+      .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime())
       .map(copy);
   },
 
@@ -104,11 +117,7 @@ export const campEventsTestStore = {
       kind,
       team: input.team,
       title: input.title,
-      allDay: input.allDay,
-      startDate: input.startDate,
-      endDate: input.allDay ? input.endDate : input.startDate,
-      startTime: input.allDay ? null : input.startTime,
-      endTime: input.allDay ? null : input.endTime,
+      ...storedCampEventWhen(input),
       place: input.place,
       description: input.description,
       calendarEventId: input.newEventId,
@@ -144,9 +153,11 @@ export const campEventsTestStore = {
       (r) => r.calendarEventId === input.calendarEventId && !r.removedAt,
     );
     if (!row) return { ok: false, error: EVENT_GONE };
-    const refused =
-      refusal(input.actorId, row.team) ??
-      (input.team !== row.team ? refusal(input.actorId, input.team) : null);
+    const refused = campEventChangeRefusal(
+      testStore.senderReach(input.actorId),
+      row.team,
+      input.team,
+    );
     if (refused) return { ok: false, error: refused };
     if (row.version !== input.expectedVersion) {
       return { ok: false, error: EVENT_CHANGED };
@@ -154,11 +165,7 @@ export const campEventsTestStore = {
     Object.assign(row, {
       team: input.team,
       title: input.title,
-      allDay: input.allDay,
-      startDate: input.startDate,
-      endDate: input.allDay ? input.endDate : input.startDate,
-      startTime: input.allDay ? null : input.startTime,
-      endTime: input.allDay ? null : input.endTime,
+      ...storedCampEventWhen(input),
       place: input.place,
       description: input.description,
       version: row.version + 1,

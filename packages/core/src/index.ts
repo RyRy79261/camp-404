@@ -262,6 +262,7 @@ export * from "./calendar-titles";
 export * from "./meeting-notes";
 export * from "./meeting-suggestions";
 export * from "./camp-events";
+export * from "./tasks";
 export * from "./guide";
 export * from "./guide-public";
 export * from "./search-text";

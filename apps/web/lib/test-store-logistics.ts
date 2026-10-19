@@ -2,27 +2,25 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
-  afrikaburnDate,
-  afrikaburnDateMayBeSkipped,
+  afrikaburnDateToSave,
   ATTENDANCE_ACTION_KEY,
   ATTENDANCE_ACTION_TITLE,
   ATTENDANCE_REF_TYPE,
   attendanceAnswered,
+  attendanceAnswerProblem,
   attendanceAskNotification,
-  attendanceIsOpen,
+  attendanceAskTargets,
   campDayKey,
+  openAttendancePhases,
   isAskedForAttendance,
   type AttendanceEntry,
   DEADLINE_KEEPER,
   ATTENDANCE_ASKER,
 } from "@camp404/core";
 import {
-  CANNOT_SKIP_DATE,
   DATE_SET_FIRST,
   DEADLINE_CHANGED,
   MAX_DEADLINES,
-  NOT_AN_AFRIKABURN_DATE,
-  PICK_THE_DATE,
   NOT_A_DEADLINE_KEEPER,
   TOO_MANY_DEADLINES,
   type DeadlineRow,
@@ -30,17 +28,11 @@ import {
 } from "@camp404/db/deadlines";
 import {
   ATTENDANCE_CHANGED,
-  ATTENDANCE_NOT_A_MEMBER,
-  attendanceClosed,
   NOT_AN_ATTENDANCE_ASKER,
   type AttendanceRead,
   type LogisticsWriteResult,
 } from "@camp404/db/logistics";
-import {
-  ATTENDANCE_PHASES,
-  type AttendanceAnswer,
-  type AttendancePhase,
-} from "@camp404/types";
+import { type AttendanceAnswer, type AttendancePhase } from "@camp404/types";
 import { testStore } from "./test-store";
 
 // The in-memory twins of the logistics attendance (@camp404/db/logistics) and
@@ -125,12 +117,7 @@ function comingOf(cycle: number): { userId: string; name: string }[] {
 }
 
 function openPhases(cycle: number, today: string): Set<AttendancePhase> {
-  const starts = new Map(
-    testStore.listLogisticsPhases(cycle).map((r) => [r.phase, r.startDate]),
-  );
-  return new Set(
-    ATTENDANCE_PHASES.filter((p) => attendanceIsOpen(starts.get(p), today)),
-  );
+  return openAttendancePhases(testStore.listLogisticsPhases(cycle), today);
 }
 
 function answeredBy(cycle: number, userId: string): Set<AttendancePhase> {
@@ -207,14 +194,14 @@ export const logisticsTestStore = {
     expected: AttendanceAnswer | null;
     now?: Date;
   }): LogisticsWriteResult<{ answer: AttendanceAnswer }> {
-    if (!isMember(input.userId)) {
-      return { ok: false, error: ATTENDANCE_NOT_A_MEMBER };
-    }
     const cycle = testStore.currentCycleNumber();
     const open = openPhases(cycle, campDayKey(input.now ?? new Date()));
-    if (!open.has(input.phase)) {
-      return { ok: false, error: attendanceClosed(input.phase) };
-    }
+    const problem = attendanceAnswerProblem({
+      member: isMember(input.userId),
+      phase: input.phase,
+      open,
+    });
+    if (problem) return { ok: false, error: problem };
     const key = `${cycle}:${input.phase}:${input.userId}`;
     const current = state().answers.get(key) ?? null;
     if (current !== input.expected) {
@@ -237,8 +224,10 @@ export const logisticsTestStore = {
     }
     const cycle = testStore.currentCycleNumber();
     const open = openPhases(cycle, campDayKey(input.now ?? new Date()));
-    const targets = comingOf(cycle).filter(
-      (m) => !attendanceAnswered(answeredBy(cycle, m.userId), open),
+    const targets = attendanceAskTargets(
+      comingOf(cycle),
+      answersOf(cycle),
+      open,
     );
     let notified = 0;
     for (const target of targets) {
@@ -346,13 +335,9 @@ export const logisticsTestStore = {
     newEventId: string;
   }): DeadlineWriteResult<{ row: DeadlineRow }> {
     return keeper(input.actorId, () => {
-      const standard = afrikaburnDate(input.kind);
-      if (!standard) return NOT_AN_AFRIKABURN_DATE;
-      if (input.skipped && !afrikaburnDateMayBeSkipped(input.kind)) {
-        return CANNOT_SKIP_DATE;
-      }
-      const dueDate = input.skipped ? null : input.dueDate;
-      if (!input.skipped && !dueDate) return PICK_THE_DATE;
+      const checked = afrikaburnDateToSave(input);
+      if (!checked.ok) return checked.error;
+      const { standard, dueDate } = checked;
       const cycle = testStore.currentCycleNumber();
       const existing = state().deadlines.find(
         (d) => d.cycle === cycle && d.kind === standard.kind,

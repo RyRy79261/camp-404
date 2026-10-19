@@ -12,9 +12,16 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
-  bookableNow,
+  ALREADY_BOOKED,
+  bookingProblem,
+  FULLY_BOOKED,
+  ITEM_BROKEN,
+  LOAN_TOO_MANY,
+  loanProblem,
   nextMaintenanceDue,
   inventoryEditor,
+  NONE_FREE,
+  NOT_BOOKABLE,
 } from "@camp404/core";
 import type {
   EditInventoryItemInput,
@@ -60,6 +67,16 @@ export type InventoryWriteResult<T = object> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 
+// The booking and lending sentences live with their checks in @camp404/core.
+export {
+  ALREADY_BOOKED,
+  FULLY_BOOKED,
+  ITEM_BROKEN,
+  LOAN_TOO_MANY,
+  NONE_FREE,
+  NOT_BOOKABLE,
+};
+
 export const NOT_AN_INVENTORY_EDITOR =
   "Only captains and that team's leads can change this.";
 export const ITEM_GONE = "That item isn't there any more. Reload the page.";
@@ -72,19 +89,10 @@ export const CUSTODIAN_UNKNOWN = "Pick a camp member for whose home it is at.";
 export const NEED_GONE =
   "That need isn't on the list any more. Reload the page.";
 export const NEED_CHANGED = "Someone changed this need first. Reload the page.";
-export const NOT_BOOKABLE = "This item can't be booked.";
-export const FULLY_BOOKED =
-  "It's fully booked. Nobody else can book it this year.";
-export const ALREADY_BOOKED = "You've already booked this.";
-export const ITEM_BROKEN =
-  "It's marked broken, so it can't be booked until it's fixed.";
-export const NONE_FREE =
-  "None is free to book: the rest are lent to another camp.";
 export const BOOKING_GONE =
   "That booking isn't there any more. Reload the page.";
 export const NOT_YOUR_BOOKING =
   "Only the member who booked it, a captain or that team's lead can cancel it.";
-export const LOAN_TOO_MANY = "You can't lend more than the camp has.";
 export const LOAN_GONE = "That loan isn't there any more. Reload the page.";
 export const LOAN_RETURNED =
   "It's already marked as returned. Reload the page.";
@@ -1064,7 +1072,6 @@ export async function bookInventoryItem(
 ): Promise<InventoryWriteResult<{ id: string }>> {
   return write(async (tx) => {
     const item = await lockItem(tx, input.itemId);
-    if (item.bookableCount === null) refuse(NOT_BOOKABLE);
     const cycle = await currentCycleNumber(tx);
     const [mine] = await tx
       .select({ id: schema.inventoryBookings.id })
@@ -1076,7 +1083,6 @@ export async function bookInventoryItem(
           eq(schema.inventoryBookings.cycle, cycle),
         ),
       );
-    if (mine) refuse(ALREADY_BOOKED);
     const [booked] = await tx
       .select({ n: count() })
       .from(schema.inventoryBookings)
@@ -1086,7 +1092,6 @@ export async function bookInventoryItem(
           eq(schema.inventoryBookings.cycle, cycle),
         ),
       );
-    if (item.condition === "broken") refuse(ITEM_BROKEN);
     const [out] = await tx
       .select({
         n: sql<number>`coalesce(sum(${schema.inventoryLoans.quantity}), 0)::int`,
@@ -1098,15 +1103,15 @@ export async function bookInventoryItem(
           isNull(schema.inventoryLoans.returnedAt),
         ),
       );
-    const free = bookableNow({
+    const problem = bookingProblem({
       bookableCount: item.bookableCount,
       quantity: item.quantity,
-      broken: false,
+      condition: item.condition,
+      mine: Boolean(mine),
+      taken: booked?.n ?? 0,
       lentOut: Number(out?.n ?? 0),
     });
-    const taken = booked?.n ?? 0;
-    if (taken >= item.bookableCount) refuse(FULLY_BOOKED);
-    if (taken >= free) refuse(NONE_FREE);
+    if (problem) refuse(problem);
     const [row] = await tx
       .insert(schema.inventoryBookings)
       .values({
@@ -1194,9 +1199,12 @@ export async function lendInventoryItem(
           isNull(schema.inventoryLoans.returnedAt),
         ),
       );
-    if (Number(out?.n ?? 0) + input.quantity > item.quantity) {
-      refuse(LOAN_TOO_MANY);
-    }
+    const tooMany = loanProblem(
+      item.quantity,
+      Number(out?.n ?? 0),
+      input.quantity,
+    );
+    if (tooMany) refuse(tooMany);
     const [row] = await tx
       .insert(schema.inventoryLoans)
       .values({

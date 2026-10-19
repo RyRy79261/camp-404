@@ -1,5 +1,24 @@
 import { and, asc, desc, eq, isNull, lt, max, sql } from "drizzle-orm";
-import { roleKeeper, type Actor, LEAD_PICKER } from "@camp404/core";
+import {
+  KEEN_FULL,
+  KEEN_HELD,
+  keenProblem,
+  LEAD_PICKER,
+  LEAD_PLACES_BELOW,
+  leadPlacesProblem,
+  newRoleProblem,
+  ROLE_CHANGED,
+  ROLE_FULL,
+  ROLE_GONE,
+  ROLE_HAS_PEOPLE,
+  ROLE_PLACES_BELOW,
+  roleChangeProblem,
+  roleFullProblem,
+  roleKeeper,
+  roleRemoveProblem,
+  TOO_MANY_ROLES,
+  type Actor,
+} from "@camp404/core";
 import { MAX_TEAM_ROLES, type Team } from "@camp404/types";
 import { lockActor } from "./actor";
 import { writeAuditEvent, type DbOrTx } from "./audit";
@@ -39,25 +58,26 @@ export type TeamRoleWriteResult<T = object> =
 export const NOT_A_ROLE_KEEPER =
   "Only captains and this team's leads can change its roles.";
 export const NOT_A_LEAD_PICKER = "Only a captain can pick a team's lead.";
-export const ROLE_CHANGED = "Someone changed this role first. Reload the page.";
-export const ROLE_GONE = "That role isn't there any more. Reload the page.";
-export const ROLE_FULL = "That role is full. Take someone off it first.";
-export const ROLE_HAS_PEOPLE =
-  "Take everyone off this role before removing it.";
-export const ROLE_PLACES_BELOW =
-  "More people fill this role than that. Take someone off it first.";
-export const LEAD_PLACES_BELOW =
-  "More people lead this team than that. Take a lead off first.";
 export const ROLE_ALREADY_HELD = "They have this role already.";
 export const ROLE_NOT_HELD =
   "They don't have this role any more. Reload the page.";
 export const ROLE_NOT_A_MEMBER = "Only approved camp members can have a role.";
-export const TOO_MANY_ROLES = `A team has ${MAX_TEAM_ROLES} roles at most.`;
 export const ROLES_ALREADY_THERE =
   "This team has roles this year already. Reload the page.";
 export const NO_ROLES_LAST_YEAR = "This team had no roles in an earlier year.";
-export const KEEN_FULL = "That role is full now.";
-export const KEEN_HELD = "You have this role already.";
+
+// The checks' sentences live with them in @camp404/core.
+export {
+  KEEN_FULL,
+  KEEN_HELD,
+  LEAD_PLACES_BELOW,
+  ROLE_CHANGED,
+  ROLE_FULL,
+  ROLE_GONE,
+  ROLE_HAS_PEOPLE,
+  ROLE_PLACES_BELOW,
+  TOO_MANY_ROLES,
+};
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -399,7 +419,8 @@ export async function saveTeamRole(input: {
             eq(schema.teamRoles.team, input.team),
           ),
         );
-      if ((counted?.n ?? 0) >= MAX_TEAM_ROLES) refuse(TOO_MANY_ROLES);
+      const tooMany = newRoleProblem(counted?.n ?? 0);
+      if (tooMany) refuse(tooMany);
       const [role] = await tx
         .insert(schema.teamRoles)
         .values({
@@ -427,11 +448,15 @@ export async function saveTeamRole(input: {
     const found = await lockRole(tx, input.id, cycle);
     if (!found) refuse(ROLE_GONE);
     assertKeeper(actor, found.team);
-    if (found.team !== input.team) refuse(ROLE_GONE);
-    if (found.version !== input.expectedVersion) refuse(ROLE_CHANGED);
-    if (input.places < (await holdersOf(tx, found.id))) {
-      refuse(ROLE_PLACES_BELOW);
-    }
+    const problem = roleChangeProblem({
+      team: found.team,
+      askedTeam: input.team,
+      version: found.version,
+      expectedVersion: input.expectedVersion,
+      places: input.places,
+      filled: await holdersOf(tx, found.id),
+    });
+    if (problem) refuse(problem);
     const [role] = await tx
       .update(schema.teamRoles)
       .set({
@@ -477,8 +502,12 @@ export async function removeTeamRole(input: {
     const found = await lockRole(tx, input.id, cycle);
     if (!found) refuse(ROLE_GONE);
     assertKeeper(actor, found.team);
-    if (found.version !== input.expectedVersion) refuse(ROLE_CHANGED);
-    if ((await holdersOf(tx, found.id)) > 0) refuse(ROLE_HAS_PEOPLE);
+    const problem = roleRemoveProblem({
+      version: found.version,
+      expectedVersion: input.expectedVersion,
+      filled: await holdersOf(tx, found.id),
+    });
+    if (problem) refuse(problem);
     await tx.delete(schema.teamRoles).where(eq(schema.teamRoles.id, found.id));
     await writeAuditEvent(tx, {
       actorId: input.actorId,
@@ -501,9 +530,11 @@ export async function setLeadPlaces(input: {
     assertKeeper(actor, input.team);
     const cycle = await currentCycleNumber(tx);
     const before = await lockTeamYear(tx, cycle, input.team);
-    if (input.places < (await leadsOf(tx, input.team, cycle))) {
-      refuse(LEAD_PLACES_BELOW);
-    }
+    const below = leadPlacesProblem(
+      input.places,
+      await leadsOf(tx, input.team, cycle),
+    );
+    if (below) refuse(below);
     if (before.leadPlaces === input.places) return {};
     await tx
       .update(schema.teamRoleSettings)
@@ -593,13 +624,13 @@ export async function setKeen(input: {
     if (!(await isRealMember(tx, input.userId))) refuse(ROLE_NOT_A_MEMBER);
     const cycle = await currentCycleNumber(tx);
     let roleId: string | null = null;
-    let open: boolean;
+    let fill: { filled: number; places: number };
     let holds: boolean;
     if (input.roleId !== null) {
       const role = await lockRole(tx, input.roleId, cycle);
       if (!role || role.team !== input.team) refuse(ROLE_GONE);
       roleId = role.id;
-      open = (await holdersOf(tx, role.id)) < role.places;
+      fill = { filled: await holdersOf(tx, role.id), places: role.places };
       const [mine] = await tx
         .select({ userId: schema.teamRoleHolders.userId })
         .from(schema.teamRoleHolders)
@@ -612,7 +643,10 @@ export async function setKeen(input: {
       holds = Boolean(mine);
     } else {
       const { leadPlaces } = await lockTeamYear(tx, cycle, input.team);
-      open = (await leadsOf(tx, input.team, cycle)) < leadPlaces;
+      fill = {
+        filled: await leadsOf(tx, input.team, cycle),
+        places: leadPlaces,
+      };
       const [mine] = await tx
         .select({ isLead: schema.teamMemberships.isLead })
         .from(schema.teamMemberships)
@@ -637,8 +671,8 @@ export async function setKeen(input: {
       await tx.delete(schema.teamRoleKeen).where(mine);
       return {};
     }
-    if (holds) refuse(KEEN_HELD);
-    if (!open) refuse(KEEN_FULL);
+    const problem = keenProblem({ ...fill, holds });
+    if (problem) refuse(problem);
     await tx
       .insert(schema.teamRoleKeen)
       .values({ cycle, team: input.team, roleId, userId: input.userId })
@@ -686,9 +720,11 @@ export async function giveTeamRole(input: {
       if (!LEAD_PICKER.allows(actor)) refuse(NOT_A_LEAD_PICKER);
       const { leadPlaces } = await lockTeamYear(tx, cycle, input.team);
       if (!(await isRealMember(tx, input.userId))) refuse(ROLE_NOT_A_MEMBER);
-      if ((await leadsOf(tx, input.team, cycle)) >= leadPlaces) {
-        refuse(ROLE_FULL);
-      }
+      const full = roleFullProblem({
+        filled: await leadsOf(tx, input.team, cycle),
+        places: leadPlaces,
+      });
+      if (full) refuse(full);
       const who = {
         userId: input.userId,
         team: input.team,
@@ -704,7 +740,11 @@ export async function giveTeamRole(input: {
     if (!role || role.team !== input.team) refuse(ROLE_GONE);
     assertKeeper(actor, role.team);
     if (!(await isRealMember(tx, input.userId))) refuse(ROLE_NOT_A_MEMBER);
-    if ((await holdersOf(tx, role.id)) >= role.places) refuse(ROLE_FULL);
+    const full = roleFullProblem({
+      filled: await holdersOf(tx, role.id),
+      places: role.places,
+    });
+    if (full) refuse(full);
     const [added] = await tx
       .insert(schema.teamRoleHolders)
       .values({

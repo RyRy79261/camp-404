@@ -1,6 +1,7 @@
 import {
+  CampLayout,
+  LAYOUT_NOTE_MAX,
   LAYOUT_STEP_M,
-  type CampLayout,
   type LayoutBlockPart,
   type LayoutNorth,
   type LayoutPiece,
@@ -382,4 +383,56 @@ export function arrivalDayCounts(
   return [...counts.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([day, count]) => ({ day, count }));
+}
+
+// --- Saving ------------------------------------------------------------------
+// The checks a save makes before it touches anything, once for the database
+// (@camp404/db/camp-layout) and the E2E store's twin.
+
+export const CHECK_LAYOUT = "Check the layout and try again.";
+
+/** A plan to save, checked by the schema: the plan, or the first problem. */
+export function checkCampLayout(
+  layout: unknown,
+): { ok: true; layout: CampLayout } | { ok: false; error: string } {
+  const parsed = CampLayout.safeParse(layout);
+  if (parsed.success) return { ok: true, layout: parsed.data };
+  return { ok: false, error: parsed.error.issues[0]?.message ?? CHECK_LAYOUT };
+}
+
+/** A version's note as stored: trimmed, cut to its limit, blank as none. */
+export function layoutNote(note: string | null | undefined): string | null {
+  const text = note?.trim() ?? "";
+  return text === "" ? null : text.slice(0, LAYOUT_NOTE_MAX);
+}
+
+/** The note on a version brought back from an earlier one. */
+export function restoredLayoutNote(number: number): string {
+  return `Brought back version ${number}`;
+}
+
+/** The note on this year's first version, copied from an earlier year. */
+export function copiedLayoutNote(fromCycle: number): string {
+  return `Copied from ${fromCycle}`;
+}
+
+/**
+ * Which version a read shows: the one asked for when it is a saved one
+ * (1..latest), else the latest (0: nothing saved yet).
+ */
+export function layoutVersionWanted(
+  latest: number,
+  versionNumber?: number,
+): number {
+  return versionNumber !== undefined &&
+    Number.isInteger(versionNumber) &&
+    versionNumber >= 1 &&
+    versionNumber <= latest
+    ? versionNumber
+    : latest;
+}
+
+/** A neighbour link's token: 24 random bytes as base64url. */
+export function isLayoutShareToken(token: string): boolean {
+  return /^[A-Za-z0-9_-]{32}$/.test(token);
 }

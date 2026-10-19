@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   anHourAfter,
   campEventCalendarStep,
+  campEventChangeRefusal,
   campEventRefusal,
   canCreateCampEvents,
   canManageCampEvent,
   hasMinutes,
   NOT_AN_EVENT_MAKER,
   NOT_YOUR_EVENT_TEAM,
+  storedCampEventWhen,
   WHOLE_CAMP_EVENTS_ARE_CAPTAINS,
 } from "../camp-events";
 
@@ -54,6 +56,78 @@ describe("campEventRefusal (the write's own check)", () => {
     );
     expect(campEventRefusal(["kitchen"], "finance")).toBe(NOT_YOUR_EVENT_TEAM);
     expect(campEventRefusal(["kitchen"], "kitchen")).toBeNull();
+  });
+});
+
+describe("campEventChangeRefusal (a change, checked before and after)", () => {
+  it("lets a captain move any event anywhere", () => {
+    expect(campEventChangeRefusal(undefined, "kitchen", null)).toBeNull();
+    expect(campEventChangeRefusal(undefined, null, "finance")).toBeNull();
+  });
+
+  it("lets a lead keep or move an event among the teams they lead", () => {
+    expect(
+      campEventChangeRefusal(["kitchen"], "kitchen", "kitchen"),
+    ).toBeNull();
+    expect(
+      campEventChangeRefusal(["kitchen", "finance"], "kitchen", "finance"),
+    ).toBeNull();
+  });
+
+  it("refuses by the team it was in first, then by the team it goes to", () => {
+    expect(campEventChangeRefusal(["kitchen"], "finance", "kitchen")).toBe(
+      NOT_YOUR_EVENT_TEAM,
+    );
+    expect(campEventChangeRefusal(["kitchen"], null, "kitchen")).toBe(
+      WHOLE_CAMP_EVENTS_ARE_CAPTAINS,
+    );
+    expect(campEventChangeRefusal(["kitchen"], "kitchen", "finance")).toBe(
+      NOT_YOUR_EVENT_TEAM,
+    );
+    expect(campEventChangeRefusal(["kitchen"], "kitchen", null)).toBe(
+      WHOLE_CAMP_EVENTS_ARE_CAPTAINS,
+    );
+    expect(campEventChangeRefusal([], "kitchen", "finance")).toBe(
+      NOT_AN_EVENT_MAKER,
+    );
+  });
+});
+
+describe("storedCampEventWhen", () => {
+  it("keeps an all-day event's days and drops its times", () => {
+    expect(
+      storedCampEventWhen({
+        allDay: true,
+        startDate: "2027-04-20",
+        endDate: "2027-04-22",
+        startTime: "10:00",
+        endTime: "11:00",
+      }),
+    ).toEqual({
+      allDay: true,
+      startDate: "2027-04-20",
+      endDate: "2027-04-22",
+      startTime: null,
+      endTime: null,
+    });
+  });
+
+  it("keeps a timed event on its first day", () => {
+    expect(
+      storedCampEventWhen({
+        allDay: false,
+        startDate: "2027-04-20",
+        endDate: "2027-04-22",
+        startTime: "10:00",
+        endTime: null,
+      }),
+    ).toEqual({
+      allDay: false,
+      startDate: "2027-04-20",
+      endDate: "2027-04-20",
+      startTime: "10:00",
+      endTime: null,
+    });
   });
 });
 

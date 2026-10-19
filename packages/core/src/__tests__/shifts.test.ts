@@ -7,6 +7,21 @@ import {
   canManageShifts,
   dutyCardAlsoOn,
   isAskedForShifts,
+  placeProblem,
+  placesBelowTaken,
+  SHIFT_ALREADY_ON,
+  SHIFT_CLOSED,
+  SHIFT_DAY_HAS_PEOPLE,
+  SHIFT_FULL,
+  SHIFT_HAS_PEOPLE,
+  SHIFT_MEMBER_ALREADY_ON,
+  SHIFT_NOT_A_MEMBER,
+  SHIFT_NOT_NEEDED,
+  SHIFT_SLOT_CHANGED,
+  SHIFT_TYPE_CHANGED,
+  shiftTypeChangeProblem,
+  shiftTypeRemoveProblem,
+  slotNeededProblem,
   shiftChangesOpen,
   shiftClashes,
   shiftDayLabel,
@@ -202,5 +217,115 @@ describe("a shift's duty card (#250)", () => {
       "Dinner dishes",
     ]);
     expect(dutyCardAlsoOn("toilets", null, types)).toEqual([]);
+  });
+});
+
+describe("placeProblem", () => {
+  const ask = {
+    day: "2027-04-27",
+    today: "2027-04-01",
+    status: "open",
+    member: true,
+    already: false,
+    placed: false,
+    taken: 1,
+    places: 2,
+  };
+
+  it("lets a member take an open place before the day", () => {
+    expect(placeProblem(ask)).toBeNull();
+  });
+
+  it("refuses in the database's order", () => {
+    const all = {
+      ...ask,
+      today: ask.day,
+      status: "not_needed",
+      member: false,
+      already: true,
+      taken: 2,
+    };
+    expect(placeProblem(all)).toBe(SHIFT_CLOSED);
+    expect(placeProblem({ ...all, today: ask.today })).toBe(SHIFT_NOT_NEEDED);
+    expect(placeProblem({ ...all, today: ask.today, status: "open" })).toBe(
+      SHIFT_NOT_A_MEMBER,
+    );
+    const member = { ...all, today: ask.today, status: "open", member: true };
+    expect(placeProblem(member)).toBe(SHIFT_ALREADY_ON);
+    expect(placeProblem({ ...member, placed: true })).toBe(
+      SHIFT_MEMBER_ALREADY_ON,
+    );
+    expect(placeProblem({ ...member, already: false })).toBe(SHIFT_FULL);
+  });
+});
+
+describe("slotNeededProblem", () => {
+  const ask = {
+    version: 2,
+    expectedVersion: 2,
+    day: "2027-04-27",
+    today: "2027-04-01",
+    needed: false,
+    taken: 0,
+  };
+
+  it("marks an empty day not needed, and a day with people needed", () => {
+    expect(slotNeededProblem(ask)).toBeNull();
+    expect(slotNeededProblem({ ...ask, needed: true, taken: 3 })).toBeNull();
+  });
+
+  it("refuses in the database's order", () => {
+    const all = { ...ask, expectedVersion: 1, today: ask.day, taken: 1 };
+    expect(slotNeededProblem(all)).toBe(SHIFT_SLOT_CHANGED);
+    expect(slotNeededProblem({ ...all, expectedVersion: 2 })).toBe(
+      SHIFT_CLOSED,
+    );
+    expect(
+      slotNeededProblem({ ...all, expectedVersion: 2, today: ask.today }),
+    ).toBe(SHIFT_DAY_HAS_PEOPLE);
+  });
+});
+
+describe("shiftTypeChangeProblem and shiftTypeRemoveProblem", () => {
+  const ask = {
+    version: 1,
+    expectedVersion: 1,
+    days: ["2027-04-26", "2027-04-27"],
+    today: "2027-04-01",
+  };
+
+  it("changes or removes a shift none of whose days has started", () => {
+    expect(
+      shiftTypeChangeProblem({ ...ask, places: 2, mostOnADay: 2 }),
+    ).toBeNull();
+    expect(shiftTypeRemoveProblem({ ...ask, people: 0 })).toBeNull();
+  });
+
+  it("refuses a change in the database's order", () => {
+    const all = {
+      ...ask,
+      expectedVersion: 0,
+      today: "2027-04-26",
+      places: 1,
+      mostOnADay: 3,
+    };
+    expect(shiftTypeChangeProblem(all)).toBe(SHIFT_TYPE_CHANGED);
+    expect(shiftTypeChangeProblem({ ...all, expectedVersion: 1 })).toBe(
+      SHIFT_CLOSED,
+    );
+    expect(
+      shiftTypeChangeProblem({ ...all, expectedVersion: 1, today: ask.today }),
+    ).toBe(placesBelowTaken(3));
+  });
+
+  it("refuses a removal in the database's order", () => {
+    const all = { ...ask, expectedVersion: 0, today: "2027-04-27", people: 1 };
+    expect(shiftTypeRemoveProblem(all)).toBe(SHIFT_TYPE_CHANGED);
+    expect(shiftTypeRemoveProblem({ ...all, expectedVersion: 1 })).toBe(
+      SHIFT_CLOSED,
+    );
+    expect(
+      shiftTypeRemoveProblem({ ...all, expectedVersion: 1, today: ask.today }),
+    ).toBe(SHIFT_HAS_PEOPLE);
   });
 });

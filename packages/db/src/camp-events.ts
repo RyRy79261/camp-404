@@ -1,11 +1,13 @@
 import { and, asc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import {
   campDayStart,
+  campEventChangeRefusal,
   campEventKindFor,
   campEventRefusal,
   hasMinutes,
   meetingInstant,
   MEETING_HAS_MINUTES,
+  storedCampEventWhen,
   type CampEventKind,
 } from "@camp404/core";
 import { writeAuditEvent } from "./audit";
@@ -205,13 +207,24 @@ export interface CampEventFields {
   description: string | null;
 }
 
+/**
+ * The actor's reach, read and locked inside the write: undefined for a
+ * captain, else the teams they lead this year (none for a member, or for an
+ * id that is no member's).
+ */
+async function lockReach(
+  tx: Tx,
+  actorId: string,
+): Promise<readonly string[] | undefined> {
+  return UUID.test(actorId) ? lockSenderReach(tx, actorId) : [];
+}
+
 async function assertManager(
   tx: Tx,
   actorId: string,
   team: Team | null,
 ): Promise<void> {
-  if (!UUID.test(actorId)) refuse(campEventRefusal([], team) ?? EVENT_GONE);
-  const refusal = campEventRefusal(await lockSenderReach(tx, actorId), team);
+  const refusal = campEventRefusal(await lockReach(tx, actorId), team);
   if (refusal) refuse(refusal);
 }
 
@@ -251,11 +264,7 @@ export async function createCampEvent(
         kind,
         team: input.team,
         title: input.title,
-        allDay: input.allDay,
-        startDate: input.startDate,
-        endDate: input.allDay ? input.endDate : input.startDate,
-        startTime: input.allDay ? null : input.startTime,
-        endTime: input.allDay ? null : input.endTime,
+        ...storedCampEventWhen(input),
         place: input.place,
         description: input.description,
         calendarEventId: input.newEventId,
@@ -334,21 +343,19 @@ export async function editCampEvent(
 ): Promise<CampEventWriteResult<{ row: CampEventRow }>> {
   return write(async (tx) => {
     const before = await lockEvent(tx, input.calendarEventId);
-    await assertManager(tx, input.actorId, before.team);
-    if (input.team !== before.team) {
-      await assertManager(tx, input.actorId, input.team);
-    }
+    const refusal = campEventChangeRefusal(
+      await lockReach(tx, input.actorId),
+      before.team,
+      input.team,
+    );
+    if (refusal) refuse(refusal);
     if (before.version !== input.expectedVersion) refuse(EVENT_CHANGED);
     const [row] = await tx
       .update(e)
       .set({
         team: input.team,
         title: input.title,
-        allDay: input.allDay,
-        startDate: input.startDate,
-        endDate: input.allDay ? input.endDate : input.startDate,
-        startTime: input.allDay ? null : input.startTime,
-        endTime: input.allDay ? null : input.endTime,
+        ...storedCampEventWhen(input),
         place: input.place,
         description: input.description,
         updatedByUserId: input.actorId,

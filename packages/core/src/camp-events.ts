@@ -85,6 +85,23 @@ export function campEventRefusal(
   return null;
 }
 
+/**
+ * The refusal for a change that moves an event from team `from` to team `to`
+ * (null: the whole camp), or null: the actor must be allowed for the event's
+ * team as it was, and, when the change moves it, for the team it goes to, so
+ * a lead cannot move another team's event to theirs.
+ */
+export function campEventChangeRefusal(
+  reach: readonly string[] | undefined,
+  from: string | null,
+  to: string | null,
+): string | null {
+  return (
+    campEventRefusal(reach, from) ??
+    (to !== from ? campEventRefusal(reach, to) : null)
+  );
+}
+
 /** An event's days and times, as stored. */
 export interface CampEventWhen {
   allDay: boolean;
@@ -94,6 +111,20 @@ export interface CampEventWhen {
   /** HH:MM camp time; null for an all-day event. */
   startTime: string | null;
   endTime: string | null;
+}
+
+/**
+ * An event's days and times as they are stored: an all-day event keeps its
+ * days and no times; a timed one is on its first day only, ending that day.
+ */
+export function storedCampEventWhen(when: CampEventWhen): CampEventWhen {
+  return {
+    allDay: when.allDay,
+    startDate: when.startDate,
+    endDate: when.allDay ? when.endDate : when.startDate,
+    startTime: when.allDay ? null : when.startTime,
+    endTime: when.allDay ? null : when.endTime,
+  };
 }
 
 /**

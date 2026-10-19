@@ -9,32 +9,28 @@ import {
   canAskForShifts,
   canManageShifts,
   isAskedForShifts,
+  placeProblem,
   shiftChangesOpen,
   shiftDays,
+  shiftTypeChangeProblem,
+  shiftTypeRemoveProblem,
   shiftsAskNotification,
+  slotNeededProblem,
 } from "@camp404/core";
 import {
   DUTY_CARD_GONE,
   NOT_A_SHIFT_ASKER,
   NOT_A_SHIFT_KEEPER,
   NO_BURN_DAYS,
-  SHIFT_ALREADY_ON,
   SHIFT_CLOSED,
-  SHIFT_DAY_HAS_PEOPLE,
-  SHIFT_FULL,
   SHIFT_GONE,
-  SHIFT_HAS_PEOPLE,
-  SHIFT_MEMBER_ALREADY_ON,
   SHIFT_MEMBER_NOT_ON,
   SHIFT_NOT_A_MEMBER,
-  SHIFT_NOT_NEEDED,
   SHIFT_NOT_ON,
-  SHIFT_SLOT_CHANGED,
   SHIFT_TYPE_CHANGED,
   TOO_MANY_SHIFT_TYPES,
   TOO_MANY_VOLUNTEER_SHIFTS,
   VOLUNTEER_SHIFT_GONE,
-  placesBelowTaken,
   type DutyCardShift,
   type ShiftRosterRead,
   type ShiftSlotRow,
@@ -229,19 +225,19 @@ function takePlace(input: {
   const found = slotOf(input.slotId, input.cycle);
   if (!found) refuse(SHIFT_GONE);
   if (input.keeper) assertKeeper(input.keeper, found.type.team);
-  if (!shiftChangesOpen(found.slot.day, campDayKey(input.now))) {
-    refuse(SHIFT_CLOSED);
-  }
-  if (found.slot.status !== "open") refuse(SHIFT_NOT_NEEDED);
-  if (!isMember(input.userId)) refuse(SHIFT_NOT_A_MEMBER);
-  if (
-    state().signups.some(
+  const problem = placeProblem({
+    day: found.slot.day,
+    today: campDayKey(input.now),
+    status: found.slot.status,
+    member: isMember(input.userId),
+    already: state().signups.some(
       (s) => s.slotId === found.slot.id && s.userId === input.userId,
-    )
-  ) {
-    refuse(input.addedByUserId ? SHIFT_MEMBER_ALREADY_ON : SHIFT_ALREADY_ON);
-  }
-  if (takenOn(found.slot.id) >= found.type.places) refuse(SHIFT_FULL);
+    ),
+    placed: Boolean(input.addedByUserId),
+    taken: takenOn(found.slot.id),
+    places: found.type.places,
+  });
+  if (problem) refuse(problem);
   state().signups.push({
     slotId: found.slot.id,
     userId: input.userId,
@@ -421,24 +417,16 @@ export const shiftsTestStore = {
         const current = typeOf(input.id, cycle);
         if (!current) refuse(SHIFT_GONE);
         assertKeeper(keeper, current.team);
-        if (current.version !== input.expectedVersion) {
-          refuse(SHIFT_TYPE_CHANGED);
-        }
-        const today = campDayKey(input.now ?? new Date());
-        if (
-          state().slots.some(
-            (s) => s.typeId === current.id && !shiftChangesOpen(s.day, today),
-          )
-        ) {
-          refuse(SHIFT_CLOSED);
-        }
-        const most = Math.max(
-          0,
-          ...state()
-            .slots.filter((s) => s.typeId === current.id)
-            .map((s) => takenOn(s.id)),
-        );
-        if (most > input.places) refuse(placesBelowTaken(most));
+        const own = state().slots.filter((s) => s.typeId === current.id);
+        const problem = shiftTypeChangeProblem({
+          version: current.version,
+          expectedVersion: input.expectedVersion,
+          days: own.map((s) => s.day),
+          today: campDayKey(input.now ?? new Date()),
+          places: input.places,
+          mostOnADay: Math.max(0, ...own.map((s) => takenOn(s.id))),
+        });
+        if (problem) refuse(problem);
         Object.assign(current, fields, { version: current.version + 1 });
         type = current;
       }
@@ -463,24 +451,16 @@ export const shiftsTestStore = {
       const current = typeOf(input.id, cycle);
       if (!current) refuse(SHIFT_GONE);
       assertKeeper(keeper, current.team);
-      if (current.version !== input.expectedVersion) refuse(SHIFT_TYPE_CHANGED);
-      const today = campDayKey(input.now ?? new Date());
-      if (
-        state().slots.some(
-          (slot) =>
-            slot.typeId === current.id && !shiftChangesOpen(slot.day, today),
-        )
-      ) {
-        refuse(SHIFT_CLOSED);
-      }
-      const slotIds = new Set(
-        state()
-          .slots.filter((s) => s.typeId === current.id)
-          .map((s) => s.id),
-      );
-      if (state().signups.some((s) => slotIds.has(s.slotId))) {
-        refuse(SHIFT_HAS_PEOPLE);
-      }
+      const own = state().slots.filter((s) => s.typeId === current.id);
+      const slotIds = new Set(own.map((s) => s.id));
+      const problem = shiftTypeRemoveProblem({
+        version: current.version,
+        expectedVersion: input.expectedVersion,
+        days: own.map((s) => s.day),
+        today: campDayKey(input.now ?? new Date()),
+        people: state().signups.filter((s) => slotIds.has(s.slotId)).length,
+      });
+      if (problem) refuse(problem);
       const s = state();
       s.types.splice(s.types.indexOf(current), 1);
       s.slots = s.slots.filter((slot) => !slotIds.has(slot.id));
@@ -523,17 +503,15 @@ export const shiftsTestStore = {
       const found = slotOf(input.slotId, testStore.currentCycleNumber());
       if (!found) refuse(SHIFT_GONE);
       assertKeeper(keeper, found.type.team);
-      if (found.slot.version !== input.expectedVersion) {
-        refuse(SHIFT_SLOT_CHANGED);
-      }
-      if (
-        !shiftChangesOpen(found.slot.day, campDayKey(input.now ?? new Date()))
-      ) {
-        refuse(SHIFT_CLOSED);
-      }
-      if (!input.needed && takenOn(found.slot.id) > 0) {
-        refuse(SHIFT_DAY_HAS_PEOPLE);
-      }
+      const problem = slotNeededProblem({
+        version: found.slot.version,
+        expectedVersion: input.expectedVersion,
+        day: found.slot.day,
+        today: campDayKey(input.now ?? new Date()),
+        needed: input.needed,
+        taken: takenOn(found.slot.id),
+      });
+      if (problem) refuse(problem);
       found.slot.status = input.needed ? "open" : "not_needed";
       found.slot.version += 1;
       return { slot: { ...found.slot } };
