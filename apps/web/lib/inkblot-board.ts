@@ -1,26 +1,16 @@
 import "server-only";
 
-import {
-  getInkblotBoard as dbGetInkblotBoard,
-  recordInkblotRun as dbRecordInkblotRun,
-} from "@camp404/db/inkblot";
-import type { InkblotBoardEntry, InkblotRun } from "@camp404/types";
-import { usesTestStore } from "./test-mode";
+import * as db from "@camp404/db/inkblot";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
-// INKBLOT's shared board, from the database or, under E2E, the test store.
-// Written through app/(console)/terminal/inkblot/actions.ts.
+// INKBLOT's shared board, from the database or, under E2E, the test store,
+// picked once (twin); lib/__tests__/desktop-agreement.test.ts holds the two
+// sides equal. Written through app/(console)/terminal/inkblot/actions.ts.
 
-export async function readInkblotBoard(): Promise<InkblotBoardEntry[]> {
-  if (usesTestStore()) return testStore.getInkblotBoard();
-  return dbGetInkblotBoard();
-}
+const board = twin(db, testStore, ["getInkblotBoard", "recordInkblotRun"]);
+
+export const readInkblotBoard = board.getInkblotBoard;
 
 /** The caller passes the signed-in member's own id, never one from the client. */
-export async function recordInkblotRunFor(
-  userId: string,
-  run: InkblotRun,
-): Promise<InkblotBoardEntry> {
-  if (usesTestStore()) return testStore.recordInkblotRun(userId, run);
-  return dbRecordInkblotRun(userId, run);
-}
+export const recordInkblotRunFor = board.recordInkblotRun;

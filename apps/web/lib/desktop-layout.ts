@@ -2,10 +2,7 @@ import "server-only";
 
 import { errorLogText } from "@camp404/core";
 import { cache } from "react";
-import {
-  getDesktopLayout as dbGetDesktopLayout,
-  saveDesktopLayout as dbSaveDesktopLayout,
-} from "@camp404/db/desktop-layouts";
+import * as db from "@camp404/db/desktop-layouts";
 import {
   desktopFolderKey,
   desktopTeamFolderKey,
@@ -17,8 +14,8 @@ import {
 import { resolveMemberState } from "./member-gate";
 import { getProgramManifest, manifestModeFor } from "./program-manifest";
 import { manifestProgramIds, type ProgramManifest } from "./programs";
-import { usesTestStore } from "./test-mode";
 import { testStore } from "./test-store";
+import { twin } from "./twin";
 
 // The member's 404 OS desktop layout (owner's decision 14 B: on the server,
 // one row per member in `desktop_layouts`). The desktop reads it beside the
@@ -26,7 +23,11 @@ import { testStore } from "./test-store";
 // back through saveDesktopLayoutAction (app/(console)/desktop-layout-actions.ts),
 // debounced. It holds program ids, grid cells and folder names only, and it is
 // never authority: an id the manifest does not hold is dropped here, never
-// drawn, and every page still runs its own gate.
+// drawn, and every page still runs its own gate. From the database or, under
+// E2E, the test store, picked once (twin); lib/__tests__/desktop-agreement.test.ts
+// holds the two sides equal.
+
+const layouts = twin(db, testStore, ["getDesktopLayout", "saveDesktopLayout"]);
 
 /** What a member's manifest lets their saved layout name. Pure. */
 export function desktopLayoutAllowed(
@@ -58,8 +59,7 @@ export function desktopLayoutAllowed(
 const readSavedLayout = cache(
   async (userId: string): Promise<DesktopLayout | null> => {
     try {
-      if (usesTestStore()) return testStore.getDesktopLayout(userId);
-      return await dbGetDesktopLayout(userId);
+      return await layouts.getDesktopLayout(userId);
     } catch (err) {
       console.error(
         "[desktop-layout] read failed; drawing the default",
@@ -103,10 +103,4 @@ export const getMyDesktopLayout = cache(
  * signed-in member's own id, never one from the client. Throws
  * `DesktopLayoutInvalidError` for a value that is not a layout.
  */
-export async function saveDesktopLayoutFor(
-  userId: string,
-  layout: unknown,
-): Promise<DesktopLayout> {
-  if (usesTestStore()) return testStore.saveDesktopLayout(userId, layout);
-  return dbSaveDesktopLayout(userId, layout);
-}
+export const saveDesktopLayoutFor = layouts.saveDesktopLayout;
