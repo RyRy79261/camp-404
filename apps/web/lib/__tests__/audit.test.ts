@@ -18,6 +18,7 @@ const EVENT: AuditEvent = {
   actorId: "cap-1",
   action: "member.id_document.viewed",
   target: "member-1",
+  metadata: { basis: "captain", idType: "passport" },
 };
 
 beforeEach(() => {

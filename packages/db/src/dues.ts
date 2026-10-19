@@ -474,7 +474,6 @@ export interface MemberDues {
   next: NextInstalment | null;
 }
 
-
 /**
  * One member's dues for a year, or null when there is no such member. A
  * member's own read (`forFinance` false) leaves out the concession reason and
@@ -1455,19 +1454,18 @@ export async function decideRefund(
       .from(schema.payments)
       .where(eq(schema.payments.id, row.paymentId))
       .limit(1);
-    await writeAuditEvent(tx, {
-      actorId: input.actorId,
-      action:
-        input.to === "refunded"
-          ? "payment.refunded"
-          : "payment.refund_declined",
-      target: row.userId,
-      metadata: {
-        reference: payment?.reference ?? null,
-        cycle: row.cycle,
-        ...(input.to === "refunded" ? { amountCents: row.amountCents } : {}),
-      },
-    });
+    const by = { actorId: input.actorId, target: row.userId };
+    const said = { reference: payment?.reference ?? null, cycle: row.cycle };
+    await writeAuditEvent(
+      tx,
+      input.to === "refunded"
+        ? {
+            ...by,
+            action: "payment.refunded",
+            metadata: { ...said, amountCents: row.amountCents },
+          }
+        : { ...by, action: "payment.refund_declined", metadata: said },
+    );
     return {};
   });
 }

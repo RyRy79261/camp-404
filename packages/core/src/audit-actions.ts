@@ -1,7 +1,8 @@
 // Every action the audit trail records, and how a captain reads it.
 //
 // `AuditEvent.action` in @camp404/db is typed from this list, so a writer with
-// a new action does not compile until the action has a label here.
+// a new action does not compile until the action has a label here and a
+// metadata shape in `AuditEvents` (audit-events.ts).
 
 import {
   GUIDE_CATEGORY_LABELS,
@@ -9,6 +10,7 @@ import {
   LOGISTICS_PHASE_LABELS,
   LogisticsPhase,
 } from "@camp404/types";
+import type { StoredAuditKey } from "./audit-events";
 import { decimalToMinor, formatMoney, isCurrency } from "./money";
 
 export const AUDIT_ACTION_LABELS = {
@@ -180,15 +182,39 @@ export function auditActionLabel(action: string): string {
 
 type Metadata = Record<string, unknown> | null | undefined;
 
-const text = (metadata: Metadata, key: string): string | null => {
-  const value = metadata?.[key];
-  return typeof value === "string" && value.trim() ? value : null;
-};
+function isAuditAction(action: string): action is AuditAction {
+  return Object.hasOwn(AUDIT_ACTION_LABELS, action);
+}
 
-const count = (metadata: Metadata, key: string): number | null => {
-  const value = metadata?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-};
+/**
+ * A stored row's metadata, read by the keys its action may hold
+ * (`StoredAuditKey`). Each value is still checked: a row keeps the JSON it was
+ * written with, so a missing or odd value reads as null.
+ */
+function stored<A extends AuditAction>(_action: A, metadata: Metadata) {
+  const get = (key: StoredAuditKey<A>): unknown => metadata?.[key];
+  return {
+    text(key: StoredAuditKey<A>): string | null {
+      const value = get(key);
+      return typeof value === "string" && value.trim() ? value : null;
+    },
+    count(key: StoredAuditKey<A>): number | null {
+      const value = get(key);
+      return typeof value === "number" && Number.isFinite(value) ? value : null;
+    },
+    flag(key: StoredAuditKey<A>): boolean | null {
+      const value = get(key);
+      return typeof value === "boolean" ? value : null;
+    },
+    has(key: StoredAuditKey<A>): boolean {
+      return metadata != null && key in metadata;
+    },
+    list(key: StoredAuditKey<A>): readonly unknown[] | null {
+      const value = get(key);
+      return Array.isArray(value) ? value : null;
+    },
+  };
+}
 
 // The captain-only passes on a member's ticket row, and their values.
 const TICKET_PASS_WORDS: Record<string, string> = {
@@ -282,25 +308,29 @@ export function auditDetail(
   metadata: Metadata,
   teamLabel: (key: string) => string = (key) => key,
 ): string | null {
+  if (!isAuditAction(action)) return null;
   switch (action) {
     case "logistics.phase_set":
     case "logistics.phase_cleared": {
-      const phase = LogisticsPhase.safeParse(text(metadata, "phase"));
+      const m = stored(action, metadata);
+      const phase = LogisticsPhase.safeParse(m.text("phase"));
       if (!phase.success) return null;
       const label = LOGISTICS_PHASE_LABELS[phase.data];
-      const start = text(metadata, "startDate");
-      const end = text(metadata, "endDate");
+      const start = m.text("startDate");
+      const end = m.text("endDate");
       return action === "logistics.phase_set" && start && end
         ? `${label}, ${start} to ${end}`
         : label;
     }
     case "logistics.attendance_asked": {
-      const asked = count(metadata, "asked");
+      const m = stored(action, metadata);
+      const asked = m.count("asked");
       if (asked === null) return null;
       return `${asked} ${asked === 1 ? "member" : "members"}`;
     }
     case "shifts.asked": {
-      const asked = count(metadata, "asked");
+      const m = stored(action, metadata);
+      const asked = m.count("asked");
       if (asked === null) return null;
       return `${asked} ${asked === 1 ? "member" : "members"}`;
     }
@@ -308,44 +338,51 @@ export function auditDetail(
     case "shifts.type_changed":
     case "shifts.type_removed":
     case "shifts.days_added": {
-      return text(metadata, "name");
+      const m = stored(action, metadata);
+      return m.text("name");
     }
     case "shifts.slot_needed_set": {
-      const name = text(metadata, "name");
-      const day = text(metadata, "day");
+      const m = stored(action, metadata);
+      const name = m.text("name");
+      const day = m.text("day");
       if (!name || !day) return null;
-      return `${name}, ${day}, ${metadata?.needed === true ? "needed" : "not needed"}`;
+      return `${name}, ${day}, ${m.flag("needed") === true ? "needed" : "not needed"}`;
     }
     case "shifts.member_placed":
     case "shifts.member_removed": {
-      const name = text(metadata, "name");
-      const day = text(metadata, "day");
+      const m = stored(action, metadata);
+      const name = m.text("name");
+      const day = m.text("day");
       if (!name || !day) return null;
       return `${name}, ${day}`;
     }
     case "logistics.deadline_added":
     case "logistics.deadline_changed":
     case "logistics.deadline_removed": {
-      const title = text(metadata, "title");
-      const due = text(metadata, "dueDate");
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const due = m.text("dueDate");
       if (!title) return null;
-      if (metadata?.skipped === true) return `${title}, no round this year`;
+      if (m.flag("skipped") === true) return `${title}, no round this year`;
       return due ? `${title}, ${due}` : title;
     }
     case "logistics.deadline_done": {
-      const title = text(metadata, "title");
+      const m = stored(action, metadata);
+      const title = m.text("title");
       if (!title) return null;
-      return metadata?.done === true ? `${title}, done` : `${title}, not done`;
+      return m.flag("done") === true ? `${title}, done` : `${title}, not done`;
     }
     case "member.approval_decided": {
-      const status = text(metadata, "status");
+      const m = stored(action, metadata);
+      const status = m.text("status");
       const word = status ? APPROVAL_WORDS[status] : undefined;
       if (!word) return null;
-      return metadata?.withReason === true ? `${word}, with a reason` : word;
+      return m.flag("withReason") === true ? `${word}, with a reason` : word;
     }
     case "member.rank_changed": {
-      const to = text(metadata, "to");
-      const from = text(metadata, "from");
+      const m = stored(action, metadata);
+      const to = m.text("to");
+      const from = m.text("from");
       if (!to || !RANK_WORDS[to]) return null;
       return from && RANK_WORDS[from]
         ? `${RANK_WORDS[from]} to ${RANK_WORDS[to]}`
@@ -353,19 +390,22 @@ export function auditDetail(
     }
     case "member.team_assigned":
     case "member.team_removed": {
-      const team = text(metadata, "team");
+      const m = stored(action, metadata);
+      const team = m.text("team");
       return team ? teamLabel(team) : null;
     }
     case "member.team_lead_set": {
-      const team = text(metadata, "team");
+      const m = stored(action, metadata);
+      const team = m.text("team");
       if (!team) return null;
-      return metadata?.isLead === true
+      return m.flag("isLead") === true
         ? `Now leads ${teamLabel(team)}`
         : `No longer leads ${teamLabel(team)}`;
     }
     case "lounge.offer_decided": {
-      const to = text(metadata, "to");
-      const title = text(metadata, "title");
+      const m = stored(action, metadata);
+      const to = m.text("to");
+      const title = m.text("title");
       const word =
         to && Object.hasOwn(LOUNGE_DECISION_WORDS, to)
           ? LOUNGE_DECISION_WORDS[to]
@@ -375,16 +415,18 @@ export function auditDetail(
     }
     case "lounge.offer_placed":
     case "lounge.slot_removed": {
-      const title = text(metadata, "title");
-      const day = count(metadata, "day");
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const day = m.count("day");
       if (!title) return null;
       return day === null ? `"${title}"` : `"${title}", day ${day}`;
     }
     case "inventory.booking_cancelled":
     case "inventory.change_approved":
     case "inventory.change_rejected": {
-      const item = text(metadata, "item");
-      const team = text(metadata, "team");
+      const m = stored(action, metadata);
+      const item = m.text("item");
+      const team = m.text("team");
       if (!item) return null;
       return team ? `${item} (${teamLabel(team)})` : item;
     }
@@ -392,40 +434,43 @@ export function auditDetail(
     case "pet.hint_changed":
     case "pet.line_changed":
     case "pet.owner_set":
-      return text(metadata, "name");
+      return stored(action, metadata).text("name");
     case "participation.decided":
       return participationDetail(
         PARTICIPATION_DECISION_WORDS,
-        text(metadata, "to"),
-        count(metadata, "cycle"),
+        stored(action, metadata).text("to"),
+        stored(action, metadata).count("cycle"),
       );
     case "participation.withdrawn":
       return participationDetail(
         PARTICIPATION_WITHDRAWN_WORDS,
-        text(metadata, "from"),
-        count(metadata, "cycle"),
+        stored(action, metadata).text("from"),
+        stored(action, metadata).count("cycle"),
       );
     case "ticket.pass_changed": {
-      const pass = text(metadata, "pass");
-      const to = text(metadata, "to");
+      const m = stored(action, metadata);
+      const pass = m.text("pass");
+      const to = m.text("to");
       if (!pass || !Object.hasOwn(TICKET_PASS_WORDS, pass) || !to) return null;
       const values = TICKET_PASS_VALUE_WORDS[pass]!;
       if (!Object.hasOwn(values, to)) return null;
-      const cycle = count(metadata, "cycle");
+      const cycle = m.count("cycle");
       const line = `${TICKET_PASS_WORDS[pass]}: ${values[to]}`;
       return cycle === null ? line : `${line} for ${cycle}`;
     }
     case "payment.recorded": {
-      const reference = text(metadata, "reference");
-      const status = text(metadata, "status");
+      const m = stored(action, metadata);
+      const reference = m.text("reference");
+      const status = m.text("status");
       const word = status ? PAYMENT_WORDS[status] : undefined;
       if (!reference) return null;
       return word ? `${reference}, ${word}` : reference;
     }
     case "payment.status_changed": {
-      const reference = text(metadata, "reference");
-      const from = text(metadata, "from");
-      const to = text(metadata, "to");
+      const m = stored(action, metadata);
+      const reference = m.text("reference");
+      const from = m.text("from");
+      const to = m.text("to");
       if (!reference || !from || !to) return reference;
       if (!PAYMENT_WORDS[from] || !PAYMENT_WORDS[to]) return reference;
       return `${reference}, ${PAYMENT_WORDS[from]} to ${PAYMENT_WORDS[to]}`;
@@ -439,11 +484,12 @@ export function auditDetail(
     case "dues.tier_changed":
     case "payment.refund_requested":
     case "payment.refunded": {
-      const cents = count(metadata, "amountCents");
-      const label = text(metadata, "label") ?? text(metadata, "description");
+      const m = stored(action, metadata);
+      const cents = m.count("amountCents");
+      const label = m.text("label") ?? m.text("description");
       const money = cents === null ? null : formatMoney(cents);
       const concession =
-        action === "dues.fee_set" && metadata?.concession === true
+        action === "dues.fee_set" && m.flag("concession") === true
           ? "with a concession"
           : null;
       const parts = [label, money, concession].filter(Boolean);
@@ -453,51 +499,57 @@ export function auditDetail(
     case "rental.item_added":
     case "rental.item_changed":
     case "rental.item_archived":
-      return text(metadata, "name");
+      return stored(action, metadata).text("name");
     case "rental.order_confirmed":
     case "rental.order_reopened": {
-      const cents = count(metadata, "totalCents");
+      const m = stored(action, metadata);
+      const cents = m.count("totalCents");
       return cents === null ? null : formatMoney(cents);
     }
     case "rental.orders_asked": {
-      const asked = count(metadata, "asked");
+      const m = stored(action, metadata);
+      const asked = m.count("asked");
       if (asked === null) return null;
       return `${asked} ${asked === 1 ? "member" : "members"}`;
     }
     case "rental.tent_labelled": {
-      const name = text(metadata, "name");
-      const label = text(metadata, "label");
+      const m = stored(action, metadata);
+      const name = m.text("name");
+      const label = m.text("label");
       if (!name) return label;
       return label ? `${name}, ${label}` : `${name}, label removed`;
     }
     case "dues.plan_set": {
-      const instalments = count(metadata, "instalments");
+      const m = stored(action, metadata);
+      const instalments = m.count("instalments");
       if (instalments === null) return null;
       return instalments === 0
         ? "Plan removed"
         : `${instalments} ${instalments === 1 ? "instalment" : "instalments"}`;
     }
     case "dues.settle_up_published": {
-      const cents = count(metadata, "totalCents");
-      const members = count(metadata, "members");
-      if (cents === null || members === null)
-        return text(metadata, "description");
+      const m = stored(action, metadata);
+      const cents = m.count("totalCents");
+      const members = m.count("members");
+      if (cents === null || members === null) return m.text("description");
       const verb = cents < 0 ? "back to" : "across";
       return `${formatMoney(Math.abs(cents))} ${verb} ${members} ${members === 1 ? "member" : "members"}`;
     }
     case "payment.proof_viewed":
     case "payment.refund_declined":
-      return text(metadata, "reference");
+      return stored(action, metadata).text("reference");
     case "report_screenshot.deleted":
     case "report_screenshot.viewed": {
-      const issue = count(metadata, "issueNumber");
+      const m = stored(action, metadata);
+      const issue = m.count("issueNumber");
       return issue && issue > 0 ? `Issue #${issue}` : null;
     }
     case "reimbursement.status_changed": {
-      const from = text(metadata, "from");
-      const to = text(metadata, "to");
-      const cents = count(metadata, "amountCents");
-      const currency = text(metadata, "currency");
+      const m = stored(action, metadata);
+      const from = m.text("from");
+      const to = m.text("to");
+      const cents = m.count("amountCents");
+      const currency = m.text("currency");
       if (
         !from ||
         !to ||
@@ -509,7 +561,7 @@ export function auditDetail(
       const moved = `${REIMBURSEMENT_WORDS[from]} to ${REIMBURSEMENT_WORDS[to]}`;
       // Claims since #242 keep whole cents; an older row keeps its decimal.
       if (cents !== null) return `${formatMoney(cents)}, ${moved}`;
-      const amount = text(metadata, "amount");
+      const amount = m.text("amount");
       if (!amount || !currency) return moved;
       const minor = decimalToMinor(amount);
       // A row from before the currency rule keeps the text it was written with.
@@ -518,7 +570,8 @@ export function auditDetail(
         : `${currency} ${amount}, ${moved}`;
     }
     case "team.program_changed": {
-      const team = text(metadata, "team");
+      const m = stored(action, metadata);
+      const team = m.text("team");
       return team ? teamLabel(team) : null;
     }
     case "team.role_added":
@@ -526,98 +579,104 @@ export function auditDetail(
     case "team.role_removed":
     case "team.role_given":
     case "team.role_taken": {
-      const team = text(metadata, "team");
-      const name = text(metadata, "name");
+      const m = stored(action, metadata);
+      const team = m.text("team");
+      const name = m.text("name");
       if (!team || !name) return null;
       return `${teamLabel(team)}: ${name}`;
     }
     case "team.roles_copied": {
-      const team = text(metadata, "team");
-      const copied = count(metadata, "copied");
+      const m = stored(action, metadata);
+      const team = m.text("team");
+      const copied = m.count("copied");
       if (!team || copied === null) return null;
       return `${teamLabel(team)}: ${copied} ${copied === 1 ? "role" : "roles"}`;
     }
     case "team.lead_places_set": {
-      const team = text(metadata, "team");
-      const places = count(metadata, "places");
+      const m = stored(action, metadata);
+      const team = m.text("team");
+      const places = m.count("places");
       if (!team || places === null) return null;
       return `${teamLabel(team)}: ${places} ${places === 1 ? "lead" : "leads"}`;
     }
     case "team_budget.set": {
-      const team = text(metadata, "team");
+      const m = stored(action, metadata);
+      const team = m.text("team");
       if (!team) return null;
-      if (!metadata || !("amountCents" in metadata)) return teamLabel(team);
-      const cents = count(metadata, "amountCents");
+      if (!m.has("amountCents")) return teamLabel(team);
+      const cents = m.count("amountCents");
       return `${teamLabel(team)}: ${cents === null ? "no budget" : formatMoney(cents)}`;
     }
     case "reimbursement.receipt_viewed":
     case "reimbursement.account_viewed": {
-      const team = text(metadata, "team");
+      const m = stored(action, metadata);
+      const team = m.text("team");
       return team ? teamLabel(team) : null;
     }
     case "document.created":
     case "document.unpublished":
     case "document.reviewed":
     case "document.updated":
-      return text(metadata, "title");
+      return stored(action, metadata).text("title");
     case "document.published": {
-      const title = text(metadata, "title");
-      const version = count(metadata, "version");
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const version = m.count("version");
       if (!title) return null;
       const named = version === null ? title : `${title}, version ${version}`;
-      if (!metadata || typeof metadata.public !== "boolean") return named;
-      return `${named}${metadata.public ? ", on the public site" : ""}`;
+      const isPublic = m.flag("public");
+      if (isPublic === null) return named;
+      return `${named}${isPublic ? ", on the public site" : ""}`;
     }
     case "document.members_only_set": {
-      const title = text(metadata, "title");
-      if (!title || !metadata || typeof metadata.membersOnly !== "boolean") {
-        return title;
-      }
-      return `${title}: ${metadata.membersOnly ? "members only" : "may go on the public site"}`;
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const membersOnly = m.flag("membersOnly");
+      if (!title || membersOnly === null) return title;
+      return `${title}: ${membersOnly ? "members only" : "may go on the public site"}`;
     }
     case "guide.section_public_set": {
-      const key = GuideCategory.safeParse(text(metadata, "category"));
-      if (!key.success || !metadata || typeof metadata.public !== "boolean") {
-        return null;
-      }
-      const chapters = Array.isArray(metadata.chapters)
-        ? metadata.chapters.length
-        : null;
+      const m = stored(action, metadata);
+      const key = GuideCategory.safeParse(m.text("category"));
+      const isPublic = m.flag("public");
+      if (!key.success || isPublic === null) return null;
+      const chapters = m.list("chapters")?.length ?? null;
       const label = GUIDE_CATEGORY_LABELS[key.data];
-      const state = metadata.public ? "public" : "members only";
+      const state = isPublic ? "public" : "members only";
       return chapters === null
         ? `${label}: ${state}`
         : `${label}: ${state}, ${chapters} ${chapters === 1 ? "chapter" : "chapters"}`;
     }
     case "document.public_set": {
-      const title = text(metadata, "title");
-      if (!title || !metadata || typeof metadata.public !== "boolean") {
-        return title;
-      }
-      return `${title}: ${metadata.public ? "public" : "members only"}`;
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const isPublic = m.flag("public");
+      if (!title || isPublic === null) return title;
+      return `${title}: ${isPublic ? "public" : "members only"}`;
     }
     // The questionnaire's title; a year-policy change says which way it went.
     case "questionnaire.unpublished":
     case "questionnaire.send_closed":
-      return text(metadata, "title");
+      return stored(action, metadata).text("title");
     case "questionnaire.carry_over_set": {
-      const title = text(metadata, "title");
-      if (!title || !metadata || typeof metadata.carryOver !== "boolean") {
-        return title;
-      }
-      return `${title}: ${metadata.carryOver ? "answers kept next year" : "asked again next year"}`;
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const carryOver = m.flag("carryOver");
+      if (!title || carryOver === null) return title;
+      return `${title}: ${carryOver ? "answers kept next year" : "asked again next year"}`;
     }
     // A pin puts a message on every recipient's screen and leaves it there, so
     // the receipt names WHO it is on the screen of — the audience is the whole
     // point of the rule that allowed the pin.
     case "announcement.pinned":
     case "announcement.unpinned": {
-      const scope = text(metadata, "scope");
+      const m = stored(action, metadata);
+      const scope = m.text("scope");
       if (scope === "everyone") return "The whole camp";
       if (scope === "team_leads") return "The team leads";
       if (scope === "drivers") return "The drivers";
       if (scope === "individual") return "Chosen people";
-      const team = text(metadata, "team");
+      const team = m.text("team");
       return scope === "team" && team ? teamLabel(team) : null;
     }
     // The event's title, and the team it is for; a whole-camp event names
@@ -625,9 +684,10 @@ export function auditDetail(
     case "calendar.event_created":
     case "calendar.event_changed":
     case "calendar.event_removed": {
-      const title = text(metadata, "title");
+      const m = stored(action, metadata);
+      const title = m.text("title");
       if (!title) return null;
-      const team = text(metadata, "team");
+      const team = m.text("team");
       return team ? `${title} · ${teamLabel(team)}` : title;
     }
     // The recipe's name, and the version number where one was written.
@@ -639,11 +699,12 @@ export function auditDetail(
     case "recipe.rerun_requested":
     case "recipe.variation_started":
     case "recipe.questions_answered":
-      return text(metadata, "title");
+      return stored(action, metadata).text("title");
     // The source's own version number, which is not the recipe's.
     case "recipe.source_saved": {
-      const title = text(metadata, "title");
-      const version = count(metadata, "version");
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const version = m.count("version");
       if (version === null) return title;
       return title
         ? `${title}, text version ${version}`
@@ -651,47 +712,55 @@ export function auditDetail(
     }
     // The version Claude was asked to change.
     case "recipe.adjust_queued": {
-      const title = text(metadata, "title");
-      const version = count(metadata, "fromVersion");
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const version = m.count("fromVersion");
       if (version === null) return title;
       return title
         ? `${title}, from version ${version}`
         : `From version ${version}`;
     }
     case "recipe.plates_queued": {
-      const title = text(metadata, "title");
-      const plates = count(metadata, "plates");
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const plates = m.count("plates");
       if (plates === null) return title;
       return title ? `${title}, ${plates} plates` : `${plates} plates`;
     }
     case "recipe.accepted":
     case "recipe.version_added":
     case "recipe.written_by_claude": {
-      const title = text(metadata, "title");
-      const version = count(metadata, "version");
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const version = m.count("version");
       if (version === null) return title;
       return title ? `${title}, version ${version}` : `Version ${version}`;
     }
     case "camp.cycle.burn_dates_set": {
-      const start = text(metadata, "burnStart");
-      const end = text(metadata, "burnEnd");
+      const m = stored(action, metadata);
+      const start = m.text("burnStart");
+      const end = m.text("burnEnd");
       return start && end ? `${start} to ${end}` : "Dates removed";
     }
     case "join_site.section_saved": {
-      const section = text(metadata, "section");
-      const year = count(metadata, "year");
+      const m = stored(action, metadata);
+      const section = m.text("section");
+      const year = m.count("year");
       return section && year !== null ? `${section}, ${year}` : section;
     }
     case "camp.cycle.renamed": {
-      const to = text(metadata, "to");
+      const m = stored(action, metadata);
+      const to = m.text("to");
       return to ? `Now called "${to}"` : "Name removed";
     }
     case "camp.teams.renamed": {
-      const label = text(metadata, "label");
+      const m = stored(action, metadata);
+      const label = m.text("label");
       return label ? `Now called "${label}"` : null;
     }
     case "camp.teams.moved": {
-      const direction = text(metadata, "direction");
+      const m = stored(action, metadata);
+      const direction = m.text("direction");
       return direction === "up" || direction === "down"
         ? `Moved ${direction}`
         : null;
@@ -701,12 +770,15 @@ export function auditDetail(
     case "member.id_document.viewed":
     case "member.bank_details.viewed":
     case "safety.emergency_contacts.view":
-      return text(metadata, "via") === "mcp" ? "Through Claude" : null;
+      return stored(action, metadata).text("via") === "mcp"
+        ? "Through Claude"
+        : null;
     // Where the allergies were read: the daily site sheet, or a
     // questionnaire's answers (on screen or as the CSV).
     case "safety.allergies.view": {
-      const via = text(metadata, "via");
-      const title = text(metadata, "title");
+      const m = stored(action, metadata);
+      const via = m.text("via");
+      const title = m.text("title");
       if (via === "daily_sheet") return "On the daily site sheet";
       if (via === "questionnaire_results" || via === "questionnaire_answers") {
         return title
@@ -720,7 +792,8 @@ export function auditDetail(
     }
     case "member.export":
     case "member.sheet_viewed": {
-      const rows = count(metadata, "rows");
+      const m = stored(action, metadata);
+      const rows = m.count("rows");
       return rows === null
         ? null
         : `${rows} ${rows === 1 ? "member" : "members"}`;
@@ -729,9 +802,10 @@ export function auditDetail(
     case "power.fuel_can_added":
     case "power.fuel_can_changed":
     case "power.fuel_can_removed": {
-      const number = count(metadata, "number");
-      const size = count(metadata, "sizeLitres");
-      const material = text(metadata, "material");
+      const m = stored(action, metadata);
+      const number = m.count("number");
+      const size = m.count("sizeLitres");
+      const material = m.text("material");
       const parts = [
         number === null ? null : `Can ${number}`,
         size === null ? null : `${size} L`,
