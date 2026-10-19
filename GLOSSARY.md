@@ -23,6 +23,14 @@ plain title, generic file name, routes, line drawing and window size, in
 it: that is its registry entry's gate (`PROGRAM_REGISTRY`,
 `apps/web/lib/programs.ts`, server-only).
 
+**Desktop controller.** The 404 OS desktop's window and routing policy as
+plain data (`apps/web/components/os/desktop-controller.ts`): `decide(state,
+event, context)` answers an event (open a program, close, minimise, Home,
+Show desktop, a taskbar press, a phone's Back) with an ordered list of
+effects (`push`, `replace`, `refresh`, a window change through
+`reduceWindows`) that the shell (`desktop-shell.tsx`) runs. No React, no DOM,
+nothing from `next/*`; the shell keeps drawing, refs and the DOM.
+
 **Twin.** The E2E test store's stand-in for a domain's database functions.
 A domain's facade picks between the two once, with `twin(real, store, keys)`
 (`apps/web/lib/twin.ts`): each named function asks `usesTestStore()` when it

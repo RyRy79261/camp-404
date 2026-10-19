@@ -18,8 +18,6 @@ import type { Route } from "next";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BlockingLayer,
-  CASCADE_STEP,
-  MIN_SIZE,
   ContextMenu,
   DesktopIcons,
   FolderNameDialog,
@@ -39,7 +37,6 @@ import {
   isMemberFolderId,
   lineUpIcons,
   localStorageBoolean,
-  pruneLayout,
   removeFromFolder,
   removeItem,
   renameFolder,
@@ -49,7 +46,6 @@ import {
   usePhone,
   useStoredBoolean,
   withCells,
-  wmReducer,
   type ContextMenuEntry,
   type ContextMenuState,
   type DesktopIconItem,
@@ -58,10 +54,7 @@ import {
   type LastSeenCopy,
   type OsWindow,
   type Viewport,
-  type WmAction,
-  type WmState,
 } from "@camp404/os";
-import { desktopFolderKey } from "@camp404/types/desktop-keys";
 import {
   defaultDesktopPreferences,
   type DesktopPreferences,
@@ -75,12 +68,7 @@ import type {
   ManifestMode,
   ProgramManifest,
 } from "@/lib/programs";
-import {
-  PROGRAM_TITLES,
-  matchProgram,
-  programSize,
-  type OpeningSize,
-} from "@/lib/program-routes";
+import { PROGRAM_TITLES, matchProgram } from "@/lib/program-routes";
 import {
   allowedWindowPrograms,
   desktopEntries,
@@ -88,9 +76,30 @@ import {
   homeScreenGroups,
   memberFolders,
   programIndex,
-  windowProgram,
   type DesktopEntry,
 } from "./desktop-items";
+import {
+  FIRST_VIEWPORT,
+  POP_SETTLE_MS,
+  accessChanged,
+  backForwardCheck,
+  decide,
+  gateRedirected,
+  initialWindows,
+  isHistoryMove,
+  isStaleReturn,
+  livePage,
+  liveWindowMissing,
+  manifestChanged,
+  openPageAction,
+  reduceWindows,
+  refusedPageRefresh,
+  restoreActions,
+  phoneBackFrom,
+  type DesktopContext,
+  type DesktopEvent,
+  type Plan,
+} from "./desktop-controller";
 import { DesktopHeader } from "./desktop-header";
 import {
   DesktopTaskbar,
@@ -157,160 +166,10 @@ import {
 // an icon is never the security boundary, every page and action keeps its
 // gate.
 
-/**
- * A window's size when it opens, before the member resizes it: the
- * prototype's sizes (_proto/programs.ts, its S, M, L and XL), which the owner
- * approved with the prototype on 2026-09-26. M is the default.
- */
-const DEFAULT_SIZE = { w: 720, h: 520 };
-/** A member's own folder. */
-const FOLDER_SIZE = { w: 520, h: 340 };
-/**
- * The camp's folders, each at the prototype's size: Teams opens tall, every
- * team's icon and the art piece pinned under them; Kitchen is one row.
- */
-const TEAMS_FOLDER_KEY = desktopFolderKey("teams");
-const CAMP_FOLDER_SIZE: Record<string, { w: number; h: number }> = {
-  [TEAMS_FOLDER_KEY]: { w: 620, h: 600 },
-  [desktopFolderKey("kitchen")]: { w: 440, h: 180 },
-  [desktopFolderKey("captains")]: { w: 560, h: 340 },
-};
-function folderSize(key: string): { w: number; h: number } {
-  return CAMP_FOLDER_SIZE[key] ?? FOLDER_SIZE;
-}
-/** The share of the room's height a growing page takes. */
-const GROW_HEIGHT = 0.9;
-/** A tab back after this long refreshes the desktop (an event, not a timer). */
-const STALE_AFTER_MS = 5 * 60_000;
 /** How long the desktop waits after the last icon move before it saves. */
 const SAVE_LAYOUT_AFTER_MS = 800;
 /** A held member's page that is not the form: the content column, no desktop. */
 const HELD_BARE = "mx-auto w-full max-w-6xl px-4 py-8 sm:px-6";
-/** A screen before it has been measured: the server's first paint. */
-const FIRST_VIEWPORT: Viewport = { width: 1280, height: 720 };
-
-type Action =
-  | WmAction<string>
-  | {
-      /** The window for a page address: open it, or raise it. */
-      type: "openPage";
-      id: string;
-      url: string;
-      program: string;
-      size: { w: number; h: number };
-      viewport: Viewport;
-    }
-  | {
-      /** Put back a stored stack around the window the URL shows. */
-      type: "restore";
-      saved: OsWindow<string>[];
-      liveKey: string | null;
-      viewport: Viewport;
-      /** The live page's opening size, when nothing saved places it. */
-      size?: { w: number; h: number };
-    }
-  | {
-      /**
-       * "Tidy windows" (the Start menu): every window on the desktop back to
-       * its opening size, cascaded from the top left in its stacking order,
-       * none maximised. Minimised windows stay down; the order, and so the
-       * live window on top, does not change.
-       */
-      type: "tidy";
-      viewport: Viewport;
-    };
-
-/**
- * Where windows open, and where "Tidy windows" starts its cascade: just
- * right of the icons' default columns (the prototype's), so the icons stay
- * in sight.
- */
-const ICONS_EDGE = 308;
-/**
- * What a new window leaves free at the right edge: the Today handle's 44 px
- * to aim at and a gap, so the handle never sits on a window's close button.
- */
-const TODAY_ROOM = 52;
-
-/**
- * The prototype's spot for the k-th window: right of the icons, cascading
- * from the top, cut to the room left (a screen with no room right of the
- * icons starts further left rather than push a window off it).
- */
-function placeAt(
-  k: number,
-  size: { w: number; h: number },
-  vp: Viewport,
-): Pick<OsWindow<string>, "x" | "y" | "w" | "h"> {
-  const room = vp.width - ICONS_EDGE - 36;
-  const x0 =
-    room >= Math.min(size.w, 640)
-      ? ICONS_EDGE
-      : Math.max(8, Math.min(vp.width - size.w - 40, ICONS_EDGE));
-  const step = k % 6;
-  const x = x0 + step * CASCADE_STEP;
-  const y = 12 + step * CASCADE_STEP;
-  return {
-    x,
-    y,
-    w: Math.max(MIN_SIZE.w, Math.min(size.w, vp.width - x - TODAY_ROOM)),
-    h: Math.max(MIN_SIZE.h, Math.min(size.h, vp.height - y - 12)),
-  };
-}
-
-function tidy(state: WmState<string>, vp: Viewport): WmState<string> {
-  const shown = state.windows
-    .filter((w) => !w.minimized)
-    .sort((a, b) => a.z - b.z);
-  const place = new Map<string, OsWindow<string>>();
-  shown.forEach((w, i) => {
-    const size = w.lastUrl ? pageSize(w.program, vp) : folderSize(w.id);
-    place.set(w.id, { ...w, ...placeAt(i, size, vp), maximized: false });
-  });
-  if (place.size === 0) return state;
-  return {
-    ...state,
-    windows: state.windows.map((w) => place.get(w.id) ?? w),
-  };
-}
-
-/**
- * A page's opening size on this screen: its own, else the default, grown to
- * its share of the room right of the icons when it grows.
- */
-export function pageSize(
-  program: string | undefined,
-  vp: Viewport,
-): { w: number; h: number } {
-  const size: OpeningSize = (program && programSize(program)) || DEFAULT_SIZE;
-  const grow = size.grow;
-  if (!grow) return { w: size.w, h: size.h };
-  const room = {
-    w: vp.width - ICONS_EDGE - TODAY_ROOM,
-    h: vp.height - 24,
-  };
-  return {
-    w: Math.max(size.w, Math.round(room.w * grow)),
-    h: Math.max(size.h, Math.round(room.h * GROW_HEIGHT)),
-  };
-}
-
-/** A window that has just opened goes where the prototype puts it. */
-function placeNew(
-  before: WmState<string>,
-  after: WmState<string>,
-  id: string,
-  size: { w: number; h: number },
-  vp: Viewport,
-): WmState<string> {
-  if (before.windows.some((w) => w.id === id)) return after;
-  const shown = before.windows.filter((w) => !w.minimized).length;
-  const at = placeAt(shown, size, vp);
-  return {
-    ...after,
-    windows: after.windows.map((w) => (w.id === id ? { ...w, ...at } : w)),
-  };
-}
 
 /** The last-seen copies the windows draw, by window key. */
 type CopyView = ReadonlyMap<string, LastSeenCopy>;
@@ -325,88 +184,6 @@ function applyCopyChange(view: CopyView, change: CopyChange): CopyView {
   for (const key of change.drop) next.delete(key);
   if (change.set) next.set(...change.set);
   return next;
-}
-
-function reducer(state: WmState<string>, action: Action): WmState<string> {
-  if (action.type === "tidy") return tidy(state, action.viewport);
-  if (action.type === "openPage") {
-    const next = wmReducer(state, {
-      type: "upsertUrl",
-      id: action.id,
-      url: action.url,
-      program: action.program,
-      size: action.size,
-      viewport: action.viewport,
-    });
-    return placeNew(state, next, action.id, action.size, action.viewport);
-  }
-  if (action.type === "open") {
-    const next = wmReducer(state, action);
-    return placeNew(state, next, action.id, action.size, action.viewport);
-  }
-  if (action.type === "restore") {
-    const live = state.windows.find((w) => w.id === action.liveKey);
-    const savedLive = action.saved.find((w) => w.id === action.liveKey);
-    const kept = state.windows.filter(
-      (w) =>
-        w.id !== action.liveKey && !action.saved.some((s) => s.id === w.id),
-    );
-    const others = [
-      ...action.saved.filter((w) => w.id !== action.liveKey),
-      ...kept,
-    ];
-    const topZ = others.reduce((z, w) => Math.max(z, w.z), 0);
-    const windows = [...others];
-    if (live) {
-      // A page opened fresh was placed before the screen was measured (on
-      // FIRST_VIEWPORT, so the server and the browser agree). A bigger screen
-      // gives it the room its own size asks for, or a wide page stays cut to
-      // a small one's; it never shrinks here (hydrate fits it to the screen).
-      const fresh =
-        !savedLive && action.size
-          ? placeAt(
-              others.filter((w) => !w.minimized).length,
-              action.size,
-              action.viewport,
-            )
-          : null;
-      windows.push({
-        ...live,
-        ...(fresh && {
-          w: Math.max(live.w, fresh.w),
-          h: Math.max(live.h, fresh.h),
-        }),
-        ...(savedLive && {
-          x: savedLive.x,
-          y: savedLive.y,
-          w: savedLive.w,
-          h: savedLive.h,
-          maximized: savedLive.maximized,
-        }),
-        minimized: false,
-        z: topZ + 1,
-      });
-    }
-    return wmReducer(state, {
-      type: "hydrate",
-      saved: { windows, topZ: topZ + 1 },
-      viewport: action.viewport,
-    });
-  }
-  return wmReducer(state, action);
-}
-
-/** The highest page window other than `except` that is on the desktop. */
-function nextPageWindow(
-  state: WmState<string>,
-  except: string,
-): OsWindow<string> | undefined {
-  let best: OsWindow<string> | undefined;
-  for (const w of state.windows) {
-    if (w.id === except || w.minimized || !w.lastUrl) continue;
-    if (!best || w.z > best.z) best = w;
-  }
-  return best;
 }
 
 /** A window's frame on the desktop, by its key. */
@@ -559,8 +336,7 @@ function DesktopInner({
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const url = search ? `${pathname}?${search}` : pathname;
-  const match = matchProgram(pathname);
-  const page = match && match.programId !== "desktop" ? match : null;
+  const page = livePage(pathname);
   const liveKey = page?.instanceKey ?? null;
   const mayLeave = useLeaveGuard();
   const keptDrafts = useKeptDrafts();
@@ -627,24 +403,12 @@ function DesktopInner({
   const closeLiveRef = useRef<() => void>(() => {});
 
   // --- Windows ---------------------------------------------------------------------
-  const openPageAction = useCallback(
-    (vp: Viewport): Action | null =>
-      page
-        ? {
-            type: "openPage",
-            id: page.instanceKey,
-            url,
-            program: windowProgram(page.programId, page.instanceKey),
-            size: pageSize(page.programId, vp),
-            viewport: vp,
-          }
-        : null,
-    [page, url],
+  // The window stack moves only through the controller's reducer
+  // (desktop-controller.ts); what an event does to it is the controller's
+  // plan, run below.
+  const [wm, dispatch] = useReducer(reduceWindows, INITIAL_WM, (initial) =>
+    initialWindows(initial, page, url, mode === "held"),
   );
-  const [wm, dispatch] = useReducer(reducer, INITIAL_WM, (initial) => {
-    const open = openPageAction(FIRST_VIEWPORT);
-    return open && mode !== "held" ? reducer(initial, open) : initial;
-  });
   // A window the member closed while it was the live one: its address is
   // still the URL until the replace lands, and it must not open again.
   const [closing, setClosing] = useState<string | null>(null);
@@ -652,11 +416,7 @@ function DesktopInner({
   // never paints for a moment inside the window it is leaving. (Adjusting
   // state while rendering, compared with the address last seen.)
   const [seenUrl, setSeenUrl] = useState(url);
-  const liveMissing =
-    !!page &&
-    !held &&
-    page.instanceKey !== closing &&
-    !wm.windows.some((w) => w.id === page.instanceKey);
+  const liveMissing = liveWindowMissing({ state: wm, page, held, closing });
   if (seenUrl !== url || liveMissing) {
     if (seenUrl !== url) {
       setSeenUrl(url);
@@ -665,7 +425,7 @@ function DesktopInner({
       // stays open only on the home screen, where its body is.
       if (pathname !== "/") setTodayOpen(false);
     }
-    const open = held ? null : openPageAction(viewport);
+    const open = held ? null : openPageAction(page, url, viewport);
     if (open) dispatch(open);
   }
   const top = topWindow(wm);
@@ -762,149 +522,12 @@ function DesktopInner({
   const [target, setTarget] = useState<string | null>(null);
   const pendingKey = navigating ? target : null;
 
-  /** Go to a page address: the one way the desktop itself switches windows. */
   // Where the desktop last sent the member, to tell when a gate redirected
   // them somewhere else (their access may have changed).
   const sentTo = useRef<string | null>(null);
-  // The window a click opened before its page arrived (below), until the
+  // The window a click opened before its page arrived, until the
   // navigation settles.
   const preOpened = useRef<string | null>(null);
-  const navigateTo = useCallback(
-    (to: string, key: string | null, resume: boolean) => {
-      if (liveKey && key !== liveKey && !mayLeave(liveKey)) return;
-      captureLive();
-      resumeKey.current = resume ? key : null;
-      sentTo.current = new URL(to, window.location.href).pathname;
-      setTarget(key);
-      // Instant feedback: a program not yet open gets its window (and its
-      // taskbar button) at once, blinking "Loading…" until the page lands in
-      // it; the server may take a second. Not on a phone, which shows one
-      // window, the page. The window is the one the page would open anyway
-      // (same id, size and place), so the arrival only fills it.
-      const m = key ? matchProgram(to) : null;
-      // A second click before the first page came: the first window it
-      // opened ahead of its page goes.
-      const earlier = preOpened.current;
-      if (earlier && earlier !== key) {
-        preOpened.current = null;
-        dispatch({ type: "close", id: earlier });
-      }
-      const already =
-        key && key !== earlier
-          ? wm.windows.find((w) => w.id === key)
-          : undefined;
-      if (already && key !== liveKey) {
-        // An open window comes to the front at once, with its last-seen
-        // copy, blinking until its page arrives.
-        dispatch({ type: "focus", id: already.id });
-      } else if (
-        key &&
-        m &&
-        m.programId !== "desktop" &&
-        !onPhoneNow() &&
-        !already
-      ) {
-        preOpened.current = key;
-        dispatch({
-          type: "openPage",
-          id: key,
-          url: to,
-          program: windowProgram(m.programId, key),
-          size: pageSize(m.programId, viewport),
-          viewport,
-        });
-      }
-      startNav(() => router.push(to as Route));
-    },
-    [captureLive, liveKey, mayLeave, router, viewport, wm.windows],
-  );
-  // A window opened ahead of its page that the page never reached (a gate
-  // sent the member elsewhere, or another click won): it goes, as if never
-  // opened. Once the page has been live in it, it is an ordinary window.
-  useEffect(() => {
-    const key = preOpened.current;
-    if (!key) return;
-    if (liveKey === key) {
-      preOpened.current = null;
-      return;
-    }
-    if (navigating) return;
-    preOpened.current = null;
-    dispatch({ type: "close", id: key });
-  }, [liveKey, navigating]);
-
-  /** Open a program's address: raise its window if open, else go there. */
-  const openHref = useCallback(
-    (href: string) => {
-      const m = matchProgram(href);
-      if (!m) return;
-      if (m.instanceKey === liveKey) {
-        dispatch({ type: "focus", id: m.instanceKey });
-        return;
-      }
-      const open = wm.windows.find((w) => w.id === m.instanceKey);
-      // A shortcut that names its own filter (a team folder's "Kitchen
-      // tasks", /tasks?team=kitchen) goes there; a plain program comes back
-      // where its window was left.
-      const filtered = href.includes("?");
-      navigateTo(
-        filtered ? href : (open?.lastUrl ?? href),
-        m.instanceKey,
-        !!open,
-      );
-    },
-    [liveKey, navigateTo, wm.windows],
-  );
-  const openProgram = useCallback(
-    (program: ClientProgram) => openHref(program.href),
-    [openHref],
-  );
-  /**
-   * Open one entry (a search result): always its exact address, in its
-   * program's window. openHref would send a plain address back to where an
-   * open window was left, so a hit on /inventory/<id> would land on another
-   * item while Inventory is already open.
-   */
-  const openSearchEntry = useCallback(
-    (href: string) => {
-      const m = matchProgram(href);
-      // navigateTo asks the leave guard only when the window changes; a
-      // result in the live window replaces its page, so ask here too.
-      if (liveKey && m?.instanceKey === liveKey && !mayLeave(liveKey)) return;
-      if (!m) {
-        startNav(() => router.push(href as Route));
-        return;
-      }
-      navigateTo(href, m.instanceKey, false);
-    },
-    [liveKey, mayLeave, navigateTo, router],
-  );
-
-  const openFolder = useCallback(
-    (key: string) => {
-      dispatch({
-        type: "open",
-        id: key,
-        program: key,
-        size: folderSize(key),
-        viewport,
-      });
-    },
-    [viewport],
-  );
-
-  /** Raise a window: a folder at once, a page by going to its address. */
-  const focusWindow = useCallback(
-    (w: OsWindow<string>) => {
-      if (w.id === liveKey || !w.lastUrl) {
-        dispatch({ type: "focus", id: w.id });
-        return;
-      }
-      navigateTo(w.lastUrl, w.id, true);
-    },
-    [liveKey, navigateTo],
-  );
-
   // The icon a closed window came from, to hand focus to when no window is
   // left (design doc, section 6): its desktop icon, or the folder icon that
   // holds it, or on a phone its home-screen button; else Start.
@@ -948,98 +571,150 @@ function DesktopInner({
     focusIconOfRef.current = focusIconOf;
   });
 
-  // Close and minimise REPLACE the address with the next window down (or the
-  // desktop). The App Router owns history.state, so "go back if the entry
-  // behind is that window" cannot be built: after a close, Back goes to the
-  // entry before the closed window's and may open a window closed earlier,
-  // fresh.
-  const closeWindow = useCallback(
-    (id: string) => {
-      copies.current!.drop(id);
-      changeCopyView({ drop: [id] });
-      scrollTops.current.delete(id);
-      // Closed on purpose (after the guard asked): no draft of it is kept,
-      // in memory or in this tab's storage.
-      keptDrafts.drop(id);
-      try {
-        forgetWindowDrafts(window.sessionStorage, userId, id);
-      } catch {
-        // Storage refused; nothing was kept there.
-      }
-      if (id === liveKey) {
-        const next = nextPageWindow(wm, id);
-        setClosing(id);
-        dispatch({ type: "close", id });
-        resumeKey.current = next?.id ?? null;
-        // No window left: focus goes back to the program's icon when the
-        // desktop arrives, not to <body>.
-        focusIconAfter.current = next ? null : id;
-        router.replace((next?.lastUrl ?? "/") as Route);
-        return;
-      }
-      dispatch({ type: "close", id });
-      requestAnimationFrame(() => {
-        const nextTop = document.querySelector<HTMLElement>(
-          "#os-desktop [data-top]",
-        );
-        if (nextTop) nextTop.focus({ preventScroll: true });
-        else focusIconOf(id);
-      });
-    },
-    [focusIconOf, keptDrafts, liveKey, router, userId, wm],
-  );
-
-  const minimizeWindow = useCallback(
-    (id: string) => {
-      if (id === liveKey) {
-        captureLive();
-        const next = nextPageWindow(wm, id);
-        dispatch({ type: "minimize", id });
-        resumeKey.current = next?.id ?? null;
-        router.replace((next?.lastUrl ?? "/") as Route);
-      } else {
-        dispatch({ type: "minimize", id });
-      }
-      requestAnimationFrame(() => {
-        for (const el of document.querySelectorAll<HTMLElement>(
-          "[data-task]",
-        )) {
-          if (el.dataset.task === id) el.focus({ preventScroll: true });
+  /** Run a controller plan's effects, in order. False when the guard said no. */
+  const run = useCallback(
+    (plan: Plan): boolean => {
+      for (const effect of plan.effects) {
+        switch (effect.kind) {
+          case "wm":
+            dispatch(effect.action);
+            break;
+          case "capture":
+            captureLive();
+            break;
+          case "push":
+            startNav(() => router.push(effect.href as Route));
+            break;
+          case "replace":
+            router.replace(effect.href as Route);
+            break;
+          case "refresh":
+            router.refresh();
+            break;
+          case "resume":
+            resumeKey.current = effect.key;
+            break;
+          case "pending":
+            setTarget(effect.key);
+            break;
+          case "sentTo":
+            sentTo.current = effect.path;
+            break;
+          case "preOpened":
+            preOpened.current = effect.key;
+            break;
+          case "closing":
+            setClosing(effect.id);
+            break;
+          case "focusIconAfter":
+            focusIconAfter.current = effect.key;
+            break;
+          case "dropCopy":
+            copies.current!.drop(effect.id);
+            changeCopyView({ drop: [effect.id] });
+            scrollTops.current.delete(effect.id);
+            break;
+          case "forgetDrafts":
+            keptDrafts.drop(effect.id);
+            try {
+              forgetWindowDrafts(window.sessionStorage, userId, effect.id);
+            } catch {
+              // Storage refused; nothing was kept there.
+            }
+            break;
+          case "focusAfterClose": {
+            const id = effect.id;
+            requestAnimationFrame(() => {
+              const nextTop = document.querySelector<HTMLElement>(
+                "#os-desktop [data-top]",
+              );
+              if (nextTop) nextTop.focus({ preventScroll: true });
+              else focusIconOfRef.current(id);
+            });
+            break;
+          }
+          case "focusTask": {
+            const id = effect.id;
+            requestAnimationFrame(() => {
+              for (const el of document.querySelectorAll<HTMLElement>(
+                "[data-task]",
+              )) {
+                if (el.dataset.task === id) el.focus({ preventScroll: true });
+              }
+            });
+            break;
+          }
         }
-      });
+      }
+      return !plan.refused;
     },
-    [captureLive, liveKey, router, wm],
+    [captureLive, keptDrafts, router, userId],
   );
 
-  /** Minimise every window; the address goes to the desktop. */
-  const showDesktop = useCallback(() => {
-    if (liveKey && !mayLeave(liveKey)) return;
-    if (liveKey) captureLive();
-    for (const w of wm.windows) {
-      if (!w.minimized) dispatch({ type: "minimize", id: w.id });
-    }
-    if (liveKey) {
-      resumeKey.current = null;
-      router.replace("/");
-    }
-  }, [captureLive, liveKey, mayLeave, router, wm.windows]);
+  /** What the controller reads of this render, at the moment of the event. */
+  const context = useCallback(
+    (): DesktopContext => ({
+      liveKey,
+      viewport,
+      preOpened: preOpened.current,
+      base: window.location.href,
+      onPhone: onPhoneNow,
+      mayLeave,
+    }),
+    [liveKey, mayLeave, viewport],
+  );
+  /** Answer an event with the controller's plan, and run it. */
+  const send = useCallback(
+    (event: DesktopEvent): boolean => run(decide(wm, event, context())),
+    [context, run, wm],
+  );
+
+  // A window opened ahead of its page that the page never reached goes; once
+  // the page has been live in it, it is an ordinary window.
+  useEffect(() => {
+    if (!preOpened.current) return;
+    send({ type: "settlePreOpened", navigating });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- settles on a new live window or the end of a navigation only, as before the controller
+  }, [liveKey, navigating]);
+
+  const openHref = useCallback(
+    (href: string) => void send({ type: "openHref", href }),
+    [send],
+  );
+  const openProgram = useCallback(
+    (program: ClientProgram) => openHref(program.href),
+    [openHref],
+  );
+  const openSearchEntry = useCallback(
+    (href: string) => void send({ type: "openSearchEntry", href }),
+    [send],
+  );
+  const openFolder = useCallback(
+    (key: string) => void send({ type: "openFolder", key }),
+    [send],
+  );
+  const focusWindow = useCallback(
+    (w: OsWindow<string>) => void send({ type: "focusWindow", id: w.id }),
+    [send],
+  );
+  const closeWindow = useCallback(
+    (id: string) => void send({ type: "close", id }),
+    [send],
+  );
+  const showDesktop = useCallback(
+    () => void send({ type: "showDesktop" }),
+    [send],
+  );
 
   // What a page inside a window may ask of the desktop (the Terminal).
   useEffect(() => {
     openHrefRef.current = openHref;
-    closeLiveRef.current = () => {
-      if (liveKey && mayLeave(liveKey)) closeWindow(liveKey);
-    };
+    closeLiveRef.current = () => void send({ type: "closeLive" });
   });
 
   const toggleFromTaskbar = useCallback(
-    (id: string) => {
-      const w = wm.windows.find((x) => x.id === id);
-      if (!w) return;
-      if (w.id === top?.id && !w.minimized) minimizeWindow(id);
-      else focusWindow(w);
-    },
-    [focusWindow, minimizeWindow, top?.id, wm.windows],
+    (id: string) => void send({ type: "taskbarToggle", id }),
+    [send],
   );
 
   // --- The phone (below md; design doc, section 5) ---------------------------------
@@ -1060,21 +735,7 @@ function DesktopInner({
   }, [voice]);
 
   /** Home on a phone: every window put away, the address the home screen. */
-  const goHome = useCallback((): boolean => {
-    if (liveKey && !mayLeave(liveKey)) return false;
-    if (liveKey) captureLive();
-    for (const w of wm.windows) {
-      if (!w.minimized) dispatch({ type: "minimize", id: w.id });
-    }
-    if (liveKey) {
-      resumeKey.current = null;
-      setTarget(null);
-      // An entry of its own: Back from the home screen goes back into the
-      // program the member left.
-      startNav(() => router.push("/"));
-    }
-    return true;
-  }, [captureLive, liveKey, mayLeave, router, wm.windows]);
+  const goHome = useCallback((): boolean => send({ type: "goHome" }), [send]);
 
   const toggleToday = useCallback(() => {
     // The Today body is the home screen's page: from a program, go home.
@@ -1098,9 +759,8 @@ function DesktopInner({
   }, []);
 
   // A Back on a phone (the browser's, Android's, a swipe) that lands on
-  // another window's page closes the window it left, so background windows
-  // do not pile up. It cannot be asked about: a page with unsaved input kept
-  // its draft (useWindowDirty) and gets it back when reopened.
+  // another window's page closes the window it left (the controller's
+  // phoneBack). It cannot be asked about.
   const committed = useRef({ liveKey, url });
   useEffect(() => {
     committed.current = { liveKey, url };
@@ -1109,9 +769,12 @@ function DesktopInner({
   useEffect(() => {
     const onPop = () => {
       const was = committed.current;
-      const now = `${window.location.pathname}${window.location.search}`;
-      poppedFrom.current =
-        onPhoneNow() && was.liveKey && now !== was.url ? was.liveKey : null;
+      poppedFrom.current = phoneBackFrom({
+        phone: onPhoneNow(),
+        liveKey: was.liveKey,
+        url: was.url,
+        now: `${window.location.pathname}${window.location.search}`,
+      });
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -1120,11 +783,8 @@ function DesktopInner({
     const from = poppedFrom.current;
     if (from === null) return;
     poppedFrom.current = null;
-    if (from === liveKey) return;
-    copies.current!.drop(from);
-    changeCopyView({ drop: [from] });
-    scrollTops.current.delete(from);
-    dispatch({ type: "close", id: from });
+    send({ type: "phoneBack", from });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once the popped page has arrived, as before the controller
   }, [liveKey, url]);
 
   // --- The screen's size ------------------------------------------------------------
@@ -1176,20 +836,15 @@ function DesktopInner({
       measured && measured.width > 0
         ? { width: measured.width, height: measured.height }
         : viewport;
-    dispatch({
-      type: "restore",
+    for (const action of restoreActions({
       saved,
       liveKey,
+      page,
       viewport: vp,
-      size: page ? pageSize(page.programId, vp) : undefined,
-    });
-    dispatch({
-      type: "pruneTo",
-      allowed: [
-        ...allowed,
-        ...(liveKey && page ? [windowProgram(page.programId, liveKey)] : []),
-      ],
-    });
+      allowed,
+    })) {
+      dispatch(action);
+    }
     restored.current = true;
   }, [
     allowed,
@@ -1227,34 +882,25 @@ function DesktopInner({
     copies.current!.clear();
     keptDrafts.clear();
     changeCopyView("clear");
-    const programIds = [...programIndex(manifest).keys()];
-    const next = pruneLayout(layout, {
-      desktopKeys: desktopEntries(manifest, { cells: {}, items: [] }).map(
-        (e) => e.key,
-      ),
-      programIds,
+    const change = manifestChanged({
+      state: wm,
+      manifest,
+      layout,
+      page,
+      liveKey,
     });
-    setLayout(next);
-    const allowedNow = new Set([
-      ...allowedWindowPrograms(manifest, next),
-      ...(page && liveKey ? [windowProgram(page.programId, liveKey)] : []),
-    ]);
+    setLayout(change.layout);
     // The windows about to go take their drafts in this tab's storage with
-    // them, as a close does: text typed into an editor the member can no
-    // longer open is not kept for if access comes back.
-    for (const w of wm.windows) {
-      const kept =
-        allowedNow.has(w.program ?? w.id) &&
-        (w.child === undefined || allowedNow.has(w.child));
-      if (kept) continue;
+    // them, as a close does.
+    for (const id of change.forget) {
       try {
-        forgetWindowDrafts(window.sessionStorage, userId, w.id);
+        forgetWindowDrafts(window.sessionStorage, userId, id);
       } catch {
         // Storage refused; nothing was kept there.
       }
     }
-    dispatch({ type: "pruneTo", allowed: allowedNow });
-  }, [keptDrafts, layout, liveKey, manifest, page, userId, wm.windows]);
+    dispatch(change.prune);
+  }, [keptDrafts, layout, liveKey, manifest, page, userId, wm]);
 
   // A different member on this tab (a sign-in as someone else): nothing of
   // the last one's is kept.
@@ -1310,7 +956,7 @@ function DesktopInner({
       // (Skip to window) fires popstate too, and must not hide the page it
       // is focusing, nor cost a server round trip.
       const now = `${window.location.pathname}${window.location.search}`;
-      if (now === committed.current.url) return;
+      if (!isHistoryMove(now, committed.current.url)) return;
       poppedTo.current = now;
       refreshStarted.current = false;
       setChecking(true);
@@ -1320,28 +966,32 @@ function DesktopInner({
   }, []);
   useEffect(() => {
     if (!checking) return;
-    if (!refreshStarted.current) {
-      const start = () => {
-        if (refreshStarted.current) return;
-        refreshStarted.current = true;
-        // The router restored this page from its cache without asking the
-        // server. Keep it hidden until a refresh has run its gate again, on
-        // the page now shown: a member who lost access never sees the cached
-        // page.
-        startRefresh(() => router.refresh());
-      };
-      if (url === poppedTo.current) {
-        start();
-        return;
-      }
-      // Not moved yet. Should the router never arrive at that address (it
-      // went somewhere else), check whatever it shows after a moment rather
-      // than keep the window hidden.
-      const late = window.setTimeout(start, 1500);
-      return () => window.clearTimeout(late);
-    } else if (!refreshing) {
-      setChecking(false);
+    const now = backForwardCheck({
+      started: refreshStarted.current,
+      refreshing,
+      url,
+      poppedTo: poppedTo.current,
+    });
+    if (now === "done") setChecking(false);
+    if (now === "done" || now === "busy") return;
+    const start = () => {
+      if (refreshStarted.current) return;
+      refreshStarted.current = true;
+      // The router restored this page from its cache without asking the
+      // server. Keep it hidden until a refresh has run its gate again, on
+      // the page now shown: a member who lost access never sees the cached
+      // page.
+      startRefresh(() => router.refresh());
+    };
+    if (now === "start") {
+      start();
+      return;
     }
+    // Not moved yet. Should the router never arrive at that address (it
+    // went somewhere else), check whatever it shows after a moment rather
+    // than keep the window hidden.
+    const late = window.setTimeout(start, POP_SETTLE_MS);
+    return () => window.clearTimeout(late);
   }, [checking, refreshing, router, url]);
 
   // --- Coming back to a stale tab --------------------------------------------------
@@ -1360,7 +1010,7 @@ function DesktopInner({
       desk?.toggleAttribute("data-os-paused", hidden);
       if (hidden) {
         hiddenAt = Date.now();
-      } else if (hiddenAt && Date.now() - hiddenAt >= STALE_AFTER_MS) {
+      } else if (isStaleReturn(hiddenAt, Date.now())) {
         hiddenAt = 0;
         router.refresh();
       }
@@ -1428,7 +1078,7 @@ function DesktopInner({
     const sent = sentTo.current;
     if (sent === null) return;
     sentTo.current = null;
-    if (sent !== pathname && !heldNow.current) router.refresh();
+    if (gateRedirected(sent, pathname, heldNow.current)) router.refresh();
   }, [pathname, router]);
 
   useEffect(() => {
@@ -1442,8 +1092,11 @@ function DesktopInner({
       // have changed under them (a demotion by someone else), so the
       // manifest catches up. Once per address.
       if (
-        body.querySelector("[data-captain-lock]") &&
-        refreshedLockFor.current !== url
+        refusedPageRefresh(
+          !!body.querySelector("[data-captain-lock]"),
+          refreshedLockFor.current,
+          url,
+        )
       ) {
         refreshedLockFor.current = url;
         router.refresh();
@@ -1497,7 +1150,7 @@ function DesktopInner({
         })
         .then(
           ({ version: now }) => {
-            if (now !== drawnVersion.current) router.refresh();
+            if (accessChanged(now, drawnVersion.current)) router.refresh();
             settle();
           },
           // Offline or a failed check: the desktop keeps what it drew.
@@ -1993,8 +1646,13 @@ function DesktopInner({
                   focusWindow(w);
                 }
               }}
-              onClose={() => closeWindow(w.id)}
-              onMinimize={() => minimizeWindow(w.id)}
+              // The frame's buttons ask the leave guard themselves.
+              onClose={() =>
+                void send({ type: "close", id: w.id, asked: true })
+              }
+              onMinimize={() =>
+                void send({ type: "minimize", id: w.id, asked: true })
+              }
               onToggleMaximize={() =>
                 dispatch({ type: "toggleMaximize", id: w.id })
               }
