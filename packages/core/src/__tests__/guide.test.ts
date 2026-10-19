@@ -17,6 +17,13 @@ import {
   headcountLabel,
   headcountText,
   printableDutyCard,
+  NOTHING_TO_PUBLISH,
+  NOT_A_CAMP_CHAPTER_WRITER,
+  NOT_A_CHAPTER_WRITER,
+  canonicalJson,
+  chapterPublishProblem,
+  guideChapterRefusal,
+  sameChapterText,
 } from "../guide";
 
 const KITCHEN = Team.enum.kitchen;
@@ -236,5 +243,54 @@ describe("printableDutyCard", () => {
     expect(out.hardRules).toEqual([]);
     expect(out.checklist).toEqual([]);
     expect(out.ask).toBeNull();
+  });
+});
+
+describe("guideChapterRefusal", () => {
+  it("names the whole-camp rule or the team rule, and nothing for a writer who may", () => {
+    const lead = { rank: "team_lead", led: [Team.enum.kitchen] };
+    expect(guideChapterRefusal(lead, Team.enum.kitchen)).toBeNull();
+    expect(guideChapterRefusal(lead, Team.enum.finance)).toBe(
+      NOT_A_CHAPTER_WRITER,
+    );
+    expect(guideChapterRefusal(lead, null)).toBe(NOT_A_CAMP_CHAPTER_WRITER);
+    expect(guideChapterRefusal({ rank: "captain", led: [] }, null)).toBeNull();
+  });
+});
+
+describe("chapterPublishProblem", () => {
+  it("wants text in a chapter and a whole card in a duty card", () => {
+    expect(
+      chapterPublishProblem({ kind: "chapter", card: null, markdown: "  " }),
+    ).toBe(NOTHING_TO_PUBLISH);
+    expect(
+      chapterPublishProblem({ kind: "chapter", card: null, markdown: "Hi." }),
+    ).toBeNull();
+    expect(
+      chapterPublishProblem({ kind: "duty_card", card: null, markdown: "" }),
+    ).toBe("A duty card needs its card filled in.");
+  });
+});
+
+describe("sameChapterText", () => {
+  const text = {
+    title: "Stove",
+    category: "kitchen",
+    team: null,
+    kind: "chapter",
+    markdown: "Light it.",
+    card: { b: 1, a: [2] },
+  };
+  it("compares every part, a card's keys in any order", () => {
+    expect(sameChapterText(text, { ...text, card: { a: [2], b: 1 } })).toBe(
+      true,
+    );
+    expect(sameChapterText(text, { ...text, markdown: "Light it!" })).toBe(
+      false,
+    );
+    expect(
+      sameChapterText({ ...text, card: null }, { ...text, card: undefined }),
+    ).toBe(true);
+    expect(canonicalJson({ b: 1, a: 2 })).toBe('{"a":2,"b":1}');
   });
 });

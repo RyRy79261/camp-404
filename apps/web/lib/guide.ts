@@ -12,11 +12,15 @@ import type {
   GuideWriteResult,
   PublishedDutyCard,
 } from "@camp404/db/documents";
-import { usesTestStore } from "./test-mode";
 import { guideTestStore } from "./test-store-guide";
+import { twin } from "./twin";
 
 // The Survival Guide's data (#250), from the database or, under E2E, the test
-// store. The rules live in @camp404/db/documents; the store repeats them.
+// store, picked once (twin). Who may write a chapter and what may be published
+// live once in @camp404/core (guideChapterRefusal, chapterPublishProblem,
+// sameChapterText); lib/__tests__/guide-agreement.test.ts holds the rest
+// equal. The public site (apps/guide) reads the database only, through the
+// members-only cut in @camp404/db/documents (toPublicChapter), never here.
 
 export type {
   GuideChapter,
@@ -28,83 +32,42 @@ export type {
   PublishedDutyCard,
 };
 
-export async function listPublishedChapters(
-  input: { query?: string } = {},
-): Promise<GuideChapterSummary[]> {
-  return usesTestStore()
-    ? guideTestStore.listPublishedChapters(input)
-    : db.listPublishedChapters(input);
-}
+const guide = twin(db, guideTestStore, [
+  "listPublishedChapters",
+  "listPublishedDutyCards",
+  "listPublishedDutyCardsInFull",
+  "getPublishedChapter",
+  "getChapterVersion",
+  "listChapterVersions",
+  "listGuideDrafts",
+  "getGuideDraft",
+  "listChapterReads",
+  "recordChapterRead",
+  "createGuideChapter",
+  "saveGuideChapter",
+  "publishGuideChapter",
+  "unpublishGuideChapter",
+  "markGuideChapterReviewed",
+  "setGuideChapterMembersOnly",
+  "listGuideSections",
+  "setGuideSectionPublic",
+]);
+
+export const listPublishedChapters = guide.listPublishedChapters;
 
 /** Every published duty card, by title (no card): the shift set-up's choices. */
-export async function listPublishedDutyCards(): ReturnType<
-  typeof db.listPublishedDutyCards
-> {
-  return usesTestStore()
-    ? guideTestStore.listPublishedDutyCards()
-    : db.listPublishedDutyCards();
-}
+export const listPublishedDutyCards = guide.listPublishedDutyCards;
 
 /** Every published duty card with its card, for "Print all duty cards". */
-export async function listPublishedDutyCardsInFull(): Promise<
-  PublishedDutyCard[]
-> {
-  return usesTestStore()
-    ? guideTestStore.listPublishedDutyCardsInFull()
-    : db.listPublishedDutyCardsInFull();
-}
+export const listPublishedDutyCardsInFull = guide.listPublishedDutyCardsInFull;
 
-export async function getPublishedChapter(
-  slug: string,
-): Promise<GuideChapter | null> {
-  return usesTestStore()
-    ? guideTestStore.getPublishedChapter(slug)
-    : db.getPublishedChapter(slug);
-}
-
-export async function getChapterVersion(
-  slug: string,
-  version: number,
-): Promise<GuideChapterVersion | null> {
-  return usesTestStore()
-    ? guideTestStore.getChapterVersion(slug, version)
-    : db.getChapterVersion(slug, version);
-}
-
-export async function listChapterVersions(
-  documentId: string,
-): ReturnType<typeof db.listChapterVersions> {
-  return usesTestStore()
-    ? guideTestStore.listChapterVersions(documentId)
-    : db.listChapterVersions(documentId);
-}
-
-export async function listGuideDrafts(): Promise<GuideDraft[]> {
-  return usesTestStore()
-    ? guideTestStore.listGuideDrafts()
-    : db.listGuideDrafts();
-}
-
-export async function getGuideDraft(slug: string): Promise<GuideDraft | null> {
-  return usesTestStore()
-    ? guideTestStore.getGuideDraft(slug)
-    : db.getGuideDraft(slug);
-}
-
-export async function listChapterReads(
-  userId: string,
-): Promise<Record<string, number>> {
-  return usesTestStore()
-    ? guideTestStore.listChapterReads(userId)
-    : db.listChapterReads(userId);
-}
-
-export async function recordChapterRead(
-  input: Parameters<typeof db.recordChapterRead>[0],
-): Promise<void> {
-  if (usesTestStore()) guideTestStore.recordChapterRead(input);
-  else await db.recordChapterRead(input);
-}
+export const getPublishedChapter = guide.getPublishedChapter;
+export const getChapterVersion = guide.getChapterVersion;
+export const listChapterVersions = guide.listChapterVersions;
+export const listGuideDrafts = guide.listGuideDrafts;
+export const getGuideDraft = guide.getGuideDraft;
+export const listChapterReads = guide.listChapterReads;
+export const recordChapterRead = guide.recordChapterRead;
 
 /**
  * Note the read after the page has gone out, so opening a chapter never waits
@@ -125,65 +88,14 @@ export function recordChapterReadAfterResponse(
   });
 }
 
-export async function createGuideChapter(
-  input: Parameters<typeof db.createGuideChapter>[0],
-): ReturnType<typeof db.createGuideChapter> {
-  return usesTestStore()
-    ? guideTestStore.createGuideChapter(input)
-    : db.createGuideChapter(input);
-}
-
-export async function saveGuideChapter(
-  input: Parameters<typeof db.saveGuideChapter>[0],
-): ReturnType<typeof db.saveGuideChapter> {
-  return usesTestStore()
-    ? guideTestStore.saveGuideChapter(input)
-    : db.saveGuideChapter(input);
-}
-
-export async function publishGuideChapter(
-  input: Parameters<typeof db.publishGuideChapter>[0],
-): ReturnType<typeof db.publishGuideChapter> {
-  return usesTestStore()
-    ? guideTestStore.publishGuideChapter(input)
-    : db.publishGuideChapter(input);
-}
-
-export async function unpublishGuideChapter(
-  input: Parameters<typeof db.unpublishGuideChapter>[0],
-): ReturnType<typeof db.unpublishGuideChapter> {
-  return usesTestStore()
-    ? guideTestStore.unpublishGuideChapter(input)
-    : db.unpublishGuideChapter(input);
-}
-
-export async function markGuideChapterReviewed(
-  input: Parameters<typeof db.markGuideChapterReviewed>[0],
-): ReturnType<typeof db.markGuideChapterReviewed> {
-  return usesTestStore()
-    ? guideTestStore.markGuideChapterReviewed(input)
-    : db.markGuideChapterReviewed(input);
-}
-
-export async function setGuideChapterMembersOnly(
-  input: Parameters<typeof db.setGuideChapterMembersOnly>[0],
-): ReturnType<typeof db.setGuideChapterMembersOnly> {
-  return usesTestStore()
-    ? guideTestStore.setGuideChapterMembersOnly(input)
-    : db.setGuideChapterMembersOnly(input);
-}
+export const createGuideChapter = guide.createGuideChapter;
+export const saveGuideChapter = guide.saveGuideChapter;
+export const publishGuideChapter = guide.publishGuideChapter;
+export const unpublishGuideChapter = guide.unpublishGuideChapter;
+export const markGuideChapterReviewed = guide.markGuideChapterReviewed;
+export const setGuideChapterMembersOnly = guide.setGuideChapterMembersOnly;
 
 /** Every section of the guide and whether it is on the public site. */
-export async function listGuideSections(): Promise<GuideSectionState[]> {
-  return usesTestStore()
-    ? guideTestStore.listGuideSections()
-    : db.listGuideSections();
-}
+export const listGuideSections = guide.listGuideSections;
 
-export async function setGuideSectionPublic(
-  input: Parameters<typeof db.setGuideSectionPublic>[0],
-): ReturnType<typeof db.setGuideSectionPublic> {
-  return usesTestStore()
-    ? guideTestStore.setGuideSectionPublic(input)
-    : db.setGuideSectionPublic(input);
-}
+export const setGuideSectionPublic = guide.setGuideSectionPublic;

@@ -46,6 +46,83 @@ export function canEditGuideChapter(
   return ledTeams.includes(team);
 }
 
+export const NOT_A_CHAPTER_WRITER =
+  "Only captains and this team's leads can write its chapters.";
+export const NOT_A_CAMP_CHAPTER_WRITER =
+  "Only captains can write whole-camp chapters.";
+export const NOTHING_TO_PUBLISH =
+  "Write something in the chapter before you publish it.";
+
+/**
+ * Why a writer may not write a chapter of `team` (canEditGuideChapter), in
+ * the sentence the guide shows, or null when they may. The database writer
+ * and the E2E store both refuse with it.
+ */
+export function guideChapterRefusal(
+  writer: { rank: string; led: readonly string[] },
+  team: string | null,
+): string | null {
+  if (canEditGuideChapter(writer.rank, writer.led, team)) return null;
+  return team === null ? NOT_A_CAMP_CHAPTER_WRITER : NOT_A_CHAPTER_WRITER;
+}
+
+/**
+ * Why a chapter cannot be published as it stands, in the order publishing
+ * checks: a duty card's card (dutyCardProblem), else text to publish at all;
+ * then the Members only parts (chapterTextProblem). Null when it may go out.
+ */
+export function chapterPublishProblem(chapter: {
+  kind: string;
+  card: DutyCardDraft | null;
+  markdown: string;
+}): string | null {
+  if (chapter.kind === "duty_card") {
+    const problem = dutyCardProblem(chapter.card, chapter.markdown);
+    if (problem) return problem;
+  } else if (chapter.markdown.trim() === "") {
+    return NOTHING_TO_PUBLISH;
+  }
+  return chapterTextProblem(chapter.markdown);
+}
+
+/** A value as JSON with every object's keys in order, to compare two cards. */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v as Record<string, unknown>).sort(([a], [b]) =>
+            a < b ? -1 : a > b ? 1 : 0,
+          ),
+        )
+      : v,
+  );
+}
+
+/** What a published version of a chapter holds, as publishing compares it. */
+export interface ChapterText {
+  title: string;
+  category: string;
+  team: string | null;
+  kind: string;
+  markdown: string;
+  card: unknown;
+}
+
+/**
+ * Whether a chapter says the same as its newest version: then publishing it
+ * again makes no new version, and its draft has nothing unpublished.
+ */
+export function sameChapterText(a: ChapterText, b: ChapterText): boolean {
+  return (
+    a.title === b.title &&
+    a.category === b.category &&
+    a.team === b.team &&
+    a.kind === b.kind &&
+    a.markdown === b.markdown &&
+    canonicalJson(a.card ?? null) === canonicalJson(b.card ?? null)
+  );
+}
+
 /** Whether someone may write at least one chapter (the New chapter button). */
 export function canEditAnyGuideChapter(
   rank: string,
