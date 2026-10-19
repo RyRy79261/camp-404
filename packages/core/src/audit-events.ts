@@ -506,9 +506,15 @@ export interface AuditEvents {
     name: string;
     day: string;
   };
-  "shifts.member_removed":
-    | { cycle: number; slotId: string; name: string; day: string }
-    | { cycle: number; slotId: string; because: string };
+  // `because` is set when the member came off with a rejected or re-opened
+  // sign-up. Rows written before 2026-10-19 for that case have no name or day.
+  "shifts.member_removed": {
+    cycle: number;
+    slotId: string;
+    name: string;
+    day: string;
+    because?: string;
+  };
   "shifts.slot_needed_set": {
     cycle: number;
     name: string;

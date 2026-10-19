@@ -615,7 +615,16 @@ describe("leaving approved", () => {
           .where(eq(schema.shiftSignups.userId, dee.id)),
       ).toHaveLength(0);
     }
-    expect(await audits("shifts.member_removed")).toHaveLength(2);
+    const removedRows = await audits("shifts.member_removed");
+    expect(removedRows).toHaveLength(2);
+    // Each row names the shift and its day, so a captain reads which it was.
+    for (const row of removedRows) {
+      expect(row.metadata).toMatchObject({
+        slotId: first.id,
+        name: type.name,
+        day: first.day,
+      });
+    }
     // The place is free, and the shift can go.
     expect(
       await signUpForShift({ userId: sam.id, slotId: first.id, now: BEFORE }),
