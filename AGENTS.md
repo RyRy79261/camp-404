@@ -70,9 +70,12 @@ Traps that already cost real time:
   by Playwright. Add the twin with the feature, or say in the PR that the flow
   has no E2E cover.
   [CORRECTION 2026-10-18] The money domains (payments, dues, claims and
-  budgets, gear rental) and the Kitchen (recipes, the menu and shopping list,
+  budgets, gear rental), the Kitchen (recipes, the menu and shopping list,
   the meal plan, prices, allergy plans and prep steps; shared seeding in
-  `__tests__/_kitchen.ts`) no longer switch per function: the facade names its
+  `__tests__/_kitchen.ts`) and camp operations (inventory, shifts, logistics
+  with attendance and AfrikaBurn dates, power, transport, the lounge, the camp
+  layout, Help wanted, Calendar events, the task board) no longer switch per
+  function: the facade names its
   data functions once in `twin(real, store, keys)` (`apps/web/lib/twin.ts`),
   which asks `usesTestStore()` at call time and looks both sides up then too,
   so a `vi.mock` of the db module still works. A rule both sides apply (the
