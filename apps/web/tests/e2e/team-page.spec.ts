@@ -146,6 +146,15 @@ test.describe("team page (test-mode)", () => {
       .getByRole("link", { name: "See this team on the calendar" })
       .click();
     await expect(page).toHaveURL(/\/calendar\?team=kitchen$/);
+    // The list, not the month: a phone's month shows a dot, not the title,
+    // and next week may be next month.
+    await page
+      .getByRole("group", { name: "View" })
+      .getByRole("button", { name: "List" })
+      .click();
+    await expect(page).toHaveURL(
+      /\/calendar\?view=list&when=upcoming&team=kitchen$/,
+    );
     await expect(page.getByText("Kitchen briefing")).toBeVisible();
   });
 
