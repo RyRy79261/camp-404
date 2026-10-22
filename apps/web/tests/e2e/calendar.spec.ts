@@ -38,6 +38,7 @@ function campDay(days: number): string {
   }).format(new Date(Date.now() + days * 86_400_000));
 }
 const TODAY = campDay(0);
+const TOMORROW = campDay(1);
 const THIS_MONTH = TODAY.slice(0, 7);
 /** The 10th of last month: always in the past, always in last month. */
 function lastMonth(day = "10"): string {
@@ -145,14 +146,15 @@ test.describe("the Calendar (test-mode)", () => {
     await expect(page).toHaveURL(/event=[0-9a-v]+/);
     await expect(chip(page, "Workshop clean-out")).toBeVisible();
 
-    // A Kitchen meeting, on the 20th: an event added with an agenda is a
-    // meeting, its meeting page made with the same agenda.
+    // A Kitchen meeting, tomorrow: an event added with an agenda is a
+    // meeting, its meeting page made with the same agenda. Tomorrow, not a
+    // fixed day, so Home's Coming up still lists it late in the month.
     await page.getByRole("button", { name: "New event" }).first().click();
     const meeting = page.getByRole("form", { name: "New event" });
     await meeting.locator("#event-team").click();
     await page.getByRole("option", { name: "Kitchen" }).click();
     await meeting.getByLabel("Title").fill("Kitchen planning");
-    await meeting.getByLabel("Date").fill(`${THIS_MONTH}-20`);
+    await meeting.getByLabel("Date").fill(TOMORROW);
     await meeting.getByLabel("Starts").fill("19:00");
     await meeting.getByLabel("Ends").fill("20:30");
     await meeting
@@ -165,6 +167,9 @@ test.describe("the Calendar (test-mode)", () => {
     const planning = panel(page, "Kitchen planning");
     await expect(planning.getByText("MEETING", { exact: true })).toBeVisible();
     await expect(planning.getByText("The menu and the gas")).toBeVisible();
+    if (TOMORROW.slice(0, 7) !== THIS_MONTH) {
+      await page.getByRole("button", { name: "Next month" }).click();
+    }
     await expect(chip(page, "Kitchen planning, 19:00, meeting")).toBeVisible();
 
     // The store's Google stand-in has both, so Home's Coming up lists them.
