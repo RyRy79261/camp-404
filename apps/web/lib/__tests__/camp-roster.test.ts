@@ -273,6 +273,18 @@ describe("matchesThisYear", () => {
     expect(shown("none")).toEqual([null]);
   });
 
+  it("keeps everyone who said Coming under Coming, whatever was decided", () => {
+    expect(shown("coming")).toEqual(["applied", "accepted", "waitlisted"]);
+  });
+
+  it("reads the member's own answer for Coming, not the decision", () => {
+    const saidMaybe = toRosterRow(
+      member({ participation: "accepted", participationIntent: "maybe" }),
+    );
+    expect(matchesThisYear(saidMaybe, "coming")).toBe(false);
+    expect(matchesThisYear({ thisYear: "accepted" }, "coming")).toBe(true);
+  });
+
   it("treats a row without the key as not answered", () => {
     const pub = toPublicRosterRow(member({ participation: "accepted" }));
     expect(matchesThisYear(pub, "none")).toBe(true);

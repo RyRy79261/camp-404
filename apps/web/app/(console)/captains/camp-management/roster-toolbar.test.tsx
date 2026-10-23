@@ -95,6 +95,7 @@ describe("RosterToolbar — This year", () => {
     }) as HTMLSelectElement;
     expect([...select.options].map((o) => o.text)).toEqual([
       "Any",
+      "Coming",
       "Coming, not decided",
       "Maybe, not decided",
       "Accepted",
