@@ -65,12 +65,15 @@ function paragraphsHtml(paragraphs: readonly string[]): string {
 /** The HTML part of an email, in the camp's email look. */
 export function renderEmailLayout(input: EmailLayoutInput): string {
   const paragraphs = paragraphsHtml(input.paragraphs);
+  const preview = input.paragraphs.find((p) => p.trim() !== "") ?? "";
   const after = input.afterButton?.length
     ? `<div style="padding-top:16px">${paragraphsHtml(input.afterButton)}</div>`
     : "";
   const button = input.button
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 4px"><tr>` +
-      `<td bgcolor="${MAGENTA}" style="background:${MAGENTA};border-radius:6px">` +
+      // Outlook on Windows ignores padding on a link: mso-padding-alt gives
+      // its button the same size from the cell.
+      `<td bgcolor="${MAGENTA}" style="background:${MAGENTA};border-radius:6px;mso-padding-alt:13px 22px">` +
       `<a href="${escapeHtml(input.button.url)}" style="display:inline-block;padding:13px 22px;font-family:${SANS};font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px">${escapeHtml(input.button.text)}</a>` +
       `</td></tr></table>`
     : "";
@@ -82,7 +85,12 @@ export function renderEmailLayout(input: EmailLayoutInput): string {
     '<meta name="supported-color-schemes" content="light">',
     `<title>${escapeHtml(input.title)}</title></head>`,
     `<body style="margin:0;padding:0;background:${PAGE}" bgcolor="${PAGE}">`,
+    // The line an inbox shows after the subject. Without it, the inbox shows
+    // the header's "404 OS CAMP 404" there. Hidden in the email itself.
+    `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:${PAGE}">${escapeHtml(preview)}</div>`,
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PAGE}" style="background:${PAGE}"><tr><td align="center" style="padding:24px 12px">`,
+    // Outlook on Windows ignores max-width, so it gets a fixed-width table.
+    '<!--[if mso]><table role="presentation" width="560" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->',
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;border:1px solid ${LINE};border-radius:8px;border-collapse:separate;overflow:hidden">`,
     // Header: the wordmark on midnight.
     `<tr><td bgcolor="${MIDNIGHT}" style="background:${MIDNIGHT};padding:16px 24px;border-radius:8px 8px 0 0">`,
@@ -103,6 +111,7 @@ export function renderEmailLayout(input: EmailLayoutInput): string {
     // Footer.
     `<tr><td bgcolor="${FOOT}" style="background:${FOOT};padding:14px 24px;border-top:1px solid ${LINE};border-radius:0 0 8px 8px;font-family:${SANS};font-size:12px;line-height:1.5;color:${MUTED}">${escapeHtml(input.footer)}</td></tr>`,
     "</table>",
+    "<!--[if mso]></td></tr></table><![endif]-->",
     "</td></tr></table>",
     "</body></html>",
   ].join("");

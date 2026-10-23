@@ -30,6 +30,19 @@ describe("renderEmailLayout", () => {
     );
   });
 
+  it("gives the inbox the first words as its preview line, and Outlook a fixed width", () => {
+    const html = renderEmailLayout(base);
+    const hidden = html.indexOf("display:none");
+    expect(hidden).toBeGreaterThan(-1);
+    expect(html.indexOf("First part.")).toBeGreaterThan(hidden);
+    expect(html.indexOf("First part.")).toBeLessThan(
+      html.indexOf("404&nbsp;OS"),
+    );
+    expect(html).toContain(
+      '<!--[if mso]><table role="presentation" width="560"',
+    );
+  });
+
   it("draws no button when there is nothing to open", () => {
     const html = renderEmailLayout(base);
     expect(html).not.toContain("<a ");
