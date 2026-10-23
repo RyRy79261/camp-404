@@ -240,6 +240,7 @@ export * from "./duration";
 export * from "./audit-actions";
 export * from "./audit-events";
 export * from "./notification-days";
+export * from "./email-layout";
 export * from "./notification-email";
 export * from "./time-zone";
 export * from "./burn-dates";
