@@ -387,8 +387,11 @@ export function matchesThisYear(
     // The member's own answer; a row that does not carry it (the Camp sheet)
     // falls back to the answer its status stands for.
     const says =
-      row.thisYearSays ??
-      (status === null ? null : INTENT_IMPLIED_BY_STATUS[status]);
+      row.thisYearSays !== undefined
+        ? row.thisYearSays
+        : status === null
+          ? null
+          : INTENT_IMPLIED_BY_STATUS[status];
     return says === "yes";
   }
   return filter === "none" ? status === null : status === filter;
