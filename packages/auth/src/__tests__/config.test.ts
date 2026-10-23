@@ -99,6 +99,21 @@ describe("auth email", () => {
       url: "https://www.camp-404.com/reset?token=abc",
     });
     expect(email.text).toContain("https://www.camp-404.com/reset?token=abc");
+    expect(email.html).toContain(
+      'href="https://www.camp-404.com/reset?token=abc"',
+    );
+    expect(email.html).toContain(">Reset password</a>");
+    expect(email.html).toContain(">Reset your password</h1>");
+  });
+
+  it("draws a notice with no link as the same card, with no button", () => {
+    const email = buildAuthEmail({
+      to: "a@example.com",
+      kind: "password-reset-completed",
+    });
+    expect(email.html).toContain("404&nbsp;OS");
+    expect(email.html).toContain(">Your password was changed</h1>");
+    expect(email.html).not.toContain("<a ");
   });
 
   it("tells the member a password was added, and how to undo it", () => {

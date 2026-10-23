@@ -59,6 +59,22 @@ describe("renderNotificationEmail", () => {
     );
   });
 
+  it("labels the email with what kind of notice it is, and a button to it", () => {
+    const email = renderNotificationEmail(
+      questionnaireReleaseNotification({
+        activationId: ID,
+        title: "Camp feedback",
+        dueAt: null,
+        blocking: false,
+      }),
+      "https://camp-404.com",
+    );
+    expect(email.html).toContain(">New questionnaire</span>");
+    expect(email.html).toContain(">Camp feedback</h1>");
+    expect(email.html).toContain(">Open in Camp 404</a>");
+    expect(email.html).toContain("404&nbsp;OS");
+  });
+
   it("escapes what a captain wrote, so it cannot inject markup", () => {
     const email = renderNotificationEmail(
       announcementNotification({

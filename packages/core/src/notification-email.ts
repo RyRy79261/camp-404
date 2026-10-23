@@ -9,6 +9,7 @@
 // and team chatter stay in the app.
 
 import type { NotificationKind, NotificationPayload } from "@camp404/types";
+import { renderEmailLayout } from "./email-layout";
 import { plainPreview } from "./markdown-text";
 import { payloadLink } from "./notifications";
 
@@ -50,17 +51,24 @@ export interface NotificationEmail {
   html: string;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+/** The small label over an email's title: what kind of notice it is. */
+export const NOTIFICATION_EMAIL_LABEL: Readonly<
+  Record<NotificationKind, string>
+> = {
+  announcement: "Announcement",
+  team_message: "Team message",
+  lead_directive: "From your team leads",
+  questionnaire_release: "New questionnaire",
+  questionnaire_reminder: "Reminder",
+  approval_decision: "Your place in the camp",
+  captain_promotion: "Captain request",
+  task_reminder: "Task due",
+  car_message: "From your driver",
+  pet_in: "Camp pets",
+};
 
 const FOOTER =
-  "You're getting this because you're a member of Camp 404. It is also in your notifications in the app.";
+  "You get this email because you are a member of Camp 404. This notice is also in your inbox in the app.";
 
 /**
  * The email for one notification: the notice's own title and body, and a link
@@ -82,13 +90,12 @@ export function renderNotificationEmail(
   const subject = `Camp 404: ${payload.title}`.slice(0, 200);
   const body = plainPreview(payload.body);
   const text = `${payload.title}\n\n${body}\n\nOpen in Camp 404: ${url}\n\n${FOOTER}\n`;
-  const html = [
-    '<div style="font-family:system-ui,sans-serif;line-height:1.5;max-width:560px">',
-    `<h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(payload.title)}</h1>`,
-    `<p style="white-space:pre-wrap;margin:0 0 20px">${escapeHtml(body)}</p>`,
-    `<p style="margin:0 0 24px"><a href="${escapeHtml(url)}">Open in Camp 404</a></p>`,
-    `<p style="font-size:12px;color:#666;margin:0">${escapeHtml(FOOTER)}</p>`,
-    "</div>",
-  ].join("");
+  const html = renderEmailLayout({
+    label: NOTIFICATION_EMAIL_LABEL[payload.kind],
+    title: payload.title,
+    paragraphs: body.split(/\n{2,}/),
+    button: { text: "Open in Camp 404", url },
+    footer: FOOTER,
+  });
   return { subject, text, html };
 }
