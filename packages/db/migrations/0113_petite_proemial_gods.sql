@@ -1,0 +1,1 @@
+ALTER TABLE "questionnaire_definitions" ADD COLUMN "anonymous_results" boolean DEFAULT false NOT NULL;

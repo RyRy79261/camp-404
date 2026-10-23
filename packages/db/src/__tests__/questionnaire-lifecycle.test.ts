@@ -6,7 +6,12 @@ import {
   type Questionnaire,
 } from "@camp404/types";
 import { useTestDb } from "./_harness";
-import { makeActivation, makeUser, requiredActionsFor } from "./_factories";
+import {
+  makeActivation,
+  makeMembership,
+  makeUser,
+  requiredActionsFor,
+} from "./_factories";
 import type { AuditAction } from "@camp404/core";
 import {
   insertDefinitionDraft,
@@ -17,6 +22,7 @@ import {
   getOpenActivationForKey,
   listOpenSendBlocking,
   publishDefinition,
+  SEND_REFUSED,
   sendActivation,
   sendReminder,
   unpublishDefinition,
@@ -353,7 +359,7 @@ describe("closeActivation", () => {
   async function publishedWithOpenSend(
     db: ReturnType<ReturnType<typeof useTestDb>["db"]>,
   ) {
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     const sent = await sendActivation({
@@ -419,7 +425,7 @@ describe("unpublishDefinition — cascade", () => {
   it("sets status unpublished, closes open activations, expires pending gates, preserves responses", async () => {
     const db = h.db();
     const actor = await makeUser(db, { isSystem: true });
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     const sent = await sendActivation({
@@ -576,7 +582,7 @@ describe("sendActivation — one-open invariant", () => {
 
   it("opens an activation pinned to the published version and fans out", async () => {
     const db = h.db();
-    const a = await makeUser(db);
+    const a = await makeUser(db, { rank: "captain" });
     const b = await makeUser(db);
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
@@ -651,9 +657,43 @@ describe("sendActivation — one-open invariant", () => {
     expect(nudge).toMatchObject({ ok: true, outcome: "sent", sent: 2 });
   });
 
+  it("lets a team lead send to the whole camp, blocking, and refuses a plain member", async () => {
+    const db = h.db();
+    const lead = await makeUser(db);
+    await makeMembership(db, {
+      userId: lead.id,
+      team: "kitchen",
+      isLead: true,
+    });
+    const member = await makeUser(db);
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    expect((await publishDefinition("feedback", lead.id)).ok).toBe(true);
+
+    const refused = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: true,
+      activatedByUserId: member.id,
+    });
+    expect(refused).toEqual({ ok: false, error: SEND_REFUSED });
+    expect(await db.select().from(schema.questionnaireActivations)).toEqual([]);
+
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: true,
+      activatedByUserId: lead.id,
+    });
+    expect(sent.ok).toBe(true);
+    const gates = await requiredActionsFor(db, member.id);
+    expect(gates).toEqual([
+      expect.objectContaining({ actionKey: "feedback", blocking: true }),
+    ]);
+  });
+
   it("refuses to send an unpublished questionnaire", async () => {
     const db = h.db();
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback")); // still a draft
     const res = await sendActivation({
       questionnaireKey: "feedback",
@@ -670,7 +710,7 @@ describe("sendActivation — one-open invariant", () => {
   it("rejects a second open send for the same key, and allows it after close", async () => {
     const db = h.db();
     const actor = await makeUser(db, { isSystem: true });
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
 
@@ -705,7 +745,7 @@ describe("sendActivation — one-open invariant", () => {
 
   it("scope=individual only fans out to the chosen targets", async () => {
     const db = h.db();
-    const picked = await makeUser(db);
+    const picked = await makeUser(db, { rank: "captain" });
     const other = await makeUser(db);
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
@@ -724,7 +764,7 @@ describe("sendActivation — one-open invariant", () => {
 
   it("propagates the activation dueAt onto the fanned-out required_actions", async () => {
     const db = h.db();
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     const due = new Date("2026-07-01T12:00:00.000Z");
@@ -746,7 +786,7 @@ describe("sendActivation — the cycle + carry-over stamp", () => {
 
   it("stamps the year current at Send and carry_over off the definition", async () => {
     const db = h.db();
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     // the camp has rolled over twice; 2028 is the open year
@@ -792,7 +832,7 @@ describe("sendActivation — the cycle + carry-over stamp", () => {
 
   it("copies carry_over = false off the definition, and the copy is FROZEN", async () => {
     const db = h.db();
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     await db
@@ -825,7 +865,7 @@ describe("data survival across the full lifecycle", () => {
   it("preserves a completed response (and the completed gate) through unpublish → re-publish", async () => {
     const db = h.db();
     const actor = await makeUser(db, { isSystem: true });
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     const sent = await sendActivation({

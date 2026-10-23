@@ -87,23 +87,18 @@ export function isApproved(
 }
 
 /**
- * Whether a viewer may see a builder questionnaire: list it in the hub, preview
- * it, or copy it. A captain sees every one. Anyone else sees a published or
- * unpublished one, and a draft only when they wrote it, because a draft is
- * private to its author until it is published. An unpublished questionnaire was
- * public once, so withdrawing it does not hide it again. The caller has already
- * checked that the viewer may author at all (team_lead or higher).
+ * Whether a viewer may see a builder questionnaire: list it, preview it, or
+ * copy it. Every camp member sees every one, drafts included (owner,
+ * 2026-10-23: "questionnaires, their states, and their draft states should be
+ * essentially viewable by everyone in the camp"). Changing one is still its
+ * author's or a captain's.
  */
 export function canViewBuilderDefinition(
   viewer: { rank: ViewerRank; userId: string },
-  definition: {
+  _definition: {
     status: "draft" | "published" | "unpublished";
     createdBy: string | null;
   },
 ): boolean {
-  return (
-    viewer.rank === "captain" ||
-    definition.status !== "draft" ||
-    definition.createdBy === viewer.userId
-  );
+  return hasClearance(viewer.rank, "camp_member");
 }

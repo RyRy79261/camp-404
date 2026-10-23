@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { resetTestState } from "../e2e/_helpers";
 import {
   answerGate,
-  buildAndPublish,
+  buildQuestionnaire,
   sendBlockingToEveryone,
   signInCaptain,
 } from "./_flows";
@@ -33,7 +33,7 @@ test("name the year, answer, start the next year, and be asked again", async ({
     captain.getByText("The camp is in 2026", { exact: true }),
   ).toBeVisible();
 
-  await buildAndPublish(captain, { ...GEAR, askAgainNextYear: true });
+  await buildQuestionnaire(captain, { ...GEAR, askAgainNextYear: true });
   await sendBlockingToEveryone(captain, GEAR.title);
   await answerGate(captain, { ...GEAR, text: "A dome tent" });
 

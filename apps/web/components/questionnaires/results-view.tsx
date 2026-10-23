@@ -426,14 +426,21 @@ function OrphanDisclosure({
   );
 }
 
-function QuestionSummary({
+/**
+ * One question's card: its counts, as the captains' Summary draws them. The
+ * member results page (`MemberResults`) draws the same card with no
+ * "individual answers" button and its own answers list as `children`.
+ */
+export function QuestionSummary({
   aggregate,
   question,
   onShowIndividual,
+  children,
 }: {
   aggregate: QuestionAggregate;
   question: Question | undefined;
-  onShowIndividual: () => void;
+  onShowIndividual?: () => void;
+  children?: React.ReactNode;
 }) {
   const multi = "multi" in aggregate && aggregate.multi;
   return (
@@ -460,6 +467,7 @@ function QuestionSummary({
           question={question}
           onShowIndividual={onShowIndividual}
         />
+        {children}
       </CardContent>
     </Card>
   );
@@ -472,7 +480,7 @@ function AggregateChart({
 }: {
   aggregate: QuestionAggregate;
   question: Question | undefined;
-  onShowIndividual: () => void;
+  onShowIndividual?: () => void;
 }) {
   if (aggregate.answered === 0) {
     return (
@@ -491,7 +499,9 @@ function AggregateChart({
 
     case "count":
       // Free text, email, phone, a date, an image or a link: counted, never
-      // listed. The aggregate holds no values to list.
+      // listed. The aggregate holds no values to list. The member results
+      // list what they may read under the card instead.
+      if (!onShowIndividual) return null;
       return (
         <div className="flex flex-col items-start gap-2">
           <p className="text-sm text-muted-foreground">

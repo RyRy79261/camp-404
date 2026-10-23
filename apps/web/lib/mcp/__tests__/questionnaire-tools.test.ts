@@ -268,18 +268,16 @@ describe("questionnaire drafting tools", () => {
     expect(updateDefinition).not.toHaveBeenCalled();
   });
 
-  it("hides another author's draft from a lead as not found", async () => {
+  it("lets a lead read another author's draft (every member reads every draft)", async () => {
     vi.mocked(getDefinitionMetaRow).mockResolvedValueOnce({
       key: "secret",
       status: "draft",
       version: "1",
       createdBy: CAPTAIN,
     } as never);
+    vi.mocked(getBuilderDefinition).mockResolvedValueOnce(DEFINITION);
     expect(
       await call("get_questionnaire_draft", { key: "secret" }, LEAD),
-    ).toEqual({
-      error: "No questionnaire with that key.",
-    });
-    expect(getBuilderDefinition).not.toHaveBeenCalled();
+    ).toMatchObject({ data: { key: "secret", status: "draft" } });
   });
 });

@@ -73,6 +73,9 @@
 //     Choice/Numeric/Count/Timeline/Grid aggregate shapes — the per-question
 //     read-back engine and the activation completion figure
 //     (./questionnaire-results)
+//   - questionnaire sharing: canSendQuestionnaireTo, canReadQuestionnaireResults,
+//     isSharedResultQuestion, sharedResults — who sends a questionnaire, and
+//     what the members who answered read back (./questionnaire-sharing)
 //   - questionnaire definition validation (the unified model, ported from
 //     AB): validateQuestionnaireDefinition, isValidQuestionnaireDefinition,
 //     definitionLimitErrors (./questionnaire-definition)
@@ -226,6 +229,7 @@ export * from "./pinned-order";
 export * from "./csv";
 export * from "./questionnaire-csv";
 export * from "./questionnaire-results";
+export * from "./questionnaire-sharing";
 export * from "./questionnaire-definition";
 export * from "./questionnaire-runtime";
 export * from "./questionnaire-versioning";

@@ -153,6 +153,8 @@ export interface DefinitionMetaRow {
   status: DefinitionStatus;
   version: string | null;
   createdBy: string | null;
+  /** The members who answered read the results without names. */
+  anonymousResults: boolean;
 }
 
 /** A definition's ownership + lifecycle, for the edit/delete permission check. */
@@ -166,6 +168,7 @@ export async function getDefinitionMetaRow(
       status: questionnaireDefinitions.status,
       version: questionnaireDefinitions.version,
       createdBy: questionnaireDefinitions.createdBy,
+      anonymousResults: questionnaireDefinitions.anonymousResults,
     })
     .from(questionnaireDefinitions)
     .where(eq(questionnaireDefinitions.key, key))
@@ -249,6 +252,34 @@ export async function setDefinitionCarryOver(
       action: "questionnaire.carry_over_set",
       target: key,
       metadata: { title: row.title, carryOver },
+    });
+  });
+}
+
+/**
+ * Set whether the members who answered read this questionnaire's results
+ * without names. Captains always read names. Like the year policy it needs no
+ * re-publish and does not bump `updated_at`. The change and its
+ * `questionnaire.anonymous_results_set` audit row commit together; a key with
+ * no definition changes nothing.
+ */
+export async function setDefinitionAnonymousResults(
+  key: string,
+  anonymous: boolean,
+  actorId: string,
+): Promise<void> {
+  await withTransaction(async (tx) => {
+    const [row] = await tx
+      .update(questionnaireDefinitions)
+      .set({ anonymousResults: anonymous })
+      .where(eq(questionnaireDefinitions.key, key))
+      .returning({ title: questionnaireDefinitions.title });
+    if (!row) return;
+    await writeAuditEvent(tx, {
+      actorId,
+      action: "questionnaire.anonymous_results_set",
+      target: key,
+      metadata: { title: row.title, anonymous },
     });
   });
 }

@@ -16,7 +16,8 @@ import {
 import { loadQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { viewerSeesLeadsOnly } from "@/lib/questionnaire-viewer";
-import { questionnaireForViewer } from "@camp404/core";
+import { isSharedResultQuestion, questionnaireForViewer } from "@camp404/core";
+import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import { nextGate } from "@/lib/required-actions";
 import {
   BlockingNotice,
@@ -124,6 +125,21 @@ export default async function QuestionnaireFillPage({
   // where it lives, is out of reach until the form is done.
   const voiceOn =
     activation.blocking && (await getVoiceConsent(campUser.id)) !== null;
+  // Everyone who answers reads the results (owner, 2026-10-23), so the member
+  // is told before they answer, and whether names show. Only questions that
+  // ask for an opinion are shared (isSharedResultQuestion).
+  const shares = flattenQuestions(definition).some(isSharedResultQuestion);
+  const anonymous = shares
+    ? ((await getDefinitionMetaRow(activation.questionnaireKey))
+        ?.anonymousResults ?? false)
+    : false;
+  const sharedNote = shares ? (
+    <p className="text-center text-xs text-muted-foreground">
+      {anonymous
+        ? "Everyone who answers sees the results, with no names."
+        : "Everyone who answers sees the results, with names."}
+    </p>
+  ) : null;
 
   const fill = (
     <QuestionnaireFill
@@ -153,10 +169,14 @@ export default async function QuestionnaireFillPage({
               <CardContent className="pt-6">{fill}</CardContent>
             </Card>
             <BlockingNotice />
+            {sharedNote}
             {voiceOn && <VoiceOffLine />}
           </>
         ) : (
-          fill
+          <>
+            {fill}
+            {sharedNote}
+          </>
         )}
       </div>
     </RunnerFrame>

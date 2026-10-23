@@ -1,9 +1,12 @@
-import { CAMP_TIME_ZONE } from "@camp404/core";
+import { CAMP_TIME_ZONE, canReadQuestionnaireResults } from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { programPage } from "@/lib/program-page";
+import { UNSET_CYCLE } from "@camp404/db/camp-config";
+import { getCurrentCycle } from "@/lib/camp-config";
 import {
   listDefinitionsForViewer,
+  listMyQuestionnaireStanding,
   listOpenSendBlocking,
 } from "@/lib/questionnaire-definitions";
 import {
@@ -16,11 +19,12 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Questionnaires — Camp 404" };
 
-// The questionnaire-builder hub (the AfrikaBurn console's questionnaire list).
-// Authoring is team-lead+ (preview-but-locked for everyone below); only captains
-// publish/send (Phase D). Data is withheld server-side when the viewer can't
-// author. Team-leads see published questionnaires + their own drafts; captains
-// see everything (reserved code keys excluded by the facade either way).
+// Every questionnaire in camp, for every member (owner, 2026-10-23:
+// "questionnaires, their states, and their draft states should be essentially
+// viewable by everyone in the camp"). Each row says where it stands and what
+// this member may do with it: answer it, look at it, see its results (once
+// they have answered), and, for team leads and captains, make, edit and send.
+// Every action and page checks its own gate again on the server.
 const EDITED = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",
@@ -29,56 +33,83 @@ const EDITED = new Intl.DateTimeFormat("en-GB", {
 });
 
 const HEADING: HubHeading = {
-  eyebrow: "Captains / Questionnaires",
+  eyebrow: "Questionnaires",
   title: "Questionnaires",
   description:
-    "Build and manage the custom questionnaires your camp uses to collect answers from members.",
+    "Every questionnaire in camp. Team leads and captains make and send them; everyone can look, and everyone who answers sees the results.",
 };
 
 export default async function QuestionnairesPage() {
-  const {
-    campUser,
-    rank,
-    cleared: canAuthor,
-  } = await programPage("questionnaires");
+  const { campUser, rank, cleared } = await programPage("questionnaires");
+  if (!cleared) {
+    return (
+      <div className="flex flex-col">
+        <PageHeading {...HEADING} />
+        <CaptainLock
+          title="Camp members only"
+          message="Questionnaires are for camp members."
+        />
+      </div>
+    );
+  }
 
-  const [definitions, openSends] = canAuthor
-    ? await Promise.all([
-        listDefinitionsForViewer({ userId: campUser.id, rank }),
-        listOpenSendBlocking(),
-      ])
-    : [[], new Map<string, boolean>()];
-  const items: HubItem[] = canAuthor
-    ? definitions.map((d) => ({
-        key: d.key,
-        title: d.title,
-        status: d.status,
-        questionCount: d.questionCount,
-        editedLabel: EDITED.format(d.updatedAt),
-        // The builder and the results page gate these again on the server;
-        // the hub only stops offering a link that would open a lock.
-        canEdit: rank === "captain" || d.createdBy === campUser.id,
-        canDelete: d.status === "draft",
-        canSeeResults: rank === "captain",
-        openSendBlocking: openSends.get(d.key) ?? null,
-      }))
-    : [];
+  const isCaptain = rank === "captain";
+  const canAuthor = rank === "team_lead" || isCaptain;
+  const year = await getCurrentCycle();
+  const [definitions, openSends, standing] = await Promise.all([
+    listDefinitionsForViewer({ userId: campUser.id, rank }),
+    listOpenSendBlocking(),
+    // Before a captain names the founding year, answers are filed under the
+    // sentinel year, as every write files them (currentCycleNumber).
+    listMyQuestionnaireStanding(campUser.id, year?.year ?? UNSET_CYCLE),
+  ]);
+  const answered = new Set(standing.answeredKeys);
+  const waiting = new Map(
+    standing.waiting.map((w) => [w.questionnaireKey, w.activationId]),
+  );
 
-  // The hub island draws the heading itself: "New questionnaire" is its action,
-  // and it opens the island's own composer.
-  return canAuthor ? (
+  const items: HubItem[] = definitions.map((d) => {
+    const canEdit = canAuthor && (isCaptain || d.createdBy === campUser.id);
+    const mayReadResults = canReadQuestionnaireResults({
+      rank,
+      isAuthor: d.createdBy === campUser.id,
+      answered: answered.has(d.key),
+    });
+    const waitingOn = waiting.get(d.key);
+    return {
+      key: d.key,
+      title: d.title,
+      status: d.status,
+      questionCount: d.questionCount,
+      editedLabel: EDITED.format(d.updatedAt),
+      // The builder and the results pages gate these again on the server;
+      // the list only stops offering a link that would open a lock.
+      canEdit,
+      canDelete: d.status === "draft" && canEdit,
+      canSend: canAuthor && (d.status === "published" || canEdit),
+      canDuplicate: canAuthor,
+      resultsHref:
+        d.status === "draft"
+          ? null
+          : isCaptain
+            ? `/captains/questionnaires/${d.key}/metrics`
+            : mayReadResults
+              ? `/questionnaires/results/${d.key}`
+              : null,
+      answerHref: waitingOn ? `/questionnaires/${waitingOn}` : null,
+      answered: answered.has(d.key),
+      openSendBlocking: openSends.get(d.key) ?? null,
+    };
+  });
+
+  // The list island draws the heading itself: "New questionnaire" is its
+  // action, and it opens the island's own composer.
+  return (
     <QuestionnaireHub
       heading={HEADING}
       items={items}
-      canCreateAttendanceCheck={rank === "captain"}
+      canAuthor={canAuthor}
+      canCreateAttendanceCheck={isCaptain}
     />
-  ) : (
-    <div className="flex flex-col">
-      <PageHeading {...HEADING} />
-      <CaptainLock
-        title="Team leads and captains only"
-        message="The questionnaire builder is for team leads and captains. Your rank doesn't have clearance for this."
-      />
-    </div>
   );
 }

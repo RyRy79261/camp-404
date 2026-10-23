@@ -158,8 +158,10 @@ describe("getProgramManifest", () => {
     asMember(campUserOf(plain));
 
     const ids = manifestProgramIds((await getProgramManifest())!);
-    expect(ids.has("questionnaires")).toBe(false);
+    expect(ids.has("announcements")).toBe(false);
     expect(ids.has("my-lift")).toBe(false);
+    // Every member reads every questionnaire (owner, 2026-10-23).
+    expect(ids.has("questionnaires")).toBe(true);
     expect(ids.has("tasks")).toBe(true);
   });
 

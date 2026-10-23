@@ -305,6 +305,14 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = (
       place: CAMP,
       rank: "camp_member",
     },
+    // Every questionnaire in camp, drafts included, for every member (owner,
+    // 2026-10-23); team leads and captains make and send them from here.
+    {
+      id: "questionnaires",
+      keywords: ["Results", "Poll", "Send"],
+      place: CAMP,
+      rank: "camp_member",
+    },
     // /power is the program's home: the answer rail (a phone's list of the six
     // sections), with the load list beside it in a wide window.
     {
@@ -462,12 +470,6 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = (
     {
       id: "applications",
       keywords: ["Accept", "Tickets", "WAP", "DDT"],
-      place: CAPTAINS,
-      rank: "team_lead",
-    },
-    {
-      id: "questionnaires",
-      keywords: ["Results", "Responses", "Publish"],
       place: CAPTAINS,
       rank: "team_lead",
     },
@@ -637,7 +639,12 @@ export const PROGRAM_REGISTRY: readonly RegistryEntry[] = (
     {
       id: "preview-questionnaire",
       place: null,
-      rank: "team_lead",
+      rank: "camp_member",
+    },
+    {
+      id: "questionnaire-results",
+      place: null,
+      rank: "camp_member",
     },
     {
       id: "send-questionnaire",

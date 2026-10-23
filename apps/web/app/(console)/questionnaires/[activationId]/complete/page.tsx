@@ -1,4 +1,7 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BarChart3 } from "lucide-react";
+import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { getActivationById, getRequiredAction } from "@camp404/db/activations";
 import { getAuthenticatedUserOrRedirect } from "@/lib/auth";
@@ -9,6 +12,7 @@ import {
   hasCampAccess,
 } from "@/lib/users";
 import { nextGate } from "@/lib/required-actions";
+import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { QueueCard } from "@/components/questionnaire/queue-card";
 import { CompletionHero } from "./completion-hero";
 import { SignOutLink } from "@/components/auth/sign-out-link";
@@ -54,9 +58,10 @@ export default async function QuestionnaireCompletePage({
     redirect(`/questionnaires/${activation.id}`);
   }
 
-  const [pending, gates] = await Promise.all([
+  const [pending, gates, builder] = await Promise.all([
     getPendingQuestionnaires(campUser.id),
     getPendingRequiredActions(campUser.id),
+    getBuilderDefinition(activation.questionnaireKey),
   ]);
   const next = nextGate(gates);
   const required = pending.filter((q) => q.blocking);
@@ -74,6 +79,17 @@ export default async function QuestionnaireCompletePage({
           />
         </CardContent>
       </Card>
+
+      {/* A builder questionnaire's results open to everyone who answered
+          (owner, 2026-10-23), once nothing holds the app. */}
+      {builder && !next ? (
+        <Button asChild variant="outline" className="self-center">
+          <Link href={`/questionnaires/results/${activation.questionnaireKey}`}>
+            <BarChart3 aria-hidden />
+            See the results
+          </Link>
+        </Button>
+      ) : null}
 
       {pending.length > 0 && (
         <section

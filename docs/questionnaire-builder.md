@@ -272,12 +272,18 @@ islands persist via server action + `router.refresh()` (mirror
 
 ### 4.1 Permissions (enforced server-side at the data layer)
 
+[CORRECTION 2026-10-23] The owner opened questionnaires to the camp and made
+"Publish means send". The table below is the current rule; AGENTS.md has the
+reasons.
+
 | Surface / action | Clearance |
 |---|---|
-| Hub + canvas + editors + Preview | ≥ `team_lead` |
-| Edit-a-draft | team-lead **only their own** drafts (`createdBy`); captain any |
-| Hub rows shown | team-lead: published + own drafts; captain: all |
-| Publish / Unpublish / Send / Push-reminder | `captain` |
+| Hub (list) + Preview | every camp member, drafts included |
+| Canvas + editors, Edit-a-draft | team-lead **only their own** (`createdBy`); captain any |
+| Send (puts the latest version online in the same press) | ≥ `team_lead`, any audience, blocking included; a draft only by its author or a captain |
+| Send changes / Close send / Push-reminder / Anonymous results | its author (≥ `team_lead`) or a captain |
+| Take offline (unpublish) / year policy / attendance check | `captain` |
+| Member results (`/questionnaires/results/[key]`) | anyone who answered this year, its author, captains; opinion questions only, cut by `sharedResults` |
 | Metrics / Responses (PII) | `captain` (data withheld server-side otherwise) |
 | Respondent runner | viewer must have a matching `required_actions` row (else "not invited"); see §5 |
 

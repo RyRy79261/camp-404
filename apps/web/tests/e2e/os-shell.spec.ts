@@ -174,6 +174,8 @@ test.describe("404 OS desktop (test-mode)", () => {
       "Tasks",
       "Calendar",
       "Roster",
+      // Every questionnaire, for every member (owner, 2026-10-23).
+      "Questionnaires",
       "Family tree",
       "Power",
       "Teams",
@@ -195,7 +197,6 @@ test.describe("404 OS desktop (test-mode)", () => {
     await page.goto("/");
     await expect(desktopIcon(page, "Captains")).toBeVisible();
     const leadCaptains = await openConsoleNav(page, "Captains");
-    await expect(navEntry(leadCaptains, "Questionnaires")).toBeVisible();
     await expect(navEntry(leadCaptains, "Announcements")).toBeVisible();
     // Events are added in the Calendar (owner, 2026-10-10).
     await expect(navEntry(leadCaptains, "New event")).toHaveCount(0);
@@ -209,7 +210,6 @@ test.describe("404 OS desktop (test-mode)", () => {
     await expect(desktopIcon(page, "Terminal")).toBeVisible();
     const captains = await openConsoleNav(page, "Captains");
     for (const name of [
-      "Questionnaires",
       "Announcements",
       "Camp overview",
       "Payments",

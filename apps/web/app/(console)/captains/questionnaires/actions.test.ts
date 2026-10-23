@@ -18,7 +18,12 @@ vi.mock("@/lib/users", () => ({
 vi.mock("@/lib/roster", () => ({ getCampManagementRoster: vi.fn() }));
 vi.mock("@camp404/db/questionnaire-definitions", () => ({
   getDefinitionMetaRow: vi.fn(),
+  setDefinitionAnonymousResults: vi.fn(),
   setDefinitionCarryOver: vi.fn(),
+}));
+vi.mock("@camp404/db/activations", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@camp404/db/activations")>()),
+  getActivationById: vi.fn(),
 }));
 vi.mock("@camp404/db/questionnaire-lifecycle", () => ({
   publishDefinition: vi.fn(),
@@ -39,7 +44,7 @@ vi.mock("@/lib/questionnaire-definitions", () => ({
 }));
 
 import { attendanceQuestionnaire } from "@camp404/types";
-import { canSendToAudience } from "@camp404/core";
+import { canSendQuestionnaireTo } from "@camp404/core";
 import { computeAudience, type AudienceData } from "@camp404/db/audience";
 import {
   closeActivationAction,
@@ -54,6 +59,7 @@ import {
   publishAction,
   remindPendingAction,
   sendAction,
+  setAnonymousResultsAction,
   unpublishAction,
   updateDefinitionAction,
 } from "./actions";
@@ -62,6 +68,7 @@ import { ensureCampUser, getLeadTeams, isTeamLead } from "@/lib/users";
 import { getCampManagementRoster } from "@/lib/roster";
 import {
   getDefinitionMetaRow,
+  setDefinitionAnonymousResults,
   setDefinitionCarryOver,
 } from "@camp404/db/questionnaire-definitions";
 import { getMealPlan } from "@/lib/meal-plan";
@@ -82,6 +89,7 @@ import {
   unpublishDefinition,
 } from "@camp404/db/questionnaire-lifecycle";
 import { deliverAfterResponse } from "@/lib/background-work";
+import { getActivationById } from "@camp404/db/activations";
 
 /**
  * Sign in as one viewer. `leadTeams` is the SOURCE of the team-lead facts, not
@@ -108,17 +116,65 @@ function asViewer(
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(deleteDraft).mockResolvedValue(true);
+  // By default the questionnaire is online and someone else wrote it, so a
+  // send is not also a publish unless a test says so.
+  vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+    key: "feedback",
+    status: "published",
+    version: "feedback-v1",
+    createdBy: "someone-else",
+    anonymousResults: false,
+  });
+  vi.mocked(publishDefinition).mockResolvedValue({
+    ok: true,
+    version: "feedback-v1",
+    change: "cosmetic",
+  });
+  vi.mocked(getActivationById).mockResolvedValue({
+    id: "00000000-0000-4000-8000-000000000001",
+    questionnaireKey: "feedback",
+  } as Awaited<ReturnType<typeof getActivationById>>);
 });
 
-describe("publishAction — captain gate", () => {
-  it("rejects a team-lead (non-captain)", async () => {
+describe("publishAction (Send changes) — its author or a captain", () => {
+  it("refuses a team lead who did not write it", async () => {
     asViewer("member", true); // derives to team_lead
     const res = await publishAction("feedback");
     expect(res).toEqual({
       ok: false,
-      errors: ["Only captains can publish or send."],
+      errors: ["You can only edit your own questionnaires."],
       issues: [],
     });
+    expect(publishDefinition).not.toHaveBeenCalled();
+  });
+
+  it("puts its author's changes online when the author is a team lead", async () => {
+    asViewer("member", true);
+    vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+      key: "feedback",
+      status: "published",
+      version: "feedback-v1",
+      createdBy: "u1",
+      anonymousResults: false,
+    });
+    expect(await publishAction("feedback")).toEqual({
+      ok: true,
+      version: "feedback-v1",
+      change: "cosmetic",
+    });
+    expect(publishDefinition).toHaveBeenCalledWith("feedback", "u1");
+  });
+
+  it("refuses a plain member, even its author", async () => {
+    asViewer("member");
+    vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+      key: "feedback",
+      status: "published",
+      version: "feedback-v1",
+      createdBy: "u1",
+      anonymousResults: false,
+    });
+    expect((await publishAction("feedback")).ok).toBe(false);
     expect(publishDefinition).not.toHaveBeenCalled();
   });
 
@@ -129,6 +185,7 @@ describe("publishAction — captain gate", () => {
       status: "draft",
       version: null,
       createdBy: "u1",
+      anonymousResults: false,
     });
     vi.mocked(publishDefinition).mockResolvedValue({
       ok: true,
@@ -161,6 +218,7 @@ describe("publishAction — captain gate", () => {
       status: "draft",
       version: null,
       createdBy: "u1",
+      anonymousResults: false,
     });
     const refused = {
       ok: false as const,
@@ -190,7 +248,15 @@ describe("createAttendanceCheckAction", () => {
       return "coming-this-year";
     });
     vi.mocked(getDefinitionMetaRow).mockImplementation(async (key) =>
-      stored ? { key, status: stored, version: null, createdBy: "u1" } : null,
+      stored
+        ? {
+            key,
+            status: stored,
+            version: null,
+            createdBy: "u1",
+            anonymousResults: false,
+          }
+        : null,
     );
     vi.mocked(publishDefinition).mockImplementation(async () => {
       stored = "published";
@@ -215,11 +281,11 @@ describe("createAttendanceCheckAction", () => {
     expect(publishDefinition).not.toHaveBeenCalled();
   });
 
-  it("refuses a team lead, who may author but not publish or send", async () => {
+  it("refuses a team lead: the yearly check is the captains'", async () => {
     asViewer("member", ["kitchen", "structures"]);
     expect(await createAttendanceCheckAction()).toEqual({
       ok: false,
-      error: "Only captains can publish or send.",
+      error: "Only captains can do this.",
     });
     expect(createAttendanceCheck).not.toHaveBeenCalled();
     expect(publishDefinition).not.toHaveBeenCalled();
@@ -317,14 +383,10 @@ describe("sendAction — validation", () => {
 });
 
 // --- sendAction: the audience gate ------------------------------------------
-// The widest thing a non-captain can do in the app. The gate is two moves —
-// `gateAuthor()` for the rank, then `canSendToAudience` for the audience — and
-// the cases that matter are the REFUSALS: dropping to `team_lead` without the
-// second move would put every member one questionnaire away from the whole
-// camp. Each verdict below is checked against the pure rule as well as the
-// action, so the two cannot drift apart.
-
-const REFUSED = "You can only send to a team you lead.";
+// Two moves: `gateAuthor()` for the rank, then `canSendQuestionnaireTo` for
+// the audience. A team lead sends to any questionnaire audience a captain may,
+// blocking included (owner, 2026-10-23); a plain member is refused at the rank
+// gate. Each verdict is checked against the pure rule as well as the action.
 
 describe("sendAction — the audience gate", () => {
   beforeEach(() => {
@@ -335,80 +397,86 @@ describe("sendAction — the audience gate", () => {
     });
   });
 
-  it("lets a team lead send to a team they lead", async () => {
+  it("lets a team lead send to the whole camp, blocking, and to any team", async () => {
     asViewer("member", ["kitchen"]);
     expect(
-      canSendToAudience(
-        { rank: "team_lead", leadTeams: ["kitchen"] },
-        { scope: "team", team: "kitchen" },
-      ),
+      canSendQuestionnaireTo({ rank: "team_lead" }, { scope: "everyone" }),
     ).toBe(true);
 
-    expect(
-      await sendAction("feedback", {
-        scope: "team",
-        team: "kitchen",
-        blocking: false,
-      }),
-    ).toEqual({ ok: true, activationId: "act1" });
+    for (const input of [
+      { scope: "everyone", blocking: true },
+      { scope: "team", team: "structures", blocking: false },
+      { scope: "team_leads", blocking: false },
+      { scope: "individual", blocking: false, targetUserIds: [ADA] },
+    ]) {
+      expect(await sendAction("feedback", input)).toEqual({
+        ok: true,
+        activationId: "act1",
+      });
+    }
     expect(sendActivation).toHaveBeenCalledWith(
       expect.objectContaining({
-        scope: "team",
-        team: "kitchen",
+        scope: "everyone",
+        blocking: true,
         activatedByUserId: "u1",
       }),
     );
   });
 
-  it("refuses a team lead sending to a team they do NOT lead", async () => {
+  it("does not put someone else's changes online when a lead sends it", async () => {
     asViewer("member", ["kitchen"]);
-    expect(
-      await sendAction("feedback", {
-        scope: "team",
-        team: "structures",
-        blocking: false,
-      }),
-    ).toEqual({ ok: false, error: REFUSED });
-    expect(sendActivation).not.toHaveBeenCalled();
+    await sendAction("feedback", { scope: "everyone", blocking: false });
+    expect(publishDefinition).not.toHaveBeenCalled();
   });
 
-  it("refuses a team lead sending to everyone", async () => {
+  it("refuses a lead sending someone else's questionnaire that is not online", async () => {
     asViewer("member", ["kitchen"]);
+    vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+      key: "feedback",
+      status: "draft",
+      version: null,
+      createdBy: "someone-else",
+      anonymousResults: false,
+    });
     expect(
       await sendAction("feedback", { scope: "everyone", blocking: false }),
-    ).toEqual({ ok: false, error: REFUSED });
+    ).toEqual({
+      ok: false,
+      error:
+        "Only its author or a captain can send this questionnaire for the first time.",
+    });
     expect(sendActivation).not.toHaveBeenCalled();
   });
 
-  it("refuses every other scope a lead might reach for", async () => {
-    // `team_leads` is a peer broadcast between leads and `individual` is a way
-    // to reach the whole camp one id at a time — both are captain-only.
+  it("puts its author's draft online and sends it in one press", async () => {
     asViewer("member", ["kitchen"]);
+    vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+      key: "feedback",
+      status: "draft",
+      version: null,
+      createdBy: "u1",
+      anonymousResults: false,
+    });
     expect(
-      await sendAction("feedback", { scope: "team_leads", blocking: false }),
-    ).toEqual({ ok: false, error: REFUSED });
+      await sendAction("feedback", { scope: "everyone", blocking: false }),
+    ).toEqual({ ok: true, activationId: "act1" });
+    expect(publishDefinition).toHaveBeenCalledWith("feedback", "u1");
     expect(
-      await sendAction("feedback", {
-        scope: "individual",
-        blocking: false,
-        targetUserIds: [ADA],
-      }),
-    ).toEqual({ ok: false, error: REFUSED });
-    expect(sendActivation).not.toHaveBeenCalled();
+      vi.mocked(publishDefinition).mock.invocationCallOrder[0]!,
+    ).toBeLessThan(vi.mocked(sendActivation).mock.invocationCallOrder[0]!);
   });
 
-  it("leaves a captain unrestricted, without reading any membership", async () => {
+  it("sends nothing when the draft cannot go online, and says why", async () => {
     asViewer("captain");
+    vi.mocked(publishDefinition).mockResolvedValue({
+      ok: false,
+      errors: ["Every question needs its words."],
+      issues: [],
+    });
     expect(
-      await sendAction("feedback", {
-        scope: "team",
-        team: "structures",
-        blocking: false,
-      }),
-    ).toEqual({ ok: true, activationId: "act1" });
-    // Captains are allowed by RANK, never by membership — so the lead-teams
-    // read never happens for them.
-    expect(getLeadTeams).not.toHaveBeenCalled();
+      await sendAction("feedback", { scope: "everyone", blocking: false }),
+    ).toEqual({ ok: false, error: "Every question needs its words." });
+    expect(sendActivation).not.toHaveBeenCalled();
   });
 
   it("refuses a plain member everywhere, at the rank gate", async () => {
@@ -423,17 +491,14 @@ describe("sendAction — the audience gate", () => {
       });
     }
     expect(sendActivation).not.toHaveBeenCalled();
-    // The rank gate refuses before the audience is even consulted: its own
-    // read of the lead teams, once per send, is the only one.
-    expect(getLeadTeams).toHaveBeenCalledTimes(2);
+    expect(publishDefinition).not.toHaveBeenCalled();
   });
 });
 
 // --- sendAction: optional questionnaires (#313) ------------------------------
 // "Anyone may answer (optional)" puts a questionnaire in every camp member's
-// My forms. Captains only: a lead is refused here (and again inside the
-// write, covered by the PGlite suite), and whatever the request says, an
-// optional send is never blocking, has no deadline and names nobody.
+// My forms. Team leads and captains (owner, 2026-10-23); whatever the request
+// says, an optional send is never blocking, has no deadline and names nobody.
 
 describe("sendAction — optional questionnaires (opt_in)", () => {
   beforeEach(() => {
@@ -474,22 +539,11 @@ describe("sendAction — optional questionnaires (opt_in)", () => {
     expect(vi.mocked(sendActivation).mock.calls[0]![0].announce).toBe(false);
   });
 
-  it("refuses a team lead, even a lead of several teams", async () => {
-    asViewer("member", ["kitchen", "structures"]);
-    expect(
-      canSendToAudience(
-        { rank: "team_lead", leadTeams: ["kitchen", "structures"] },
-        { scope: "opt_in" },
-      ),
-    ).toBe(false);
+  it("lets a team lead put one in My forms", async () => {
+    asViewer("member", ["kitchen"]);
     expect(
       await sendAction("feedback", { scope: "opt_in", blocking: false }),
-    ).toEqual({ ok: false, error: REFUSED });
-    expect(await previewAudienceCount({ scope: "opt_in" })).toEqual({
-      ok: false,
-      error: REFUSED,
-    });
-    expect(sendActivation).not.toHaveBeenCalled();
+    ).toEqual({ ok: true, activationId: "act1" });
   });
 
   it("refuses a plain member at the rank gate", async () => {
@@ -510,6 +564,7 @@ describe("unpublishAction", () => {
       status: "draft",
       version: null,
       createdBy: "u1",
+      anonymousResults: false,
     });
     expect(await unpublishAction("feedback")).toEqual({
       ok: false,
@@ -523,6 +578,7 @@ describe("unpublishAction", () => {
       status: "published",
       version: null,
       createdBy: "u1",
+      anonymousResults: false,
     });
     vi.mocked(unpublishDefinition).mockResolvedValue({
       ok: true,
@@ -535,11 +591,30 @@ describe("unpublishAction", () => {
 });
 
 describe("closeActivationAction", () => {
-  it("rejects a team-lead at the captain gate", async () => {
-    asViewer("member", true); // team_lead — passes the author gate, fails captain
+  it("refuses a team lead who did not write the questionnaire", async () => {
+    asViewer("member", true);
     expect(
       await closeActivationAction("00000000-0000-0000-0000-000000000000"),
-    ).toEqual({ ok: false, error: "Only captains can publish or send." });
+    ).toEqual({
+      ok: false,
+      error: "You can only edit your own questionnaires.",
+    });
+    expect(closeActivation).not.toHaveBeenCalled();
+  });
+
+  it("lets its author, a team lead, close the send", async () => {
+    asViewer("member", true);
+    vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+      key: "feedback",
+      status: "published",
+      version: "feedback-v1",
+      createdBy: "u1",
+      anonymousResults: false,
+    });
+    vi.mocked(closeActivation).mockResolvedValue({ ok: true });
+    expect(
+      await closeActivationAction("00000000-0000-0000-0000-000000000000"),
+    ).toEqual({ ok: true });
   });
 
   it("rejects an invalid activation id", async () => {
@@ -622,19 +697,18 @@ describe("previewAudienceCount — refusals cost nothing", () => {
 });
 
 describe("previewAudienceCount — the gate", () => {
-  it("gives a team-lead no count for an audience they cannot send to", async () => {
-    // The preview runs the SAME gate as the send, so it refuses exactly what
-    // the send would refuse — a preview that answered here would be a lie.
+  it("gives a team lead a count for the whole camp, like a captain", async () => {
     asViewer("member", ["kitchen"]);
     vi.mocked(getCampManagementRoster).mockResolvedValue(ROSTER);
+    const expected = computeAudience(
+      { scope: "everyone", team: null },
+      AUDIENCE_DATA,
+      null,
+    ).length;
     expect(await previewAudienceCount({ scope: "everyone" })).toEqual({
-      ok: false,
-      error: REFUSED,
+      ok: true,
+      count: expected,
     });
-    expect(
-      await previewAudienceCount({ scope: "team", team: "structures" }),
-    ).toEqual({ ok: false, error: REFUSED });
-    expect(getCampManagementRoster).not.toHaveBeenCalled();
   });
 
   it("counts the team a lead DOES lead, agreeing with computeAudience", async () => {
@@ -754,11 +828,11 @@ describe("previewAudienceCount — the count agrees with the send", () => {
 const ACT = "44444444-4444-4444-8444-444444444444";
 
 describe("remindPendingAction — the gate", () => {
-  it("refuses a team-lead", async () => {
+  it("refuses a team lead who did not write the questionnaire", async () => {
     asViewer("member", true); // derives to team_lead
     expect(await remindPendingAction(ACT)).toEqual({
       ok: false,
-      error: "Only captains can publish or send.",
+      error: "You can only edit your own questionnaires.",
     });
     expect(sendReminder).not.toHaveBeenCalled();
   });
@@ -767,7 +841,7 @@ describe("remindPendingAction — the gate", () => {
     asViewer("member");
     expect(await remindPendingAction(ACT)).toEqual({
       ok: false,
-      error: "Only captains can publish or send.",
+      error: "Team-lead access only.",
     });
     expect(sendReminder).not.toHaveBeenCalled();
   });
@@ -960,15 +1034,15 @@ describe("draft authoring — a team lead and another author's draft", () => {
     expect(deleteDraft).not.toHaveBeenCalled();
   });
 
-  it("cannot copy it, and cannot tell it exists", async () => {
+  it("may copy it: every member reads every draft (owner, 2026-10-23)", async () => {
     asViewer("member", true);
     definitionRow("draft", "someone-else");
+    vi.mocked(duplicateDefinition).mockResolvedValue("kitchen-rota-2");
 
     expect(await duplicateDraftAction("kitchen-rota")).toEqual({
-      ok: false,
-      error: "Questionnaire not found.",
+      ok: true,
+      key: "kitchen-rota-2",
     });
-    expect(duplicateDefinition).not.toHaveBeenCalled();
   });
 
   it("may copy another author's published questionnaire", async () => {
@@ -1265,5 +1339,37 @@ describe("a database error", () => {
     const id = "00000000-0000-0000-0000-000000000000";
     expect(await closeActivationAction(id)).toEqual({ ok: true });
     expect(closeActivation).toHaveBeenCalledWith(id, "u1");
+  });
+});
+
+describe("setAnonymousResultsAction — its author or a captain", () => {
+  it("refuses a team lead who did not write it, and a plain member", async () => {
+    asViewer("member", true);
+    expect(await setAnonymousResultsAction("feedback", true)).toEqual({
+      ok: false,
+      error: "You can only edit your own questionnaires.",
+    });
+    asViewer("member");
+    expect((await setAnonymousResultsAction("feedback", true)).ok).toBe(false);
+    expect(setDefinitionAnonymousResults).not.toHaveBeenCalled();
+  });
+
+  it("sets it for its author, naming them on the audit row", async () => {
+    asViewer("member", true);
+    vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+      key: "feedback",
+      status: "draft",
+      version: null,
+      createdBy: "u1",
+      anonymousResults: false,
+    });
+    expect(await setAnonymousResultsAction("feedback", true)).toEqual({
+      ok: true,
+    });
+    expect(setDefinitionAnonymousResults).toHaveBeenCalledWith(
+      "feedback",
+      true,
+      "u1",
+    );
   });
 });

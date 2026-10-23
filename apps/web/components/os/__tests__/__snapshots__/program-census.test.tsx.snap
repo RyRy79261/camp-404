@@ -566,6 +566,18 @@ exports[`program census > gives every program the same title, drawing and openin
       "w": 720,
     },
   },
+  "questionnaire-results": {
+    "line": "forms",
+    "small": {
+      "h": 626,
+      "w": 880,
+    },
+    "title": "Results",
+    "wide": {
+      "h": 950,
+      "w": 1092,
+    },
+  },
   "questionnaires": {
     "line": "forms",
     "small": {
@@ -878,6 +890,7 @@ exports[`program census > gives the captain the same manifest 1`] = `
     "recipe-source",
     "edit-questionnaire",
     "preview-questionnaire",
+    "questionnaire-results",
     "send-questionnaire",
     "results",
     "respondent-answers",
@@ -936,6 +949,10 @@ exports[`program census > gives the captain the same manifest 1`] = `
     {
       "id": "kitchen",
       "kind": "folder",
+    },
+    {
+      "id": "questionnaires",
+      "kind": "program",
     },
     {
       "id": "power",
@@ -1217,15 +1234,6 @@ exports[`program census > gives the captain the same manifest 1`] = `
           "label": "Applications",
         },
         {
-          "fileName": "FORMS.EXE",
-          "folder": "captains",
-          "group": "captains",
-          "href": "/captains/questionnaires",
-          "icon": "questionnaires",
-          "id": "questionnaires",
-          "label": "Questionnaires",
-        },
-        {
           "fileName": "BROADCAST.EXE",
           "folder": "captains",
           "group": "captains",
@@ -1410,6 +1418,15 @@ exports[`program census > gives the captain the same manifest 1`] = `
       "icon": "roster",
       "id": "roster",
       "label": "Roster",
+    },
+    {
+      "fileName": "FORMS.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/captains/questionnaires",
+      "icon": "questionnaires",
+      "id": "questionnaires",
+      "label": "Questionnaires",
     },
     {
       "fileName": "POWER.EXE",
@@ -1731,6 +1748,15 @@ exports[`program census > gives the captain the same manifest 1`] = `
       "where": "Kitchen",
     },
     {
+      "id": "questionnaires",
+      "keywords": [
+        "Results",
+        "Poll",
+        "Send",
+      ],
+      "where": "Communications & HR",
+    },
+    {
       "id": "power",
       "keywords": [
         "Fuel cans",
@@ -1869,15 +1895,6 @@ exports[`program census > gives the captain the same manifest 1`] = `
         "Tickets",
         "WAP",
         "DDT",
-      ],
-      "where": "Captains",
-    },
-    {
-      "id": "questionnaires",
-      "keywords": [
-        "Results",
-        "Responses",
-        "Publish",
       ],
       "where": "Captains",
     },
@@ -2031,6 +2048,10 @@ exports[`program census > gives the captain the same manifest 1`] = `
           "kind": "folder",
         },
         {
+          "id": "questionnaires",
+          "kind": "program",
+        },
+        {
           "id": "power",
           "kind": "program",
         },
@@ -2157,7 +2178,7 @@ exports[`program census > gives the captain the same manifest 1`] = `
     },
     "today": true,
   },
-  "version": "cd81c397",
+  "version": "034b6263",
 }
 `;
 
@@ -2178,6 +2199,7 @@ exports[`program census > gives the financeLead the same manifest 1`] = `
     "recipe-source",
     "edit-questionnaire",
     "preview-questionnaire",
+    "questionnaire-results",
     "send-questionnaire",
     "inkblot",
     "questionnaire",
@@ -2234,6 +2256,10 @@ exports[`program census > gives the financeLead the same manifest 1`] = `
     {
       "id": "kitchen",
       "kind": "folder",
+    },
+    {
+      "id": "questionnaires",
+      "kind": "program",
     },
     {
       "id": "power",
@@ -2488,15 +2514,6 @@ exports[`program census > gives the financeLead the same manifest 1`] = `
           "label": "Applications",
         },
         {
-          "fileName": "FORMS.EXE",
-          "folder": "captains",
-          "group": "captains",
-          "href": "/captains/questionnaires",
-          "icon": "questionnaires",
-          "id": "questionnaires",
-          "label": "Questionnaires",
-        },
-        {
           "fileName": "BROADCAST.EXE",
           "folder": "captains",
           "group": "captains",
@@ -2627,6 +2644,15 @@ exports[`program census > gives the financeLead the same manifest 1`] = `
       "icon": "roster",
       "id": "roster",
       "label": "Roster",
+    },
+    {
+      "fileName": "FORMS.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/captains/questionnaires",
+      "icon": "questionnaires",
+      "id": "questionnaires",
+      "label": "Questionnaires",
     },
     {
       "fileName": "POWER.EXE",
@@ -2940,6 +2966,15 @@ exports[`program census > gives the financeLead the same manifest 1`] = `
       "where": "Kitchen",
     },
     {
+      "id": "questionnaires",
+      "keywords": [
+        "Results",
+        "Poll",
+        "Send",
+      ],
+      "where": "Communications & HR",
+    },
+    {
       "id": "power",
       "keywords": [
         "Fuel cans",
@@ -3063,15 +3098,6 @@ exports[`program census > gives the financeLead the same manifest 1`] = `
       "where": "Captains",
     },
     {
-      "id": "questionnaires",
-      "keywords": [
-        "Results",
-        "Responses",
-        "Publish",
-      ],
-      "where": "Captains",
-    },
-    {
       "id": "announcements",
       "keywords": [
         "Pop-up",
@@ -3168,6 +3194,10 @@ exports[`program census > gives the financeLead the same manifest 1`] = `
         {
           "id": "kitchen",
           "kind": "folder",
+        },
+        {
+          "id": "questionnaires",
+          "kind": "program",
         },
         {
           "id": "power",
@@ -3294,7 +3324,7 @@ exports[`program census > gives the financeLead the same manifest 1`] = `
     },
     "today": true,
   },
-  "version": "8926e5c9",
+  "version": "cf37df31",
 }
 `;
 
@@ -3355,6 +3385,10 @@ exports[`program census > gives the held the same manifest 1`] = `
     {
       "id": "kitchen",
       "kind": "folder",
+    },
+    {
+      "id": "questionnaires",
+      "kind": "program",
     },
     {
       "id": "power",
@@ -3692,6 +3726,15 @@ exports[`program census > gives the held the same manifest 1`] = `
       "label": "Roster",
     },
     {
+      "fileName": "FORMS.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/captains/questionnaires",
+      "icon": "questionnaires",
+      "id": "questionnaires",
+      "label": "Questionnaires",
+    },
+    {
       "fileName": "POWER.EXE",
       "folder": null,
       "group": "camp",
@@ -4003,6 +4046,15 @@ exports[`program census > gives the held the same manifest 1`] = `
       "where": "Kitchen",
     },
     {
+      "id": "questionnaires",
+      "keywords": [
+        "Results",
+        "Poll",
+        "Send",
+      ],
+      "where": "Communications & HR",
+    },
+    {
       "id": "power",
       "keywords": [
         "Fuel cans",
@@ -4133,7 +4185,7 @@ exports[`program census > gives the held the same manifest 1`] = `
     "inbox": null,
     "today": false,
   },
-  "version": "78ebd4df",
+  "version": "9c4d6d2b",
 }
 `;
 
@@ -4155,6 +4207,7 @@ exports[`program census > gives the kitchenLead the same manifest 1`] = `
     "recipe-source",
     "edit-questionnaire",
     "preview-questionnaire",
+    "questionnaire-results",
     "send-questionnaire",
     "inkblot",
     "questionnaire",
@@ -4211,6 +4264,10 @@ exports[`program census > gives the kitchenLead the same manifest 1`] = `
     {
       "id": "kitchen",
       "kind": "folder",
+    },
+    {
+      "id": "questionnaires",
+      "kind": "program",
     },
     {
       "id": "power",
@@ -4475,15 +4532,6 @@ exports[`program census > gives the kitchenLead the same manifest 1`] = `
           "label": "Applications",
         },
         {
-          "fileName": "FORMS.EXE",
-          "folder": "captains",
-          "group": "captains",
-          "href": "/captains/questionnaires",
-          "icon": "questionnaires",
-          "id": "questionnaires",
-          "label": "Questionnaires",
-        },
-        {
           "fileName": "BROADCAST.EXE",
           "folder": "captains",
           "group": "captains",
@@ -4605,6 +4653,15 @@ exports[`program census > gives the kitchenLead the same manifest 1`] = `
       "icon": "roster",
       "id": "roster",
       "label": "Roster",
+    },
+    {
+      "fileName": "FORMS.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/captains/questionnaires",
+      "icon": "questionnaires",
+      "id": "questionnaires",
+      "label": "Questionnaires",
     },
     {
       "fileName": "POWER.EXE",
@@ -4926,6 +4983,15 @@ exports[`program census > gives the kitchenLead the same manifest 1`] = `
       "where": "Kitchen",
     },
     {
+      "id": "questionnaires",
+      "keywords": [
+        "Results",
+        "Poll",
+        "Send",
+      ],
+      "where": "Communications & HR",
+    },
+    {
       "id": "power",
       "keywords": [
         "Fuel cans",
@@ -5049,15 +5115,6 @@ exports[`program census > gives the kitchenLead the same manifest 1`] = `
       "where": "Captains",
     },
     {
-      "id": "questionnaires",
-      "keywords": [
-        "Results",
-        "Responses",
-        "Publish",
-      ],
-      "where": "Captains",
-    },
-    {
       "id": "announcements",
       "keywords": [
         "Pop-up",
@@ -5143,6 +5200,10 @@ exports[`program census > gives the kitchenLead the same manifest 1`] = `
         {
           "id": "kitchen",
           "kind": "folder",
+        },
+        {
+          "id": "questionnaires",
+          "kind": "program",
         },
         {
           "id": "power",
@@ -5340,7 +5401,7 @@ exports[`program census > gives the kitchenLead the same manifest 1`] = `
     },
     "today": true,
   },
-  "version": "edab7ab9",
+  "version": "7486dc05",
 }
 `;
 
@@ -5357,6 +5418,8 @@ exports[`program census > gives the member the same manifest 1`] = `
     "recipe",
     "recipe-version",
     "recipe-source",
+    "preview-questionnaire",
+    "questionnaire-results",
     "inkblot",
     "questionnaire",
   ],
@@ -5416,6 +5479,10 @@ exports[`program census > gives the member the same manifest 1`] = `
     {
       "id": "kitchen",
       "kind": "folder",
+    },
+    {
+      "id": "questionnaires",
+      "kind": "program",
     },
     {
       "id": "power",
@@ -5763,6 +5830,15 @@ exports[`program census > gives the member the same manifest 1`] = `
       "label": "Roster",
     },
     {
+      "fileName": "FORMS.EXE",
+      "folder": null,
+      "group": "camp",
+      "href": "/captains/questionnaires",
+      "icon": "questionnaires",
+      "id": "questionnaires",
+      "label": "Questionnaires",
+    },
+    {
       "fileName": "POWER.EXE",
       "folder": null,
       "group": "camp",
@@ -6084,6 +6160,15 @@ exports[`program census > gives the member the same manifest 1`] = `
       "where": "Kitchen",
     },
     {
+      "id": "questionnaires",
+      "keywords": [
+        "Results",
+        "Poll",
+        "Send",
+      ],
+      "where": "Communications & HR",
+    },
+    {
       "id": "power",
       "keywords": [
         "Fuel cans",
@@ -6272,6 +6357,10 @@ exports[`program census > gives the member the same manifest 1`] = `
           "kind": "folder",
         },
         {
+          "id": "questionnaires",
+          "kind": "program",
+        },
+        {
           "id": "power",
           "kind": "program",
         },
@@ -6404,7 +6493,7 @@ exports[`program census > gives the member the same manifest 1`] = `
     },
     "today": true,
   },
-  "version": "4e5435ee",
+  "version": "429ff549",
 }
 `;
 
@@ -7088,6 +7177,14 @@ exports[`program census > opens the same window for every console page 1`] = `
       "genericTitle": "FORM.FRM",
       "instanceKey": "questionnaire:sample-activationId",
       "programId": "questionnaire",
+    },
+  ],
+  [
+    "/questionnaires/results/[key]",
+    {
+      "genericTitle": "POLL.TXT",
+      "instanceKey": "questionnaire-results:sample-key",
+      "programId": "questionnaire-results",
     },
   ],
   [

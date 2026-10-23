@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import {
-  canSendToAudience,
+  canSendQuestionnaireTo,
   classifyChange,
   type DefinitionIssue,
   definitionLimitErrors,
@@ -430,7 +430,8 @@ export interface SendInput {
 }
 
 /** The refusal when the sender may not address the audience they chose. */
-export const SEND_REFUSED = "You can only send to a team you lead.";
+export const SEND_REFUSED =
+  "Only team leads and captains can send a questionnaire.";
 
 export type SendResult =
   | { ok: true; activationId: string; created: number }
@@ -483,21 +484,18 @@ export async function sendActivation(input: SendInput): Promise<SendResult> {
   const optIn = input.scope === "opt_in";
 
   const activationId = await withTransaction(async (tx) => {
-    if (optIn) {
-      // The action asked canSendToAudience on the screen's answer; ask again
-      // on the sender's rank and lead teams read under lock here, so a captain
-      // demoted a moment ago cannot put a questionnaire in the whole camp's My
-      // forms on the old answer.
-      const actor = await lockActor(tx, input.activatedByUserId);
-      if (
-        !actor ||
-        !canSendToAudience(
-          { rank: actor.rank, leadTeams: actor.ledTeams },
-          { scope: "opt_in" },
-        )
-      ) {
-        return null;
-      }
+    // The action asked canSendQuestionnaireTo on the screen's answer; ask
+    // again on the sender's rank read under lock here, so a lead or captain
+    // demoted a moment ago cannot reach the whole camp on the old answer.
+    const actor = await lockActor(tx, input.activatedByUserId);
+    if (
+      !actor ||
+      !canSendQuestionnaireTo(
+        { rank: actor.rank },
+        { scope: input.scope, team: input.team ?? null },
+      )
+    ) {
+      return null;
     }
     const [act] = await tx
       .insert(schema.questionnaireActivations)

@@ -20,23 +20,24 @@ import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
   closeActivationAction,
   getCarryOverAction,
+  setAnonymousResultsAction,
   setCarryOverAction,
   unpublishAction,
 } from "../actions";
 
 type Status = "draft" | "published" | "unpublished";
 
-// The builder's right rail. AfrikaBurn's builder has an "Audience & send" card
-// there; Camp 404 publishes first and chooses the audience on the Send page, so
-// the same card holds this questionnaire's lifecycle instead: its status,
-// Publish, Send, Close send, See results, Unpublish and the year policy.
-// Publishing, closing, unpublishing, results and the year policy are
-// captain-only, and each action checks that again on the server; a team lead
-// sees the status, Send, and why Publish is out of reach.
+// The builder's right rail: this questionnaire's life. Sending is the one step
+// (owner, 2026-10-23: "Publish means send"): "Send…" opens the Send page, and
+// sending there puts the latest version online and asks the people picked.
+// While a send is out, "Send changes" puts edits online and "Close send" ends
+// it. Everyone who can open the builder (its author, or a captain) does these;
+// each action checks that again on the server. Unpublishing and the year
+// policy stay with captains.
 
 /**
  * Shown while editing a published/unpublished questionnaire: head edits don't
- * reach members until a captain re-publishes (the live snapshot keeps serving).
+ * reach members until they are sent (the live snapshot keeps serving).
  * Spec §4.2.
  */
 export function EditPublishedBanner({ status }: { status: Status }) {
@@ -45,8 +46,8 @@ export function EditPublishedBanner({ status }: { status: Status }) {
       <TriangleAlert aria-hidden />
       <span>
         {status === "published"
-          ? "You're editing a live questionnaire. Members keep the current version until you re-publish."
-          : "This questionnaire is unpublished. Edits are saved as a draft; re-publish to put it back online."}
+          ? "You're editing a questionnaire that is out with members. They keep the version they have until you send your changes."
+          : "This questionnaire was taken offline. Edits are saved; send it to put it back online."}
       </span>
     </Alert>
   );
@@ -147,14 +148,18 @@ export function CarryOverToggle({
   );
 }
 
-const STATUS_BADGE: Record<
-  Status,
-  { label: string; variant: "success" | "secondary" | "outline" }
-> = {
-  draft: { label: "Draft", variant: "outline" },
-  published: { label: "Published", variant: "success" },
-  unpublished: { label: "Unpublished", variant: "secondary" },
-};
+/** Where a questionnaire stands, in the words the camp uses. */
+export function lifecycleLabel(
+  status: Status,
+  sentNow: boolean,
+): { label: string; variant: "success" | "secondary" | "outline" } {
+  if (status === "draft") return { label: "Draft", variant: "outline" };
+  if (status === "unpublished")
+    return { label: "Offline", variant: "secondary" };
+  return sentNow
+    ? { label: "Sent", variant: "success" }
+    : { label: "Closed", variant: "secondary" };
+}
 
 /** The question before closing an open send, wherever a captain can close one. */
 export const CLOSE_SEND_CONFIRM = {
@@ -173,11 +178,11 @@ export const CLOSE_OPT_IN_CONFIRM = {
 } as const;
 
 /**
- * The lifecycle card: status; Publish (or Re-publish); for a published
- * questionnaire Send (or Close send while one is open), See results and
- * Unpublish; and the year policy. `onPublish` belongs to the builder, which
- * saves unsaved changes first and shows what publishing refused beside the
- * blocks it is about.
+ * The Send card: where it stands; Send… (or, while a send is out, Send changes
+ * and Close send); its results; Unpublish (captains); whether the results
+ * show names; and the year policy (captains). `onSend` and `onSendChanges`
+ * belong to the builder, which checks and saves the draft first and shows
+ * what stops it beside the blocks it is about.
  */
 export function LifecycleRail({
   questionnaireKey,
@@ -186,35 +191,42 @@ export function LifecycleRail({
   isCaptain,
   openActivationId,
   openActivationBlocking = null,
-  publishing,
+  anonymousResults,
+  busy: builderBusy,
   unsaved,
-  onPublish,
+  onSend,
+  onSendChanges,
 }: {
   questionnaireKey: string;
   status: Status;
   version: string | null;
-  /** Captains publish, close, unpublish and set the year policy. */
+  /** Captains also unpublish, read every name, and set the year policy. */
   isCaptain: boolean;
   openActivationId: string | null;
-  /** The open send's blocking flag, shown beside "Currently sent". */
+  /** The open send's blocking flag, shown beside "Out with members". */
   openActivationBlocking?: boolean | null;
-  publishing: boolean;
+  /** The members who answered read the results without names. */
+  anonymousResults: boolean;
+  /** The builder is checking, saving or sending changes. */
+  busy: "send" | "changes" | null;
   /** The builder holds changes that are not saved yet. */
   unsaved: boolean;
-  onPublish: () => void;
+  onSend: () => void;
+  onSendChanges: () => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"unpublish" | "close" | null>(null);
   const [confirm, confirmDialog] = useConfirm();
   const reasonId = useId();
-  const badge = STATUS_BADGE[status];
+  const sentNow = status === "published" && openActivationId !== null;
+  const badge = lifecycleLabel(status, sentNow);
 
   async function unpublish() {
     const sure = await confirm({
-      title: "Unpublish this questionnaire?",
+      title: "Take this questionnaire offline?",
       description:
         "Members stop being able to answer it, and any open send closes. Their answers so far are kept.",
-      confirmLabel: "Unpublish",
+      confirmLabel: "Take offline",
       destructive: true,
     });
     if (!sure) return;
@@ -225,7 +237,7 @@ export function LifecycleRail({
         toast.error(result.error);
         return;
       }
-      toast.success("Unpublished");
+      toast.success("Taken offline");
       router.refresh();
     } finally {
       setBusy(null);
@@ -253,20 +265,23 @@ export function LifecycleRail({
     }
   }
 
-  const anyBusy = publishing || busy !== null;
+  const anyBusy = builderBusy !== null || busy !== null;
+  const spinner = (
+    <Loader2 aria-hidden className="size-4 motion-safe:animate-spin" />
+  );
 
   return (
     // In the builder's grid: under the questionnaire while the page has two
     // columns (never under the palette, which sticks down its column and
     // would cover it), its own third column from xl.
     <aside
-      aria-label="Publish and send"
+      aria-label="Send"
       className="flex flex-col gap-4 page-lg:col-start-2 page-xl:sticky page-xl:top-6 page-xl:col-start-3 page-xl:row-start-1 page-xl:self-start"
     >
       {confirmDialog}
       <Card>
         <CardHeader>
-          <CardTitle>Publish &amp; send</CardTitle>
+          <CardTitle>Send</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -277,9 +292,9 @@ export function LifecycleRail({
               </span>
             ) : null}
           </div>
-          {openActivationId ? (
+          {sentNow ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              Currently sent to members
+              Out with members now
               {openActivationBlocking !== null ? (
                 <BlockingBadge blocking={openActivationBlocking} />
               ) : null}
@@ -288,84 +303,75 @@ export function LifecycleRail({
 
           {status !== "draft" ? <EditPublishedBanner status={status} /> : null}
 
-          <div className="flex flex-col gap-1.5">
-            {isCaptain ? (
+          <div className="flex flex-col gap-2">
+            {sentNow ? (
               <>
                 <Button
                   type="button"
-                  onClick={onPublish}
+                  onClick={onSendChanges}
                   disabled={anyBusy}
-                  aria-describedby={unsaved ? reasonId : undefined}
+                  aria-describedby={reasonId}
                 >
-                  {publishing ? (
-                    <Loader2
-                      aria-hidden
-                      className="size-4 motion-safe:animate-spin"
-                    />
-                  ) : null}
-                  {status === "draft" ? "Publish" : "Re-publish"}
+                  {builderBusy === "changes" ? (
+                    spinner
+                  ) : (
+                    <Send aria-hidden className="size-4" />
+                  )}
+                  Send changes
                 </Button>
-                {unsaved ? (
-                  <span id={reasonId} className="text-xs text-muted-foreground">
-                    Your unsaved changes are saved first.
-                  </span>
-                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void closeSend()}
+                  disabled={anyBusy}
+                >
+                  {busy === "close" ? (
+                    spinner
+                  ) : (
+                    <Undo2 aria-hidden className="size-4" />
+                  )}
+                  Close send
+                </Button>
               </>
             ) : (
-              <>
-                <Button type="button" disabled aria-describedby={reasonId}>
-                  {status === "draft" ? "Publish" : "Re-publish"}
-                </Button>
-                <span id={reasonId} className="text-xs text-muted-foreground">
-                  Only captains can publish. Save your draft, then ask a captain
-                  to publish it.
-                </span>
-              </>
+              <Button
+                type="button"
+                onClick={onSend}
+                disabled={anyBusy}
+                aria-describedby={reasonId}
+              >
+                {builderBusy === "send" ? (
+                  spinner
+                ) : (
+                  <Send aria-hidden className="size-4" />
+                )}
+                Send…
+              </Button>
             )}
+            <span id={reasonId} className="text-xs text-muted-foreground">
+              {sentNow
+                ? "Send changes puts your edits in front of the people already asked."
+                : "You pick who answers next. Sending puts it online and asks them in one step."}
+              {unsaved ? " Your unsaved changes are saved first." : null}
+            </span>
           </div>
 
-          {status === "published" || (isCaptain && status !== "draft") ? (
+          {status !== "draft" ? (
             <div className="flex flex-col gap-2">
-              {status === "published" ? (
-                isCaptain && openActivationId ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void closeSend()}
-                    disabled={anyBusy}
-                  >
-                    {busy === "close" ? (
-                      <Loader2
-                        aria-hidden
-                        className="size-4 motion-safe:animate-spin"
-                      />
-                    ) : (
-                      <Undo2 aria-hidden className="size-4" />
-                    )}
-                    Close send
-                  </Button>
-                ) : (
-                  <Button asChild variant="outline">
-                    <Link
-                      href={`/captains/questionnaires/${questionnaireKey}/send`}
-                    >
-                      <Send aria-hidden className="size-4" /> Send to members
-                    </Link>
-                  </Button>
-                )
-              ) : null}
-              {/* The read-back half. A draft has no answers, so the page would
-                  render an empty state that reads as broken. Results are
-                  captain-only. */}
-              {isCaptain ? (
-                <Button asChild variant="outline">
-                  <Link
-                    href={`/captains/questionnaires/${questionnaireKey}/metrics`}
-                  >
-                    <BarChart3 aria-hidden className="size-4" /> See results
-                  </Link>
-                </Button>
-              ) : null}
+              {/* A draft has no answers, so a results page would read as
+                  broken. A captain reads the full results with names; the
+                  author reads what the members who answered read. */}
+              <Button asChild variant="outline">
+                <Link
+                  href={
+                    isCaptain
+                      ? `/captains/questionnaires/${questionnaireKey}/metrics`
+                      : `/questionnaires/results/${questionnaireKey}`
+                  }
+                >
+                  <BarChart3 aria-hidden className="size-4" /> See results
+                </Link>
+              </Button>
               {isCaptain && status === "published" ? (
                 <Button
                   type="button"
@@ -374,22 +380,17 @@ export function LifecycleRail({
                   onClick={() => void unpublish()}
                   disabled={anyBusy}
                 >
-                  {busy === "unpublish" ? (
-                    <Loader2
-                      aria-hidden
-                      className="size-4 motion-safe:animate-spin"
-                    />
-                  ) : null}
-                  Unpublish
+                  {busy === "unpublish" ? spinner : null}
+                  Take offline
                 </Button>
               ) : null}
             </div>
           ) : null}
 
-          <p className="text-xs text-muted-foreground">
-            Publishing puts this version online. Sending asks members to answer
-            it, on the Send page.
-          </p>
+          <AnonymousResultsToggle
+            questionnaireKey={questionnaireKey}
+            initial={anonymousResults}
+          />
 
           {isCaptain ? (
             <CarryOverToggle questionnaireKey={questionnaireKey} />
@@ -397,5 +398,67 @@ export function LifecycleRail({
         </CardContent>
       </Card>
     </aside>
+  );
+}
+
+/**
+ * Whether the members who answered see names in the results (owner,
+ * 2026-10-23: names by default, anonymous when the author asks). Captains
+ * always see names. No optimistic flip: the server stays the truth.
+ */
+export function AnonymousResultsToggle({
+  questionnaireKey,
+  initial,
+}: {
+  questionnaireKey: string;
+  initial: boolean;
+}) {
+  const switchId = useId();
+  const hintId = useId();
+  const [anonymous, setAnonymous] = useState(initial);
+  const [pending, startTransition] = useTransition();
+
+  function change(next: boolean) {
+    startTransition(async () => {
+      const result = await setAnonymousResultsAction(questionnaireKey, next);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setAnonymous(next);
+      toast.success(
+        next ? "Results will show no names" : "Results will show names",
+      );
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-border pt-4">
+      <div className="flex items-start justify-between gap-4">
+        <label htmlFor={switchId} className="text-sm font-medium">
+          Anonymous results
+        </label>
+        <div className="flex items-center gap-2">
+          {pending ? (
+            <Loader2
+              aria-hidden
+              className="size-4 text-muted-foreground motion-safe:animate-spin"
+            />
+          ) : null}
+          <Switch
+            id={switchId}
+            checked={anonymous}
+            disabled={pending}
+            aria-describedby={hintId}
+            onCheckedChange={change}
+          />
+        </div>
+      </div>
+      <p id={hintId} className="text-xs text-muted-foreground">
+        {anonymous
+          ? "People who answered see the counts and the written answers, with no names. Captains still see names."
+          : "People who answered see the counts first, then who answered what."}
+      </p>
+    </div>
   );
 }

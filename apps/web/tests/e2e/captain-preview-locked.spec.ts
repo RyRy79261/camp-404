@@ -80,7 +80,6 @@ test.describe("captain surfaces — preview-but-locked (test-mode)", () => {
     const captains = await openConsoleNav(page, "Captains");
     for (const name of [
       "Camp overview",
-      "Questionnaires",
       "Announcements",
       "Payments",
       "Camp settings",

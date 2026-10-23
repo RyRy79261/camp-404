@@ -126,7 +126,8 @@ export function registerQuestionnaireTools(server: McpServer): void {
         handler: async ({ scope }) => {
           const rank = requireAuthor(scope);
           const meta = await getDefinitionMetaRow(args.key);
-          // "Not found" for a draft this author may not see, so keys can't be probed.
+          // Every camp member reads every questionnaire, drafts included
+          // (canViewBuilderDefinition); the tool itself is for authors.
           if (
             !meta ||
             !canViewBuilderDefinition({ userId: scope.campUserId, rank }, meta)

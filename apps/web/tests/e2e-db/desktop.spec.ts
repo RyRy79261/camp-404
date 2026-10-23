@@ -15,7 +15,7 @@ import {
 } from "../e2e/lib/console-nav";
 import {
   answerGate,
-  buildAndPublish,
+  buildQuestionnaire,
   sendBlockingToEveryone,
   signInCaptain,
 } from "./_flows";
@@ -135,8 +135,8 @@ test("a member held by a blocking questionnaire: mid-session, then on a hard loa
 
   // Then sends two blocking questionnaires to everyone (answering each
   // itself, as it is held too).
-  await buildAndPublish(captain, CHECK);
-  await buildAndPublish(captain, CHECK2);
+  await buildQuestionnaire(captain, CHECK);
+  await buildQuestionnaire(captain, CHECK2);
   await sendBlockingToEveryone(captain, CHECK.title);
   await answerGate(captain, { ...CHECK, text: "A dome tent" });
   await sendBlockingToEveryone(captain, CHECK2.title);

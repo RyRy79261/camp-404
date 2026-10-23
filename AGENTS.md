@@ -633,6 +633,20 @@ Decisions baked into the schema — keep new code consistent with them:
     message away from the whole camp. Publishing, closing and reminding a
     questionnaire stay captain-only. Change the rule in that function, never
     at a call site.
+    [CORRECTION 2026-10-23] Questionnaire sends no longer use
+    `canSendToAudience` (owner: "a team lead should be able to send
+    questionnaires to the whole camp", blocking included). They ask
+    `canSendQuestionnaireTo` in `packages/core/src/questionnaire-sharing.ts`:
+    a team lead or a captain, any questionnaire audience. `sendActivation`
+    asks it again on `lockActor` inside its own transaction, for every scope.
+    "Publish means send": there is no Publish button; Send puts the author's
+    latest version online in the same press (`sendAction`), and "Send
+    changes" re-publishes for an open send. A questionnaire's author or a
+    captain sends a draft, sends changes, closes and reminds its send and
+    sets "Anonymous results"; anyone else of team-lead rank may send one
+    already online. Taking one offline, the year policy and the attendance
+    check stay captain-only. Announcements, tasks and calendar events keep
+    `canSendToAudience`.
   - **The Kitchen's recipe review is the other place team identity decides
     what a lead may do** (owner's flow for #243, 2026-09-23: "A Kitchen team
     lead or a captain approves it"). `canApproveRecipe` in
@@ -683,6 +697,20 @@ Decisions baked into the schema — keep new code consistent with them:
   shared, key-driven spine. The generic def+response pair is a deliberately
   _scoped_ exception to "bespoke over generic" (below), for camp-authored
   forms only.
+  [2026-10-23] **Every member sees every builder questionnaire, and everyone
+  who answers sees its results** (owner: "like when you do a poll on
+  Telegram"). The list (`/captains/questionnaires`, the Questionnaires
+  program, now on every member's desktop) shows drafts too, read-only
+  through the preview (`canViewBuilderDefinition`). A member who finished a
+  questionnaire this year, its author and captains read
+  `/questionnaires/results/[key]` (`canReadQuestionnaireResults`). What it
+  shows is cut on the server by `sharedResults` (`@camp404/core`): only
+  questions that ask for an opinion (`isSharedResultQuestion`: no role, no
+  email, phone, file or image), a typed "Other…" reads "Other", counts first,
+  and names behind "See who answered what" unless the questionnaire's
+  `anonymous_results` is on (then written answers only, unnamed). The runner
+  tells the member this before they answer. Captains keep the full results
+  page.
 - **Who is coming this year.** `camp_participations` is each member's
   per-year place: one row per member per burn year, its `status` set by the
   member's answer to the `participation_intent` question (Yes → `applied`,

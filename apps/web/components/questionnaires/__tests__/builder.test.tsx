@@ -47,8 +47,9 @@ vi.mock("@/app/(console)/captains/questionnaires/actions", () => ({
   publishAction: vi.fn(async () => ({
     ok: true,
     version: "gear-check-v1",
-    change: "initial",
+    change: "cosmetic",
   })),
+  setAnonymousResultsAction: vi.fn(),
   setCarryOverAction: vi.fn(),
   unpublishAction: vi.fn(),
   updateDefinitionAction: vi.fn(async () => ({ ok: true })),
@@ -141,9 +142,7 @@ describe("QuestionnaireBuilderV2 — layout", () => {
     ).toBeTruthy();
     expect(screen.getByText("Details")).toBeTruthy();
     expect(screen.getByText("2 sections · 2 questions")).toBeTruthy();
-    expect(
-      screen.getByRole("complementary", { name: "Publish and send" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("complementary", { name: "Send" })).toBeTruthy();
     expect(
       screen.getByText(/Every question you add is a question a camp member/),
     ).toBeTruthy();
@@ -496,28 +495,92 @@ describe("QuestionnaireBuilderV2 — conditions", () => {
   });
 });
 
-describe("QuestionnaireBuilderV2 — publishing", () => {
-  it("saves unsaved changes first, then publishes", async () => {
-    renderBuilder();
+describe("QuestionnaireBuilderV2 — sending", () => {
+  const OPEN = "00000000-0000-4000-8000-000000000009";
+  // DEFINITION's second section is empty, which stops a send; this one holds.
+  const READY: Questionnaire = {
+    ...DEFINITION,
+    pages: [
+      DEFINITION.pages[0]!,
+      {
+        ...(DEFINITION.pages[1] as QuestionsPage),
+        questions: [
+          {
+            id: "notes",
+            kind: "short_text",
+            prompt: "Anything else?",
+            maxLength: 120,
+            required: false,
+          },
+        ],
+      },
+    ],
+  };
+  /** A questionnaire that is out with members now. */
+  function renderSent() {
+    return render(
+      <QuestionnaireBuilderV2
+        initial={{
+          key: "gear-check",
+          definition: READY,
+          status: "published",
+          version: "gear-check-v1",
+        }}
+        isCaptain
+        openActivationId={OPEN}
+      />,
+    );
+  }
+
+  it("Send… saves unsaved changes first, then opens the Send page", async () => {
+    renderBuilder({}, READY);
     fireEvent.change(screen.getByLabelText("Section 2 title"), {
       target: { value: "Later" },
     });
     expect(
-      screen.getByText("Your unsaved changes are saved first."),
+      screen.getByText(/Your unsaved changes are saved first\./),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send…" }));
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith(
+        "/captains/questionnaires/gear-check/send",
+      ),
+    );
+    expect(updateDefinitionAction).toHaveBeenCalledTimes(1);
+    // Sending puts it online, on the Send page: nothing is published here.
+    expect(publishAction).not.toHaveBeenCalled();
+  });
+
+  it("Send… shows what stops it beside the block, and saves and opens nothing", async () => {
+    // DEFINITION's second section has no question, which stops a send.
+    renderBuilder();
+    fireEvent.click(screen.getByRole("button", { name: "Send…" }));
+    expect(await screen.findByText(/blocking sending/)).toBeTruthy();
+    expect(toast.error).toHaveBeenCalledWith(
+      "Not ready to send",
+      expect.anything(),
+    );
+    expect(updateDefinitionAction).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("Send changes saves first, then puts the edits online for the open send", async () => {
+    renderSent();
+    fireEvent.change(screen.getByLabelText("Section 2 title"), {
+      target: { value: "Later" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send changes" }));
     await waitFor(() =>
       expect(publishAction).toHaveBeenCalledWith("gear-check"),
     );
-    expect(updateDefinitionAction).toHaveBeenCalledTimes(1);
     expect(
       vi.mocked(updateDefinitionAction).mock.invocationCallOrder[0],
     ).toBeLessThan(vi.mocked(publishAction).mock.invocationCallOrder[0]!);
-    expect(toast.success).toHaveBeenCalledWith("Published");
+    expect(toast.success).toHaveBeenCalledWith("Changes sent");
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("shows what publishing refused beside the block it is about", async () => {
+  it("shows what sending changes refused beside the block it is about", async () => {
     vi.mocked(publishAction).mockResolvedValueOnce({
       ok: false,
       errors: [
@@ -534,11 +597,11 @@ describe("QuestionnaireBuilderV2 — publishing", () => {
         },
       ],
     });
-    renderBuilder();
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    renderSent();
+    fireEvent.click(screen.getByRole("button", { name: "Send changes" }));
 
     expect(
-      await screen.findByText("1 problem is blocking publishing"),
+      await screen.findByText("1 problem is blocking sending"),
     ).toBeTruthy();
     const block = screen.getByRole("group", {
       name: "Yes / No: Bringing a tent?",
@@ -546,35 +609,24 @@ describe("QuestionnaireBuilderV2 — publishing", () => {
     expect(
       within(block).getByText(/are both marked for the same use/),
     ).toBeTruthy();
-    expect(updateDefinitionAction).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith("Not published", {
-      description: "1 problem is blocking publishing.",
+    expect(toast.error).toHaveBeenCalledWith("Changes not sent", {
+      description: "1 problem is stopping it going out.",
     });
   });
 
   it("says a refusal that is not about the questionnaire's content", async () => {
     vi.mocked(publishAction).mockResolvedValueOnce({
       ok: false,
-      errors: ["Only captains can publish or send."],
+      errors: ["You can only edit your own questionnaires."],
       issues: [],
     });
-    renderBuilder();
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    renderSent();
+    fireEvent.click(screen.getByRole("button", { name: "Send changes" }));
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Not published", {
-        description: "Only captains can publish or send.",
+      expect(toast.error).toHaveBeenCalledWith("Changes not sent", {
+        description: "You can only edit your own questionnaires.",
       }),
     );
-  });
-
-  it("shows a team lead why Publish is out of reach", () => {
-    renderBuilder({ isCaptain: false });
-    const publish = screen.getByRole("button", { name: "Publish" });
-    expect((publish as HTMLButtonElement).disabled).toBe(true);
-    expect(
-      document.getElementById(publish.getAttribute("aria-describedby")!)
-        ?.textContent,
-    ).toMatch(/Only captains can publish/);
   });
 });
 

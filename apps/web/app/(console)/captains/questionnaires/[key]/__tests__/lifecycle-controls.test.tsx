@@ -5,6 +5,7 @@ vi.mock("../../actions", () => ({
   closeActivationAction: vi.fn(),
   getCarryOverAction: vi.fn(),
   publishAction: vi.fn(),
+  setAnonymousResultsAction: vi.fn(),
   setCarryOverAction: vi.fn(),
   unpublishAction: vi.fn(),
 }));
@@ -23,6 +24,7 @@ import { LifecycleRail } from "../lifecycle-controls";
 import {
   closeActivationAction,
   getCarryOverAction,
+  setAnonymousResultsAction,
   setCarryOverAction,
   unpublishAction,
 } from "../../actions";
@@ -33,7 +35,8 @@ import {
 // because getting it backwards would silently re-ask the whole camp.
 
 function renderBar(props: Partial<Parameters<typeof LifecycleRail>[0]> = {}) {
-  const onPublish = vi.fn();
+  const onSend = vi.fn();
+  const onSendChanges = vi.fn();
   render(
     <LifecycleRail
       questionnaireKey="arrival"
@@ -41,13 +44,15 @@ function renderBar(props: Partial<Parameters<typeof LifecycleRail>[0]> = {}) {
       version={null}
       isCaptain
       openActivationId={null}
-      publishing={false}
+      anonymousResults={false}
+      busy={null}
       unsaved={false}
-      onPublish={onPublish}
+      onSend={onSend}
+      onSendChanges={onSendChanges}
       {...props}
     />,
   );
-  return onPublish;
+  return { onSend, onSendChanges };
 }
 
 beforeEach(() => {
@@ -211,43 +216,40 @@ describe("LifecycleRail — the lifecycle", () => {
     });
   });
 
-  it("publishes a draft through the builder, with nothing to send yet", async () => {
-    const onPublish = renderBar();
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
-    expect(onPublish).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("link", { name: /Send to members/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Unpublish" })).toBeNull();
+  it("sends a draft through the builder: no Publish, no results yet", async () => {
+    const { onSend } = renderBar();
+    expect(screen.queryByRole("button", { name: /Publish/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Send…" }));
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Take offline" })).toBeNull();
     expect(screen.queryByRole("link", { name: /See results/ })).toBeNull();
     await waitFor(() => expect(getCarryOverAction).toHaveBeenCalled());
   });
 
-  it("offers Re-publish, Send, See results and Unpublish on a published questionnaire", async () => {
+  it("offers Send, results and Take offline on one that is online but not out", async () => {
     renderBar({ status: "published", version: "arrival-v2" });
-    expect(screen.getByRole("button", { name: "Re-publish" })).toBeTruthy();
+    expect(screen.getByText("Closed")).toBeTruthy();
     expect(screen.getByText("arrival-v2")).toBeTruthy();
-    expect(
-      screen
-        .getByRole("link", { name: /Send to members/ })
-        .getAttribute("href"),
-    ).toBe("/captains/questionnaires/arrival/send");
+    expect(screen.getByRole("button", { name: "Send…" })).toBeTruthy();
     expect(
       screen.getByRole("link", { name: /See results/ }).getAttribute("href"),
     ).toBe("/captains/questionnaires/arrival/metrics");
-    expect(
-      screen.getByText(/You're editing a live questionnaire/),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Take offline" })).toBeTruthy();
     await waitFor(() => expect(getCarryOverAction).toHaveBeenCalled());
   });
 
-  it("closes an open send only after asking", async () => {
+  it("offers Send changes and Close send while a send is out, and closes only after asking", async () => {
     vi.mocked(closeActivationAction).mockResolvedValue({ ok: true });
-    renderBar({
+    const { onSendChanges } = renderBar({
       status: "published",
       openActivationId: "00000000-0000-4000-8000-000000000009",
       openActivationBlocking: true,
     });
-    expect(screen.getByText("Currently sent to members")).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /Send to members/ })).toBeNull();
+    expect(screen.getByText("Sent")).toBeTruthy();
+    expect(screen.getByText("Out with members now")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Send…" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Send changes" }));
+    expect(onSendChanges).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Close send" }));
     await screen.findByText("Close the current send?");
@@ -262,16 +264,16 @@ describe("LifecycleRail — the lifecycle", () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
-  it("unpublishes only after asking, and reports a refusal as a toast", async () => {
+  it("takes it offline only after asking, and reports a refusal as a toast", async () => {
     vi.mocked(unpublishAction).mockResolvedValue({
       ok: false,
       error: "Only a published questionnaire can be unpublished.",
     });
     renderBar({ status: "published" });
-    fireEvent.click(screen.getByRole("button", { name: "Unpublish" }));
-    await screen.findByText("Unpublish this questionnaire?");
+    fireEvent.click(screen.getByRole("button", { name: "Take offline" }));
+    await screen.findByText("Take this questionnaire offline?");
     expect(unpublishAction).not.toHaveBeenCalled();
-    confirmInDialog("Unpublish");
+    confirmInDialog("Take offline");
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
         "Only a published questionnaire can be unpublished.",
@@ -280,27 +282,80 @@ describe("LifecycleRail — the lifecycle", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("shows a team lead the status and Send, and why Publish is out of reach", () => {
-    renderBar({ status: "published", isCaptain: false });
-    const publish = screen.getByRole("button", { name: "Re-publish" });
-    expect((publish as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/Only captains can publish/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Send to members/ })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /See results/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Unpublish" })).toBeNull();
+  it("gives its author, a team lead, Send and their results, but not the captains' steps", () => {
+    renderBar({
+      status: "published",
+      isCaptain: false,
+      openActivationId: "00000000-0000-4000-8000-000000000009",
+    });
+    expect(screen.getByRole("button", { name: "Send changes" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close send" })).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: /See results/ }).getAttribute("href"),
+    ).toBe("/questionnaires/results/arrival");
+    expect(screen.queryByRole("button", { name: "Take offline" })).toBeNull();
     expect(
       screen.queryByRole("switch", { name: "Ask everyone again next year" }),
     ).toBeNull();
+    expect(
+      screen.getByRole("switch", { name: "Anonymous results" }),
+    ).toBeTruthy();
     expect(getCarryOverAction).not.toHaveBeenCalled();
   });
 
-  it("spins only Publish while publishing", async () => {
-    renderBar({ status: "published", publishing: true });
-    const publish = screen.getByRole("button", { name: "Re-publish" });
-    expect(publish.querySelector("svg")).toBeTruthy();
+  it("spins only the button pressed", async () => {
+    renderBar({
+      status: "published",
+      openActivationId: "00000000-0000-4000-8000-000000000009",
+      busy: "changes",
+    });
+    const changes = screen.getByRole("button", { name: "Send changes" });
     expect(
-      screen.getByRole("button", { name: "Unpublish" }).querySelector("svg"),
+      changes.querySelector(".animate-spin, .motion-safe\\:animate-spin"),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Take offline" }).querySelector("svg"),
     ).toBeNull();
     await waitFor(() => expect(getCarryOverAction).toHaveBeenCalled());
+  });
+});
+
+describe("LifecycleRail — anonymous results", () => {
+  beforeEach(() => {
+    vi.mocked(getCarryOverAction).mockResolvedValue({
+      ok: true,
+      carryOver: true,
+    });
+  });
+
+  it("starts with names shown and flips only when the server agrees", async () => {
+    vi.mocked(setAnonymousResultsAction).mockResolvedValue({ ok: true });
+    renderBar();
+    const control = screen.getByRole("switch", { name: "Anonymous results" });
+    expect(control.getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByText(/then who answered what/)).toBeTruthy();
+    fireEvent.click(control);
+    await waitFor(() =>
+      expect(setAnonymousResultsAction).toHaveBeenCalledWith("arrival", true),
+    );
+    await waitFor(() =>
+      expect(control.getAttribute("aria-checked")).toBe("true"),
+    );
+  });
+
+  it("stays as it was when the server refuses", async () => {
+    vi.mocked(setAnonymousResultsAction).mockResolvedValue({
+      ok: false,
+      error: "You can only edit your own questionnaires.",
+    });
+    renderBar({ anonymousResults: true });
+    const control = screen.getByRole("switch", { name: "Anonymous results" });
+    fireEvent.click(control);
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "You can only edit your own questionnaires.",
+      ),
+    );
+    expect(control.getAttribute("aria-checked")).toBe("true");
   });
 });

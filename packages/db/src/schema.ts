@@ -5052,6 +5052,12 @@ export const questionnaireDefinitions = pgTable("questionnaire_definitions", {
   // past collection ran under. As a column it is also togglable with no
   // re-publish, and readable in one SELECT by the rollover planner.
   carryOver: boolean("carry_over").notNull().default(true),
+
+  // Whether the members who answered read the results without names (owner,
+  // 2026-10-23: names by default, "we should be able to set it if we need to
+  // make that anonymous"). Captains always read names. A column for the same
+  // reasons as `carry_over`: it changes no question, so it needs no re-publish.
+  anonymousResults: boolean("anonymous_results").notNull().default(false),
 });
 
 // Immutable published snapshots. Publishing copies the definition head into a

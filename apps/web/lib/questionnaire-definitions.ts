@@ -27,7 +27,10 @@ import {
 } from "@camp404/db/questionnaire-definitions";
 import * as lifecycle from "@camp404/db/questionnaire-lifecycle";
 import * as results from "@camp404/db/questionnaire-results";
-import type { OpenSendGateRow } from "@camp404/db/questionnaire-results";
+import type {
+  MyQuestionnaireStanding,
+  OpenSendGateRow,
+} from "@camp404/db/questionnaire-results";
 import { ATTENDANCE_CHECK_KEY } from "./attendance-check";
 import { BURNER_PROFILE_TEMPLATE, readStoredDefinition } from "./questionnaire";
 import { twin } from "./twin";
@@ -57,6 +60,8 @@ const stored = twin(
     listDefinitionRows: () => definitions.listDefinitionRows(),
     listOpenSendBlocking: () => lifecycle.listOpenSendBlocking(),
     listOpenSendGates: () => results.listOpenSendGates(),
+    listMyQuestionnaireStanding: (userId: string, cycle: number) =>
+      results.listMyQuestionnaireStanding(userId, cycle),
   },
   {
     getQuestionnaireDefinitionRow: (_key: string) => null,
@@ -64,6 +69,10 @@ const stored = twin(
     listDefinitionRows: () => [],
     listOpenSendBlocking: () => new Map<string, boolean>(),
     listOpenSendGates: (): OpenSendGateRow[] => [],
+    listMyQuestionnaireStanding: (
+      _userId: string,
+      _cycle: number,
+    ): MyQuestionnaireStanding => ({ answeredKeys: [], waiting: [] }),
   },
   [
     "getQuestionnaireDefinitionRow",
@@ -71,6 +80,7 @@ const stored = twin(
     "listDefinitionRows",
     "listOpenSendBlocking",
     "listOpenSendGates",
+    "listMyQuestionnaireStanding",
   ],
 );
 
@@ -288,9 +298,9 @@ export interface DefinitionSummary {
 }
 
 /**
- * The hub list for a viewer, newest first. Who sees what is
- * `canViewBuilderDefinition`: a captain sees every builder questionnaire; a
- * team lead sees published and unpublished ones plus their own drafts.
+ * The list for a viewer, newest first. Who sees what is
+ * `canViewBuilderDefinition`: every camp member sees every builder
+ * questionnaire, drafts included.
  */
 export async function listDefinitionsForViewer(viewer: {
   userId: string;
@@ -331,3 +341,10 @@ export const listOpenSendBlocking = stored.listOpenSendBlocking;
  * printing zeroes (see the Overview's captain panels).
  */
 export const listOpenSendGates = stored.listOpenSendGates;
+
+/**
+ * One member's own standing on the builder questionnaires in `cycle`: what
+ * they finished (which opens its results to them) and which open sends wait
+ * on them. Empty in E2E, where no sends are modelled.
+ */
+export const listMyQuestionnaireStanding = stored.listMyQuestionnaireStanding;
