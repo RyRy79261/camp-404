@@ -1,5 +1,6 @@
 import type { CampManagementMember } from "@camp404/db/roster";
 import type { ParticipationIntent, ParticipationStatus } from "@camp404/types";
+import { INTENT_IMPLIED_BY_STATUS } from "@camp404/core";
 import { COUNTRIES } from "./countries";
 import { requiredActionName } from "./required-actions";
 
@@ -367,18 +368,32 @@ export function matchesTeam(row: PublicRosterRow, team: string): boolean {
 }
 
 /**
- * The captain's "This year" filter: any row, one attendance status, or `none`
+ * The captain's "This year" filter: any row, one attendance status, `coming`
+ * for every member who said Coming (whatever the captains decided), or `none`
  * for a member with no answer for the year.
  */
-export type ThisYearFilter = "any" | ParticipationStatus | "none";
+export type ThisYearFilter = "any" | "coming" | ParticipationStatus | "none";
 
 /** Whether a row belongs under the "This year" filter. */
 export function matchesThisYear(
-  row: Pick<PublicRosterRow, "thisYear">,
+  row: Pick<PublicRosterRow, "thisYear"> & {
+    thisYearSays?: ParticipationIntent | null;
+  },
   filter: ThisYearFilter,
 ): boolean {
   if (filter === "any") return true;
   const status = row.thisYear ?? null;
+  if (filter === "coming") {
+    // The member's own answer; a row that does not carry it (the Camp sheet)
+    // falls back to the answer its status stands for.
+    const says =
+      row.thisYearSays !== undefined
+        ? row.thisYearSays
+        : status === null
+          ? null
+          : INTENT_IMPLIED_BY_STATUS[status];
+    return says === "yes";
+  }
   return filter === "none" ? status === null : status === filter;
 }
 

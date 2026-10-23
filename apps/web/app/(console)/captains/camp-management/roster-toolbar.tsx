@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { ChevronDown, Search, TriangleAlert } from "lucide-react";
-import { NO_ANSWER_LABEL, STANDING_LABEL } from "@camp404/core";
+import { INTENT_LABEL, NO_ANSWER_LABEL, STANDING_LABEL } from "@camp404/core";
 import { PARTICIPATION_STATUSES } from "@camp404/types";
 import { Input } from "@camp404/ui/components/input";
 import { cn } from "@camp404/ui/lib/utils";
@@ -39,9 +39,11 @@ const SORT_OPTIONS: { value: string; label: string; sort: RosterSort }[] = [
 
 // The captain's "This year" choices: one group each, in words that say
 // whether they are about the member's answer or the captains' decision
-// (STANDING_LABEL), never one label for both.
+// (STANDING_LABEL), never one label for both. "Coming" is the member's answer
+// alone: everyone who said Coming, whatever the captains decided.
 const THIS_YEAR_OPTIONS: { value: ThisYearFilter; label: string }[] = [
   { value: "any", label: "Any" },
+  { value: "coming", label: INTENT_LABEL.yes },
   ...PARTICIPATION_STATUSES.map((value) => ({
     value,
     label: STANDING_LABEL[value],

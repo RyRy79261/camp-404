@@ -1,3 +1,4 @@
+import { INTENT_IMPLIED_BY_STATUS } from "@camp404/core";
 import { describe, expect, it } from "vitest";
 import type { CampManagementMember } from "@camp404/db/roster";
 import {
@@ -254,7 +255,15 @@ describe("matchesThisYear", () => {
     null,
   ];
   const rows = STATUSES.map((participation) =>
-    toRosterRow(member({ participation })),
+    toRosterRow(
+      member({
+        participation,
+        participationIntent:
+          participation === null
+            ? null
+            : INTENT_IMPLIED_BY_STATUS[participation],
+      }),
+    ),
   );
   const shown = (filter: ThisYearFilter) =>
     rows.filter((r) => matchesThisYear(r, filter)).map((r) => r.thisYear);
@@ -271,6 +280,21 @@ describe("matchesThisYear", () => {
 
   it("keeps only the unanswered under Not answered", () => {
     expect(shown("none")).toEqual([null]);
+  });
+
+  it("keeps everyone who said Coming under Coming, whatever was decided", () => {
+    expect(shown("coming")).toEqual(["applied", "accepted", "waitlisted"]);
+  });
+
+  it("reads the member's own answer for Coming, not the decision", () => {
+    const saidMaybe = toRosterRow(
+      member({ participation: "accepted", participationIntent: "maybe" }),
+    );
+    expect(matchesThisYear(saidMaybe, "coming")).toBe(false);
+    expect(matchesThisYear({ thisYear: "accepted" }, "coming")).toBe(true);
+    expect(
+      matchesThisYear({ thisYear: "accepted", thisYearSays: null }, "coming"),
+    ).toBe(false);
   });
 
   it("treats a row without the key as not answered", () => {

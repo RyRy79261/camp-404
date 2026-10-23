@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { ChevronDown, Search } from "lucide-react";
-import { NO_ANSWER_LABEL, STANDING_LABEL } from "@camp404/core";
+import { INTENT_LABEL, NO_ANSWER_LABEL, STANDING_LABEL } from "@camp404/core";
 import { PARTICIPATION_STATUSES } from "@camp404/types";
 import { Input } from "@camp404/ui/components/input";
 import { cn } from "@camp404/ui/lib/utils";
@@ -274,6 +274,7 @@ export function CampSheetGrid({
           active={thisYear !== "any"}
         >
           <option value="any">This year: everyone</option>
+          <option value="coming">{INTENT_LABEL.yes}</option>
           {PARTICIPATION_STATUSES.map((status) => (
             <option key={status} value={status}>
               {STANDING_LABEL[status]}
