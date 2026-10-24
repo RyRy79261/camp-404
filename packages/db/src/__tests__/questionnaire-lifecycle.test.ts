@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   fromBuilderQuestionnaire,
   type BuilderQuestionnaire,
@@ -636,6 +636,53 @@ describe("questionnaire lifecycle — audit rows", () => {
       { title: "Camp feedback", anonymous: false },
       { title: "Camp feedback", anonymous: true },
     ]);
+  });
+
+  it("a send holds the definition row FOR SHARE before it opens, so it waits for a names change", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await publishDefinition("feedback", captain.id);
+
+    // The SQL each transaction sends, in order (PGlite has one connection, so
+    // the race itself cannot be run here; the lock order is what prevents it).
+    const client = h.client();
+    const seen: string[] = [];
+    const original = client.transaction.bind(client);
+    vi.spyOn(client, "transaction").mockImplementation((async (
+      fn: (tx: Parameters<Parameters<typeof original>[0]>[0]) => unknown,
+    ) =>
+      original(async (tx) => {
+        const query = tx.query.bind(tx);
+        tx.query = ((text: string, ...rest: unknown[]) => {
+          seen.push(text.toLowerCase());
+          return (query as (...a: unknown[]) => unknown)(text, ...rest);
+        }) as typeof tx.query;
+        return fn(tx);
+      })) as typeof client.transaction);
+    try {
+      const sent = await sendActivation({
+        questionnaireKey: "feedback",
+        scope: "everyone",
+        blocking: false,
+        activatedByUserId: captain.id,
+      });
+      if (!sent.ok) throw new Error(sent.error);
+    } finally {
+      vi.restoreAllMocks();
+    }
+    const definitionShare = seen.findIndex(
+      (q) =>
+        q.includes('from "questionnaire_definitions"') &&
+        q.endsWith("for share"),
+    );
+    const opened = seen.findIndex(
+      (q) =>
+        q.startsWith('update "questionnaire_activations" set "status"') &&
+        q.includes('"opened_at"'),
+    );
+    expect(definitionShare).toBeGreaterThanOrEqual(0);
+    expect(opened).toBeGreaterThan(definitionShare);
   });
 });
 

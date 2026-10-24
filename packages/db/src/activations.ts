@@ -131,6 +131,15 @@ export async function openActivationTx(
   act: ActivationFanOut,
   recipientIds: string[],
 ): Promise<number> {
+  // Serialise with setDefinitionAnonymousResults, which holds FOR UPDATE on
+  // this row while it checks for an open send and then turns names on. Without
+  // this, a send could open between its check and its write, and members would
+  // answer a form that said "no names" whose results then show names.
+  await tx
+    .select({ key: schema.questionnaireDefinitions.key })
+    .from(schema.questionnaireDefinitions)
+    .where(eq(schema.questionnaireDefinitions.key, act.questionnaireKey))
+    .for("share");
   await tx
     .update(schema.questionnaireActivations)
     .set({ status: "open", openedAt: new Date(), updatedAt: new Date() })
