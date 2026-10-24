@@ -263,7 +263,7 @@ islands persist via server action + `router.refresh()` (mirror
 | Board   | Screen                                                                                            | Route                                      |
 | ------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | 49      | Hub: list (status badge, question count, edited date), New, empty state                           | `/captains/questionnaires`                 |
-| 50 / 54 | Build canvas; footer Preview + Publish; Settings gear → settings sheet                            | `/captains/questionnaires/[key]`           |
+| 50 / 54 | Build canvas; Preview; the "Send" rail (no Publish button, §4.1)                                  | `/captains/questionnaires/[key]`           |
 | 51 / 56 | Add field / Add block bottom-sheet catalog (grouped, real client-side search on name+description) | sheet                                      |
 | 52 / 53 | Field editor (per-kind params, options editor, live preview)                                      | sheet                                      |
 | 55      | Pages & page settings (title/intro/type/requiredToContinue; reorder; delete)                      | sheet                                      |
@@ -297,14 +297,14 @@ activation, not the definition.
 
 - **New questionnaire:** creates a draft immediately (`status=draft`,
   `version=NULL`, `createdBy=current user`) with one default page, routes to the
-  empty editor; appears in the hub on create. **Publish (not create)** requires a
+  empty editor; appears in the hub on create. **Sending (not create)** requires a
   non-empty title.
 - **Save model:** structural ops (reorder on drag-end, add/delete field/block/page)
   **autosave** via server action + `router.refresh()`; sheet editors
   (52/53/55/57/58) buffer locally and persist only on footer **Save** — dismiss
   discards, with a "Discard changes?" confirm if dirty. The canvas has no global
   Save; Preview uses the autosaved state. **Autosave never bumps version** (only
-  Publish snapshots).
+  Send, which publishes, snapshots).
   **[CORRECTION 2026-09-17]** There is no autosave now. The builder edits the
   unified `Questionnaire` in memory and "Save draft" writes it
   (`updateDefinitionAction`, which accepts only the unified model). A draft
@@ -320,13 +320,13 @@ activation, not the definition.
 - **Concurrency:** last-write-wins, no optimistic locking in v1 (inherits the
   team-settings pattern).
 - **Hub-row overflow menu:** Draft → Rename, Duplicate, Delete (confirm);
-  Published → Rename, Duplicate, Unpublish (§6 close-confirm), View metrics /
-  responses.
+  Published → Rename, Duplicate, Take offline (captains; §6 close-confirm), View
+  metrics / responses.
 - **Duplicate** (v1): clones a questionnaire's definition into a new draft
   (`status=draft`, fresh key, fresh block UUIDs).
 - **Edit a published questionnaire:** edits mutate the working head; the live
   published version (snapshot) is unchanged and keeps serving open activations
-  until the captain Publishes again. The hub flags "published · draft changes"
+  until it is sent again. The hub flags "published · draft changes"
   when head ≠ latest version; the canvas shows a banner "Editing changes to a live
   questionnaire; members keep the current version until you re-publish."
   [CORRECTION 2026-10-23] Members keep their version until its author or a
@@ -427,7 +427,7 @@ visible under empty responses (completable). Warnings (allow-with-confirm):
 
 - [CORRECTION 2026-10-23] Send is not separate from Publish any more and is
   not captain-only: see §4.1. It publishes the head, then opens the activation.
-- **Send** (captain, separate from Publish) opens an activation pinned to the
+- **Send** publishes the head, then opens an activation pinned to the
   **currently-published version** (immutable on the activation) and fans out
   `required_actions` via `openActivation()`. Scope (§6.4), blocking, dueAt.
 - **Invariant:** at most **one OPEN activation per key** (enforced by a partial
