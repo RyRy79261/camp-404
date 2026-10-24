@@ -630,6 +630,23 @@ describe("saveBuilderResponses — an optional questionnaire (opt_in)", () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
+  it("says the form is closed when the send closed after the check", async () => {
+    vi.mocked(upsertQuestionnaireResponse).mockResolvedValue("closed");
+    vi.mocked(completeBuilderResponse).mockResolvedValue("closed");
+    for (const final of [false, true]) {
+      expect(
+        await saveBuilderResponses("act-1", { name: "Ada" }, final),
+      ).toEqual({ ok: false, errors: { _form: "This form is closed." } });
+    }
+    expect(
+      vi.mocked(upsertQuestionnaireResponse).mock.calls[0]![0],
+    ).toMatchObject({ whileOpen: true });
+    expect(vi.mocked(completeBuilderResponse).mock.calls[0]![0]).toMatchObject({
+      whileOpen: true,
+    });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
   it("refuses someone it is not open to, and a closed send", async () => {
     for (const access of ["not-invited", "closed"] as const) {
       vi.mocked(getOptInAccess).mockResolvedValue(access);

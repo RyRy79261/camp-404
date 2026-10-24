@@ -29,6 +29,7 @@ import {
   unpublishDefinition,
 } from "../questionnaire-lifecycle";
 import { completeBuilderResponse, getActivationById } from "../activations";
+import { upsertQuestionnaireResponse } from "../questionnaire-responses";
 import { DEFAULT_CAMP_CONFIG } from "../camp-config";
 import * as schema from "../schema";
 
@@ -644,23 +645,7 @@ describe("questionnaire lifecycle — audit rows", () => {
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", captain.id);
 
-    // The SQL each transaction sends, in order (PGlite has one connection, so
-    // the race itself cannot be run here; the lock order is what prevents it).
-    const client = h.client();
-    const seen: string[] = [];
-    const original = client.transaction.bind(client);
-    vi.spyOn(client, "transaction").mockImplementation((async (
-      fn: (tx: Parameters<Parameters<typeof original>[0]>[0]) => unknown,
-    ) =>
-      original(async (tx) => {
-        const query = tx.query.bind(tx);
-        tx.query = ((text: string, ...rest: unknown[]) => {
-          seen.push(text.toLowerCase());
-          return (query as (...a: unknown[]) => unknown)(text, ...rest);
-        }) as typeof tx.query;
-        return fn(tx);
-      })) as typeof client.transaction);
-    try {
+    const seen = await transactionSql(h, async () => {
       const sent = await sendActivation({
         questionnaireKey: "feedback",
         scope: "everyone",
@@ -668,14 +653,8 @@ describe("questionnaire lifecycle — audit rows", () => {
         activatedByUserId: captain.id,
       });
       if (!sent.ok) throw new Error(sent.error);
-    } finally {
-      vi.restoreAllMocks();
-    }
-    const definitionShare = seen.findIndex(
-      (q) =>
-        q.includes('from "questionnaire_definitions"') &&
-        q.endsWith("for share"),
-    );
+    });
+    const definitionShare = seen.findIndex(isDefinitionShare);
     const opened = seen.findIndex(
       (q) =>
         q.startsWith('update "questionnaire_activations" set "status"') &&
@@ -684,7 +663,129 @@ describe("questionnaire lifecycle — audit rows", () => {
     expect(definitionShare).toBeGreaterThanOrEqual(0);
     expect(opened).toBeGreaterThan(definitionShare);
   });
+
+  it("an answer saved after its send closed is refused, so names can still be turned on", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    expect(
+      await setDefinitionAnonymousResults("feedback", true, captain.id),
+    ).toBe("ok");
+    await publishDefinition("feedback", captain.id);
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: false,
+      activatedByUserId: captain.id,
+    });
+    if (!sent.ok) throw new Error(sent.error);
+    // The runner checked "open" before this close; both saves land after it.
+    await closeActivation(sent.activationId, captain.id);
+
+    const answer = {
+      userId: member.id,
+      definitionKey: "feedback",
+      definitionVersion: "feedback-v1",
+      cycle: 1,
+      responses: { q1: "no names please" },
+      activationId: sent.activationId,
+      whileOpen: true,
+    };
+    expect(await upsertQuestionnaireResponse(answer)).toBe("closed");
+    expect(
+      await completeBuilderResponse({
+        ...answer,
+        activationId: sent.activationId,
+      }),
+    ).toBe("closed");
+    expect(
+      await db
+        .select({ id: schema.questionnaireResponses.id })
+        .from(schema.questionnaireResponses)
+        .where(eq(schema.questionnaireResponses.definitionKey, "feedback")),
+    ).toEqual([]);
+    expect(
+      await setDefinitionAnonymousResults("feedback", false, captain.id),
+    ).toBe("ok");
+  });
+
+  it("an answer holds the definition row FOR SHARE before it is written, so a names change waits for it", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await publishDefinition("feedback", captain.id);
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: false,
+      activatedByUserId: captain.id,
+    });
+    if (!sent.ok) throw new Error(sent.error);
+    const answer = {
+      userId: member.id,
+      definitionKey: "feedback",
+      definitionVersion: "feedback-v1",
+      cycle: 1,
+      responses: { q1: "yes" },
+      activationId: sent.activationId,
+      whileOpen: true,
+    };
+
+    for (const save of [
+      () => upsertQuestionnaireResponse(answer),
+      () => completeBuilderResponse(answer),
+    ]) {
+      const seen = await transactionSql(h, async () => {
+        expect(await save()).toBe(true);
+      });
+      const definitionShare = seen.findIndex(isDefinitionShare);
+      const written = seen.findIndex((q) =>
+        q.startsWith('insert into "questionnaire_responses"'),
+      );
+      expect(definitionShare).toBeGreaterThanOrEqual(0);
+      expect(written).toBeGreaterThan(definitionShare);
+    }
+  });
 });
+
+/** Whether a statement takes the definition row FOR SHARE. */
+function isDefinitionShare(q: string): boolean {
+  return (
+    q.includes('from "questionnaire_definitions"') && q.endsWith("for share")
+  );
+}
+
+/**
+ * The SQL every transaction sends while `run` runs, in order. PGlite has one
+ * connection, so a race cannot be run here; the lock order is what prevents it.
+ */
+async function transactionSql(
+  h: ReturnType<typeof useTestDb>,
+  run: () => Promise<void>,
+): Promise<string[]> {
+  const client = h.client();
+  const seen: string[] = [];
+  const original = client.transaction.bind(client);
+  vi.spyOn(client, "transaction").mockImplementation((async (
+    fn: (tx: Parameters<Parameters<typeof original>[0]>[0]) => unknown,
+  ) =>
+    original(async (tx) => {
+      const query = tx.query.bind(tx);
+      tx.query = ((text: string, ...rest: unknown[]) => {
+        seen.push(text.toLowerCase());
+        return (query as (...a: unknown[]) => unknown)(text, ...rest);
+      }) as typeof tx.query;
+      return fn(tx);
+    })) as typeof client.transaction);
+  try {
+    await run();
+  } finally {
+    vi.restoreAllMocks();
+  }
+  return seen;
+}
 
 describe("sendActivation — one-open invariant", () => {
   const h = useTestDb();

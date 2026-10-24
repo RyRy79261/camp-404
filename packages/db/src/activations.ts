@@ -6,6 +6,7 @@ import { currentCycle, resolveCycles, UNSET_CYCLE } from "./camp-config";
 import { meetsRequiredVersion } from "./versions";
 import { currentCycleNumber } from "./cycles";
 import type { DbOrTx } from "./audit";
+import { lockOpenSend } from "./questionnaire-responses";
 import { applyParticipationIntent } from "./participations";
 import {
   safeParseStoredDefinition,
@@ -1050,9 +1051,20 @@ export async function completeBuilderResponse(input: {
    * nothing, not even the role mirror, and returns false.
    */
   firstSubmitOnly?: boolean;
-}): Promise<boolean> {
+  /**
+   * Write only while this send is still open (the runner's submit; see
+   * lockOpenSend). Returns "closed" and writes nothing when it has closed.
+   */
+  whileOpen?: boolean;
+}): Promise<boolean | "closed"> {
   const now = new Date();
   return await withTransaction(async (tx) => {
+    if (
+      input.whileOpen &&
+      !(await lockOpenSend(tx, input.definitionKey, input.activationId))
+    ) {
+      return "closed";
+    }
     const written = await tx
       .insert(schema.questionnaireResponses)
       .values({

@@ -4,8 +4,13 @@ import {
   type Questionnaire,
   type QuestionnaireResponses,
 } from "@camp404/types";
-import { createHttpDb } from "./index";
-import { questionnaireResponses, questionnaireVersions } from "./schema";
+import { createHttpDb, withTransaction, type Tx } from "./index";
+import {
+  questionnaireActivations,
+  questionnaireDefinitions,
+  questionnaireResponses,
+  questionnaireVersions,
+} from "./schema";
 
 // Generic response store for BUILDER questionnaires (code questionnaires keep
 // their bespoke domain tables). One latest-answer row per (user, definition,
@@ -53,8 +58,62 @@ export async function upsertQuestionnaireResponse(input: {
    * false when the row was already finished and nothing was written.
    */
   keepCompleted?: boolean;
-}): Promise<boolean> {
-  const db = createHttpDb();
+  /**
+   * Write only while this send is still open (the runner's saves). Returns
+   * "closed" and writes nothing when it has closed since the caller checked.
+   */
+  whileOpen?: boolean;
+}): Promise<boolean | "closed"> {
+  return withTransaction(async (tx) => {
+    if (input.whileOpen) {
+      const activationId = input.activationId;
+      if (
+        !activationId ||
+        !(await lockOpenSend(tx, input.definitionKey, activationId))
+      ) {
+        return "closed";
+      }
+    }
+    return writeResponse(tx, input);
+  });
+}
+
+/**
+ * Hold the definition row FOR SHARE and check that this send is still open,
+ * before an answer is written. setDefinitionAnonymousResults holds the same
+ * row FOR UPDATE while it looks for answers and open sends, so an answer
+ * either lands before it looks (and it refuses to turn names on) or sees the
+ * send closed here (and is not written). Without this, a save that passed the
+ * caller's "open" check could land after a close and a names change, and its
+ * member, told "no names", would be shown by name.
+ */
+export async function lockOpenSend(
+  tx: Tx,
+  definitionKey: string,
+  activationId: string,
+): Promise<boolean> {
+  await tx
+    .select({ key: questionnaireDefinitions.key })
+    .from(questionnaireDefinitions)
+    .where(eq(questionnaireDefinitions.key, definitionKey))
+    .for("share");
+  const [send] = await tx
+    .select({ status: questionnaireActivations.status })
+    .from(questionnaireActivations)
+    .where(
+      and(
+        eq(questionnaireActivations.id, activationId),
+        eq(questionnaireActivations.questionnaireKey, definitionKey),
+      ),
+    )
+    .limit(1);
+  return send?.status === "open";
+}
+
+async function writeResponse(
+  db: Tx,
+  input: Parameters<typeof upsertQuestionnaireResponse>[0],
+): Promise<boolean> {
   const activationId = input.activationId ?? null;
   const completedAt = input.completedAt ?? null;
   const written = await db
