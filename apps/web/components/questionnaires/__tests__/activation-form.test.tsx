@@ -395,12 +395,14 @@ describe("ActivationForm — who answers (optional questionnaires)", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("never asks a team lead", () => {
+  // Who may send is the page's and the action's rule; the form only draws
+  // the choice when the page passes offerOptIn.
+  it("draws no answer-mode choice unless the page offers it", () => {
     renderForm({
       members: [],
       scopeOptions: [{ value: "team", label: "A team" }],
       teamOptions: teamOptions.slice(0, 1),
-      notAuthor: true,
+      offerOptIn: false,
     });
     expect(
       screen.queryByRole("radiogroup", { name: "Who answers?" }),
