@@ -162,12 +162,15 @@ const LEAVE_MESSAGE =
 export function QuestionnaireBuilderV2({
   initial,
   isCaptain,
+  anonymousResults = false,
   openActivationId = null,
   openActivationBlocking = null,
 }: {
   initial: BuilderV2Initial;
-  /** Captains publish; team leads author their own drafts. */
+  /** Captains also take a questionnaire offline and set the year policy. */
   isCaptain: boolean;
+  /** The members who answered read the results without names. */
+  anonymousResults?: boolean;
   openActivationId?: string | null;
   openActivationBlocking?: boolean | null;
 }) {
@@ -195,7 +198,9 @@ export function QuestionnaireBuilderV2({
   const [savedEdits, setSavedEdits] = React.useState(0);
   const dirty = edits !== savedEdits;
   const [saveState, setSaveState] = React.useState<SaveState>("idle");
-  const [busy, setBusy] = React.useState<"save" | "publish" | null>(null);
+  const [busy, setBusy] = React.useState<"save" | "send" | "publish" | null>(
+    null,
+  );
   const [activeSection, setActiveSection] = React.useState(0);
   // The block last clicked or focused in the active section: a page break
   // goes after it. Null when the author last worked on the section itself.
@@ -458,6 +463,32 @@ export function QuestionnaireBuilderV2({
     }
   }
 
+  /**
+   * "Send…": the publish rules first, here, so the author sees each problem
+   * where it is; then save; then the Send page, where sending puts it online.
+   */
+  async function goSend() {
+    if (liveIssues.length > 0) {
+      setShowIssues("publish");
+      toast.error("Not ready to send", {
+        description:
+          liveIssues.length === 1
+            ? "1 problem is stopping it going out."
+            : `${liveIssues.length} problems are stopping it going out.`,
+      });
+      panelRef.current?.focus();
+      return;
+    }
+    setBusy("send");
+    try {
+      if (dirty && !(await saveDraft())) return;
+      router.push(`/captains/questionnaires/${questionnaireKey}/send`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** "Send changes": put the edits online for the send that is out. */
   async function publish() {
     if (dirty && !(await saveDraft())) return;
     setBusy("publish");
@@ -470,13 +501,13 @@ export function QuestionnaireBuilderV2({
         }
         const shownMessages = new Set(result.issues.map((i) => i.message));
         const other = result.errors.filter((e) => !shownMessages.has(e));
-        toast.error("Not published", {
+        toast.error("Changes not sent", {
           description:
             other.length > 0
               ? other.join(" ")
               : result.issues.length === 1
-                ? "1 problem is blocking publishing."
-                : `${result.issues.length} problems are blocking publishing.`,
+                ? "1 problem is stopping it going out."
+                : `${result.issues.length} problems are stopping it going out.`,
         });
         if (result.issues.length > 0) panelRef.current?.focus();
         return;
@@ -484,15 +515,13 @@ export function QuestionnaireBuilderV2({
       setServerIssues(null);
       setShowIssues(null);
       toast.success(
-        result.change === "cosmetic"
-          ? "Updated the live version"
-          : result.change === "breaking"
-            ? `Published a new version (${result.version})`
-            : "Published",
+        result.change === "breaking"
+          ? `Sent a new version (${result.version})`
+          : "Changes sent",
       );
       router.refresh();
     } catch {
-      toast.error("Not published", {
+      toast.error("Changes not sent", {
         description: "We couldn't reach the server. Try again.",
       });
     } finally {
@@ -628,9 +657,13 @@ export function QuestionnaireBuilderV2({
           isCaptain={isCaptain}
           openActivationId={openActivationId}
           openActivationBlocking={openActivationBlocking}
-          publishing={busy === "publish"}
+          anonymousResults={anonymousResults}
+          busy={
+            busy === "send" ? "send" : busy === "publish" ? "changes" : null
+          }
           unsaved={dirty}
-          onPublish={() => void publish()}
+          onSend={() => void goSend()}
+          onSendChanges={() => void publish()}
         />
       </div>
 
@@ -655,8 +688,8 @@ export function QuestionnaireBuilderV2({
           </span>
           <span className="hidden page-sm:inline">
             {liveIssues.length > 0
-              ? `${liveIssues.length} ${liveIssues.length === 1 ? "problem" : "problems"} to fix before this can be published.`
-              : "Ready to publish."}
+              ? `${liveIssues.length} ${liveIssues.length === 1 ? "problem" : "problems"} to fix before this can be sent.`
+              : "Ready to send."}
           </span>
         </span>
         <Button asChild variant="ghost">
@@ -1136,7 +1169,7 @@ function SectionEditor({
                 {questionsHere === 1
                   ? "This section still has 1 question."
                   : `This section still has ${questionsHere} questions.`}{" "}
-                You can&apos;t publish until you move or delete{" "}
+                You can&apos;t send it until you move or delete{" "}
                 {questionsHere === 1 ? "it" : "them"}, or turn this off.
               </p>
             ) : null}

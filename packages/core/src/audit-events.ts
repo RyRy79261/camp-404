@@ -425,6 +425,7 @@ export interface AuditEvents {
     cycle: number;
     amountCents: number;
   };
+  "questionnaire.anonymous_results_set": { title: string; anonymous: boolean };
   "questionnaire.carry_over_set": { title: string; carryOver: boolean };
   "questionnaire.send_closed": { key: string; title: string };
   "questionnaire.unpublished": { title: string; closedSends: number };

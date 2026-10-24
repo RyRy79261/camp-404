@@ -242,7 +242,7 @@ export const DefinitionIssuePanel = React.forwardRef<
   ref,
 ) {
   if (issues.length === 0) return null;
-  const step = blocking === "save" ? "this save" : "publishing";
+  const step = blocking === "save" ? "this save" : "sending";
   return (
     <div
       ref={ref}
@@ -259,7 +259,7 @@ export const DefinitionIssuePanel = React.forwardRef<
       <p className="text-xs text-muted-foreground">
         {blocking === "save"
           ? "A draft saves once every question, option and heading has its words."
-          : "A questionnaire is published only once it holds together: every question written, branches that move forward, every section reachable."}
+          : "A questionnaire goes out only once it holds together: every question written, branches that move forward, every section reachable."}
       </p>
       <ul className="flex flex-col gap-1.5">
         {issues.map((issue, i) => {

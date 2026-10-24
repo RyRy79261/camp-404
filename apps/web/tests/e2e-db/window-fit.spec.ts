@@ -14,7 +14,7 @@ import {
 } from "../e2e/lib/window-fit";
 import {
   answerGate,
-  buildAndPublish,
+  buildQuestionnaire,
   sendBlockingToEveryone,
   signInCaptain,
 } from "./_flows";
@@ -38,7 +38,7 @@ test("the builder and a questionnaire's results fit their window", async ({
   await resetTestState(request);
   const captain = await signInCaptain(browser, request, "fit-db-captain");
   await captain.setViewportSize({ width: 1440, height: 900 });
-  await buildAndPublish(captain, FIT);
+  await buildQuestionnaire(captain, FIT);
 
   // The builder: the palette above the questionnaire in a narrow window
   // (its entries two a row), beside it in a wide one (one a row); a

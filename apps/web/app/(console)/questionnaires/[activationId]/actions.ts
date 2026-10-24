@@ -23,6 +23,7 @@ import {
 import { upsertQuestionnaireResponse } from "@camp404/db/questionnaire-responses";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 
+const CLOSED = "This form is closed.";
 const SAVE_FAILED =
   "We couldn't save your answers just now. Please try again — if it keeps happening, let a camp captain know.";
 const SAVE_REJECTED =
@@ -57,7 +58,7 @@ export async function saveBuilderResponses(
 
   const activation = await getActivationById(activationId);
   if (!activation || activation.status !== "open") {
-    return { ok: false, errors: { _form: "This form is closed." } };
+    return { ok: false, errors: { _form: CLOSED } };
   }
   // An optional questionnaire (#313) has no gate: any camp member may answer
   // it once, while it is open. Its writes below are compare-and-sets on "not
@@ -69,7 +70,7 @@ export async function saveBuilderResponses(
       return { ok: false, errors: { _form: ALREADY_ANSWERED } };
     }
     if (access !== "answer") {
-      return { ok: false, errors: { _form: "This form is closed." } };
+      return { ok: false, errors: { _form: CLOSED } };
     }
   } else {
     // Access predicate — the viewer must have a PENDING obligation for this
@@ -85,7 +86,7 @@ export async function saveBuilderResponses(
       targeted.status !== "pending" ||
       targeted.activationId !== activation.id
     ) {
-      return { ok: false, errors: { _form: "This form is closed." } };
+      return { ok: false, errors: { _form: CLOSED } };
     }
   }
 
@@ -141,7 +142,7 @@ export async function saveBuilderResponses(
     toStore = draft.responses;
   }
 
-  let written: boolean;
+  let written: boolean | "closed";
   try {
     if (final) {
       // Atomic: upsert the completed response + satisfy the gate in one
@@ -160,6 +161,9 @@ export async function saveBuilderResponses(
         // year, arrival day…) land there in the same transaction.
         mirror: questionnaireRoleMirror(definition, toStore),
         firstSubmitOnly: optIn,
+        // Re-checked under the definition's lock, so a close and a names
+        // change that land after the check above cannot let this through.
+        whileOpen: true,
       });
     } else {
       written = await upsertQuestionnaireResponse({
@@ -171,6 +175,7 @@ export async function saveBuilderResponses(
         activationId: activation.id,
         completedAt: null,
         keepCompleted: optIn,
+        whileOpen: true,
       });
     }
   } catch (err) {
@@ -179,6 +184,9 @@ export async function saveBuilderResponses(
       errorLogText(err, process.env),
     );
     return { ok: false, errors: { _form: SAVE_FAILED } };
+  }
+  if (written === "closed") {
+    return { ok: false, errors: { _form: CLOSED } };
   }
   // Lost the race to another submit of the same optional questionnaire.
   if (optIn && !written) {

@@ -1,3 +1,4 @@
+import { canEditBuilderDefinition } from "@camp404/core";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -26,22 +27,21 @@ import { countOptInMembers } from "@camp404/db/activations";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { parseSendPrefill } from "./prefill";
 
-// The audiences this screen offers a captain who chose "People you choose must
-// answer", in picker order. `drivers` is broadcast-only, so it is not listed.
-// `opt_in` is not an audience in that list: it is the other answer to "Who
-// answers?" (#313), which only a captain is asked. A team lead is offered
-// `team` alone.
+// The audiences this screen offers for "People you choose must answer", in
+// picker order. `drivers` is broadcast-only, so it is not listed. `opt_in` is
+// not an audience in that list: it is the other answer to "Who answers?"
+// (#313). A team lead is offered the same as a captain (owner, 2026-10-23).
 const SEND_SCOPES = ["everyone", "team", "team_leads", "individual"] as const;
-const LEAD_SCOPES = ["team"] as const;
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Send questionnaire — Camp 404" };
 
 // The Send/Activate screen (§6.4), from the AfrikaBurn console's activate
-// page. Captains send to any audience; a team lead sends to the teams they
-// lead. Anyone else gets the locked shell before any questionnaire read. Only
-// a published questionnaire can be sent.
+// page. Team leads and captains send to any audience (owner, 2026-10-23);
+// anyone else gets the locked shell before any questionnaire read. Sending
+// puts the questionnaire online in the same press: its author or a captain
+// may send a draft, anyone else only one already online.
 export default async function SendPage({
   params,
   searchParams,
@@ -50,8 +50,7 @@ export default async function SendPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { key } = await params;
-  const { cleared, rank, actor } = await programPage("send-questionnaire");
-  const isCaptain = rank === "captain";
+  const { cleared, rank, campUser } = await programPage("send-questionnaire");
   const chrome = (children: ReactNode, title: string, description?: string) => (
     <div className="flex flex-col">
       <PageHeading
@@ -63,11 +62,8 @@ export default async function SendPage({
     </div>
   );
 
-  // A lead sends only to a team they lead this year (owner's call, 2026-09-16).
-  // sendAction checks the same rule again (canSendToAudience).
-  const leadTeams: readonly string[] =
-    cleared && !isCaptain ? actor.ledTeams : [];
-  if (!cleared || (!isCaptain && leadTeams.length === 0)) {
+  // sendAction checks the same rule again (canSendQuestionnaireTo).
+  if (!cleared) {
     // Nothing about the questionnaire is read for a viewer who can't send, so
     // the heading names the page, not the questionnaire.
     return chrome(
@@ -81,16 +77,20 @@ export default async function SendPage({
 
   const meta = await getDefinitionMetaRow(key);
   if (!meta) notFound();
-  if (meta.status !== "published") {
+  // Its author or a captain sends their latest version, which goes online in
+  // the same press. Anyone else sends only what is already online.
+  const canEdit = canEditBuilderDefinition({ rank, userId: campUser.id }, meta);
+  if (meta.status !== "published" && !canEdit) {
     return chrome(
       <Alert variant="info">
         <span>
-          Publish this questionnaire before you can send it.{" "}
+          Only its author or a captain can send this questionnaire for the first
+          time.{" "}
           <Link
-            href={`/captains/questionnaires/${key}`}
+            href={`/captains/questionnaires/${key}/preview`}
             className="font-medium underline"
           >
-            Back to the editor
+            Look at it
           </Link>
         </span>
       </Alert>,
@@ -104,26 +104,22 @@ export default async function SendPage({
   const [openActivation, roster, config, year, query, campMembers] =
     await Promise.all([
       getOpenActivationForKey(key),
-      // Members are picked only for an `individual` send, which a lead can't
-      // make.
-      isCaptain ? getCampManagementRoster() : Promise.resolve([]),
+      // Members are picked for an `individual` send. Only names and teams
+      // reach the page.
+      getCampManagementRoster(),
       getTeamsConfig(),
       getCurrentCycle(),
       searchParams,
-      // "For all N camp members": only a captain is offered the optional send.
-      isCaptain ? countOptInMembers() : Promise.resolve(null),
+      // "For all N camp members", for the optional send.
+      countOptInMembers(),
     ]);
 
   // Both pickers and the member subtitles come from the camp config through the
   // one audience vocabulary — teamPickerOptions drops ARCHIVED teams, and
   // memberTeamsLabel renders "Kitchen" where the raw `power_and_lighting` used
   // to print.
-  const teamOptions: AudienceOption[] = teamPickerOptions(config).filter(
-    (option) => isCaptain || leadTeams.includes(option.value),
-  );
-  const scopeOptions: AudienceOption[] = (
-    isCaptain ? SEND_SCOPES : LEAD_SCOPES
-  ).map((scope) => ({
+  const teamOptions: AudienceOption[] = teamPickerOptions(config);
+  const scopeOptions: AudienceOption[] = SEND_SCOPES.map((scope) => ({
     value: scope,
     label: audienceLabel(scope),
   }));
@@ -155,7 +151,7 @@ export default async function SendPage({
         scopeOptions={scopeOptions}
         teamOptions={teamOptions}
         openActivationId={openActivation?.id ?? null}
-        asLead={!isCaptain}
+        notAuthor={!canEdit}
         yearLabel={
           year
             ? year.name
@@ -166,13 +162,11 @@ export default async function SendPage({
         initialAudience={initialAudience}
         initialBlocking={prefill.blocking}
         initialDueAt={prefill.dueAt}
-        offerOptIn={isCaptain}
+        offerOptIn
         campMemberCount={campMembers}
       />
     </div>,
     title,
-    isCaptain
-      ? "Choose who answers, then send."
-      : "Choose an audience and delivery options, then send.",
+    "Choose who answers, then send. Sending puts it online and asks them in one step.",
   );
 }

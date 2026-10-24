@@ -91,7 +91,7 @@ test.describe("Camp sheet (test-mode)", () => {
     await page.goto("/");
     const captains = await openConsoleNav(page, "Captains");
     // Something the lead does get, before the absence.
-    await expect(navEntry(captains, "Questionnaires")).toBeVisible();
+    await expect(navEntry(captains, "Announcements")).toBeVisible();
     await expect(navEntry(captains, "Camp sheet")).toHaveCount(0);
 
     await page.goto("/captains/camp-sheet");

@@ -101,7 +101,7 @@ function isSendScope(value: string): value is SendScope {
 /** The icon and caption on each audience card. */
 const SCOPE_CARD: Record<
   SendScope,
-  { icon: React.ReactNode; caption: string; leadCaption?: string }
+  { icon: React.ReactNode; caption: string }
 > = {
   everyone: {
     icon: <Tent className="h-4 w-4" aria-hidden />,
@@ -110,7 +110,6 @@ const SCOPE_CARD: Record<
   team: {
     icon: <Users className="h-4 w-4" aria-hidden />,
     caption: "Everyone on one team this year.",
-    leadCaption: "Everyone on a team you lead.",
   },
   team_leads: {
     icon: <ShieldCheck className="h-4 w-4" aria-hidden />,
@@ -158,10 +157,11 @@ export interface ActivationFormProps {
   teamOptions: AudienceOption[];
   openActivationId: string | null;
   /**
-   * A team lead's view: closing a send is captain-only, so a lead is told who
-   * can, and the way back is the hub.
+   * The sender did not write this questionnaire and is not a captain: closing
+   * a send is its author's or a captain's, so they are told who can, and the
+   * way back is the list.
    */
-  asLead?: boolean;
+  notAuthor?: boolean;
   /** The year a send made now is filed under, as a captain reads it. */
   yearLabel?: string | null;
   /** Pre-filled choices (from the query string). The author still confirms. */
@@ -211,7 +211,7 @@ export function ActivationForm({
   scopeOptions,
   teamOptions,
   openActivationId,
-  asLead = false,
+  notAuthor = false,
   yearLabel,
   initialAudience,
   initialBlocking,
@@ -319,7 +319,7 @@ export function ActivationForm({
     });
   }
 
-  const backHref = asLead
+  const backHref = notAuthor
     ? ("/captains/questionnaires" as const)
     : (`/captains/questionnaires/${questionnaireKey}` as const);
 
@@ -401,13 +401,13 @@ export function ActivationForm({
           <Alert variant="warning">
             <TriangleAlert aria-hidden />
             <span>
-              {asLead
-                ? `“${title}” is already sent. A captain can close that send so it can go out again.`
+              {notAuthor
+                ? `“${title}” is already sent. Its author or a captain can close that send so it can go out again.`
                 : `“${title}” is already sent. Close the current send before sending it again with new settings.`}
             </span>
           </Alert>
           <div className="flex flex-wrap gap-2">
-            {!asLead && (
+            {!notAuthor && (
               <Button
                 type="button"
                 onClick={() => void closeCurrent()}
@@ -423,7 +423,7 @@ export function ActivationForm({
             )}
             <Button asChild variant="outline">
               <Link href={backHref}>
-                {asLead ? "Back to questionnaires" : "Back to editor"}
+                {notAuthor ? "Back to questionnaires" : "Back to editor"}
               </Link>
             </Button>
           </div>
@@ -492,7 +492,7 @@ export function ActivationForm({
                       active={active}
                       icon={card.icon}
                       title={option.label}
-                      caption={(asLead && card.leadCaption) || card.caption}
+                      caption={card.caption}
                     />
                   );
                 }}

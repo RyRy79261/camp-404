@@ -10,7 +10,8 @@
 // Phase-3 extractions land here progressively (see architecture.md
 // §hybrid-extraction). Landed so far:
 //   - access/clearance: rankLevel, hasClearance, requireClearance,
-//     deriveViewerRank, hasCampAccess, isApproved, canViewBuilderDefinition
+//     deriveViewerRank, hasCampAccess, isApproved, canViewBuilderDefinition,
+//     canEditBuilderDefinition
 //     (./access)
 //   - approval review: availableReviewActions, reviewRefusal,
 //     isReviewTransition — which vetting decisions exist (./approval-review)
@@ -73,6 +74,9 @@
 //     Choice/Numeric/Count/Timeline/Grid aggregate shapes — the per-question
 //     read-back engine and the activation completion figure
 //     (./questionnaire-results)
+//   - questionnaire sharing: canSendQuestionnaireTo, canReadQuestionnaireResults,
+//     isSharedResultQuestion, sharedResults — who sends a questionnaire, and
+//     what the members who answered read back (./questionnaire-sharing)
 //   - questionnaire definition validation (the unified model, ported from
 //     AB): validateQuestionnaireDefinition, isValidQuestionnaireDefinition,
 //     definitionLimitErrors (./questionnaire-definition)
@@ -226,6 +230,7 @@ export * from "./pinned-order";
 export * from "./csv";
 export * from "./questionnaire-csv";
 export * from "./questionnaire-results";
+export * from "./questionnaire-sharing";
 export * from "./questionnaire-definition";
 export * from "./questionnaire-runtime";
 export * from "./questionnaire-versioning";

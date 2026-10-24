@@ -3,14 +3,17 @@
 import { useId, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import type { Route } from "next";
 import {
   BarChart3,
   CalendarCheck,
   ClipboardList,
   Copy,
+  Eye,
   FileText,
   Loader2,
   Pencil,
+  PenLine,
   Plus,
   Send,
   Trash2,
@@ -32,6 +35,7 @@ import { toast } from "@camp404/ui/components/toast";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import { ATTENDANCE_CHECK_KEY } from "@/lib/attendance-check";
+import { lifecycleLabel } from "./[key]/lifecycle-controls";
 import {
   createAttendanceCheckAction,
   createDraftAction,
@@ -56,8 +60,16 @@ export interface HubItem {
   /** This viewer may open it in the builder (a captain, or its author). */
   canEdit: boolean;
   canDelete: boolean;
-  /** Results are captain-only. */
-  canSeeResults: boolean;
+  /** A team lead or a captain, and it is online or theirs to put online. */
+  canSend: boolean;
+  /** A team lead or a captain may start a copy. */
+  canDuplicate: boolean;
+  /** Where this viewer reads its results, or null when they may not yet. */
+  resultsHref: string | null;
+  /** The open send waiting on this viewer, or null. */
+  answerHref: string | null;
+  /** This viewer finished it this year. */
+  answered: boolean;
   /** Its open send's blocking flag, or null when nothing is sent right now. */
   openSendBlocking: boolean | null;
 }
@@ -67,33 +79,28 @@ interface RowBusy {
   action: "duplicate" | "delete";
 }
 
-const STATUS: Record<
-  HubItem["status"],
-  { label: string; variant: "success" | "secondary" | "outline" }
-> = {
-  published: { label: "Published", variant: "success" },
-  draft: { label: "Draft", variant: "outline" },
-  unpublished: { label: "Unpublished", variant: "secondary" },
-};
-
-// The hub, laid out like the AfrikaBurn console's questionnaire list: a list
+// The list, laid out like the AfrikaBurn console's questionnaire list: a list
 // section per where a questionnaire stands, each questionnaire a card with its
-// status, counts and key, and Edit / Results / Send beside it. AfrikaBurn splits
-// the list by audience; Camp 404 chooses the audience per send, so it splits by
-// whether a send is open. "New questionnaire" names the draft first, then opens
-// the builder on it. A captain also has one click for the yearly "Coming this
-// year?" check: it creates and publishes that questionnaire, then opens its
-// Send page, where the captain picks who it reaches. Every mutation routes
-// through the captain/team-lead-gated server actions; the page re-renders from
-// the server.
+// status and counts, and what this member may do beside it (Answer, Edit or
+// Look, Results, Send). Camp 404 chooses the audience per send, so it splits
+// by whether a send is open. Every member sees every questionnaire (owner,
+// 2026-10-23). A team lead or a captain also makes one: "New questionnaire"
+// names the draft first, then opens the builder on it. A captain also has one
+// click for the yearly "Coming this year?" check: it creates and puts online
+// that questionnaire, then opens its Send page, where the captain picks who it
+// reaches. Every mutation routes through the gated server actions; the page
+// re-renders from the server.
 export function QuestionnaireHub({
   heading,
   items,
+  canAuthor = false,
   canCreateAttendanceCheck = false,
 }: {
   heading: HubHeading;
   items: HubItem[];
-  /** A captain: the only rank that publishes and sends. */
+  /** A team lead or a captain: makes questionnaires. */
+  canAuthor?: boolean;
+  /** A captain: the yearly attendance check. */
   canCreateAttendanceCheck?: boolean;
 }) {
   const router = useRouter();
@@ -232,10 +239,12 @@ export function QuestionnaireHub({
                     : "Create this year's attendance check"}
                 </Button>
               ) : null}
-              <Button onClick={() => setCreating(true)} disabled={creating}>
-                <Plus aria-hidden />
-                New questionnaire
-              </Button>
+              {canAuthor ? (
+                <Button onClick={() => setCreating(true)} disabled={creating}>
+                  <Plus aria-hidden />
+                  New questionnaire
+                </Button>
+              ) : null}
             </div>
             {checkError ? (
               <p
@@ -360,10 +369,11 @@ export function QuestionnaireHub({
               <FileText className="h-8 w-8 text-muted-foreground" aria-hidden />
               <p className="text-sm font-medium">No questionnaires yet</p>
               <p className="text-sm text-muted-foreground">
-                Build one to collect answers from members. Keep it short — every
-                question is one a camp member has to answer.
+                {canAuthor
+                  ? "Build one to collect answers from members. Keep it short — every question is one a camp member has to answer."
+                  : "Team leads and captains make them. They show here as soon as someone starts one."}
               </p>
-              {!creating ? (
+              {canAuthor && !creating ? (
                 <Button onClick={() => setCreating(true)}>
                   <Plus aria-hidden />
                   Build a questionnaire
@@ -466,7 +476,8 @@ function QuestionnaireCard({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const status = STATUS[item.status];
+  const sentNow = item.openSendBlocking !== null;
+  const status = lifecycleLabel(item.status, sentNow);
   return (
     <Card>
       <CardContent className="flex flex-col gap-4 p-5">
@@ -485,11 +496,22 @@ function QuestionnaireCard({
                 {item.questionCount === 1 ? "question" : "questions"}
               </Badge>
             </div>
-            <p className="font-mono text-xs text-muted-foreground">
-              {item.key} · updated {item.editedLabel}
+            <p className="text-xs text-muted-foreground">
+              {item.answered ? "You answered · " : ""}updated {item.editedLabel}
+              {sentNow && !item.resultsHref && !item.answerHref
+                ? " · answer it to see the results"
+                : ""}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {item.answerHref ? (
+              <Button asChild size="sm" aria-label={`Answer ${item.title}`}>
+                <Link href={item.answerHref as Route}>
+                  <PenLine aria-hidden />
+                  Answer
+                </Link>
+              </Button>
+            ) : null}
             {item.canEdit ? (
               <Button
                 asChild
@@ -502,46 +524,60 @@ function QuestionnaireCard({
                   Edit
                 </Link>
               </Button>
-            ) : null}
-            {/* Results only exist once something has been published and sent
-                — a draft has no answers to show, and an empty metrics page
-                reads as broken rather than as "not yet". */}
-            {item.canSeeResults && item.status !== "draft" ? (
+            ) : (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                aria-label={`Look at ${item.title}`}
+              >
+                <Link href={`/captains/questionnaires/${item.key}/preview`}>
+                  <Eye aria-hidden />
+                  Look
+                </Link>
+              </Button>
+            )}
+            {item.resultsHref ? (
               <Button
                 asChild
                 variant="outline"
                 size="sm"
                 aria-label={`See results for ${item.title}`}
               >
-                <Link href={`/captains/questionnaires/${item.key}/metrics`}>
+                <Link href={item.resultsHref as Route}>
                   <BarChart3 aria-hidden />
                   Results
                 </Link>
               </Button>
             ) : null}
-            {/* The way a team lead reaches Send: a lead can't open a captain's
-                questionnaire in the builder. */}
-            {item.status === "published" ? (
-              <Button asChild size="sm" aria-label={`Send ${item.title}`}>
+            {item.canSend && !sentNow ? (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                aria-label={`Send ${item.title}`}
+              >
                 <Link href={`/captains/questionnaires/${item.key}/send`}>
                   <Send aria-hidden />
                   Send
                 </Link>
               </Button>
             ) : null}
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Duplicate ${item.title}`}
-              onClick={onDuplicate}
-              disabled={locked}
-            >
-              {busy === "duplicate" ? (
-                <Loader2 aria-hidden className="motion-safe:animate-spin" />
-              ) : (
-                <Copy aria-hidden />
-              )}
-            </Button>
+            {item.canDuplicate ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`Duplicate ${item.title}`}
+                onClick={onDuplicate}
+                disabled={locked}
+              >
+                {busy === "duplicate" ? (
+                  <Loader2 aria-hidden className="motion-safe:animate-spin" />
+                ) : (
+                  <Copy aria-hidden />
+                )}
+              </Button>
+            ) : null}
             {item.canDelete ? (
               <Button
                 variant="ghost"

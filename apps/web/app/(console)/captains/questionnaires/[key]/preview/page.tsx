@@ -1,8 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
-import { Pencil } from "lucide-react";
-import { canViewBuilderDefinition } from "@camp404/core";
+import { ArrowLeft, Pencil } from "lucide-react";
+import {
+  canEditBuilderDefinition,
+  canViewBuilderDefinition,
+} from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { Card, CardContent } from "@camp404/ui/components/card";
@@ -16,17 +19,18 @@ export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Questionnaire preview — Camp 404" };
 
-// Author preview — the real runner driven from empty answers, no persistence,
-// no side-effects (BuilderPreview). Team-lead+ only: a lower rank gets the
-// locked page (preview-but-locked, D3) and no definition is read. The form sits
-// in a card at the width a member reads it, like the AfrikaBurn fill page.
+// A questionnaire as members see it — the real runner driven from empty
+// answers, no persistence, no side-effects (BuilderPreview). Every camp member
+// may look at every questionnaire, drafts included (owner, 2026-10-23); its
+// author and captains get a way back to the editor. The form sits in a card at
+// the width a member reads it, like the AfrikaBurn fill page.
 export default async function BuilderPreviewPage({
   params,
 }: {
   params: Promise<{ key: string }>;
 }) {
   const { key } = await params;
-  const { campUser, rank, cleared } = await programPage(
+  const { campUser, rank, actor, cleared } = await programPage(
     "preview-questionnaire",
   );
   const chrome = (title: string, children: ReactNode, actions?: ReactNode) => (
@@ -45,15 +49,15 @@ export default async function BuilderPreviewPage({
     return chrome(
       "Preview",
       <CaptainLock
-        title="Team leads and captains only"
-        message="Questionnaire previews are for team leads and captains."
+        title="Camp members only"
+        message="Questionnaires are for camp members."
       />,
     );
   }
 
   const meta = await getDefinitionMetaRow(key);
   if (!meta) notFound();
-  // The hub's visibility rule: never another author's private draft.
+  // The list's visibility rule (every camp member, drafts included).
   if (!canViewBuilderDefinition({ rank, userId: campUser.id }, meta)) {
     notFound();
   }
@@ -61,11 +65,22 @@ export default async function BuilderPreviewPage({
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  const backToEditor = (
+  const canEdit = canEditBuilderDefinition(
+    { rank: actor.rank, userId: campUser.id },
+    meta,
+  );
+  const backToEditor = canEdit ? (
     <Button asChild variant="outline">
       <Link href={`/captains/questionnaires/${key}`}>
         <Pencil aria-hidden />
         Back to editor
+      </Link>
+    </Button>
+  ) : (
+    <Button asChild variant="outline">
+      <Link href="/captains/questionnaires">
+        <ArrowLeft aria-hidden />
+        All questionnaires
       </Link>
     </Button>
   );

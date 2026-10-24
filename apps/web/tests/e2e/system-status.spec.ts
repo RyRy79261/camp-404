@@ -107,9 +107,9 @@ test.describe("/captains/system (test-mode)", () => {
     await expect(page.getByText("Background work")).toHaveCount(0);
     await expect(checkRow(page, "Database")).toHaveCount(0);
     // A lead's desktop has no way to it either: their Captains folder holds
-    // the builder and nothing of a captain's.
+    // a lead's tools and nothing of a captain's.
     const captains = await openConsoleNav(page, "Captains");
-    await expect(navEntry(captains, "Questionnaires")).toBeVisible();
+    await expect(navEntry(captains, "Announcements")).toBeVisible();
     await expect(navEntry(captains, "System status")).toHaveCount(0);
   });
 });

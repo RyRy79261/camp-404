@@ -118,6 +118,8 @@ export const AUDIT_ACTION_LABELS = {
   "payment.refund_declined": "Declined a refund",
   "payment.refund_requested": "Asked for a refund",
   "payment.refunded": "Refunded a payment",
+  "questionnaire.anonymous_results_set":
+    "Changed whether a questionnaire's results show names",
   "questionnaire.carry_over_set":
     "Changed whether a questionnaire is asked again next year",
   "questionnaire.send_closed": "Closed a questionnaire send",
@@ -658,6 +660,13 @@ export function auditDetail(
     case "questionnaire.unpublished":
     case "questionnaire.send_closed":
       return stored(action, metadata).text("title");
+    case "questionnaire.anonymous_results_set": {
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const anonymous = m.flag("anonymous");
+      if (!title || anonymous === null) return title;
+      return `${title}: ${anonymous ? "results without names" : "results with names"}`;
+    }
     case "questionnaire.carry_over_set": {
       const m = stored(action, metadata);
       const title = m.text("title");

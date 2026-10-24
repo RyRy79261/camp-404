@@ -5,7 +5,7 @@ import {
   redeemInviteAtGate,
   resetTestState,
 } from "../e2e/_helpers";
-import { buildAndPublish, signInCaptain } from "./_flows";
+import { buildQuestionnaire, signInCaptain } from "./_flows";
 import { signInAs } from "./personas";
 
 // Optional questionnaires (#313, owner approved 2026-10-03: "Build the opt in
@@ -28,7 +28,7 @@ test("a captain puts a questionnaire in My forms and a member answers it from Op
 }) => {
   await resetTestState(request);
   const captain = await signInCaptain(browser, request);
-  await buildAndPublish(captain, ART);
+  await buildQuestionnaire(captain, ART);
 
   // Send: "Who answers?" → Anyone may answer (optional).
   await captain.goto(`/captains/questionnaires/${ART.key}/send`);
@@ -146,22 +146,23 @@ test("a captain puts a questionnaire in My forms and a member answers it from Op
   await otherContext.close();
 });
 
-test("a team lead is never asked who answers", async ({ browser, request }) => {
+test("a team lead is asked who answers, like a captain", async ({
+  browser,
+  request,
+}) => {
   await resetTestState(request);
-  const captain = await signInCaptain(browser, request);
-  await buildAndPublish(captain, ART);
-
   const lead = await signInAs(browser, request, "team_lead");
+  await buildQuestionnaire(lead, ART);
+
   await lead.goto(`/captains/questionnaires/${ART.key}/send`);
-  // Present first (the lead's own team), then the absence.
+  // Owner, 2026-10-23: a lead sends to the whole camp, or puts it in My forms.
+  const who = lead.getByRole("radiogroup", { name: "Who answers?" });
+  await expect(who).toBeVisible({ timeout: 60_000 });
   await expect(
-    lead.getByRole("radiogroup", { name: "Which team?" }),
-  ).toBeVisible({ timeout: 60_000 });
+    who.getByRole("radio", { name: /^Anyone may answer/ }),
+  ).toBeVisible();
   await expect(
-    lead.getByRole("radiogroup", { name: "Who answers?" }),
-  ).toHaveCount(0);
-  await expect(lead.getByText(/Anyone may answer/)).toHaveCount(0);
-  await expect(
-    lead.getByRole("button", { name: "Put it in My forms" }),
-  ).toHaveCount(0);
+    lead.getByRole("radio", { name: /^Everyone/, checked: true }),
+  ).toBeVisible();
+  await expect(lead.getByRole("switch", { name: "Blocking" })).toBeVisible();
 });

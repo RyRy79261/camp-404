@@ -479,6 +479,15 @@ export const PROGRAM_DEFINITIONS = {
     line: "forms",
     size: XL_SIZE,
   },
+  // What the members who answered read back (owner, 2026-10-23).
+  "questionnaire-results": {
+    title: "Results",
+    file: "POLL.TXT",
+    routes: ["/questionnaires/results/[key]"],
+    keyed: true,
+    line: "forms",
+    size: L_WIDE,
+  },
   "respondent-answers": {
     title: "Answers",
     file: "ANSWERS.TXT",

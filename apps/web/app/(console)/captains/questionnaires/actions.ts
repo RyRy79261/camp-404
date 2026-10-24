@@ -6,7 +6,7 @@ import { Questionnaire, Team, questionsWithRole } from "@camp404/types";
 import type { ViewerRank } from "@camp404/types";
 import {
   CAMP_TIME_ZONE,
-  canSendToAudience,
+  canSendQuestionnaireTo,
   canViewBuilderDefinition,
   definitionLimitErrors,
   isQuestionnaireTemplateKey,
@@ -21,12 +21,15 @@ import { PUSH_SCOPES } from "@camp404/db/activations";
 import { computeAudience } from "@camp404/db/audience";
 import {
   getDefinitionMetaRow,
+  setDefinitionAnonymousResults,
   setDefinitionCarryOver,
 } from "@camp404/db/questionnaire-definitions";
+import { getActivationById } from "@camp404/db/activations";
 import {
   closeActivation,
   publishDefinition,
   sendActivation,
+  getOpenActivationForKey,
   sendReminder,
   unpublishDefinition,
   type PublishResult,
@@ -48,9 +51,11 @@ import {
 import { usesTestStore } from "@/lib/test-mode";
 import { deliverAfterResponse } from "@/lib/background-work";
 
-// Questionnaire-builder mutations (Phase C). Team-leads may create and edit
-// their OWN drafts, and SEND to a team they lead (see the send gate below);
-// publish / unpublish / close stay captain-only (Phase D). Each action does an
+// Questionnaire-builder mutations. Team leads create and edit their OWN
+// questionnaires, and send them; a captain may change any (owner, 2026-10-23:
+// "Publish means send", and a lead sends to the whole camp). Sending publishes
+// the author's latest version in the same press. Unpublishing, the year policy
+// and the attendance check stay with captains. Each action does an
 // auth + clearance gate, a Zod boundary parse, an ownership check where it
 // matters, then the write + revalidate — the same preview-but-locked (D3)
 // comparator the captain pages gate on (server actions are reachable
@@ -78,49 +83,47 @@ type CaptainGate =
   | { ok: true; campUser: CampUser }
   | { ok: false; error: string };
 
-/** Gate the lifecycle actions (publish / unpublish / close) to captains. */
+/** Gate the captain-only actions: unpublish, the year policy, the attendance check. */
 async function gateCaptain(): Promise<CaptainGate> {
-  return captainActionGate("captain", "Only captains can publish or send.");
+  return captainActionGate("captain", "Only captains can do this.");
+}
+
+/**
+ * Gate a change to one questionnaire's life: a team lead or a captain who may
+ * edit it (a captain any, a lead their own).
+ */
+async function gateEditor(
+  key: string,
+): Promise<{ ok: true; campUser: CampUser } | { ok: false; error: string }> {
+  const gate = await gateAuthor();
+  if (!gate.ok) return gate;
+  if (!Key.safeParse(key).success) return { ok: false, error: "Invalid key." };
+  const can = await canEditQuestionnaire(gate, key);
+  return can.ok ? { ok: true, campUser: gate.campUser } : can;
 }
 
 // --- The send gate ----------------------------------------------------------
-// Sending is the one lifecycle step that is NOT captain-only. It is gated in
-// two moves, deliberately, because this is the widest thing a non-captain can
-// do in the app:
+// Sending is gated in two moves:
 //
-//   1. `gateAuthor()` — the RANK gate. Still a gate, just one rung lower: a
-//      plain camp member is refused here and never reaches step 2.
-//   2. `canSendToAudience()` — the AUDIENCE gate. A team lead may address ONE
-//      thing: a `team` scope they themselves lead. `everyone`, `team_leads`,
-//      `drivers`, `individual` and `opt_in` are all refused, so there is no
-//      arrangement of the form that reaches the whole camp. `opt_in` (#313)
-//      is asked again inside sendActivation's own transaction.
+//   1. `gateAuthor()`: the RANK gate. A plain camp member is refused here.
+//   2. `canSendQuestionnaireTo()` (@camp404/core): the AUDIENCE gate. A team
+//      lead may address any questionnaire audience a captain may, blocking
+//      included (owner, 2026-10-23). This is the questionnaire's own rule:
+//      announcements keep "a lead reaches only a team they lead".
 //
-// Dropping the gate to `team_lead` WITHOUT step 2 would have put every member
-// of the camp one questionnaire away from a lead; the audience rule is what
-// makes the widening safe, and it lives in @camp404/core (pure, tested) so it
-// is stated once rather than re-derived here. Change the rule there.
-//
-// The owner said yes on 2026-09-16: a lead may send to the teams they lead.
-// `[key]/send/page.tsx` offers a lead the `team` scope over those teams only;
-// this action is still the boundary that enforces it.
+// `sendActivation` asks the same rule again on the sender's rank read under
+// lock in its own transaction, so a demotion between the two cannot slip
+// through. Change the rule in @camp404/core, never here.
 
-/** The refusal a lead sees when the audience is wider than the team they lead. */
-const AUDIENCE_REFUSED = "You can only send to a team you lead.";
+/** The refusal when the audience is not one this sender may address. */
+const AUDIENCE_REFUSED =
+  "Only team leads and captains can send a questionnaire.";
 const ATTENDANCE_QUESTION_MISSING =
   'The "Coming this year?" questionnaire has lost its Yes / Maybe / No question. Open it in the builder and add a question marked "Coming this year", then try again.';
 
-/**
- * The audience half of the send gate: may this actor address this audience?
- *
- * Captains are allowed by RANK, never by membership — so their check costs no
- * membership read at all. Everyone else is checked against the teams they lead
- * THIS year, which is the only per-team fact in the system; clearance itself
- * stays global (owner-ratified).
- */
+/** The audience half of the send gate: may this actor address this audience? */
 function allowSendTo(gate: { actor: Actor }, audience: AudienceSpec): QResult {
-  const { rank, ledTeams } = gate.actor;
-  if (!canSendToAudience({ rank, leadTeams: ledTeams }, audience)) {
+  if (!canSendQuestionnaireTo(gate.actor, audience)) {
     return { ok: false, error: AUDIENCE_REFUSED };
   }
   return { ok: true };
@@ -326,26 +329,36 @@ export async function deleteDraftAction(key: string): Promise<QResult> {
   });
 }
 
-// --- Lifecycle: publish / unpublish / send / close (captain-only, Phase D) ---
+// --- Lifecycle: publish / unpublish / send / close ---------------------------
+
+const NO_OPEN_SEND =
+  "This questionnaire has no open send. Use Send to choose who to ask.";
 
 /**
- * Publish the working head (captain-only). On refusal, `errors` holds every
- * reason as a sentence and `issues` the definition's publish blockers with
- * their code, path, page and block (PublishResult in
- * @camp404/db/questionnaire-lifecycle).
+ * Put the working head online (the builder's "Send changes", for a
+ * questionnaire already out with members): its author or a captain. On
+ * refusal, `errors` holds every reason as a sentence and `issues` the
+ * definition's publish blockers with their code, path, page and block
+ * (PublishResult in @camp404/db/questionnaire-lifecycle).
  */
 export async function publishAction(key: string): Promise<PublishActionResult> {
   return runAction(
     "publishAction",
     async () => {
-      const gate = await gateCaptain();
+      const gate = await gateEditor(key);
       if (!gate.ok) return { ok: false, errors: [gate.error], issues: [] };
-      if (!Key.safeParse(key).success) {
-        return { ok: false, errors: ["Invalid key."], issues: [] };
-      }
       const meta = await getDefinitionMetaRow(key);
       if (!meta) {
         return { ok: false, errors: ["Questionnaire not found."], issues: [] };
+      }
+      // "Send changes" is for a send that is out. A first send, or one after
+      // a close, goes through `sendAction`, so nothing is ever online with
+      // nobody asked.
+      if (
+        meta.status !== "published" ||
+        !(await getOpenActivationForKey(key))
+      ) {
+        return { ok: false, errors: [NO_OPEN_SEND], issues: [] };
       }
       const result = await publishDefinition(key, gate.campUser.id);
       if (result.ok) revalidateBuilder(key);
@@ -446,12 +459,13 @@ const SendForm = z
   );
 
 /**
- * Send a published questionnaire to an audience.
+ * Send a questionnaire to an audience: one press that puts it online and asks
+ * them ("Publish means send", owner 2026-10-23).
  *
- * Captain OR team lead — the one lifecycle action that admits a lead, and only
- * to a team they lead (see the send-gate note above). The rank gate runs first
- * so a plain member is refused without the form being parsed; the audience gate
- * runs on the PARSED audience, because "which team" is the whole question.
+ * A team lead or a captain (see the send gate above). Someone who may edit the
+ * questionnaire (its author, or a captain) sends their latest version: it is
+ * published first, and publishing's refusal comes back as the send's. Anyone
+ * else may send a questionnaire that is already online, as it is.
  */
 export async function sendAction(
   key: string,
@@ -474,6 +488,25 @@ export async function sendAction(
       team: parsed.data.team ?? null,
     });
     if (!allowed.ok) return allowed;
+    const meta = await getDefinitionMetaRow(key);
+    if (!meta) return { ok: false, error: "Questionnaire not found." };
+    if ((await canEditQuestionnaire(gate, key)).ok) {
+      const published = await publishDefinition(key, gate.campUser.id);
+      if (!published.ok) {
+        return {
+          ok: false,
+          error:
+            published.errors[0] ??
+            "This questionnaire can't go out yet. Open it in the editor to see why.",
+        };
+      }
+    } else if (meta.status !== "published") {
+      return {
+        ok: false,
+        error:
+          "Only its author or a captain can send this questionnaire for the first time.",
+      };
+    }
     // An optional questionnaire asks nobody: it is never blocking, has no
     // deadline and names nobody, whatever the request says.
     const optIn = parsed.data.scope === "opt_in";
@@ -596,16 +629,28 @@ export async function previewAudienceCount(
   });
 }
 
+/**
+ * Gate a change to an open send (close it, remind it): its questionnaire's
+ * author or a captain, the people who may send it again.
+ */
+async function gateSendOwner(
+  activationId: string,
+): Promise<{ ok: true; campUser: CampUser } | { ok: false; error: string }> {
+  const activation = await getActivationById(activationId);
+  if (!activation) return { ok: false, error: "That send no longer exists." };
+  return gateEditor(activation.questionnaireKey);
+}
+
 export async function closeActivationAction(
   activationId: string,
   key?: string,
 ): Promise<QResult> {
   return runAction("closeActivationAction", async () => {
-    const gate = await gateCaptain();
-    if (!gate.ok) return gate;
     if (!z.string().uuid().safeParse(activationId).success) {
       return { ok: false, error: "Invalid activation." };
     }
+    const gate = await gateSendOwner(activationId);
+    if (!gate.ok) return gate;
     const result = await closeActivation(activationId, gate.campUser.id);
     if (result.ok) revalidateBuilder(key);
     return result;
@@ -686,9 +731,7 @@ export type ReminderActionResult =
 /**
  * Nudge every member with a pending required action for this open send.
  *
- * Captain-only, like every other lifecycle action here: a reminder is a push to
- * an audience the sender did not choose member-by-member, and §4.1 keeps that
- * on the captain side of the clearance split.
+ * Its questionnaire's author or a captain: the people who may send it.
  *
  * Nothing is revalidated on the way out — a reminder changes no number on the
  * metrics page (the gates it targets stay exactly as pending as they were), so
@@ -698,11 +741,11 @@ export async function remindPendingAction(
   activationId: string,
 ): Promise<ReminderActionResult> {
   return runAction("remindPendingAction", async () => {
-    const gate = await gateCaptain();
-    if (!gate.ok) return gate;
     if (!z.string().uuid().safeParse(activationId).success) {
       return { ok: false, error: "Invalid activation." };
     }
+    const gate = await gateSendOwner(activationId);
+    if (!gate.ok) return gate;
     const result = await sendReminder({
       activationId,
       senderId: gate.campUser.id,
@@ -739,5 +782,45 @@ export async function remindPendingAction(
           ? sent
           : `${sent} ${result.suppressed} more ${result.suppressed === 1 ? "was" : "were"} skipped — already reminded in the last 24 hours.`,
     };
+  });
+}
+
+/**
+ * Set whether the members who answered read this questionnaire's results
+ * without names: its author or a captain. Captains always read names.
+ */
+export async function setAnonymousResultsAction(
+  key: string,
+  anonymous: boolean,
+): Promise<QResult> {
+  return runAction("setAnonymousResultsAction", async () => {
+    const gate = await gateEditor(key);
+    if (!gate.ok) return gate;
+    const parsedFlag = z.boolean().safeParse(anonymous);
+    if (!parsedFlag.success) return { ok: false, error: "Invalid request." };
+    const outcome = await setDefinitionAnonymousResults(
+      key,
+      parsedFlag.data,
+      gate.campUser.id,
+    );
+    if (outcome === "missing") {
+      return { ok: false, error: "Questionnaire not found." };
+    }
+    if (outcome === "answered") {
+      return {
+        ok: false,
+        error:
+          "People already answered this with no names, so names stay hidden.",
+      };
+    }
+    if (outcome === "open") {
+      return {
+        ok: false,
+        error:
+          "People may be answering this now with no names. Close the send to show names.",
+      };
+    }
+    revalidateBuilder(key);
+    return { ok: true };
   });
 }

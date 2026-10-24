@@ -2,7 +2,12 @@ import { and, asc, eq } from "drizzle-orm";
 import type { Questionnaire } from "@camp404/types";
 import { writeAuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
-import { questionnaireDefinitions, questionnaireVersions } from "./schema";
+import {
+  questionnaireActivations,
+  questionnaireDefinitions,
+  questionnaireResponses,
+  questionnaireVersions,
+} from "./schema";
 
 type DefinitionStatus = "draft" | "published" | "unpublished";
 
@@ -153,6 +158,8 @@ export interface DefinitionMetaRow {
   status: DefinitionStatus;
   version: string | null;
   createdBy: string | null;
+  /** The members who answered read the results without names. */
+  anonymousResults: boolean;
 }
 
 /** A definition's ownership + lifecycle, for the edit/delete permission check. */
@@ -166,6 +173,7 @@ export async function getDefinitionMetaRow(
       status: questionnaireDefinitions.status,
       version: questionnaireDefinitions.version,
       createdBy: questionnaireDefinitions.createdBy,
+      anonymousResults: questionnaireDefinitions.anonymousResults,
     })
     .from(questionnaireDefinitions)
     .where(eq(questionnaireDefinitions.key, key))
@@ -250,6 +258,69 @@ export async function setDefinitionCarryOver(
       target: key,
       metadata: { title: row.title, carryOver },
     });
+  });
+}
+
+/**
+ * Set whether the members who answered read this questionnaire's results
+ * without names. Captains always read names. Like the year policy it needs no
+ * re-publish and does not bump `updated_at`. The change and its
+ * `questionnaire.anonymous_results_set` audit row commit together. Once
+ * anyone has answered an anonymous questionnaire (any year), names are never
+ * turned on ("answered"): those people answered on the word "no names". Nor
+ * while a send is open ("open"): someone may have the form open under that
+ * notice. Turning names off is always allowed.
+ */
+export async function setDefinitionAnonymousResults(
+  key: string,
+  anonymous: boolean,
+  actorId: string,
+): Promise<"ok" | "answered" | "open" | "missing"> {
+  return withTransaction(async (tx) => {
+    // Lock the row so a second change waits for this one.
+    const [current] = await tx
+      .select({
+        title: questionnaireDefinitions.title,
+        anonymousResults: questionnaireDefinitions.anonymousResults,
+      })
+      .from(questionnaireDefinitions)
+      .where(eq(questionnaireDefinitions.key, key))
+      .for("update");
+    if (!current) return "missing";
+    if (current.anonymousResults === anonymous) return "ok";
+    // People who answered were told "no names": never put names on them.
+    if (current.anonymousResults && !anonymous) {
+      const [answer] = await tx
+        .select({ id: questionnaireResponses.id })
+        .from(questionnaireResponses)
+        .where(eq(questionnaireResponses.definitionKey, key))
+        .limit(1);
+      if (answer) return "answered";
+      // Someone may have the form open under the "no names" notice and
+      // submit after this change: wait until the send is closed.
+      const [open] = await tx
+        .select({ id: questionnaireActivations.id })
+        .from(questionnaireActivations)
+        .where(
+          and(
+            eq(questionnaireActivations.questionnaireKey, key),
+            eq(questionnaireActivations.status, "open"),
+          ),
+        )
+        .limit(1);
+      if (open) return "open";
+    }
+    await tx
+      .update(questionnaireDefinitions)
+      .set({ anonymousResults: anonymous })
+      .where(eq(questionnaireDefinitions.key, key));
+    await writeAuditEvent(tx, {
+      actorId,
+      action: "questionnaire.anonymous_results_set",
+      target: key,
+      metadata: { title: current.title, anonymous },
+    });
+    return "ok";
   });
 }
 

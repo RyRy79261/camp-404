@@ -264,26 +264,12 @@ describe("ActivationForm — an open send", () => {
   });
 });
 
-describe("ActivationForm — a team lead", () => {
-  it("is offered a team alone, and no close button", () => {
-    const lead = {
-      members: [],
-      scopeOptions: [{ value: "team", label: "A team" }],
-      teamOptions: teamOptions.slice(0, 1),
-      asLead: true,
-    };
-    const { unmount } = renderForm(lead);
+describe("ActivationForm — someone who did not write it", () => {
+  it("is told who can close an open send, and has no close button", () => {
+    renderForm({ notAuthor: true, openActivationId: "act1" });
     expect(
-      screen.getAllByRole("radio", { name: /A team|Everyone|leads|members/ }),
-    ).toHaveLength(1);
-    expect(
-      screen.getByRole("radiogroup", { name: "Which team?" }),
+      screen.getByText(/Its author or a captain can close that send/),
     ).toBeTruthy();
-    expect(screen.getByText("Everyone on a team you lead.")).toBeTruthy();
-    unmount();
-
-    renderForm({ ...lead, openActivationId: "act1" });
-    expect(screen.getByText(/A captain can close that send/)).toBeTruthy();
     expect(
       screen.queryByRole("button", { name: /Close current send/i }),
     ).toBeNull();
@@ -409,12 +395,14 @@ describe("ActivationForm — who answers (optional questionnaires)", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("never asks a team lead", () => {
+  // Who may send is the page's and the action's rule; the form only draws
+  // the choice when the page passes offerOptIn.
+  it("draws no answer-mode choice unless the page offers it", () => {
     renderForm({
       members: [],
       scopeOptions: [{ value: "team", label: "A team" }],
       teamOptions: teamOptions.slice(0, 1),
-      asLead: true,
+      offerOptIn: false,
     });
     expect(
       screen.queryByRole("radiogroup", { name: "Who answers?" }),

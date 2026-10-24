@@ -7,14 +7,16 @@ import {
 } from "../e2e/_helpers";
 import {
   answerGate,
-  buildAndPublish,
+  buildQuestionnaire,
   sendBlockingToEveryone,
   signInCaptain,
 } from "./_flows";
+import { signInAs } from "./personas";
 
-// The questionnaire engine end to end, on a real database: a captain builds,
-// publishes and sends a questionnaire; a member is gated by it and answers it;
-// the captain reads the answers and exports them. The in-memory store cannot
+// The questionnaire engine end to end, on a real database: a captain builds
+// and sends a questionnaire (sending puts it online); a member is gated by it,
+// answers it and reads the results back; the captain reads the answers and
+// exports them. The in-memory store cannot
 // run any of this (owner's call E2E-DB).
 
 const GEAR = {
@@ -23,14 +25,11 @@ const GEAR = {
   prompt: "What tent are you bringing?",
 };
 
-test("build, publish, send, answer, read the results", async ({
-  browser,
-  request,
-}) => {
+test("build, send, answer, read the results", async ({ browser, request }) => {
   await resetTestState(request);
   const captain = await signInCaptain(browser, request);
 
-  await buildAndPublish(captain, GEAR);
+  await buildQuestionnaire(captain, GEAR);
   await sendBlockingToEveryone(captain, GEAR.title);
 
   // A blocking send to everyone gates the captain too.
@@ -56,6 +55,19 @@ test("build, publish, send, answer, read the results", async ({
   await expect(
     member.getByRole("heading", { level: 1, name: "My forms" }),
   ).toBeVisible();
+
+  // Having answered, the member reads the results: counts first, then names.
+  await member.goto(`/questionnaires/results/${GEAR.key}`);
+  await expect(
+    member.getByText("2 people answered.", { exact: false }),
+  ).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(member.getByText("2 answered · 0 skipped")).toBeVisible();
+  await expect(member.getByText("A dome tent")).toHaveCount(0);
+  await member.getByRole("button", { name: "See who answered what" }).click();
+  await expect(member.getByText("A dome tent")).toBeVisible();
+  await expect(member.getByText("A bell tent")).toBeVisible();
 
   // Read the results: the counts, then each answer.
   await captain.goto(`/captains/questionnaires/${GEAR.key}/metrics`);
@@ -102,4 +114,23 @@ test("build, publish, send, answer, read the results", async ({
   expect(body).toContain("Mem Ber");
 
   await memberContext.close();
+});
+
+test("a team lead builds a questionnaire and sends it to the whole camp in one step", async ({
+  browser,
+  request,
+}) => {
+  await resetTestState(request);
+  const lead = await signInAs(browser, request, "team_lead");
+  await buildQuestionnaire(lead, GEAR);
+  // No captain needed: the lead's Send puts it online and asks everyone.
+  await sendBlockingToEveryone(lead, GEAR.title);
+  await answerGate(lead, { ...GEAR, text: "A dome tent" });
+
+  await lead.goto("/captains/questionnaires");
+  await expect(
+    lead.getByRole("link", { name: `See results for ${GEAR.title}` }),
+  ).toBeVisible({
+    timeout: 60_000,
+  });
 });
