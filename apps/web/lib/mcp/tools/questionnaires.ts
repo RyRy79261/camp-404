@@ -85,7 +85,7 @@ export function registerQuestionnaireTools(server: McpServer): void {
     {
       title: "List builder questionnaires",
       description:
-        "The questionnaires the builder hub shows you: a captain sees all; a team lead sees published and unpublished ones plus their own drafts.",
+        "The questionnaires the builder hub shows you: every camp member sees every questionnaire, drafts included.",
       inputSchema: z.object({}),
     },
     async (_args, extra) =>

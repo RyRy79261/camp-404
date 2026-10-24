@@ -10,7 +10,8 @@
 // Phase-3 extractions land here progressively (see architecture.md
 // §hybrid-extraction). Landed so far:
 //   - access/clearance: rankLevel, hasClearance, requireClearance,
-//     deriveViewerRank, hasCampAccess, isApproved, canViewBuilderDefinition
+//     deriveViewerRank, hasCampAccess, isApproved, canViewBuilderDefinition,
+//     canEditBuilderDefinition
 //     (./access)
 //   - approval review: availableReviewActions, reviewRefusal,
 //     isReviewTransition — which vetting decisions exist (./approval-review)

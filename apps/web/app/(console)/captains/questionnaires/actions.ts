@@ -29,6 +29,7 @@ import {
   closeActivation,
   publishDefinition,
   sendActivation,
+  getOpenActivationForKey,
   sendReminder,
   unpublishDefinition,
   type PublishResult,
@@ -330,6 +331,9 @@ export async function deleteDraftAction(key: string): Promise<QResult> {
 
 // --- Lifecycle: publish / unpublish / send / close ---------------------------
 
+const NO_OPEN_SEND =
+  "This questionnaire has no open send. Use Send to choose who to ask.";
+
 /**
  * Put the working head online (the builder's "Send changes", for a
  * questionnaire already out with members): its author or a captain. On
@@ -346,6 +350,15 @@ export async function publishAction(key: string): Promise<PublishActionResult> {
       const meta = await getDefinitionMetaRow(key);
       if (!meta) {
         return { ok: false, errors: ["Questionnaire not found."], issues: [] };
+      }
+      // "Send changes" is for a send that is out. A first send, or one after
+      // a close, goes through `sendAction`, so nothing is ever online with
+      // nobody asked.
+      if (
+        meta.status !== "published" ||
+        !(await getOpenActivationForKey(key))
+      ) {
+        return { ok: false, errors: [NO_OPEN_SEND], issues: [] };
       }
       const result = await publishDefinition(key, gate.campUser.id);
       if (result.ok) revalidateBuilder(key);
@@ -785,7 +798,21 @@ export async function setAnonymousResultsAction(
     if (!gate.ok) return gate;
     const parsedFlag = z.boolean().safeParse(anonymous);
     if (!parsedFlag.success) return { ok: false, error: "Invalid request." };
-    await setDefinitionAnonymousResults(key, parsedFlag.data, gate.campUser.id);
+    const outcome = await setDefinitionAnonymousResults(
+      key,
+      parsedFlag.data,
+      gate.campUser.id,
+    );
+    if (outcome === "missing") {
+      return { ok: false, error: "Questionnaire not found." };
+    }
+    if (outcome === "answered") {
+      return {
+        ok: false,
+        error:
+          "People already answered this with no names, so names stay hidden.",
+      };
+    }
     revalidateBuilder(key);
     return { ok: true };
   });

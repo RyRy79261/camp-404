@@ -47,14 +47,14 @@ they share nothing else. Coexistence is permanent.
 
 ### 1.1 Identifier map (one set of keys threads every hop)
 
-| Concept | Where | Value |
-|---|---|---|
-| Definition family key | `questionnaire_definitions.key` (PK) | server-minted `slugify(title)+suffix`, immutable on rename; reserved code keys excluded |
-| Published snapshot | `questionnaire_versions(key, version)` (PK) | immutable copy of the definition at publish |
-| Dispatch | `questionnaire_activations` | `questionnaireKey = key`, `version = currently-published version`, `id = activationId` |
-| Obligation | `required_actions` | `actionKey = key`, `version`, `activationId`; `unique(userId, actionKey)` |
-| Answer | `questionnaire_responses` | `(userId, definitionKey, definitionVersion)` |
-| Runner route | — | `/questionnaires/[activationId]` → activation → (key, version) → snapshot |
+| Concept               | Where                                       | Value                                                                                   |
+| --------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Definition family key | `questionnaire_definitions.key` (PK)        | server-minted `slugify(title)+suffix`, immutable on rename; reserved code keys excluded |
+| Published snapshot    | `questionnaire_versions(key, version)` (PK) | immutable copy of the definition at publish                                             |
+| Dispatch              | `questionnaire_activations`                 | `questionnaireKey = key`, `version = currently-published version`, `id = activationId`  |
+| Obligation            | `required_actions`                          | `actionKey = key`, `version`, `activationId`; `unique(userId, actionKey)`               |
+| Answer                | `questionnaire_responses`                   | `(userId, definitionKey, definitionVersion)`                                            |
+| Runner route          | —                                           | `/questionnaires/[activationId]` → activation → (key, version) → snapshot               |
 
 ---
 
@@ -74,13 +74,13 @@ Block = QuestionBlock { block: 'question', question: Question }      // discrimi
 - **Discriminant:** `QuestionBlock` carries `block:'question'` so its wrapped
   `Question.kind` never collides with `ContentBlock.kind`.
 - **Loader discrimination (read time):** inspect `pages[0]` — `'blocks' in
-  pages[0]` ⇒ builder (parse with `BuilderQuestionnaire`); `'questions'`/`'kind'`
+pages[0]` ⇒ builder (parse with `BuilderQuestionnaire`); `'questions'`/`'kind'`
   ⇒ legacy (`Questionnaire`). `getQuestionnaireDefinition` returns `Questionnaire
-  | BuilderQuestionnaire`; the column is `$type<Questionnaire |
-  BuilderQuestionnaire>()`. The seeded burner definition stays legacy and still
+| BuilderQuestionnaire`; the column is `$type<Questionnaire |
+BuilderQuestionnaire>()`. The seeded burner definition stays legacy and still
   validates.
 - **Page defaults** (on create / page-add): `{ uuid, type:'question', title:'',
-  intro:undefined, requiredToContinue:false, blocks:[] }`. `type` is set from the
+intro:undefined, requiredToContinue:false, blocks:[] }`. `type` is set from the
   creating tile (Question/Content page).
 - **Page `type` is a declarative label** (drives respondent chrome/progress
   copy), not a structural constraint — content blocks may appear on any page. But
@@ -101,13 +101,13 @@ Block = QuestionBlock { block: 'question', question: Question }      // discrimi
 no arrays of conditions). May reference **only an earlier field** (the builder
 rejects forward references). Operators by referenced kind:
 
-| Referenced kind | Operators | `value` |
-|---|---|---|
-| single_select, combobox | `eq`, `ne` | option value (string) |
-| boolean | `eq`, `ne` | `true`/`false` |
-| multi_select | `includes`, `not_includes` | option value (string) |
-| number, slider | `eq`, `ne`, `gt`, `gte`, `lt`, `lte` | number the field can give (see below) |
-| any kind | `is_answered`, `is_empty` | omitted |
+| Referenced kind         | Operators                            | `value`                               |
+| ----------------------- | ------------------------------------ | ------------------------------------- |
+| single_select, combobox | `eq`, `ne`                           | option value (string)                 |
+| boolean                 | `eq`, `ne`                           | `true`/`false`                        |
+| multi_select            | `includes`, `not_includes`           | option value (string)                 |
+| number, slider          | `eq`, `ne`, `gt`, `gte`, `lt`, `lte` | number the field can give (see below) |
+| any kind                | `is_answered`, `is_empty`            | omitted                               |
 
 `value` must match the referenced field's response type. An **unanswered**
 referenced field makes the condition evaluate **false (hide)**, except
@@ -144,21 +144,21 @@ long, today the My forms change log; readers fall back to the prompt
 
 ### Input fields (`Question` discriminated union in `@camp404/types`)
 
-| Palette | Stored kind | State | Params / notes |
-|---|---|---|---|
-| Short text | `short_text` | extend | `placeholder?` (**add**), `maxLength` stepper |
-| Long text | `long_text` | extend | `enableDictation` bool (**add**, default false) → guards the DictatePill; existing Groq `/api/voice/transcribe` |
-| Email | `email` | **new** | format-validated (RFC-lite regex, no new deps); reuse onboarding email input |
-| Phone | `phone` | **new** | format-validated; reuse onboarding phone input; no new deps |
-| Number | `number` | exists (#113) | min / `max`(default 6) — integer +1, **no `step`** |
-| Scale | `slider` + `display:'segmented'` | extend | **row of number buttons** to pick from; min/max positive integers, mobile cap ≤9 cells; low/high labels optional |
-| Slider | `slider` + `display:'continuous'` | extend | continuous; min/max/step + low/high labels |
-| Single select | `single_select` | exists | `options[]` (≥2); "Allow multiple" morph → `multi_select`, **authoring-time only** |
-| Multi select | `multi_select` | exists | `options[]` (≥2) |
-| Dropdown | `combobox` | exists | searchable single-select |
-| Date | `date` | exists | no min/max in v1 (platform-`Date` rule) |
-| Toggle | `boolean` | **new** | on/off; fixed `Yes`/`No` labels in v1 (not author-editable); `displayResponseValue` returns Yes/No; an **untouched required boolean = missing** (store only after explicit toggle) |
-| Image upload | `image` | exists | respondent uploads; reuse square-avatar Blob pipeline |
+| Palette       | Stored kind                       | State         | Params / notes                                                                                                                                                                     |
+| ------------- | --------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Short text    | `short_text`                      | extend        | `placeholder?` (**add**), `maxLength` stepper                                                                                                                                      |
+| Long text     | `long_text`                       | extend        | `enableDictation` bool (**add**, default false) → guards the DictatePill; existing Groq `/api/voice/transcribe`                                                                    |
+| Email         | `email`                           | **new**       | format-validated (RFC-lite regex, no new deps); reuse onboarding email input                                                                                                       |
+| Phone         | `phone`                           | **new**       | format-validated; reuse onboarding phone input; no new deps                                                                                                                        |
+| Number        | `number`                          | exists (#113) | min / `max`(default 6) — integer +1, **no `step`**                                                                                                                                 |
+| Scale         | `slider` + `display:'segmented'`  | extend        | **row of number buttons** to pick from; min/max positive integers, mobile cap ≤9 cells; low/high labels optional                                                                   |
+| Slider        | `slider` + `display:'continuous'` | extend        | continuous; min/max/step + low/high labels                                                                                                                                         |
+| Single select | `single_select`                   | exists        | `options[]` (≥2); "Allow multiple" morph → `multi_select`, **authoring-time only**                                                                                                 |
+| Multi select  | `multi_select`                    | exists        | `options[]` (≥2)                                                                                                                                                                   |
+| Dropdown      | `combobox`                        | exists        | searchable single-select                                                                                                                                                           |
+| Date          | `date`                            | exists        | no min/max in v1 (platform-`Date` rule)                                                                                                                                            |
+| Toggle        | `boolean`                         | **new**       | on/off; fixed `Yes`/`No` labels in v1 (not author-editable); `displayResponseValue` returns Yes/No; an **untouched required boolean = missing** (store only after explicit toggle) |
+| Image upload  | `image`                           | exists        | respondent uploads; reuse square-avatar Blob pipeline                                                                                                                              |
 
 - **Add `display:'segmented'|'continuous'`** (default `continuous`) to
   `SliderQuestion`; the Scale card pre-sets `segmented`, the Slider card
@@ -206,12 +206,12 @@ long, today the My forms change log; readers fall back to the prompt
 
 ### Content blocks (`ContentBlock` union — display-only, never captured)
 
-| Block | kind | Params |
-|---|---|---|
-| Header break | `header_break` | headingText, eyebrow?, subtext?, alignment(`left`/`center`, default `left`) |
-| Explainer | `explainer` | bodyText, style(`plain`/`note`/`callout`/`warning`) |
-| Image | `image_block` | imageUrl, caption?, **altText (required)**, sizeFit(`fit`/`fill`/`full-width`) |
-| Divider | `divider` | — |
+| Block        | kind           | Params                                                                         |
+| ------------ | -------------- | ------------------------------------------------------------------------------ |
+| Header break | `header_break` | headingText, eyebrow?, subtext?, alignment(`left`/`center`, default `left`)    |
+| Explainer    | `explainer`    | bodyText, style(`plain`/`note`/`callout`/`warning`)                            |
+| Image        | `image_block`  | imageUrl, caption?, **altText (required)**, sizeFit(`fit`/`fill`/`full-width`) |
+| Divider      | `divider`      | —                                                                              |
 
 > `image_block` (display-only, author-uploaded) ≠ the `image` **input** field
 > (respondent-uploaded, captures a URL). Board 58's "Edit field" title is a mock
@@ -219,21 +219,20 @@ long, today the My forms change log; readers fall back to the prompt
 
 ### 3.1 Content-block rendering (respondent side)
 
-| Block / style | Treatment |
-|---|---|
-| `header_break` | eyebrow = uppercase `$accent` small-caps; heading bold; subtext muted; `alignment` left/center |
-| explainer `plain` | muted body, no bg/icon |
-| explainer `note` | `$accent`-tint bg |
-| explainer `callout` | `$primary`-tint bg + megaphone icon |
-| explainer `warning` | `$destructive`-tint bg + alert-triangle icon |
-| `image_block` `fit` | constrain to column, preserve aspect |
-| `image_block` `fill` | fill column width, preserve aspect |
-| `image_block` `full-width` | edge-to-edge, ignore page padding |
+| Block / style              | Treatment                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------- |
+| `header_break`             | eyebrow = uppercase `$accent` small-caps; heading bold; subtext muted; `alignment` left/center |
+| explainer `plain`          | muted body, no bg/icon                                                                         |
+| explainer `note`           | `$accent`-tint bg                                                                              |
+| explainer `callout`        | `$primary`-tint bg + megaphone icon                                                            |
+| explainer `warning`        | `$destructive`-tint bg + alert-triangle icon                                                   |
+| `image_block` `fit`        | constrain to column, preserve aspect                                                           |
+| `image_block` `fill`       | fill column width, preserve aspect                                                             |
+| `image_block` `full-width` | edge-to-edge, ignore page padding                                                              |
 
 `altText` is **required** (publish-time check). `image_block` uploads via a
 non-square pipeline (preserve aspect; [CORRECTION 2026-09-29: built as `/api/uploads/builder-image` and `/api/uploads/questionnaire-image`] a dedicated `/api/uploads/image` or the
-avatar route **without** square-crop) — JPG/PNG, 10 MB, Remove/Replace per board [CORRECTION 2026-09-29: as built, `builder-image` takes JPEG, PNG or WebP and `questionnaire-image` PNG or WebP, both up to 5 MB]
-58. The square-crop avatar pipeline applies **only to the respondent `image`
+avatar route **without** square-crop) — JPG/PNG, 10 MB, Remove/Replace per board [CORRECTION 2026-09-29: as built, `builder-image` takes JPEG, PNG or WebP and `questionnaire-image` PNG or WebP, both up to 5 MB] 58. The square-crop avatar pipeline applies **only to the respondent `image`
 input field**.
 
 ---
@@ -253,22 +252,26 @@ islands persist via server action + `router.refresh()` (mirror
 > counts) and one card per section with its blocks edited inline (no sheets or
 > catalog dialog), and a right rail holding the lifecycle (status, Publish,
 > Send, Close send, See results, Unpublish, "Ask everyone again next year").
+> [CORRECTION 2026-10-23] There is no Publish button: the rail is "Send" (Send…,
+> or Send changes and Close send while a send is out), See results, Take
+> offline (captains), "Ask everyone again next year" (captains) and
+> "Anonymous results". Sending puts the latest version online (§4.1).
 > Section settings (shuffle, "After this section, go to", required to continue,
 > content only, "Show only when…") sit on the section card. Blocks reorder by
 > arrows or by dragging (keyboard too).
 
-| Board | Screen | Route |
-|---|---|---|
-| 49 | Hub: list (status badge, question count, edited date), New, empty state | `/captains/questionnaires` |
-| 50 / 54 | Build canvas; footer Preview + Publish; Settings gear → settings sheet | `/captains/questionnaires/[key]` |
-| 51 / 56 | Add field / Add block bottom-sheet catalog (grouped, real client-side search on name+description) | sheet |
-| 52 / 53 | Field editor (per-kind params, options editor, live preview) | sheet |
-| 55 | Pages & page settings (title/intro/type/requiredToContinue; reorder; delete) | sheet |
-| 57 / 58 | Content-block editors (header/explainer/image) | sheet |
-| — | Preview = **real runner** vs draft, no persistence, no side-effects | `/captains/questionnaires/[key]/preview` |
-| — | Send/Activate (functional, undrawn — §6) | `/captains/questionnaires/[key]/send` |
-| — | **Metrics** (captain-only, published-only) | `/captains/questionnaires/[key]/metrics` |
-| — | **Responses** (captain-only, published-only) | `/captains/questionnaires/[key]/responses` |
+| Board   | Screen                                                                                            | Route                                      |
+| ------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| 49      | Hub: list (status badge, question count, edited date), New, empty state                           | `/captains/questionnaires`                 |
+| 50 / 54 | Build canvas; footer Preview + Publish; Settings gear → settings sheet                            | `/captains/questionnaires/[key]`           |
+| 51 / 56 | Add field / Add block bottom-sheet catalog (grouped, real client-side search on name+description) | sheet                                      |
+| 52 / 53 | Field editor (per-kind params, options editor, live preview)                                      | sheet                                      |
+| 55      | Pages & page settings (title/intro/type/requiredToContinue; reorder; delete)                      | sheet                                      |
+| 57 / 58 | Content-block editors (header/explainer/image)                                                    | sheet                                      |
+| —       | Preview = **real runner** vs draft, no persistence, no side-effects                               | `/captains/questionnaires/[key]/preview`   |
+| —       | Send/Activate (functional, undrawn — §6)                                                          | `/captains/questionnaires/[key]/send`      |
+| —       | **Metrics** (captain-only, published-only)                                                        | `/captains/questionnaires/[key]/metrics`   |
+| —       | **Responses** (captain-only, published-only)                                                      | `/captains/questionnaires/[key]/responses` |
 
 ### 4.1 Permissions (enforced server-side at the data layer)
 
@@ -276,16 +279,16 @@ islands persist via server action + `router.refresh()` (mirror
 "Publish means send". The table below is the current rule; AGENTS.md has the
 reasons.
 
-| Surface / action | Clearance |
-|---|---|
-| Hub (list) + Preview | every camp member, drafts included |
-| Canvas + editors, Edit-a-draft | team-lead **only their own** (`createdBy`); captain any |
-| Send (puts the latest version online in the same press) | ≥ `team_lead`, any audience, blocking included; a draft only by its author or a captain |
-| Send changes / Close send / Push-reminder / Anonymous results | its author (≥ `team_lead`) or a captain |
-| Take offline (unpublish) / year policy / attendance check | `captain` |
-| Member results (`/questionnaires/results/[key]`) | anyone who answered this year, its author, captains; opinion questions only, cut by `sharedResults` |
-| Metrics / Responses (PII) | `captain` (data withheld server-side otherwise) |
-| Respondent runner | viewer must have a matching `required_actions` row (else "not invited"); see §5 |
+| Surface / action                                              | Clearance                                                                                           |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Hub (list) + Preview                                          | every camp member, drafts included                                                                  |
+| Canvas + editors, Edit-a-draft                                | team-lead **only their own** (`createdBy`); captain any                                             |
+| Send (puts the latest version online in the same press)       | ≥ `team_lead`, any audience, blocking included; a draft only by its author or a captain             |
+| Send changes / Close send / Push-reminder / Anonymous results | its author (≥ `team_lead`) or a captain                                                             |
+| Take offline (unpublish) / year policy / attendance check     | `captain`                                                                                           |
+| Member results (`/questionnaires/results/[key]`)              | anyone who answered this year, its author, captains; opinion questions only, cut by `sharedResults` |
+| Metrics / Responses (PII)                                     | `captain` (data withheld server-side otherwise)                                                     |
+| Respondent runner                                             | viewer must have a matching `required_actions` row (else "not invited"); see §5                     |
 
 Definitions are **global** (no team column); audience scoping happens at the
 activation, not the definition.
@@ -308,7 +311,11 @@ activation, not the definition.
   saves once every question, option and heading has its words; everything else
   is checked at publish. Publish saves unsaved changes first, then
   `publishAction` runs every rule on the server and its issues show beside the
-  section, block or option they are about. Deleting a block or a section, and
+  section, block or option they are about. [CORRECTION 2026-10-23] Send does
+  this now: it checks the issues, saves, and opens the Send page, whose
+  `sendAction` publishes and sends in one press. `publishAction` is only
+  "Send changes", for a questionnaire with an open send; anything else is
+  refused, so nothing goes online with nobody asked. Deleting a block or a section, and
   leaving with unsaved changes, ask first. Preview shows the saved draft.
 - **Concurrency:** last-write-wins, no optimistic locking in v1 (inherits the
   team-settings pattern).
@@ -322,8 +329,12 @@ activation, not the definition.
   until the captain Publishes again. The hub flags "published · draft changes"
   when head ≠ latest version; the canvas shows a banner "Editing changes to a live
   questionnaire; members keep the current version until you re-publish."
+  [CORRECTION 2026-10-23] Members keep their version until its author or a
+  captain presses "Send changes" (an open send) or sends it again.
 - **Settings gear** (boards 50/54) opens a questionnaire-settings sheet: title,
   description, and the lifecycle actions (Publish / Unpublish / Send).
+  [CORRECTION 2026-10-23] The lifecycle is the "Send" rail; there is no
+  Publish action.
 
 ---
 
@@ -339,7 +350,7 @@ was answered).
 - Pages → blocks; content blocks display-only; **"Page N of M" (left) and "X%"
   (right)** as two nodes (board 58). `M` = count of currently-visible pages
   (content pages included); `N` = 1-based ordinal in the visible list; `X% =
-  round(N/M·100)`, **clamped non-decreasing**. Single-page forms suppress the
+round(N/M·100)`, **clamped non-decreasing**. Single-page forms suppress the
   progress row; a **blocking** runner still shows the Required chip + sign-out bar.
 - **Save cadence:** upsert the `(userId, definitionKey, version)` response row on
   **each page advance** (`completedAt=null`); on final submit set `completedAt` +
@@ -389,19 +400,19 @@ re-open**. Breaking ⇒ mint a **new version** (`<base>-vN+1`, matching
 `versions.ts` `meetsRequiredVersion`); the gate re-opens only when the captain
 **Sends** the new version.
 
-| Change | Class |
-|---|---|
-| Edit prompt/helper/label/eyebrow/subtext/caption | cosmetic |
-| Add/remove/edit a **content** block; reorder fields/pages | cosmetic |
+| Change                                                                          | Class    |
+| ------------------------------------------------------------------------------- | -------- |
+| Edit prompt/helper/label/eyebrow/subtext/caption                                | cosmetic |
+| Add/remove/edit a **content** block; reorder fields/pages                       | cosmetic |
 | Edit page title/intro/alignment; enable a display variant (segmented/dictation) | cosmetic |
-| Widen a constraint (raise maxLength, widen min/max, **add** an option) | cosmetic |
-| **Add** or **remove** an input field | breaking |
-| `required` off→on **or** on→off | breaking |
-| Change field `kind`; single↔multi morph | breaking |
-| **Remove or rename** an option value | breaking |
-| **Narrow** a constraint (lower maxLength, narrow min/max) | breaking |
-| Page `type` question→content with surviving input fields | breaking |
-| Add/remove/change a `visibleIf` | breaking |
+| Widen a constraint (raise maxLength, widen min/max, **add** an option)          | cosmetic |
+| **Add** or **remove** an input field                                            | breaking |
+| `required` off→on **or** on→off                                                 | breaking |
+| Change field `kind`; single↔multi morph                                         | breaking |
+| **Remove or rename** an option value                                            | breaking |
+| **Narrow** a constraint (lower maxLength, narrow min/max)                       | breaking |
+| Page `type` question→content with surviving input fields                        | breaking |
+| Add/remove/change a `visibleIf`                                                 | breaking |
 
 ### 6.2 Publish-time validity (hard blockers, member-visible messages)
 
@@ -414,12 +425,14 @@ visible under empty responses (completable). Warnings (allow-with-confirm):
 
 ### 6.3 Dispatch (Send), re-send, unpublish
 
+- [CORRECTION 2026-10-23] Send is not separate from Publish any more and is
+  not captain-only: see §4.1. It publishes the head, then opens the activation.
 - **Send** (captain, separate from Publish) opens an activation pinned to the
   **currently-published version** (immutable on the activation) and fans out
   `required_actions` via `openActivation()`. Scope (§6.4), blocking, dueAt.
 - **Invariant:** at most **one OPEN activation per key** (enforced by a partial
   unique index on `questionnaire_activations(questionnaire_key) WHERE status =
-  'open'`), which transitively gives each targeted user at most one open
+'open'`), which transitively gives each targeted user at most one open
   obligation per key. Activations are immutable once opened; to change
   scope/blocking/dueAt the captain **closes** the current activation and opens a
   fresh one (a second overlapping open is forbidden).
@@ -465,12 +478,12 @@ metrics are out of scope — they store in bespoke tables). Routes under §4.
 
 ### 7.2 Per-kind aggregation
 
-| Kinds | Surface |
-|---|---|
-| single_select, multi_select, combobox, boolean, slider-segmented, number | histogram (value counts) |
-| slider-continuous | numeric summary (min/max/avg/median) |
-| short_text, long_text, email, phone, image, date | **response count only** (no value breakdown — PII) |
-| rating_grid | per row: average, rated count, N/A count (no names) |
+| Kinds                                                                    | Surface                                             |
+| ------------------------------------------------------------------------ | --------------------------------------------------- |
+| single_select, multi_select, combobox, boolean, slider-segmented, number | histogram (value counts)                            |
+| slider-continuous                                                        | numeric summary (min/max/avg/median)                |
+| short_text, long_text, email, phone, image, date                         | **response count only** (no value breakdown — PII)  |
+| rating_grid                                                              | per row: average, rated count, N/A count (no names) |
 
 ### 7.3 Responses surface (the "collect" payoff — was missing)
 
@@ -486,6 +499,7 @@ metrics are out of scope — they store in bespoke tables). Routes under §4.
 A captain action on the metrics surface broadcasts to the **pending** users for
 the active activation: reuse `broadcasts` → `notification_deliveries` →
 `push_tokens`. Auto-fill `title = questionnaire.title`, default body "Reminder:
+
 <title> is due <dueAt>. Tap to complete.", `refType='questionnaire_activation'`,
 `refId=activationId`. **Dedup** ≤1 per (user, activation) per 24h; skip users
 with no push token; no custom-message UI in v1.
@@ -515,6 +529,7 @@ existing `@camp404/ui` components** — good-enough polish.
 Each phase ends green on `pnpm turbo run lint typecheck test build`.
 
 **Phase A — Types & schema contract.**
+
 - `@camp404/types`: add `BuilderQuestionnaire` parallel type + `Block` /
   `ContentBlock` unions (per §2 discriminants); add kinds `email`, `phone`,
   `boolean`; add `slider.display`, `short_text.placeholder`,
@@ -579,17 +594,17 @@ existing form parts (no board draws it)._
 
 ## 10. Reuse map
 
-| Need | Existing precedent |
-|---|---|
-| Definition load (validate-or-fall-back) | `apps/web/lib/questionnaire-definitions.ts`, `packages/db/src/questionnaire-definitions.ts` |
-| Member field rendering / preview | `apps/web/components/questionnaire/field.tsx` [CORRECTION 2026-09-29: was `question.tsx` (`FieldInput`)] |
-| Runner / wizard / blocking chrome | `apps/web/components/questionnaire/{runner,blocking-chrome}.tsx` [CORRECTION 2026-09-29: `wizard.tsx` is now `runner.tsx`] |
-| Validation / diff / display | `packages/types/src/questionnaire.ts` |
-| Gate + preview-but-locked | `apps/web/app/(console)/captains/camp-settings/page.tsx` + `CaptainLock`; `packages/core/src/access.ts` |
-| List reorder / rename | `captains/camp-settings/team-settings-manager.tsx`; home Customize `@dnd-kit` |
-| Compose → draft → publish, per-record edit/delete | `captains/announcements/announcements-manager.tsx` |
-| Dispatch / gate spine | `packages/db/src/activations.ts` (open/satisfy/**closeActivation new**), `apps/web/lib/required-actions.ts` (`nextGate`/`ACTION_ROUTES`), `packages/db/src/versions.ts` |
-| Change-log | `packages/db/src/questionnaire-edits.ts` (key-driven; records who/when/from-version) |
-| Image / voice | `/api/uploads/avatar` (square, input field); new non-square path for `image_block`; `/api/voice/transcribe` (Groq) |
-| Push fan-out | `broadcasts` → `notification_deliveries` → `push_tokens` |
-| Queue states (membership page) | `packages/types/src/questionnaire-queue.ts` |
+| Need                                              | Existing precedent                                                                                                                                                      |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Definition load (validate-or-fall-back)           | `apps/web/lib/questionnaire-definitions.ts`, `packages/db/src/questionnaire-definitions.ts`                                                                             |
+| Member field rendering / preview                  | `apps/web/components/questionnaire/field.tsx` [CORRECTION 2026-09-29: was `question.tsx` (`FieldInput`)]                                                                |
+| Runner / wizard / blocking chrome                 | `apps/web/components/questionnaire/{runner,blocking-chrome}.tsx` [CORRECTION 2026-09-29: `wizard.tsx` is now `runner.tsx`]                                              |
+| Validation / diff / display                       | `packages/types/src/questionnaire.ts`                                                                                                                                   |
+| Gate + preview-but-locked                         | `apps/web/app/(console)/captains/camp-settings/page.tsx` + `CaptainLock`; `packages/core/src/access.ts`                                                                 |
+| List reorder / rename                             | `captains/camp-settings/team-settings-manager.tsx`; home Customize `@dnd-kit`                                                                                           |
+| Compose → draft → publish, per-record edit/delete | `captains/announcements/announcements-manager.tsx`                                                                                                                      |
+| Dispatch / gate spine                             | `packages/db/src/activations.ts` (open/satisfy/**closeActivation new**), `apps/web/lib/required-actions.ts` (`nextGate`/`ACTION_ROUTES`), `packages/db/src/versions.ts` |
+| Change-log                                        | `packages/db/src/questionnaire-edits.ts` (key-driven; records who/when/from-version)                                                                                    |
+| Image / voice                                     | `/api/uploads/avatar` (square, input field); new non-square path for `image_block`; `/api/voice/transcribe` (Groq)                                                      |
+| Push fan-out                                      | `broadcasts` → `notification_deliveries` → `push_tokens`                                                                                                                |
+| Queue states (membership page)                    | `packages/types/src/questionnaire-queue.ts`                                                                                                                             |

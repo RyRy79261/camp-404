@@ -10,7 +10,7 @@ import { sendBlockingToEveryone, signInCaptain } from "./_flows";
 
 // The post-burn survey (#251), end to end on a real database: a captain plans
 // two meals, starts a draft from the survey template (its star ratings take
-// one row per meal), publishes and sends it; a member rates the two meals and
+// one row per meal), sends it; a member rates the two meals and
 // never sees the team leads' questions; a lead of another team does; the
 // results page shows each meal's average. The in-memory store runs no builder
 // questionnaires, so this lives in the real-database suite.
@@ -97,10 +97,7 @@ test("a captain sends the post-burn survey, members rate two meals, results show
     new RegExp(`/captains/questionnaires/${SURVEY.key}$`),
     { timeout: 60_000 },
   );
-  const rail = captain.getByRole("complementary", { name: "Publish and send" });
-  await rail.getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(rail.getByText("Published", { exact: true })).toBeVisible();
-
+  // Sending puts the draft online in the same press: no Publish step.
   await sendBlockingToEveryone(captain, SURVEY.title);
   // A blocking send gates the captain too; a captain sees the leads' part.
   await answerSurvey(captain, { dinner: 4, breakfast: 2 }, true);

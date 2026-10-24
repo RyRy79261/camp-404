@@ -26,6 +26,7 @@ vi.mock("@camp404/db/activations", async (importOriginal) => ({
   getActivationById: vi.fn(),
 }));
 vi.mock("@camp404/db/questionnaire-lifecycle", () => ({
+  getOpenActivationForKey: vi.fn(),
   publishDefinition: vi.fn(),
   unpublishDefinition: vi.fn(),
   sendActivation: vi.fn(),
@@ -87,6 +88,7 @@ import {
   sendActivation,
   sendReminder,
   unpublishDefinition,
+  getOpenActivationForKey,
 } from "@camp404/db/questionnaire-lifecycle";
 import { deliverAfterResponse } from "@/lib/background-work";
 import { getActivationById } from "@camp404/db/activations";
@@ -134,6 +136,10 @@ beforeEach(() => {
     id: "00000000-0000-4000-8000-000000000001",
     questionnaireKey: "feedback",
   } as Awaited<ReturnType<typeof getActivationById>>);
+  // ...and a send of it is out.
+  vi.mocked(getOpenActivationForKey).mockResolvedValue({
+    id: "00000000-0000-4000-8000-000000000001",
+  } as Awaited<ReturnType<typeof getOpenActivationForKey>>);
 });
 
 describe("publishAction (Send changes) — its author or a captain", () => {
@@ -182,8 +188,8 @@ describe("publishAction (Send changes) — its author or a captain", () => {
     asViewer("captain");
     vi.mocked(getDefinitionMetaRow).mockResolvedValue({
       key: "feedback",
-      status: "draft",
-      version: null,
+      status: "published",
+      version: "feedback-v1",
       createdBy: "u1",
       anonymousResults: false,
     });
@@ -215,8 +221,8 @@ describe("publishAction (Send changes) — its author or a captain", () => {
     asViewer("captain");
     vi.mocked(getDefinitionMetaRow).mockResolvedValue({
       key: "feedback",
-      status: "draft",
-      version: null,
+      status: "published",
+      version: "feedback-v1",
       createdBy: "u1",
       anonymousResults: false,
     });
@@ -234,6 +240,35 @@ describe("publishAction (Send changes) — its author or a captain", () => {
     };
     vi.mocked(publishDefinition).mockResolvedValue(refused);
     expect(await publishAction("feedback")).toEqual(refused);
+  });
+
+  it("refuses a draft, or one with no open send: Send asks people first", async () => {
+    const noSend = {
+      ok: false,
+      errors: [
+        "This questionnaire has no open send. Use Send to choose who to ask.",
+      ],
+      issues: [],
+    };
+    asViewer("captain");
+    vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+      key: "feedback",
+      status: "draft",
+      version: null,
+      createdBy: "u1",
+      anonymousResults: false,
+    });
+    expect(await publishAction("feedback")).toEqual(noSend);
+    vi.mocked(getDefinitionMetaRow).mockResolvedValue({
+      key: "feedback",
+      status: "published",
+      version: "feedback-v1",
+      createdBy: "u1",
+      anonymousResults: false,
+    });
+    vi.mocked(getOpenActivationForKey).mockResolvedValue(null);
+    expect(await publishAction("feedback")).toEqual(noSend);
+    expect(publishDefinition).not.toHaveBeenCalled();
   });
 });
 
@@ -1363,6 +1398,7 @@ describe("setAnonymousResultsAction — its author or a captain", () => {
       createdBy: "u1",
       anonymousResults: false,
     });
+    vi.mocked(setDefinitionAnonymousResults).mockResolvedValue("ok");
     expect(await setAnonymousResultsAction("feedback", true)).toEqual({
       ok: true,
     });
@@ -1371,5 +1407,15 @@ describe("setAnonymousResultsAction — its author or a captain", () => {
       true,
       "u1",
     );
+  });
+
+  it("says why names stay hidden once people answered with no names", async () => {
+    asViewer("captain");
+    vi.mocked(setDefinitionAnonymousResults).mockResolvedValue("answered");
+    expect(await setAnonymousResultsAction("feedback", false)).toEqual({
+      ok: false,
+      error:
+        "People already answered this with no names, so names stay hidden.",
+    });
   });
 });

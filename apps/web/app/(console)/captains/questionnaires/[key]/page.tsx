@@ -1,3 +1,4 @@
+import { canEditBuilderDefinition } from "@camp404/core";
 import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
@@ -54,7 +55,7 @@ export default async function QuestionnaireBuilderPage({
   const isNew = meta.status === "draft" && meta.version === null;
 
   const canEdit =
-    canAuthor && (rank === "captain" || meta.createdBy === campUser.id);
+    canAuthor && canEditBuilderDefinition({ rank, userId: campUser.id }, meta);
   if (!canEdit) redirect(`/captains/questionnaires/${key}/preview`);
 
   const definition = await getBuilderDefinition(key);

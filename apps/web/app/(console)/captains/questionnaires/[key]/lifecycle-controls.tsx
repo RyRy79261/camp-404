@@ -40,14 +40,22 @@ type Status = "draft" | "published" | "unpublished";
  * reach members until they are sent (the live snapshot keeps serving).
  * Spec §4.2.
  */
-export function EditPublishedBanner({ status }: { status: Status }) {
+export function EditPublishedBanner({
+  status,
+  sentNow,
+}: {
+  status: Status;
+  sentNow: boolean;
+}) {
   return (
     <Alert variant="warning">
       <TriangleAlert aria-hidden />
       <span>
-        {status === "published"
-          ? "You're editing a questionnaire that is out with members. They keep the version they have until you send your changes."
-          : "This questionnaire was taken offline. Edits are saved; send it to put it back online."}
+        {status === "unpublished"
+          ? "This questionnaire was taken offline. Send it to put it back online with your latest edits."
+          : sentNow
+            ? "You're editing a questionnaire that is out with members. They keep the version they have until you send your changes."
+            : "No send is open. Your edits go online the next time you send it."}
       </span>
     </Alert>
   );
@@ -301,7 +309,9 @@ export function LifecycleRail({
             </div>
           ) : null}
 
-          {status !== "draft" ? <EditPublishedBanner status={status} /> : null}
+          {status !== "draft" ? (
+            <EditPublishedBanner status={status} sentNow={sentNow} />
+          ) : null}
 
           <div className="flex flex-col gap-2">
             {sentNow ? (

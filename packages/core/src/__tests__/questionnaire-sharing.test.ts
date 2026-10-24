@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Question } from "@camp404/types";
+import type { Question, Questionnaire } from "@camp404/types";
 import {
   type SharedRespondent,
   canReadQuestionnaireResults,
@@ -50,6 +50,21 @@ const coming = {
   options: [{ value: "yes", label: "Yes" }],
   required: true,
 } as Question;
+
+/** One page holding `questions`, plus any extra pages. */
+function form(
+  questions: Question[],
+  extraPages: Questionnaire["pages"] = [],
+): Questionnaire {
+  return {
+    version: "1",
+    title: "Survey",
+    pages: [
+      { id: "p1", kind: "questions", title: "Page", questions },
+      ...extraPages,
+    ],
+  } as Questionnaire;
+}
 
 describe("canSendQuestionnaireTo", () => {
   it("lets a team lead send to the whole camp, like a captain", () => {
@@ -142,7 +157,8 @@ describe("sharedResults", () => {
 
   it("counts and names only the shared questions", () => {
     const result = sharedResults({
-      questions: [pick, note, email, allergies, coming],
+      definition: form([pick, note, email, allergies, coming]),
+      seesLeadsOnly: false,
       respondents,
       anonymous: false,
     });
@@ -169,7 +185,8 @@ describe("sharedResults", () => {
 
   it("names nobody when anonymous, and lists only written answers", () => {
     const result = sharedResults({
-      questions: [pick, note],
+      definition: form([pick, note]),
+      seesLeadsOnly: false,
       respondents,
       anonymous: true,
     });
@@ -181,5 +198,55 @@ describe("sharedResults", () => {
     const all = JSON.stringify(result);
     expect(all).not.toContain("Caitlin");
     expect(all).not.toContain("Lee");
+  });
+
+  it("shows a plain member no leads-only question or page, and a lead both", () => {
+    const leadsQuestion = {
+      id: "crew",
+      kind: "short_text",
+      prompt: "Was your crew big enough?",
+      required: false,
+      leadsOnly: true,
+    } as Question;
+    const leadsPage = {
+      id: "p2",
+      kind: "questions",
+      title: "Leads",
+      leadsOnly: true,
+      questions: [
+        {
+          id: "budget",
+          kind: "short_text",
+          prompt: "Budget enough?",
+          required: false,
+        },
+      ],
+    } as Questionnaire["pages"][number];
+    const definition = form([note, leadsQuestion], [leadsPage]);
+    const people: SharedRespondent[] = [
+      {
+        name: "Lee",
+        responses: { note: "Gazebo", crew: "Too small", budget: "Short" },
+      },
+    ];
+
+    const member = sharedResults({
+      definition,
+      seesLeadsOnly: false,
+      respondents: people,
+      anonymous: false,
+    });
+    expect(member.questions.map((q) => q.id)).toEqual(["note"]);
+    const all = JSON.stringify(member);
+    expect(all).not.toContain("Too small");
+    expect(all).not.toContain("Short");
+
+    const lead = sharedResults({
+      definition,
+      seesLeadsOnly: true,
+      respondents: people,
+      anonymous: false,
+    });
+    expect(lead.questions.map((q) => q.id)).toEqual(["note", "crew", "budget"]);
   });
 });

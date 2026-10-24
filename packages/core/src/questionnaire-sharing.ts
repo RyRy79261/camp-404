@@ -1,7 +1,9 @@
 import {
   displayResponseValue,
+  flattenQuestions,
   isOtherAnswer,
   type Question,
+  type Questionnaire,
   type QuestionnaireResponses,
   type ViewerRank,
 } from "@camp404/types";
@@ -11,6 +13,7 @@ import {
   aggregateQuestions,
   type ResponseAggregate,
 } from "./questionnaire-results";
+import { questionnaireForViewer } from "./questionnaire-viewer";
 
 // Who sends a builder questionnaire, and what the camp reads back from it
 // (owner, 2026-10-23: "Publish means send", "a team lead should be able to send
@@ -26,8 +29,9 @@ import {
 // READING RESULTS. A member reads a questionnaire's results for a year once
 // they have answered it that year; its author and every captain read them
 // anyway. What a member reads is cut here, on the server, before it reaches a
-// page: only questions that ask for an opinion (`isSharedResultQuestion`),
-// counts first, and names only when the questionnaire is not anonymous.
+// page: only questions that ask for an opinion (`isSharedResultQuestion`) and
+// that the viewer could see on the form (no leads-only part for a plain
+// member), counts first, and names only when the questionnaire is not anonymous.
 // Captains keep their own full results page.
 
 /** Every scope a questionnaire send may name. */
@@ -151,16 +155,23 @@ function hasAnswer(value: unknown): boolean {
 }
 
 /**
- * What the members who answered read back. Answers to questions that are not
- * shown, and to questions since removed, are dropped before anything is
- * counted, so not even their count leaves the server.
+ * What the members who answered read back. A viewer below team lead gets no
+ * leads-only page or question (`questionnaireForViewer`, as on the form).
+ * Answers to questions that are not shown, and to questions since removed,
+ * are dropped before anything is counted, so not even their count leaves the
+ * server.
  */
 export function sharedResults(input: {
-  questions: readonly Question[];
+  definition: Questionnaire;
+  seesLeadsOnly: boolean;
   respondents: readonly SharedRespondent[];
   anonymous: boolean;
 }): SharedResults {
-  const questions = input.questions.filter(isSharedResultQuestion);
+  const questions = flattenQuestions(
+    questionnaireForViewer(input.definition, {
+      seesLeadsOnly: input.seesLeadsOnly,
+    }),
+  ).filter(isSharedResultQuestion);
   const shown = new Set(questions.map((q) => q.id));
   const cut = input.respondents.map((r) => ({
     name: r.name,

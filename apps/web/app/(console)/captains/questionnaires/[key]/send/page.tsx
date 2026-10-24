@@ -1,3 +1,4 @@
+import { canEditBuilderDefinition } from "@camp404/core";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -50,7 +51,6 @@ export default async function SendPage({
 }) {
   const { key } = await params;
   const { cleared, rank, campUser } = await programPage("send-questionnaire");
-  const isCaptain = rank === "captain";
   const chrome = (children: ReactNode, title: string, description?: string) => (
     <div className="flex flex-col">
       <PageHeading
@@ -79,7 +79,7 @@ export default async function SendPage({
   if (!meta) notFound();
   // Its author or a captain sends their latest version, which goes online in
   // the same press. Anyone else sends only what is already online.
-  const canEdit = isCaptain || meta.createdBy === campUser.id;
+  const canEdit = canEditBuilderDefinition({ rank, userId: campUser.id }, meta);
   if (meta.status !== "published" && !canEdit) {
     return chrome(
       <Alert variant="info">

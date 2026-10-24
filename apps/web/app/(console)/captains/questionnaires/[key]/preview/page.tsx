@@ -2,7 +2,10 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
-import { canViewBuilderDefinition } from "@camp404/core";
+import {
+  canEditBuilderDefinition,
+  canViewBuilderDefinition,
+} from "@camp404/core";
 import { Button } from "@camp404/ui/components/button";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { Card, CardContent } from "@camp404/ui/components/card";
@@ -62,9 +65,10 @@ export default async function BuilderPreviewPage({
   const definition = await getBuilderDefinition(key);
   if (!definition) notFound();
 
-  const canEdit =
-    actor.rank === "captain" ||
-    (actor.rank === "team_lead" && meta.createdBy === campUser.id);
+  const canEdit = canEditBuilderDefinition(
+    { rank: actor.rank, userId: campUser.id },
+    meta,
+  );
   const backToEditor = canEdit ? (
     <Button asChild variant="outline">
       <Link href={`/captains/questionnaires/${key}`}>

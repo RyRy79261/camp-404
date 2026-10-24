@@ -2,7 +2,11 @@ import { and, asc, eq } from "drizzle-orm";
 import type { Questionnaire } from "@camp404/types";
 import { writeAuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
-import { questionnaireDefinitions, questionnaireVersions } from "./schema";
+import {
+  questionnaireDefinitions,
+  questionnaireResponses,
+  questionnaireVersions,
+} from "./schema";
 
 type DefinitionStatus = "draft" | "published" | "unpublished";
 
@@ -260,27 +264,48 @@ export async function setDefinitionCarryOver(
  * Set whether the members who answered read this questionnaire's results
  * without names. Captains always read names. Like the year policy it needs no
  * re-publish and does not bump `updated_at`. The change and its
- * `questionnaire.anonymous_results_set` audit row commit together; a key with
- * no definition changes nothing.
+ * `questionnaire.anonymous_results_set` audit row commit together. Once
+ * anyone has answered an anonymous questionnaire (any year), names are never
+ * turned on ("answered"): those people answered on the word "no names".
+ * Turning names off is always allowed.
  */
 export async function setDefinitionAnonymousResults(
   key: string,
   anonymous: boolean,
   actorId: string,
-): Promise<void> {
-  await withTransaction(async (tx) => {
-    const [row] = await tx
+): Promise<"ok" | "answered" | "missing"> {
+  return withTransaction(async (tx) => {
+    // Lock the row so a second change waits for this one.
+    const [current] = await tx
+      .select({
+        title: questionnaireDefinitions.title,
+        anonymousResults: questionnaireDefinitions.anonymousResults,
+      })
+      .from(questionnaireDefinitions)
+      .where(eq(questionnaireDefinitions.key, key))
+      .for("update");
+    if (!current) return "missing";
+    if (current.anonymousResults === anonymous) return "ok";
+    // People who answered were told "no names": never put names on them.
+    if (current.anonymousResults && !anonymous) {
+      const [answer] = await tx
+        .select({ id: questionnaireResponses.id })
+        .from(questionnaireResponses)
+        .where(eq(questionnaireResponses.definitionKey, key))
+        .limit(1);
+      if (answer) return "answered";
+    }
+    await tx
       .update(questionnaireDefinitions)
       .set({ anonymousResults: anonymous })
-      .where(eq(questionnaireDefinitions.key, key))
-      .returning({ title: questionnaireDefinitions.title });
-    if (!row) return;
+      .where(eq(questionnaireDefinitions.key, key));
     await writeAuditEvent(tx, {
       actorId,
       action: "questionnaire.anonymous_results_set",
       target: key,
-      metadata: { title: row.title, anonymous },
+      metadata: { title: current.title, anonymous },
     });
+    return "ok";
   });
 }
 

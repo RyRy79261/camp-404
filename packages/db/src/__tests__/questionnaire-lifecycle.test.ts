@@ -15,6 +15,7 @@ import {
 import type { AuditAction } from "@camp404/core";
 import {
   insertDefinitionDraft,
+  setDefinitionAnonymousResults,
   setDefinitionCarryOver,
 } from "../questionnaire-definitions";
 import {
@@ -573,6 +574,49 @@ describe("questionnaire lifecycle — audit rows", () => {
         target: "feedback",
         metadata: { title: "Camp feedback", carryOver: false },
       },
+    ]);
+  });
+
+  it("never turns names on once someone answered with no names", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+
+    // Before anyone answers, both ways are allowed, each audited.
+    expect(
+      await setDefinitionAnonymousResults("feedback", true, captain.id),
+    ).toBe("ok");
+    expect(
+      await setDefinitionAnonymousResults("feedback", false, captain.id),
+    ).toBe("ok");
+    expect(
+      await setDefinitionAnonymousResults("feedback", true, captain.id),
+    ).toBe("ok");
+    expect(await setDefinitionAnonymousResults("nope", true, captain.id)).toBe(
+      "missing",
+    );
+
+    await db.insert(schema.questionnaireResponses).values({
+      userId: captain.id,
+      definitionKey: "feedback",
+      definitionVersion: "feedback-v1",
+      responses: { q1: "no names please" },
+      completedAt: new Date(),
+    });
+    expect(
+      await setDefinitionAnonymousResults("feedback", false, captain.id),
+    ).toBe("answered");
+    const [meta] = await db
+      .select({ anonymous: schema.questionnaireDefinitions.anonymousResults })
+      .from(schema.questionnaireDefinitions)
+      .where(eq(schema.questionnaireDefinitions.key, "feedback"));
+    expect(meta!.anonymous).toBe(true);
+    expect(
+      (await auditRows(db)).map((r) => r.metadata as { anonymous: boolean }),
+    ).toEqual([
+      { title: "Camp feedback", anonymous: true },
+      { title: "Camp feedback", anonymous: false },
+      { title: "Camp feedback", anonymous: true },
     ]);
   });
 });

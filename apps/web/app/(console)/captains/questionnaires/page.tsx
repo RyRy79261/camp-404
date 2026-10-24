@@ -1,4 +1,8 @@
-import { CAMP_TIME_ZONE, canReadQuestionnaireResults } from "@camp404/core";
+import {
+  CAMP_TIME_ZONE,
+  canEditBuilderDefinition,
+  canReadQuestionnaireResults,
+} from "@camp404/core";
 import { CaptainLock } from "@camp404/ui/components/captain-lock";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { programPage } from "@/lib/program-page";
@@ -69,7 +73,7 @@ export default async function QuestionnairesPage() {
   );
 
   const items: HubItem[] = definitions.map((d) => {
-    const canEdit = canAuthor && (isCaptain || d.createdBy === campUser.id);
+    const canEdit = canEditBuilderDefinition({ rank, userId: campUser.id }, d);
     const mayReadResults = canReadQuestionnaireResults({
       rank,
       isAuthor: d.createdBy === campUser.id,

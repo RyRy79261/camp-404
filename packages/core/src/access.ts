@@ -102,3 +102,19 @@ export function canViewBuilderDefinition(
 ): boolean {
   return hasClearance(viewer.rank, "camp_member");
 }
+
+/**
+ * Whether a viewer may change a builder questionnaire (edit it, send a draft
+ * or its changes, close its send, set "Anonymous results"): a captain may
+ * change any, a team lead only one they wrote.
+ */
+export function canEditBuilderDefinition(
+  viewer: { rank: ViewerRank; userId: string },
+  definition: { createdBy: string | null },
+): boolean {
+  if (viewer.rank === "captain") return true;
+  return (
+    hasClearance(viewer.rank, "team_lead") &&
+    definition.createdBy === viewer.userId
+  );
+}

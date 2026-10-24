@@ -3,10 +3,11 @@ import "server-only";
 import { notFound } from "next/navigation";
 import {
   canReadQuestionnaireResults,
+  hasClearance,
   sharedResults,
   type SharedResults,
 } from "@camp404/core";
-import { flattenQuestions, type ViewerRank } from "@camp404/types";
+import type { ViewerRank } from "@camp404/types";
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import {
@@ -89,7 +90,9 @@ export async function loadMemberResults(
       respondents: respondents.length,
       anonymous: meta.anonymousResults,
       ...sharedResults({
-        questions: flattenQuestions(definition),
+        definition,
+        // Clearance is global: a lead of any team, as on the form itself.
+        seesLeadsOnly: hasClearance(viewer.rank, "team_lead"),
         respondents,
         anonymous: meta.anonymousResults,
       }),

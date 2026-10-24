@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canEditBuilderDefinition,
   canViewBuilderDefinition,
   deriveViewerRank,
   hasCampAccess,
@@ -92,5 +93,32 @@ describe("canViewBuilderDefinition", () => {
         ).toBe(true);
       }
     }
+  });
+});
+
+describe("canEditBuilderDefinition", () => {
+  const mine = { createdBy: "me" };
+  const theirs = { createdBy: "them" };
+  it("lets a captain change any, a team lead only their own", () => {
+    expect(
+      canEditBuilderDefinition({ rank: "captain", userId: "me" }, theirs),
+    ).toBe(true);
+    expect(
+      canEditBuilderDefinition({ rank: "team_lead", userId: "me" }, mine),
+    ).toBe(true);
+    expect(
+      canEditBuilderDefinition({ rank: "team_lead", userId: "me" }, theirs),
+    ).toBe(false);
+  });
+  it("never a plain member, even the author", () => {
+    expect(
+      canEditBuilderDefinition({ rank: "camp_member", userId: "me" }, mine),
+    ).toBe(false);
+    expect(
+      canEditBuilderDefinition(
+        { rank: "team_lead", userId: "me" },
+        { createdBy: null },
+      ),
+    ).toBe(false);
   });
 });
