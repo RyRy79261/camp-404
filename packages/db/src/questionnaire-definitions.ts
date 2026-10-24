@@ -3,6 +3,7 @@ import type { Questionnaire } from "@camp404/types";
 import { writeAuditEvent } from "./audit";
 import { createHttpDb, withTransaction } from "./index";
 import {
+  questionnaireActivations,
   questionnaireDefinitions,
   questionnaireResponses,
   questionnaireVersions,
@@ -266,14 +267,15 @@ export async function setDefinitionCarryOver(
  * re-publish and does not bump `updated_at`. The change and its
  * `questionnaire.anonymous_results_set` audit row commit together. Once
  * anyone has answered an anonymous questionnaire (any year), names are never
- * turned on ("answered"): those people answered on the word "no names".
- * Turning names off is always allowed.
+ * turned on ("answered"): those people answered on the word "no names". Nor
+ * while a send is open ("open"): someone may have the form open under that
+ * notice. Turning names off is always allowed.
  */
 export async function setDefinitionAnonymousResults(
   key: string,
   anonymous: boolean,
   actorId: string,
-): Promise<"ok" | "answered" | "missing"> {
+): Promise<"ok" | "answered" | "open" | "missing"> {
   return withTransaction(async (tx) => {
     // Lock the row so a second change waits for this one.
     const [current] = await tx
@@ -294,6 +296,19 @@ export async function setDefinitionAnonymousResults(
         .where(eq(questionnaireResponses.definitionKey, key))
         .limit(1);
       if (answer) return "answered";
+      // Someone may have the form open under the "no names" notice and
+      // submit after this change: wait until the send is closed.
+      const [open] = await tx
+        .select({ id: questionnaireActivations.id })
+        .from(questionnaireActivations)
+        .where(
+          and(
+            eq(questionnaireActivations.questionnaireKey, key),
+            eq(questionnaireActivations.status, "open"),
+          ),
+        )
+        .limit(1);
+      if (open) return "open";
     }
     await tx
       .update(questionnaireDefinitions)

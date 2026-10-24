@@ -1417,5 +1417,11 @@ describe("setAnonymousResultsAction — its author or a captain", () => {
       error:
         "People already answered this with no names, so names stay hidden.",
     });
+    vi.mocked(setDefinitionAnonymousResults).mockResolvedValue("open");
+    expect(await setAnonymousResultsAction("feedback", false)).toEqual({
+      ok: false,
+      error:
+        "People may be answering this now with no names. Close the send to show names.",
+    });
   });
 });

@@ -813,6 +813,13 @@ export async function setAnonymousResultsAction(
           "People already answered this with no names, so names stay hidden.",
       };
     }
+    if (outcome === "open") {
+      return {
+        ok: false,
+        error:
+          "People may be answering this now with no names. Close the send to show names.",
+      };
+    }
     revalidateBuilder(key);
     return { ok: true };
   });

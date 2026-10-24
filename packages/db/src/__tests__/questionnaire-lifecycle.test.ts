@@ -489,6 +489,8 @@ describe("questionnaire lifecycle — audit rows", () => {
   const UNPUBLISHED = "questionnaire.unpublished" satisfies AuditAction;
   const SEND_CLOSED = "questionnaire.send_closed" satisfies AuditAction;
   const CARRY_OVER_SET = "questionnaire.carry_over_set" satisfies AuditAction;
+  const ANONYMOUS_SET =
+    "questionnaire.anonymous_results_set" satisfies AuditAction;
 
   async function auditRows(db: ReturnType<typeof h.db>) {
     return db
@@ -596,6 +598,20 @@ describe("questionnaire lifecycle — audit rows", () => {
       "missing",
     );
 
+    // An open send: someone may have the form open under "no names".
+    await publishDefinition("feedback", captain.id);
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: false,
+      activatedByUserId: captain.id,
+    });
+    if (!sent.ok) throw new Error(sent.error);
+    expect(
+      await setDefinitionAnonymousResults("feedback", false, captain.id),
+    ).toBe("open");
+    await closeActivation(sent.activationId, captain.id);
+
     await db.insert(schema.questionnaireResponses).values({
       userId: captain.id,
       definitionKey: "feedback",
@@ -612,7 +628,9 @@ describe("questionnaire lifecycle — audit rows", () => {
       .where(eq(schema.questionnaireDefinitions.key, "feedback"));
     expect(meta!.anonymous).toBe(true);
     expect(
-      (await auditRows(db)).map((r) => r.metadata as { anonymous: boolean }),
+      (await auditRows(db))
+        .filter((r) => r.action === ANONYMOUS_SET)
+        .map((r) => r.metadata),
     ).toEqual([
       { title: "Camp feedback", anonymous: true },
       { title: "Camp feedback", anonymous: false },
