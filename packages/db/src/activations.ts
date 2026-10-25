@@ -6,6 +6,7 @@ import { currentCycle, resolveCycles, UNSET_CYCLE } from "./camp-config";
 import { meetsRequiredVersion } from "./versions";
 import { currentCycleNumber } from "./cycles";
 import type { DbOrTx } from "./audit";
+import { lockOpenSend } from "./questionnaire-responses";
 import { applyParticipationIntent } from "./participations";
 import {
   safeParseStoredDefinition,
@@ -131,6 +132,15 @@ export async function openActivationTx(
   act: ActivationFanOut,
   recipientIds: string[],
 ): Promise<number> {
+  // Serialise with setDefinitionAnonymousResults, which holds FOR UPDATE on
+  // this row while it checks for an open send and then turns names on. Without
+  // this, a send could open between its check and its write, and members would
+  // answer a form that said "no names" whose results then show names.
+  await tx
+    .select({ key: schema.questionnaireDefinitions.key })
+    .from(schema.questionnaireDefinitions)
+    .where(eq(schema.questionnaireDefinitions.key, act.questionnaireKey))
+    .for("share");
   await tx
     .update(schema.questionnaireActivations)
     .set({ status: "open", openedAt: new Date(), updatedAt: new Date() })
@@ -1041,9 +1051,20 @@ export async function completeBuilderResponse(input: {
    * nothing, not even the role mirror, and returns false.
    */
   firstSubmitOnly?: boolean;
-}): Promise<boolean> {
+  /**
+   * Write only while this send is still open (the runner's submit; see
+   * lockOpenSend). Returns "closed" and writes nothing when it has closed.
+   */
+  whileOpen?: boolean;
+}): Promise<boolean | "closed"> {
   const now = new Date();
   return await withTransaction(async (tx) => {
+    if (
+      input.whileOpen &&
+      !(await lockOpenSend(tx, input.definitionKey, input.activationId))
+    ) {
+      return "closed";
+    }
     const written = await tx
       .insert(schema.questionnaireResponses)
       .values({

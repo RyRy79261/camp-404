@@ -145,7 +145,7 @@ describe("DefinitionIssuePanel and IssueNote", () => {
         anchorFor={(i) => (i.location.pageIndex === 1 ? "section-s2" : null)}
       />,
     );
-    expect(screen.getByText("3 problems are blocking publishing")).toBeTruthy();
+    expect(screen.getByText("3 problems are blocking sending")).toBeTruthy();
     expect(screen.getByText("About you · Block 2 · Option 2")).toBeTruthy();
     const links = screen.getAllByRole("link", { name: "Section 2" });
     expect(links[0]!.getAttribute("href")).toBe("#section-s2");

@@ -24,9 +24,12 @@ export async function signInCaptain(
   return page;
 }
 
-/** Build a one-question questionnaire in the builder and publish it. */
-export async function buildAndPublish(
-  captain: Page,
+/**
+ * Build a one-question questionnaire in the builder and save it as a draft.
+ * Nothing is online yet: sending puts it online (owner, 2026-10-23).
+ */
+export async function buildQuestionnaire(
+  author: Page,
   input: {
     title: string;
     key: string;
@@ -34,20 +37,20 @@ export async function buildAndPublish(
     askAgainNextYear?: boolean;
   },
 ): Promise<void> {
-  await captain.goto("/captains/questionnaires");
-  await captain.getByRole("button", { name: "New questionnaire" }).click();
-  await captain.getByLabel("Questionnaire name").fill(input.title);
+  await author.goto("/captains/questionnaires");
+  await author.getByRole("button", { name: "New questionnaire" }).click();
+  await author.getByLabel("Questionnaire name").fill(input.title);
   // Exact: the hub also has "Create this year's attendance check".
-  await captain.getByRole("button", { name: "Create", exact: true }).click();
+  await author.getByRole("button", { name: "Create", exact: true }).click();
   // Create navigates to the builder once its page has rendered. Under next
   // dev the builder (the largest client bundle in the app) compiles on its
   // first visit, which can outlast the 15 s default on a busy machine.
-  await expect(captain).toHaveURL(
+  await expect(author).toHaveURL(
     new RegExp(`/captains/questionnaires/${input.key}$`),
     { timeout: 60_000 },
   );
 
-  const rail = captain.getByRole("complementary", { name: "Publish and send" });
+  const rail = author.getByRole("complementary", { name: "Send" });
   if (input.askAgainNextYear) {
     // The switch loads its current setting first; a click before that is lost.
     const askAgain = rail.getByRole("switch", {
@@ -59,19 +62,20 @@ export async function buildAndPublish(
   }
   // The palette adds to the section being worked on, and focuses the new
   // question's prompt.
-  await captain
+  await author
     .getByRole("complementary", { name: "Add a block" })
     .getByRole("button", { name: "Short answer", exact: true })
     .click();
-  await captain.getByLabel("Question prompt").fill(input.prompt);
-  await captain.getByRole("button", { name: "Save draft" }).click();
-  await expect(captain.getByText("All changes saved")).toBeVisible();
-
-  await rail.getByRole("button", { name: "Publish", exact: true }).click();
-  await expect(rail.getByText("Published", { exact: true })).toBeVisible();
+  await author.getByLabel("Question prompt").fill(input.prompt);
+  await author.getByRole("button", { name: "Save draft" }).click();
+  await expect(author.getByText("All changes saved")).toBeVisible();
+  await expect(rail.getByText("Draft", { exact: true })).toBeVisible();
 }
 
-/** Send a published questionnaire to everyone, blocking. */
+/**
+ * Send a questionnaire to everyone, blocking, from the list. A draft goes
+ * online in the same press.
+ */
 export async function sendBlockingToEveryone(
   captain: Page,
   title: string,

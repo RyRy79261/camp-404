@@ -536,5 +536,17 @@ describe("recipe audit rows", () => {
     expect(
       detail("questionnaire.carry_over_set", { title: "Dietary needs" }),
     ).toBe("Dietary needs");
+    expect(
+      detail("questionnaire.anonymous_results_set", {
+        title: "Tent sizes",
+        anonymous: true,
+      }),
+    ).toBe("Tent sizes: results without names");
+    expect(
+      detail("questionnaire.anonymous_results_set", {
+        title: "Tent sizes",
+        anonymous: false,
+      }),
+    ).toBe("Tent sizes: results with names");
   });
 });

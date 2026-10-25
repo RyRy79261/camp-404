@@ -138,6 +138,8 @@ describe("buildProgramManifest: the personas", () => {
       { kind: "program", id: "roster" },
       { kind: "folder", id: "teams" },
       { kind: "folder", id: "kitchen" },
+      // Every questionnaire, for every member (owner, 2026-10-23).
+      { kind: "program", id: "questionnaires" },
       { kind: "program", id: "power" },
       { kind: "program", id: "logistics" },
       // The shift roster (#248), for every member.
@@ -214,7 +216,6 @@ describe("buildProgramManifest: the personas", () => {
     ]);
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
       "applications",
-      "questionnaires",
       "announcements",
       "claim-approvals",
     ]);
@@ -324,7 +325,6 @@ describe("buildProgramManifest: the personas", () => {
     );
     expect(folder(m, "captains")?.programs.map((p) => p.id)).toEqual([
       "applications",
-      "questionnaires",
       "announcements",
       "claim-approvals",
     ]);
@@ -372,7 +372,6 @@ describe("buildProgramManifest: the personas", () => {
       "overview",
       "camp-sheet",
       "applications",
-      "questionnaires",
       "announcements",
       "claim-approvals",
       "payments",
@@ -550,10 +549,12 @@ describe("buildProgramManifest: team folders (decision 8)", () => {
     const m = buildProgramManifest(
       facts({ memberships: [{ team: COMMS, isLead: false }] }),
     );
+    // Questionnaires is every member's program now (owner, 2026-10-23).
     expect(teamFolder(m, COMMS)?.programs.map((p) => p.id)).toEqual([
       `team:${COMMS}`,
       `calendar:${COMMS}`,
       `tasks:${COMMS}`,
+      "questionnaires",
     ]);
   });
 

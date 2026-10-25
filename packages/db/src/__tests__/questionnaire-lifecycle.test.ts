@@ -1,15 +1,21 @@
 import { eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   fromBuilderQuestionnaire,
   type BuilderQuestionnaire,
   type Questionnaire,
 } from "@camp404/types";
 import { useTestDb } from "./_harness";
-import { makeActivation, makeUser, requiredActionsFor } from "./_factories";
+import {
+  makeActivation,
+  makeMembership,
+  makeUser,
+  requiredActionsFor,
+} from "./_factories";
 import type { AuditAction } from "@camp404/core";
 import {
   insertDefinitionDraft,
+  setDefinitionAnonymousResults,
   setDefinitionCarryOver,
 } from "../questionnaire-definitions";
 import {
@@ -17,11 +23,13 @@ import {
   getOpenActivationForKey,
   listOpenSendBlocking,
   publishDefinition,
+  SEND_REFUSED,
   sendActivation,
   sendReminder,
   unpublishDefinition,
 } from "../questionnaire-lifecycle";
 import { completeBuilderResponse, getActivationById } from "../activations";
+import { upsertQuestionnaireResponse } from "../questionnaire-responses";
 import { DEFAULT_CAMP_CONFIG } from "../camp-config";
 import * as schema from "../schema";
 
@@ -353,7 +361,7 @@ describe("closeActivation", () => {
   async function publishedWithOpenSend(
     db: ReturnType<ReturnType<typeof useTestDb>["db"]>,
   ) {
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     const sent = await sendActivation({
@@ -419,7 +427,7 @@ describe("unpublishDefinition — cascade", () => {
   it("sets status unpublished, closes open activations, expires pending gates, preserves responses", async () => {
     const db = h.db();
     const actor = await makeUser(db, { isSystem: true });
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     const sent = await sendActivation({
@@ -482,6 +490,8 @@ describe("questionnaire lifecycle — audit rows", () => {
   const UNPUBLISHED = "questionnaire.unpublished" satisfies AuditAction;
   const SEND_CLOSED = "questionnaire.send_closed" satisfies AuditAction;
   const CARRY_OVER_SET = "questionnaire.carry_over_set" satisfies AuditAction;
+  const ANONYMOUS_SET =
+    "questionnaire.anonymous_results_set" satisfies AuditAction;
 
   async function auditRows(db: ReturnType<typeof h.db>) {
     return db
@@ -569,14 +579,220 @@ describe("questionnaire lifecycle — audit rows", () => {
       },
     ]);
   });
+
+  it("never turns names on once someone answered with no names", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+
+    // Before anyone answers, both ways are allowed, each audited.
+    expect(
+      await setDefinitionAnonymousResults("feedback", true, captain.id),
+    ).toBe("ok");
+    expect(
+      await setDefinitionAnonymousResults("feedback", false, captain.id),
+    ).toBe("ok");
+    expect(
+      await setDefinitionAnonymousResults("feedback", true, captain.id),
+    ).toBe("ok");
+    expect(await setDefinitionAnonymousResults("nope", true, captain.id)).toBe(
+      "missing",
+    );
+
+    // An open send: someone may have the form open under "no names".
+    await publishDefinition("feedback", captain.id);
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: false,
+      activatedByUserId: captain.id,
+    });
+    if (!sent.ok) throw new Error(sent.error);
+    expect(
+      await setDefinitionAnonymousResults("feedback", false, captain.id),
+    ).toBe("open");
+    await closeActivation(sent.activationId, captain.id);
+
+    await db.insert(schema.questionnaireResponses).values({
+      userId: captain.id,
+      definitionKey: "feedback",
+      definitionVersion: "feedback-v1",
+      responses: { q1: "no names please" },
+      completedAt: new Date(),
+    });
+    expect(
+      await setDefinitionAnonymousResults("feedback", false, captain.id),
+    ).toBe("answered");
+    const [meta] = await db
+      .select({ anonymous: schema.questionnaireDefinitions.anonymousResults })
+      .from(schema.questionnaireDefinitions)
+      .where(eq(schema.questionnaireDefinitions.key, "feedback"));
+    expect(meta!.anonymous).toBe(true);
+    expect(
+      (await auditRows(db))
+        .filter((r) => r.action === ANONYMOUS_SET)
+        .map((r) => r.metadata),
+    ).toEqual([
+      { title: "Camp feedback", anonymous: true },
+      { title: "Camp feedback", anonymous: false },
+      { title: "Camp feedback", anonymous: true },
+    ]);
+  });
+
+  it("a send holds the definition row FOR SHARE before it opens, so it waits for a names change", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await publishDefinition("feedback", captain.id);
+
+    const seen = await transactionSql(h, async () => {
+      const sent = await sendActivation({
+        questionnaireKey: "feedback",
+        scope: "everyone",
+        blocking: false,
+        activatedByUserId: captain.id,
+      });
+      if (!sent.ok) throw new Error(sent.error);
+    });
+    const definitionShare = seen.findIndex(isDefinitionShare);
+    const opened = seen.findIndex(
+      (q) =>
+        q.startsWith('update "questionnaire_activations" set "status"') &&
+        q.includes('"opened_at"'),
+    );
+    expect(definitionShare).toBeGreaterThanOrEqual(0);
+    expect(opened).toBeGreaterThan(definitionShare);
+  });
+
+  it("an answer saved after its send closed is refused, so names can still be turned on", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    expect(
+      await setDefinitionAnonymousResults("feedback", true, captain.id),
+    ).toBe("ok");
+    await publishDefinition("feedback", captain.id);
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: false,
+      activatedByUserId: captain.id,
+    });
+    if (!sent.ok) throw new Error(sent.error);
+    // The runner checked "open" before this close; both saves land after it.
+    await closeActivation(sent.activationId, captain.id);
+
+    const answer = {
+      userId: member.id,
+      definitionKey: "feedback",
+      definitionVersion: "feedback-v1",
+      cycle: 1,
+      responses: { q1: "no names please" },
+      activationId: sent.activationId,
+      whileOpen: true,
+    };
+    expect(await upsertQuestionnaireResponse(answer)).toBe("closed");
+    expect(
+      await completeBuilderResponse({
+        ...answer,
+        activationId: sent.activationId,
+      }),
+    ).toBe("closed");
+    expect(
+      await db
+        .select({ id: schema.questionnaireResponses.id })
+        .from(schema.questionnaireResponses)
+        .where(eq(schema.questionnaireResponses.definitionKey, "feedback")),
+    ).toEqual([]);
+    expect(
+      await setDefinitionAnonymousResults("feedback", false, captain.id),
+    ).toBe("ok");
+  });
+
+  it("an answer holds the definition row FOR SHARE before it is written, so a names change waits for it", async () => {
+    const db = h.db();
+    const captain = await makeUser(db, { rank: "captain" });
+    const member = await makeUser(db);
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    await publishDefinition("feedback", captain.id);
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: false,
+      activatedByUserId: captain.id,
+    });
+    if (!sent.ok) throw new Error(sent.error);
+    const answer = {
+      userId: member.id,
+      definitionKey: "feedback",
+      definitionVersion: "feedback-v1",
+      cycle: 1,
+      responses: { q1: "yes" },
+      activationId: sent.activationId,
+      whileOpen: true,
+    };
+
+    for (const save of [
+      () => upsertQuestionnaireResponse(answer),
+      () => completeBuilderResponse(answer),
+    ]) {
+      const seen = await transactionSql(h, async () => {
+        expect(await save()).toBe(true);
+      });
+      const definitionShare = seen.findIndex(isDefinitionShare);
+      const written = seen.findIndex((q) =>
+        q.startsWith('insert into "questionnaire_responses"'),
+      );
+      expect(definitionShare).toBeGreaterThanOrEqual(0);
+      expect(written).toBeGreaterThan(definitionShare);
+    }
+  });
 });
+
+/** Whether a statement takes the definition row FOR SHARE. */
+function isDefinitionShare(q: string): boolean {
+  return (
+    q.includes('from "questionnaire_definitions"') && q.endsWith("for share")
+  );
+}
+
+/**
+ * The SQL every transaction sends while `run` runs, in order. PGlite has one
+ * connection, so a race cannot be run here; the lock order is what prevents it.
+ */
+async function transactionSql(
+  h: ReturnType<typeof useTestDb>,
+  run: () => Promise<void>,
+): Promise<string[]> {
+  const client = h.client();
+  const seen: string[] = [];
+  const original = client.transaction.bind(client);
+  vi.spyOn(client, "transaction").mockImplementation((async (
+    fn: (tx: Parameters<Parameters<typeof original>[0]>[0]) => unknown,
+  ) =>
+    original(async (tx) => {
+      const query = tx.query.bind(tx);
+      tx.query = ((text: string, ...rest: unknown[]) => {
+        seen.push(text.toLowerCase());
+        return (query as (...a: unknown[]) => unknown)(text, ...rest);
+      }) as typeof tx.query;
+      return fn(tx);
+    })) as typeof client.transaction);
+  try {
+    await run();
+  } finally {
+    vi.restoreAllMocks();
+  }
+  return seen;
+}
 
 describe("sendActivation — one-open invariant", () => {
   const h = useTestDb();
 
   it("opens an activation pinned to the published version and fans out", async () => {
     const db = h.db();
-    const a = await makeUser(db);
+    const a = await makeUser(db, { rank: "captain" });
     const b = await makeUser(db);
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
@@ -651,9 +867,43 @@ describe("sendActivation — one-open invariant", () => {
     expect(nudge).toMatchObject({ ok: true, outcome: "sent", sent: 2 });
   });
 
+  it("lets a team lead send to the whole camp, blocking, and refuses a plain member", async () => {
+    const db = h.db();
+    const lead = await makeUser(db);
+    await makeMembership(db, {
+      userId: lead.id,
+      team: "kitchen",
+      isLead: true,
+    });
+    const member = await makeUser(db);
+    await seedDraft(db, "feedback", validDef("Camp feedback"));
+    expect((await publishDefinition("feedback", lead.id)).ok).toBe(true);
+
+    const refused = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: true,
+      activatedByUserId: member.id,
+    });
+    expect(refused).toEqual({ ok: false, error: SEND_REFUSED });
+    expect(await db.select().from(schema.questionnaireActivations)).toEqual([]);
+
+    const sent = await sendActivation({
+      questionnaireKey: "feedback",
+      scope: "everyone",
+      blocking: true,
+      activatedByUserId: lead.id,
+    });
+    expect(sent.ok).toBe(true);
+    const gates = await requiredActionsFor(db, member.id);
+    expect(gates).toEqual([
+      expect.objectContaining({ actionKey: "feedback", blocking: true }),
+    ]);
+  });
+
   it("refuses to send an unpublished questionnaire", async () => {
     const db = h.db();
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback")); // still a draft
     const res = await sendActivation({
       questionnaireKey: "feedback",
@@ -670,7 +920,7 @@ describe("sendActivation — one-open invariant", () => {
   it("rejects a second open send for the same key, and allows it after close", async () => {
     const db = h.db();
     const actor = await makeUser(db, { isSystem: true });
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
 
@@ -705,7 +955,7 @@ describe("sendActivation — one-open invariant", () => {
 
   it("scope=individual only fans out to the chosen targets", async () => {
     const db = h.db();
-    const picked = await makeUser(db);
+    const picked = await makeUser(db, { rank: "captain" });
     const other = await makeUser(db);
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
@@ -724,7 +974,7 @@ describe("sendActivation — one-open invariant", () => {
 
   it("propagates the activation dueAt onto the fanned-out required_actions", async () => {
     const db = h.db();
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     const due = new Date("2026-07-01T12:00:00.000Z");
@@ -746,7 +996,7 @@ describe("sendActivation — the cycle + carry-over stamp", () => {
 
   it("stamps the year current at Send and carry_over off the definition", async () => {
     const db = h.db();
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     // the camp has rolled over twice; 2028 is the open year
@@ -792,7 +1042,7 @@ describe("sendActivation — the cycle + carry-over stamp", () => {
 
   it("copies carry_over = false off the definition, and the copy is FROZEN", async () => {
     const db = h.db();
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     await db
@@ -825,7 +1075,7 @@ describe("data survival across the full lifecycle", () => {
   it("preserves a completed response (and the completed gate) through unpublish → re-publish", async () => {
     const db = h.db();
     const actor = await makeUser(db, { isSystem: true });
-    const u = await makeUser(db);
+    const u = await makeUser(db, { rank: "captain" });
     await seedDraft(db, "feedback", validDef("Camp feedback"));
     await publishDefinition("feedback", null);
     const sent = await sendActivation({

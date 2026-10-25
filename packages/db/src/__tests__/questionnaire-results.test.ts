@@ -6,6 +6,8 @@ import {
   listActivationResponses,
   listActivationsForCycle,
   listOpenSendGates,
+  hasAnsweredQuestionnaire,
+  listMyQuestionnaireStanding,
   listResultCycles,
 } from "../questionnaire-results";
 import * as schema from "../schema";
@@ -351,5 +353,73 @@ describe("listOpenSendGates — the Overview's completion rail", () => {
         status: null,
       },
     ]);
+  });
+});
+
+describe("listMyQuestionnaireStanding / hasAnsweredQuestionnaire", () => {
+  const h = useTestDb();
+
+  it("reads only the member's own finished answers in the year, and their open sends", async () => {
+    const db = h.db();
+    const me = await makeUser(db);
+    const other = await makeUser(db);
+    const open = await makeActivation(db, { status: "open", cycle: 2 });
+    const closed = await makeActivation(db, {
+      status: "closed",
+      cycle: 2,
+      questionnaireKey: "old",
+    });
+
+    await answer(db, { userId: me.id, cycle: 2, responses: { q1: "a" } });
+    // A half-filled form is not an answer; another year is not this year.
+    await answer(db, {
+      userId: me.id,
+      cycle: 2,
+      definitionKey: "half",
+      responses: { q1: "a" },
+      completedAt: null,
+    });
+    await answer(db, {
+      userId: me.id,
+      cycle: 1,
+      definitionKey: "last-year",
+      responses: { q1: "a" },
+    });
+    await answer(db, {
+      userId: other.id,
+      cycle: 2,
+      definitionKey: "theirs",
+      responses: { q1: "a" },
+    });
+    await gate(db, { userId: me.id, activationId: open.id, actionKey: "x" });
+    await gate(db, { userId: me.id, activationId: closed.id, actionKey: "y" });
+    await gate(db, { userId: other.id, activationId: open.id, actionKey: "x" });
+
+    const standing = await listMyQuestionnaireStanding(me.id, 2);
+    expect(standing.answeredKeys).toEqual([KEY]);
+    expect(standing.waiting).toEqual([
+      { questionnaireKey: open.questionnaireKey, activationId: open.id },
+    ]);
+
+    expect(
+      await hasAnsweredQuestionnaire({
+        userId: me.id,
+        definitionKey: KEY,
+        cycle: 2,
+      }),
+    ).toBe(true);
+    for (const [key, cycle] of [
+      ["half", 2],
+      ["last-year", 2],
+      [KEY, 1],
+    ] as const) {
+      expect(
+        await hasAnsweredQuestionnaire({
+          userId: me.id,
+          definitionKey: key,
+          cycle,
+        }),
+      ).toBe(false);
+    }
   });
 });

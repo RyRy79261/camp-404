@@ -275,3 +275,81 @@ export async function listOpenSendGates(): Promise<OpenSendGateRow[]> {
       asc(schema.questionnaireActivations.id),
     );
 }
+
+/** Where one member stands on the builder questionnaires, for the list. */
+export interface MyQuestionnaireStanding {
+  /** Keys this member finished in the year asked about. */
+  answeredKeys: string[];
+  /** Open sends still waiting on this member: the key and the send to open. */
+  waiting: { questionnaireKey: string; activationId: string }[];
+}
+
+/**
+ * One member's own standing: what they finished in `cycle` (which is what
+ * opens a questionnaire's results to them), and which open sends still wait
+ * on them. Reads only the member's own rows.
+ */
+export async function listMyQuestionnaireStanding(
+  userId: string,
+  cycle: number,
+): Promise<MyQuestionnaireStanding> {
+  const db = createHttpDb();
+  const [answered, waiting] = await Promise.all([
+    db
+      .select({ key: schema.questionnaireResponses.definitionKey })
+      .from(schema.questionnaireResponses)
+      .where(
+        and(
+          eq(schema.questionnaireResponses.userId, userId),
+          eq(schema.questionnaireResponses.cycle, cycle),
+          isNotNull(schema.questionnaireResponses.completedAt),
+        ),
+      ),
+    db
+      .select({
+        questionnaireKey: schema.questionnaireActivations.questionnaireKey,
+        activationId: schema.questionnaireActivations.id,
+      })
+      .from(schema.requiredActions)
+      .innerJoin(
+        schema.questionnaireActivations,
+        eq(
+          schema.questionnaireActivations.id,
+          schema.requiredActions.activationId,
+        ),
+      )
+      .where(
+        and(
+          eq(schema.requiredActions.userId, userId),
+          eq(schema.requiredActions.status, "pending"),
+          eq(schema.questionnaireActivations.status, "open"),
+        ),
+      ),
+  ]);
+  return { answeredKeys: answered.map((r) => r.key), waiting };
+}
+
+/**
+ * Whether this member finished this questionnaire in `cycle`: what opens its
+ * results to them.
+ */
+export async function hasAnsweredQuestionnaire(input: {
+  userId: string;
+  definitionKey: string;
+  cycle: number;
+}): Promise<boolean> {
+  const db = createHttpDb();
+  const [row] = await db
+    .select({ id: schema.questionnaireResponses.id })
+    .from(schema.questionnaireResponses)
+    .where(
+      and(
+        eq(schema.questionnaireResponses.userId, input.userId),
+        eq(schema.questionnaireResponses.definitionKey, input.definitionKey),
+        eq(schema.questionnaireResponses.cycle, input.cycle),
+        isNotNull(schema.questionnaireResponses.completedAt),
+      ),
+    )
+    .limit(1);
+  return !!row;
+}

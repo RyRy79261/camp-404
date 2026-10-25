@@ -55,14 +55,20 @@ function item(partial: Partial<HubItem>): HubItem {
     editedLabel: "17 Sep 2026",
     canEdit: true,
     canDelete: true,
-    canSeeResults: true,
+    canSend: true,
+    canDuplicate: true,
+    resultsHref: null,
+    answerHref: null,
+    answered: false,
     openSendBlocking: null,
     ...partial,
   };
 }
 
-function renderHub(items: HubItem[]) {
-  render(<QuestionnaireHub heading={HEADING} items={items} />);
+function renderHub(items: HubItem[], canAuthor = true) {
+  render(
+    <QuestionnaireHub heading={HEADING} items={items} canAuthor={canAuthor} />,
+  );
 }
 
 describe("QuestionnaireHub — New", () => {
@@ -125,7 +131,7 @@ describe("QuestionnaireHub — the list", () => {
       .closest("section")!;
     expect(within(sent).getByText("Arrival")).toBeTruthy();
     expect(within(sent).getByText("3 questions")).toBeTruthy();
-    expect(within(sent).getByText("a · updated 17 Sep 2026")).toBeTruthy();
+    expect(within(sent).getByText("Sent")).toBeTruthy();
     const notSent = screen
       .getByRole("heading", { name: /Not sent/ })
       .closest("section")!;
@@ -140,13 +146,13 @@ describe("QuestionnaireHub — the list", () => {
         title: "Live one",
         status: "published",
         canDelete: false,
+        resultsHref: "/captains/questionnaires/live/metrics",
       }),
       item({
         key: "theirs",
         title: "Theirs",
         status: "published",
         canEdit: false,
-        canSeeResults: false,
         canDelete: false,
       }),
     ]);
@@ -156,7 +162,10 @@ describe("QuestionnaireHub — the list", () => {
     expect(
       screen.queryByRole("link", { name: "See results for Draft one" }),
     ).toBeNull();
-    expect(screen.queryByRole("link", { name: "Send Draft one" })).toBeNull();
+    // Its author sends a draft: sending puts it online.
+    expect(
+      screen.getByRole("link", { name: "Send Draft one" }).getAttribute("href"),
+    ).toBe("/captains/questionnaires/draft/send");
 
     expect(
       screen
@@ -164,18 +173,66 @@ describe("QuestionnaireHub — the list", () => {
         .getAttribute("href"),
     ).toBe("/captains/questionnaires/live/metrics");
     expect(
-      screen.getByRole("link", { name: "Send Live one" }).getAttribute("href"),
-    ).toBe("/captains/questionnaires/live/send");
-    expect(
       screen.queryByRole("button", { name: "Delete Live one" }),
     ).toBeNull();
 
-    // A team lead looking at a captain's questionnaire: Send only.
+    // A team lead looking at someone else's questionnaire: Look and Send.
     expect(screen.queryByRole("link", { name: "Edit Theirs" })).toBeNull();
     expect(
-      screen.queryByRole("link", { name: "See results for Theirs" }),
-    ).toBeNull();
+      screen.getByRole("link", { name: "Look at Theirs" }).getAttribute("href"),
+    ).toBe("/captains/questionnaires/theirs/preview");
     expect(screen.getByRole("link", { name: "Send Theirs" })).toBeTruthy();
+  });
+
+  it("shows a plain member every questionnaire, to answer, look at and read back", () => {
+    const member = {
+      canEdit: false,
+      canDelete: false,
+      canSend: false,
+      canDuplicate: false,
+    };
+    renderHub(
+      [
+        item({ ...member, key: "draft", title: "Draft one" }),
+        item({
+          ...member,
+          key: "waiting",
+          title: "Waiting",
+          status: "published",
+          openSendBlocking: false,
+          answerHref: "/questionnaires/act-1",
+        }),
+        item({
+          ...member,
+          key: "done",
+          title: "Done",
+          status: "published",
+          openSendBlocking: false,
+          answered: true,
+          resultsHref: "/questionnaires/results/done",
+        }),
+      ],
+      false,
+    );
+    expect(
+      screen.queryByRole("button", { name: "New questionnaire" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Look at Draft one" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Answer Waiting" }).getAttribute("href"),
+    ).toBe("/questionnaires/act-1");
+    expect(
+      screen
+        .getByRole("link", { name: "See results for Done" })
+        .getAttribute("href"),
+    ).toBe("/questionnaires/results/done");
+    expect(screen.getByText(/You answered/)).toBeTruthy();
+    for (const name of [/^Send /, /^Edit /, /^Duplicate /, /^Delete /]) {
+      expect(screen.queryByRole("link", { name })).toBeNull();
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
   });
 
   it("duplicates, spinning only the duplicate button, and reports a refusal as a toast", async () => {
@@ -236,6 +293,7 @@ describe("QuestionnaireHub — this year's attendance check", () => {
       <QuestionnaireHub
         heading={HEADING}
         items={items}
+        canAuthor
         canCreateAttendanceCheck={captain}
       />,
     );

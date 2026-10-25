@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canEditBuilderDefinition,
   canViewBuilderDefinition,
   deriveViewerRank,
   hasCampAccess,
@@ -81,33 +82,43 @@ describe("requireClearance", () => {
 });
 
 describe("canViewBuilderDefinition", () => {
-  const lead = { rank: "team_lead" as const, userId: "lead-1" };
+  const member = { rank: "camp_member" as const, userId: "m-1" };
   const captain = { rank: "captain" as const, userId: "cap-1" };
 
-  it("shows a captain every questionnaire, drafts included", () => {
-    expect(
-      canViewBuilderDefinition(captain, { status: "draft", createdBy: "x" }),
-    ).toBe(true);
+  it("shows every camp member every questionnaire, drafts included", () => {
+    for (const viewer of [member, captain]) {
+      for (const status of ["draft", "published", "unpublished"] as const) {
+        expect(
+          canViewBuilderDefinition(viewer, { status, createdBy: "x" }),
+        ).toBe(true);
+      }
+    }
   });
+});
 
-  it("shows a lead their own draft but not another author's", () => {
+describe("canEditBuilderDefinition", () => {
+  const mine = { createdBy: "me" };
+  const theirs = { createdBy: "them" };
+  it("lets a captain change any, a team lead only their own", () => {
     expect(
-      canViewBuilderDefinition(lead, { status: "draft", createdBy: "lead-1" }),
+      canEditBuilderDefinition({ rank: "captain", userId: "me" }, theirs),
     ).toBe(true);
     expect(
-      canViewBuilderDefinition(lead, { status: "draft", createdBy: "x" }),
+      canEditBuilderDefinition({ rank: "team_lead", userId: "me" }, mine),
+    ).toBe(true);
+    expect(
+      canEditBuilderDefinition({ rank: "team_lead", userId: "me" }, theirs),
+    ).toBe(false);
+  });
+  it("never a plain member, even the author", () => {
+    expect(
+      canEditBuilderDefinition({ rank: "camp_member", userId: "me" }, mine),
     ).toBe(false);
     expect(
-      canViewBuilderDefinition(lead, { status: "draft", createdBy: null }),
+      canEditBuilderDefinition(
+        { rank: "team_lead", userId: "me" },
+        { createdBy: null },
+      ),
     ).toBe(false);
-  });
-
-  it("shows a lead any published or unpublished questionnaire", () => {
-    expect(
-      canViewBuilderDefinition(lead, { status: "published", createdBy: "x" }),
-    ).toBe(true);
-    expect(
-      canViewBuilderDefinition(lead, { status: "unpublished", createdBy: "x" }),
-    ).toBe(true);
   });
 });

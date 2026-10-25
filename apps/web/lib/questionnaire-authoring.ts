@@ -1,5 +1,6 @@
 import "server-only";
 
+import { canEditBuilderDefinition } from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
 import { getDefinitionMetaRow } from "@camp404/db/questionnaire-definitions";
 import type { CampUser } from "./users";
@@ -19,8 +20,12 @@ export async function canEditQuestionnaire(
 ): Promise<AuthoringCheck> {
   const meta = await getDefinitionMetaRow(key);
   if (!meta) return { ok: false, error: "Questionnaire not found." };
-  if (author.rank === "captain") return { ok: true };
-  if (meta.createdBy !== author.campUser.id) {
+  if (
+    !canEditBuilderDefinition(
+      { rank: author.rank, userId: author.campUser.id },
+      meta,
+    )
+  ) {
     return { ok: false, error: "You can only edit your own questionnaires." };
   }
   return { ok: true };

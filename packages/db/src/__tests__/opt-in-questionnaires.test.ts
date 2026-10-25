@@ -196,7 +196,7 @@ describe("sendActivation — opt_in", () => {
     }
   });
 
-  it("refuses a team lead and a plain member inside the write, and stores nothing", async () => {
+  it("lets a team lead put it in My forms, like a captain", async () => {
     const db = h.db();
     const lead = await makeUser(db);
     await makeMembership(db, {
@@ -204,15 +204,21 @@ describe("sendActivation — opt_in", () => {
       team: "kitchen",
       isLead: true,
     });
+    await publish();
+
+    const res = await putInMyForms(lead.id);
+    expect(res.ok).toBe(true);
+  });
+
+  it("refuses a plain member inside the write, and stores nothing", async () => {
+    const db = h.db();
     const member = await makeUser(db);
     await publish();
 
-    for (const sender of [lead, member]) {
-      expect(await putInMyForms(sender.id, { announce: true })).toEqual({
-        ok: false,
-        error: SEND_REFUSED,
-      });
-    }
+    expect(await putInMyForms(member.id, { announce: true })).toEqual({
+      ok: false,
+      error: SEND_REFUSED,
+    });
     expect(await db.select().from(schema.questionnaireActivations)).toEqual([]);
     expect(await deliveries(db)).toEqual([]);
   });

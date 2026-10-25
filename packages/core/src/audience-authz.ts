@@ -12,11 +12,10 @@ import { hasClearance } from "./access";
 // their own team. That decision is made here, once, as a pure function over
 // plain inputs — no DB, no session, no next/*.
 //
-// LIVE CALLER: `sendAction` / `previewAudienceCount` in
-// apps/web/app/captains/questionnaires/actions.ts, which gate on
-// `gateAuthor()` (>= team_lead) and THEN on this function for the specific
-// audience. The two moves are the safety property: the rank gate alone would
-// have put every member one questionnaire away from the whole camp.
+// LIVE CALLERS: announcements, tasks and calendar events. [CORRECTION
+// 2026-10-23] Questionnaire sends no longer ask this: a team lead sends a
+// questionnaire to the whole camp (owner), by `canSendQuestionnaireTo` in
+// ./questionnaire-sharing.
 //
 // PRODUCT RULE (flagged for the camp owner — change it here, not at call
 // sites): a team lead may send ONLY to a single team they themselves lead.

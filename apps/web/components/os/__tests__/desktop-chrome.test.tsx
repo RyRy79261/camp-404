@@ -177,7 +177,7 @@ describe("the Start menu", () => {
     ).toBeTruthy();
     const captains = within(menu.getByRole("group", { name: "Captains" }));
     expect(
-      captains.getByRole("menuitem", { name: "Questionnaires" }),
+      captains.getByRole("menuitem", { name: "Announcements" }),
     ).toBeTruthy();
     expect(captains.getByRole("menuitem", { name: "Terminal" })).toBeTruthy();
     const rows = menu.getAllByRole("menuitem").map((el) => el.textContent);
