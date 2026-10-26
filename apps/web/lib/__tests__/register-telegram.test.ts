@@ -20,8 +20,11 @@ const ok = () =>
   vi.fn(async () => new Response(JSON.stringify({ ok: true, result: true })));
 
 describe("registerTelegram", () => {
-  it("points the webhook at the production site, never a preview", () => {
-    expect(PRODUCTION_ORIGIN).toBe(SITE_URL);
+  it("points the webhook at the production site's www host, never a preview", () => {
+    // camp-404.com answers 307 to www, and Telegram does not follow redirects.
+    expect(PRODUCTION_ORIGIN).toBe(
+      SITE_URL.replace("https://", "https://www."),
+    );
   });
 
   it("registers the webhook and the commands on production", async () => {
@@ -33,7 +36,7 @@ describe("registerTelegram", () => {
     ];
     expect(webhook[0]).toMatch(/\/setWebhook$/);
     expect(JSON.parse(webhook[1].body as string)).toEqual({
-      url: "https://camp-404.com/api/telegram/webhook",
+      url: "https://www.camp-404.com/api/telegram/webhook",
       secret_token: "hook-secret",
       allowed_updates: ALLOWED_UPDATES,
     });

@@ -4,10 +4,12 @@
 // "production" and TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET are set, and
 // it never fails the build: a problem is one warning line, never the token.
 
-// The production origin, the same as SITE_URL in lib/site.ts (a test holds
-// them equal). Never VERCEL_URL: a preview's protection answers Telegram 403,
-// and Telegram would retry forever.
-export const PRODUCTION_ORIGIN = "https://camp-404.com";
+// The production origin that answers without a redirect: the bare domain
+// (SITE_URL in lib/site.ts) sends every request on to www with a 307, and
+// Telegram does not follow redirects, so a webhook on the bare domain never
+// reaches the app. Never VERCEL_URL: a preview's protection answers Telegram
+// 403, and Telegram would retry forever.
+export const PRODUCTION_ORIGIN = "https://www.camp-404.com";
 
 export const WEBHOOK_PATH = "/api/telegram/webhook";
 

@@ -818,8 +818,10 @@ Decisions baked into the schema — keep new code consistent with them:
   Nobody registers the webhook by hand: `vercel-build` runs
   `apps/web/scripts/register-telegram.mjs` after the migrations, which on
   production only (with `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`
-  set) calls `setWebhook` for `SITE_URL`'s `/api/telegram/webhook` (never
-  `VERCEL_URL`) and `setMyCommands`, and never fails the build. The owner
+  set) calls `setWebhook` for `https://www.camp-404.com/api/telegram/webhook`
+  (never `VERCEL_URL`) and `setMyCommands`, and never fails the build.
+  [CORRECTION 2026-10-26] It said `SITE_URL`: the bare domain answers 307
+  to www, and Telegram does not follow redirects, so no update arrived. The owner
   sets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and
   `TELEGRAM_BOT_USERNAME=jebediah_404_bot` in Vercel; without the username
   the Profile shows no Telegram card.
