@@ -1,6 +1,12 @@
 import type { CampManagementMember } from "@camp404/db/roster";
 import type { ParticipationIntent, ParticipationStatus } from "@camp404/types";
-import { INTENT_IMPLIED_BY_STATUS } from "@camp404/core";
+import {
+  DECISION_LABEL,
+  INTENT_IMPLIED_BY_STATUS,
+  INTENT_LABEL,
+  NO_ANSWER_LABEL,
+  type ParticipationDecision,
+} from "@camp404/core";
 import { COUNTRIES } from "./countries";
 import { requiredActionName } from "./required-actions";
 
@@ -368,33 +374,74 @@ export function matchesTeam(row: PublicRosterRow, team: string): boolean {
 }
 
 /**
- * The captain's "This year" filter: any row, one attendance status, `coming`
- * for every member who said Coming (whatever the captains decided), or `none`
- * for a member with no answer for the year.
+ * The captain's "This year" filter. It offers what the list shows: what the
+ * member said (Coming, Maybe, Not coming, No answer yet), and the captains'
+ * decision (Accepted, Waiting list, Declined). "Declined" is a sign-up a
+ * captain turned down, so only a list whose rows carry `approvalStatus`
+ * offers it.
  */
-export type ThisYearFilter = "any" | "coming" | ParticipationStatus | "none";
+export type ThisYearFilter =
+  | "any"
+  | ParticipationIntent
+  | "none"
+  | ParticipationDecision
+  | "declined";
+
+/** The filter's options, in two groups, in the words the list's badges use. */
+export function thisYearOptions(withDeclined: boolean): {
+  label: string;
+  options: { value: ThisYearFilter; label: string }[];
+}[] {
+  return [
+    {
+      label: "They said",
+      options: [
+        { value: "yes", label: INTENT_LABEL.yes },
+        { value: "maybe", label: INTENT_LABEL.maybe },
+        { value: "no", label: INTENT_LABEL.no },
+        { value: "none", label: NO_ANSWER_LABEL },
+      ],
+    },
+    {
+      label: "Captains' decision",
+      options: [
+        { value: "accepted", label: DECISION_LABEL.accepted },
+        { value: "waitlisted", label: DECISION_LABEL.waitlisted },
+        ...(withDeclined
+          ? [
+              {
+                value: "declined" as const,
+                label: PUBLIC_STANDING_LABEL.rejected,
+              },
+            ]
+          : []),
+      ],
+    },
+  ];
+}
 
 /** Whether a row belongs under the "This year" filter. */
 export function matchesThisYear(
   row: Pick<PublicRosterRow, "thisYear"> & {
     thisYearSays?: ParticipationIntent | null;
+    approvalStatus?: RosterRow["approvalStatus"];
   },
   filter: ThisYearFilter,
 ): boolean {
   if (filter === "any") return true;
+  if (filter === "declined") return row.approvalStatus === "rejected";
   const status = row.thisYear ?? null;
-  if (filter === "coming") {
-    // The member's own answer; a row that does not carry it (the Camp sheet)
-    // falls back to the answer its status stands for.
-    const says =
-      row.thisYearSays !== undefined
-        ? row.thisYearSays
-        : status === null
-          ? null
-          : INTENT_IMPLIED_BY_STATUS[status];
-    return says === "yes";
-  }
-  return filter === "none" ? status === null : status === filter;
+  if (filter === "accepted" || filter === "waitlisted")
+    return status === filter;
+  // What the member said. A row that does not carry the answer (the Camp
+  // sheet) falls back to the answer its status stands for.
+  const says =
+    row.thisYearSays !== undefined
+      ? row.thisYearSays
+      : status === null
+        ? null
+        : INTENT_IMPLIED_BY_STATUS[status];
+  return filter === "none" ? says === null : says === filter;
 }
 
 /** The Overview's "This year" counts, one per status plus the unanswered. */

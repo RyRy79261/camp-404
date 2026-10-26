@@ -2,11 +2,16 @@
 
 import type { ReactNode } from "react";
 import { ChevronDown, Search, TriangleAlert } from "lucide-react";
-import { INTENT_LABEL, NO_ANSWER_LABEL, STANDING_LABEL } from "@camp404/core";
-import { PARTICIPATION_STATUSES } from "@camp404/types";
 import { Input } from "@camp404/ui/components/input";
 import { cn } from "@camp404/ui/lib/utils";
-import type { RosterChip, RosterSort, ThisYearFilter } from "@/lib/camp-roster";
+import {
+  thisYearOptions,
+  type RosterChip,
+  type RosterSort,
+  type ThisYearFilter,
+} from "@/lib/camp-roster";
+
+const THIS_YEAR_OPTIONS = thisYearOptions(true);
 
 // The sort choices a phone gets, where the table's column headers are hidden.
 const SORT_OPTIONS: { value: string; label: string; sort: RosterSort }[] = [
@@ -35,20 +40,6 @@ const SORT_OPTIONS: { value: string; label: string; sort: RosterSort }[] = [
     label: "Country",
     sort: { key: "country", direction: "asc" },
   },
-];
-
-// The captain's "This year" choices: one group each, in words that say
-// whether they are about the member's answer or the captains' decision
-// (STANDING_LABEL), never one label for both. "Coming" is the member's answer
-// alone: everyone who said Coming, whatever the captains decided.
-const THIS_YEAR_OPTIONS: { value: ThisYearFilter; label: string }[] = [
-  { value: "any", label: "Any" },
-  { value: "coming", label: INTENT_LABEL.yes },
-  ...PARTICIPATION_STATUSES.map((value) => ({
-    value,
-    label: STANDING_LABEL[value],
-  })),
-  { value: "none", label: NO_ANSWER_LABEL },
 ];
 
 // The roster's filter strip, laid out like the AfrikaBurn registrations filters:
@@ -274,10 +265,15 @@ export function RosterToolbar({
                 thisYear.value !== "any" && "border-primary",
               )}
             >
-              {THIS_YEAR_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
+              <option value="any">Any</option>
+              {THIS_YEAR_OPTIONS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
             <SelectChevron />
