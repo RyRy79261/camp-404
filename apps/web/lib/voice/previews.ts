@@ -1,4 +1,4 @@
-import { formatMoney } from "@camp404/core";
+import { formatMoney, shiftTimeText } from "@camp404/core";
 import { getDocumentBySlug } from "@camp404/db/documents";
 import { findInviteCodeByCode } from "@camp404/db/invite-codes";
 import { listReimbursementsForReview } from "@camp404/db/reimbursements";
@@ -30,7 +30,7 @@ import { getMeetingNote } from "../meeting-notes";
 import { meetingHref } from "../meeting-notes-view";
 import { getQuestionnaireForPicker } from "../questionnaire-config";
 import { recipePath } from "../recipe-copy";
-import { getRecipeDetail } from "../recipes";
+import { getRecipeDetail, getRecipeSource } from "../recipes";
 import { getAttendanceView, listLogisticsPhases } from "../logistics";
 import type { McpScope } from "../mcp/scope";
 import { ledgerCycle } from "../payments";
@@ -210,6 +210,70 @@ const shiftPreviews: Record<string, PreviewFn> = {
     if (!slot.mine) return { ...base, blocked: "You are not on it." };
     if (!slot.open) return { ...base, blocked: "Its day has started." };
     return base;
+  },
+  async create_shift_type(args) {
+    const labels = await readTeamLabels();
+    const team = str(args.team);
+    const start = typeof args.startMinute === "number" ? args.startMinute : 0;
+    const length =
+      typeof args.durationMinutes === "number" ? args.durationMinutes : 0;
+    return {
+      sentence: `Add the shift ${quote(str(args.name))} for ${labels[team] ?? team}, ${shiftTimeText(start, length)}`,
+      facts: `Shifts · ${String(args.places)} places · a slot on each Burn day to come`,
+      ...(args.note ? { change: [`Note: ${shown(args.note)}`] } : {}),
+      path: "/shifts",
+      args,
+      keys: [],
+    };
+  },
+  async update_shift_type(args, ctx) {
+    const view = await getShiftsView({
+      userId: ctx.scope.campUserId,
+      rank: ctx.scope.viewerRank,
+      ledTeams: ctx.scope.viewerRank === "team_lead" ? ctx.scope.leadTeams : [],
+      now: ctx.now,
+    });
+    const type = view.types.find((t) => t.id === str(args.id));
+    if (!type) {
+      return blocked(
+        "Change a shift",
+        "That shift isn't on the roster.",
+        args,
+        "/shifts",
+      );
+    }
+    const labels = await readTeamLabels();
+    const change: string[] = [];
+    if (args.name !== undefined) change.push(`Name: ${shown(args.name)}`);
+    if (args.team !== undefined) {
+      change.push(`Team: ${labels[str(args.team)] ?? str(args.team)}`);
+    }
+    if (args.startMinute !== undefined || args.durationMinutes !== undefined) {
+      const start =
+        typeof args.startMinute === "number"
+          ? args.startMinute
+          : type.startMinute;
+      const length =
+        typeof args.durationMinutes === "number"
+          ? args.durationMinutes
+          : type.durationMinutes;
+      change.push(`Time: ${shiftTimeText(start, length)}`);
+    }
+    if (args.places !== undefined) change.push(`Places: ${shown(args.places)}`);
+    if (args.note !== undefined) change.push(`Note: ${shown(args.note)}`);
+    if (args.dutyCardId !== undefined) {
+      change.push(
+        args.dutyCardId === null ? "Duty card: none" : "Duty card: changed",
+      );
+    }
+    return {
+      sentence: `Change the shift ${quote(type.name)}`,
+      facts: `Shifts · ${type.teamLabel} · now ${type.timeText}, ${type.places} places`,
+      change,
+      path: "/shifts",
+      args: { ...args, expectedVersion: type.version },
+      keys: [`shift-type:${type.id}`],
+    };
   },
 };
 
@@ -584,6 +648,88 @@ const otherPreviews: Record<string, PreviewFn> = {
       path: "/inventory",
       args,
       keys: [`item:${item.id}`],
+    };
+  },
+  async update_inventory_item(args) {
+    const item = await getInventoryItem(str(args.itemId));
+    if (!item || item.archivedAt) {
+      return blocked(
+        "Change a gear item",
+        "That gear item isn't in the inventory.",
+        args,
+        "/inventory",
+      );
+    }
+    const unit = item.unit ? ` ${item.unit}` : "";
+    const change = Object.entries(args)
+      .filter(([key]) => key !== "itemId" && key !== "expectedVersion")
+      .map(([key, value]) => `${key}: ${shown(value)}`);
+    return {
+      sentence: `Change ${quote(item.name)}`,
+      facts: `Inventory · now ${item.quantity}${unit}, ${CONDITION_LABELS[item.condition].toLowerCase()}, ${LOCATION_LABELS[item.location].toLowerCase()} · logged in its history`,
+      change,
+      path: "/inventory",
+      args: { ...args, expectedVersion: item.version },
+      keys: [`item:${item.id}`],
+    };
+  },
+  async retype_recipe_text(args) {
+    const recipe = await getRecipeDetail(str(args.recipeId));
+    if (!recipe) {
+      return blocked(
+        "Retype a recipe's text",
+        "That recipe isn't there.",
+        args,
+        "/kitchen/recipes/review",
+      );
+    }
+    const source = await getRecipeSource(recipe.id);
+    const text = args.sections ? args.sections : args.text;
+    return {
+      sentence: `Retype the text of ${quote(recipe.title ?? "Untitled recipe")}`,
+      facts:
+        "Kitchen · you become its text's author · nothing is sent to Claude",
+      change: [`Text (the whole recipe): ${shown(text)}`],
+      path: recipePath(recipe.id),
+      args: { ...args, expectedSourceVersion: source?.version ?? 0 },
+      keys: [`recipe:${recipe.id}`],
+    };
+  },
+  async rename_recipe(args) {
+    const recipe = await getRecipeDetail(str(args.recipeId));
+    if (!recipe) {
+      return blocked(
+        "Rename a recipe",
+        "That recipe isn't there.",
+        args,
+        "/kitchen/recipes/review",
+      );
+    }
+    return {
+      sentence: `Rename ${quote(recipe.title)} to ${quote(str(args.title))}`,
+      facts: "Kitchen · only the name changes · nothing is sent to Claude",
+      path: recipePath(recipe.id),
+      args: { ...args, expectedTitle: recipe.title },
+      keys: [`recipe:${recipe.id}`],
+    };
+  },
+  async keep_document_members_only(args) {
+    const doc = usesTestStore()
+      ? null
+      : await getDocumentBySlug(str(args.slug));
+    if (!doc && !usesTestStore())
+      return blocked(
+        "Keep a guide chapter members only",
+        "No chapter with that slug.",
+        args,
+        "/guide",
+      );
+    return {
+      sentence: `Keep ${quote(doc?.title ?? str(args.slug))} members only`,
+      facts: "Survival Guide · off the public site; members still read it",
+      path: "/guide",
+      args,
+      keys: [`doc:${str(args.slug)}`],
     };
   },
   async revoke_invite_code(args) {

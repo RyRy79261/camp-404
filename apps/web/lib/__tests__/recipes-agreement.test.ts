@@ -23,6 +23,8 @@ import {
   RECIPE_DECIDED,
   RECIPE_GONE,
   RUN_STAGES,
+  SOURCE_CHANGED,
+  TITLE_NEEDED,
   TEXT_NEEDED,
   forRecipe,
   plateCountIsBase,
@@ -80,6 +82,7 @@ import {
   proofreadTokenTotals,
   queuePlateProofread,
   queueProofread,
+  renameRecipe,
   requestRerun,
   resetStaleRuns,
   resubmitRecipe,
@@ -364,6 +367,21 @@ describe("recipes: the database and the test store agree", () => {
         }),
         source: await getRecipeSource(id),
         sources: await listRecipeSources(id),
+        // The connector's retype names the source version it read.
+        staleSource: await retypeRecipeText({
+          recipeId: id,
+          actorId: p.kitchenLead,
+          text: "Lentils, from an older read.",
+          expectedSourceVersion:
+            ((await getRecipeSource(id))?.version ?? 0) - 1,
+        }),
+        onSource: await retypeRecipeText({
+          recipeId: id,
+          actorId: p.kitchenLead,
+          text: "Lentils, from the newest read.",
+          expectedSourceVersion: (await getRecipeSource(id))?.version ?? 0,
+        }),
+        afterSource: (await getRecipeSource(id))?.version,
         noNote: await requestRerun({
           recipeId: id,
           actorId: p.kitchenLead,
@@ -397,11 +415,68 @@ describe("recipes: the database and the test store agree", () => {
       otherLead: { ok: false, error: NOT_A_KITCHEN_REVIEWER },
       blankGone: { ok: false, error: TEXT_NEEDED },
       retyped: { ok: true },
+      staleSource: { ok: false, error: SOURCE_CHANGED },
+      onSource: { ok: true },
       noNote: { ok: false, error: RERUN_NOTE_NEEDED },
       noNoteGone: { ok: false, error: RERUN_NOTE_NEEDED },
       tooLong: { ok: false },
       member: { ok: false, error: NOT_A_KITCHEN_REVIEWER },
       asked: { ok: true },
+    });
+    expect(store).toEqual(db);
+  });
+
+  it("lets a reviewer rename a recipe, on the name they read, in the database's order", async () => {
+    const { db, store } = await bothWays(mode, h, async (p) => {
+      const id = await suggest(p.member, { title: "Dhal" });
+      return {
+        member: await renameRecipe({
+          recipeId: id,
+          actorId: p.member,
+          title: "Dal",
+          expectedTitle: "Dhal",
+        }),
+        otherLead: await renameRecipe({
+          recipeId: id,
+          actorId: p.financeLead,
+          title: "Dal",
+          expectedTitle: "Dhal",
+        }),
+        blank: await renameRecipe({
+          recipeId: id,
+          actorId: p.kitchenLead,
+          title: "  ",
+          expectedTitle: "Dhal",
+        }),
+        gone: await renameRecipe({
+          recipeId: NOBODY,
+          actorId: p.kitchenLead,
+          title: "Dal",
+          expectedTitle: "Dhal",
+        }),
+        renamed: await renameRecipe({
+          recipeId: id,
+          actorId: p.kitchenLead,
+          title: " Red lentil dal ",
+          expectedTitle: "Dhal",
+        }),
+        stale: await renameRecipe({
+          recipeId: id,
+          actorId: p.captain,
+          title: "Lentils",
+          expectedTitle: "Dhal",
+        }),
+        title: (await getRecipeDetail(id))?.title,
+      };
+    });
+    expect(db).toMatchObject({
+      member: { ok: false, error: NOT_A_KITCHEN_REVIEWER },
+      otherLead: { ok: false, error: NOT_A_KITCHEN_REVIEWER },
+      blank: { ok: false, error: TITLE_NEEDED },
+      gone: { ok: false, error: RECIPE_GONE },
+      renamed: { ok: true, title: "Red lentil dal" },
+      stale: { ok: false, error: RECIPE_CHANGED },
+      title: "Red lentil dal",
     });
     expect(store).toEqual(db);
   });

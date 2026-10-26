@@ -10,6 +10,7 @@ import {
 } from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
 import { LOGISTICS_REFUSAL } from "../logistics-copy";
+import { SHIFTS_ACTION_REFUSAL } from "../shifts-copy";
 import { TEAM_PROGRAM_REFUSAL } from "../team-program-copy";
 import { SITE_URL } from "../site";
 import { scopeActor, type McpScope } from "./scope";
@@ -101,13 +102,22 @@ export const GATES = {
     allows: byRule(LOGISTICS_EDITOR),
     refusal: LOGISTICS_REFUSAL,
   },
-  // The Inventory page's Add button (canEditAnyInventory). Which team's gear
-  // is the write's own check (canEditInventory on the item's team).
+  // The Inventory page's Add button and an item's Edit (canEditAnyInventory).
+  // Which team's gear is the write's own check (canEditInventory on the
+  // item's team).
   inventoryEditor: {
     who: "Captains, and team leads for their own team's gear",
     allows: (s) => canEditAnyInventory(s.viewerRank, s.leadTeams),
     refusal:
-      "Only a captain or a lead of the item's team can add gear. Any member can suggest a change to an item instead.",
+      "Only a captain or a lead of the item's team can add or change gear. Any member can suggest a change to an item instead.",
+  },
+  // The Shifts page's set-up (saveShiftTypeAction's rank gate): any lead may
+  // reach it, and which team's shifts is the tool's own check (shiftKeeper:
+  // a lead of THAT team, or a captain), made again by the write.
+  shiftKeeper: {
+    who: "Captains, and team leads for their own team's shifts",
+    allows: atLeast("team_lead"),
+    refusal: SHIFTS_ACTION_REFUSAL,
   },
   // A team program's Save (canEditTeamProgram): any lead may reach it, and
   // which team's is the tool's own check (a lead of THAT team, or a captain),
@@ -370,6 +380,20 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     does: "Give up your place on a shift slot before its day.",
     page: "/shifts",
   },
+  create_shift_type: {
+    kind: "write",
+    area: "Shifts",
+    gate: GATES.shiftKeeper,
+    does: "Add a shift for a team you lead (captains: any team), with a slot on each Burn day to come.",
+    page: "/shifts",
+  },
+  update_shift_type: {
+    kind: "write",
+    area: "Shifts",
+    gate: GATES.shiftKeeper,
+    does: "Change a shift's name, time, places, note or duty card, on the version you read (team leads: their own team's).",
+    page: "/shifts",
+  },
   // People
   list_users: {
     kind: "read",
@@ -477,6 +501,13 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     gate: GATES.teamLead,
     does: "Publish the version you read, or take a chapter off the guide.",
   },
+  keep_document_members_only: {
+    kind: "write",
+    area: "Survival Guide",
+    gate: GATES.captain,
+    does: "Keep a whole chapter or duty card off the public site (members still read it). It never puts anything on the public site.",
+    page: "/guide",
+  },
   // Questionnaires
   list_questionnaire_drafts: {
     kind: "read",
@@ -550,6 +581,20 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     does: "Suggestions waiting for a decision, recipes ready to send to Claude, and older drafts waiting to be accepted. Deciding and sending stay on the page.",
     page: "/kitchen/recipes/review",
   },
+  rename_recipe: {
+    kind: "write",
+    area: "Kitchen",
+    gate: GATES.kitchenReview,
+    does: "Rename a recipe, a suggestion or one in the book, from the name you read. Nothing is sent to Claude.",
+    page: "/kitchen/recipes/review",
+  },
+  retype_recipe_text: {
+    kind: "write",
+    area: "Kitchen",
+    gate: GATES.kitchenReview,
+    does: "Retype the text of a recipe still in review, on the source version you read. Nothing is sent to Claude.",
+    page: "/kitchen/recipes/review",
+  },
   // Inventory
   list_inventory_items: {
     kind: "read",
@@ -563,6 +608,13 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     area: "Inventory",
     gate: GATES.inventoryEditor,
     does: "Add an item of gear to a team you may edit (captains: any team). Logged in the item's history.",
+    page: "/inventory",
+  },
+  update_inventory_item: {
+    kind: "write",
+    area: "Inventory",
+    gate: GATES.inventoryEditor,
+    does: "Change an item of gear of a team you may edit, on the version you read. Logged in the item's history.",
     page: "/inventory",
   },
   propose_inventory_change: {
@@ -848,7 +900,7 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
   },
   {
     area: "Inventory",
-    what: "Approve or turn down a suggested change, change or archive an item, lend it out, and keep the team's needs",
+    what: "Approve or turn down a suggested change, archive an item, lend it out, and keep the team's needs",
     why: "These live on the Inventory page; the connector has no tool for them yet.",
     path: "/inventory",
     gate: GATES.inventoryEditor,
@@ -918,7 +970,7 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
   },
   {
     area: "Shifts",
-    what: "Set up shifts, put someone on a shift or take them off, and ask everyone to sign up",
+    what: "Remove a shift, mark a day not needed, put someone on a shift or take them off, and ask everyone to sign up",
     why: "These live on the Shifts page; the connector has no tool for them yet.",
     path: "/shifts",
     gate: GATES.teamLead,
@@ -932,8 +984,8 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
   },
   {
     area: "Survival Guide",
-    what: "Put a guide section on the public site, or keep a chapter members only",
-    why: "It decides what the whole internet reads, so a captain does it on the page.",
+    what: "Put a guide section on the public site, or let a chapter kept members only go out with its section again",
+    why: "It decides what the whole internet reads, so a captain does it on the page. Keeping a chapter members only can be done here.",
     path: "/guide",
     gate: GATES.captain,
   },

@@ -944,7 +944,10 @@ Decisions baked into the schema — keep new code consistent with them:
   (`guide_sections`, every section starts private) and it is not marked
   "Keep this whole chapter members only" (`documents.members_only`). Only a
   captain flips either switch (`canSetGuideSectionPublic`,
-  `canSetGuideChapterMembersOnly`), audited in the same transaction. A chapter
+  `canSetGuideChapterMembersOnly`), audited in the same transaction. The
+  Claude connector may only set the members-only mark
+  (`keep_document_members_only`, 2026-10-26), never clear it or make a
+  section public, so nothing reaches the public site from a chat. A chapter
   published into a public section goes public at once; the editor says so
   beside Publish. A writer keeps part of a chapter for members with a
   `:::members … :::` block (the editor's "Members only" button; the writer's

@@ -49,6 +49,7 @@ vi.mock("@camp404/db/documents", async (importOriginal) => {
       created: true,
     })),
     unpublishGuideChapter: vi.fn(async () => ({ ok: true })),
+    setGuideChapterMembersOnly: vi.fn(async () => ({ ok: true })),
     saveGuideChapter: vi.fn(async () => ({
       ok: true,
       document: { version: 2 },

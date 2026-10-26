@@ -181,7 +181,7 @@ describe("inventory", () => {
 
     const asMember = await call("add_inventory_item", STOVE, plain.id);
     expect(asMember.error).toMatch(
-      /^Only a captain or a lead of the item's team can add gear\./,
+      /^Only a captain or a lead of the item's team can add or change gear\./,
     );
     expect(asMember.error).toMatch(
       /On the website: https?:\/\/\S+\/inventory$/,

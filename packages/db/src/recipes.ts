@@ -784,11 +784,17 @@ const QUEUEABLE = [...RECIPE_QUEUEABLE];
  * A reviewer retypes the recipe's working text, and becomes its author. This
  * is the way past a missing consent, and the way to paste in the text of a
  * suggestion that came as a link.
+ *
+ * `expectedSourceVersion`, when given, is the source version the writer read
+ * (0 for none): a retype over a source someone changed since is refused, as
+ * the source editor's send is. The page's Retype button sends none; the
+ * Claude connector always does (its writes take what the person read).
  */
 export async function retypeRecipeText(input: {
   recipeId: string;
   actorId: string;
   text: string;
+  expectedSourceVersion?: number;
 }): Promise<RecipeWriteResult> {
   return write(async (tx) => {
     await assertKitchenReviewer(tx, input.actorId);
@@ -819,12 +825,21 @@ export async function retypeRecipeText(input: {
         (await recipeExists(tx, input.recipeId)) ? RECIPE_CHANGED : RECIPE_GONE,
       );
     }
+    // The recipe row is locked by the update above, so the newest source
+    // cannot move between this read and the insert below.
+    const latest = await latestSource(tx, input.recipeId);
+    if (
+      input.expectedSourceVersion !== undefined &&
+      (latest?.version ?? 0) !== input.expectedSourceVersion
+    ) {
+      refuse(SOURCE_CHANGED);
+    }
     // The retyped text is the next source version, and the reviewer's. The
     // Serves a reviewer set in the source editor carries over: a retype
     // changes the words, not how many the source feeds.
     await insertSource(tx, {
       recipeId: input.recipeId,
-      serves: (await latestSource(tx, input.recipeId))?.serves ?? null,
+      serves: latest?.serves ?? null,
       sections: sourceFromText(text),
       authorId: input.actorId,
       now,
@@ -836,6 +851,43 @@ export async function retypeRecipeText(input: {
       metadata: { title: changed.title ?? UNTITLED_RECIPE },
     });
     return {};
+  });
+}
+
+/**
+ * A reviewer renames a recipe (owner's option A, 2026-10-26): a suggestion or
+ * one in the book. A compare-and-set on the name the reviewer read
+ * (`expectedTitle`, as every page shows it: UNTITLED_RECIPE for a recipe from
+ * before titles), audited with the
+ * old and the new name. Only the recipe's name changes: the versions in the
+ * book keep the words they were written with, and nothing is sent to Claude.
+ * A later Claude write names the recipe from its version, as it always has.
+ */
+export async function renameRecipe(input: {
+  recipeId: string;
+  actorId: string;
+  title: string;
+  expectedTitle: string;
+}): Promise<RecipeWriteResult<{ title: string }>> {
+  return write(async (tx) => {
+    await assertKitchenReviewer(tx, input.actorId);
+    const title = cleanTitle(input.title);
+    const recipe = await lockRecipe(tx, input.recipeId);
+    if ((recipe.title ?? UNTITLED_RECIPE) !== input.expectedTitle) {
+      refuse(RECIPE_CHANGED);
+    }
+    if (recipe.title === title) return { title };
+    await tx
+      .update(schema.recipes)
+      .set({ title, updatedAt: new Date() })
+      .where(eq(schema.recipes.id, input.recipeId));
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "recipe.renamed",
+      target: input.recipeId,
+      metadata: { title, from: recipe.title },
+    });
+    return { title };
   });
 }
 

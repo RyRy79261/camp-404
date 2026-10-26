@@ -460,6 +460,10 @@ describe("recipe audit rows", () => {
 
   it("name the recipe, and the version where one was written", () => {
     expect(detail("recipe.rejected", { title: "Dhal" })).toBe("Dhal");
+    expect(detail("recipe.renamed", { title: "Dal", from: "Dhal" })).toBe(
+      "Dhal → Dal",
+    );
+    expect(detail("recipe.renamed", { title: "Dal", from: null })).toBe("Dal");
     expect(
       detail("recipe.rerun_requested", { title: "Dhal", note: "Grams" }),
     ).toBe("Dhal");
