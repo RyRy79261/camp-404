@@ -925,7 +925,8 @@ function telegramIntent(
   audience: Audience | undefined,
 ): boolean {
   return (
-    telegram === true && (audience ?? { scope: "everyone" }).scope === "everyone"
+    telegram === true &&
+    (audience ?? { scope: "everyone" }).scope === "everyone"
   );
 }
 
@@ -5430,6 +5431,7 @@ export const testStore = {
     recipeId: string;
     actorId: string;
     text: string;
+    expectedSourceVersion?: number;
   }): RecipeWriteResult {
     if (!isKitchenReviewer(input.actorId)) {
       return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
@@ -5443,6 +5445,13 @@ export const testStore = {
     if (!RECIPE_RETYPABLE.includes(recipe.status)) {
       return { ok: false, error: RECIPE_CHANGED };
     }
+    const latest = latestStoreSource(recipe.id);
+    if (
+      input.expectedSourceVersion !== undefined &&
+      (latest?.version ?? 0) !== input.expectedSourceVersion
+    ) {
+      return { ok: false, error: SOURCE_CHANGED };
+    }
     const now = new Date();
     recipe.rawText = text;
     recipe.textAuthorId = input.actorId;
@@ -5453,7 +5462,7 @@ export const testStore = {
     // Serves set in the source editor carries over, as in production.
     insertStoreSource({
       recipeId: recipe.id,
-      serves: latestStoreSource(recipe.id)?.serves ?? null,
+      serves: latest?.serves ?? null,
       sections: sourceFromText(text),
       authorId: input.actorId,
       now,

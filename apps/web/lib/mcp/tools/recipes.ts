@@ -14,10 +14,18 @@ import {
   LINK_ONLY_REFUSAL,
   LINK_ONLY_TEXT,
   MAX_PLATES,
+  RECIPE_TEXT_MAX,
+  RetypeRecipeTextInput,
   SuggestRecipeInput,
 } from "@camp404/types";
 import { recipePath, recipeVersionPath } from "../../recipe-copy";
-import { addLesson, getPlateCount, getRecipeDetail } from "../../recipes";
+import {
+  addLesson,
+  getPlateCount,
+  getRecipeDetail,
+  getRecipeSource,
+  retypeRecipeText,
+} from "../../recipes";
 import { siteUrl } from "../capabilities";
 import { ToolError, notFound, runTool, truncateList } from "../tool-utils";
 
@@ -43,6 +51,15 @@ import { ToolError, notFound, runTool, truncateList } from "../tool-utils";
 //
 // add_recipe_lesson is the version page's "Notes" form (addLesson): any
 // approved member, on a recipe in the book.
+//
+// retype_recipe_text is the recipe page's "Retype text" (retypeRecipeText):
+// a captain or a Kitchen lead replaces the working text of a recipe still in
+// review, becomes its author, and the text is the recipe's next source
+// version, audited, in one transaction. It takes the source version the
+// caller read (get_recipe's `sourceVersion`), which the write checks under
+// the recipe's lock. The name is not the reviewer's to change (the submitter
+// renames it when asked for changes), and nothing is sent to Claude: the
+// source editor's "Send for proofreading" is a person's click on the page.
 
 /** The headings sourceFromText reads, one per source section, in order. */
 const SECTION_HEADINGS = [
@@ -235,7 +252,7 @@ export function registerRecipeTools(server: McpServer): void {
     {
       title: "Read a recipe",
       description:
-        "One recipe as its page shows it to you. In the book: the accepted version (`recipe`: ingredients, steps, notes), the plates it is written for, every plate count that has a result (`readyPlates`), the amounts at `plates` when that count has a result (else at the version's own count, with `askedPlatesNotReady`), how it was scaled, and the cooks' notes (`lessons`). Before the book, only its submitter and the Kitchen's reviewers see it: its status and the original text. Nothing here sends anything to Claude.",
+        "One recipe as its page shows it to you. In the book: the accepted version (`recipe`: ingredients, steps, notes), the plates it is written for, every plate count that has a result (`readyPlates`), the amounts at `plates` when that count has a result (else at the version's own count, with `askedPlatesNotReady`), how it was scaled, and the cooks' notes (`lessons`). Before the book, only its submitter and the Kitchen's reviewers see it: its status and the working text. For captains and Kitchen leads, `sourceVersion` is what retype_recipe_text needs. Nothing here sends anything to Claude.",
       inputSchema: z.object({
         recipeId: z.string().uuid(),
         plates: z.number().int().min(1).max(MAX_PLATES).optional(),
@@ -250,8 +267,17 @@ export function registerRecipeTools(server: McpServer): void {
           const detail = await readableRecipe(args.recipeId, scope);
           const url = siteUrl(recipePath(detail.id));
           const current = detail.currentVersion;
+          // The source version retype_recipe_text names: for the Kitchen's
+          // reviewers, who alone may retype (0 when it has none).
+          const sourceVersion = canApproveRecipe(
+            scope.viewerRank,
+            scope.leadTeams,
+          )
+            ? ((await getRecipeSource(detail.id))?.version ?? 0)
+            : undefined;
           if (!current) {
             return {
+              sourceVersion,
               id: detail.id,
               title: detail.title,
               status: detail.status,
@@ -276,6 +302,7 @@ export function registerRecipeTools(server: McpServer): void {
             id: detail.id,
             title: detail.title,
             status: detail.status,
+            sourceVersion,
             inTheBook: true,
             version: current.version,
             versionId: current.id,
@@ -357,6 +384,72 @@ export function registerRecipeTools(server: McpServer): void {
                 ? recipeVersionPath(parsed.data.recipeId, version)
                 : recipePath(parsed.data.recipeId),
             ),
+          };
+        },
+      }),
+  );
+
+  server.registerTool(
+    "retype_recipe_text",
+    {
+      title: "Retype a recipe's text",
+      description:
+        "Replaces the working text of a recipe still in review (suggested, approved or proofread; not one in the book) as the recipe page's Retype text does: you become the text's author, and it is saved as the recipe's next source version, recorded under your name. Give its `text`, or its `sections` (ingredients, equipment, steps, notes; one or the other), and the `sourceVersion` get_recipe gave you as `expectedSourceVersion` (0 when it has none). If someone changed it since you read it, it is refused: read again. The name stays as it is, and nothing is sent to Claude: sending it is a person's click on the page.",
+      inputSchema: z.object({
+        recipeId: z.string().uuid(),
+        expectedSourceVersion: z.number().int().min(0),
+        text: z.string().min(1).max(RECIPE_TEXT_MAX).optional(),
+        sections: z
+          .object({
+            ingredients: sectionText,
+            equipment: sectionText,
+            steps: sectionText,
+            notes: sectionText,
+          })
+          .optional(),
+      }),
+    },
+    async (args, extra) =>
+      runTool({
+        toolName: "retype_recipe_text",
+        extra,
+        // Never the words themselves.
+        argsForAudit: {
+          recipeId: args.recipeId,
+          expectedSourceVersion: args.expectedSourceVersion,
+          asSections: Boolean(args.sections),
+        },
+        handler: async ({ scope }) => {
+          if (args.text && args.sections) {
+            throw new ToolError(
+              "Give the recipe as text or as sections, not both.",
+            );
+          }
+          const parsed = RetypeRecipeTextInput.safeParse({
+            recipeId: args.recipeId,
+            text: args.sections
+              ? sectionsAsText(args.sections)
+              : (args.text ?? ""),
+          });
+          if (!parsed.success) {
+            throw new ToolError(
+              parsed.error.issues[0]?.message ?? "That text is not valid.",
+            );
+          }
+          // The page's own write: it checks the reviewer again, the recipe's
+          // status and the source version under the recipe's lock, and
+          // writes the audit row in the same transaction.
+          const result = await retypeRecipeText({
+            ...parsed.data,
+            actorId: scope.campUserId,
+            expectedSourceVersion: args.expectedSourceVersion,
+          });
+          if (!result.ok) throw new ToolError(result.error);
+          return {
+            id: parsed.data.recipeId,
+            // The write refused any other base, so this is the new version.
+            sourceVersion: args.expectedSourceVersion + 1,
+            url: siteUrl(recipePath(parsed.data.recipeId)),
           };
         },
       }),

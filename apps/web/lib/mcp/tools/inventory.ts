@@ -1,8 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { canEditInventory } from "@camp404/core";
-import { NOT_AN_INVENTORY_EDITOR } from "@camp404/db/inventory";
 import {
+  ITEM_CHANGED,
+  ITEM_GONE,
+  NOT_AN_INVENTORY_EDITOR,
+} from "@camp404/db/inventory";
+import {
+  EditInventoryItemInput,
   INVENTORY_CATEGORIES,
   INVENTORY_CONDITIONS,
   INVENTORY_LOCATIONS,
@@ -12,9 +17,11 @@ import {
 import { getTeamsConfig, teamLabelMap } from "../../camp-config";
 import {
   addInventoryItem,
+  getInventoryItem,
   listInventoryItems,
   listPendingProposals,
   proposeInventoryChange,
+  updateInventoryItem,
 } from "../../inventory";
 import {
   INVENTORY_PATH,
@@ -36,10 +43,36 @@ import { runTool, ToolError, truncateList } from "../tool-utils";
 //    (lockAllowed, inventoryEditor) and refuses a team they may not edit; the change
 //    log row ("Added", by them) is written in the same transaction, as on the
 //    page. Nothing here passes a rank or a team list.
+//  - Changing an item is updateInventoryItem, the item page's Edit dialog's
+//    write: the same lock, the same editor check on the item's team (and on
+//    the new team when it moves), the compare-and-set on the version the
+//    caller read, and the same "Edited" history row. The dialog sends the
+//    whole item; the tool takes only what changes and fills the rest from the
+//    item as it stands, and only at the version the caller read, so a call
+//    on an older version is refused rather than merged.
 //  - Any member may suggest a change to an item (proposeInventoryChange), as
 //    on the item's page; a lead of its team or a captain decides on the page.
-//  - Editing, archiving, deciding a suggestion, lending, needs and bookings
-//    stay on the page for now.
+//  - Archiving, deciding a suggestion, lending, needs and bookings stay on the
+//    page for now.
+
+/** The fields the Edit dialog sends. */
+const ITEM_KEYS = [
+  "name",
+  "details",
+  "team",
+  "category",
+  "condition",
+  "quantity",
+  "unit",
+  "weightKg",
+  "wattsEach",
+  "location",
+  "custodianUserId",
+  "storageLocation",
+  "requiresMaintenance",
+  "maintenanceIntervalDays",
+  "bookableCount",
+] as const;
 
 const firstIssue = (error: z.ZodError, fallback: string) =>
   error.issues[0]?.message ?? fallback;
@@ -236,6 +269,84 @@ export function registerInventoryTools(server: McpServer): void {
             id: result.id,
             status: "pending",
             url: siteUrl(inventoryItemPath(parsed.data.itemId)),
+          };
+        },
+      }),
+  );
+
+  server.registerTool(
+    "update_inventory_item",
+    {
+      title: "Change an item of gear",
+      description: `Changes an item of gear as the item page's Edit does, for an item of a team you may edit: a captain any team, a team lead their own (moving it to another team needs that team too). Give \`itemId\`, the \`expectedVersion\` you read (list_inventory_items' \`version\`) and only the fields that change; the rest stay as they are, and null clears a field that may be blank. If someone changed the item since you read it, it is refused: read again. Logged in the item's history ("Edited", by you). \`location\` "custodian_home" needs \`custodianUserId\`; \`requiresMaintenance\` needs \`maintenanceIntervalDays\`. Categories: ${INVENTORY_CATEGORIES.join(", ")}.`,
+      inputSchema: z.object({
+        itemId: z.string().uuid(),
+        expectedVersion: z.number().int().min(1),
+        name: z.string().min(1).max(80).optional(),
+        team: z.string().max(80).optional(),
+        category: z.enum(INVENTORY_CATEGORIES).optional(),
+        condition: z.enum(INVENTORY_CONDITIONS).optional(),
+        quantity: z.number().int().min(0).optional(),
+        unit: z.string().max(30).nullable().optional(),
+        details: z.string().max(500).nullable().optional(),
+        weightKg: z.number().min(0).nullable().optional(),
+        wattsEach: z.number().positive().nullable().optional(),
+        location: z.enum(INVENTORY_LOCATIONS).optional(),
+        custodianUserId: z.string().uuid().nullable().optional(),
+        storageLocation: z.string().max(80).nullable().optional(),
+        requiresMaintenance: z.boolean().optional(),
+        maintenanceIntervalDays: z.number().int().min(1).nullable().optional(),
+        bookableCount: z.number().int().min(1).nullable().optional(),
+      }),
+    },
+    async (args, extra) =>
+      runTool({
+        toolName: "update_inventory_item",
+        extra,
+        // Which fields changed, never their values.
+        argsForAudit: {
+          itemId: args.itemId,
+          expectedVersion: args.expectedVersion,
+          fields: ITEM_KEYS.filter((k) => args[k] !== undefined),
+        },
+        handler: async ({ scope }) => {
+          const item = await getInventoryItem(args.itemId);
+          if (!item || item.archivedAt) throw new ToolError(ITEM_GONE);
+          // The fields left out are filled from this read, so it must be the
+          // version the caller read; the write checks the version again.
+          if (item.version !== args.expectedVersion) {
+            throw new ToolError(ITEM_CHANGED);
+          }
+          const whole: Record<string, unknown> = {
+            itemId: args.itemId,
+            expectedVersion: args.expectedVersion,
+          };
+          for (const key of ITEM_KEYS) {
+            whole[key] = args[key] !== undefined ? args[key] : item[key];
+          }
+          const parsed = EditInventoryItemInput.safeParse(whole);
+          if (!parsed.success) {
+            throw new ToolError(
+              firstIssue(parsed.error, "That change is not valid."),
+            );
+          }
+          const result = await updateInventoryItem({
+            ...parsed.data,
+            actorId: scope.campUserId,
+          });
+          if (!result.ok) {
+            throw new ToolError(
+              result.error === NOT_AN_INVENTORY_EDITOR
+                ? `${result.error} On the website: ${siteUrl(inventoryItemPath(args.itemId))}`
+                : result.error,
+            );
+          }
+          return {
+            id: args.itemId,
+            name: parsed.data.name,
+            team: parsed.data.team,
+            version: result.version,
+            url: siteUrl(inventoryItemPath(args.itemId)),
           };
         },
       }),

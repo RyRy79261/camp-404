@@ -784,11 +784,17 @@ const QUEUEABLE = [...RECIPE_QUEUEABLE];
  * A reviewer retypes the recipe's working text, and becomes its author. This
  * is the way past a missing consent, and the way to paste in the text of a
  * suggestion that came as a link.
+ *
+ * `expectedSourceVersion`, when given, is the source version the writer read
+ * (0 for none): a retype over a source someone changed since is refused, as
+ * the source editor's send is. The page's Retype button sends none; the
+ * Claude connector always does (its writes take what the person read).
  */
 export async function retypeRecipeText(input: {
   recipeId: string;
   actorId: string;
   text: string;
+  expectedSourceVersion?: number;
 }): Promise<RecipeWriteResult> {
   return write(async (tx) => {
     await assertKitchenReviewer(tx, input.actorId);
@@ -819,12 +825,21 @@ export async function retypeRecipeText(input: {
         (await recipeExists(tx, input.recipeId)) ? RECIPE_CHANGED : RECIPE_GONE,
       );
     }
+    // The recipe row is locked by the update above, so the newest source
+    // cannot move between this read and the insert below.
+    const latest = await latestSource(tx, input.recipeId);
+    if (
+      input.expectedSourceVersion !== undefined &&
+      (latest?.version ?? 0) !== input.expectedSourceVersion
+    ) {
+      refuse(SOURCE_CHANGED);
+    }
     // The retyped text is the next source version, and the reviewer's. The
     // Serves a reviewer set in the source editor carries over: a retype
     // changes the words, not how many the source feeds.
     await insertSource(tx, {
       recipeId: input.recipeId,
-      serves: (await latestSource(tx, input.recipeId))?.serves ?? null,
+      serves: latest?.serves ?? null,
       sections: sourceFromText(text),
       authorId: input.actorId,
       now,

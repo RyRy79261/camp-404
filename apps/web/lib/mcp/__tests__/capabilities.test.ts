@@ -128,6 +128,42 @@ describe("capabilitiesFor", () => {
     );
   });
 
+  it("gives the edit tools by their pages' rules, and keeping a chapter members only to captains", () => {
+    const kitchen = toolsFor(
+      scopeOf("member", [{ team: "kitchen", isLead: true }]),
+    );
+    const structures = toolsFor(
+      scopeOf("member", [{ team: "structures", isLead: true }]),
+    );
+    const member = toolsFor(scopeOf("member"));
+    const captain = toolsFor(scopeOf("captain"));
+    for (const name of [
+      "update_inventory_item",
+      "create_shift_type",
+      "update_shift_type",
+      "keep_document_members_only",
+      "retype_recipe_text",
+    ]) {
+      expect(member, name).not.toContain(name);
+      expect(captain, name).toContain(name);
+    }
+    // Any lead reaches gear and shifts; which team is the write's check.
+    expect(structures).toEqual(
+      expect.arrayContaining([
+        "update_inventory_item",
+        "create_shift_type",
+        "update_shift_type",
+      ]),
+    );
+    expect(kitchen).toContain("retype_recipe_text");
+    expect(structures).not.toContain("retype_recipe_text");
+    expect(kitchen).not.toContain("keep_document_members_only");
+    const websiteOnly = capabilitiesFor(scopeOf("captain")).areas.flatMap((a) =>
+      a.websiteOnly.map((w) => w.what),
+    );
+    expect(websiteOnly.join(" ")).toMatch(/public site/);
+  });
+
   it("gives every member the everyday tools, and adding a task to leads", () => {
     const member = toolsFor(scopeOf("member"));
     const lead = toolsFor(

@@ -56,6 +56,11 @@ website, never more, and takes data out the way the website does.
   budgets); sending recipes to Claude; the guide's public sections and
   members-only marks; deletes, archives, year rollover, camp settings; making
   invite codes; uploads.
+  [CORRECTION 2026-10-26] A captain may now keep a chapter members only
+  through the connector (`keep_document_members_only`, the editor's own
+  write with the mark fixed to true, audited). It can only take a chapter
+  off the public site: putting a section on it, or clearing the mark, stays
+  website-only.
 - **The website's save paths** (2026-10-05). `update_my_burner_profile` is
   My forms' save: the patch is laid over the stored answers, the whole
   profile is checked as the website checks a re-submit, and it saves at the
@@ -374,6 +379,12 @@ compare-and-set on the column read. Editing and removing stay on the page.
 | `list_inventory_updates(filter)`                               | R   | M (own + approved); L/C (all)          |
 | `approve_inventory_update(id)` / `reject_inventory_update(id)` | W   | any L + C (schema confirms cross-team) |
 
+[2026-10-26] As built: `list_inventory_items`, `add_inventory_item`,
+`propose_inventory_change` and `update_inventory_item` (the item page's Edit:
+a captain, or a lead of the item's team and of the team it moves to;
+compare-and-set on the version read; the "Edited" history row). Deciding a
+suggestion, archiving, lending, needs and bookings stay on the page.
+
 ### Drivers / lifts
 
 | Tool                                   | R/W | Tier                                                           |
@@ -431,6 +442,13 @@ Each through the page's own function, as the signed-in person:
 
 Answering a questionnaire, pledging, paying, ordering gear, writing a new
 meeting note and setting up shifts stay on the website.
+[CORRECTION 2026-10-26] Adding and changing a shift is now a tool too
+(`create_shift_type`, `update_shift_type`: the set-up dialog's
+`saveShiftType`, a captain or a lead of that team, compare-and-set on the
+version, audited). Removing a shift, marking a day not needed, placing
+people and asking everyone stay on the website. A captain or a Kitchen lead
+may also retype a recipe's text (`retype_recipe_text`: the recipe page's
+Retype, on the source version read); it sends nothing to Claude.
 
 ## Cross-cutting rules
 

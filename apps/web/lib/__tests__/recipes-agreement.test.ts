@@ -23,6 +23,7 @@ import {
   RECIPE_DECIDED,
   RECIPE_GONE,
   RUN_STAGES,
+  SOURCE_CHANGED,
   TEXT_NEEDED,
   forRecipe,
   plateCountIsBase,
@@ -364,6 +365,21 @@ describe("recipes: the database and the test store agree", () => {
         }),
         source: await getRecipeSource(id),
         sources: await listRecipeSources(id),
+        // The connector's retype names the source version it read.
+        staleSource: await retypeRecipeText({
+          recipeId: id,
+          actorId: p.kitchenLead,
+          text: "Lentils, from an older read.",
+          expectedSourceVersion:
+            ((await getRecipeSource(id))?.version ?? 0) - 1,
+        }),
+        onSource: await retypeRecipeText({
+          recipeId: id,
+          actorId: p.kitchenLead,
+          text: "Lentils, from the newest read.",
+          expectedSourceVersion: (await getRecipeSource(id))?.version ?? 0,
+        }),
+        afterSource: (await getRecipeSource(id))?.version,
         noNote: await requestRerun({
           recipeId: id,
           actorId: p.kitchenLead,
@@ -397,6 +413,8 @@ describe("recipes: the database and the test store agree", () => {
       otherLead: { ok: false, error: NOT_A_KITCHEN_REVIEWER },
       blankGone: { ok: false, error: TEXT_NEEDED },
       retyped: { ok: true },
+      staleSource: { ok: false, error: SOURCE_CHANGED },
+      onSource: { ok: true },
       noNote: { ok: false, error: RERUN_NOTE_NEEDED },
       noNoteGone: { ok: false, error: RERUN_NOTE_NEEDED },
       tooLong: { ok: false },

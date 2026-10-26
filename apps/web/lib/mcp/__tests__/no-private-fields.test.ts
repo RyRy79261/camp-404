@@ -279,6 +279,29 @@ describe("no tool returns ID numbers or bank details", () => {
         condition: "good",
         location: "storage_unit",
       },
+      update_inventory_item: {
+        itemId: item!.id,
+        expectedVersion: 1,
+        storageLocation: "Shelf 2",
+      },
+      retype_recipe_text: {
+        recipeId: recipe!.id,
+        expectedSourceVersion: 0,
+        text: "Oats\nSoak overnight.",
+      },
+      create_shift_type: {
+        team: "kitchen",
+        name: "Breakfast",
+        startMinute: 7 * 60,
+        durationMinutes: 60,
+        places: 2,
+      },
+      update_shift_type: {
+        id: shiftType!.id,
+        expectedVersion: 1,
+        places: 5,
+      },
+      keep_document_members_only: { slug: "rules" },
       list_logistics_days: {},
       set_logistics_days: {
         phase: "build",

@@ -9,6 +9,7 @@ import {
   listPublishedChapters,
   publishGuideChapter,
   saveGuideChapter,
+  setGuideChapterMembersOnly,
   unpublishGuideChapter,
 } from "@camp404/db/documents";
 import {
@@ -38,8 +39,11 @@ import {
 // SaveGuideChapterInput), the same writer rule (chapterRefusal: a captain any
 // chapter, a team lead their teams' chapters, decided again inside each
 // write's transaction), and publishing only the version the writer read
-// (GuideChapterRef, a compare-and-set). Putting a section on the public site
-// and keeping a chapter members only are a captain's, on the website.
+// (GuideChapterRef, a compare-and-set). A captain may keep a chapter members
+// only here (keep_document_members_only: the editor's write with the mark
+// fixed to true, so it can only take something off the public site). Putting
+// a section on the public site, and letting a chapter go out with its
+// section again, stay a captain's, on the website.
 
 const PUBLISHING = `Publishing makes the version readable by every member in the app's Survival Guide. If the chapter's topic is a public section (a captain's switch) and a captain has not kept the chapter members only, it also goes on the public site, ${GUIDE_SITE_HOST}, with every :::members … ::: part cut out: those parts stay in the app for members.`;
 
@@ -270,7 +274,7 @@ function registerDocumentAuthoringTools(server: McpServer): void {
     "publish_document",
     {
       title: "Publish a chapter, or take it off the guide",
-      description: `Publishes the version you read (expectedVersion, from get_document_draft or update_document): if someone saved since, nothing is published and you read it again. Each publish that changes the chapter is a new version; old versions stay. A duty card must be complete to publish. ${PUBLISHING} published: false takes it off the guide (and the public site); its versions stay. Making a section public and keeping a chapter members only are a captain's, on the website.`,
+      description: `Publishes the version you read (expectedVersion, from get_document_draft or update_document): if someone saved since, nothing is published and you read it again. Each publish that changes the chapter is a new version; old versions stay. A duty card must be complete to publish. ${PUBLISHING} published: false takes it off the guide (and the public site); its versions stay. Making a section public is a captain's, on the website; a captain may keep a chapter members only with keep_document_members_only.`,
       inputSchema: z.object({
         slug: GuideSlug,
         published: z.boolean(),
@@ -313,6 +317,32 @@ function registerDocumentAuthoringTools(server: McpServer): void {
             version: result.version,
             newVersion: result.created,
           };
+        },
+      }),
+  );
+
+  server.registerTool(
+    "keep_document_members_only",
+    {
+      title: "Keep a chapter members only",
+      description: `Keeps a whole chapter or duty card off the public site, ${GUIDE_SITE_HOST}, as the guide editor's "Keep this whole chapter members only" does: members still read it in the app. It only ever keeps a chapter private; letting one go public again, and putting a section on the public site, are a captain's, on the website. Recorded in the camp's history under your name.`,
+      inputSchema: z.object({ slug: GuideSlug }),
+    },
+    async (args, extra) =>
+      runTool({
+        toolName: "keep_document_members_only",
+        extra,
+        argsForAudit: args,
+        handler: async ({ scope }) => {
+          // The editor's own write, with membersOnly fixed to true: it checks
+          // the captain again and writes the audit row in its transaction.
+          const result = await setGuideChapterMembersOnly({
+            actorId: scope.campUserId,
+            slug: args.slug,
+            membersOnly: true,
+          });
+          if (!result.ok) throw new ToolError(result.error);
+          return { slug: args.slug, membersOnly: true };
         },
       }),
   );
