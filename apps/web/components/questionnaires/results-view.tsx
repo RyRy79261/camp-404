@@ -523,7 +523,7 @@ function AggregateChart({
     case "timeline":
       return (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {aggregate.buckets.map((bucket) => (
               <BarRow
                 key={bucket.value}
@@ -654,7 +654,7 @@ function RatingGridTable({ aggregate }: { aggregate: RatingGridAggregate }) {
 
 function ChoiceRows({ rows }: { rows: readonly ChoiceRow[] }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       {rows.map((row) => (
         <BarRow
           key={row.value}
@@ -703,7 +703,7 @@ function NumericChart({
         : (aggregate.buckets.at(-1)?.value ?? 0);
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {[...aggregate.buckets].reverse().map((bucket) => (
             <BarRow
               key={bucket.value}
@@ -784,7 +784,7 @@ function NumericChart({
       {aggregate.enumerated ? (
         <Histogram buckets={aggregate.buckets} />
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {aggregate.buckets.map((bucket) => (
             <BarRow
               key={bucket.value}
@@ -820,19 +820,17 @@ function BarRow({
   percent: number;
   flag?: string;
 }) {
-  // The label/value gutters are fixed at md+ so bars line up down the card. On
-  // a 360px phone those same widths left the track invisible, so below md the
-  // label goes full-width above the bar and the count sits beside it.
+  // The label sits on its own line above the bar at every width, so a long
+  // choice (a sentence with an emoji) reads in full instead of being cut to a
+  // fixed gutter. The bar and its count share the line below; the count keeps
+  // a fixed width so the bars still line up down the card.
   return (
-    <div className="flex flex-col gap-1 page-md:flex-row page-md:items-center page-md:gap-3">
-      <span
-        className="truncate text-sm page-md:w-40 page-md:shrink-0"
-        title={typeof label === "string" ? label : undefined}
-      >
+    <div className="flex flex-col gap-1">
+      <span className="text-sm break-words">
         {label}
         {flag && <UnlistedFlag text={flag} />}
       </span>
-      <div className="flex items-center gap-2 page-md:contents">
+      <div className="flex items-center gap-2 page-md:gap-3">
         <div
           className="h-6 flex-1 overflow-hidden rounded-sm bg-muted"
           aria-hidden

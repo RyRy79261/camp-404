@@ -205,6 +205,36 @@ describe("ResultsView — Summary", () => {
     );
   });
 
+  it("shows a long choice in full, never cut to a fixed gutter", () => {
+    const long =
+      "1. The financially enlightened one who reads every line of the budget 💸";
+    const questions: Question[] = [
+      {
+        id: "who",
+        kind: "single_select",
+        prompt: "Who are you at camp?",
+        required: false,
+        allowOther: false,
+        options: [
+          { value: "money", label: long },
+          { value: "plot", label: "6. The plot twist" },
+        ],
+      } as Question,
+    ];
+    renderView({
+      questions,
+      summary: aggregateQuestions(questions, [{ who: "money" }]),
+    });
+    const label = screen.getByText(long);
+    // The whole sentence is in the DOM, on an element that wraps rather than
+    // clips: no truncate and no fixed label width at any window size.
+    for (let el: HTMLElement | null = label; el; el = el.parentElement) {
+      expect(el.className).not.toMatch(/\btruncate\b/);
+      expect(el.className).not.toMatch(/(^|\s)(page-\w+:)?w-\d+/);
+      if (el.matches("[class*='rounded-xl']")) break;
+    }
+  });
+
   it("shows the empty state instead of charts when nobody has answered", () => {
     renderView({
       summary: aggregateQuestions(QUESTIONS, []),
