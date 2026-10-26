@@ -30,6 +30,10 @@ import {
   removeTelegramPlace,
   setTelegramPostSettings,
 } from "../telegram-places";
+import {
+  postQuestionnaireInTelegram,
+  questionnairePostDialog,
+} from "../telegram-questionnaire-post";
 
 describe("a member's Telegram: the database and the test store agree", () => {
   const h = useTestDb();
@@ -160,6 +164,27 @@ describe("a member's Telegram: the database and the test store agree", () => {
       captainRemove: { ok: true },
       again: { ok: false },
       after: [],
+    });
+  });
+
+  it("has no send to post for a questionnaire nobody sent", async () => {
+    const { db, store } = await bothWays(mode, h, async (p) => {
+      const missing = "00000000-0000-4000-8000-000000000001";
+      return {
+        dialog: await questionnairePostDialog(missing),
+        post: await postQuestionnaireInTelegram({
+          actorId: p.captain,
+          activationId: missing,
+          tagUserIds: [],
+          placeIds: [],
+          messageConnected: false,
+        }),
+      };
+    });
+    expect(store).toEqual(db);
+    expect(db).toEqual({
+      dialog: null,
+      post: { ok: false, error: "That send no longer exists." },
     });
   });
 });

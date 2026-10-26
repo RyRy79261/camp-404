@@ -149,3 +149,20 @@ person up by `@username`. So the owner chose:
   form, said Coming this year and has not connected Ol' Jeb; at most one post
   a camp day per form per chat. The handles are read when the post is sent,
   never stored with it.
+
+## Post a questionnaire by hand (owner, 2026-10-27)
+
+The owner wanted to send out a questionnaire again, and to choose who is
+tagged ("We could simply select who to tag in the message something
+smarter"). Approved mock-up: `docs/plans/2026-10-27-telegram-questionnaire-post-mockup.png`.
+
+- Each sent questionnaire's row has **Post in Telegram**, for its author or a
+  captain, any time. The automatic reminders stay as they are.
+- The dialog shows the message, then **Who to tag**: chips (Hasn't answered,
+  Said Coming and hasn't answered, Said Maybe, Nobody) tick a group, and each
+  person can be ticked or unticked. A member who connected Ol' Jeb starts
+  unticked (they can get a private message); one with no Telegram username
+  cannot be tagged.
+- **Where**: the places from the Ol' Jeb card, all ticked. **Also send a
+  private message to members who connected Telegram**, ticked.
+- The post lists every tag, in more messages if they do not fit.

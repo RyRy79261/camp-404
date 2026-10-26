@@ -570,6 +570,13 @@ export interface AuditEvents {
     title: string;
   };
   "telegram.chat_removed": { chatId: string; title: string };
+  "telegram.questionnaire_posted": {
+    activationId: string;
+    title: string;
+    places: number;
+    tagged: number;
+    messaged: number;
+  };
   "telegram.posts_set": {
     announcements: boolean;
     reminders: boolean;

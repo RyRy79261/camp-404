@@ -3,6 +3,9 @@ import {
   campDayKey,
   CAPTAIN_ONLY,
   isComingThisYear,
+  plainPreview,
+  questionnaireReminderNotification,
+  type TagCandidate,
   renderTelegramPost,
   telegramMention,
   type TelegramPost,
@@ -265,7 +268,10 @@ export async function moveTelegramChat(
 
 // --- Queueing -------------------------------------------------------------
 
-const SETTING: Record<TelegramPostKind, keyof TelegramPostSettings> = {
+/** The posts Camp settings' ticks switch on and off (a hand post is never off). */
+type TickedPostKind = Exclude<TelegramPostKind, "questionnaire">;
+
+const SETTING: Record<TickedPostKind, keyof TelegramPostSettings> = {
   announcement: "announcements",
   reminder: "reminders",
   meeting: "meetings",
@@ -275,7 +281,7 @@ const SETTING: Record<TelegramPostKind, keyof TelegramPostSettings> = {
 export { campDayKey };
 
 export interface QueuedTelegramPost {
-  kind: TelegramPostKind;
+  kind: TickedPostKind;
   title: string;
   body: string;
   refId: string | null;
@@ -391,6 +397,131 @@ export async function reminderTags(
   return { open: true, tags: [...new Set(tags)].sort(), untagged };
 }
 
+// --- A questionnaire posted by hand (owner's mock-up, 2026-10-27) ---------
+
+/**
+ * The members a send still waits on, for the "Post in Telegram" dialog: their
+ * name, what they said this year, their Telegram username and whether they
+ * connected Ol' Jeb. Empty for a send that is not open. Who owes a form and
+ * what they said read at team lead and up; the caller gates who sees this.
+ */
+export async function questionnairePostCandidates(
+  activationId: string,
+  db: DbOrTx = createHttpDb(),
+): Promise<TagCandidate[]> {
+  const [act] = await db
+    .select({
+      status: schema.questionnaireActivations.status,
+      key: schema.questionnaireActivations.questionnaireKey,
+    })
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.id, activationId))
+    .limit(1);
+  if (!act || act.status !== "open") return [];
+  const cycle = await currentCycleNumber(db);
+  const rows = await db
+    .selectDistinct({
+      userId: schema.users.id,
+      name: schema.users.displayName,
+      handle: schema.users.telegramHandle,
+      dmAt: schema.users.telegramDmAt,
+      intent: schema.campParticipations.intent,
+      status: schema.campParticipations.status,
+    })
+    .from(schema.requiredActions)
+    .innerJoin(schema.users, eq(schema.users.id, schema.requiredActions.userId))
+    .leftJoin(
+      schema.campParticipations,
+      and(
+        eq(schema.campParticipations.userId, schema.users.id),
+        eq(schema.campParticipations.cycle, cycle),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.requiredActions.activationId, activationId),
+        eq(schema.requiredActions.actionKey, act.key),
+        eq(schema.requiredActions.status, "pending"),
+        eq(schema.users.isSystem, false),
+        eq(schema.users.sanitised, false),
+      ),
+    );
+  return rows
+    .map((r) => ({
+      userId: r.userId,
+      name: r.name?.trim() || "Camp member",
+      intent: r.intent ?? null,
+      status: r.status ?? null,
+      mention: telegramMention(r.handle),
+      connected: r.dmAt !== null,
+    }))
+    .sort(
+      (a, b) =>
+        a.name.localeCompare(b.name, "en") || a.userId.localeCompare(b.userId),
+    );
+}
+
+/** What the "Post in Telegram" dialog shows for an open send. */
+export interface QuestionnairePostDialog {
+  /** The post's first line and its short line, as Ol' Jeb will send them. */
+  title: string;
+  body: string;
+  candidates: TagCandidate[];
+}
+
+/** The dialog's message and who it may tag, or null for a send that is not open. */
+export async function questionnairePostDialog(
+  activationId: string,
+  db: DbOrTx = createHttpDb(),
+): Promise<QuestionnairePostDialog | null> {
+  const [act] = await db
+    .select({
+      title: schema.questionnaireActivations.title,
+      status: schema.questionnaireActivations.status,
+      dueAt: schema.questionnaireActivations.dueAt,
+    })
+    .from(schema.questionnaireActivations)
+    .where(eq(schema.questionnaireActivations.id, activationId))
+    .limit(1);
+  if (!act || act.status !== "open") return null;
+  const payload = questionnaireReminderNotification({
+    activationId,
+    title: act.title,
+    dueAt: act.dueAt,
+  });
+  return {
+    title: payload.title,
+    body: plainPreview(payload.body),
+    candidates: await questionnairePostCandidates(activationId, db),
+  };
+}
+
+/**
+ * The tags of a hand-posted questionnaire, read as it is sent: of the members
+ * its poster picked, those who still owe it and are still here. Null when
+ * the send is no longer open.
+ */
+async function questionnairePostTags(
+  activationId: string,
+  userIds: readonly string[],
+  db: DbOrTx,
+): Promise<string[] | null> {
+  const candidates = await questionnairePostCandidates(activationId, db);
+  if (candidates.length === 0) {
+    const [act] = await db
+      .select({ status: schema.questionnaireActivations.status })
+      .from(schema.questionnaireActivations)
+      .where(eq(schema.questionnaireActivations.id, activationId))
+      .limit(1);
+    if (act?.status !== "open") return null;
+  }
+  const picked = new Set(userIds);
+  const tags = candidates
+    .filter((c) => picked.has(c.userId) && c.mention)
+    .map((c) => c.mention!);
+  return [...new Set(tags)].sort();
+}
+
 // --- The drain ------------------------------------------------------------
 
 export type TelegramPostSend = (
@@ -450,6 +581,7 @@ export async function drainTelegramPosts(
         title: posts.title,
         body: posts.body,
         refId: posts.refId,
+        tagUserIds: posts.tagUserIds,
         buttonText: posts.buttonText,
         buttonPath: posts.buttonPath,
         expired: sql<boolean>`${posts.createdAt} < ${old}`,
@@ -509,6 +641,19 @@ export async function drainTelegramPosts(
       tags = who.tags;
       untagged = who.untagged;
     }
+    if (row.kind === "questionnaire") {
+      // The poster's picks, read now: whoever answered or left since is not
+      // tagged. A send closed since is not posted; "Nobody" still posts.
+      const picked = row.refId
+        ? await questionnairePostTags(row.refId, row.tagUserIds ?? [], db)
+        : null;
+      if (picked === null) {
+        await finish(row.id, "skipped");
+        result.skipped += 1;
+        continue;
+      }
+      tags = picked;
+    }
     const post = renderTelegramPost(
       { ...row, tags, untagged },
       options.siteUrl,
@@ -537,6 +682,15 @@ export async function drainTelegramPosts(
     const status = outcome.ok ? "sent" : "failed";
     await finish(row.id, status);
     result[status] += 1;
+    if (outcome.ok) {
+      // The tags that did not fit: best effort, after the post is recorded
+      // sent, so a failure here never sends the post itself twice.
+      for (const text of post.more ?? []) {
+        await send(row.chatId, row.threadId, { text, button: null }).catch(
+          () => undefined,
+        );
+      }
+    }
   }
   return result;
 }

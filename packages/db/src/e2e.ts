@@ -115,3 +115,22 @@ export async function setApprovalForE2E(
     .set({ approvalStatus: status, approvalDecisionReason: reason })
     .where(eq(schema.users.id, userId));
 }
+
+/**
+ * Give a member a Telegram username and, when `connected`, a connection to
+ * Ol' Jeb (as tapping Start would), for the "Post in Telegram" spec.
+ */
+export async function seedTelegramForE2E(
+  userId: string,
+  input: { handle?: string | null; connected: boolean },
+): Promise<void> {
+  assertLocalE2EDatabase();
+  await createHttpDb()
+    .update(schema.users)
+    .set({
+      ...(input.handle !== undefined ? { telegramHandle: input.handle } : {}),
+      telegramUserId: input.connected ? `e2e-${userId}` : null,
+      telegramDmAt: input.connected ? new Date() : null,
+    })
+    .where(eq(schema.users.id, userId));
+}

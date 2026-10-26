@@ -72,6 +72,9 @@ export default defineConfig({
       PGCRYPTO_KEY: "e2e-local-only-pgcrypto-key-0123456789",
       INVITE_CODES: "test-invite-e2e-only-code",
       GOD_EMAILS: "god@example.com",
+      // Ol' Jeb's username: "Post in Telegram" and the Telegram cards show
+      // only when it is set (the store run sets it too).
+      TELEGRAM_BOT_USERNAME: "jebediah_404_bot",
       // Auth emails land in a file instead of being sent (tests/e2e-db/_mail.ts).
       AUTH_EMAIL_CAPTURE_FILE,
     },

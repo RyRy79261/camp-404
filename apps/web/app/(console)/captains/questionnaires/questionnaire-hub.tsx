@@ -35,6 +35,7 @@ import { toast } from "@camp404/ui/components/toast";
 import { useConfirm } from "@camp404/ui/components/confirm-dialog";
 import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import { ATTENDANCE_CHECK_KEY } from "@/lib/attendance-check";
+import { TelegramPostButton } from "@/components/questionnaires/telegram-post-dialog";
 import { lifecycleLabel } from "./[key]/lifecycle-controls";
 import {
   createAttendanceCheckAction,
@@ -72,6 +73,11 @@ export interface HubItem {
   answered: boolean;
   /** Its open send's blocking flag, or null when nothing is sent right now. */
   openSendBlocking: boolean | null;
+  /**
+   * The open send this viewer may post in Telegram (its author or a captain,
+   * with Ol' Jeb set up and a chat to post in), or null.
+   */
+  telegramActivationId?: string | null;
 }
 
 interface RowBusy {
@@ -511,6 +517,12 @@ function QuestionnaireCard({
                   Answer
                 </Link>
               </Button>
+            ) : null}
+            {item.telegramActivationId ? (
+              <TelegramPostButton
+                activationId={item.telegramActivationId}
+                title={item.title}
+              />
             ) : null}
             {item.canEdit ? (
               <Button

@@ -6,9 +6,19 @@
 // same plain text push puts on a lock screen (the title and the plain body),
 // so it carries nothing a push would not.
 
-import type { NotificationKind, NotificationPayload } from "@camp404/types";
+import type {
+  NotificationKind,
+  NotificationPayload,
+  ParticipationIntent,
+  ParticipationStatus,
+} from "@camp404/types";
 import { plainPreview } from "./markdown-text";
 import { notificationLink } from "./notification-links";
+import {
+  INTENT_LABEL,
+  isComingThisYear,
+  NO_ANSWER_LABEL,
+} from "./participation";
 
 /**
  * Which notices a connected member asked for (users.telegram_notices).
@@ -137,14 +147,26 @@ export function telegramMention(
 
 export const TELEGRAM_ANSWER_BUTTON = "Answer in Camp 404";
 
-/** What Ol' Jeb posts in a camp chat. */
-export type TelegramPostKind = "announcement" | "reminder" | "meeting";
+/**
+ * What Ol' Jeb posts in a camp chat. `questionnaire` is a questionnaire a
+ * captain or its author posts by hand, tagging the people they picked.
+ */
+export type TelegramPostKind =
+  | "announcement"
+  | "reminder"
+  | "meeting"
+  | "questionnaire";
 
 export interface TelegramPost {
   /** Plain text, sent with no parse mode. */
   text: string;
   /** The button under it, or null. */
   button: { text: string; url: string } | null;
+  /**
+   * More messages, sent after it: the tags that did not fit under
+   * Telegram's 4096 characters. Plain text, no button.
+   */
+  more?: string[];
 }
 
 /**
@@ -167,6 +189,16 @@ export function renderTelegramPost(
   const lines = [post.title.trim()];
   const body = plainPreview(post.body);
   if (body) lines.push(body);
+  const button =
+    post.buttonText && post.buttonPath
+      ? {
+          text: post.buttonText,
+          url: `${siteUrl.replace(/\/+$/, "")}${post.buttonPath}`,
+        }
+      : null;
+  if (post.kind === "questionnaire") {
+    return questionnairePost(lines, post.tags ?? [], button);
+  }
   if (post.kind === "reminder") {
     const line = stillToAnswer(post.tags ?? [], post.untagged ?? 0);
     if (line) lines.push(line);
@@ -176,14 +208,128 @@ export function renderTelegramPost(
     full.length <= TELEGRAM_MESSAGE_MAX
       ? full
       : `${full.slice(0, TELEGRAM_MESSAGE_MAX - 1).trimEnd()}…`;
-  const button =
-    post.buttonText && post.buttonPath
-      ? {
-          text: post.buttonText,
-          url: `${siteUrl.replace(/\/+$/, "")}${post.buttonPath}`,
-        }
-      : null;
   return { text, button };
+}
+
+/** The words after a hand-posted questionnaire's tags. */
+export const QUESTIONNAIRE_TAG_TAIL = "this one's for you.";
+
+/**
+ * A questionnaire posted by hand: its title and line, then every tag the
+ * poster picked ("@a @b, this one's for you."). Every tag is sent: the ones
+ * that do not fit under Telegram's limit go in the messages after it.
+ */
+function questionnairePost(
+  lines: string[],
+  tags: readonly string[],
+  button: TelegramPost["button"],
+): TelegramPost {
+  const head = clip(lines.filter(Boolean).join("\n\n"));
+  if (tags.length === 0) return { text: head, button };
+  const chunks: string[] = [];
+  let current = "";
+  // Room for ", this one's for you." on the last chunk.
+  const room = TELEGRAM_MESSAGE_MAX - QUESTIONNAIRE_TAG_TAIL.length - 2;
+  for (const tag of tags) {
+    const next = current ? `${current} ${tag}` : tag;
+    if (next.length > room && current) {
+      chunks.push(current);
+      current = tag;
+    } else {
+      current = next;
+    }
+  }
+  chunks.push(current);
+  chunks[chunks.length - 1] += `, ${QUESTIONNAIRE_TAG_TAIL}`;
+  const first = `${head}\n\n${chunks[0]}`;
+  if (first.length <= TELEGRAM_MESSAGE_MAX) {
+    const more = chunks.slice(1);
+    return more.length > 0
+      ? { text: first, button, more }
+      : { text: first, button };
+  }
+  return { text: head, button, more: chunks };
+}
+
+function clip(text: string): string {
+  return text.length <= TELEGRAM_MESSAGE_MAX
+    ? text
+    : `${text.slice(0, TELEGRAM_MESSAGE_MAX - 1).trimEnd()}…`;
+}
+
+// --- Who a hand-posted questionnaire tags (owner's mock-up, 2026-10-27) ----
+
+/** A member who still owes the questionnaire, as the "Post in Telegram" dialog lists them. */
+export interface TagCandidate {
+  userId: string;
+  name: string;
+  /** What the member said this year, or null for no answer. */
+  intent: ParticipationIntent | null;
+  /** Their stored status this year (both halves), or null. */
+  status: ParticipationStatus | null;
+  /** Their `@handle` (`telegramMention`), or null: they cannot be tagged. */
+  mention: string | null;
+  /** They connected Ol' Jeb, so they can get a private message instead. */
+  connected: boolean;
+}
+
+/** The dialog's "Who to tag" chips. */
+export const TAG_GROUPS = ["pending", "coming", "maybe", "nobody"] as const;
+export type TagGroup = (typeof TAG_GROUPS)[number];
+
+export const TAG_GROUP_LABEL: Readonly<Record<TagGroup, string>> = {
+  pending: "Hasn't answered",
+  coming: "Said Coming, hasn't answered",
+  maybe: "Said Maybe",
+  nobody: "Nobody",
+};
+
+/**
+ * Whether a member who still owes the form is in a chip's group. Every
+ * candidate owes it, so "Hasn't answered" is all of them; "Said Coming" is
+ * the camp's own rule for who is coming (`isComingThisYear`, as the
+ * automatic reminders tag); "Said Maybe" is the member's own answer.
+ */
+export function inTagGroup(c: TagCandidate, group: TagGroup): boolean {
+  switch (group) {
+    case "pending":
+      return true;
+    case "coming":
+      return isComingThisYear(c.status);
+    case "maybe":
+      return c.intent === "maybe";
+    case "nobody":
+      return false;
+  }
+}
+
+/** How many members a chip names (its count). */
+export function tagGroupCount(
+  candidates: readonly TagCandidate[],
+  group: TagGroup,
+): number {
+  return candidates.filter((c) => inTagGroup(c, group)).length;
+}
+
+/**
+ * Who a chip ticks: its members who can be tagged and have not connected
+ * Ol' Jeb (a connected member gets a private message instead, so starts
+ * unticked; the poster may still tick them).
+ */
+export function tagGroupTicks(
+  candidates: readonly TagCandidate[],
+  group: TagGroup,
+): Set<string> {
+  return new Set(
+    candidates
+      .filter((c) => inTagGroup(c, group) && c.mention && !c.connected)
+      .map((c) => c.userId),
+  );
+}
+
+/** A candidate's answer this year, in the member's own words. */
+export function tagCandidateStanding(c: TagCandidate): string {
+  return c.intent ? INTENT_LABEL[c.intent] : NO_ANSWER_LABEL;
 }
 
 function stillToAnswer(tags: readonly string[], untagged: number): string {
