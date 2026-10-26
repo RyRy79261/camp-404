@@ -797,6 +797,29 @@ Decisions baked into the schema — keep new code consistent with them:
   is no worker: `deliverDue` fans out and drains the queue in `after()` (see
   No cron jobs). `push_tokens`
   holds device tokens.
+  [2026-10-26] **Ol' Jeb** (`@jebediah_404_bot`, the camp's Telegram bot;
+  plan `docs/plans/2026-10-25-telegram-ol-jeb.md`) is a third channel beside
+  push and email. A bot may never send the first private message, so a
+  member connects from the Profile's Telegram card: a one-use link
+  (`t.me/<bot>?start=<code>`, `telegram_link_codes`, hash only, 10 minutes)
+  and `/start <code>` at the webhook set `users.telegram_user_id` and
+  `telegram_dm_at`. `/stop`, blocking the bot or Disconnect clear
+  `telegram_dm_at`. `deliveryValues` queues `telegram_status` for every
+  delivery that goes by push; the drain (`@camp404/db/telegram-dm`) skips a
+  member who is not connected, connected after the notice was written, or
+  chose "Only the important ones" (`telegram_notices`, the email list). The
+  message is the push text (title and plain body, `renderTelegramNotice` in
+  core) with an "Open in Camp 404" button, never more. The webhook handles
+  each `update_id` once (`telegram_updates`) and reads no group text. Ol'
+  Jeb's voice is casual and friendly, never a cowboy (owner, 2026-10-26).
+  Nobody registers the webhook by hand: `vercel-build` runs
+  `apps/web/scripts/register-telegram.mjs` after the migrations, which on
+  production only (with `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`
+  set) calls `setWebhook` for `SITE_URL`'s `/api/telegram/webhook` (never
+  `VERCEL_URL`) and `setMyCommands`, and never fails the build. The owner
+  sets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and
+  `TELEGRAM_BOT_USERNAME=jebediah_404_bot` in Vercel; without the username
+  the Profile shows no Telegram card.
 - **Component mapping.** String keys (`required_actions.action_key`,
   `questionnaire_activations.questionnaire_key`, `broadcasts.ref_type`)
   map to bespoke components via a code-side registry — the DB stores the
@@ -1214,6 +1237,14 @@ LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
 - Telegram outbound stays off (`DEFERRED.md`). `dispatchPendingAnnouncements`
   is kept in `@camp404/telegram`; when Telegram is turned on, call it from
   `deliverDue`, not from a scheduled route.
+  [CORRECTION 2026-10-26] Private notices are on: `deliverDue` drains queued
+  Telegram notices (`drainQueuedTelegram`, 25 a run, oldest first, `FOR
+UPDATE SKIP LOCKED`) when `TELEGRAM_BOT_TOKEN` is set, behind
+  `mayContactMembers` like push and email. A 429 ends the run, a 403 (the
+  member blocked Ol' Jeb) disconnects them, and a notice queued over 20 hours
+  is marked failed unsent. The daily upkeep forgets webhook update ids older
+  than a week. Group posts (`dispatchPendingAnnouncements`, invites, tags)
+  are still off: step 2 of the plan.
 
 ## Conventions
 

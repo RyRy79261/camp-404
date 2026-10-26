@@ -1,24 +1,36 @@
 import { errorLogText } from "@camp404/core";
+import {
+  forgetTelegramUpdate,
+  recordTelegramUpdate,
+} from "@camp404/db/telegram-dm";
 import { NextResponse } from "next/server";
 import {
   handleChatMemberUpdate,
-  parseUpdate,
+  handleMyChatMember,
+  handlePrivateMessage,
+  updateSchema,
   verifyWebhookSecret,
 } from "@camp404/telegram";
-import { getWebhookSecret } from "@/lib/telegram";
+import { getTelegramClient, getWebhookSecret } from "@/lib/telegram";
 
 export const runtime = "nodejs";
 
-// Webhook receiver for the Camp 404 Telegram bot. Telegram POSTs every
-// update here; we verify the secret header (set via `setWebhook`), parse
-// the update, and dispatch to the relevant handler. We ALWAYS reply 200
-// OK as long as the secret is valid — Telegram retries non-2xx responses
-// aggressively, and a parsing failure on one bad update should not stall
-// the queue.
+// Webhook receiver for Ol' Jeb, the camp's Telegram bot. Telegram POSTs every
+// update here with the secret header set by `setWebhook`.
 //
-// Wiring: configure `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`,
-// then `POST setWebhook` once at deploy time pointing at this URL with
-// allowed_updates ["chat_member"] (plus "message" if you add commands).
+// - A bad secret is 401. A body that is not an update we read is 200: Telegram
+//   retries anything else, and one bad update must not stall the queue.
+// - Each update is handled once, by its update_id (`telegram_updates`): a
+//   retry of one already handled is 200 and does nothing.
+// - Our own failure (the database, mostly) is 503, after forgetting the
+//   update_id, so Telegram's retry handles it again.
+//
+// What Ol' Jeb reads: private messages (`/start <code>` connects a member,
+// `/stop` stops their notices, anything else gets one fixed sentence),
+// `my_chat_member` (a member blocking the bot), and `chat_member` (a member
+// joining the camp group through their invite link). Group text is never
+// read. Register the webhook with allowed_updates
+// ["message", "my_chat_member", "chat_member"], on the production domain only.
 export async function POST(req: Request) {
   let secret: string;
   try {
@@ -38,19 +50,45 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ ok: true, ignored: "non-json" });
   }
+  const parsed = updateSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ ok: true, ignored: "not-an-update" });
+  }
+  const update = parsed.data;
 
   try {
-    const update = parseUpdate(body);
+    if (!(await recordTelegramUpdate(update.update_id))) {
+      return NextResponse.json({ ok: true, ignored: "duplicate" });
+    }
+  } catch (err) {
+    console.error(
+      "[telegram/webhook] could not record the update",
+      errorLogText(err, process.env),
+    );
+    return new NextResponse("Try again", { status: 503 });
+  }
+
+  try {
+    if (update.message) {
+      await handlePrivateMessage(update.message, getTelegramClient());
+    }
+    if (update.my_chat_member) {
+      await handleMyChatMember(update.my_chat_member);
+    }
     if (update.chat_member) {
       await handleChatMemberUpdate(update.chat_member);
     }
   } catch (err) {
-    // Telegram will not retry a 200 — and we don't want it to. Log and
-    // move on so a single malformed update doesn't block subsequent ones.
     console.error(
       "[telegram/webhook] update handler failed",
       errorLogText(err, process.env),
     );
+    try {
+      await forgetTelegramUpdate(update.update_id);
+    } catch {
+      // Then Telegram's retry is dropped as a duplicate; nothing better to do.
+    }
+    return new NextResponse("Try again", { status: 503 });
   }
 
   return NextResponse.json({ ok: true });

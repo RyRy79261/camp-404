@@ -1,0 +1,342 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Ol' Jeb: Connect Telegram mock-up</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: oklch(0.15 0.05 295);
+        --panel: oklch(0.2 0.06 295);
+        --line: oklch(0.35 0.08 295);
+        --fg: oklch(0.95 0.01 295);
+        --mut: oklch(0.72 0.04 295);
+        --mag: oklch(0.65 0.27 340);
+        --blue: oklch(0.62 0.18 255);
+        --ok: oklch(0.75 0.17 150);
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: Inter, sans-serif;
+        color: var(--fg);
+        background: #0b0912;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 16px;
+      }
+      .step {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .lab {
+        font: 12px Silkscreen;
+        color: var(--blue);
+      }
+      .desk {
+        background: var(--bg);
+        background-image:
+          linear-gradient(var(--line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line) 1px, transparent 1px);
+        background-size: 32px 32px;
+        padding: 16px;
+      }
+      .win {
+        background: var(--panel);
+        border: 2px solid var(--line);
+        box-shadow: 4px 4px 0 #0008;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: color-mix(in oklch, var(--mag) 70%, var(--bg));
+        padding: 4px 8px;
+        font-family: Silkscreen;
+        font-size: 12px;
+      }
+      .bar .b {
+        margin-left: auto;
+        display: flex;
+        gap: 4px;
+      }
+      .bar .b i {
+        width: 12px;
+        height: 12px;
+        border: 1px solid var(--fg);
+        display: block;
+      }
+      .body {
+        padding: 14px;
+      }
+      .eye {
+        font-family: Silkscreen;
+        font-size: 10px;
+        color: var(--mag);
+      }
+      h1 {
+        font-size: 18px;
+        margin: 2px 0 10px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        background: color-mix(in oklch, var(--panel) 80%, black);
+        padding: 12px;
+        min-height: 170px;
+      }
+      .ct {
+        font-family: Silkscreen;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      p {
+        font-size: 13px;
+        color: var(--mut);
+        margin: 8px 0;
+        line-height: 1.45;
+      }
+      .btn {
+        display: inline-flex;
+        border: 1px solid var(--mag);
+        background: var(--mag);
+        color: #fff;
+        font: 500 13px Inter;
+        padding: 8px 12px;
+      }
+      .btn.o {
+        background: transparent;
+        color: var(--fg);
+        border-color: var(--line);
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .badge {
+        font-family: Silkscreen;
+        font-size: 10px;
+        padding: 2px 6px;
+        border: 1px solid;
+      }
+      .radio {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 8px 0;
+        font-size: 13px;
+      }
+      .radio label {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .phone {
+        background: #17212b;
+        padding: 14px;
+        font-size: 13px;
+        min-height: 260px;
+      }
+      .ph {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #0e1621;
+        margin-bottom: 8px;
+      }
+      .av {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--mag);
+        display: grid;
+        place-items: center;
+        font-family: Silkscreen;
+        font-size: 11px;
+      }
+      .msg {
+        background: #182533;
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin: 8px 0;
+        color: #e9eef3;
+        line-height: 1.4;
+      }
+      .msg b {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .me {
+        background: #2b5278;
+        margin-left: 60px;
+      }
+      .kb {
+        display: block;
+        text-align: center;
+        background: #24394e;
+        color: #6ab3f3;
+        padding: 7px;
+        border-radius: 6px;
+        margin-top: 6px;
+        font-weight: 500;
+      }
+      .time {
+        font-size: 10px;
+        color: #7d8b99;
+        text-align: right;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grid">
+      <div class="step">
+        <div class="lab">1 · Not connected</div>
+        <div class="desk">
+          <div class="win">
+            <div class="bar">
+              ▣ Profile<span class="b"><i></i><i></i></span>
+            </div>
+            <div class="body">
+              <div class="eye">ME</div>
+              <h1>Your profile</h1>
+              <div class="card">
+                <div class="ct">
+                  ✈ Telegram
+                  <span class="badge" style="color: var(--mut)">Off</span>
+                </div>
+                <p>
+                  Get your camp notices from Ol' Jeb, the camp's Telegram bot.
+                  You see the same notices as in your inbox.
+                </p>
+                <div class="row"><span class="btn">Connect Telegram</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="phone">
+          <div class="ph">
+            <div class="av">OJ</div>
+            <div>
+              <b>Ol' Jeb</b>
+              <div style="font-size: 11px; color: #7d8b99">
+                @jebediah_404_bot
+              </div>
+            </div>
+          </div>
+          <p style="color: #7d8b99; text-align: center">No messages yet</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="lab">2 · Waiting for Start</div>
+        <div class="desk">
+          <div class="win">
+            <div class="bar">
+              ▣ Profile<span class="b"><i></i><i></i></span>
+            </div>
+            <div class="body">
+              <div class="eye">ME</div>
+              <h1>Your profile</h1>
+              <div class="card">
+                <div class="ct">
+                  ✈ Telegram
+                  <span class="badge" style="color: var(--blue)">Waiting</span>
+                </div>
+                <p>
+                  Telegram is open. Tap <b style="color: var(--fg)">Start</b> in
+                  your chat with Ol' Jeb.
+                </p>
+                <p>This link works for 10 minutes.</p>
+                <div class="row">
+                  <span class="btn o">Open Telegram again</span
+                  ><span class="btn o">Cancel</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="phone">
+          <div class="ph">
+            <div class="av">OJ</div>
+            <div>
+              <b>Ol' Jeb</b>
+              <div style="font-size: 11px; color: #7d8b99">
+                @jebediah_404_bot
+              </div>
+            </div>
+          </div>
+          <div class="msg">
+            I'm Ol' Jeb, Camp 404's bot. Tap Start and I'll send your camp
+            notices here.
+          </div>
+          <span class="kb" style="background: #2b5278; color: #fff">START</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="lab">3 · Connected</div>
+        <div class="desk">
+          <div class="win">
+            <div class="bar">
+              ▣ Profile<span class="b"><i></i><i></i></span>
+            </div>
+            <div class="body">
+              <div class="eye">ME</div>
+              <h1>Your profile</h1>
+              <div class="card">
+                <div class="ct">
+                  ✈ Telegram
+                  <span class="badge" style="color: var(--ok)">On</span>
+                </div>
+                <p>
+                  Ol' Jeb sends your notices to
+                  <b style="color: var(--fg)">@cloud_404</b>.
+                </p>
+                <div class="radio">
+                  <label><input type="radio" checked /> All my notices</label>
+                  <label
+                    ><input type="radio" /> Only the important ones (forms,
+                    tasks due, approvals)</label
+                  >
+                </div>
+                <div class="row"><span class="btn o">Disconnect</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="phone">
+          <div class="ph">
+            <div class="av">OJ</div>
+            <div>
+              <b>Ol' Jeb</b>
+              <div style="font-size: 11px; color: #7d8b99">
+                @jebediah_404_bot
+              </div>
+            </div>
+          </div>
+          <div class="msg me">/start</div>
+          <div class="msg">
+            Hey Cloud, you're all set. Your camp notices will land here now.
+          </div>
+          <div class="msg">
+            <b>Form due Friday</b>Tell the Kitchen what you can't eat.<span
+              class="kb"
+              >Open in Camp 404</span
+            >
+            <div class="time">09:12</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -247,6 +247,7 @@ export * from "./audit-events";
 export * from "./notification-days";
 export * from "./email-layout";
 export * from "./notification-email";
+export * from "./notification-telegram";
 export * from "./time-zone";
 export * from "./burn-dates";
 export * from "./join-site";

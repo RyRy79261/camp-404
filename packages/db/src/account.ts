@@ -55,6 +55,8 @@ export function sanitisedUserPatch(
     voiceConsentAt: null,
     telegramHandle: null,
     telegramUserId: null,
+    telegramDmAt: null,
+    telegramNotices: "all",
     // Their words about themselves, and their place on the public join site.
     campTitle: null,
     campBlurb: null,

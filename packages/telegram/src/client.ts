@@ -53,6 +53,12 @@ export interface TelegramMessage {
   text?: string;
 }
 
+/** A button under a message that opens a web address. */
+export interface InlineKeyboardButton {
+  text: string;
+  url: string;
+}
+
 export interface BotIdentity {
   id: number;
   is_bot: boolean;
@@ -133,6 +139,8 @@ export class TelegramClient {
     parseMode?: "MarkdownV2" | "HTML";
     disableNotification?: boolean;
     disableWebPagePreview?: boolean;
+    /** Buttons under the message; only URL buttons are used. */
+    inlineKeyboard?: InlineKeyboardButton[][];
   }): Promise<TelegramMessage> {
     return this.call<TelegramMessage>("sendMessage", {
       chat_id: input.chatId,
@@ -140,6 +148,9 @@ export class TelegramClient {
       parse_mode: input.parseMode,
       disable_notification: input.disableNotification,
       disable_web_page_preview: input.disableWebPagePreview,
+      reply_markup: input.inlineKeyboard
+        ? { inline_keyboard: input.inlineKeyboard }
+        : undefined,
     });
   }
 

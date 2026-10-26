@@ -22,3 +22,17 @@ export function getWebhookSecret(): string {
   }
   return secret;
 }
+
+/** Whether Ol' Jeb can send: the bot token is set. */
+export function isTelegramConfigured(): boolean {
+  return Boolean(process.env.TELEGRAM_BOT_TOKEN);
+}
+
+/**
+ * The bot's username (without "@"), for the Connect Telegram link. Unset: the
+ * Profile shows no Telegram card.
+ */
+export function telegramBotUsername(): string | null {
+  const name = process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@+/, "");
+  return name && /^[A-Za-z0-9_]{5,32}$/.test(name) ? name : null;
+}

@@ -768,6 +768,14 @@ export const TABLE_LIFECYCLE = {
     },
   },
   telegramAnnouncements: { year: "none" },
+  // A live way into a member's private chat with Ol' Jeb, like an invite.
+  telegramLinkCodes: {
+    year: "none",
+    erasure: {
+      userId: del,
+    },
+  },
+  telegramUpdates: { year: "none" },
   mcpOauthClients: { year: "none" },
   mcpAuthCodes: {
     year: "none",

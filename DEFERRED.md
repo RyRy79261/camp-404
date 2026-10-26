@@ -56,6 +56,7 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > the real-database run (`tests/e2e-db/captain-review.spec.ts`) approves,
   > rejects and reads a member's ID number. Account deletion is still a no-op
   > under `E2E_TEST_MODE` (`lib/account.ts`) with no E2E cover.
+
 - **Result-object actions still throw raw on DB errors** — only `createInviteAction`
   try/catches its DB write. The announcements, camp-management, and profile actions
   advertise a `{ok:false}` contract but convert only validation/authz failures; a
@@ -100,6 +101,13 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > removed (B4c, #176).
 
 - **Telegram outbound triggers — intentionally NOT activated (maintainer decision).** `issueGroupInviteForUser` (on captain approval) and `queueAnnouncement` (on announcement publish) are built + unit-tested in `@camp404/telegram`, and the inbound webhook + `dispatchPendingAnnouncements` exist (the dispatch cron route was removed 2026-09-24: no cron jobs; call it from `deliverDue` in `apps/web/lib/background-work.ts` when Telegram is turned on), but the triggers are deliberately **left uncalled** — Telegram outbound must not run yet. Keep all the code; wire the triggers (guarded for no bot config, with an announcement→Telegram toggle, surfacing the invite link via `notification_deliveries`) only when Telegram is explicitly turned on. **[audit #10]**
+
+  > **[CORRECTION 2026-10-26]** Private notices are on (owner, 2026-10-25): a
+  > member connects Ol' Jeb from their Profile and `deliverDue` drains their
+  > notices (`drainQueuedTelegram`). The group triggers above (invites,
+  > announcements, reminder tags, `/notifyhere`) are still uncalled: step 2 of
+  > `docs/plans/2026-10-25-telegram-ol-jeb.md`.
+
 - **Invite-code case handling** — generated/DB codes are canonically lowercase (validity pattern `/^[a-z0-9]+.../`), but the redeem path matches **verbatim** while `/api/tools/invite/check` lowercases — so a DB code typed in the wrong case can pass the availability check yet fail on redeem. Fixing this needs a _coordinated_ change (normalise at redeem + env + seed + storage **and** update the e2e fixtures + the CI `INVITE_CODES`, which currently use uppercase verbatim). An earlier attempt that only lowercased the redeem path broke the e2e and was reverted; do it as a deliberate, test-data-aware change. **[audit #11]**
 
   > **[CORRECTION 2026-09-29]** Done. `normalizeInviteCode` (`@camp404/core`)
@@ -107,10 +115,12 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > availability check and the invite tool. The fixtures keep a lowercase
   > `INVITE_CODES`, and the specs type it in capitals to prove case is
   > ignored.
+
 - **MCP OAuth DB-flow tests** — the pure crypto is now tested; the DB-backed flows (authorization-code consume, refresh-token rotation, rotation-race, Postgres round-trip) need an integration/DB test harness the repo doesn't have yet. **[audit #9]**
 
   > **[CORRECTION 2026-09-29]** Done: `packages/db/src/__tests__/mcp-oauth.test.ts`
   > runs these flows, the races included, on the PGlite harness.
+
 - ~~**Gate fallback removal**~~ — done in #179: the E2E test store mirrors required actions, and the `completedAt` check is gone.
 - **`opt_in` activation scope** — pull-model audience (members self-select); currently error-gated in `openActivation`. **[E]**
 - **Captain activation compose UI** and **captain-initiated account erasure**. **[E, F]**
@@ -119,13 +129,16 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > lead, for a team they lead) send a questionnaire from its Send page
   > (`/captains/questionnaires/[key]/send`). Captain-initiated erasure is
   > still not built.
+
 - **Native push** — `@capacitor-firebase/messaging` client POSTing to the existing `/api/push/tokens` (no server change). Needs the deployed API base URL and an APNs key. **[D]**
 
   > **[CORRECTION 2026-10-07]** There is no native app to put it in: the Capacitor shell was removed (#367). Native push waits for the phone app redo planned in #354; phones get web push today.
+
 - **Scope-aware test-store publish** — if scoped-broadcast E2E is added, extend `test-store.publishBroadcast` to resolve the audience by scope (today it only models `scope='everyone'` announcements). **[C]**
 
   > **[CORRECTION 2026-09-29]** Done: `announcementRecipients` in
   > `lib/test-store.ts` resolves `everyone`, `team_leads` and `team`.
+
 - **Remaining low-severity hygiene** — any other items from audit #13.
 
 ## Operator actions (config, not code)

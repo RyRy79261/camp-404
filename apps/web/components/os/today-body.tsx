@@ -666,6 +666,16 @@ export function TodayBody({
         {/* Web push opt-in; renders nothing unless push is supported and
             the member has not decided yet. */}
         <EnablePush />
+
+        {/* Ol' Jeb, the camp's Telegram bot: set up, and not connected. */}
+        {shown.telegramNudge && (
+          <DesktopLink
+            href="/profile"
+            className="inline-flex w-full items-center justify-center gap-2 border border-os-line px-3 py-2 text-sm text-os-fg hover:bg-os-fg/5 max-md:min-h-11"
+          >
+            Get notices on Telegram
+          </DesktopLink>
+        )}
       </div>
     </div>
   );

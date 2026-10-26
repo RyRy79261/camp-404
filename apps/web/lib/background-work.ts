@@ -15,6 +15,11 @@ import {
 } from "@camp404/db/questionnaire-lifecycle";
 import { consumeRateLimit } from "@camp404/db/rate-limit";
 import { remindTaskDeadlines } from "@camp404/db/tasks";
+import {
+  drainQueuedTelegram,
+  pruneTelegramUpdates,
+} from "@camp404/db/telegram-dm";
+import { telegramNoticeSender } from "@camp404/telegram";
 import { sweepOrphanAvatarBlobs } from "./avatar-blob";
 import { isEmailConfigured, sendEmail } from "./email";
 import { sendPush } from "./firebase-admin";
@@ -24,6 +29,7 @@ import {
 } from "./integration-config";
 import { catchUpCampCalendar } from "./logistics";
 import { SITE_URL } from "./site";
+import { getTelegramClient, isTelegramConfigured } from "./telegram";
 import { isE2ETestMode } from "./test-mode";
 
 // Work that used to run on a schedule, now run by people using the app. The
@@ -111,11 +117,11 @@ async function step(
 }
 
 /**
- * Deliver what is due now: send queued push and email. Every write that
- * publishes a notice fans it out in its own transaction, so there is nothing
- * left to fan out here. Push and email are skipped while their service is not
- * set up, and on any deployment but production, so their rows stay queued
- * until it is.
+ * Deliver what is due now: send queued push, email and Telegram. Every write
+ * that publishes a notice fans it out in its own transaction, so there is
+ * nothing left to fan out here. Each is skipped while its service is not set
+ * up, and on any deployment but production, so their rows stay queued until it
+ * is.
  */
 export async function deliverDue(): Promise<void> {
   // Only production sends (mayContactMembers): elsewhere the in-app notices
@@ -127,6 +133,14 @@ export async function deliverDue(): Promise<void> {
   if (isEmailConfigured()) {
     await step("email", () =>
       drainQueuedEmail(sendEmail, { siteUrl: SITE_URL }),
+    );
+  }
+  // Ol' Jeb: each notice that goes by push, to members who connected Telegram.
+  if (isTelegramConfigured()) {
+    await step("telegram", () =>
+      drainQueuedTelegram(telegramNoticeSender(getTelegramClient()), {
+        siteUrl: SITE_URL,
+      }),
     );
   }
 }
@@ -150,6 +164,8 @@ export async function runMaintenance(): Promise<void> {
   // Claude connector clients registered over a day ago and never authorized.
   // Registration is open to anyone, so this is what keeps it bounded.
   await step("unused connector clients", () => sweepUnusedClients());
+  // Telegram retries an update for about a day; forget them after a week.
+  await step("telegram updates", () => pruneTelegramUpdates());
   if (process.env.VERCEL_ENV === "production") {
     await step("orphan photos", async () => {
       const result = await sweepOrphanAvatarBlobs(await listLiveAuthUserIds());
