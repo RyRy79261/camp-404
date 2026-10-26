@@ -193,6 +193,15 @@ In rough order of when each blocks the next:
    at the deployed `/api/telegram/webhook`, and seed the
    `telegram_chats` rows for each. [CORRECTION 2026-10-05] The admin CLI
    is deleted; this needs a captain action or a custom migration instead.
+   [CORRECTION 2026-10-26] The bot exists (`@jebediah_404_bot`, "Ol' Jeb").
+   Do NOT call `setWebhook` by hand: `allowed_updates: ["chat_member"]`
+   would stop the `message` and `my_chat_member` updates that `/start`,
+   `/stop` and block detection need. Each production deploy registers the
+   webhook (`apps/web/scripts/register-telegram.mjs`, from `vercel-build`)
+   with `message`, `my_chat_member` and `chat_member`. The owner only sets
+   `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and
+   `TELEGRAM_BOT_USERNAME` in Vercel. Seeding `telegram_chats` is still
+   open (step 2, `/notifyhere`).
 
 2. **Approval trigger.** `issueGroupInviteForUser(userId)` is a helper
    that nobody calls yet. There is no single `users.approved` flag —
