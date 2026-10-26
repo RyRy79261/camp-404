@@ -1243,7 +1243,10 @@ LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
   [CORRECTION 2026-10-26] Private notices are on: `deliverDue` drains queued
   Telegram notices (`drainQueuedTelegram`, 25 a run, oldest first, `FOR
 UPDATE SKIP LOCKED`) when `TELEGRAM_BOT_TOKEN` is set, behind
-  `mayContactMembers` like push and email. A 429 ends the run, a 403 (the
+  `mayContactMembers` like push and email. Telegram has no idempotency key,
+  so the run commits each row as `sending` before it sends and writes the
+  answer after: a run cut short never sends a notice twice (one left
+  `sending` 20 hours is marked failed). A 429 ends the run, a 403 (the
   member blocked Ol' Jeb) disconnects them, and a notice queued over 20 hours
   is marked failed unsent. The daily upkeep forgets webhook update ids older
   than a week. Group posts (`dispatchPendingAnnouncements`, invites, tags)

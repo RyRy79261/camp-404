@@ -1,5 +1,5 @@
 {
-  "id": "4f306a6e-ed55-422c-a8b6-acb4fc0cf97c",
+  "id": "dfd34471-0d4f-47c9-9a76-758c0d59dfa8",
   "prevId": "f4f3b032-7651-438d-8d43-dcb624f93123",
   "version": "7",
   "dialect": "postgresql",
@@ -16285,6 +16285,7 @@
       "schema": "public",
       "values": [
         "queued",
+        "sending",
         "sent",
         "failed",
         "skipped"

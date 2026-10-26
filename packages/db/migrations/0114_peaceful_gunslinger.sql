@@ -1,4 +1,4 @@
-CREATE TYPE "public"."telegram_delivery_status" AS ENUM('queued', 'sent', 'failed', 'skipped');--> statement-breakpoint
+CREATE TYPE "public"."telegram_delivery_status" AS ENUM('queued', 'sending', 'sent', 'failed', 'skipped');--> statement-breakpoint
 CREATE TYPE "public"."telegram_notices" AS ENUM('mine', 'all');--> statement-breakpoint
 CREATE TABLE "telegram_link_codes" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

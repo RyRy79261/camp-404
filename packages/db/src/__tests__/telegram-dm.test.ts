@@ -326,6 +326,48 @@ describe("drainQueuedTelegram", () => {
     expect(await statusOf(db, campNews)).toBe("sent");
   });
 
+  it("marks a notice sending before it sends, so a cut-off run never resends it", async () => {
+    const db = h.db();
+    const member = await makeUser(db, {
+      telegramUserId: "211",
+      telegramDmAt: past,
+    });
+    const id = await queue(db, member.id);
+    const during: string[] = [];
+    const send = vi.fn<TelegramSend>(async () => {
+      // The claim is committed: another run reads it as taken.
+      during.push(await statusOf(db, id));
+      return { ok: true } as const;
+    });
+    await drainQueuedTelegram(send, { siteUrl: SITE });
+    expect(during).toEqual(["sending"]);
+    expect(await statusOf(db, id)).toBe("sent");
+  });
+
+  it("never sends a notice left sending, and fails it once it is old", async () => {
+    const db = h.db();
+    const member = await makeUser(db, {
+      telegramUserId: "212",
+      telegramDmAt: new Date(Date.now() - 48 * 3600_000),
+    });
+    const recent = await queue(db, member.id);
+    const old = await queue(
+      db,
+      member.id,
+      payload,
+      new Date(Date.now() - (TELEGRAM_MAX_QUEUED_HOURS + 1) * 3600_000),
+    );
+    await db
+      .update(schema.notificationDeliveries)
+      .set({ telegramStatus: "sending" })
+      .where(sql`${schema.notificationDeliveries.id} in (${recent}, ${old})`);
+    const send = vi.fn<TelegramSend>(async () => ({ ok: true }) as const);
+    await drainQueuedTelegram(send, { siteUrl: SITE });
+    expect(send).not.toHaveBeenCalled();
+    expect(await statusOf(db, recent)).toBe("sending");
+    expect(await statusOf(db, old)).toBe("failed");
+  });
+
   it("marks a notice queued too long as failed, unsent", async () => {
     const db = h.db();
     const member = await makeUser(db, {

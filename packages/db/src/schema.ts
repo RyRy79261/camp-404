@@ -416,8 +416,12 @@ export const telegramInviteStatusEnum = pgEnum("telegram_invite_status", [
 // push channels), else `skipped`; the drain then skips anyone not connected.
 // Rows from before Telegram existed are `skipped`, so connecting never sends
 // old notices.
+// `sending` is claimed by a drain run and not yet answered: never sent again
+// (Telegram has no idempotency key), failed once it is TELEGRAM_MAX_QUEUED_HOURS
+// old.
 export const telegramDeliveryStatusEnum = pgEnum("telegram_delivery_status", [
   "queued",
+  "sending",
   "sent",
   "failed",
   "skipped",
