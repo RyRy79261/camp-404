@@ -853,6 +853,27 @@ Decisions baked into the schema — keep new code consistent with them:
   ends the run, 20 hours to live). The welcome wizard offers "Get your
   notices on Telegram" as an optional step to an approved member who has not
   connected (never a `required_actions` row).
+  [2026-10-27, owner's mock-up `docs/plans/2026-10-27-telegram-questionnaire-post-mockup.png`]
+  **"Post in Telegram"** on a sent questionnaire's row (its author or a
+  captain, the people who may Remind it; only with Ol' Jeb set up and a
+  place): a dialog of who the send still waits on (`questionnairePostDialog`:
+  name, what they said this year in their own words, `@handle`, connected or
+  not), chips that tick a group (Hasn't answered / Said Coming, by
+  `isComingThisYear` / Said Maybe / Nobody, `tagGroupTicks` in core: a
+  connected member starts unticked, one with no username cannot be ticked),
+  the places, and "Also send a private message to members who connected
+  Telegram". `postQuestionnaireInTelegram` (`@camp404/db/questionnaire-lifecycle`)
+  checks everything again under lock: the poster (`lockActor` +
+  `canEditBuilderDefinition`), an open send that is not opt-in, only places
+  Ol' Jeb posts in, and only tags of members the send still waits on. It
+  queues one `questionnaire` post per place (deduped a minute, so a double
+  press posts once; no daily limit, and the reminder tick does not switch it
+  off), storing the picks as user ids (`tag_user_ids`), never handles, and
+  writes the private reminders as a reminder notice to the connected members
+  it waits on, audited (`telegram.questionnaire_posted`). The drain reads
+  each handle when it sends, drops whoever answered or left, posts "Nobody"
+  with no tag line, skips a send closed since, and sends every tag (the ones
+  past 4096 characters in messages after it).
 - **Component mapping.** String keys (`required_actions.action_key`,
   `questionnaire_activations.questionnaire_key`, `broadcasts.ref_type`)
   map to bespoke components via a code-side registry — the DB stores the

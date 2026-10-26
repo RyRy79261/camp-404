@@ -50,6 +50,13 @@ import {
 } from "@/lib/questionnaire-definitions";
 import { usesTestStore } from "@/lib/test-mode";
 import { deliverAfterResponse } from "@/lib/background-work";
+import { telegramBotUsername } from "@/lib/telegram";
+import { listTelegramPlaces } from "@/lib/telegram-places";
+import {
+  postQuestionnaireInTelegram,
+  questionnairePostDialog,
+  type QuestionnairePostDialog,
+} from "@/lib/telegram-questionnaire-post";
 
 // Questionnaire-builder mutations. Team leads create and edit their OWN
 // questionnaires, and send them; a captain may change any (owner, 2026-10-23:
@@ -822,5 +829,103 @@ export async function setAnonymousResultsAction(
     }
     revalidateBuilder(key);
     return { ok: true };
+  });
+}
+
+// --- Post in Telegram (owner's mock-up, 2026-10-27) ------------------------
+// A sent questionnaire's author or a captain (the people who may remind it)
+// posts it in the camp's Telegram chats, tagging who they pick. The dialog
+// reads who the send still waits on; the write checks every pick again under
+// lock (@camp404/db/questionnaire-lifecycle postQuestionnaireInTelegram).
+
+export interface TelegramPostDialog extends QuestionnairePostDialog {
+  places: { id: string; title: string; topic: boolean }[];
+}
+
+export type TelegramPostDialogResult =
+  | { ok: true; dialog: TelegramPostDialog }
+  | { ok: false; error: string };
+
+const TELEGRAM_OFF = "Ol' Jeb is not set up for the camp yet.";
+
+/** What the "Post in Telegram" dialog shows: who it waits on, and where. */
+export async function telegramPostDialogAction(
+  activationId: string,
+): Promise<TelegramPostDialogResult> {
+  return runAction("telegramPostDialogAction", async () => {
+    if (!z.string().uuid().safeParse(activationId).success) {
+      return { ok: false, error: "Invalid activation." };
+    }
+    const gate = await gateSendOwner(activationId);
+    if (!gate.ok) return gate;
+    if (telegramBotUsername() === null)
+      return { ok: false, error: TELEGRAM_OFF };
+    const [read, places] = await Promise.all([
+      questionnairePostDialog(activationId),
+      listTelegramPlaces(),
+    ]);
+    if (!read) {
+      return {
+        ok: false,
+        error: "This send is closed, so there is nothing to post.",
+      };
+    }
+    return {
+      ok: true,
+      dialog: {
+        ...read,
+        places: places.map((p) => ({
+          id: p.id,
+          title: p.title,
+          topic: p.threadId !== null,
+        })),
+      },
+    };
+  });
+}
+
+const PostInTelegram = z.object({
+  activationId: z.string().uuid(),
+  tagUserIds: z.array(z.string().uuid()).max(500),
+  placeIds: z.array(z.string().uuid()).max(50),
+  messageConnected: z.boolean(),
+});
+
+export type PostInTelegramActionResult =
+  | { ok: true; message: string }
+  | { ok: false; error: string };
+
+/** Post the send in the chats picked, tagging the members picked. */
+export async function postInTelegramAction(
+  input: z.input<typeof PostInTelegram>,
+): Promise<PostInTelegramActionResult> {
+  return runAction("postInTelegramAction", async () => {
+    const parsed = PostInTelegram.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Invalid request." };
+    const gate = await gateSendOwner(parsed.data.activationId);
+    if (!gate.ok) return gate;
+    if (telegramBotUsername() === null)
+      return { ok: false, error: TELEGRAM_OFF };
+    const result = await postQuestionnaireInTelegram({
+      actorId: gate.campUser.id,
+      ...parsed.data,
+    });
+    if (!result.ok) return result;
+    deliverAfterResponse();
+    const people = (n: number) => (n === 1 ? "1 person" : `${n} people`);
+    const tagged =
+      result.tagged === 0
+        ? "tagging nobody"
+        : `tagging ${people(result.tagged)}`;
+    const messaged =
+      result.messaged === 0
+        ? ""
+        : result.messaged === 1
+          ? " 1 person also gets a private message."
+          : ` ${result.messaged} people also get a private message.`;
+    return {
+      ok: true,
+      message: `Ol' Jeb is posting it, ${tagged}.${messaged}`,
+    };
   });
 }

@@ -173,6 +173,7 @@ export const AUDIT_ACTION_LABELS = {
   "telegram.chat_added": "Had Ol' Jeb post in a Telegram chat",
   "telegram.chat_removed": "Stopped Ol' Jeb posting in a Telegram chat",
   "telegram.posts_set": "Changed what Ol' Jeb posts in the camp's chats",
+  "telegram.questionnaire_posted": "Posted a questionnaire in Telegram",
   "ticket.pass_changed": "Changed a member's ticket, DDT or WAP",
 } as const;
 
@@ -438,6 +439,15 @@ export function auditDetail(
     case "telegram.chat_added":
     case "telegram.chat_removed":
       return stored(action, metadata).text("title");
+    case "telegram.questionnaire_posted": {
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const tagged = m.count("tagged");
+      if (!title) return null;
+      return tagged === null
+        ? `"${title}"`
+        : `"${title}", tagged ${tagged === 1 ? "1 person" : `${tagged} people`}`;
+    }
     case "pet.marked_in":
     case "pet.hint_changed":
     case "pet.line_changed":

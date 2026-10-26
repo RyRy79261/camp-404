@@ -447,6 +447,9 @@ export const telegramPostKindEnum = pgEnum("telegram_post_kind", [
   "announcement",
   "reminder",
   "meeting",
+  // A questionnaire a captain or its author posts by hand ("Post in
+  // Telegram"), tagging the members they picked (`tag_user_ids`).
+  "questionnaire",
 ]);
 
 // --- Sign-in identity (Better Auth) --------------------------------------
@@ -4883,6 +4886,10 @@ export const telegramAnnouncements = pgTable(
     title: text("title").notNull().default(""),
     // The questionnaire send (reminder) or camp event (meeting) it is about.
     refId: uuid("ref_id"),
+    // A hand-posted questionnaire: the members its poster picked to tag, as
+    // ids, never handles. The drain reads each handle when it sends and drops
+    // anyone who answered, left or was erased meanwhile.
+    tagUserIds: uuid("tag_user_ids").array(),
     // The button under the post: its words and the app path it opens.
     buttonText: text("button_text"),
     buttonPath: text("button_path"),

@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import {
+  canEditBuilderDefinition,
   canSendQuestionnaireTo,
   classifyChange,
   type DefinitionIssue,
@@ -29,7 +30,12 @@ import {
 } from "./activations";
 import { carryOverFor, currentCycleNumber } from "./cycles";
 import { writeAuditEvent } from "./audit";
-import { campDayKey, queueTelegramPosts } from "./telegram-posts";
+import {
+  campDayKey,
+  listTelegramPlaces,
+  questionnairePostCandidates,
+  queueTelegramPosts,
+} from "./telegram-posts";
 
 // Builder-questionnaire lifecycle: publish (snapshot + cosmetic-vs-version-bump),
 // unpublish (status + cascade close), send (open an activation with the one-open
@@ -1163,5 +1169,151 @@ export async function remindRequiredActionsDueSoon(
       );
     }
     return { actions: due.length, reminded: targets.length };
+  });
+}
+
+// --- Post in Telegram (owner's mock-up, 2026-10-27) -------------------------
+// A questionnaire's author or a captain posts an open send in the camp's
+// chats by hand, any time, tagging the members they pick, and may send the
+// members who connected Ol' Jeb a private reminder too. Everything the dialog
+// chose is checked again here, under lock: the poster, the send, every tag
+// (only members it still waits on), every chat (only places Ol' Jeb posts in).
+
+export const POST_IN_TELEGRAM_REFUSED =
+  "Only its author or a captain can post this questionnaire in Telegram.";
+export const POST_IN_TELEGRAM_CLOSED =
+  "This send is closed, so there is nothing to post.";
+export const POST_IN_TELEGRAM_NO_PLACE =
+  "Pick at least one chat for Ol' Jeb to post in.";
+export const POST_IN_TELEGRAM_TOO_SOON =
+  "Ol' Jeb is already posting this. Wait a minute before you post it again.";
+
+export type PostInTelegramResult =
+  | { ok: true; places: number; tagged: number; messaged: number }
+  | { ok: false; error: string };
+
+export async function postQuestionnaireInTelegram(input: {
+  actorId: string;
+  activationId: string;
+  /** The members to tag; anyone the send no longer waits on is dropped. */
+  tagUserIds: readonly string[];
+  /** The places (`telegram_chats.id`) to post in. */
+  placeIds: readonly string[];
+  /** Also a private reminder to the members it waits on who connected Ol' Jeb. */
+  messageConnected: boolean;
+  now?: Date;
+}): Promise<PostInTelegramResult> {
+  const now = input.now ?? new Date();
+  return withTransaction(async (tx): Promise<PostInTelegramResult> => {
+    const [act] = await tx
+      .select({
+        id: schema.questionnaireActivations.id,
+        key: schema.questionnaireActivations.questionnaireKey,
+        title: schema.questionnaireActivations.title,
+        status: schema.questionnaireActivations.status,
+        scope: schema.questionnaireActivations.scope,
+        dueAt: schema.questionnaireActivations.dueAt,
+      })
+      .from(schema.questionnaireActivations)
+      .where(eq(schema.questionnaireActivations.id, input.activationId))
+      .for("update");
+    if (!act) return { ok: false, error: "That send no longer exists." };
+
+    const actor = await lockActor(tx, input.actorId);
+    const [def] = await tx
+      .select({ createdBy: schema.questionnaireDefinitions.createdBy })
+      .from(schema.questionnaireDefinitions)
+      .where(eq(schema.questionnaireDefinitions.key, act.key))
+      .limit(1);
+    if (
+      !actor ||
+      !def ||
+      !canEditBuilderDefinition(
+        { rank: actor.rank, userId: input.actorId },
+        def,
+      )
+    ) {
+      return { ok: false, error: POST_IN_TELEGRAM_REFUSED };
+    }
+    if (act.status !== "open" || act.scope === "opt_in") {
+      return { ok: false, error: POST_IN_TELEGRAM_CLOSED };
+    }
+
+    const wanted = new Set(input.placeIds);
+    const places = (await listTelegramPlaces(tx)).filter((p) =>
+      wanted.has(p.id),
+    );
+    if (places.length === 0) {
+      return { ok: false, error: POST_IN_TELEGRAM_NO_PLACE };
+    }
+
+    const candidates = await questionnairePostCandidates(act.id, tx);
+    const picked = new Set(input.tagUserIds);
+    const tagUserIds = candidates
+      .filter((c) => picked.has(c.userId) && c.mention)
+      .map((c) => c.userId);
+
+    const payload = questionnaireReminderNotification({
+      activationId: act.id,
+      title: act.title,
+      dueAt: act.dueAt,
+    });
+    // One post per place a minute: a double press queues nothing twice.
+    const minute = Math.floor(now.getTime() / 60_000);
+    const rows = await tx
+      .insert(schema.telegramAnnouncements)
+      .values(
+        places.map((place) => ({
+          chatId: place.chatId,
+          threadId: place.threadId,
+          kind: "questionnaire" as const,
+          title: payload.title,
+          body: payload.body,
+          refId: act.id,
+          tagUserIds,
+          buttonText: TELEGRAM_ANSWER_BUTTON,
+          buttonPath: notificationLink(payload.refType, payload.refId),
+          dedupeKey: `questionnaire:${act.id}:${minute}:${place.chatId}`,
+        })),
+      )
+      .onConflictDoNothing()
+      .returning({ id: schema.telegramAnnouncements.id });
+    if (rows.length === 0)
+      return { ok: false, error: POST_IN_TELEGRAM_TOO_SOON };
+
+    // The private reminder goes the way every reminder does (in the app, by
+    // push and by Ol' Jeb), to the connected members it still waits on.
+    const messaged = input.messageConnected
+      ? candidates.filter((c) => c.connected).map((c) => c.userId)
+      : [];
+    if (messaged.length > 0) {
+      await insertQuestionnaireNotice(tx, {
+        senderId: input.actorId,
+        kind: "reminder",
+        presentation: "popup",
+        payload,
+        targets: messaged,
+        now,
+      });
+    }
+
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "telegram.questionnaire_posted",
+      target: `questionnaire_activation:${act.id}`,
+      metadata: {
+        activationId: act.id,
+        title: act.title,
+        places: rows.length,
+        tagged: tagUserIds.length,
+        messaged: messaged.length,
+      },
+    });
+    return {
+      ok: true,
+      places: rows.length,
+      tagged: tagUserIds.length,
+      messaged: messaged.length,
+    };
   });
 }

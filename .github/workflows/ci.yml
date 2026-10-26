@@ -472,6 +472,7 @@ jobs:
           E2E_TEST_MODE: "1"
           INVITE_CODES: test-invite-e2e-only-code
           GOD_EMAILS: god@example.com
+          TELEGRAM_BOT_USERNAME: jebediah_404_bot
         run: pnpm --filter @camp404/web build
       - name: Run real-database e2e tests
         env:

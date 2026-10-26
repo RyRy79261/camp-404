@@ -10,6 +10,10 @@ import {
   renderTelegramPost,
   telegramMention,
   renderTelegramNotice,
+  tagCandidateStanding,
+  tagGroupCount,
+  tagGroupTicks,
+  type TagCandidate,
   shouldTelegramNotification,
   TELEGRAM_MESSAGE_MAX,
 } from "../notification-telegram";
@@ -209,5 +213,98 @@ describe("meetingPostBody", () => {
         teamLabel: null,
       }),
     ).toBe("Mon 2 Nov to Wed 4 Nov · Whole camp");
+  });
+});
+
+describe("Post in Telegram: who a chip ticks", () => {
+  const c = (userId: string, over: Partial<TagCandidate> = {}) => ({
+    userId,
+    name: userId,
+    intent: null,
+    status: null,
+    mention: `@${userId}_404`,
+    connected: false,
+    ...over,
+  });
+  const list = [
+    c("noanswer"),
+    c("coming", { intent: "yes", status: "applied" }),
+    c("accepted", { intent: "maybe", status: "accepted" }),
+    c("maybe", { intent: "maybe", status: "maybe" }),
+    c("nohandle", { intent: "yes", status: "applied", mention: null }),
+    c("dm", { intent: "yes", status: "applied", connected: true }),
+  ] as const;
+
+  it("counts everyone in a chip's group", () => {
+    expect(tagGroupCount(list, "pending")).toBe(6);
+    expect(tagGroupCount(list, "coming")).toBe(4);
+    expect(tagGroupCount(list, "maybe")).toBe(2);
+    expect(tagGroupCount(list, "nobody")).toBe(0);
+  });
+
+  it("ticks only who can be tagged and has not connected", () => {
+    expect([...tagGroupTicks(list, "pending")].sort()).toEqual([
+      "accepted",
+      "coming",
+      "maybe",
+      "noanswer",
+    ]);
+    expect([...tagGroupTicks(list, "coming")].sort()).toEqual([
+      "accepted",
+      "coming",
+    ]);
+    expect([...tagGroupTicks(list, "maybe")].sort()).toEqual([
+      "accepted",
+      "maybe",
+    ]);
+    expect(tagGroupTicks(list, "nobody").size).toBe(0);
+  });
+
+  it("says what each member said, never the captains' decision", () => {
+    expect(tagCandidateStanding(list[0])).toBe("No answer yet");
+    expect(tagCandidateStanding(list[2])).toBe("Maybe");
+    expect(tagCandidateStanding(list[1])).toBe("Coming");
+  });
+});
+
+describe("renderTelegramPost: a questionnaire posted by hand", () => {
+  const base = {
+    kind: "questionnaire" as const,
+    title: "Coming this year?",
+    body: "Tell us if you're coming.",
+    buttonText: "Answer in Camp 404",
+    buttonPath: "/questionnaires/x",
+  };
+
+  it("ends with every tag", () => {
+    const post = renderTelegramPost(
+      { ...base, tags: ["@a_404", "@b_404"] },
+      "https://camp-404.com",
+    );
+    expect(post.text).toBe(
+      "Coming this year?\n\nTell us if you're coming.\n\n@a_404 @b_404, this one's for you.",
+    );
+    expect(post.more).toBeUndefined();
+    expect(post.button?.url).toBe("https://camp-404.com/questionnaires/x");
+  });
+
+  it("posts with no tag line when nobody is tagged", () => {
+    expect(renderTelegramPost(base, "https://camp-404.com").text).toBe(
+      "Coming this year?\n\nTell us if you're coming.",
+    );
+  });
+
+  it("sends every tag, in more messages past Telegram's limit", () => {
+    const tags = Array.from(
+      { length: 400 },
+      (_, i) => `@member_${String(i).padStart(4, "0")}`,
+    );
+    const post = renderTelegramPost({ ...base, tags }, "https://camp-404.com");
+    const all = [post.text, ...(post.more ?? [])];
+    for (const text of all) expect(text.length).toBeLessThanOrEqual(4096);
+    expect(post.more?.length).toBeGreaterThan(0);
+    const sent = all.join(" ");
+    for (const tag of tags) expect(sent).toContain(tag);
+    expect(all.at(-1)!.endsWith(", this one's for you.")).toBe(true);
   });
 });

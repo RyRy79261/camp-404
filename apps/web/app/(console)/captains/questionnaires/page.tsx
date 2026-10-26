@@ -8,6 +8,9 @@ import { PageHeading } from "@camp404/ui/components/page-heading";
 import { programPage } from "@/lib/program-page";
 import { UNSET_CYCLE } from "@camp404/db/camp-config";
 import { getCurrentCycle } from "@/lib/camp-config";
+import { getOpenActivationForKey } from "@camp404/db/questionnaire-lifecycle";
+import { telegramBotUsername } from "@/lib/telegram";
+import { listTelegramPlaces } from "@/lib/telegram-places";
 import {
   listDefinitionsForViewer,
   listMyQuestionnaireStanding,
@@ -67,10 +70,32 @@ export default async function QuestionnairesPage() {
     // sentinel year, as every write files them (currentCycleNumber).
     listMyQuestionnaireStanding(campUser.id, year?.year ?? UNSET_CYCLE),
   ]);
+  // "Post in Telegram" needs Ol' Jeb set up and a chat he posts in; only the
+  // people who may remind a send see it (its author or a captain).
+  const telegramReady =
+    canAuthor &&
+    telegramBotUsername() !== null &&
+    (await listTelegramPlaces()).length > 0;
   const answered = new Set(standing.answeredKeys);
   const waiting = new Map(
     standing.waiting.map((w) => [w.questionnaireKey, w.activationId]),
   );
+
+  const postable = new Map<string, string>();
+  if (telegramReady) {
+    await Promise.all(
+      definitions
+        .filter(
+          (d) =>
+            openSends.has(d.key) &&
+            canEditBuilderDefinition({ rank, userId: campUser.id }, d),
+        )
+        .map(async (d) => {
+          const open = await getOpenActivationForKey(d.key);
+          if (open && open.scope !== "opt_in") postable.set(d.key, open.id);
+        }),
+    );
+  }
 
   const items: HubItem[] = definitions.map((d) => {
     const canEdit = canEditBuilderDefinition({ rank, userId: campUser.id }, d);
@@ -103,6 +128,7 @@ export default async function QuestionnairesPage() {
       answerHref: waitingOn ? `/questionnaires/${waitingOn}` : null,
       answered: answered.has(d.key),
       openSendBlocking: openSends.get(d.key) ?? null,
+      telegramActivationId: postable.get(d.key) ?? null,
     };
   });
 
