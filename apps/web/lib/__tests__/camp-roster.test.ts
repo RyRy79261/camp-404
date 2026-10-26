@@ -272,29 +272,36 @@ describe("matchesThisYear", () => {
     expect(shown("any")).toEqual(STATUSES);
   });
 
-  it("keeps exactly one status under each status option", () => {
-    for (const status of STATUSES.filter((s) => s !== null)) {
-      expect(shown(status)).toEqual([status]);
-    }
-  });
-
-  it("keeps only the unanswered under Not answered", () => {
+  it("filters on what the member said, whatever was decided", () => {
+    expect(shown("yes")).toEqual(["applied", "accepted", "waitlisted"]);
+    expect(shown("maybe")).toEqual(["maybe"]);
+    expect(shown("no")).toEqual(["not_attending"]);
     expect(shown("none")).toEqual([null]);
   });
 
-  it("keeps everyone who said Coming under Coming, whatever was decided", () => {
-    expect(shown("coming")).toEqual(["applied", "accepted", "waitlisted"]);
+  it("filters on the captains' decision, whatever was said", () => {
+    expect(shown("accepted")).toEqual(["accepted"]);
+    expect(shown("waitlisted")).toEqual(["waitlisted"]);
   });
 
-  it("reads the member's own answer for Coming, not the decision", () => {
+  it("reads the member's own answer, not the decision", () => {
     const saidMaybe = toRosterRow(
       member({ participation: "accepted", participationIntent: "maybe" }),
     );
-    expect(matchesThisYear(saidMaybe, "coming")).toBe(false);
-    expect(matchesThisYear({ thisYear: "accepted" }, "coming")).toBe(true);
+    expect(matchesThisYear(saidMaybe, "yes")).toBe(false);
+    expect(matchesThisYear(saidMaybe, "maybe")).toBe(true);
+    expect(matchesThisYear(saidMaybe, "accepted")).toBe(true);
+    // A row without the answer (the Camp sheet) reads it from the status.
+    expect(matchesThisYear({ thisYear: "accepted" }, "yes")).toBe(true);
     expect(
-      matchesThisYear({ thisYear: "accepted", thisYearSays: null }, "coming"),
+      matchesThisYear({ thisYear: "accepted", thisYearSays: null }, "yes"),
     ).toBe(false);
+  });
+
+  it("keeps only declined sign-ups under Declined", () => {
+    const declined = toRosterRow(member({ approvalStatus: "rejected" }));
+    expect(matchesThisYear(declined, "declined")).toBe(true);
+    expect(rows.filter((r) => matchesThisYear(r, "declined"))).toEqual([]);
   });
 
   it("treats a row without the key as not answered", () => {

@@ -211,7 +211,7 @@ test.describe("attendance: the captains' roster and overview", () => {
 
     // Only the Maybes.
     const filter = page.getByRole("combobox", { name: "This year" });
-    await filter.selectOption({ label: "Maybe, not decided" });
+    await filter.selectOption({ label: "Maybe" });
     await expect(rosterRow(page, "Ben Maybe")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Open Ada Yes's profile" }),

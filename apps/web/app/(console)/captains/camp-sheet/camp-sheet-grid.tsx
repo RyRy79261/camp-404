@@ -8,11 +8,13 @@ import {
   type ReactNode,
 } from "react";
 import { ChevronDown, Search } from "lucide-react";
-import { INTENT_LABEL, NO_ANSWER_LABEL, STANDING_LABEL } from "@camp404/core";
-import { PARTICIPATION_STATUSES } from "@camp404/types";
 import { Input } from "@camp404/ui/components/input";
 import { cn } from "@camp404/ui/lib/utils";
-import { matchesThisYear, type ThisYearFilter } from "@/lib/camp-roster";
+import {
+  matchesThisYear,
+  thisYearOptions,
+  type ThisYearFilter,
+} from "@/lib/camp-roster";
 import type { CampSheet, CampSheetColumn } from "@/lib/camp-sheet";
 
 // The Camp sheet's grid, drawn like a spreadsheet (the owner's pick, option A):
@@ -274,13 +276,16 @@ export function CampSheetGrid({
           active={thisYear !== "any"}
         >
           <option value="any">This year: everyone</option>
-          <option value="coming">{INTENT_LABEL.yes}</option>
-          {PARTICIPATION_STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {STANDING_LABEL[status]}
-            </option>
+          {/* The sheet lists no declined sign-ups, so it offers no Declined. */}
+          {thisYearOptions(false).map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.options.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
-          <option value="none">{NO_ANSWER_LABEL}</option>
         </NativeSelect>
         <p
           aria-live="polite"

@@ -96,13 +96,16 @@ describe("RosterToolbar — This year", () => {
     expect([...select.options].map((o) => o.text)).toEqual([
       "Any",
       "Coming",
-      "Coming, not decided",
-      "Maybe, not decided",
-      "Accepted",
-      "Waiting list",
+      "Maybe",
       "Not coming",
       "No answer yet",
+      "Accepted",
+      "Waiting list",
+      "Declined",
     ]);
+    expect(
+      [...select.querySelectorAll("optgroup")].map((g) => g.label),
+    ).toEqual(["They said", "Captains' decision"]);
     fireEvent.change(select, { target: { value: "maybe" } });
     expect(onChange).toHaveBeenCalledWith("maybe");
     fireEvent.change(select, { target: { value: "none" } });
