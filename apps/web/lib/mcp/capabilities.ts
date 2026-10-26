@@ -581,6 +581,13 @@ export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
     does: "Suggestions waiting for a decision, recipes ready to send to Claude, and older drafts waiting to be accepted. Deciding and sending stay on the page.",
     page: "/kitchen/recipes/review",
   },
+  rename_recipe: {
+    kind: "write",
+    area: "Kitchen",
+    gate: GATES.kitchenReview,
+    does: "Rename a recipe, a suggestion or one in the book, from the name you read. Nothing is sent to Claude.",
+    page: "/kitchen/recipes/review",
+  },
   retype_recipe_text: {
     kind: "write",
     area: "Kitchen",

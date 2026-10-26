@@ -143,6 +143,7 @@ describe("capabilitiesFor", () => {
       "update_shift_type",
       "keep_document_members_only",
       "retype_recipe_text",
+      "rename_recipe",
     ]) {
       expect(member, name).not.toContain(name);
       expect(captain, name).toContain(name);
@@ -157,6 +158,8 @@ describe("capabilitiesFor", () => {
     );
     expect(kitchen).toContain("retype_recipe_text");
     expect(structures).not.toContain("retype_recipe_text");
+    expect(kitchen).toContain("rename_recipe");
+    expect(structures).not.toContain("rename_recipe");
     expect(kitchen).not.toContain("keep_document_members_only");
     const websiteOnly = capabilitiesFor(scopeOf("captain")).areas.flatMap((a) =>
       a.websiteOnly.map((w) => w.what),

@@ -442,6 +442,7 @@ export interface AuditEvents {
   };
   "recipe.plates_queued": RecipeRun & { version: number; rerun: boolean };
   "recipe.rejected": { title: string; reason: string };
+  "recipe.renamed": { title: string; from: string | null };
   "recipe.rerun_requested": { title: string; note: string | null };
   "recipe.source_saved": { title: string; version: number };
   "recipe.text_retyped": Titled;

@@ -695,6 +695,24 @@ const otherPreviews: Record<string, PreviewFn> = {
       keys: [`recipe:${recipe.id}`],
     };
   },
+  async rename_recipe(args) {
+    const recipe = await getRecipeDetail(str(args.recipeId));
+    if (!recipe) {
+      return blocked(
+        "Rename a recipe",
+        "That recipe isn't there.",
+        args,
+        "/kitchen/recipes/review",
+      );
+    }
+    return {
+      sentence: `Rename ${quote(recipe.title)} to ${quote(str(args.title))}`,
+      facts: "Kitchen · only the name changes · nothing is sent to Claude",
+      path: recipePath(recipe.id),
+      args: { ...args, expectedTitle: recipe.title },
+      keys: [`recipe:${recipe.id}`],
+    };
+  },
   async keep_document_members_only(args) {
     const doc = usesTestStore()
       ? null

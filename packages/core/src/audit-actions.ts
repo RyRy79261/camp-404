@@ -132,6 +132,7 @@ export const AUDIT_ACTION_LABELS = {
   "recipe.questions_answered": "Answered Claude's questions on a recipe",
   "recipe.plates_queued": "Proofread a recipe for a plate count",
   "recipe.rejected": "Rejected a recipe",
+  "recipe.renamed": "Renamed a recipe",
   "recipe.rerun_requested": "Asked a captain to proofread a recipe again",
   "recipe.source_saved": "Changed a recipe's source text",
   "recipe.text_retyped": "Retyped a recipe's text",
@@ -715,6 +716,14 @@ export function auditDetail(
     case "recipe.variation_started":
     case "recipe.questions_answered":
       return stored(action, metadata).text("title");
+    // The old name and the new one.
+    case "recipe.renamed": {
+      const m = stored(action, metadata);
+      const title = m.text("title");
+      const from = m.text("from");
+      if (!title) return null;
+      return from ? `${from} → ${title}` : title;
+    }
     // The source's own version number, which is not the recipe's.
     case "recipe.source_saved": {
       const m = stored(action, metadata);

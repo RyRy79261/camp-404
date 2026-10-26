@@ -284,6 +284,11 @@ describe("no tool returns ID numbers or bank details", () => {
         expectedVersion: 1,
         storageLocation: "Shelf 2",
       },
+      rename_recipe: {
+        recipeId: recipe!.id,
+        title: "Overnight oats",
+        expectedTitle: "Oats",
+      },
       retype_recipe_text: {
         recipeId: recipe!.id,
         expectedSourceVersion: 0,

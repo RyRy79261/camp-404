@@ -61,6 +61,7 @@ const recipes = twin(db, testStore, [
   "resubmitRecipe",
   "decideRecipe",
   "retypeRecipeText",
+  "renameRecipe",
   "requestRerun",
   "queueProofread",
   "sendSourceForProofreading",
@@ -98,6 +99,7 @@ export const suggestRecipe = recipes.suggestRecipe;
 export const resubmitRecipe = recipes.resubmitRecipe;
 export const decideRecipe = recipes.decideRecipe;
 export const retypeRecipeText = recipes.retypeRecipeText;
+export const renameRecipe = recipes.renameRecipe;
 export const requestRerun = recipes.requestRerun;
 export const queueProofread = recipes.queueProofread;
 /**

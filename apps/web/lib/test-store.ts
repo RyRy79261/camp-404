@@ -308,6 +308,7 @@ import {
   STALE_RUN_ERROR,
   TEXT_NEEDED,
   TEXT_TOO_LONG,
+  TITLE_NEEDED,
   UNTITLED_RECIPE,
   VERSION_CHANGED,
   adjustReason,
@@ -5469,6 +5470,30 @@ export const testStore = {
     });
     recordRecipeEvent(recipe, "recipe.text_retyped", input.actorId);
     return { ok: true };
+  },
+
+  renameRecipe(input: {
+    recipeId: string;
+    actorId: string;
+    title: string;
+    expectedTitle: string;
+  }): RecipeWriteResult<{ title: string }> {
+    if (!isKitchenReviewer(input.actorId)) {
+      return { ok: false, error: NOT_A_KITCHEN_REVIEWER };
+    }
+    const title = input.title.trim().slice(0, 120);
+    if (!title) return { ok: false, error: TITLE_NEEDED };
+    const recipe = findRecipe(input.recipeId);
+    if (!recipe) return { ok: false, error: RECIPE_GONE };
+    if ((recipe.title || UNTITLED_RECIPE) !== input.expectedTitle) {
+      return { ok: false, error: RECIPE_CHANGED };
+    }
+    if (recipe.title === title) return { ok: true, title };
+    const from = recipe.title;
+    recipe.title = title;
+    recipe.updatedAt = new Date();
+    recordRecipeEvent(recipe, "recipe.renamed", input.actorId, { from });
+    return { ok: true, title };
   },
 
   requestRerun(input: {

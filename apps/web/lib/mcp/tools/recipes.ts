@@ -24,6 +24,7 @@ import {
   getPlateCount,
   getRecipeDetail,
   getRecipeSource,
+  renameRecipe,
   retypeRecipeText,
 } from "../../recipes";
 import { siteUrl } from "../capabilities";
@@ -60,6 +61,11 @@ import { ToolError, notFound, runTool, truncateList } from "../tool-utils";
 // the recipe's lock. The name is not the reviewer's to change (the submitter
 // renames it when asked for changes), and nothing is sent to Claude: the
 // source editor's "Send for proofreading" is a person's click on the page.
+//
+// rename_recipe is renameRecipe (owner's option A, 2026-10-26): the same
+// people rename a suggestion or a recipe in the book, a compare-and-set on
+// the name they read, audited with the old and the new name. The website's
+// button waits for the owner's approval of its layout.
 
 /** The headings sourceFromText reads, one per source section, in order. */
 const SECTION_HEADINGS = [
@@ -450,6 +456,42 @@ export function registerRecipeTools(server: McpServer): void {
             // The write refused any other base, so this is the new version.
             sourceVersion: args.expectedSourceVersion + 1,
             url: siteUrl(recipePath(parsed.data.recipeId)),
+          };
+        },
+      }),
+  );
+
+  server.registerTool(
+    "rename_recipe",
+    {
+      title: "Rename a recipe",
+      description:
+        "Renames a recipe, a suggestion or one in the book. Give the new `title` and the name you read (`expectedTitle`, get_recipe's `title`); if someone renamed it since, it is refused: read again. Only the name changes: the versions in the book keep their words, and nothing is sent to Claude. Recorded under your name with the old and the new name.",
+      inputSchema: z.object({
+        recipeId: z.string().uuid(),
+        title: z.string().min(1).max(120),
+        expectedTitle: z.string().min(1).max(200),
+      }),
+    },
+    async (args, extra) =>
+      runTool({
+        toolName: "rename_recipe",
+        extra,
+        argsForAudit: { recipeId: args.recipeId },
+        handler: async ({ scope }) => {
+          // The write checks the reviewer again, locks the recipe and writes
+          // the audit row in the same transaction.
+          const result = await renameRecipe({
+            recipeId: args.recipeId,
+            actorId: scope.campUserId,
+            title: args.title,
+            expectedTitle: args.expectedTitle,
+          });
+          if (!result.ok) throw new ToolError(result.error);
+          return {
+            id: args.recipeId,
+            title: result.title,
+            url: siteUrl(recipePath(args.recipeId)),
           };
         },
       }),

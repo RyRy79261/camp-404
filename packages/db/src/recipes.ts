@@ -855,6 +855,43 @@ export async function retypeRecipeText(input: {
 }
 
 /**
+ * A reviewer renames a recipe (owner's option A, 2026-10-26): a suggestion or
+ * one in the book. A compare-and-set on the name the reviewer read
+ * (`expectedTitle`, as every page shows it: UNTITLED_RECIPE for a recipe from
+ * before titles), audited with the
+ * old and the new name. Only the recipe's name changes: the versions in the
+ * book keep the words they were written with, and nothing is sent to Claude.
+ * A later Claude write names the recipe from its version, as it always has.
+ */
+export async function renameRecipe(input: {
+  recipeId: string;
+  actorId: string;
+  title: string;
+  expectedTitle: string;
+}): Promise<RecipeWriteResult<{ title: string }>> {
+  return write(async (tx) => {
+    await assertKitchenReviewer(tx, input.actorId);
+    const title = cleanTitle(input.title);
+    const recipe = await lockRecipe(tx, input.recipeId);
+    if ((recipe.title ?? UNTITLED_RECIPE) !== input.expectedTitle) {
+      refuse(RECIPE_CHANGED);
+    }
+    if (recipe.title === title) return { title };
+    await tx
+      .update(schema.recipes)
+      .set({ title, updatedAt: new Date() })
+      .where(eq(schema.recipes.id, input.recipeId));
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "recipe.renamed",
+      target: input.recipeId,
+      metadata: { title, from: recipe.title },
+    });
+    return { title };
+  });
+}
+
+/**
  * A Kitchen lead (or a captain) asks a captain to run proofreading again,
  * saying what should change. It costs nothing and sends nothing: the note
  * waits on the recipe, in the captain's Ready to proofread list, until a

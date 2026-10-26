@@ -4,14 +4,17 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { SHIFT_TYPE_CHANGED } from "@camp404/core";
-import type { Team } from "@camp404/types";
+import { KitchenRecipe, type Team } from "@camp404/types";
 import type { CampConfig } from "@camp404/db/camp-config";
 import { ITEM_CHANGED, NOT_AN_INVENTORY_EDITOR } from "@camp404/db/inventory";
-import { SOURCE_CHANGED } from "@camp404/db/recipes";
+import { RECIPE_CHANGED, SOURCE_CHANGED } from "@camp404/db/recipes";
 import * as schema from "@camp404/db/schema";
 import { assignTeam, setLead } from "@camp404/db/team-memberships";
 import { useTestDb } from "../../../../../packages/db/src/__tests__/_harness";
-import { makeUser } from "../../../../../packages/db/src/__tests__/_factories";
+import {
+  makeUser,
+  seedAcceptedVersion,
+} from "../../../../../packages/db/src/__tests__/_factories";
 import { SHIFTS_ACTION_REFUSAL } from "../../shifts-copy";
 import { registerCampMcpTools } from "../server";
 
@@ -332,6 +335,123 @@ describe("retype_recipe_text", () => {
       .where(eq(schema.recipes.id, id));
     expect(recipe!.rawText).toBe("Dal, v2.");
     expect(await auditRows("recipe.text_retyped")).toHaveLength(1);
+  });
+});
+
+describe("rename_recipe", () => {
+  async function inTheBook(by: string) {
+    const [row] = await h
+      .db()
+      .insert(schema.recipes)
+      .values({ source: "text", title: "Oats", submitterId: by })
+      .returning({ id: schema.recipes.id });
+    await seedAcceptedVersion(h.db(), {
+      recipeId: row!.id,
+      authorId: by,
+      recipe: KitchenRecipe.parse({
+        title: "Oats",
+        plates: 20,
+        ingredients: [
+          { name: "Oats", category: "grain", quantity: 2, unit: "kg" },
+        ],
+        steps: [{ instruction: "Soak overnight.", uses: ["Oats"] }],
+      }),
+    });
+    return row!.id;
+  }
+  const titleOf = async (id: string) =>
+    (
+      await h
+        .db()
+        .select({ title: schema.recipes.title })
+        .from(schema.recipes)
+        .where(eq(schema.recipes.id, id))
+    )[0]!.title;
+
+  it("renames a suggestion and a recipe in the book, from the name read, audited, nothing sent to Claude", async () => {
+    await campYear();
+    const plain = await member();
+    const lead = await leadOf("kitchen");
+    const boss = await captain();
+    const suggestion = await suggested(plain.id);
+    const book = await inTheBook(plain.id);
+
+    const read = await call("get_recipe", { recipeId: suggestion }, lead.id);
+    const { data, error } = await call(
+      "rename_recipe",
+      {
+        recipeId: suggestion,
+        title: "Red lentil dal",
+        expectedTitle: read.data!.title,
+      },
+      lead.id,
+    );
+    expect(error).toBeUndefined();
+    expect(data).toMatchObject({ id: suggestion, title: "Red lentil dal" });
+    expect(await titleOf(suggestion)).toBe("Red lentil dal");
+
+    const inBook = await call(
+      "rename_recipe",
+      { recipeId: book, title: "Overnight oats", expectedTitle: "Oats" },
+      boss.id,
+    );
+    expect(inBook.error).toBeUndefined();
+    expect(await titleOf(book)).toBe("Overnight oats");
+    // Every member reads the new name in the book.
+    const listed = await call("list_recipes", {}, plain.id);
+    expect(listed.data!.rows).toEqual([
+      expect.objectContaining({ id: book, title: "Overnight oats" }),
+    ]);
+
+    const rows = await auditRows("recipe.renamed");
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.target === suggestion)).toMatchObject({
+      actorId: lead.id,
+      metadata: { title: "Red lentil dal", from: "Dal" },
+    });
+    expect(await h.db().select().from(schema.recipeProofreadRuns)).toEqual([]);
+  });
+
+  it("refuses a member and a lead of another team at the gate, writing nothing", async () => {
+    await campYear();
+    const plain = await member();
+    const structures = await leadOf("structures");
+    const id = await suggested(plain.id);
+    for (const as of [plain.id, structures.id]) {
+      const { error } = await call(
+        "rename_recipe",
+        { recipeId: id, title: "Mine", expectedTitle: "Dal" },
+        as,
+      );
+      expect(error).toMatch(/^Only a captain or a Kitchen lead can do this\./);
+    }
+    expect(await titleOf(id)).toBe("Dal");
+    expect(await auditRows("recipe.renamed")).toEqual([]);
+  });
+
+  it("refuses a rename from a name someone changed since it was read", async () => {
+    await campYear();
+    const plain = await member();
+    const lead = await leadOf("kitchen");
+    const boss = await captain();
+    const id = await suggested(plain.id);
+    expect(
+      (
+        await call(
+          "rename_recipe",
+          { recipeId: id, title: "Dhal", expectedTitle: "Dal" },
+          boss.id,
+        )
+      ).error,
+    ).toBeUndefined();
+    const stale = await call(
+      "rename_recipe",
+      { recipeId: id, title: "Lentils", expectedTitle: "Dal" },
+      lead.id,
+    );
+    expect(stale.error).toBe(RECIPE_CHANGED);
+    expect(await titleOf(id)).toBe("Dhal");
+    expect(await auditRows("recipe.renamed")).toHaveLength(1);
   });
 });
 
