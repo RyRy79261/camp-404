@@ -448,7 +448,7 @@ meeting note and setting up shifts stay on the website.
 version, audited). Removing a shift, marking a day not needed, placing
 people and asking everyone stay on the website. A captain or a Kitchen lead
 may also retype a recipe's text (`retype_recipe_text`: the recipe page's
-Retype, on the source version read); it sends nothing to Claude.
+Retype, on the source version read) and rename a recipe (`rename_recipe`, owner option A, on the name read, audited `recipe.renamed`); neither sends anything to Claude. The website's Rename button waits for the owner to approve its layout.
 
 ## Cross-cutting rules
 
