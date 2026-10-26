@@ -18,6 +18,7 @@ import {
   notificationLink,
   QUESTIONNAIRE_REF_TYPE,
   sortPinned,
+  TELEGRAM_OPEN_BUTTON,
   type NotificationKind,
 } from "@camp404/core";
 import {
@@ -29,6 +30,7 @@ import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import { computeAudience, type BroadcastScope } from "./audience";
 import { currentCycleNumber } from "./cycles";
+import { queueTelegramPosts } from "./telegram-posts";
 
 // Announcements & notifications data layer.
 //
@@ -420,6 +422,11 @@ export interface AnnouncementSummary {
    * marked draft keeps the mark instead of clearing it on the next save.
    */
   pinOnPublish: boolean;
+  /**
+   * The composer's "Also post in Telegram" on a draft (a captain's, to
+   * everyone): publishing queues one post per chat Ol' Jeb posts in.
+   */
+  telegramOnPublish: boolean;
   createdAt: Date;
   /** Recipients fanned out to (0 for drafts). */
   recipientCount: number;
@@ -454,6 +461,7 @@ export async function listAnnouncements(
       publishedAt: schema.broadcasts.publishedAt,
       pinnedAt: schema.broadcasts.pinnedAt,
       pinOnPublish: schema.broadcasts.pinOnPublish,
+      telegramOnPublish: schema.broadcasts.telegramOnPublish,
       createdAt: schema.broadcasts.createdAt,
       recipientCount: sql<number>`(
         select count(*)::int from notification_deliveries nd
@@ -506,6 +514,24 @@ export interface DraftInput {
    * viewer actually received.
    */
   pinned?: boolean;
+  /**
+   * The composer's "Also post in Telegram". Kept only on a draft to everyone:
+   * a team's or a few people's announcement never goes to a camp-wide chat.
+   * Publishing honours it only for a captain.
+   */
+  telegram?: boolean;
+}
+
+/** The "Also post in Telegram" intent, as the draft stores it. */
+function telegramIntentColumns(
+  telegram: boolean | undefined,
+  audience: Audience | undefined,
+) {
+  return {
+    telegramOnPublish:
+      telegram === true &&
+      (audience ?? { scope: "everyone" }).scope === "everyone",
+  };
 }
 
 /**
@@ -539,6 +565,7 @@ export async function createAnnouncementDraft(
         body: input.body,
         presentation: input.presentation,
         ...pinIntentColumns(input.pinned),
+        ...telegramIntentColumns(input.telegram, input.audience),
       })
       .returning({ id: schema.broadcasts.id });
     const targets = audienceTargets(input.audience);
@@ -559,6 +586,7 @@ export async function updateAnnouncementDraft(input: {
   presentation: AnnouncementPresentation;
   audience?: Audience;
   pinned?: boolean;
+  telegram?: boolean;
 }): Promise<boolean> {
   return withTransaction(async (tx) => {
     const rows = await tx
@@ -569,6 +597,7 @@ export async function updateAnnouncementDraft(input: {
         presentation: input.presentation,
         ...audienceColumns(input.audience ?? { scope: "everyone" }),
         ...pinIntentColumns(input.pinned),
+        ...telegramIntentColumns(input.telegram, input.audience),
       })
       .where(isOwnedAnnouncementDraft(input.id, input.senderId))
       .returning({ id: schema.broadcasts.id });
@@ -636,10 +665,37 @@ export async function publishAnnouncement(input: {
         scope: schema.broadcasts.scope,
         team: schema.broadcasts.team,
         pinOnPublish: schema.broadcasts.pinOnPublish,
+        telegramOnPublish: schema.broadcasts.telegramOnPublish,
       });
 
     const broadcast = claimed[0];
     if (!broadcast) return null;
+
+    // "Also post in Telegram": a captain's announcement to everyone only
+    // (reach is undefined for a captain, read and locked above), one post
+    // per chat Ol' Jeb posts in, when Camp settings' announcements tick is on.
+    if (
+      broadcast.telegramOnPublish &&
+      reach === undefined &&
+      broadcast.scope === "everyone"
+    ) {
+      await queueTelegramPosts(tx, {
+        kind: "announcement",
+        title: broadcast.title,
+        body: broadcast.body,
+        refId: broadcast.id,
+        buttonText: TELEGRAM_OPEN_BUTTON,
+        buttonPath: notificationLink(
+          announcementNotification({
+            broadcastId: broadcast.id,
+            title: broadcast.title,
+            body: broadcast.body,
+          }).refType,
+          broadcast.id,
+        ),
+        dedupe: `announcement:${broadcast.id}`,
+      });
+    }
 
     // The composer asked for this one to stay at the top. Turn that intent
     // into the real pin here, in the claim's own transaction and through the

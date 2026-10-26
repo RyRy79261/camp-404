@@ -82,6 +82,7 @@ import {
   taskEditProblem,
   taskMoveProblem,
   taskRemoveProblem,
+  CAPTAIN_ONLY,
 } from "@camp404/core";
 import {
   DRAFT_MISSING,
@@ -171,6 +172,15 @@ import {
   TELEGRAM_LINK_MINUTES,
   type TelegramConnection,
 } from "@camp404/db/telegram-dm";
+import {
+  DEFAULT_TELEGRAM_POST_SETTINGS,
+  TELEGRAM_CAPTAINS_ONLY,
+  TELEGRAM_PLACE_GONE,
+  type AddPlaceResult,
+  type TelegramPlace,
+  type TelegramPostSettings,
+  type TelegramWriteResult,
+} from "@camp404/db/telegram-posts";
 import type { TelegramNotices } from "@camp404/core";
 import type { AuditEvent } from "@camp404/db/audit";
 import { JoinSectionInvalidError } from "@camp404/db/join-site";
@@ -531,6 +541,8 @@ interface TestBroadcast {
   pinnedBy: string | null;
   /** The composer's "keep it at the top", spent when the draft publishes. */
   pinOnPublish: boolean;
+  /** The composer's "Also post in Telegram" (a draft to everyone only). */
+  telegramOnPublish: boolean;
   createdAt: Date;
 }
 
@@ -894,11 +906,32 @@ interface TestStoreState {
    * Optional: added by `??=` below.
    */
   telegram?: Map<string, TestTelegram>;
+  /** The chats Ol' Jeb posts in, and Camp settings' three ticks. */
+  telegramPlaces?: TestTelegramPlace[];
+  telegramPosts?: TelegramPostSettings;
   /** `telegram_link_codes`, by the code itself (the store keeps no hash). */
   telegramCodes?: Map<
     string,
     { userId: string; expiresAt: Date; used: boolean }
   >;
+}
+
+/**
+ * The draft's "Also post in Telegram", as @camp404/db/broadcasts keeps it: on
+ * a draft to everyone only.
+ */
+function telegramIntent(
+  telegram: boolean | undefined,
+  audience: Audience | undefined,
+): boolean {
+  return (
+    telegram === true && (audience ?? { scope: "everyone" }).scope === "everyone"
+  );
+}
+
+/** A chat Ol' Jeb posts in, in the store (`telegram_chats`). */
+interface TestTelegramPlace extends TelegramPlace {
+  archived: boolean;
 }
 
 /** A member's Telegram state in the store. */
@@ -1116,7 +1149,10 @@ S.desktopPreferences ??= new Map<string, Record<string, unknown>>();
 S.inkblotRuns ??= [];
 S.telegram ??= new Map<string, TestTelegram>();
 S.telegramCodes ??= new Map();
+S.telegramPlaces ??= [];
+S.telegramPosts ??= { ...DEFAULT_TELEGRAM_POST_SETTINGS };
 const telegramState = S.telegram;
+const telegramPlaces = S.telegramPlaces;
 const telegramCodes = S.telegramCodes;
 const recipes = S.recipes;
 const recipeRuns = S.recipeRuns;
@@ -2271,6 +2307,7 @@ export const testStore = {
     presentation: TestPresentation;
     audience?: Audience;
     pinned?: boolean;
+    telegram?: boolean;
   }): { id: string } {
     const row: TestBroadcast = {
       id: crypto.randomUUID(),
@@ -2283,6 +2320,7 @@ export const testStore = {
       pinnedAt: null,
       pinnedBy: null,
       pinOnPublish: input.pinned === true,
+      telegramOnPublish: telegramIntent(input.telegram, input.audience),
       createdAt: new Date(),
     };
     broadcasts.push(row);
@@ -2296,6 +2334,7 @@ export const testStore = {
     presentation: TestPresentation;
     audience?: Audience;
     pinned?: boolean;
+    telegram?: boolean;
   }): boolean {
     const row = broadcasts.find(
       (b) =>
@@ -2311,6 +2350,7 @@ export const testStore = {
     // A draft records the intent only. The real pin is set when it publishes,
     // through the same audited path a later Pin press uses.
     row.pinOnPublish = input.pinned === true;
+    row.telegramOnPublish = telegramIntent(input.telegram, input.audience);
     return true;
   },
   deleteBroadcastDraft(input: { id: string; senderId: string }): boolean {
@@ -2556,6 +2596,7 @@ export const testStore = {
     publishedAt: Date | null;
     pinnedAt: Date | null;
     pinOnPublish: boolean;
+    telegramOnPublish: boolean;
     createdAt: Date;
     recipientCount: number;
     acknowledgedCount: number;
@@ -2586,6 +2627,7 @@ export const testStore = {
             publishedAt: b.publishedAt,
             pinnedAt: b.pinnedAt,
             pinOnPublish: b.pinOnPublish,
+            telegramOnPublish: b.telegramOnPublish,
             createdAt: b.createdAt,
             recipientCount: own.length,
             acknowledgedCount: own.filter((d) => d.acknowledgedAt !== null)
@@ -6892,6 +6934,8 @@ export const testStore = {
     S.inkblotRuns.length = 0;
     telegramState.clear();
     telegramCodes.clear();
+    telegramPlaces.length = 0;
+    S.telegramPosts = { ...DEFAULT_TELEGRAM_POST_SETTINGS };
     resetDuesStore();
     resetRentalStore();
     resetLogisticsStore();
@@ -7247,6 +7291,79 @@ export const testStore = {
       dmAt: row?.dmAt ?? null,
       notices,
     });
+  },
+  // --- Ol' Jeb's posts (the twin of @camp404/db/telegram-posts) -----------
+
+  listTelegramPlaces(): TelegramPlace[] {
+    return telegramPlaces
+      .filter((p) => !p.archived)
+      .sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime())
+      .map(({ archived: _archived, ...place }) => ({ ...place }));
+  },
+  getTelegramPostSettings(): TelegramPostSettings {
+    return { ...S.telegramPosts! };
+  },
+  setTelegramPostSettings(input: {
+    actorId: string;
+    settings: TelegramPostSettings;
+  }): TelegramWriteResult {
+    if (!CAPTAIN_ONLY.allows(testStore.actorInStore(input.actorId))) {
+      return { ok: false, error: TELEGRAM_CAPTAINS_ONLY };
+    }
+    S.telegramPosts = { ...input.settings };
+    return { ok: true };
+  },
+  removeTelegramPlace(input: {
+    actorId: string;
+    id: string;
+  }): TelegramWriteResult {
+    if (!CAPTAIN_ONLY.allows(testStore.actorInStore(input.actorId))) {
+      return { ok: false, error: TELEGRAM_CAPTAINS_ONLY };
+    }
+    const place = telegramPlaces.find((p) => p.id === input.id && !p.archived);
+    if (!place) return { ok: false, error: TELEGRAM_PLACE_GONE };
+    place.archived = true;
+    return { ok: true };
+  },
+  /** `/notifyhere`, as the real one: a connected captain only. */
+  addTelegramPlace(input: {
+    telegramUserId: string;
+    chatId: string;
+    threadId: string | null;
+    title: string;
+    username: string | null;
+  }): AddPlaceResult {
+    const sender = [...telegramState].find(
+      ([, row]) =>
+        row.telegramUserId === input.telegramUserId && row.dmAt !== null,
+    );
+    const user = sender ? findUserById(sender[0]) : undefined;
+    if (
+      !sender ||
+      !user ||
+      user.sanitised ||
+      !CAPTAIN_ONLY.allows(testStore.actorInStore(sender[0]))
+    ) {
+      return { ok: false, reason: "not_a_captain" };
+    }
+    const title = input.title.trim().slice(0, 200) || "Telegram chat";
+    const existing = telegramPlaces.find((p) => p.chatId === input.chatId);
+    if (existing) {
+      existing.threadId = input.threadId;
+      existing.title = title;
+      existing.addedAt = new Date();
+      existing.archived = false;
+    } else {
+      telegramPlaces.push({
+        id: crypto.randomUUID(),
+        chatId: input.chatId,
+        threadId: input.threadId,
+        title,
+        addedAt: new Date(),
+        archived: false,
+      });
+    }
+    return { ok: true };
   },
   getTelegramConnection(userId: string): TelegramConnection {
     const row = telegramState.get(userId);

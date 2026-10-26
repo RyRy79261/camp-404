@@ -170,6 +170,9 @@ export const AUDIT_ACTION_LABELS = {
   "team.role_given": "Gave a member a role in a team",
   "team.role_taken": "Took a member out of a team's role",
   "team_budget.set": "Set a team budget",
+  "telegram.chat_added": "Had Ol' Jeb post in a Telegram chat",
+  "telegram.chat_removed": "Stopped Ol' Jeb posting in a Telegram chat",
+  "telegram.posts_set": "Changed what Ol' Jeb posts in the camp's chats",
   "ticket.pass_changed": "Changed a member's ticket, DDT or WAP",
 } as const;
 
@@ -432,6 +435,9 @@ export function auditDetail(
       if (!item) return null;
       return team ? `${item} (${teamLabel(team)})` : item;
     }
+    case "telegram.chat_added":
+    case "telegram.chat_removed":
+      return stored(action, metadata).text("title");
     case "pet.marked_in":
     case "pet.hint_changed":
     case "pet.line_changed":

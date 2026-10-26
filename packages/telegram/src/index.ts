@@ -35,3 +35,5 @@ export {
   telegramNoticeSender,
   telegramSendFailure,
 } from "./private-chat";
+
+export { handleGroupMessage, telegramPostSender } from "./group-chat";

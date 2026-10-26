@@ -14,6 +14,7 @@ import type {
   DesktopPreferencesPatch,
 } from "@camp404/types/desktop-preferences";
 import type { OsThemeEffects } from "@/lib/os-themes";
+import { createTelegramLinkAction } from "@/app/(console)/profile/telegram-actions";
 import { DisplayControls, OneClickSwitch } from "./display-controls";
 import { LineIcon } from "./line-icons";
 
@@ -37,6 +38,11 @@ export interface WelcomeWizardProps {
   onChange: (patch: DesktopPreferencesPatch) => void;
   /** Open the Today panel (the step about it). */
   onOpenToday?: () => void;
+  /**
+   * Offer Ol' Jeb (the camp's Telegram bot) as an optional step: he is set up
+   * and this member has not connected him.
+   */
+  telegramOffer?: boolean;
   onClose: () => void;
 }
 
@@ -81,6 +87,62 @@ function Narrow({
     <div data-welcome-phone className="flex flex-col gap-3 md:hidden">
       {children}
     </div>
+  );
+}
+
+/**
+ * The optional Telegram step (owner's mock-up, 2026-10-26): Connect opens the
+ * member's own one-use link to Ol' Jeb, as the Profile's card does. Skipping
+ * is the footer's "Skip for now" or Next; it can be done later on the Profile.
+ */
+function TelegramStep() {
+  const [state, setState] = useState<"off" | "busy" | "open">("off");
+  const [error, setError] = useState<string | null>(null);
+
+  async function connect() {
+    setError(null);
+    // Opened inside the click, so a browser does not block it.
+    const opened = window.open("about:blank", "_blank");
+    setState("busy");
+    const result = await createTelegramLinkAction();
+    if (!result.ok) {
+      opened?.close();
+      setState("off");
+      setError(result.error);
+      return;
+    }
+    if (opened) opened.location.href = result.data.link;
+    setState("open");
+  }
+
+  return (
+    <>
+      <p>
+        Ol&rsquo; Jeb, the camp&rsquo;s Telegram bot, can send you the notices
+        about you: forms you owe, your tasks, your approval.
+      </p>
+      <p>This is optional. You can do it later on your Profile.</p>
+      {state === "open" ? (
+        <p data-welcome-telegram="open">
+          Telegram is open. Tap <strong>Start</strong> in your chat with
+          Ol&rsquo; Jeb.
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void connect()}
+          disabled={state === "busy"}
+          className="w-fit border border-os-fg bg-os-fg px-3 py-1.5 font-pixel text-[11px] uppercase text-os-bg outline-none hover:border-os-primary hover:bg-os-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-os-primary disabled:opacity-60"
+        >
+          Connect Telegram
+        </button>
+      )}
+      {error && (
+        <p role="alert" className="text-os-danger">
+          {error}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -171,6 +233,7 @@ export function WelcomeWizard({
   effects,
   onChange,
   onOpenToday,
+  telegramOffer = false,
   onClose,
 }: WelcomeWizardProps) {
   const [index, setIndex] = useState(0);
@@ -333,6 +396,15 @@ export function WelcomeWizard({
         </>
       ),
     },
+    ...(telegramOffer
+      ? [
+          {
+            key: "telegram",
+            title: "Get your notices on Telegram",
+            body: <TelegramStep />,
+          },
+        ]
+      : []),
     {
       key: "done",
       title: "Done",

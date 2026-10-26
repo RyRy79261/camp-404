@@ -23,6 +23,13 @@ import {
   getTelegramConnection,
   setTelegramNotices,
 } from "../telegram-connection";
+import {
+  addTelegramPlace,
+  getTelegramPostSettings,
+  listTelegramPlaces,
+  removeTelegramPlace,
+  setTelegramPostSettings,
+} from "../telegram-places";
 
 describe("a member's Telegram: the database and the test store agree", () => {
   const h = useTestDb();
@@ -73,6 +80,86 @@ describe("a member's Telegram: the database and the test store agree", () => {
       connected: { connected: true, handle: "cloud_404", notices: "mine" },
       everything: { connected: true, notices: "all" },
       after: { connected: false, notices: "all" },
+    });
+  });
+
+  it("adds a chat for a connected captain only, keeps the ticks, and removes it", async () => {
+    const { db, store } = await bothWays(mode, h, async (p) => {
+      const connect = async (userId: string, telegramUserId: string) =>
+        connectTelegram({
+          code: await createTelegramLinkCode(userId),
+          telegramUserId,
+          username: null,
+        });
+      await connect(p.captain, "555");
+      await connect(p.member, "556");
+      const place = (telegramUserId: string, threadId: string | null) =>
+        addTelegramPlace({
+          telegramUserId,
+          chatId: "-100500",
+          threadId,
+          title: "Camp 404 › Announcements",
+          username: null,
+        });
+      const byMember = await place("556", null);
+      const byStranger = await place("999", null);
+      const byCaptain = await place("555", "7");
+      const listed = (await listTelegramPlaces()).map((x) => ({
+        chatId: x.chatId,
+        threadId: x.threadId,
+        title: x.title,
+      }));
+      const settingsBefore = await getTelegramPostSettings();
+      const memberTicks = await setTelegramPostSettings({
+        actorId: p.member,
+        settings: { announcements: false, reminders: false, meetings: false },
+      });
+      const captainTicks = await setTelegramPostSettings({
+        actorId: p.captain,
+        settings: { announcements: true, reminders: false, meetings: true },
+      });
+      const settingsAfter = await getTelegramPostSettings();
+      const id = (await listTelegramPlaces())[0]!.id;
+      const memberRemove = await removeTelegramPlace({
+        actorId: p.member,
+        id,
+      });
+      const captainRemove = await removeTelegramPlace({
+        actorId: p.captain,
+        id,
+      });
+      const again = await removeTelegramPlace({ actorId: p.captain, id });
+      const after = await listTelegramPlaces();
+      return {
+        byMember,
+        byStranger,
+        byCaptain,
+        listed,
+        settingsBefore,
+        memberTicks,
+        captainTicks,
+        settingsAfter,
+        memberRemove,
+        captainRemove,
+        again,
+        after,
+      };
+    });
+    expect(store).toEqual(db);
+    expect(db).toMatchObject({
+      byMember: { ok: false, reason: "not_a_captain" },
+      byStranger: { ok: false, reason: "not_a_captain" },
+      byCaptain: { ok: true },
+      // (_agreement's normaliser stands ids in for the chat and topic.)
+      listed: [{ title: "Camp 404 › Announcements" }],
+      settingsBefore: { announcements: true, reminders: true, meetings: true },
+      memberTicks: { ok: false },
+      captainTicks: { ok: true },
+      settingsAfter: { announcements: true, reminders: false, meetings: true },
+      memberRemove: { ok: false },
+      captainRemove: { ok: true },
+      again: { ok: false },
+      after: [],
     });
   });
 });

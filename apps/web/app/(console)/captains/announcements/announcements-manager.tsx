@@ -161,6 +161,8 @@ interface FormState {
   people: string[];
   /** "Keep it at the top" — the second axis beside presentation. */
   pinned: boolean;
+  /** "Also post in Telegram": a captain's announcement to everyone. */
+  telegram: boolean;
 }
 
 /** One choice in "Who it's for". The page offers only what the sender may pick. */
@@ -216,6 +218,7 @@ const ComposerDraft = z.object({
   audience: z.string().max(200),
   people: z.array(z.string().max(64)).max(100).default([]),
   pinned: z.boolean(),
+  telegram: z.boolean().default(false),
 });
 
 /** What the composer holds when it is saved: blank, or the draft it edits. */
@@ -224,6 +227,7 @@ function savedForm(
   announcements: readonly AnnouncementSummary[],
   audienceOptions: readonly AudienceOption[],
   preferredAudience?: string,
+  telegramOffered = false,
 ): FormState {
   const editing =
     editingId === null
@@ -238,6 +242,8 @@ function savedForm(
       audience: preferredAudience ?? audienceOptions[0]?.value ?? "everyone",
       people: [],
       pinned: false,
+      // Ticked by default whenever it is offered (owner's mock-up).
+      telegram: telegramOffered,
     };
   }
   return {
@@ -248,6 +254,7 @@ function savedForm(
     audience: audienceValue(editing.audience),
     people: audiencePeople(editing.audience),
     pinned: markedPinned(editing),
+    telegram: editing.telegramOnPublish,
   };
 }
 
@@ -270,6 +277,12 @@ type AnnouncementsManagerProps = {
    * who may address neither.
    */
   picker?: AnnouncementPickerData | null;
+  /**
+   * The chats Ol' Jeb would post a captain's announcement to everyone in, by
+   * name. Empty (no "Also post in Telegram") for a lead, before the bot is set
+   * up, with no chat, or with Camp settings' announcements tick off.
+   */
+  telegramChats?: string[];
 };
 
 /**
@@ -281,6 +294,7 @@ type AnnouncementsManagerProps = {
  */
 export function AnnouncementsManager(props: AnnouncementsManagerProps) {
   const { announcements, audienceOptions, preferredAudience } = props;
+  const telegramOffered = (props.telegramChats ?? []).length > 0;
   const draft = useEditorDraft<FormState>({
     editor: "announcement",
     baseline: savedForm(
@@ -288,6 +302,7 @@ export function AnnouncementsManager(props: AnnouncementsManagerProps) {
       announcements,
       audienceOptions,
       preferredAudience,
+      telegramOffered,
     ),
     parse: (raw) => {
       const parsed = ComposerDraft.safeParse(raw);
@@ -324,14 +339,17 @@ function AnnouncementsManagerView({
   leadTeams,
   preferredAudience,
   picker = null,
+  telegramChats = [],
   draft,
 }: AnnouncementsManagerProps & { draft: EditorDraft<FormState> }) {
   const router = useRouter();
+  const telegramOffered = telegramChats.length > 0;
   const emptyForm: FormState = savedForm(
     null,
     announcements,
     audienceOptions,
     preferredAudience,
+    telegramOffered,
   );
   const [form, setForm] = useState<FormState>(draft.start);
   // Unsaved: the composer differs from what it holds when saved (blank, or
@@ -347,6 +365,7 @@ function AnnouncementsManagerView({
           announcements,
           audienceOptions,
           preferredAudience,
+          telegramOffered,
         ),
       ),
   });
@@ -442,6 +461,10 @@ function AnnouncementsManagerView({
       presentation: form.presentation,
       audience: audienceFromValue(form.audience, form.people),
       pinned: form.pinned,
+      // Only to everyone: a team's or a few people's news never goes to a
+      // camp-wide chat. The server keeps it for a captain only.
+      telegram:
+        telegramOffered && form.audience === "everyone" && form.telegram,
     };
     startTransition(async () => {
       const result = editing
@@ -467,6 +490,7 @@ function AnnouncementsManagerView({
       audience: audienceValue(a.audience),
       people: audiencePeople(a.audience),
       pinned: markedPinned(a),
+      telegram: a.telegramOnPublish,
     });
   };
 
@@ -812,6 +836,39 @@ function AnnouncementsManagerView({
             />
           </div>
 
+          {/* Ol' Jeb's "Also post in Telegram" (owner's mock-up, 2026-10-26):
+              a captain's announcement to everyone, ticked by default. Not
+              offered for any narrower audience, so it is not drawn then. */}
+          {telegramOffered && form.audience === "everyone" && (
+            <div
+              data-telegram-post
+              className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/30 p-3"
+            >
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="announcement-telegram">
+                  Also post in Telegram
+                </Label>
+                <p
+                  id="announcement-telegram-hint"
+                  className="text-xs text-muted-foreground"
+                >
+                  Ol&apos; Jeb posts it when you publish, in{" "}
+                  {telegramChats.join(", ")}.
+                </p>
+              </div>
+              <Switch
+                id="announcement-telegram"
+                checked={form.telegram}
+                onCheckedChange={(telegram) =>
+                  setForm((f) => ({ ...f, telegram }))
+                }
+                aria-describedby="announcement-telegram-hint"
+                disabled={pending}
+                className="mt-1"
+              />
+            </div>
+          )}
+
           {error && (
             <Alert variant="error">
               <TriangleAlert aria-hidden />
@@ -960,6 +1017,12 @@ function AnnouncementHeader({
             <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
               <Pin className="h-3.5 w-3.5" aria-hidden />
               {a.publishedAt === null ? "Will stay at top" : "Pinned"}
+            </span>
+          )}
+          {a.publishedAt === null && a.telegramOnPublish && (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+              <Send className="h-3.5 w-3.5" aria-hidden />
+              Also on Telegram
             </span>
           )}
           <Badge variant="outline">

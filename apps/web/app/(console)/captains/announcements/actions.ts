@@ -115,6 +115,8 @@ export async function saveDraftAction(
     const { id } = await createAnnouncementDraft({
       senderId: gate.senderId,
       ...parsed.data,
+      // Only a captain's announcement goes to the camp's Telegram chats.
+      telegram: gate.isCaptain && parsed.data.telegram,
     });
     revalidatePath("/captains/announcements");
     return { ok: true, data: { id } };
@@ -144,6 +146,7 @@ export async function updateDraftAction(
       id,
       senderId: gate.senderId,
       ...parsed.data,
+      telegram: gate.isCaptain && parsed.data.telegram,
     });
     if (!ok) {
       return {

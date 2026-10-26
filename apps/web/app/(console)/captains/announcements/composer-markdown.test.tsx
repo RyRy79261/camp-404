@@ -102,6 +102,7 @@ describe("the announcement composer", () => {
         presentation: "feed",
         pinnedAt: null,
         pinOnPublish: false,
+        telegramOnPublish: false,
         audience: { scope: "everyone" },
         senderId: "me",
         senderName: "Me",

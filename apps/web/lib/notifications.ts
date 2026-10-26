@@ -66,6 +66,8 @@ interface DraftFields {
   audience: Audience;
   /** The composer's "keep it at the top"; inert until the draft is published. */
   pinned: boolean;
+  /** The composer's "Also post in Telegram"; a captain's draft to everyone. */
+  telegram?: boolean;
 }
 
 // Neither input carries the sender's rank or teams: the write reads them

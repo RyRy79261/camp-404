@@ -825,6 +825,31 @@ Decisions baked into the schema — keep new code consistent with them:
   sets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and
   `TELEGRAM_BOT_USERNAME=jebediah_404_bot` in Vercel; without the username
   the Profile shows no Telegram card.
+  [2026-10-26, step 2; owner's mock-up approved the same day] **Ol' Jeb
+  posts in the camp's chats** (`@camp404/db/telegram-posts`). A captain who
+  connected him sends `/notifyhere` in a group or a forum topic: the webhook
+  (`handleGroupMessage` in `@camp404/telegram`, the only group text he reads)
+  adds it as a place (`telegram_chats` of kind `announcement_channel`, with
+  `thread_id` for a topic; one place per chat), audited
+  (`telegram.chat_added`); anyone else gets "Sorry". Camp settings' Ol' Jeb
+  card lists the places with Remove (`telegram.chat_removed`) and three ticks
+  on `camp_settings` (`telegram.posts_set`): announcements, questionnaire
+  reminders, new meetings. Posts are `telegram_announcements` rows, queued in
+  the transaction of the write they are about, one per place, deduped by
+  `dedupe_key`: a captain's announcement to everyone with "Also post in
+  Telegram" (`broadcasts.telegram_on_publish`, ticked by default in the
+  composer, never offered for a narrower audience; `publishAnnouncement`
+  honours it for a captain only), a reminder from `sendReminder` (a captain's
+  Remind and the deadline nudges; once a camp day per send per chat), and a
+  new meeting from `createCampEvent`. A reminder stores no handle: the drain
+  works out its tags when it sends (`reminderTags`: still owes the send, said
+  Coming by `isComingThisYear`, not connected for DMs; `telegramMention` keeps
+  only a valid username, the rest are counted "without a Telegram
+  username"), so an erased member's name is never kept in the table. The
+  drain is the DM drain's shape (committed `sending` before a send, a 429
+  ends the run, 20 hours to live). The welcome wizard offers "Get your
+  notices on Telegram" as an optional step to an approved member who has not
+  connected (never a `required_actions` row).
 - **Component mapping.** String keys (`required_actions.action_key`,
   `questionnaire_activations.questionnaire_key`, `broadcasts.ref_type`)
   map to bespoke components via a code-side registry — the DB stores the
@@ -1252,7 +1277,10 @@ UPDATE SKIP LOCKED`) when `TELEGRAM_BOT_TOKEN` is set, behind
   member blocked Ol' Jeb) disconnects them, and a notice queued over 20 hours
   is marked failed unsent. The daily upkeep forgets webhook update ids older
   than a week. Group posts (`dispatchPendingAnnouncements`, invites, tags)
-  are still off: step 2 of the plan.
+  are still off: step 2 of the plan. [CORRECTION 2026-10-26] Group posts are
+  on: `deliverDue` also drains `drainTelegramPosts` (announcements, reminder
+  tags, new meetings; see Notifications). `dispatchPendingAnnouncements` is
+  superseded and stays uncalled; the invite link on approval is still off.
 
 ## Conventions
 

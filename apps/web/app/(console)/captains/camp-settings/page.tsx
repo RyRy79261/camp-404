@@ -12,6 +12,12 @@ import {
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { programPage } from "@/lib/program-page";
 import { getTeamsConfig } from "@/lib/camp-config";
+import { telegramBotUsername } from "@/lib/telegram";
+import {
+  getTelegramPostSettings,
+  listTelegramPlaces,
+} from "@/lib/telegram-places";
+import { OlJebCard } from "@/components/camp-settings/ol-jeb-card";
 import { TeamSettingsManager, type TeamRow } from "./team-settings-manager";
 
 export const dynamic = "force-dynamic";
@@ -32,13 +38,18 @@ export default async function CampSettingsPage() {
   const teams: TeamRow[] = cleared
     ? [...(await getTeamsConfig()).teams].sort((a, b) => a.order - b.order)
     : [];
+  // Ol' Jeb's card: only for a captain, and only once the bot is set up.
+  const bot = cleared ? telegramBotUsername() : null;
+  const [places, posts] = bot
+    ? await Promise.all([listTelegramPlaces(), getTelegramPostSettings()])
+    : [[], null];
 
   return (
     <div className="flex flex-col">
       <PageHeading
         eyebrow="Captains / Camp settings"
         title="Camp settings"
-        description="Your camp's teams, and the year everything is filed under."
+        description="Your camp's teams, the year everything is filed under, and where Ol' Jeb posts."
       />
 
       {cleared ? (
@@ -47,27 +58,40 @@ export default async function CampSettingsPage() {
             <TeamSettingsManager teams={teams} />
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarClock className="h-4 w-4 text-accent" aria-hidden />
-                The camp&apos;s year
-              </CardTitle>
-              <CardDescription>
-                Say what year the camp is in, and when it moves on to the next
-                burn, say so here. You see exactly which questionnaires go out
-                again before anything changes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild variant="secondary" size="sm">
-                <Link href="/captains/camp-settings/cycle">
-                  Open the camp&apos;s year
-                  <ArrowRight aria-hidden />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="flex flex-col gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CalendarClock className="h-4 w-4 text-accent" aria-hidden />
+                  The camp&apos;s year
+                </CardTitle>
+                <CardDescription>
+                  Say what year the camp is in, and when it moves on to the next
+                  burn, say so here. You see exactly which questionnaires go out
+                  again before anything changes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild variant="secondary" size="sm">
+                  <Link href="/captains/camp-settings/cycle">
+                    Open the camp&apos;s year
+                    <ArrowRight aria-hidden />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+            {bot && posts && (
+              <OlJebCard
+                bot={bot}
+                posts={posts}
+                places={places.map((p) => ({
+                  id: p.id,
+                  title: p.title,
+                  topic: p.threadId !== null,
+                }))}
+              />
+            )}
+          </div>
         </div>
       ) : (
         <CaptainLock message="Camp settings are captain-only. Your rank doesn't have clearance for this." />

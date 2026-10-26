@@ -107,6 +107,15 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > notices (`drainQueuedTelegram`). The group triggers above (invites,
   > announcements, reminder tags, `/notifyhere`) are still uncalled: step 2 of
   > `docs/plans/2026-10-25-telegram-ol-jeb.md`.
+  >
+  > **[CORRECTION 2026-10-26, step 2]** Group posts are on: a connected captain
+  > sends `/notifyhere` in a chat or topic, and `deliverDue` drains
+  > `drainTelegramPosts` (`@camp404/db/telegram-posts`): announcements a
+  > captain ticks "Also post in Telegram" on, questionnaire reminders that tag
+  > who still owes the form, and new meetings. `queueAnnouncement` and
+  > `dispatchPendingAnnouncements` are superseded by it and stay uncalled (they
+  > know no topic and no at-most-once claim; do not wire them). The invite link
+  > on approval (`issueGroupInviteForUser`) is still uncalled.
 
 - **Invite-code case handling** — generated/DB codes are canonically lowercase (validity pattern `/^[a-z0-9]+.../`), but the redeem path matches **verbatim** while `/api/tools/invite/check` lowercases — so a DB code typed in the wrong case can pass the availability check yet fail on redeem. Fixing this needs a _coordinated_ change (normalise at redeem + env + seed + storage **and** update the e2e fixtures + the CI `INVITE_CODES`, which currently use uppercase verbatim). An earlier attempt that only lowercased the redeem path broke the e2e and was reverted; do it as a deliberate, test-data-aware change. **[audit #11]**
 

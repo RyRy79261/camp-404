@@ -30,7 +30,9 @@ describe("registerTelegram", () => {
   it("registers the webhook and the commands on production", async () => {
     const fetchImpl = ok();
     expect(await registerTelegram({ env, fetchImpl })).toBe("registered");
-    const [webhook, commands] = fetchImpl.mock.calls as unknown as [
+    const [webhook, commands, groupCommands] = fetchImpl.mock
+      .calls as unknown as [
+      [string, RequestInit],
       [string, RequestInit],
       [string, RequestInit],
     ];
@@ -45,12 +47,18 @@ describe("registerTelegram", () => {
       "my_chat_member",
       "chat_member",
     ]);
+    // Start and Stop in a private chat; /notifyhere in a group.
     expect(commands[0]).toMatch(/\/setMyCommands$/);
+    const privateBody = JSON.parse(commands[1].body as string);
+    expect(privateBody.scope).toEqual({ type: "all_private_chats" });
     expect(
-      JSON.parse(commands[1].body as string).commands.map(
-        (c: { command: string }) => c.command,
-      ),
+      privateBody.commands.map((c: { command: string }) => c.command),
     ).toEqual(["start", "stop"]);
+    const groupBody = JSON.parse(groupCommands[1].body as string);
+    expect(groupBody.scope).toEqual({ type: "all_group_chats" });
+    expect(
+      groupBody.commands.map((c: { command: string }) => c.command),
+    ).toEqual(["notifyhere"]);
   });
 
   it("does nothing off production or without the token and secret", async () => {

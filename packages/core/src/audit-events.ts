@@ -564,6 +564,17 @@ export interface AuditEvents {
     amountCents: number | null;
     fromCents: number | null;
   };
+  "telegram.chat_added": {
+    chatId: string;
+    threadId: string | null;
+    title: string;
+  };
+  "telegram.chat_removed": { chatId: string; title: string };
+  "telegram.posts_set": {
+    announcements: boolean;
+    reminders: boolean;
+    meetings: boolean;
+  };
   "ticket.pass_changed": {
     cycle: number;
     pass: string;

@@ -57,5 +57,8 @@ export const ComposeAnnouncementInput = z.object({
   // console page for the members it reached. Any presentation may be pinned.
   // Marked here on the draft, inert until the announcement is published.
   pinned: z.boolean().default(false),
+  // "Also post in Telegram": Ol' Jeb posts it in the camp's chats when it is
+  // published. Kept only on a captain's draft to everyone.
+  telegram: z.boolean().default(false),
 });
 export type ComposeAnnouncementInput = z.infer<typeof ComposeAnnouncementInput>;

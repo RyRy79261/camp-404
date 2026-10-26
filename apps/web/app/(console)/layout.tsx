@@ -18,6 +18,8 @@ import { isE2ETestMode } from "@/lib/test-mode";
 import { getInboxBadge } from "@/lib/inbox-badge";
 import { todayBurn } from "@/lib/today";
 import { getMyMemberships } from "@/lib/users";
+import { telegramBotUsername } from "@/lib/telegram";
+import { getTelegramConnection } from "@/lib/telegram-connection";
 
 // Reads the session cookie on every request; cannot be prerendered.
 export const dynamic = "force-dynamic";
@@ -116,6 +118,14 @@ export default async function ConsoleLayout({
   if (!manifest || !layout) return <>{children}</>;
 
   const { campUser, authUser } = state;
+  // The welcome wizard's optional Telegram step: read only while the wizard
+  // has never been closed, so other page loads cost nothing.
+  const telegramOffer =
+    full &&
+    !held &&
+    preferences.welcomeSeenAt === null &&
+    telegramBotUsername() !== null &&
+    !(await getTelegramConnection(campUser.id).catch(() => null))?.connected;
   // The teams they lead this year, by name, in the camp's order: the account
   // chip's "Leads …" line. Their own facts, drawn as text; nothing decides
   // with them.
@@ -190,6 +200,7 @@ export default async function ConsoleLayout({
       // Prince comes home for one member (lib/prince-keeper.ts): a yes or
       // no, decided here; the address list never leaves the server.
       princeKeeper={isPrinceKeeper(process.env, authUser)}
+      telegramOffer={telegramOffer}
       // The empty clock's 30 s wait before she walks on; shorter under
       // the E2E harness only.
       reunionDelayMs={reunionDelayMs()}

@@ -61,6 +61,22 @@ const messageSchema = z
     from: telegramUserSchema.optional(),
     date: z.number(),
     text: z.string().optional(),
+    // A forum topic in a supergroup: the topic's id, and whether the message
+    // is in one (`/notifyhere` sent in a topic).
+    message_thread_id: z.number().optional(),
+    is_topic_message: z.boolean().optional(),
+    // A group that became a supergroup gets a new id.
+    migrate_to_chat_id: z.number().optional(),
+    // In a forum topic, the topic's first message, which names it.
+    reply_to_message: z
+      .object({
+        forum_topic_created: z
+          .object({ name: z.string() })
+          .passthrough()
+          .optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 

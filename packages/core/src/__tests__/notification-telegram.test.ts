@@ -2,9 +2,13 @@ import { NOTIFICATION_KINDS } from "@camp404/types";
 import { describe, expect, it } from "vitest";
 import { plainPreview } from "../markdown-text";
 import {
+  isCommandForUs,
   isPersonalNotification,
+  meetingPostBody,
   OL_JEB_SAYS,
   parseBotCommand,
+  renderTelegramPost,
+  telegramMention,
   renderTelegramNotice,
   shouldTelegramNotification,
   TELEGRAM_MESSAGE_MAX,
@@ -107,5 +111,103 @@ describe("OL_JEB_SAYS", () => {
     expect(OL_JEB_SAYS.connected(undefined)).toBe(
       "Hey, you're all set. Your camp notices will land here now.",
     );
+  });
+});
+
+describe("/notifyhere", () => {
+  it("reads the command and the bot it names", () => {
+    expect(parseBotCommand("/notifyhere")).toEqual({
+      command: "notifyhere",
+      bot: null,
+    });
+    expect(parseBotCommand("/notifyhere@Jebediah_404_bot")).toEqual({
+      command: "notifyhere",
+      bot: "Jebediah_404_bot",
+    });
+  });
+
+  it("is for Ol' Jeb with no name or his own, never another bot's", () => {
+    expect(isCommandForUs(null, "jebediah_404_bot")).toBe(true);
+    expect(isCommandForUs("JEBEDIAH_404_BOT", "jebediah_404_bot")).toBe(true);
+    expect(isCommandForUs("other_bot", "jebediah_404_bot")).toBe(false);
+    expect(isCommandForUs("jebediah_404_bot", null)).toBe(false);
+  });
+});
+
+describe("telegramMention", () => {
+  it("tags only a username Telegram allows", () => {
+    expect(telegramMention("cloud_404")).toBe("@cloud_404");
+    expect(telegramMention(" @@cloud_404 ")).toBe("@cloud_404");
+    expect(telegramMention("abcd")).toBeNull();
+    expect(telegramMention("4cloud")).toBeNull();
+    expect(telegramMention("cloud 404")).toBeNull();
+    expect(telegramMention("cloud\n@everyone")).toBeNull();
+    expect(telegramMention(null)).toBeNull();
+  });
+});
+
+describe("renderTelegramPost", () => {
+  const base = {
+    title: "Form due Friday: Coming this year?",
+    body: "Please **answer** by Friday.",
+    buttonText: "Answer in Camp 404",
+    buttonPath: "/questionnaires/abc",
+  };
+
+  it("tags who still owes a reminder and counts who has no username", () => {
+    const post = renderTelegramPost(
+      {
+        ...base,
+        kind: "reminder",
+        tags: ["@cloud_404", "@mike_404"],
+        untagged: 2,
+      },
+      "https://camp-404.com/",
+    );
+    expect(post.text).toBe(
+      "Form due Friday: Coming this year?\n\nPlease answer by Friday.\n\nStill to answer: @cloud_404 @mike_404 and 2 more without a Telegram username.",
+    );
+    expect(post.button).toEqual({
+      text: "Answer in Camp 404",
+      url: "https://camp-404.com/questionnaires/abc",
+    });
+  });
+
+  it("says how many when nobody has a username, and tags only reminders", () => {
+    expect(
+      renderTelegramPost(
+        { ...base, kind: "reminder", tags: [], untagged: 1 },
+        "https://camp-404.com",
+      ).text,
+    ).toContain("Still to answer: 1 person without a Telegram username.");
+    expect(
+      renderTelegramPost(
+        { ...base, kind: "announcement", tags: ["@cloud_404"], untagged: 3 },
+        "https://camp-404.com",
+      ).text,
+    ).not.toContain("Still to answer");
+  });
+});
+
+describe("meetingPostBody", () => {
+  it("says the day, the time and the team", () => {
+    expect(
+      meetingPostBody({
+        allDay: false,
+        startDate: "2026-11-02",
+        endDate: "2026-11-02",
+        startTime: "18:00",
+        teamLabel: "Structures",
+      }),
+    ).toBe("Mon 2 Nov, 18:00 · Structures team");
+    expect(
+      meetingPostBody({
+        allDay: true,
+        startDate: "2026-11-02",
+        endDate: "2026-11-04",
+        startTime: null,
+        teamLabel: null,
+      }),
+    ).toBe("Mon 2 Nov to Wed 4 Nov · Whole camp");
   });
 });

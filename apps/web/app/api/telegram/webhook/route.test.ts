@@ -9,6 +9,7 @@ import type * as Telegram from "@camp404/telegram";
 vi.mock("@/lib/telegram", () => ({
   getWebhookSecret: vi.fn(),
   getTelegramClient: vi.fn(() => ({})),
+  telegramBotUsername: vi.fn(() => "jebediah_404_bot"),
 }));
 vi.mock("@camp404/db/telegram-dm", () => ({
   recordTelegramUpdate: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock("@camp404/db/telegram-dm", () => ({
 vi.mock("@camp404/telegram", async (importOriginal) => ({
   ...(await importOriginal<typeof Telegram>()),
   handleChatMemberUpdate: vi.fn(),
+  handleGroupMessage: vi.fn(),
   handleMyChatMember: vi.fn(),
   handlePrivateMessage: vi.fn(),
 }));
@@ -29,6 +31,7 @@ import {
 } from "@camp404/db/telegram-dm";
 import {
   handleChatMemberUpdate,
+  handleGroupMessage,
   handleMyChatMember,
   handlePrivateMessage,
 } from "@camp404/telegram";
@@ -147,5 +150,26 @@ describe("POST /api/telegram/webhook", () => {
     };
     expect((await post(JSON.stringify(block))).status).toBe(200);
     expect(handleMyChatMember).toHaveBeenCalledOnce();
+  });
+
+  it("hands a group message (/notifyhere) to the group handler, with the bot's name", async () => {
+    const group = {
+      update_id: 5,
+      message: {
+        message_id: 2,
+        date: 1,
+        chat: { id: -100, type: "supergroup", title: "Camp 404" },
+        from: { id: 7, first_name: "Ada" },
+        text: "/notifyhere",
+        message_thread_id: 3,
+        is_topic_message: true,
+      },
+    };
+    expect((await post(JSON.stringify(group))).status).toBe(200);
+    expect(handlePrivateMessage).not.toHaveBeenCalled();
+    expect(handleGroupMessage).toHaveBeenCalledOnce();
+    expect(vi.mocked(handleGroupMessage).mock.calls[0]![2]).toBe(
+      "jebediah_404_bot",
+    );
   });
 });
