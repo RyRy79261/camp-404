@@ -1,5 +1,8 @@
 # Telegram Bot Proposal
 
+[2026-10-26] Step 1 of `docs/plans/2026-10-25-telegram-ol-jeb.md` (private
+notices from Ol' Jeb) is built; the group parts below are still off.
+
 Status (checked 2026-09-29): partly built and switched off. The scaffold (#14) and the inbound webhook exist; nothing calls the outbound triggers, and no bot is registered. [CORRECTION 2026-09-29] There are no cron routes (#274): `/api/cron/telegram/dispatch` is gone, and when Telegram is turned on `dispatchPendingAnnouncements` is called from `deliverDue` in `apps/web/lib/background-work.ts` (see `DEFERRED.md`). Approval is `users.approval_status` with a captain UI, and admin-cli has no `telegram register-chat` command.
 
 > Plan for the Camp 404 Telegram bot: a service account that lives in the
@@ -190,6 +193,15 @@ In rough order of when each blocks the next:
    at the deployed `/api/telegram/webhook`, and seed the
    `telegram_chats` rows for each. [CORRECTION 2026-10-05] The admin CLI
    is deleted; this needs a captain action or a custom migration instead.
+   [CORRECTION 2026-10-26] The bot exists (`@jebediah_404_bot`, "Ol' Jeb").
+   Do NOT call `setWebhook` by hand: `allowed_updates: ["chat_member"]`
+   would stop the `message` and `my_chat_member` updates that `/start`,
+   `/stop` and block detection need. Each production deploy registers the
+   webhook (`apps/web/scripts/register-telegram.mjs`, from `vercel-build`)
+   with `message`, `my_chat_member` and `chat_member`. The owner only sets
+   `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and
+   `TELEGRAM_BOT_USERNAME` in Vercel. Seeding `telegram_chats` is still
+   open (step 2, `/notifyhere`).
 
 2. **Approval trigger.** `issueGroupInviteForUser(userId)` is a helper
    that nobody calls yet. There is no single `users.approved` flag —
@@ -245,6 +257,10 @@ In rough order of when each blocks the next:
 - **DMs from the bot.** The bot does not message members directly. The
   invite link goes via the in-app + push notification system; the bot
   only ever posts to chats it manages.
+  [CORRECTION 2026-10-26] The owner chose private notices too (option 2,
+  2026-10-25): the bot is Ol' Jeb (`@jebediah_404_bot`), and a member who
+  connects from their Profile gets their notices in a private chat. See
+  `docs/plans/2026-10-25-telegram-ol-jeb.md` and AGENTS.md (Notifications).
 - **Group moderation.** No `/kick`, no `/mute`, no spam handling. The
   bot is a service account, not a mod.
 - **Multi-bot or multi-camp.** One bot, one main group, one announcement

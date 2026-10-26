@@ -152,6 +152,9 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "users.termsConsentedAt": "captain",
   "users.sanitisedAt": "captain",
   "users.telegramUserId": "captain",
+  // Whether and how a member gets notices from Ol' Jeb: their own setting.
+  "users.telegramDmAt": "captain",
+  "users.telegramNotices": "captain",
   "users.aiDataConsent": "captain",
   "users.aiDataConsentAt": "captain",
   // A captain's own voice notice (#356); only they act on it.

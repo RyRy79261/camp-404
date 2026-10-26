@@ -411,6 +411,27 @@ export const telegramInviteStatusEnum = pgEnum("telegram_invite_status", [
   "revoked",
 ]);
 
+// Whether a delivery also goes to the member's private chat with Ol' Jeb (the
+// camp's Telegram bot), and how that went. `queued` when it goes by push (the
+// push channels), else `skipped`; the drain then skips anyone not connected.
+// Rows from before Telegram existed are `skipped`, so connecting never sends
+// old notices.
+// `sending` is claimed by a drain run and not yet answered: never sent again
+// (Telegram has no idempotency key), failed once it is TELEGRAM_MAX_QUEUED_HOURS
+// old.
+export const telegramDeliveryStatusEnum = pgEnum("telegram_delivery_status", [
+  "queued",
+  "sending",
+  "sent",
+  "failed",
+  "skipped",
+]);
+
+// Which notices a connected member wants from Ol' Jeb: only the ones about
+// them (the default, isPersonalNotification in @camp404/core), or every
+// notice that goes by push.
+export const telegramNoticesEnum = pgEnum("telegram_notices", ["mine", "all"]);
+
 // Outbound Telegram message queue state.
 export const telegramAnnouncementStatusEnum = pgEnum(
   "telegram_announcement_status",
@@ -670,6 +691,14 @@ export const users = pgTable(
     // invite link — captured from the `chat_member` webhook update.
     telegramHandle: text("telegram_handle"),
     telegramUserId: text("telegram_user_id").unique(),
+    // When the member opened a private chat with Ol' Jeb through their own
+    // one-use link (`/start <code>`). NULL: no private chat, so no notices by
+    // Telegram (a bot may never send the first private message). Cleared by
+    // `/stop`, by blocking the bot, and by Disconnect on the Profile.
+    telegramDmAt: timestamp("telegram_dm_at", { mode: "date" }),
+    telegramNotices: telegramNoticesEnum("telegram_notices")
+      .notNull()
+      .default("mine"),
 
     // AI / MCP consent. Opt-in for surfacing this user's *identification
     // documents* — passport, SA ID, EFT details, others' reimbursement bank
@@ -3132,6 +3161,9 @@ export const notificationDeliveries = pgTable(
     emailStatus: emailDeliveryStatusEnum("email_status")
       .notNull()
       .default("skipped"),
+    telegramStatus: telegramDeliveryStatusEnum("telegram_status")
+      .notNull()
+      .default("skipped"),
 
     refType: text("ref_type"),
     refId: uuid("ref_id"),
@@ -3159,6 +3191,10 @@ export const notificationDeliveries = pgTable(
     emailQueueIdx: index("notification_deliveries_email_queue_idx")
       .on(n.createdAt)
       .where(sql`${n.emailStatus} = 'queued'`),
+    // The Telegram drain reads only queued rows.
+    telegramQueueIdx: index("notification_deliveries_telegram_queue_idx")
+      .on(n.createdAt)
+      .where(sql`${n.telegramStatus} = 'queued'`),
     // The inbox pages newest first: (created_at, id) is its cursor.
     userCreatedIdx: index("notification_deliveries_user_created_idx").on(
       n.userId,
@@ -4836,6 +4872,33 @@ export const telegramAnnouncements = pgTable(
     ),
   }),
 );
+
+// One-use link that opens a member's private chat with Ol' Jeb: the Profile's
+// Connect Telegram makes one, and `/start <code>` in that chat uses it. Only
+// the SHA-256 of the code is stored; it lives 10 minutes and is used once.
+export const telegramLinkCodes = pgTable(
+  "telegram_link_codes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    usedAt: timestamp("used_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("telegram_link_codes_user_idx").on(t.userId),
+  }),
+);
+
+// Every Telegram update the webhook has handled, by its `update_id`, so a
+// retry Telegram sends (after a slow answer, or a 503) is handled once.
+export const telegramUpdates = pgTable("telegram_updates", {
+  updateId: bigint("update_id", { mode: "number" }).primaryKey(),
+  receivedAt: timestamp("received_at", { mode: "date" }).notNull().defaultNow(),
+});
 
 // --- MCP OAuth (server-only) --------------------------------------------
 // Pure auth-server state for Claude.ai (and other MCP clients) connecting

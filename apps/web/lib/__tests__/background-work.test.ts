@@ -26,6 +26,14 @@ vi.mock("@/lib/email", () => ({
 }));
 vi.mock("@/lib/firebase-admin", () => ({ sendPush: vi.fn() }));
 vi.mock("@/lib/logistics", () => ({ catchUpCampCalendar: vi.fn() }));
+vi.mock("@camp404/db/telegram-dm", () => ({
+  drainQueuedTelegram: vi.fn(),
+  pruneTelegramUpdates: vi.fn(),
+}));
+vi.mock("@/lib/telegram", () => ({
+  isTelegramConfigured: vi.fn(),
+  getTelegramClient: vi.fn(() => ({})),
+}));
 vi.mock("@/lib/integration-config", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/integration-config")>()),
   firebaseAdminCredentials: vi.fn(),
@@ -60,6 +68,11 @@ import { sweepOrphanAvatarBlobs } from "@/lib/avatar-blob";
 import { isEmailConfigured } from "@/lib/email";
 import { firebaseAdminCredentials } from "@/lib/integration-config";
 import { catchUpCampCalendar } from "@/lib/logistics";
+import {
+  drainQueuedTelegram,
+  pruneTelegramUpdates,
+} from "@camp404/db/telegram-dm";
+import { isTelegramConfigured } from "@/lib/telegram";
 
 // 12:00 in camp (UTC+2), inside reminder hours; 02:00 in camp, outside.
 const NOON = new Date("2026-09-24T10:00:00Z");
@@ -73,6 +86,7 @@ beforeEach(() => {
   vi.mocked(consumeRateLimit).mockResolvedValue(ALLOW);
   vi.mocked(firebaseAdminCredentials).mockReturnValue({} as never);
   vi.mocked(isEmailConfigured).mockReturnValue(true);
+  vi.mocked(isTelegramConfigured).mockReturnValue(true);
   vi.mocked(listLiveAuthUserIds).mockResolvedValue(new Set(["auth-1"]));
   vi.mocked(sweepOrphanAvatarBlobs).mockResolvedValue({
     status: "swept",
@@ -91,18 +105,21 @@ describe("deliverDue", () => {
     process.env.VERCEL_ENV = "production";
   });
 
-  it("sends push and email", async () => {
+  it("sends push, email and Telegram", async () => {
     await deliverDue();
     expect(drainQueuedPush).toHaveBeenCalledOnce();
     expect(drainQueuedEmail).toHaveBeenCalledOnce();
+    expect(drainQueuedTelegram).toHaveBeenCalledOnce();
   });
 
-  it("leaves push and email queued while their service is not set up", async () => {
+  it("leaves push, email and Telegram queued while their service is not set up", async () => {
     vi.mocked(firebaseAdminCredentials).mockReturnValue(null);
     vi.mocked(isEmailConfigured).mockReturnValue(false);
+    vi.mocked(isTelegramConfigured).mockReturnValue(false);
     await deliverDue();
     expect(drainQueuedPush).not.toHaveBeenCalled();
     expect(drainQueuedEmail).not.toHaveBeenCalled();
+    expect(drainQueuedTelegram).not.toHaveBeenCalled();
   });
 
   it("sends no push or email off production: a preview or a laptop holds real members", async () => {
@@ -114,6 +131,7 @@ describe("deliverDue", () => {
       // The in-app notices were written by the action; the rest stays queued.
       expect(drainQueuedPush).not.toHaveBeenCalled();
       expect(drainQueuedEmail).not.toHaveBeenCalled();
+      expect(drainQueuedTelegram).not.toHaveBeenCalled();
     }
   });
 
@@ -204,6 +222,7 @@ describe("runDueWork", () => {
   it("sweeps connector clients nobody authorized, once a day, on every deployment", async () => {
     await runDueWork(NOON);
     expect(sweepUnusedClients).toHaveBeenCalledOnce();
+    expect(pruneTelegramUpdates).toHaveBeenCalledOnce();
   });
 
   it("sweeps orphan photos on production only", async () => {

@@ -2,18 +2,36 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type * as Telegram from "@camp404/telegram";
 
 // Telegram posts every update here. Nothing may run before the shared secret
-// is checked, and once it is, the route always answers 200 so Telegram does
-// not retry one bad update forever.
+// is checked. A body we do not read is 200 (Telegram would retry it forever),
+// a retry of an update already handled is 200 and does nothing, and our own
+// failure is 503 after forgetting the update, so the retry is handled.
 
-vi.mock("@/lib/telegram", () => ({ getWebhookSecret: vi.fn() }));
+vi.mock("@/lib/telegram", () => ({
+  getWebhookSecret: vi.fn(),
+  getTelegramClient: vi.fn(() => ({})),
+}));
+vi.mock("@camp404/db/telegram-dm", () => ({
+  recordTelegramUpdate: vi.fn(),
+  forgetTelegramUpdate: vi.fn(),
+}));
 vi.mock("@camp404/telegram", async (importOriginal) => ({
   ...(await importOriginal<typeof Telegram>()),
   handleChatMemberUpdate: vi.fn(),
+  handleMyChatMember: vi.fn(),
+  handlePrivateMessage: vi.fn(),
 }));
 
 import { POST } from "./route";
 import { getWebhookSecret } from "@/lib/telegram";
-import { handleChatMemberUpdate } from "@camp404/telegram";
+import {
+  forgetTelegramUpdate,
+  recordTelegramUpdate,
+} from "@camp404/db/telegram-dm";
+import {
+  handleChatMemberUpdate,
+  handleMyChatMember,
+  handlePrivateMessage,
+} from "@camp404/telegram";
 
 const SECRET = "s3cret-webhook-value";
 
@@ -49,6 +67,7 @@ const chatMember = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getWebhookSecret).mockReturnValue(SECRET);
+  vi.mocked(recordTelegramUpdate).mockResolvedValue(true);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -80,14 +99,53 @@ describe("POST /api/telegram/webhook", () => {
     expect(handleChatMemberUpdate).toHaveBeenCalledOnce();
   });
 
-  it("still answers 200 when the handler throws", async () => {
-    vi.mocked(handleChatMemberUpdate).mockRejectedValue(new Error("boom"));
-    expect((await post(JSON.stringify(chatMember))).status).toBe(200);
+  it("handles a retry of an update already handled only once", async () => {
+    vi.mocked(recordTelegramUpdate).mockResolvedValueOnce(false);
+    const res = await post(JSON.stringify(chatMember));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, ignored: "duplicate" });
+    expect(handleChatMemberUpdate).not.toHaveBeenCalled();
   });
 
-  it("ignores an update with no chat_member", async () => {
-    const res = await post(JSON.stringify({ update_id: 2, message: {} }));
-    expect(res.status).toBe(200);
+  it("answers 503 and forgets the update when the handler throws", async () => {
+    vi.mocked(handleChatMemberUpdate).mockRejectedValue(new Error("boom"));
+    expect((await post(JSON.stringify(chatMember))).status).toBe(503);
+    expect(forgetTelegramUpdate).toHaveBeenCalledWith(1);
+  });
+
+  it("answers 503 when the update cannot be recorded", async () => {
+    vi.mocked(recordTelegramUpdate).mockRejectedValue(new Error("db down"));
+    expect((await post(JSON.stringify(chatMember))).status).toBe(503);
     expect(handleChatMemberUpdate).not.toHaveBeenCalled();
+  });
+
+  it("acknowledges a body that is not an update", async () => {
+    const res = await post(JSON.stringify({ hello: "there" }));
+    expect(res.status).toBe(200);
+    expect(recordTelegramUpdate).not.toHaveBeenCalled();
+  });
+
+  it("hands a private message and a block to their handlers", async () => {
+    const message = {
+      update_id: 3,
+      message: {
+        message_id: 1,
+        date: 1,
+        chat: { id: 7, type: "private" },
+        from: { id: 7, first_name: "Ada" },
+        text: "/start abc",
+      },
+    };
+    expect((await post(JSON.stringify(message))).status).toBe(200);
+    expect(handlePrivateMessage).toHaveBeenCalledOnce();
+    const block = {
+      update_id: 4,
+      my_chat_member: {
+        ...chatMember.chat_member,
+        chat: { id: 7, type: "private" },
+      },
+    };
+    expect((await post(JSON.stringify(block))).status).toBe(200);
+    expect(handleMyChatMember).toHaveBeenCalledOnce();
   });
 });

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev --port 3000",
     "build": "next build",
-    "vercel-build": "pnpm --filter @camp404/db db:migrate && next build",
+    "vercel-build": "pnpm --filter @camp404/db db:migrate && node scripts/register-telegram.mjs && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",

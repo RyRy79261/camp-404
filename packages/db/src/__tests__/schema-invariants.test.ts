@@ -121,6 +121,10 @@ describe("partial unique and queue indexes keep their predicates", () => {
         columns: ["created_at"],
         where: "email_status = 'queued'",
       },
+      notification_deliveries_telegram_queue_idx: {
+        columns: ["created_at"],
+        where: "telegram_status = 'queued'",
+      },
       notification_deliveries_broadcast_user_uniq: {
         columns: ["broadcast_id", "user_id"],
         where: "broadcast_id IS NOT NULL",

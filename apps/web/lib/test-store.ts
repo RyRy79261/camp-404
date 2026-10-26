@@ -167,6 +167,11 @@ import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
 import type { PendingRequiredAction } from "@camp404/db/activations";
 import { computeAudience } from "@camp404/db/audience";
+import {
+  TELEGRAM_LINK_MINUTES,
+  type TelegramConnection,
+} from "@camp404/db/telegram-dm";
+import type { TelegramNotices } from "@camp404/core";
 import type { AuditEvent } from "@camp404/db/audit";
 import { JoinSectionInvalidError } from "@camp404/db/join-site";
 import {
@@ -884,6 +889,23 @@ interface TestStoreState {
   teamPrograms: Map<string, TeamProgram>;
   /** `inkblot_scores`: every run put on the board, in the order played. */
   inkblotRuns: (InkblotBoardEntry & { userId: string })[];
+  /**
+   * Each member's private chat with Ol' Jeb (users.telegram_*), by user id.
+   * Optional: added by `??=` below.
+   */
+  telegram?: Map<string, TestTelegram>;
+  /** `telegram_link_codes`, by the code itself (the store keeps no hash). */
+  telegramCodes?: Map<
+    string,
+    { userId: string; expiresAt: Date; used: boolean }
+  >;
+}
+
+/** A member's Telegram state in the store. */
+interface TestTelegram {
+  telegramUserId: string | null;
+  dmAt: Date | null;
+  notices: TelegramNotices;
 }
 
 /** A `lounge_offers` row; the host's name is read from the user on the way out. */
@@ -1092,6 +1114,10 @@ S.mealPlans ??= new Map<number, StoredMealPlan>();
 S.desktopLayouts ??= new Map<string, unknown>();
 S.desktopPreferences ??= new Map<string, Record<string, unknown>>();
 S.inkblotRuns ??= [];
+S.telegram ??= new Map<string, TestTelegram>();
+S.telegramCodes ??= new Map();
+const telegramState = S.telegram;
+const telegramCodes = S.telegramCodes;
 const recipes = S.recipes;
 const recipeRuns = S.recipeRuns;
 const recipeSources = S.recipeSources;
@@ -6864,6 +6890,8 @@ export const testStore = {
     S.desktopPreferences.clear();
     S.teamPrograms.clear();
     S.inkblotRuns.length = 0;
+    telegramState.clear();
+    telegramCodes.clear();
     resetDuesStore();
     resetRentalStore();
     resetLogisticsStore();
@@ -7076,6 +7104,10 @@ export const testStore = {
     drop(driverProfiles, (d) => d.userId === userId);
     this.deleteDesktopLayout(userId);
     this.deleteInkblotRuns(userId);
+    telegramState.delete(userId);
+    for (const [code, row] of [...telegramCodes]) {
+      if (row.userId === userId) telegramCodes.delete(code);
+    }
     drop(deliveries, (d) => d.userId === userId);
     drop(questionnaireEdits, (e) => e.userId === userId);
     drop(requiredActions, (a) => a.userId === userId);
@@ -7147,6 +7179,86 @@ export const testStore = {
   seedRawDesktopLayout(userId: string, value: unknown): void {
     S.desktopLayouts.set(userId, structuredClone(value));
   },
+  // --- Ol' Jeb (the twin of @camp404/db/telegram-dm) ----------------------
+
+  createTelegramLinkCode(userId: string): string {
+    const code = `e2e-${crypto.randomUUID()}`;
+    telegramCodes.set(code, {
+      userId,
+      expiresAt: new Date(Date.now() + TELEGRAM_LINK_MINUTES * 60_000),
+      used: false,
+    });
+    return code;
+  },
+  /** `/start <code>`: used once, inside its 10 minutes, as the real one. */
+  connectTelegram(input: {
+    code: string;
+    telegramUserId: string;
+    username: string | null;
+  }): { ok: true; userId: string } | { ok: false; reason: "link_run_out" } {
+    const row = telegramCodes.get(input.code);
+    if (!row || row.used || row.expiresAt.getTime() <= Date.now()) {
+      return { ok: false, reason: "link_run_out" };
+    }
+    row.used = true;
+    const user = findUserById(row.userId);
+    if (!user || user.sanitised) return { ok: false, reason: "link_run_out" };
+    for (const [otherId, other] of telegramState) {
+      if (
+        otherId !== row.userId &&
+        other.telegramUserId === input.telegramUserId
+      ) {
+        other.telegramUserId = null;
+        other.dmAt = null;
+      }
+    }
+    const current = telegramState.get(row.userId);
+    telegramState.set(row.userId, {
+      telegramUserId: input.telegramUserId,
+      dmAt: new Date(),
+      notices: current?.notices ?? "mine",
+    });
+    if (input.username && !user.telegramHandle?.trim()) {
+      user.telegramHandle = input.username;
+    }
+    return { ok: true, userId: row.userId };
+  },
+  /** E2E stand-in for tapping Start: uses the member's newest live code. */
+  tapTelegramStart(userId: string, username: string | null) {
+    const codes = [...telegramCodes].filter(
+      ([, row]) => row.userId === userId && !row.used,
+    );
+    const newest = codes[codes.length - 1];
+    if (!newest) return { ok: false as const, reason: "link_run_out" as const };
+    return this.connectTelegram({
+      code: newest[0],
+      telegramUserId: `e2e-${userId}`,
+      username,
+    });
+  },
+  disconnectTelegram(userId: string): void {
+    const row = telegramState.get(userId);
+    if (row) row.dmAt = null;
+  },
+  setTelegramNotices(userId: string, notices: TelegramNotices): void {
+    const row = telegramState.get(userId);
+    telegramState.set(userId, {
+      telegramUserId: row?.telegramUserId ?? null,
+      dmAt: row?.dmAt ?? null,
+      notices,
+    });
+  },
+  getTelegramConnection(userId: string): TelegramConnection {
+    const row = telegramState.get(userId);
+    const handle =
+      findUserById(userId)?.telegramHandle?.trim().replace(/^@+/, "") || null;
+    return {
+      connected: row?.dmAt != null,
+      handle,
+      notices: row?.notices ?? "mine",
+    };
+  },
+
   /** Account erasure's delete of `desktop_layouts`, preferences and all. */
   deleteDesktopLayout(userId: string): void {
     S.desktopLayouts.delete(userId);

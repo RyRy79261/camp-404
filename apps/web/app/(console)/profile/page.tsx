@@ -37,6 +37,9 @@ import { feedbackTracker } from "@/lib/integration-config";
 import { SignOutLink } from "@/components/auth/sign-out-link";
 import { ReportSettingsCard } from "@/components/feedback/report-settings-card";
 import { ProfileSections } from "@/components/profile/profile-sections";
+import { TelegramCard } from "@/components/profile/telegram-card";
+import { telegramBotUsername } from "@/lib/telegram";
+import { getTelegramConnection } from "@/lib/telegram-connection";
 import { MyTicket } from "./my-ticket";
 import { PaymentReference } from "./payment-reference";
 
@@ -64,16 +67,20 @@ export default async function ProfilePage() {
   const name = campUser.displayName ?? authUser.primaryEmail ?? "Burner";
   const initials = initialsFrom(campUser.displayName ?? authUser.primaryEmail);
   // The same pill the roster shows: a team lead reads "Team Lead", not "Member".
-  const [lead, refCode, participation, ticket, dues] = await Promise.all([
-    isTeamLead(campUser.id),
-    getMemberRefCode(campUser.id),
-    getMyParticipation(campUser.id),
-    getMyTicket(campUser.id),
-    // Their own balance for the year (#240); never anyone else's.
-    ledgerCycle().then((cycle) =>
-      getMemberDues(campUser.id, cycle, { forFinance: false }),
-    ),
-  ]);
+  // Ol' Jeb's card shows only once the bot is set up (its username is known).
+  const telegramOn = telegramBotUsername() !== null;
+  const [lead, refCode, participation, ticket, dues, telegram] =
+    await Promise.all([
+      isTeamLead(campUser.id),
+      getMemberRefCode(campUser.id),
+      getMyParticipation(campUser.id),
+      getMyTicket(campUser.id),
+      // Their own balance for the year (#240); never anyone else's.
+      ledgerCycle().then((cycle) =>
+        getMemberDues(campUser.id, cycle, { forFinance: false }),
+      ),
+      telegramOn ? getTelegramConnection(campUser.id) : null,
+    ]);
   // A ticket matters only to someone who might come: not before they answer,
   // and not once they say No.
   const asksTicket = mayRecordTicket(participation?.status ?? null);
@@ -197,6 +204,14 @@ export default async function ProfilePage() {
                 </CardContent>
               )}
             </Card>
+
+            {telegram && (
+              <TelegramCard
+                connected={telegram.connected}
+                handle={telegram.handle}
+                notices={telegram.notices}
+              />
+            )}
 
             <Card>
               <CardHeader>

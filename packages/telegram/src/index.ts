@@ -4,6 +4,7 @@ export {
   escapeMarkdownV2,
   type BotIdentity,
   type ChatInviteLink,
+  type InlineKeyboardButton,
   type TelegramClientOptions,
   type TelegramMessage,
 } from "./client";
@@ -27,3 +28,10 @@ export {
   type EnqueueAnnouncementInput,
   type IssueInviteResult,
 } from "./handlers";
+
+export {
+  handleMyChatMember,
+  handlePrivateMessage,
+  telegramNoticeSender,
+  telegramSendFailure,
+} from "./private-chat";

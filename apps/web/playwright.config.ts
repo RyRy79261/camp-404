@@ -89,6 +89,9 @@ export default defineConfig({
           // The one test member who sees Prince come home (os-shell.spec.ts);
           // nobody else's desktop changes.
           PRINCE_KEEPER_EMAILS: "prince-keeper@example.com",
+          // Ol' Jeb's username, so the Profile's Telegram card draws
+          // (telegram.spec.ts). No token: nothing is ever sent.
+          TELEGRAM_BOT_USERNAME: "jebediah_404_bot",
         },
       },
 });

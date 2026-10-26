@@ -8,6 +8,8 @@ import { getMyLift } from "./lifts";
 import { isAwaitingApproval, type MemberState } from "./member-gate";
 import { isSignInSecured } from "./sign-in-security";
 import { listMyOpenTasks } from "./tasks";
+import { telegramBotUsername } from "./telegram";
+import { getTelegramConnection } from "./telegram-connection";
 import { getMyTeams, getPendingQuestionnaires } from "./users";
 
 // The Today gadget's contents (owner, 2026-09-23: the member's OWN summary;
@@ -49,6 +51,11 @@ export interface TodayModel {
    * for someone else (the session changed under the page) is never shown.
    */
   userId: string;
+  /**
+   * Whether to offer "Get notices on Telegram": Ol' Jeb is set up and this
+   * member has not connected.
+   */
+  telegramNudge?: boolean;
 }
 
 const DATE = new Intl.DateTimeFormat("en-GB", {
@@ -72,18 +79,30 @@ export async function getTodayModel(
   const waiting = isAwaitingApproval(campUser, block);
   if (block && !waiting) return null;
 
-  const [memberships, pending, lift, secured, settings, calendar, myTasks] =
-    await Promise.all([
-      waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
-      waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
-      waiting ? Promise.resolve(null) : getMyLift(campUser.id),
-      isSignInSecured(),
-      getCampSettings(),
-      waiting ? Promise.resolve(null) : getUpcomingEvents(),
-      waiting
-        ? Promise.resolve({ items: [], total: 0 })
-        : listMyOpenTasks(campUser.id),
-    ]);
+  const telegramOn = !waiting && telegramBotUsername() !== null;
+  const [
+    memberships,
+    pending,
+    lift,
+    secured,
+    settings,
+    calendar,
+    myTasks,
+    telegram,
+  ] = await Promise.all([
+    waiting ? Promise.resolve([]) : getMyTeams(campUser.id),
+    waiting ? Promise.resolve([]) : getPendingQuestionnaires(campUser.id),
+    waiting ? Promise.resolve(null) : getMyLift(campUser.id),
+    isSignInSecured(),
+    getCampSettings(),
+    waiting ? Promise.resolve(null) : getUpcomingEvents(),
+    waiting
+      ? Promise.resolve({ items: [], total: 0 })
+      : listMyOpenTasks(campUser.id),
+    telegramOn
+      ? getTelegramConnection(campUser.id).catch(() => null)
+      : Promise.resolve(null),
+  ]);
   const labels = teamLabelMap(settings.teams);
 
   const home = buildHome({
@@ -111,6 +130,7 @@ export async function getTodayModel(
     burn: todayBurn(current, now, previousEnd),
     builtAt: now.getTime(),
     userId: campUser.id,
+    telegramNudge: telegram !== null && !telegram.connected,
   };
 }
 

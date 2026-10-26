@@ -48,6 +48,8 @@ function row(
     lostCatNumber: null,
     telegramHandle: "grace",
     telegramUserId: "123",
+    telegramDmAt: null,
+    telegramNotices: "mine",
     aiDataConsent: true,
     aiDataConsentAt: null,
     voiceConsentAt: null,
