@@ -433,10 +433,21 @@ export const telegramDeliveryStatusEnum = pgEnum("telegram_delivery_status", [
 export const telegramNoticesEnum = pgEnum("telegram_notices", ["mine", "all"]);
 
 // Outbound Telegram message queue state.
+// `sending` is claimed by a drain run and not yet answered: never sent again
+// (Telegram has no idempotency key). `skipped` was not sent on purpose (the
+// chat was removed, or a reminder had nobody left to tag).
 export const telegramAnnouncementStatusEnum = pgEnum(
   "telegram_announcement_status",
-  ["queued", "sent", "failed"],
+  ["queued", "sending", "sent", "failed", "skipped"],
 );
+
+// What a post in a camp chat is: a captain's announcement, a questionnaire
+// reminder that tags who still owes it, or a new meeting in the Calendar.
+export const telegramPostKindEnum = pgEnum("telegram_post_kind", [
+  "announcement",
+  "reminder",
+  "meeting",
+]);
 
 // --- Sign-in identity (Better Auth) --------------------------------------
 // Self-hosted Better Auth (@camp404/auth) owns these tables; they replace the
@@ -3099,6 +3110,10 @@ export const broadcasts = pgTable(
     // intent, not a pin: nothing reads it but `publishAnnouncement`, which
     // clears it as it sets the real pin.
     pinOnPublish: boolean("pin_on_publish").notNull().default(false),
+    // The composer's "Also post in Telegram", recorded on the draft like the
+    // pin intent. Only a captain's draft to everyone carries it; publishing
+    // queues one post per chat Ol' Jeb posts in (telegram_announcements).
+    telegramOnPublish: boolean("telegram_on_publish").notNull().default(false),
   },
   (b) => ({
     senderIdx: index("broadcasts_sender_idx").on(b.senderId),
@@ -4803,6 +4818,15 @@ export const telegramChats = pgTable("telegram_chats", {
   // generating deep links and verifying webhook updates target the
   // expected chat.
   username: text("username"),
+  // The forum topic in a supergroup (`message_thread_id`) that `/notifyhere`
+  // was sent in; null for the chat itself. One place per chat: `/notifyhere`
+  // in another topic of the same chat moves it there.
+  threadId: text("thread_id"),
+  // When a captain sent `/notifyhere` here: Ol' Jeb posts camp news in this
+  // chat. Null: he does not (never asked, or a captain removed it). Kept apart
+  // from `kind`, so the camp's main group (invites) can be a place too and
+  // removing it as a place never stops its invites.
+  postsSince: timestamp("posts_since", { mode: "date" }),
   addedByUserId: uuid("added_by_user_id").references(() => users.id, {
     onDelete: "set null",
   }),
@@ -4850,6 +4874,21 @@ export const telegramAnnouncements = pgTable(
       onDelete: "set null",
     }),
     chatId: text("chat_id").notNull(),
+    // The topic to post in (`telegram_chats.thread_id` when queued).
+    threadId: text("thread_id"),
+    kind: telegramPostKindEnum("kind").notNull().default("announcement"),
+    // The post's first line. The body is plain text; a reminder's tags are
+    // NOT stored: the drain works out who still owes the form when it sends,
+    // so no member's handle is kept in this table.
+    title: text("title").notNull().default(""),
+    // The questionnaire send (reminder) or camp event (meeting) it is about.
+    refId: uuid("ref_id"),
+    // The button under the post: its words and the app path it opens.
+    buttonText: text("button_text"),
+    buttonPath: text("button_path"),
+    // One post per thing per chat (a reminder: per camp day), so a retry or
+    // a second reminder the same day queues nothing.
+    dedupeKey: text("dedupe_key").unique(),
     body: text("body").notNull(),
     status: telegramAnnouncementStatusEnum("status")
       .notNull()
@@ -5048,6 +5087,18 @@ export const campSettings = pgTable(
     // teams, Finance, Transport and Logistics, Communications & HR, Mutant
     // Vehicle, Sound and Water; the seed mirrors DEFAULT_CAMP_CONFIG in camp-config.ts (a test
     // guards the two against drift). See camp-config.ts for the accessor.
+    // What Ol' Jeb posts in the camp's Telegram chats (Camp settings' Ol' Jeb
+    // card): announcements a captain ticks, questionnaire reminders that tag
+    // who still owes them, and new meetings.
+    telegramPostAnnouncements: boolean("telegram_post_announcements")
+      .notNull()
+      .default(true),
+    telegramPostReminders: boolean("telegram_post_reminders")
+      .notNull()
+      .default(true),
+    telegramPostMeetings: boolean("telegram_post_meetings")
+      .notNull()
+      .default(true),
     config: jsonb("config")
       .$type<CampConfig>()
       .notNull()

@@ -51,6 +51,15 @@ vi.mock("@/app/(console)/notifications/actions", () => ({
 vi.mock("@/components/push/device-token", () => ({
   forgetDeviceToken: vi.fn(),
 }));
+const telegram = vi.hoisted(() => ({
+  link: vi.fn(async () => ({
+    ok: true as const,
+    data: { link: "https://t.me/jebediah_404_bot?start=abc" },
+  })),
+}));
+vi.mock("@/app/(console)/profile/telegram-actions", () => ({
+  createTelegramLinkAction: telegram.link,
+}));
 
 import { Desktop, type DesktopProps } from "../desktop-shell";
 
@@ -126,6 +135,92 @@ describe("the welcome wizard", () => {
       within(panel!).getByRole("heading", { name: "Welcome" }),
     );
     expect(within(panel!).getByText("Step 1 of 7")).toBeTruthy();
+  });
+
+  it("offers Telegram as an optional step only when Ol' Jeb is set up and not connected", async () => {
+    render(<Desktop {...props({ telegramOffer: true })} />);
+    const panel = wizard()!;
+    expect(within(panel).getByText("Step 1 of 8")).toBeTruthy();
+    for (let i = 0; i < 6; i++) {
+      fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
+    }
+    expect(
+      within(panel).getByRole("heading", {
+        name: "Get your notices on Telegram",
+      }),
+    ).toBeTruthy();
+    // Skipping is the footer's, as on every step.
+    expect(
+      within(panel).getByRole("button", { name: "Skip for now" }),
+    ).toBeTruthy();
+    const open = vi.spyOn(window, "open").mockReturnValue({
+      location: { href: "" },
+      close: vi.fn(),
+    } as unknown as Window);
+    await act(async () => {
+      fireEvent.click(
+        within(panel).getByRole("button", { name: "Connect Telegram" }),
+      );
+    });
+    expect(telegram.link).toHaveBeenCalledOnce();
+    expect(
+      panel.querySelector("[data-welcome-telegram='open']"),
+    ).not.toBeNull();
+    open.mockRestore();
+    cleanup();
+
+    render(<Desktop {...props()} />);
+    expect(within(wizard()!).getByText("Step 1 of 7")).toBeTruthy();
+  });
+
+  it("gives the Telegram link to tap when the tab was blocked, and recovers when the link fails", async () => {
+    render(<Desktop {...props({ telegramOffer: true })} />);
+    const panel = wizard()!;
+    for (let i = 0; i < 6; i++) {
+      fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
+    }
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    await act(async () => {
+      fireEvent.click(
+        within(panel).getByRole("button", { name: "Connect Telegram" }),
+      );
+    });
+    expect(
+      within(panel)
+        .getByRole("link", { name: "Open Telegram" })
+        .getAttribute("href"),
+    ).toBe("https://t.me/jebediah_404_bot?start=abc");
+    expect(within(panel).queryByText(/Telegram is open/)).toBeNull();
+    cleanup();
+
+    render(<Desktop {...props({ telegramOffer: true })} />);
+    const again = wizard()!;
+    for (let i = 0; i < 6; i++) {
+      fireEvent.click(within(again).getByRole("button", { name: "Next" }));
+    }
+    const close = vi.fn();
+    open.mockReturnValue({
+      location: { href: "" },
+      close,
+    } as unknown as Window);
+    telegram.link.mockRejectedValueOnce(new Error("offline"));
+    await act(async () => {
+      fireEvent.click(
+        within(again).getByRole("button", { name: "Connect Telegram" }),
+      );
+    });
+    expect(within(again).getByRole("alert").textContent).toBe(
+      "Something went wrong. Please try again.",
+    );
+    expect(close).toHaveBeenCalled();
+    expect(
+      (
+        within(again).getByRole("button", {
+          name: "Connect Telegram",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+    open.mockRestore();
   });
 
   it("walks its steps with Next and Back, each heading taking focus", async () => {

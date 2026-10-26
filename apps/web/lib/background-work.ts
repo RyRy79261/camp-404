@@ -19,7 +19,8 @@ import {
   drainQueuedTelegram,
   pruneTelegramUpdates,
 } from "@camp404/db/telegram-dm";
-import { telegramNoticeSender } from "@camp404/telegram";
+import { drainTelegramPosts } from "@camp404/db/telegram-posts";
+import { telegramNoticeSender, telegramPostSender } from "@camp404/telegram";
 import { sweepOrphanAvatarBlobs } from "./avatar-blob";
 import { isEmailConfigured, sendEmail } from "./email";
 import { sendPush } from "./firebase-admin";
@@ -139,6 +140,13 @@ export async function deliverDue(): Promise<void> {
   if (isTelegramConfigured()) {
     await step("telegram", () =>
       drainQueuedTelegram(telegramNoticeSender(getTelegramClient()), {
+        siteUrl: SITE_URL,
+      }),
+    );
+    // Ol' Jeb's posts in the camp's chats: announcements, reminders that tag
+    // who still owes a form, and new meetings.
+    await step("telegram posts", () =>
+      drainTelegramPosts(telegramPostSender(getTelegramClient()), {
         siteUrl: SITE_URL,
       }),
     );

@@ -6,12 +6,16 @@ import {
   campEventRefusal,
   hasMinutes,
   meetingInstant,
+  meetingPostBody,
   MEETING_HAS_MINUTES,
   storedCampEventWhen,
+  TELEGRAM_OPEN_BUTTON,
   type CampEventKind,
 } from "@camp404/core";
 import { writeAuditEvent } from "./audit";
 import { lockSenderReach } from "./broadcasts";
+import { resolveTeamsConfig, teamLabelMap } from "./camp-config";
+import { queueTelegramPosts } from "./telegram-posts";
 import { currentCycleNumber } from "./cycles";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
@@ -289,6 +293,24 @@ export async function createCampEvent(
         })
         .returning({ id: schema.meetingNotes.id });
       noteId = note!.id;
+      // Ol' Jeb tells the camp's chats about a new meeting.
+      const [settings] = await tx
+        .select({ config: schema.campSettings.config })
+        .from(schema.campSettings)
+        .limit(1);
+      const labels = teamLabelMap(resolveTeamsConfig(settings?.config));
+      await queueTelegramPosts(tx, {
+        kind: "meeting",
+        title: `New meeting: ${input.title}`,
+        body: meetingPostBody({
+          ...row!,
+          teamLabel: row!.team ? (labels[row!.team] ?? row!.team) : null,
+        }),
+        refId: null,
+        buttonText: TELEGRAM_OPEN_BUTTON,
+        buttonPath: `/calendar?view=month&month=${row!.startDate.slice(0, 7)}&event=${encodeURIComponent(input.newEventId)}`,
+        dedupe: `meeting:${input.newEventId}`,
+      });
     }
     await writeAuditEvent(tx, {
       actorId: input.actorId,

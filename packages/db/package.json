@@ -81,7 +81,8 @@
     "./id-documents": "./src/id-documents.ts",
     "./audit": "./src/audit.ts",
     "./maintenance": "./src/maintenance.ts",
-    "./pets": "./src/pets.ts"
+    "./pets": "./src/pets.ts",
+    "./telegram-posts": "./src/telegram-posts.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",

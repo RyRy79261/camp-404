@@ -48,6 +48,7 @@ function sent(
     publishedAt: new Date("2026-09-01T10:00:00Z"),
     pinnedAt: null,
     pinOnPublish: false,
+    telegramOnPublish: false,
     createdAt: new Date("2026-09-01T09:00:00Z"),
     recipientCount: 3,
     acknowledgedCount: 0,

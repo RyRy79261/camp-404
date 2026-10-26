@@ -10,10 +10,15 @@ A small Telegram Bot API client, the update handlers and the webhook check.
   `/start <code>` (connects a member), `/stop` and anything else with one
   fixed sentence; `handleMyChatMember` stops a member who blocked the bot;
   `telegramNoticeSender` is the drain's send (`@camp404/db/telegram-dm`).
-- **Status:** group outbound (group invites, posting announcements) is built and
-  tested but deliberately not called. When the owner turns Telegram on, call
-  `dispatchPendingAnnouncements` from `deliverDue` in
-  `apps/web/lib/background-work.ts`. See [`DEFERRED.md`](../../DEFERRED.md).
+- **Group chats (on, 2026-10-26):** `handleGroupMessage` reads only
+  `/notifyhere` (a connected captain adds the chat or topic Ol' Jeb posts
+  in) and a group's move to a supergroup; `telegramPostSender` is the post
+  drain's send (`@camp404/db/telegram-posts`), into the topic when there is
+  one.
+- **Status:** the group invite on approval (`issueGroupInviteForUser`) is
+  built and tested but deliberately not called. `queueAnnouncement` and
+  `dispatchPendingAnnouncements` are superseded by the post drain; do not
+  call them. See [`DEFERRED.md`](../../DEFERRED.md).
 
 ```bash
 pnpm --filter @camp404/telegram test

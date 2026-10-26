@@ -5,6 +5,7 @@ import {
   type DefinitionIssue,
   definitionLimitErrors,
   errorLogText,
+  notificationLink,
   type NotificationPayload,
   optInQuestionnaireNotification,
   QUESTIONNAIRE_REF_TYPE,
@@ -12,6 +13,7 @@ import {
   questionnaireReminderNotification,
   REQUIRED_ACTION_REF_TYPE,
   requiredActionReminderNotification,
+  TELEGRAM_ANSWER_BUTTON,
   validateQuestionnaireDefinition,
 } from "@camp404/core";
 import { lockActor } from "./actor";
@@ -27,6 +29,7 @@ import {
 } from "./activations";
 import { carryOverFor, currentCycleNumber } from "./cycles";
 import { writeAuditEvent } from "./audit";
+import { campDayKey, queueTelegramPosts } from "./telegram-posts";
 
 // Builder-questionnaire lifecycle: publish (snapshot + cosmetic-vs-version-bump),
 // unpublish (status + cascade close), send (open an activation with the one-open
@@ -998,6 +1001,19 @@ export async function sendReminder(input: {
       payload,
       targets,
       now,
+    });
+
+    // Ol' Jeb's reminder in the camp's chats, tagging who still owes it (the
+    // tags are worked out when it is sent). At most one a camp day per send
+    // per chat, whether a captain pressed Remind or the deadline nudged.
+    await queueTelegramPosts(tx, {
+      kind: "reminder",
+      title: payload.title,
+      body: payload.body,
+      refId: act.id,
+      buttonText: TELEGRAM_ANSWER_BUTTON,
+      buttonPath: notificationLink(payload.refType, payload.refId),
+      dedupe: `reminder:${act.id}:${campDayKey(now)}`,
     });
 
     return {

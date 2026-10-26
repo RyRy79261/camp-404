@@ -6,6 +6,11 @@ import {
 } from "@/lib/notifications";
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { programPage } from "@/lib/program-page";
+import { telegramBotUsername } from "@/lib/telegram";
+import {
+  getTelegramPostSettings,
+  listTelegramPlaces,
+} from "@/lib/telegram-places";
 import {
   AnnouncementsManager,
   type AudienceOption,
@@ -45,6 +50,17 @@ export default async function AnnouncementsPage({
         isCaptain ? getAnnouncementPickerData(campUser.id) : null,
       ])
     : [[], null];
+  // "Also post in Telegram": a captain's, when Ol' Jeb is set up, posts
+  // announcements, and has a chat to post them in. The chats it names.
+  const telegramChats =
+    isCaptain && cleared && telegramBotUsername()
+      ? await Promise.all([
+          listTelegramPlaces(),
+          getTelegramPostSettings(),
+        ]).then(([places, posts]) =>
+          posts.announcements ? places.map((p) => p.title) : [],
+        )
+      : [];
   // Only what this sender may pick. The actions check it again.
   const audienceOptions: AudienceOption[] = isCaptain
     ? [
@@ -89,6 +105,7 @@ export default async function AnnouncementsPage({
           // anything. A lead gets their own teams, and no pin elsewhere.
           leadTeams={isCaptain ? null : leadTeams}
           picker={picker}
+          telegramChats={telegramChats}
           // A team page's "Write announcement" opens the composer on that
           // team, when this sender may address it; anything else is ignored.
           preferredAudience={

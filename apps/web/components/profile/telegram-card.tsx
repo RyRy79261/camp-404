@@ -48,6 +48,8 @@ export function TelegramCard({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [saving, setSaving] = useState<"mine" | "all" | null>(null);
+  // The browser blocked the new tab: the member taps the link themselves.
+  const [blocked, setBlocked] = useState(false);
   // Shown at once; put back if the save fails.
   const [chosen, setChosen] = useState(notices);
   const waitingSince = useRef(0);
@@ -79,13 +81,22 @@ export function TelegramCard({
     // follows once the link is made.
     const opened = window.open("about:blank", "_blank");
     startTransition(async () => {
-      const result = await createTelegramLinkAction();
+      let result: Awaited<ReturnType<typeof createTelegramLinkAction>>;
+      try {
+        result = await createTelegramLinkAction();
+      } catch {
+        result = {
+          ok: false,
+          error: "Something went wrong. Please try again.",
+        };
+      }
       if (!result.ok) {
         opened?.close();
         setError(result.error);
         return;
       }
       if (opened) opened.location.href = result.data.link;
+      setBlocked(!opened);
       setLink(result.data.link);
     });
   };
@@ -130,7 +141,7 @@ export function TelegramCard({
         )}
         {state === "waiting" && (
           <CardDescription>
-            Telegram is open. Tap{" "}
+            {blocked ? "Tap Open Telegram, then tap" : "Telegram is open. Tap"}{" "}
             <strong className="text-foreground">Start</strong> in your chat with
             Ol&apos; Jeb. This link works for 10 minutes.
           </CardDescription>
@@ -160,7 +171,7 @@ export function TelegramCard({
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm">
               <a href={link} target="_blank" rel="noopener noreferrer">
-                Open Telegram again
+                {blocked ? "Open Telegram" : "Open Telegram again"}
               </a>
             </Button>
             <Button variant="outline" size="sm" onClick={() => setLink(null)}>

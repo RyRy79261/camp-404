@@ -141,9 +141,12 @@ export class TelegramClient {
     disableWebPagePreview?: boolean;
     /** Buttons under the message; only URL buttons are used. */
     inlineKeyboard?: InlineKeyboardButton[][];
+    /** A forum topic in a supergroup (`message_thread_id`). */
+    messageThreadId?: number;
   }): Promise<TelegramMessage> {
     return this.call<TelegramMessage>("sendMessage", {
       chat_id: input.chatId,
+      message_thread_id: input.messageThreadId,
       text: input.text,
       parse_mode: input.parseMode,
       disable_notification: input.disableNotification,

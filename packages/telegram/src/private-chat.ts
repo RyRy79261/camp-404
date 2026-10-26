@@ -42,6 +42,8 @@ export async function handlePrivateMessage(
     reply = (await isTelegramConnected(telegramUserId))
       ? OL_JEB_SAYS.onlyNotices
       : OL_JEB_SAYS.hello;
+  } else if (command.command === "notifyhere") {
+    reply = OL_JEB_SAYS.notifyhereInGroup;
   } else if (command.command === "stop") {
     reply = (await stopTelegramByTelegramId(telegramUserId))
       ? OL_JEB_SAYS.stopped

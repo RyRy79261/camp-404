@@ -201,7 +201,9 @@ In rough order of when each blocks the next:
    with `message`, `my_chat_member` and `chat_member`. The owner only sets
    `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and
    `TELEGRAM_BOT_USERNAME` in Vercel. Seeding `telegram_chats` is still
-   open (step 2, `/notifyhere`).
+   open (step 2, `/notifyhere`). [CORRECTION 2026-10-26] Done: a connected
+   captain sends `/notifyhere` in the chat or topic
+   (`@camp404/db/telegram-posts`).
 
 2. **Approval trigger.** `issueGroupInviteForUser(userId)` is a helper
    that nobody calls yet. There is no single `users.approved` flag —

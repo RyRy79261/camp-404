@@ -6,12 +6,17 @@ import {
 import { NextResponse } from "next/server";
 import {
   handleChatMemberUpdate,
+  handleGroupMessage,
   handleMyChatMember,
   handlePrivateMessage,
   updateSchema,
   verifyWebhookSecret,
 } from "@camp404/telegram";
-import { getTelegramClient, getWebhookSecret } from "@/lib/telegram";
+import {
+  getTelegramClient,
+  getWebhookSecret,
+  telegramBotUsername,
+} from "@/lib/telegram";
 
 export const runtime = "nodejs";
 
@@ -26,10 +31,12 @@ export const runtime = "nodejs";
 //   update_id, so Telegram's retry handles it again.
 //
 // What Ol' Jeb reads: private messages (`/start <code>` connects a member,
-// `/stop` stops their notices, anything else gets one fixed sentence),
+// `/stop` stops their notices, anything else gets one fixed sentence), in a
+// group only `/notifyhere` from a connected captain (the chat or topic he
+// posts camp news in) and a group's move to a supergroup,
 // `my_chat_member` (a member blocking the bot), and `chat_member` (a member
-// joining the camp group through their invite link). Group text is never
-// read. Register the webhook with allowed_updates
+// joining the camp group through their invite link). No other group text
+// is read. Register the webhook with allowed_updates
 // ["message", "my_chat_member", "chat_member"], on the production domain only.
 export async function POST(req: Request) {
   let secret: string;
@@ -69,8 +76,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    if (update.message) {
+    if (update.message?.chat.type === "private") {
       await handlePrivateMessage(update.message, getTelegramClient());
+    } else if (update.message) {
+      await handleGroupMessage(
+        update.message,
+        getTelegramClient(),
+        telegramBotUsername(),
+      );
     }
     if (update.my_chat_member) {
       await handleMyChatMember(update.my_chat_member);

@@ -178,7 +178,9 @@ test.describe("404 OS welcome and themes (test-mode)", () => {
       panel.getByRole("heading", { name: "Moving around" }),
     ).toBeFocused();
     await expect(panel.getByText(/glows there/)).toBeVisible();
-    await expect(panel.getByText("Step 3 of 7")).toBeVisible();
+    // Eight steps: the E2E run sets Ol' Jeb up (TELEGRAM_BOT_USERNAME), so
+    // the optional Telegram step is offered to a member not connected yet.
+    await expect(panel.getByText("Step 3 of 8")).toBeVisible();
     await expect(panel.getByText(/Back, at its top, closes it/)).toBeVisible();
     await expect(panel.locator("[data-welcome-demo]")).toBeHidden();
     await panel.getByRole("button", { name: "Next" }).click();

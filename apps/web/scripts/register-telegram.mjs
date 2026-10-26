@@ -21,6 +21,11 @@ export const COMMANDS = [
   { command: "stop", description: "Stop my camp notices" },
 ];
 
+/** In a group: where Ol' Jeb posts camp news (a connected captain only). */
+export const GROUP_COMMANDS = [
+  { command: "notifyhere", description: "Post camp news here (captains)" },
+];
+
 /**
  * Register the webhook and the commands. Answers what it did, for the log:
  * "skipped", "registered", or a warning sentence.
@@ -53,7 +58,14 @@ export async function registerTelegram({ env, fetchImpl = fetch }) {
       secret_token: secret,
       allowed_updates: ALLOWED_UPDATES,
     });
-    await call("setMyCommands", { commands: COMMANDS });
+    await call("setMyCommands", {
+      commands: COMMANDS,
+      scope: { type: "all_private_chats" },
+    });
+    await call("setMyCommands", {
+      commands: GROUP_COMMANDS,
+      scope: { type: "all_group_chats" },
+    });
     return "registered";
   } catch (err) {
     // The error's own words only: the URL that holds the token is never in it.

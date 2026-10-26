@@ -119,6 +119,7 @@ function draft(
     publishedAt: null,
     pinnedAt: null,
     pinOnPublish: false,
+    telegramOnPublish: false,
     createdAt: new Date("2026-10-01T10:00:00Z"),
     recipientCount: 0,
     acknowledgedCount: 0,

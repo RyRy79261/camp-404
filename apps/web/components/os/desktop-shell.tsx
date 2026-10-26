@@ -265,6 +265,11 @@ export interface DesktopProps {
    */
   princeKeeper?: boolean;
   /**
+   * The welcome wizard offers Ol' Jeb (the camp's Telegram bot) as an
+   * optional step: he is set up and this member has not connected him.
+   */
+  telegramOffer?: boolean;
+  /**
    * How long the clock stays empty before she walks on, in ms. Unset: the
    * scene's own 30 s. Only the E2E harness shortens it.
    */
@@ -328,6 +333,7 @@ function DesktopInner({
   today = null,
   boot = null,
   princeKeeper = false,
+  telegramOffer = false,
   reunionDelayMs,
   catsDelayMs,
   children,
@@ -1929,6 +1935,7 @@ function DesktopInner({
               onOpenToday={
                 today && !phoneNow ? () => setTodayStored(true) : undefined
               }
+              telegramOffer={telegramOffer}
               onClose={display.closeWelcome}
             />
           )}

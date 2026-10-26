@@ -1,0 +1,229 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Ol' Jeb step 2 mock-up</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/><style>
+      :root {
+        --bg: oklch(0.15 0.05 295);
+        --panel: oklch(0.2 0.06 295);
+        --line: oklch(0.35 0.08 295);
+        --fg: oklch(0.95 0.01 295);
+        --mut: oklch(0.72 0.04 295);
+        --mag: oklch(0.65 0.27 340);
+        --blue: oklch(0.62 0.18 255);
+        --ok: oklch(0.75 0.17 150);
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: Inter, sans-serif;
+        color: var(--fg);
+        background: #0b0912;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 16px;
+      }
+      .step {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .lab {
+        font: 12px Silkscreen;
+        color: var(--blue);
+      }
+      .desk {
+        background: var(--bg);
+        background-image:
+          linear-gradient(var(--line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line) 1px, transparent 1px);
+        background-size: 32px 32px;
+        padding: 16px;
+      }
+      .win {
+        background: var(--panel);
+        border: 2px solid var(--line);
+        box-shadow: 4px 4px 0 #0008;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: color-mix(in oklch, var(--mag) 70%, var(--bg));
+        padding: 4px 8px;
+        font-family: Silkscreen;
+        font-size: 12px;
+      }
+      .bar .b {
+        margin-left: auto;
+        display: flex;
+        gap: 4px;
+      }
+      .bar .b i {
+        width: 12px;
+        height: 12px;
+        border: 1px solid var(--fg);
+        display: block;
+      }
+      .body {
+        padding: 14px;
+      }
+      .eye {
+        font-family: Silkscreen;
+        font-size: 10px;
+        color: var(--mag);
+      }
+      h1 {
+        font-size: 18px;
+        margin: 2px 0 10px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        background: color-mix(in oklch, var(--panel) 80%, black);
+        padding: 12px;
+        
+      }
+      .ct {
+        font-family: Silkscreen;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      p {
+        font-size: 13px;
+        color: var(--mut);
+        margin: 8px 0;
+        line-height: 1.45;
+      }
+      .btn {
+        display: inline-flex;
+        border: 1px solid var(--mag);
+        background: var(--mag);
+        color: #fff;
+        font: 500 13px Inter;
+        padding: 8px 12px;
+      }
+      .btn.o {
+        background: transparent;
+        color: var(--fg);
+        border-color: var(--line);
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .badge {
+        font-family: Silkscreen;
+        font-size: 10px;
+        padding: 2px 6px;
+        border: 1px solid;
+      }
+      .radio {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 8px 0;
+        font-size: 13px;
+      }
+      .radio label {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .phone {
+        background: #17212b;
+        padding: 14px;
+        font-size: 13px;
+        min-height: 260px;
+      }
+      .ph {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #0e1621;
+        margin-bottom: 8px;
+      }
+      .av {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--mag);
+        display: grid;
+        place-items: center;
+        font-family: Silkscreen;
+        font-size: 11px;
+      }
+      .msg {
+        background: #182533;
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin: 8px 0;
+        color: #e9eef3;
+        line-height: 1.4;
+      }
+      .msg b {
+        display: block;
+        margin-bottom: 2px;
+      }
+      .me {
+        background: #2b5278;
+        margin-left: 60px;
+      }
+      .kb {
+        display: block;
+        text-align: center;
+        background: #24394e;
+        color: #6ab3f3;
+        padding: 7px;
+        border-radius: 6px;
+        margin-top: 6px;
+        font-weight: 500;
+      }
+      .time {
+        font-size: 10px;
+        color: #7d8b99;
+        text-align: right;
+      }
+    </style><style>
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:16px}
+.chat{border:1px solid var(--line);padding:8px 10px;margin:6px 0;display:flex;gap:8px;align-items:center;font-size:13px}
+.chat .x{margin-left:auto;font-size:12px;color:var(--mut);border:1px solid var(--line);padding:2px 8px}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:6px 0}
+.tag{color:#6ab3f3}
+.sys{font-size:11px;color:#7d8b99;text-align:center;margin:6px 0}
+.who{font-size:11px;color:var(--mag);font-weight:600;margin-bottom:2px}
+.note{font-size:12px;color:var(--mut);border-left:2px solid var(--blue);padding-left:8px;margin:8px 0}
+h2{font:12px Silkscreen;color:var(--blue);margin:18px 0 8px}
+</style></head><body>
+<h2>1 · Captain: the Ol' Jeb card in Camp settings</h2><div class="grid2"><div class="desk"><div class="win"><div class="bar">▣ Camp settings<span class="b"><i></i><i></i></span></div><div class="body"><div class="eye">CAPTAINS / CAMP SETTINGS</div><h1>Camp settings</h1><div class="card">
+<div class="ct">✈ Ol' Jeb <span class="badge" style="color:var(--ok)">On</span></div>
+<p>Ol' Jeb posts camp news in these chats:</p>
+<div class="chat">📢 Camp 404 Announcements <span style="color:var(--mut);font-size:11px">group</span><span class="x">Remove</span></div>
+<div class="chat"># Camp 404 › Announcements <span style="color:var(--mut);font-size:11px">topic</span><span class="x">Remove</span></div>
+<p style="margin-top:12px"><b style="color:var(--fg)">What he posts there</b></p>
+<label class="chk"><input type="checkbox" checked> Announcements (when you tick "Also post in Telegram")</label>
+<label class="chk"><input type="checkbox" checked> Questionnaire reminders, tagging who still has to answer</label>
+<label class="chk"><input type="checkbox" checked> New meetings in the Calendar</label>
+<div class="note">To add a chat: add @jebediah_404_bot to the group, then send <b style="color:var(--fg)">/notifyhere</b> in it (or in the topic). Only a captain who connected Telegram can do this.</div>
+</div></div></div></div><div class="phone"><div class="ph"><div class="av">CA</div><div><b>Camp 404 Announcements</b><div style="font-size:11px;color:#7d8b99">group · 41 members</div></div></div>
+<div class="sys">Cloud added Ol' Jeb</div>
+<div class="msg me">/notifyhere</div>
+<div class="msg"><div class="who">Ol' Jeb</div>Got it! I'll post camp news in this chat from now on.</div>
+<div class="sys">— if someone who is not a captain tries —</div>
+<div class="msg"><div class="who">Ol' Jeb</div>Sorry, only a captain who connected me in Camp 404 can do that.</div></div></div>
+<h2>2 · What the group sees</h2><div class="grid2"><div class="phone"><div class="ph"><div class="av">CA</div><div><b>Camp 404 Announcements</b><div style="font-size:11px;color:#7d8b99">group · 41 members</div></div></div>
+<div class="msg"><div class="who">Ol' Jeb</div><b>Build weekend moved to 8 Nov</b>The truck is booked for Saturday 8 Nov. Bring gloves.<span class="kb">Open in Camp 404</span><div class="time">10:02</div></div>
+<div class="msg"><div class="who">Ol' Jeb</div><b>Form due Friday: Coming this year?</b>Still to answer: <span class="tag">@cloud_404</span> <span class="tag">@mike_404</span> <span class="tag">@jinn_cat</span> and 2 more without a Telegram username.<span class="kb">Answer in Camp 404</span><div class="time">09:00</div></div>
+<div class="msg"><div class="who">Ol' Jeb</div><b>New meeting: Build planning</b>Sat 2 Nov, 18:00 · Structures team<span class="kb">Open in Camp 404</span><div class="time">14:31</div></div></div><div class="desk"><div class="win"><div class="bar">▣ Announcements<span class="b"><i></i><i></i></span></div><div class="body"><div class="eye">CAPTAINS / ANNOUNCEMENTS</div><h1>New announcement</h1><div class="card">
+<p style="color:var(--fg)">Title: <b>Build weekend moved to 8 Nov</b></p>
+<p>Audience: Everyone</p>
+<label class="chk"><input type="checkbox" checked> Also post in Telegram <span style="color:var(--mut)">(Camp 404 Announcements, Announcements topic)</span></label>
+<div class="row"><span class="btn">Publish</span></div></div></div></div></div></div>
+<h2>3 · Onboarding: optional step</h2><div class="grid2"><div class="desk"><div class="win"><div class="bar">▣ Welcome<span class="b"><i></i><i></i></span></div><div class="body"><div class="eye">WELCOME</div><h1>Get your notices on Telegram</h1><div class="card">
+<p>Ol' Jeb, the camp's Telegram bot, can send you the notices about you: forms you owe, your tasks, your approval.</p>
+<p>This is optional. You can do it later on your Profile.</p>
+<div class="row"><span class="btn">Connect Telegram</span><span class="btn o">Skip for now</span></div></div></div></div></div><div></div></div>
+</body></html>
