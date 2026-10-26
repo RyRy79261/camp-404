@@ -22,6 +22,8 @@ vi.mock("@camp404/ui/components/toast", () => ({ toast: { error: vi.fn() } }));
 import { TelegramCard } from "../telegram-card";
 
 const LINK = "https://t.me/jebediah_404_bot?start=abc";
+/** The tab Connect opens (a browser that did not block it). */
+let tab: { location: { href: string }; close: ReturnType<typeof vi.fn> };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -35,7 +37,8 @@ beforeEach(() => {
   });
   actions.setTelegramNoticesAction.mockResolvedValue({ ok: true });
   actions.disconnectTelegramAction.mockResolvedValue({ ok: true });
-  vi.spyOn(window, "open").mockReturnValue(null);
+  tab = { location: { href: "" }, close: vi.fn() };
+  vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
 });
 afterEach(() => {
   cleanup();
@@ -95,6 +98,29 @@ describe("TelegramCard", () => {
       await vi.advanceTimersByTimeAsync(3500);
     });
     expect(refresh).toHaveBeenCalled();
+  });
+
+  it("gives the link to tap when the browser blocked the new tab", async () => {
+    vi.mocked(window.open).mockReturnValue(null);
+    render(<TelegramCard connected={false} handle={null} notices="mine" />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect Telegram" }));
+    const link = await screen.findByRole("link", { name: "Open Telegram" });
+    expect(link.getAttribute("href")).toBe(LINK);
+    expect(screen.queryByText(/Telegram is open/)).toBeNull();
+    expect(screen.getByText(/Tap Open Telegram, then tap/)).toBeTruthy();
+  });
+
+  it("closes the tab and says so when making the link fails outright", async () => {
+    actions.createTelegramLinkAction.mockRejectedValue(new Error("offline"));
+    render(<TelegramCard connected={false} handle={null} notices="mine" />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect Telegram" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Something went wrong. Please try again.",
+    );
+    expect(tab.close).toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: "Connect Telegram" }),
+    ).toBeTruthy();
   });
 
   it("says the camp is not set up when the link cannot be made", async () => {

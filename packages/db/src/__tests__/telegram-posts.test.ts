@@ -18,6 +18,9 @@ import {
   TELEGRAM_POST_MAX_QUEUED_HOURS,
   type TelegramPostSend,
 } from "../telegram-posts";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { getActiveChatByKind } from "../telegram";
 import { withTransaction } from "../index";
 import * as schema from "../schema";
 
@@ -144,6 +147,91 @@ describe("/notifyhere: who may add a chat", () => {
     await addPlace("905", "-100600", null, "Camp 404");
     places = await listTelegramPlaces();
     expect(places).toMatchObject([{ chatId: "-100600", threadId: null }]);
+  });
+
+  it("keeps the camp's main group a main group: a place, and its invites, after Remove too", async () => {
+    const db = h.db();
+    const captain = await connectedCaptain(db, "907");
+    await db.insert(schema.telegramChats).values({
+      kind: "main_group",
+      chatId: "-100800",
+      title: "Camp 404",
+    });
+    expect(await addPlace("907", "-100800", "3", "Camp 404 › News")).toEqual({
+      ok: true,
+    });
+    const [row] = await db
+      .select()
+      .from(schema.telegramChats)
+      .where(eq(schema.telegramChats.chatId, "-100800"));
+    expect(row).toMatchObject({ kind: "main_group", archivedAt: null });
+    expect(await listTelegramPlaces()).toMatchObject([
+      { chatId: "-100800", threadId: "3" },
+    ]);
+
+    const [place] = await listTelegramPlaces();
+    await removeTelegramPlace({ actorId: captain.id, id: place!.id });
+    expect(await listTelegramPlaces()).toEqual([]);
+    expect(await getActiveChatByKind("main_group")).toMatchObject({
+      chatId: "-100800",
+      kind: "main_group",
+    });
+  });
+
+  it("moves the posts still waiting for a chat to the topic it moved to", async () => {
+    const db = h.db();
+    await connectedCaptain(db, "908");
+    await addPlace("908", "-100900", "7");
+    const post = (dedupe: string) =>
+      withTransaction((tx) =>
+        queueTelegramPosts(tx, {
+          kind: "meeting",
+          title: "New meeting: Build",
+          body: "b",
+          refId: null,
+          buttonText: null,
+          buttonPath: null,
+          dedupe,
+        }),
+      );
+    await post("m:1");
+    await post("m:2");
+    const [sent] = await queuedPosts(db);
+    await db
+      .update(schema.telegramAnnouncements)
+      .set({ status: "sent" })
+      .where(eq(schema.telegramAnnouncements.id, sent!.id));
+
+    await addPlace("908", "-100900", "9");
+    const rows = await queuedPosts(db);
+    expect(rows.map((r) => [r.status, r.threadId]).sort()).toEqual([
+      ["queued", "9"],
+      ["sent", "7"],
+    ]);
+  });
+
+  it("keeps a chat added before posts_since as a place (migration 0117)", async () => {
+    const db = h.db();
+    await db.insert(schema.telegramChats).values([
+      { kind: "announcement_channel", chatId: "-1", title: "Old place" },
+      { kind: "main_group", chatId: "-2", title: "Main group" },
+      {
+        kind: "announcement_channel",
+        chatId: "-3",
+        title: "Gone",
+        archivedAt: new Date(),
+      },
+    ]);
+    const dir = path.join(__dirname, "../../migrations");
+    const file = readdirSync(dir).find((f) =>
+      f.startsWith("0117_telegram_places_posts_since"),
+    )!;
+    const fix = readFileSync(path.join(dir, file), "utf8");
+    await db.execute(sql.raw(fix));
+    await db.execute(sql.raw(fix));
+    expect((await listTelegramPlaces()).map((p) => p.title)).toEqual([
+      "Old place",
+    ]);
   });
 
   it("lets only a captain remove a chat or change the ticks", async () => {

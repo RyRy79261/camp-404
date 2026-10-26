@@ -72,6 +72,10 @@ is ticked by default and offered only for an announcement to everyone.
   and `callback_query` to `allowed_updates`. Dedupe on `update_id` (new small
   table, `ON CONFLICT DO NOTHING`). Bad secret 401; junk 200; our own failure
   503 so Telegram retries. Group text is never read (privacy mode stays on).
+  [CORRECTION 2026-10-26] In a group Ol' Jeb reads one command,
+  `/notifyhere` (from a captain who connected him), and the service message
+  of a group that became a supergroup (`migrate_to_chat_id`, so its place
+  follows the new id); no other group text (`handleGroupMessage`).
 - **Sending.** `notification_deliveries.telegram_status` (new, like
   `email_status`): `queued` when the member is linked and the kind passes
   their switch, else `skipped`. A third drain in `deliverDue`, beside push and
@@ -81,6 +85,12 @@ is ticked by default and offered only for an announcement to everyone.
   older than 20 hours is marked failed, so a stale notice never arrives late.
   Only production sends (`mayContactMembers`).
 - **Group posts.** `dispatchPendingAnnouncements` runs from the same drain.
+  [CORRECTION 2026-10-26] `drainTelegramPosts` (`@camp404/db/telegram-posts`)
+  runs from `deliverDue` instead, with the same at-most-once claim as the
+  private notices and the topic of each place; `dispatchPendingAnnouncements`
+  is superseded and stays uncalled. A place is a chat with `posts_since` set
+  (migrations 0116 and 0117), whatever its kind, so the camp's main group
+  keeps its invites when it is also a place, and Remove clears only that.
 - **Registration.** Done on each production deploy by
   `apps/web/scripts/register-telegram.mjs` (from `vercel-build`): setWebhook
   and setMyCommands, never failing the build.

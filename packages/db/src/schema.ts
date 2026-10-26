@@ -4822,6 +4822,11 @@ export const telegramChats = pgTable("telegram_chats", {
   // was sent in; null for the chat itself. One place per chat: `/notifyhere`
   // in another topic of the same chat moves it there.
   threadId: text("thread_id"),
+  // When a captain sent `/notifyhere` here: Ol' Jeb posts camp news in this
+  // chat. Null: he does not (never asked, or a captain removed it). Kept apart
+  // from `kind`, so the camp's main group (invites) can be a place too and
+  // removing it as a place never stops its invites.
+  postsSince: timestamp("posts_since", { mode: "date" }),
   addedByUserId: uuid("added_by_user_id").references(() => users.id, {
     onDelete: "set null",
   }),

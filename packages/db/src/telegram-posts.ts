@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, lt, sql } from "drizzle-orm";
 import {
   campDayKey,
   CAPTAIN_ONLY,
@@ -19,7 +19,8 @@ import type { TelegramSendResult } from "./telegram-dm";
 // docs/plans/2026-10-25-telegram-ol-jeb.md; owner's mock-up of 2026-10-26).
 //
 //  - A place is a chat (or one forum topic in a supergroup) Ol' Jeb posts in:
-//    an active `telegram_chats` row of kind `announcement_channel`. A captain
+//    a `telegram_chats` row with `posts_since` set, whatever its `kind`, so
+//    the camp's main group (its invites) can be a place too. A captain
 //    who connected Telegram adds one by sending `/notifyhere` in it; a captain
 //    removes one on Camp settings. Both are audited.
 //  - Camp settings' three ticks say what he posts: announcements a captain
@@ -36,8 +37,8 @@ import type { TelegramSendResult } from "./telegram-dm";
 const chats = schema.telegramChats;
 const posts = schema.telegramAnnouncements;
 
-/** The kind of `telegram_chats` row a place is. */
-const PLACE_KIND = "announcement_channel" as const;
+/** The kind a chat Ol' Jeb did not know before `/notifyhere` is stored as. */
+const NEW_PLACE_KIND = "announcement_channel" as const;
 
 /** A chat, or a forum topic in one, where Ol' Jeb posts camp news. */
 export interface TelegramPlace {
@@ -66,17 +67,22 @@ export const DEFAULT_TELEGRAM_POST_SETTINGS: TelegramPostSettings = {
 export async function listTelegramPlaces(
   db: DbOrTx = createHttpDb(),
 ): Promise<TelegramPlace[]> {
-  return db
+  const rows = await db
     .select({
       id: chats.id,
       chatId: chats.chatId,
       threadId: chats.threadId,
       title: chats.title,
-      addedAt: chats.addedAt,
+      postsSince: chats.postsSince,
     })
     .from(chats)
-    .where(and(eq(chats.kind, PLACE_KIND), isNull(chats.archivedAt)))
-    .orderBy(asc(chats.addedAt));
+    .where(isNotNull(chats.postsSince))
+    .orderBy(asc(chats.postsSince));
+  // `addedAt` is when it became a place (the filter keeps it set).
+  return rows.map(({ postsSince, ...place }) => ({
+    ...place,
+    addedAt: postsSince!,
+  }));
 }
 
 export async function getTelegramPostSettings(
@@ -141,15 +147,10 @@ export async function removeTelegramPlace(input: {
       return { ok: false, error: TELEGRAM_CAPTAINS_ONLY };
     }
     const [row] = await tx
+      // Only the posting mark: a main group keeps its kind and its invites.
       .update(chats)
-      .set({ archivedAt: new Date() })
-      .where(
-        and(
-          eq(chats.id, input.id),
-          eq(chats.kind, PLACE_KIND),
-          isNull(chats.archivedAt),
-        ),
-      )
+      .set({ postsSince: null })
+      .where(and(eq(chats.id, input.id), isNotNull(chats.postsSince)))
       .returning({ chatId: chats.chatId, title: chats.title });
     if (!row) return { ok: false, error: TELEGRAM_PLACE_GONE };
     await writeAuditEvent(tx, {
@@ -197,28 +198,34 @@ export async function addTelegramPlace(input: {
       return { ok: false, reason: "not_a_captain" };
     }
     const title = input.title.trim().slice(0, 200) || "Telegram chat";
+    // A chat Ol' Jeb already knows (the camp's main group, say) keeps its
+    // kind, its archive mark and who added it: only the posting mark, the
+    // topic and the names change.
     await tx
       .insert(chats)
       .values({
-        kind: PLACE_KIND,
+        kind: NEW_PLACE_KIND,
         chatId: input.chatId,
         threadId: input.threadId,
         title,
         username: input.username,
         addedByUserId: sender.id,
+        postsSince: new Date(),
       })
       .onConflictDoUpdate({
         target: chats.chatId,
         set: {
-          kind: PLACE_KIND,
           threadId: input.threadId,
           title,
           username: input.username,
-          addedByUserId: sender.id,
-          addedAt: new Date(),
-          archivedAt: null,
+          postsSince: new Date(),
         },
       });
+    // Posts still waiting for this chat go to the topic it is in now.
+    await tx
+      .update(posts)
+      .set({ threadId: input.threadId })
+      .where(and(eq(posts.chatId, input.chatId), eq(posts.status, "queued")));
     await writeAuditEvent(tx, {
       actorId: sender.id,
       action: "telegram.chat_added",

@@ -96,23 +96,37 @@ function Narrow({
  * is the footer's "Skip for now" or Next; it can be done later on the Profile.
  */
 function TelegramStep() {
-  const [state, setState] = useState<"off" | "busy" | "open">("off");
+  const [state, setState] = useState<"off" | "busy" | "open" | "blocked">(
+    "off",
+  );
+  const [link, setLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function connect() {
     setError(null);
-    // Opened inside the click, so a browser does not block it.
+    // Opened inside the click, so a browser does not block it. Null when it
+    // did anyway: then the member gets the link to tap themselves.
     const opened = window.open("about:blank", "_blank");
     setState("busy");
-    const result = await createTelegramLinkAction();
+    let result: Awaited<ReturnType<typeof createTelegramLinkAction>>;
+    try {
+      result = await createTelegramLinkAction();
+    } catch {
+      result = { ok: false, error: "Something went wrong. Please try again." };
+    }
     if (!result.ok) {
       opened?.close();
       setState("off");
       setError(result.error);
       return;
     }
-    if (opened) opened.location.href = result.data.link;
-    setState("open");
+    setLink(result.data.link);
+    if (opened) {
+      opened.location.href = result.data.link;
+      setState("open");
+    } else {
+      setState("blocked");
+    }
   }
 
   return (
@@ -126,6 +140,18 @@ function TelegramStep() {
         <p data-welcome-telegram="open">
           Telegram is open. Tap <strong>Start</strong> in your chat with
           Ol&rsquo; Jeb.
+        </p>
+      ) : state === "blocked" && link ? (
+        <p data-welcome-telegram="blocked">
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-os-fg underline underline-offset-2 hover:text-os-primary"
+          >
+            Open Telegram
+          </a>
+          , then tap <strong>Start</strong> in your chat with Ol&rsquo; Jeb.
         </p>
       ) : (
         <button

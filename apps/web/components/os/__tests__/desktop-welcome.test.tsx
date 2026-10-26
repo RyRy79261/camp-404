@@ -173,6 +173,56 @@ describe("the welcome wizard", () => {
     expect(within(wizard()!).getByText("Step 1 of 7")).toBeTruthy();
   });
 
+  it("gives the Telegram link to tap when the tab was blocked, and recovers when the link fails", async () => {
+    render(<Desktop {...props({ telegramOffer: true })} />);
+    const panel = wizard()!;
+    for (let i = 0; i < 6; i++) {
+      fireEvent.click(within(panel).getByRole("button", { name: "Next" }));
+    }
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    await act(async () => {
+      fireEvent.click(
+        within(panel).getByRole("button", { name: "Connect Telegram" }),
+      );
+    });
+    expect(
+      within(panel)
+        .getByRole("link", { name: "Open Telegram" })
+        .getAttribute("href"),
+    ).toBe("https://t.me/jebediah_404_bot?start=abc");
+    expect(within(panel).queryByText(/Telegram is open/)).toBeNull();
+    cleanup();
+
+    render(<Desktop {...props({ telegramOffer: true })} />);
+    const again = wizard()!;
+    for (let i = 0; i < 6; i++) {
+      fireEvent.click(within(again).getByRole("button", { name: "Next" }));
+    }
+    const close = vi.fn();
+    open.mockReturnValue({
+      location: { href: "" },
+      close,
+    } as unknown as Window);
+    telegram.link.mockRejectedValueOnce(new Error("offline"));
+    await act(async () => {
+      fireEvent.click(
+        within(again).getByRole("button", { name: "Connect Telegram" }),
+      );
+    });
+    expect(within(again).getByRole("alert").textContent).toBe(
+      "Something went wrong. Please try again.",
+    );
+    expect(close).toHaveBeenCalled();
+    expect(
+      (
+        within(again).getByRole("button", {
+          name: "Connect Telegram",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+    open.mockRestore();
+  });
+
   it("walks its steps with Next and Back, each heading taking focus", async () => {
     render(<Desktop {...props()} />);
     const panel = wizard()!;

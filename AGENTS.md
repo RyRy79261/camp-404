@@ -829,8 +829,11 @@ Decisions baked into the schema — keep new code consistent with them:
   posts in the camp's chats** (`@camp404/db/telegram-posts`). A captain who
   connected him sends `/notifyhere` in a group or a forum topic: the webhook
   (`handleGroupMessage` in `@camp404/telegram`, the only group text he reads)
-  adds it as a place (`telegram_chats` of kind `announcement_channel`, with
-  `thread_id` for a topic; one place per chat), audited
+  adds it as a place (`telegram_chats.posts_since` set, with `thread_id`
+  for a topic; one place per chat; a chat Ol' Jeb did not know is stored as
+  `announcement_channel`, and a known one keeps its `kind`, so the main group
+  keeps its invites; Remove clears only `posts_since`; posts still queued
+  for the chat follow it to its new topic), audited
   (`telegram.chat_added`); anyone else gets "Sorry". Camp settings' Ol' Jeb
   card lists the places with Remove (`telegram.chat_removed`) and three ticks
   on `camp_settings` (`telegram.posts_set`): announcements, questionnaire
