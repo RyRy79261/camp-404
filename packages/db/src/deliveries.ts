@@ -38,7 +38,7 @@ export function deliveryValues(
       : "skipped",
     // Telegram follows push: a notice that goes by push also goes to the
     // member's private chat with Ol' Jeb; the drain skips anyone not
-    // connected, or who asked for the important ones only.
+    // connected, or who wants only the notices about them.
     telegramStatus:
       input.channel === "push" || input.channel === "both"
         ? "queued"

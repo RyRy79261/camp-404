@@ -28,8 +28,10 @@ accepted", "Build starts Friday".
    Telegram, as the title, a short plain body and an "Open in Camp 404"
    button. Nothing private is in it (no safety data, no ID, no money detail):
    the same text push already shows on a lock screen.
-3. **A switch:** "All my notices" or "Only the important ones" (the email
-   list, `shouldEmailNotification`). Default: all.
+3. **A switch:** "Only notices about me" (the default, owner 2026-10-26:
+   forms they owe, their tasks, approval, promotion, car, pet;
+   `isPersonalNotification`) or "All my notices" (camp announcements and
+   team messages too).
 4. **Disconnect**, in the app, or by blocking the bot in Telegram (the
    webhook sees it and unlinks).
 5. **The camp group.** On approval the member gets their one-use invite link
@@ -114,5 +116,7 @@ person up by `@username`. So the owner chose:
 - The Start tap also goes into onboarding as one optional step.
 - Reminders follow the existing due-date reminders (`runDueWork`, 09:00 to
   21:00, on a page load, no cron).
+- New meetings (a Meeting added in the Calendar) are also posted to the
+  announcement chats (owner, 2026-10-26). Step 2.
 - Open: which chat gets the tags. A tag pings a member in a GROUP even when
   they muted it; in a broadcast CHANNEL a tag does not ping anyone extra.

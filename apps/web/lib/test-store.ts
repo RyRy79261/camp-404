@@ -7216,7 +7216,7 @@ export const testStore = {
     telegramState.set(row.userId, {
       telegramUserId: input.telegramUserId,
       dmAt: new Date(),
-      notices: current?.notices ?? "all",
+      notices: current?.notices ?? "mine",
     });
     if (input.username && !user.telegramHandle?.trim()) {
       user.telegramHandle = input.username;
@@ -7255,7 +7255,7 @@ export const testStore = {
     return {
       connected: row?.dmAt != null,
       handle,
-      notices: row?.notices ?? "all",
+      notices: row?.notices ?? "mine",
     };
   },
 

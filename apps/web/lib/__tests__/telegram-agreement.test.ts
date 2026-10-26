@@ -51,8 +51,8 @@ describe("a member's Telegram: the database and the test store agree", () => {
         username: null,
       });
       const connected = await getTelegramConnection(p.member);
-      await setTelegramNotices(p.member, "important");
-      const important = await getTelegramConnection(p.member);
+      await setTelegramNotices(p.member, "all");
+      const everything = await getTelegramConnection(p.member);
       await disconnectTelegram(p.member);
       const after = await getTelegramConnection(p.member);
       return {
@@ -61,18 +61,18 @@ describe("a member's Telegram: the database and the test store agree", () => {
         again,
         unknown,
         connected,
-        important,
+        everything,
         after,
       };
     });
     expect(store).toEqual(db);
     expect(db).toMatchObject({
-      before: { connected: false, handle: null, notices: "all" },
+      before: { connected: false, handle: null, notices: "mine" },
       first: true,
       again: { ok: false, reason: "link_run_out" },
-      connected: { connected: true, handle: "cloud_404", notices: "all" },
-      important: { connected: true, notices: "important" },
-      after: { connected: false, notices: "important" },
+      connected: { connected: true, handle: "cloud_404", notices: "mine" },
+      everything: { connected: true, notices: "all" },
+      after: { connected: false, notices: "all" },
     });
   });
 });

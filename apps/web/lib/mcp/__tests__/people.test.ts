@@ -49,7 +49,7 @@ function row(
     telegramHandle: "grace",
     telegramUserId: "123",
     telegramDmAt: null,
-    telegramNotices: "all",
+    telegramNotices: "mine",
     aiDataConsent: true,
     aiDataConsentAt: null,
     voiceConsentAt: null,

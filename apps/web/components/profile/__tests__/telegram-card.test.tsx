@@ -45,7 +45,7 @@ afterEach(() => {
 describe("TelegramCard", () => {
   it("is Off with a Connect button for a member not connected", () => {
     const { container } = render(
-      <TelegramCard connected={false} handle={null} notices="all" />,
+      <TelegramCard connected={false} handle={null} notices="mine" />,
     );
     expect(
       container
@@ -60,7 +60,7 @@ describe("TelegramCard", () => {
 
   it("waits after Connect, with the member's own link to open again", async () => {
     const { container } = render(
-      <TelegramCard connected={false} handle={null} notices="all" />,
+      <TelegramCard connected={false} handle={null} notices="mine" />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Connect Telegram" }));
     await waitFor(() =>
@@ -88,7 +88,7 @@ describe("TelegramCard", () => {
       ok: true,
       data: { connected: true },
     });
-    render(<TelegramCard connected={false} handle={null} notices="all" />);
+    render(<TelegramCard connected={false} handle={null} notices="mine" />);
     fireEvent.click(screen.getByRole("button", { name: "Connect Telegram" }));
     await screen.findByRole("link", { name: "Open Telegram again" });
     await act(async () => {
@@ -102,7 +102,7 @@ describe("TelegramCard", () => {
       ok: false,
       error: "Telegram isn't set up for the camp yet.",
     });
-    render(<TelegramCard connected={false} handle={null} notices="all" />);
+    render(<TelegramCard connected={false} handle={null} notices="mine" />);
     fireEvent.click(screen.getByRole("button", { name: "Connect Telegram" }));
     expect((await screen.findByRole("alert")).textContent).toBe(
       "Telegram isn't set up for the camp yet.",
@@ -110,18 +110,23 @@ describe("TelegramCard", () => {
   });
 
   it("is On with the handle, the notices choice and Disconnect", async () => {
-    render(<TelegramCard connected handle="cloud_404" notices="all" />);
+    render(<TelegramCard connected handle="cloud_404" notices="mine" />);
     expect(screen.getByText("On")).toBeTruthy();
     expect(screen.getByText("@cloud_404")).toBeTruthy();
-    const important = screen.getByRole("radio", {
-      name: /Only the important ones/,
+    expect(
+      (
+        screen.getByRole("radio", {
+          name: /Only notices about me/,
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+    const all = screen.getByRole("radio", {
+      name: /All my notices/,
     }) as HTMLInputElement;
-    fireEvent.click(important);
-    expect(important.checked).toBe(true);
+    fireEvent.click(all);
+    expect(all.checked).toBe(true);
     await waitFor(() =>
-      expect(actions.setTelegramNoticesAction).toHaveBeenCalledWith(
-        "important",
-      ),
+      expect(actions.setTelegramNoticesAction).toHaveBeenCalledWith("all"),
     );
     fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
     await waitFor(() =>
@@ -134,13 +139,13 @@ describe("TelegramCard", () => {
       ok: false,
       error: "Something went wrong. Please try again.",
     });
-    render(<TelegramCard connected handle={null} notices="all" />);
-    fireEvent.click(screen.getByRole("radio", { name: /Only the important/ }));
+    render(<TelegramCard connected handle={null} notices="mine" />);
+    fireEvent.click(screen.getByRole("radio", { name: /All my notices/ }));
     await waitFor(() =>
       expect(
         (
           screen.getByRole("radio", {
-            name: "All my notices",
+            name: /Only notices about me/,
           }) as HTMLInputElement
         ).checked,
       ).toBe(true),

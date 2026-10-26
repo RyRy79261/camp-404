@@ -31,7 +31,7 @@ export interface TelegramCardProps {
   connected: boolean;
   /** The member's Telegram handle, without "@". */
   handle: string | null;
-  notices: "all" | "important";
+  notices: "mine" | "all";
 }
 
 /** How often the Waiting state checks, and for how long (the link's life). */
@@ -47,7 +47,7 @@ export function TelegramCard({
   const [link, setLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [saving, setSaving] = useState<"all" | "important" | null>(null);
+  const [saving, setSaving] = useState<"mine" | "all" | null>(null);
   // Shown at once; put back if the save fails.
   const [chosen, setChosen] = useState(notices);
   const waitingSince = useRef(0);
@@ -97,7 +97,7 @@ export function TelegramCard({
       else router.refresh();
     });
 
-  const choose = async (value: "all" | "important") => {
+  const choose = async (value: "mine" | "all") => {
     if (value === chosen) return;
     const before = chosen;
     setChosen(value);
@@ -174,12 +174,12 @@ export function TelegramCard({
               <legend className="sr-only">Which notices</legend>
               {(
                 [
-                  ["all", "All my notices", null],
                   [
-                    "important",
-                    "Only the important ones",
-                    "(forms, tasks due, approvals)",
+                    "mine",
+                    "Only notices about me",
+                    "(forms I owe, my tasks, my approval)",
                   ],
+                  ["all", "All my notices", "(camp announcements too)"],
                 ] as const
               ).map(([value, label, hint]) => (
                 <label

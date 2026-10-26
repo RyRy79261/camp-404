@@ -423,13 +423,10 @@ export const telegramDeliveryStatusEnum = pgEnum("telegram_delivery_status", [
   "skipped",
 ]);
 
-// Which notices a connected member wants from Ol' Jeb: every notice that goes
-// by push, or only the important ones (the email list,
-// shouldEmailNotification in @camp404/core).
-export const telegramNoticesEnum = pgEnum("telegram_notices", [
-  "all",
-  "important",
-]);
+// Which notices a connected member wants from Ol' Jeb: only the ones about
+// them (the default, isPersonalNotification in @camp404/core), or every
+// notice that goes by push.
+export const telegramNoticesEnum = pgEnum("telegram_notices", ["mine", "all"]);
 
 // Outbound Telegram message queue state.
 export const telegramAnnouncementStatusEnum = pgEnum(
@@ -697,7 +694,7 @@ export const users = pgTable(
     telegramDmAt: timestamp("telegram_dm_at", { mode: "date" }),
     telegramNotices: telegramNoticesEnum("telegram_notices")
       .notNull()
-      .default("all"),
+      .default("mine"),
 
     // AI / MCP consent. Opt-in for surfacing this user's *identification
     // documents* — passport, SA ID, EFT details, others' reimbursement bank

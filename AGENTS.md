@@ -806,8 +806,11 @@ Decisions baked into the schema — keep new code consistent with them:
   `telegram_dm_at`. `/stop`, blocking the bot or Disconnect clear
   `telegram_dm_at`. `deliveryValues` queues `telegram_status` for every
   delivery that goes by push; the drain (`@camp404/db/telegram-dm`) skips a
-  member who is not connected, connected after the notice was written, or
-  chose "Only the important ones" (`telegram_notices`, the email list). The
+  member who is not connected or connected after the notice was written, and
+  a notice not about the member (`isPersonalNotification` in core: forms
+  they owe, their tasks, approval, promotion, car, pet) unless they chose
+  "All my notices" (`telegram_notices`; the default is `mine`, owner
+  2026-10-26: announcements and team messages go to the camp group). The
   message is the push text (title and plain body, `renderTelegramNotice` in
   core) with an "Open in Camp 404" button, never more. The webhook handles
   each `update_id` once (`telegram_updates`) and reads no group text. Ol'

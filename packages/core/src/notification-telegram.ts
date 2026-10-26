@@ -8,25 +8,49 @@
 
 import type { NotificationKind, NotificationPayload } from "@camp404/types";
 import { plainPreview } from "./markdown-text";
-import { shouldEmailNotification } from "./notification-email";
 import { notificationLink } from "./notification-links";
 
-type Presentation = "acknowledge" | "popup" | "feed";
-
-/** Which notices a connected member asked for (users.telegram_notices). */
-export type TelegramNotices = "all" | "important";
+/**
+ * Which notices a connected member asked for (users.telegram_notices).
+ * "mine", the default (owner, 2026-10-26), is only the notices about this
+ * member; "all" adds what goes to the whole camp or a team.
+ */
+export type TelegramNotices = "mine" | "all";
 
 /**
- * Whether a delivery that goes by push also goes to this member by Telegram.
- * "important" is the email list: the notices a member must not miss.
+ * Whether a notice is about this member alone: something they owe, their own
+ * task, their own approval or promotion, their car, their pet. Announcements,
+ * questionnaire sends and team messages go to many people, and the camp group
+ * gets those.
  */
+export function isPersonalNotification(kind: NotificationKind): boolean {
+  switch (kind) {
+    case "questionnaire_reminder":
+    case "task_reminder":
+    case "approval_decision":
+    case "captain_promotion":
+    case "car_message":
+    case "pet_in":
+      return true;
+    case "announcement":
+    case "questionnaire_release":
+    case "team_message":
+    case "lead_directive":
+      return false;
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
+}
+
+/** Whether a delivery that goes by push also goes to this member by Telegram. */
 export function shouldTelegramNotification(
   kind: NotificationKind,
-  presentation: Presentation,
   notices: TelegramNotices,
 ): boolean {
   if (notices === "all") return true;
-  return shouldEmailNotification(kind, presentation);
+  return isPersonalNotification(kind);
 }
 
 /** Telegram refuses a message over 4096 characters. */

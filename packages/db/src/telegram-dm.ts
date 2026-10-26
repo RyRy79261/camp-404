@@ -182,7 +182,7 @@ export async function getTelegramConnection(
   return {
     connected: row?.dmAt != null,
     handle,
-    notices: row?.notices ?? "all",
+    notices: row?.notices ?? "mine",
   };
 }
 
@@ -264,7 +264,7 @@ export const TELEGRAM_MAX_DEFERRALS_IN_A_ROW = 3;
  * Send queued Telegram notices, oldest first, under FOR UPDATE SKIP LOCKED so
  * two runs never send one twice. A member who is not connected (or connected
  * after the notice was written), erased, a system account, or asked for the
- * important ones only, is `skipped`. A notice queued longer than
+ * notices about them only and this one is not, is `skipped`. A notice queued longer than
  * TELEGRAM_MAX_QUEUED_HOURS is `failed` unsent.
  */
 export async function drainQueuedTelegram(
@@ -277,7 +277,6 @@ export async function drainQueuedTelegram(
         id: schema.notificationDeliveries.id,
         userId: schema.notificationDeliveries.userId,
         kind: schema.notificationDeliveries.kind,
-        presentation: schema.notificationDeliveries.presentation,
         title: schema.notificationDeliveries.title,
         body: schema.notificationDeliveries.body,
         refType: schema.notificationDeliveries.refType,
@@ -317,7 +316,7 @@ export async function drainQueuedTelegram(
         row.isSystem ||
         row.sanitised ||
         blocked.has(row.userId) ||
-        !shouldTelegramNotification(row.kind, row.presentation, row.notices)
+        !shouldTelegramNotification(row.kind, row.notices)
       ) {
         status = "skipped";
       } else if (row.expired) {

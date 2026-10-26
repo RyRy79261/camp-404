@@ -1,8 +1,8 @@
 import { NOTIFICATION_KINDS } from "@camp404/types";
 import { describe, expect, it } from "vitest";
 import { plainPreview } from "../markdown-text";
-import { shouldEmailNotification } from "../notification-email";
 import {
+  isPersonalNotification,
   OL_JEB_SAYS,
   parseBotCommand,
   renderTelegramNotice,
@@ -13,24 +13,26 @@ import {
 describe("shouldTelegramNotification", () => {
   it("sends every kind to a member who wants all notices", () => {
     for (const kind of NOTIFICATION_KINDS) {
-      expect(shouldTelegramNotification(kind, "feed", "all")).toBe(true);
+      expect(shouldTelegramNotification(kind, "all")).toBe(true);
     }
   });
 
-  it("sends only the email list to a member who wants the important ones", () => {
+  it("sends only the notices about the member by default", () => {
     for (const kind of NOTIFICATION_KINDS) {
-      for (const presentation of ["acknowledge", "popup", "feed"] as const) {
-        expect(
-          shouldTelegramNotification(kind, presentation, "important"),
-        ).toBe(shouldEmailNotification(kind, presentation));
-      }
+      expect(shouldTelegramNotification(kind, "mine")).toBe(
+        isPersonalNotification(kind),
+      );
     }
-    expect(
-      shouldTelegramNotification("team_message", "feed", "important"),
-    ).toBe(false);
-    expect(
-      shouldTelegramNotification("questionnaire_reminder", "feed", "important"),
-    ).toBe(true);
+    expect(shouldTelegramNotification("announcement", "mine")).toBe(false);
+    expect(shouldTelegramNotification("questionnaire_release", "mine")).toBe(
+      false,
+    );
+    expect(shouldTelegramNotification("team_message", "mine")).toBe(false);
+    expect(shouldTelegramNotification("questionnaire_reminder", "mine")).toBe(
+      true,
+    );
+    expect(shouldTelegramNotification("task_reminder", "mine")).toBe(true);
+    expect(shouldTelegramNotification("approval_decision", "mine")).toBe(true);
   });
 });
 

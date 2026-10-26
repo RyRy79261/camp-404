@@ -71,17 +71,15 @@ test("a member connects Telegram, picks their notices and disconnects", async ({
     timeout: 15_000,
   });
   await expect(card).toContainText("Ol' Jeb sends your notices to @cloud_404.");
-  const all = card.getByRole("radio", { name: "All my notices" });
-  const important = card.getByRole("radio", {
-    name: /Only the important ones/,
-  });
+  const mine = card.getByRole("radio", { name: /Only notices about me/ });
+  const all = card.getByRole("radio", { name: /All my notices/ });
+  await expect(mine).toBeChecked();
+  await all.check();
   await expect(all).toBeChecked();
-  await important.check();
-  await expect(important).toBeChecked();
   await page.reload();
   await expect(
     page.locator("[data-telegram-card]").getByRole("radio", {
-      name: /Only the important ones/,
+      name: /All my notices/,
     }),
   ).toBeChecked();
 

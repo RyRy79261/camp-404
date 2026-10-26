@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import {
   announcementNotification,
-  questionnaireReleaseNotification,
+  questionnaireReminderNotification,
 } from "@camp404/core";
 import { useTestDb } from "./_harness";
 import { makeUser } from "./_factories";
@@ -75,7 +75,7 @@ describe("connectTelegram", () => {
     expect(await getTelegramConnection(member.id)).toEqual({
       connected: true,
       handle: "typed",
-      notices: "all",
+      notices: "mine",
     });
 
     // Used once.
@@ -168,13 +168,13 @@ describe("connectTelegram", () => {
       telegramUserId: "118",
       telegramDmAt: new Date(),
     });
-    await setTelegramNotices(member.id, "important");
+    await setTelegramNotices(member.id, "all");
     expect(await stopTelegramByTelegramId("118")).toBe(true);
     expect(await stopTelegramByTelegramId("999")).toBe(false);
     expect(await getTelegramConnection(member.id)).toEqual({
       connected: false,
       handle: null,
-      notices: "important",
+      notices: "all",
     });
     await db
       .update(schema.users)
@@ -198,11 +198,10 @@ describe("recordTelegramUpdate", () => {
 
 describe("drainQueuedTelegram", () => {
   const h = useTestDb();
-  const payload = questionnaireReleaseNotification({
+  const payload = questionnaireReminderNotification({
     activationId: ID,
     title: "Camp feedback",
     dueAt: null,
-    blocking: false,
   });
   const quiet = announcementNotification({
     broadcastId: ID,
@@ -296,20 +295,35 @@ describe("drainQueuedTelegram", () => {
     expect(await statusOf(db, old)).toBe("skipped");
   });
 
-  it("sends only the important ones to a member who asked for that", async () => {
+  it("sends only the notices about a member by default", async () => {
     const db = h.db();
     const member = await makeUser(db, {
       telegramUserId: "206",
       telegramDmAt: past,
-      telegramNotices: "important",
     });
-    const important = await queue(db, member.id, payload);
-    const chatter = await queue(db, member.id, quiet);
+    const mine = await queue(db, member.id, payload);
+    const campNews = await queue(db, member.id, quiet);
     const send = vi.fn<TelegramSend>(async () => ({ ok: true }) as const);
     await drainQueuedTelegram(send, { siteUrl: SITE });
     expect(send).toHaveBeenCalledOnce();
-    expect(await statusOf(db, important)).toBe("sent");
-    expect(await statusOf(db, chatter)).toBe("skipped");
+    expect(await statusOf(db, mine)).toBe("sent");
+    expect(await statusOf(db, campNews)).toBe("skipped");
+  });
+
+  it("sends camp announcements too to a member who chose all", async () => {
+    const db = h.db();
+    const member = await makeUser(db, {
+      telegramUserId: "210",
+      telegramDmAt: past,
+      telegramNotices: "all",
+    });
+    const mine = await queue(db, member.id, payload);
+    const campNews = await queue(db, member.id, quiet);
+    const send = vi.fn<TelegramSend>(async () => ({ ok: true }) as const);
+    await drainQueuedTelegram(send, { siteUrl: SITE });
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(await statusOf(db, mine)).toBe("sent");
+    expect(await statusOf(db, campNews)).toBe("sent");
   });
 
   it("marks a notice queued too long as failed, unsent", async () => {

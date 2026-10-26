@@ -1,5 +1,5 @@
 {
-  "id": "bca9dd83-4e9e-4086-8472-7e67e1f87feb",
+  "id": "4f306a6e-ed55-422c-a8b6-acb4fc0cf97c",
   "prevId": "f4f3b032-7651-438d-8d43-dcb624f93123",
   "version": "7",
   "dialect": "postgresql",
@@ -15361,7 +15361,7 @@
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": "'all'"
+          "default": "'mine'"
         },
         "ai_data_consent": {
           "name": "ai_data_consent",
@@ -16304,8 +16304,8 @@
       "name": "telegram_notices",
       "schema": "public",
       "values": [
-        "all",
-        "important"
+        "mine",
+        "all"
       ]
     },
     "public.ticket_status": {

@@ -57,7 +57,7 @@ export async function disconnectTelegramAction(): Promise<ActionResult> {
   });
 }
 
-const Notices = z.enum(["all", "important"]);
+const Notices = z.enum(["mine", "all"]);
 
 export async function setTelegramNoticesAction(
   notices: string,
