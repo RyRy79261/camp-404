@@ -9,6 +9,8 @@ import {
   campForecast,
   budgetsUnspentCents,
   FEE_ALREADY_SET,
+  feeBurnYear,
+  feeFigures,
   feeInstalmentsLeft,
   feeTimingLabel,
   feeTimingSchedule,
@@ -460,5 +462,39 @@ describe("the camp money audit rows", () => {
         index: 0,
       }),
     ).toMatch(/^Storage unit, R.*, 2026-11-14$/);
+  });
+});
+
+describe("feeBurnYear: the burn year the fees are for", () => {
+  it("is the camp's year when a captain set one", () => {
+    expect(feeBurnYear(2027, "2026-10-28")).toBe(2027);
+    expect(feeBurnYear(2030, "2026-10-28")).toBe(2030);
+  });
+
+  it("with no year set, is the next AfrikaBurn after today (late April)", () => {
+    expect(feeBurnYear(1, "2026-10-28")).toBe(2027);
+    expect(feeBurnYear(1, "2027-03-01")).toBe(2027);
+    expect(feeBurnYear(1, "2027-04-30")).toBe(2027);
+    expect(feeBurnYear(1, "2027-05-01")).toBe(2028);
+  });
+
+  it("gives an unset year's fees real days, never year 0", () => {
+    const figures = feeFigures({
+      liveFeeCents: null,
+      pledgedCents: R(7200),
+      payBy: "part_by_end_nov",
+      subsidy: false,
+      paidCents: 0,
+      plan: [],
+      cycle: 1,
+      today: "2026-10-28",
+    });
+    expect(figures.burnYear).toBe(2027);
+    expect(figures.feeNext).toMatchObject({
+      kind: "due",
+      dueOn: "2026-11-30",
+      amountCents: R(3600),
+      overdue: false,
+    });
   });
 });

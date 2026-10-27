@@ -20,6 +20,23 @@ import { isComingThisYear } from "./participation";
 
 // --- When a member can pay ---------------------------------------------------
 
+/** AfrikaBurn ends by the end of April: a day after it looks to next year's. */
+const BURN_OVER_AFTER = "04-30";
+
+/**
+ * The burn year a camp's fees are for: its cycle once a captain set the year
+ * (the cycle IS the burn year, 2027), else the next AfrikaBurn after `today`
+ * (late April: from May on, next year's). A camp with no year set has the
+ * cycle sentinel 1, which would put the fees in year 0. Every fee caller goes
+ * through this: feeFigures does itself, and a screen or total that takes a
+ * burn year asks it first. `today` is YYYY-MM-DD.
+ */
+export function feeBurnYear(cycle: number, today: string): number {
+  if (cycle >= 1000) return cycle;
+  const year = Number(today.slice(0, 4));
+  return today.slice(5) > BURN_OVER_AFTER ? year + 1 : year;
+}
+
 /** The day each step of the fee calendar falls on, for a burn year. */
 export function feeTimingDays(burnYear: number): {
   endNov: string;
@@ -238,12 +255,20 @@ export function feeFigures(input: {
   subsidy: boolean;
   paidCents: number;
   plan: readonly Instalment[];
-  /** The burn year (the dues' cycle). */
+  /** The dues' cycle (the burn year once one is set; feeBurnYear). */
   cycle: number;
   today: string;
-}): { feeTotalCents: number; feeOwingCents: number; feeNext: NextFeePayment } {
+}): {
+  /** The burn year the fees are for (feeBurnYear), for the screens' words. */
+  burnYear: number;
+  feeTotalCents: number;
+  feeOwingCents: number;
+  feeNext: NextFeePayment;
+} {
   const feeTotalCents = input.liveFeeCents ?? input.pledgedCents ?? 0;
+  const burnYear = feeBurnYear(input.cycle, input.today);
   return {
+    burnYear,
     feeTotalCents,
     feeOwingCents: Math.max(0, feeTotalCents - input.paidCents),
     feeNext: nextFeePayment(
@@ -255,7 +280,7 @@ export function feeFigures(input: {
         hasPledge: input.pledgedCents !== null || input.liveFeeCents !== null,
         subsidy: input.subsidy,
       },
-      input.cycle,
+      burnYear,
       input.today,
     ),
   };

@@ -536,6 +536,9 @@ export interface MemberDues {
   } | null;
   balance: DuesBalance;
   next: NextInstalment | null;
+  /** The burn year the fees are for (feeBurnYear: the cycle, or the next
+   * AfrikaBurn when no year is set). Name a "by when" with it. */
+  burnYear: number;
   /** What the fee is: the live camp fee, else the pledge, else 0. */
   feeTotalCents: number;
   /** What is still owed of it after every payment received or waived. */
@@ -1174,6 +1177,9 @@ export interface DuesAccountRow {
   openRefunds: number;
   /** The Finance team's payment plan, by day (empty: none). */
   plan: Instalment[];
+  /** The burn year the fees are for (feeBurnYear: the cycle, or the next
+   * AfrikaBurn when no year is set). Name a "by when" with it. */
+  burnYear: number;
   /** What the fee is: the live camp fee, else the pledge, else 0. */
   feeTotalCents: number;
   feeOwingCents: number;

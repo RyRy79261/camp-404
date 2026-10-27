@@ -38,7 +38,7 @@ export async function getPledgeStep(
   if (!dues) return null;
   return {
     scale,
-    burnYear: cycle,
+    burnYear: dues.burnYear,
     pledge: dues.pledge
       ? {
           amountCents: dues.pledge.amountCents,

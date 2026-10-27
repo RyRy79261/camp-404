@@ -183,7 +183,7 @@ export default async function ProfilePage() {
                           {pledgeWithScale(dues.pledge.amountCents, dues.scale)}
                         </span>
                         {dues.payBy
-                          ? `, ${feeTimingPhrase(dues.payBy, dues.cycle)}`
+                          ? `, ${feeTimingPhrase(dues.payBy, dues.burnYear)}`
                           : ""}
                         {dues.subsidy ? ", and asked for a subsidy" : ""}.
                       </p>

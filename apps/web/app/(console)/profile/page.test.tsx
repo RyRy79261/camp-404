@@ -104,6 +104,7 @@ describe("profile: the member's pledge", () => {
   it("shows it read-only, with the scale's name and by when, linking to change it", async () => {
     vi.mocked(getMemberDues).mockResolvedValueOnce({
       cycle: 2027,
+      burnYear: 2027,
       pledge: { amountCents: 720_000 },
       payBy: "part_by_end_nov",
       subsidy: false,

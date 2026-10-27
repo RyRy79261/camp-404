@@ -766,6 +766,7 @@ export const duesTestStore = {
             (r) => r.status === "requested",
           ).length,
           plan: dues.instalments,
+          burnYear: dues.burnYear,
           feeTotalCents: dues.feeTotalCents,
           feeOwingCents: dues.feeOwingCents,
           feeNext: dues.feeNext,

@@ -86,7 +86,7 @@ export default async function MyDuesPage() {
     plan: dues.instalments,
     payBy: dues.payBy,
     feeTotalCents: dues.feeTotalCents,
-    burnYear: cycle,
+    burnYear: dues.burnYear,
     next: dues.feeNext,
   });
   const pledgeValue = dues.pledge
@@ -249,7 +249,9 @@ export default async function MyDuesPage() {
                   <span className="font-medium tabular-nums">
                     {pledgeWithScale(dues.pledge.amountCents, scale)}
                   </span>
-                  {dues.payBy ? `, ${feeTimingPhrase(dues.payBy, cycle)}` : ""}
+                  {dues.payBy
+                    ? `, ${feeTimingPhrase(dues.payBy, dues.burnYear)}`
+                    : ""}
                   {dues.subsidy ? ", and asked for a subsidy" : ""}.{" "}
                   <span className="text-muted-foreground">
                     {feeCharged
@@ -258,7 +260,7 @@ export default async function MyDuesPage() {
                   </span>
                 </p>
                 <PledgeDialog
-                  burnYear={cycle}
+                  burnYear={dues.burnYear}
                   scale={scale}
                   pledge={pledgeValue}
                   amountLocked={feeCharged}
@@ -270,7 +272,7 @@ export default async function MyDuesPage() {
 
         {mustPledge && (
           <PledgeStep
-            burnYear={cycle}
+            burnYear={dues.burnYear}
             scale={scale}
             pledge={null}
             submitLabel="Save my pledge"

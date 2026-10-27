@@ -3,6 +3,7 @@ import "server-only";
 import {
   budgetsUnspentCents,
   campDayKey,
+  feeBurnYear,
   campForecast,
   feeTotals,
   nearestScaleName,
@@ -128,7 +129,11 @@ export async function getFeeOverview(
           ? null
           : nearestScaleName(row.pledgeCents, scale),
     })),
-    totals: feeTotals(accounts.map(feeMemberOf), cycle, today),
+    totals: feeTotals(
+      accounts.map(feeMemberOf),
+      feeBurnYear(cycle, today),
+      today,
+    ),
   };
 }
 
@@ -167,7 +172,7 @@ export async function getCampMoney(
       members: accounts.map(feeMemberOf),
       bills,
       budgetsUnspentCents: budgetsUnspentCents(Object.values(budgets)),
-      burnYear: cycle,
+      burnYear: feeBurnYear(cycle, today),
     }),
   };
 }
