@@ -1,0 +1,642 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Camp fees — mock-up</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:oklch(0.15 0.05 295);--panel:oklch(0.2 0.06 295);--line:oklch(0.35 0.08 295);
+  --fg:oklch(0.95 0.01 295);--mut:oklch(0.72 0.04 295);--mag:oklch(0.65 0.27 340);
+  --blue:oklch(0.62 0.18 255);--ok:oklch(0.75 0.17 150);--warn:oklch(0.8 0.15 80);--bad:oklch(0.68 0.2 25);
+  --sunk:color-mix(in oklch,var(--panel) 80%,black);
+}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;font-family:Inter,sans-serif;font-size:13px;color:var(--fg);background:#0b0912;line-height:1.45}
+h2{font:12px Silkscreen;color:var(--blue);margin:32px 0 8px}
+h2:first-of-type{margin-top:8px}
+.intro{color:var(--mut);max-width:820px;margin:0 0 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:16px;align-items:start}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:16px;align-items:start}
+.opt{display:flex;flex-direction:column;gap:8px;min-width:0}
+.optlab{font:11px Silkscreen;color:var(--mag);display:flex;gap:8px;align-items:center}
+.optlab span{color:var(--mut);font:12px Inter}
+.desk{background:var(--bg);background-image:linear-gradient(color-mix(in oklch,var(--line) 60%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in oklch,var(--line) 60%,transparent) 1px,transparent 1px);background-size:32px 32px;padding:16px;position:relative;min-width:0}
+.win{background:var(--panel);border:2px solid var(--line);box-shadow:4px 4px 0 #0008;min-width:0}
+.bar{display:flex;align-items:center;gap:8px;background:color-mix(in oklch,var(--mag) 70%,var(--bg));padding:4px 8px;font:12px Silkscreen}
+.bar .b{margin-left:auto;display:flex;gap:4px}
+.bar .b i{width:12px;height:12px;border:1px solid var(--fg);display:block}
+.body{padding:16px;container-type:inline-size;min-width:0}
+.eye{font:10px Silkscreen;color:var(--mag)}
+h1{font-size:20px;margin:4px 0 4px}
+.desc{color:var(--mut);margin:0 0 16px;max-width:640px}
+.head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:4px}
+.card{border:1px solid var(--line);background:var(--sunk);padding:16px;min-width:0}
+.card+.card,.stack>*+*{margin-top:16px}
+:is(.card,.callout,.ref,.split)+:is(.card,.callout,.ref,.split){margin-top:16px}
+.split>.card{margin:0}
+.ct{font-weight:600;font-size:14px;margin:0 0 4px}
+.cd{color:var(--mut);margin:0 0 12px;font-size:12px}
+p{margin:8px 0}
+.mut{color:var(--mut)}.sm{font-size:12px}.xs{font-size:11px}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--mag);background:var(--mag);color:#fff;font:500 13px Inter;padding:8px 12px;cursor:pointer;white-space:nowrap}
+.btn.o{background:transparent;color:var(--fg);border-color:var(--line)}
+.btn.g{background:transparent;border-color:transparent;color:var(--mut);padding:8px}
+.btn.s{padding:4px 8px;font-size:12px}
+.btn.w{width:100%;justify-content:center}
+.btn:hover{filter:brightness(1.15)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.badge{font:10px Silkscreen;padding:2px 6px;border:1px solid;display:inline-block;white-space:nowrap}
+.b-ok{color:var(--ok)}.b-warn{color:var(--warn)}.b-bad{color:var(--bad)}.b-blue{color:var(--blue)}.b-mut{color:var(--mut)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 16px;overflow:hidden;flex-wrap:nowrap}
+.tabs span{padding:8px 12px;color:var(--mut);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;font-weight:500}
+.tabs span.on{color:var(--fg);border-color:var(--mag)}
+.tabs .new::after{content:"NEW";font:8px Silkscreen;color:var(--mag);margin-left:4px;vertical-align:top}
+.tabmenu{display:none;border:1px solid var(--line);padding:8px 12px;margin:0 0 16px;justify-content:space-between}
+@container (max-width:560px){.tabs{display:none}.tabmenu{display:flex}}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+@container (max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi dt{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);font-weight:500}
+.kpi dd{margin:0}.kpi .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.kpi .h{font-size:11px;color:var(--mut)}
+.neg{color:var(--bad)}
+.chips{display:inline-flex;border:1px solid var(--line);padding:4px;gap:4px;flex-wrap:wrap}
+.chips span{padding:6px 12px;color:var(--mut);cursor:pointer;font-weight:500}
+.chips span.on{background:var(--mag);color:#fff}
+/* ResponsiveDataTable: a table, stacked to cards by its own width */
+.tw{container-type:inline-size;border:1px solid var(--line);background:var(--sunk);min-width:0}
+table.t{width:100%;border-collapse:collapse}
+.t th{font-size:11px;text-align:left;color:var(--mut);font-weight:500;padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.t td{padding:12px;border-bottom:1px solid color-mix(in oklch,var(--line) 50%,transparent);vertical-align:middle}
+.t tr:last-child td{border-bottom:0}
+.t .r{text-align:right}
+.t td.act{width:1%;white-space:nowrap}
+.t tfoot td{font-weight:600;border-top:1px solid var(--line)}
+.t .lbl{display:none}
+.t .name{font-weight:600}
+.t .sub{display:block;font-size:11px;color:var(--mut);font-weight:400}
+.t .inc td:first-child,.t .inc .amt{color:var(--ok)}
+.t tr.hl td{background:color-mix(in oklch,var(--mag) 10%,transparent)}
+@container (max-width:620px){
+  .t thead{display:none}
+  .t,.t tbody,.t tr,.t td,.t tfoot{display:block;width:auto}
+  .t tr{border-bottom:1px solid var(--line);padding:12px}
+  .t td{border:0;padding:2px 0;display:flex;justify-content:space-between;gap:12px;text-align:right}
+  .t td.first{display:block;text-align:left;font-size:14px;margin-bottom:4px}
+  .t td.act{width:auto;justify-content:flex-start;margin-top:8px}
+  .t .lbl{display:inline;color:var(--mut);font-size:12px;text-align:left}
+  .t td:empty{display:none}
+}
+.ra{display:inline-flex;gap:4px;align-items:center}
+.ra .p{min-width:96px;justify-content:center}
+.ra .sec{display:inline-flex;width:72px;justify-content:flex-end}
+.ra .ico{width:32px;height:32px;display:inline-grid;place-items:center;color:var(--mut);border:1px solid transparent}
+.ra .ico:hover{border-color:var(--line)}
+.sum{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:baseline}
+.sum .op{font:12px Silkscreen;color:var(--mut);width:16px;text-align:center}
+.sum .am{text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
+.sum .tot{border-top:1px solid var(--line);padding-top:8px;margin-top:4px;font-weight:700;font-size:16px}
+.sum .note{grid-column:2/4;font-size:11px;color:var(--mut);margin-top:-2px}
+.split{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px}
+@container (max-width:700px){.split{grid-template-columns:1fr}}
+.callout{border:1px solid var(--line);border-left:4px solid var(--mag);background:var(--sunk);padding:12px 16px}
+.callout.blue{border-left-color:var(--blue)}
+.fl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+.fl dt{font-size:11px;color:var(--mut)}.fl dd{margin:0;font-weight:500}
+.input{border:1px solid var(--line);background:var(--bg);padding:8px 12px;color:var(--fg);font:13px Inter;min-width:0}
+.field{display:flex;flex-direction:column;gap:4px}.field label{font-size:12px;font-weight:500}
+.hist{list-style:none;padding:0;margin:8px 0 0}
+.hist li{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid color-mix(in oklch,var(--line) 50%,transparent);font-size:12px;color:var(--mut)}
+.hist li:first-child{color:var(--fg)}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.switch i{width:36px;height:20px;border:1px solid var(--line);background:var(--bg);position:relative;display:block}
+.switch i::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;background:var(--mut)}
+.switch.on i{border-color:var(--mag);background:color-mix(in oklch,var(--mag) 35%,var(--bg))}
+.switch.on i::after{left:18px;background:#fff}
+/* dialogs */
+.dlg{background:var(--panel);border:2px solid var(--mag);box-shadow:6px 6px 0 #0009;max-width:520px;width:100%}
+.dlg .body{padding:16px}
+.dlg h3{margin:0 0 8px;font-size:16px}
+.people{border:1px solid var(--line);margin:8px 0}
+.person{display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid color-mix(in oklch,var(--line) 50%,transparent);font-size:12px}
+.person:last-child{border:0}.person .h{margin-left:auto;color:var(--mut);font-size:11px;text-align:right}
+.aud{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--mut)}
+.aud svg{flex:none;color:var(--mag);margin-top:1px}
+.link{color:var(--blue);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.who{display:none;margin:4px 0 0 24px;font-size:12px;color:var(--mut)}
+.who.open{display:block}
+.chk{display:flex;gap:8px;align-items:flex-start;margin:8px 0}
+.chk input{accent-color:var(--mag);margin-top:2px}
+.lb{font:10px Silkscreen;color:var(--mut);margin:16px 0 4px}
+/* option cards (OptionCardGroup) */
+.oc{display:flex;flex-direction:column;gap:8px}
+.oc label{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);padding:12px;cursor:pointer;background:var(--bg)}
+.oc label.on{border-color:var(--mag);background:color-mix(in oklch,var(--mag) 14%,var(--bg))}
+.oc .dot{width:16px;height:16px;border:1px solid var(--mut);flex:none;margin-top:1px;display:grid;place-items:center}
+.oc label.on .dot{border-color:var(--mag)}.oc label.on .dot::after{content:"";width:8px;height:8px;background:var(--mag)}
+.oc b{font-weight:600;display:block}.oc small{color:var(--mut);font-size:12px}
+.oc.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+/* taskbar & tray */
+.taskbar{position:absolute;left:0;right:0;bottom:0;height:44px;border-top:2px solid var(--line);background:color-mix(in oklch,var(--bg) 85%,black);display:flex;align-items:center;gap:8px;padding:0 8px}
+.start{font:11px Silkscreen;border:1px solid var(--mag);padding:6px 10px;color:var(--fg)}
+.tbtn{font-size:12px;border:1px solid var(--line);padding:6px 10px;color:var(--mut);max-width:160px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.tray{margin-left:auto;display:flex;gap:6px;align-items:center}
+.tbox{height:32px;min-width:32px;border:1px solid var(--line);background:var(--bg);display:grid;place-items:center;position:relative;padding:0 8px}
+.tbox.on{border-color:var(--mag)}
+.pip{position:absolute;top:-6px;right:-6px;background:var(--mag);color:var(--bg);font:700 10px Inter;min-width:16px;height:16px;display:grid;place-items:center;padding:0 2px}
+.clock{font:12px ui-monospace,monospace;text-align:right;line-height:1.1}.clock small{display:block;font-size:9px;color:var(--mut)}
+/* pay guide */
+.pg{position:absolute;right:16px;bottom:60px;width:360px;background:var(--panel);border:2px solid var(--mag);box-shadow:6px 6px 0 #0009}
+.pg .in{padding:16px}
+.pg .x{position:absolute;top:8px;right:8px;color:var(--mut);cursor:pointer;font-size:16px;line-height:1;padding:4px}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;border:1px solid var(--line);padding:4px;margin:8px 0}
+.seg span{text-align:center;padding:8px 4px;cursor:pointer;color:var(--mut);font-weight:500;font-size:12px}
+.seg span.on{background:var(--mag);color:#fff}
+.bank{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px;border:1px solid var(--line);padding:12px;background:var(--bg)}
+.bank dt{color:var(--mut)}.bank dd{margin:0;font-weight:500;font-variant-numeric:tabular-nums}
+.ref{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--line);border-left:4px solid var(--mag);padding:8px 12px;background:var(--bg)}
+.ref code{font:600 18px ui-monospace,monospace}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.steps li{display:grid;grid-template-columns:24px 1fr;gap:8px}
+.steps .n{width:24px;height:24px;border:1px solid var(--mag);display:grid;place-items:center;font:11px Silkscreen;color:var(--mag)}
+.steps .n.done{background:var(--mag);color:#fff}
+.mini{position:absolute;right:16px;bottom:60px;border:2px solid var(--line);background:var(--panel);box-shadow:4px 4px 0 #0008;display:flex;align-items:center;gap:8px;padding:0}
+.mini .bar{width:100%}
+.prog{height:8px;border:1px solid var(--line);background:var(--bg);margin:8px 0 4px}
+.prog i{display:block;height:100%;background:var(--mag)}
+.hidden{display:none!important}
+/* phone */
+.phone{width:360px;max-width:100%;height:740px;border:2px solid var(--line);background:var(--bg);background-image:linear-gradient(color-mix(in oklch,var(--line) 45%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in oklch,var(--line) 45%,transparent) 1px,transparent 1px);background-size:32px 32px;position:relative;overflow:hidden;display:flex;flex-direction:column;flex:none}
+.phead{height:44px;flex:none;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--line);background:color-mix(in oklch,var(--bg) 85%,transparent);font:11px Silkscreen}
+.phead .tray{gap:6px}
+.pwin{flex:1;overflow:hidden;background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.pwin .bar{flex:none}
+.pwin .body{padding:16px;overflow:hidden;flex:1}
+.pbot{height:56px;flex:none;border-top:2px solid var(--line);background:color-mix(in oklch,var(--bg) 85%,black);display:grid;grid-template-columns:repeat(4,1fr);align-items:center;text-align:center;font:9px Silkscreen;color:var(--mut)}
+.pbot span{display:flex;flex-direction:column;align-items:center;gap:2px;position:relative}
+.pbanner{flex:none;border-top:2px solid var(--mag);background:var(--panel);padding:8px 12px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.sheet{position:absolute;left:0;right:0;bottom:56px;max-height:calc(100% - 100px);background:var(--panel);border-top:2px solid var(--mag);box-shadow:0 -8px 24px #000a;overflow:hidden}
+.sheet .grab{width:40px;height:4px;background:var(--line);margin:8px auto 0}
+.sheet .in{padding:12px 16px 16px}
+.scrim{position:absolute;inset:0;background:#0009}
+.notes{width:380px;background:var(--panel);border:2px solid var(--line);box-shadow:6px 6px 0 #0009}
+.notes .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid var(--line)}
+.nrow{display:grid;grid-template-columns:8px 1fr;gap:12px;padding:12px 16px;border-bottom:1px solid color-mix(in oklch,var(--line) 50%,transparent)}
+.nrow .d{width:8px;height:8px;margin-top:6px;background:var(--mag)}.nrow .d.read{background:transparent}
+.nrow b{font-weight:600;display:block}
+.nrow .k{font:9px Silkscreen;color:var(--blue)}
+.foot{padding:8px 16px;color:var(--mag);font-weight:500}
+.rail{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px}
+@container (max-width:700px){.rail{grid-template-columns:1fr}}
+.gaps{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:400}
+.gaps li{display:grid;grid-template-columns:16px 1fr;gap:8px;align-items:start}
+.gaps .tick{width:16px;height:16px;border:1px solid var(--mut);display:grid;place-items:center;font-size:11px;margin-top:1px}
+.gaps .done{color:var(--mut);text-decoration:line-through}
+.gaps .done .tick{border-color:var(--ok);background:var(--ok);color:var(--bg);text-decoration:none}
+.gaps.shut{display:none}
+.notpicked{opacity:.5;filter:grayscale(.6)}
+.optlab .picked{font:10px Silkscreen;background:var(--ok);color:var(--bg);padding:2px 6px}
+.out{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.out .big{font:28px Silkscreen;color:var(--fg)}
+.out .usd{font:13px ui-monospace,monospace;color:var(--mut)}
+.pill{font:10px Silkscreen;text-transform:uppercase;background:var(--mag);color:#fff;padding:2px 6px}
+.pill.sub{background:var(--blue)}
+[data-scale] .note{font-size:13px;margin-top:4px;min-height:19px}
+.scale{position:relative;padding:44px 4px 48px;margin-top:8px}
+.track{position:relative;height:16px;border:1px solid var(--line);background:linear-gradient(90deg,var(--blue),color-mix(in oklch,var(--mag) 70%,transparent),var(--mag))}
+.hatch{position:absolute;inset:0 auto 0 0;background:repeating-linear-gradient(135deg,#0008 0 4px,transparent 4px 8px)}
+.sub0{position:absolute;left:4px;top:50%;transform:translateY(-50%);font:8px Silkscreen;text-transform:uppercase}
+.needle{position:absolute;top:-4px;bottom:-4px;width:2px;transform:translateX(-50%);background:#fff;box-shadow:0 0 8px #fff}
+.mk{position:absolute;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;text-align:center;pointer-events:none}
+.mk.end{transform:translateX(-70%)}
+.mk b{font:9px Silkscreen;text-transform:uppercase;white-space:nowrap;font-weight:400}
+.mk small{font:10px ui-monospace,monospace;color:var(--mut);white-space:nowrap}
+.mk i{width:1px;height:12px;background:color-mix(in oklch,var(--fg) 60%,transparent);display:block}
+.mk.up{bottom:calc(100% - 44px)}
+.mk.dn{top:60px}
+.mk.dn{transform:translateX(calc(-100% + 1px));align-items:flex-end;text-align:right}
+.mk.dn.rec{transform:none;align-items:flex-start;text-align:left}
+.mk.rec i{background:var(--mag);width:2px}
+.mk.rec b{color:var(--mag)}
+.ph .mk small{display:none}
+.ph .scale{padding-bottom:36px}
+.scale input[type=range]{position:absolute;left:4px;right:4px;top:39px;height:26px;margin:0;width:calc(100% - 8px);-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer}
+.scale input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:26px;background:var(--fg);border:2px solid var(--mag)}
+.scale input[type=range]::-moz-range-thumb{width:14px;height:26px;background:var(--fg);border:2px solid var(--mag);border-radius:0}
+.toast{border:1px solid var(--line);background:var(--panel);padding:12px 16px;display:flex;gap:8px;align-items:center;box-shadow:4px 4px 0 #0008}
+.flow{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.flow>*{flex:1 1 300px;min-width:0}
+.why{border-left:2px solid var(--blue);padding-left:8px;color:var(--mut);font-size:12px;margin:8px 0 0;max-width:900px}
+@media (max-width:600px){body{padding:8px}.desk{padding:8px}.pg,.mini{position:static;width:auto;margin-top:8px}.taskbar{position:static;margin:16px -8px -8px}.phone{width:100%}}
+</style></head><body>
+
+<div class="eye" style="font-size:12px">404 OS · Mock-up · 27 Oct 2026</div>
+<h1 style="font-size:22px">Camp fees</h1>
+<p class="intro">Eight screens for the camp fees sprint. Where a layout is open, Option A and Option B sit side by side. The owner picked step 1 B and step 4 A; the other options are greyed. Buttons, tabs and links work. All amounts are in rands. Sample bank details only.</p>
+
+<!-- ============ STEP 1 ============ -->
+<h2>1 · Finance › Camp money (new tab in Payments)</h2>
+<p class="why">Who: captains and Finance leads. Finance types the bank balance with a date; every balance is kept. The bills list and the forecast read it. "Mark paid" is the one main row action, in the same place on every row.</p>
+<div class="grid">
+ <div class="opt notpicked"><div class="optlab">Option A <span>The sum first: one plain calculation, then the bills</span></div>
+ <div class="desk"><div class="win"><div class="bar">▣ Payments<span class="b"><i></i><i></i></span></div><div class="body">
+  <div class="head"><div><div class="eye">Finance / Payments</div><h1>Camp money</h1></div><span class="btn">+ Add a bill</span></div>
+  <p class="desc">What the camp has, what it must pay and what is left.</p>
+  <div class="tabs"><span>Payments</span><span>Who owes what</span><span class="on new">Camp money</span><span>Claims</span><span>Budgets</span><span>Bank statement</span><span>Fees and dates</span></div>
+  <div class="tabmenu"><span>Camp money</span><span class="mut">▾</span></div>
+  <div class="split">
+   <div class="card"><p class="ct">Money left</p><p class="cd">If everyone pays what they pledged.</p>
+    <div class="sum">
+     <span class="op"></span><span>In the bank <span class="mut xs">on 25 Oct</span></span><span class="am">R100,000.00</span>
+     <span class="op">+</span><span>Fees still expected <span class="mut xs">9 said Coming</span></span><span class="am">R48,900.00</span>
+     <span class="op">−</span><span>Bills still due <span class="mut xs">4 bills</span></span><span class="am">R148,400.00</span>
+     <span class="op">−</span><span>Team budgets not spent</span><span class="am">R11,500.00</span>
+     <span class="op tot">=</span><span class="tot">Money left</span><span class="am tot neg">−R11,000.00</span>
+     <span class="note">We are short by R11,000.00. The 3 who said Maybe would add about R21,600.00 at the recommended R7,200.00 each.</span>
+    </div></div>
+   <div class="card"><p class="ct">After the 1 Dec deposit</p><p class="cd">The R70,000.00 deposit to Dimensions.</p>
+    <div class="kpi"><dd class="v" style="font-size:24px">R49,200.00</dd><dd class="h">In the bank on 1 Dec, with fees due by 30 Nov (R23,600.00) in and the 15 Nov storage paid.</dd></div>
+    <p class="xs mut" style="margin-top:12px">If every team spent its budget by then: R37,700.00.</p></div>
+  </div>
+  <div class="card"><div class="head"><div><p class="ct">Bank balance</p><p class="cd" style="margin:0">Type what the bank shows. We keep every one.</p></div></div>
+   <div class="row" style="margin-top:12px"><div class="field"><label>Balance (R)</label><input class="input" value="100 000.00" style="width:140px"></div><div class="field"><label>On</label><input class="input" value="25 Oct 2026" style="width:120px"></div><span class="btn o" style="align-self:flex-end">Save balance</span></div>
+   <ul class="hist"><li><span>25 Oct 2026 · Caitlin</span><span class="num">R100,000.00</span></li><li><span>1 Oct 2026 · Caitlin</span><span class="num">R96,850.00</span></li><li><span>2 Sep 2026 · Michael</span><span class="num">R91,200.00</span></li></ul>
+  </div>
+  <div style="margin-top:16px" class="row"><p class="ct" style="margin:0">Bills</p><span class="chips" data-chips><span class="on">Still due (4)</span><span>Paid (2)</span><span>All</span></span></div>
+  <div class="tw" style="margin-top:8px"><table class="t"><thead><tr><th style="min-width:180px">Bill</th><th class="r">Amount</th><th>Due</th><th></th></tr></thead><tbody>
+   <tr><td class="first"><span class="name">Storage unit</span><span class="sub">Paarden Eiland Storage · monthly, 6 left</span></td><td class="r num"><span class="lbl">Amount</span>R4,400.00 a month</td><td class="num"><span class="lbl">Due</span><span>15 Nov 2026<br><span class="badge b-warn">Not paid</span></span></td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico" title="Edit">✎</span></span></span></td></tr>
+   <tr class="hl"><td class="first"><span class="name">Tent hire deposit</span><span class="sub">Dimensions · one time</span></td><td class="r num"><span class="lbl">Amount</span>R70,000.00</td><td class="num"><span class="lbl">Due</span><span>1 Dec 2026<br><span class="badge b-warn">Not paid</span></span></td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr>
+   <tr><td class="first"><span class="name">Container</span><span class="sub">Caitlin · one time</span></td><td class="r num"><span class="lbl">Amount</span>R20,000.00</td><td class="num"><span class="lbl">Due</span><span>15 Feb 2027<br><span class="badge b-blue">Planned</span></span></td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr>
+   <tr><td class="first"><span class="name">Tent hire balance</span><span class="sub">Dimensions · one time</span></td><td class="r num"><span class="lbl">Amount</span>R32,000.00</td><td class="num"><span class="lbl">Due</span><span>31 Mar 2027<br><span class="badge b-warn">Not paid</span></span></td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr>
+  </tbody></table></div>
+ </div></div></div></div>
+
+ <div class="opt"><div class="optlab">Option B <span class="picked">Picked</span><span>Four figures, then the money date by date</span></div>
+ <div class="desk"><div class="win"><div class="bar">▣ Payments<span class="b"><i></i><i></i></span></div><div class="body">
+  <div class="head"><div><div class="eye">Finance / Payments</div><h1>Camp money</h1></div><span class="btn">+ Add a bill</span></div>
+  <p class="desc">What the camp has, what it must pay and what is left.</p>
+  <div class="tabs"><span>Payments</span><span>Who owes what</span><span class="on new">Camp money</span><span>Claims</span><span>Budgets</span><span>Bank statement</span><span>Fees and dates</span></div>
+  <div class="tabmenu"><span>Camp money</span><span class="mut">▾</span></div>
+  <div class="card"><dl class="kpis" style="margin:0">
+   <div class="kpi"><dt>In the bank</dt><dd class="v">R100,000.00</dd><dd class="h">on 25 Oct · <span class="link">Update</span></dd></div>
+   <div class="kpi"><dt>Fees still to come</dt><dd class="v">R48,900.00</dd><dd class="h">from 7 of 9 Coming</dd></div>
+   <div class="kpi"><dt>After 1 Dec deposit</dt><dd class="v">R49,200.00</dd><dd class="h">before team budgets</dd></div>
+   <div class="kpi"><dt>Money left</dt><dd class="v neg">−R11,000.00</dd><dd class="h">after every bill and budget</dd></div>
+  </dl></div>
+  <div class="row" style="margin-top:16px"><p class="ct" style="margin:0">Date by date</p><span class="chips" data-chips><span class="on">Still due</span><span>Paid (2)</span></span></div>
+  <div class="tw" style="margin-top:8px"><table class="t"><thead><tr><th>Date</th><th>What</th><th class="r">In / out</th><th class="r">Money after</th><th></th></tr></thead><tbody><tr class=""><td class="first num">15 Nov</td><td><span class="lbl">What</span><span><b>Storage unit</b> <span class="mut xs">monthly · Paarden Eiland Storage</span></span></td><td class="r num amt"><span class="lbl">Out</span>−R4,400.00</td><td class="r num"><span class="lbl">Money after</span>R95,600.00</td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr><tr class="inc"><td class="first num">30 Nov</td><td><span class="lbl">What</span><span>Fees due <span class="mut xs">4 members</span></span></td><td class="r num amt"><span class="lbl">In</span>+R23,600.00</td><td class="r num"><span class="lbl">Money after</span>R119,200.00</td><td class="act"></td></tr><tr class="hl"><td class="first num">1 Dec</td><td><span class="lbl">What</span><span><b>Tent hire deposit</b> <span class="mut xs">Dimensions</span></span></td><td class="r num amt"><span class="lbl">Out</span>−R70,000.00</td><td class="r num"><span class="lbl">Money after</span><b>R49,200.00</b></td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr><tr class=""><td class="first num">15 Dec</td><td><span class="lbl">What</span><span><b>Storage unit</b></span></td><td class="r num amt"><span class="lbl">Out</span>−R4,400.00</td><td class="r num"><span class="lbl">Money after</span>R44,800.00</td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr><tr class="inc"><td class="first num">31 Dec</td><td><span class="lbl">What</span><span>Fees due <span class="mut xs">4 members</span></span></td><td class="r num amt"><span class="lbl">In</span>+R16,800.00</td><td class="r num"><span class="lbl">Money after</span>R61,600.00</td><td class="act"></td></tr><tr class=""><td class="first num">15 Jan</td><td><span class="lbl">What</span><span><b>Storage unit</b></span></td><td class="r num amt"><span class="lbl">Out</span>−R4,400.00</td><td class="r num"><span class="lbl">Money after</span>R57,200.00</td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr><tr class="inc"><td class="first num">15 Jan</td><td><span class="lbl">What</span><span>Fees due <span class="mut xs">Jess</span></span></td><td class="r num amt"><span class="lbl">In</span>+R3,500.00</td><td class="r num"><span class="lbl">Money after</span>R60,700.00</td><td class="act"></td></tr><tr class=""><td class="first num">15 Feb</td><td><span class="lbl">What</span><span><b>Storage unit</b></span></td><td class="r num amt"><span class="lbl">Out</span>−R4,400.00</td><td class="r num"><span class="lbl">Money after</span>R56,300.00</td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr><tr class=""><td class="first num">15 Feb</td><td><span class="lbl">What</span><span><b>Container</b> <span class="mut xs">Caitlin</span> <span class="badge b-blue">Planned</span></span></td><td class="r num amt"><span class="lbl">Out</span>−R20,000.00</td><td class="r num"><span class="lbl">Money after</span>R36,300.00</td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr><tr class=""><td class="first num">15 Mar</td><td><span class="lbl">What</span><span><b>Storage unit</b></span></td><td class="r num amt"><span class="lbl">Out</span>−R4,400.00</td><td class="r num"><span class="lbl">Money after</span>R31,900.00</td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr><tr class=""><td class="first num">31 Mar</td><td><span class="lbl">What</span><span><b>Tent hire balance</b> <span class="mut xs">Dimensions</span></span></td><td class="r num amt"><span class="lbl">Out</span>−R32,000.00</td><td class="r num"><span class="lbl">Money after</span><span class="neg">−R100.00</span></td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr><tr class=""><td class="first num">15 Apr</td><td><span class="lbl">What</span><span><b>Storage unit</b> <span class="mut xs">last one</span></span></td><td class="r num amt"><span class="lbl">Out</span>−R4,400.00</td><td class="r num"><span class="lbl">Money after</span><span class="neg">−R4,500.00</span></td><td class="act"><span class="ra"><span class="btn s p" data-paid>Mark paid</span><span class="sec"><span class="ico">✎</span></span></span></td></tr><tr class="inc"><td class="first num">No date</td><td><span class="lbl">What</span><span>Fees with no date yet <span class="mut xs">Pieter</span></span></td><td class="r num amt"><span class="lbl">In</span>+R5,000.00</td><td class="r num"><span class="lbl">Money after</span>R500.00</td><td class="act"></td></tr><tr class=""><td class="first num">—</td><td><span class="lbl">What</span><span>Team budgets not spent</span></td><td class="r num amt"><span class="lbl">Out</span>−R11,500.00</td><td class="r num"><span class="lbl">Money after</span><b class="neg">−R11,000.00</b></td><td class="act"></td></tr></tbody></table></div>
+  
+ </div></div></div></div>
+</div>
+
+<!-- ============ STEP 2 ============ -->
+<h2>2 · Finance › Who owes what, with pledges and when they can pay</h2>
+<p class="why">There are no fixed tiers: "Pledged" is the member's own amount, with the nearest name on the scale under it. "When they can pay" is their answer in "Coming this year?". A member who asked for a subsidy wears a "Subsidy: talk to them" badge. One main button ("Remind who still owes"); "Ask everyone to pledge" sits beside it, outlined. The table stacks into cards when the window is narrow (see the phone PNG).</p>
+<div class="desk"><div class="win"><div class="bar">▣ Payments<span class="b"><i></i><i></i></span></div><div class="body">
+ <div class="head"><div><div class="eye">Finance / Payments</div><h1>Who owes what</h1></div>
+  <div class="row"><span class="btn o">Ask everyone to pledge</span><span class="btn" data-open="dlg-remind">Remind who still owes</span></div></div>
+ <p class="desc">Each member's pledge, when they said they can pay, and what they have paid this year.</p>
+ <div class="tabs"><span>Payments</span><span class="on">Who owes what</span><span class="new">Camp money</span><span>Claims</span><span>Budgets</span><span>Bank statement</span><span>Fees and dates</span></div>
+ <div class="tabmenu"><span>Who owes what</span><span class="mut">▾</span></div>
+ <div class="callout blue" style="display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px">
+  <div><b>Collecting fees</b><div class="sm mut">On: members who owe see how to pay, and you can send reminders.</div></div>
+  <span class="switch on" data-switch><i></i><span>On</span></span></div>
+ <div class="card"><dl class="kpis" style="margin:0">
+  <div class="kpi"><dt>Pledged</dt><dd class="v">R56,900.00</dd><dd class="h">9 said Coming · 1 asks for a subsidy</dd></div>
+  <div class="kpi"><dt>Paid</dt><dd class="v">R8,000.00</dd><dd class="h">1 paid up · 1 part paid</dd></div>
+  <div class="kpi"><dt>Still expected</dt><dd class="v">R48,900.00</dd><dd class="h">7 members owe</dd></div>
+  <div class="kpi"><dt>Due by 30 Nov</dt><dd class="v">R23,600.00</dd><dd class="h">4 members</dd></div>
+ </dl></div>
+ <div class="row" style="margin:16px 0 8px"><span class="chips" data-chips><span class="on">Coming (9)</span><span>Maybe (3)</span><span>Owe money (7)</span><span>Subsidy (1)</span><span>Everyone</span></span></div>
+ <div class="tw"><table class="t"><thead><tr><th>Member</th><th class="r">Pledged</th><th>When they can pay</th><th class="r">Paid</th><th class="r">Still owing</th><th>Next instalment</th><th></th></tr></thead><tbody>
+  <tr><td class="first"><span class="name">Alex</span></td><td class="r num"><span class="lbl">Pledged</span><span>R6,000.00<span class="sub">Reasonable</span></span></td><td><span class="lbl">When</span>Full by end Nov</td><td class="r num"><span class="lbl">Paid</span>R6,000.00</td><td class="r num"><span class="lbl">Still owing</span><span class="mut">R0.00</span></td><td><span class="lbl">Next</span><span class="badge b-ok">Paid up</span></td><td class="act mut">›</td></tr>
+  <tr><td class="first"><span class="name">Caitlin</span></td><td class="r num"><span class="lbl">Pledged</span><span>R8,000.00<span class="sub">Ideal</span></span></td><td><span class="lbl">When</span>Part by end Nov</td><td class="r num"><span class="lbl">Paid</span>R2,000.00</td><td class="r num"><span class="lbl">Still owing</span>R6,000.00</td><td class="num"><span class="lbl">Next</span>R2,000.00 by 30 Nov</td><td class="act mut">›</td></tr>
+  <tr><td class="first"><span class="name">Cloud</span></td><td class="r num"><span class="lbl">Pledged</span><span>R7,200.00<span class="sub">near Ideal</span></span></td><td><span class="lbl">When</span>Full by end Dec</td><td class="r num"><span class="lbl">Paid</span>R0.00</td><td class="r num"><span class="lbl">Still owing</span>R7,200.00</td><td class="num"><span class="lbl">Next</span>R7,200.00 by 31 Dec</td><td class="act mut">›</td></tr>
+  <tr><td class="first"><span class="name">Jess</span></td><td class="r num"><span class="lbl">Pledged</span><span>R3,500.00<span class="sub">Essential</span></span></td><td><span class="lbl">When</span>Full by 15 Jan 2027</td><td class="r num"><span class="lbl">Paid</span>R0.00</td><td class="r num"><span class="lbl">Still owing</span>R3,500.00</td><td class="num"><span class="lbl">Next</span>R3,500.00 by 15 Jan</td><td class="act mut">›</td></tr>
+  <tr><td class="first"><span class="name">Lerato</span></td><td class="r num"><span class="lbl">Pledged</span><span>R7,200.00<span class="sub">near Ideal</span></span></td><td><span class="lbl">When</span>Part by end Nov</td><td class="r num"><span class="lbl">Paid</span>R0.00</td><td class="r num"><span class="lbl">Still owing</span>R7,200.00</td><td class="num"><span class="lbl">Next</span>R3,600.00 by 30 Nov</td><td class="act mut">›</td></tr>
+  <tr><td class="first"><span class="name">Michael</span></td><td class="r num"><span class="lbl">Pledged</span><span>R16,000.00<span class="sub">Perfect World</span></span></td><td><span class="lbl">When</span>Full by end Nov</td><td class="r num"><span class="lbl">Paid</span>R0.00</td><td class="r num"><span class="lbl">Still owing</span>R16,000.00</td><td class="num"><span class="lbl">Next</span>R16,000.00 by 30 Nov</td><td class="act mut">›</td></tr>
+  <tr><td class="first"><span class="name">Pieter</span></td><td class="r num"><span class="lbl">Pledged</span><span>R5,000.00<span class="sub">near Reasonable</span></span></td><td><span class="lbl">When</span>Will talk to a captain</td><td class="r num"><span class="lbl">Paid</span>R0.00</td><td class="r num"><span class="lbl">Still owing</span>R5,000.00</td><td><span class="lbl">Next</span><span class="mut">No date yet</span></td><td class="act mut">›</td></tr>
+  <tr><td class="first"><span class="name">Sam</span><span class="sub" style="margin-top:4px"><span class="badge b-blue">Subsidy: talk to them</span></span></td><td class="r num"><span class="lbl">Pledged</span><span>R0.00<span class="sub">Subsidy</span></span></td><td><span class="lbl">When</span><span class="mut">Not answered</span></td><td class="r num"><span class="lbl">Paid</span>R0.00</td><td class="r num"><span class="lbl">Still owing</span><span class="mut">R0.00</span></td><td><span class="lbl">Next</span><span class="mut">After a talk</span></td><td class="act mut">›</td></tr>
+  <tr><td class="first"><span class="name">Thabo</span></td><td class="r num"><span class="lbl">Pledged</span><span>R4,000.00<span class="sub">near Essential</span></span></td><td><span class="lbl">When</span>Part by end Nov</td><td class="r num"><span class="lbl">Paid</span>R0.00</td><td class="r num"><span class="lbl">Still owing</span>R4,000.00</td><td class="num"><span class="lbl">Next</span>R2,000.00 by 30 Nov</td><td class="act mut">›</td></tr>
+ </tbody></table></div>
+</div></div></div>
+
+<div class="flow" style="margin-top:16px">
+ <div class="desk" id="dlg-remind"><div class="dlg"><div class="bar">▣ Remind who still owes<span class="b"><i></i></span></div><div class="body">
+  <h3>Remind 7 members who still owe?</h3>
+  <p class="aud"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 13c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M11 3a2.5 2.5 0 010 5M12.5 9.5c1.3.5 2 1.8 2 3.5"/></svg><span>Reaches 7 people who said Coming and still owe. Left out: 3 who said Not coming this year. <span class="link" data-who="who-r">Who?</span></span></p>
+  <p class="who" id="who-r">Bongi, Kyle, Tash</p>
+  <div class="people">
+   <div class="person">Caitlin<span class="h">R2,000.00 by 30 Nov · Ol' Jeb</span></div>
+   <div class="person">Lerato<span class="h">R3,600.00 by 30 Nov · Ol' Jeb</span></div>
+   <div class="person">Michael<span class="h">R16,000.00 by 30 Nov · Ol' Jeb</span></div>
+   <div class="person">Thabo<span class="h">R2,000.00 by 30 Nov</span></div>
+   <div class="person mut">+ 3 more (Cloud, Jess, Pieter)</div>
+  </div>
+  <p class="sm">Each one gets a notice about <b>their own</b> next payment: in their inbox, by push and email, and as a private message from Ol' Jeb if they connected Telegram (4 of 7). Sam asked for a subsidy and owes nothing yet, so he is not reminded.</p>
+  <label class="chk"><input type="checkbox" checked><span>Also post a general reminder in Camp 404 Announcements<br><span class="xs mut">"Camp fees are coming due. Check My dues in Camp 404." Nobody is named and no amounts are shown.</span></span></label>
+  <div class="row" style="justify-content:flex-end;margin-top:16px"><span class="btn o">Cancel</span><span class="btn">Send 7 reminders</span></div>
+ </div></div></div>
+ <div class="desk"><div class="lb" style="margin-top:0">What the group sees</div>
+  <div style="background:#17212b;padding:12px;max-width:420px"><div style="background:#182533;border-radius:10px;padding:8px 12px;color:#e9eef3"><div style="color:var(--mag);font-size:11px;font-weight:600">Ol' Jeb</div><b>Camp fees are coming due</b><br>Check My dues in Camp 404 to see what you owe and how to pay.<span style="display:block;text-align:center;background:#24394e;color:#6ab3f3;padding:8px;border-radius:6px;margin-top:8px;font-weight:500">Open My dues</span></div></div>
+  <div class="lb">What Lerato gets privately</div>
+  <div style="background:#17212b;padding:12px;max-width:420px"><div style="background:#182533;border-radius:10px;padding:8px 12px;color:#e9eef3"><b>Your camp fee: R3,600.00 by 30 Nov</b><br>You have paid R0.00 of R7,200.00. Your reference is C404-M017.<span style="display:block;text-align:center;background:#24394e;color:#6ab3f3;padding:8px;border-radius:6px;margin-top:8px;font-weight:500">Open in Camp 404</span></div></div>
+ </div>
+</div>
+
+<!-- ============ STEP 3 ============ -->
+<h2>3 · "Coming this year?" → "What can you commit?"</h2>
+<p class="why">Shown only after "Coming". The Join site's floating scale: slide or type ANY amount in rands (more than Perfect World is fine). The scale's names are marks under the slider; the dollar label sits beside the rand figure. The marked point is the Recommended amount, about US$450. Then "By when can you pay it?", and a subsidy tick box: when ticked, R0 is fine and "By when" is optional. Nothing is charged until captains give the member a place.</p>
+<div class="flow">
+ <div class="desk" style="flex:2 1 560px"><div class="win"><div class="bar">▣ My forms<span class="b"><i></i><i></i></span></div><div class="body" style="max-width:720px">
+  <div class="eye">Me / My forms</div><h1>Coming this year?</h1><p class="desc">Tell us if you're coming to AfrikaBurn 2027. It takes 2 minutes.</p>
+  <div class="card"><p class="ct">Are you coming?</p>
+   <div class="oc two" data-oc><label class="on"><span class="dot"></span><span><b>Coming</b></span></label><label><span class="dot"></span><span><b>Maybe</b></span></label><label><span class="dot"></span><span><b>Not coming</b></span></label></div></div>
+  <div class="card" data-scale>
+   <p class="ct">What can you commit?</p><p class="cd">A floating scale, not a fixed fee. Pay what you can afford. Slide, or type an amount.</p>
+   <div class="out"><span class="big" data-amt>R7,200.00</span><span class="usd" data-usd>≈ US$450.00</span><span class="pill" data-pill>Recommended</span></div>
+   <div class="note" data-note>About US$450: what we suggest if you can.</div>
+   <div class="scale">
+    <div class="track"><div class="hatch" style="width:19.44%"></div><span class="sub0">Subsidy</span><div class="needle" data-needle style="left:40%"></div></div>
+    <div class="mk up" style="left:19.44%"><b>Essential</b><small>R3,500 · ≈ US$219</small><i></i></div>
+    <div class="mk up" style="left:44.44%"><b>Ideal</b><small>R8,000 · ≈ US$500</small><i></i></div>
+    <div class="mk up end" style="left:88.89%"><b>Perfect World</b><small>R16,000 · ≈ US$1,000</small><i></i></div>
+    <div class="mk dn" style="left:33.33%"><i></i><b>Reasonable</b><small>R6,000 · ≈ US$375</small></div>
+    <div class="mk dn rec" style="left:40%"><i></i><b>★ Recommended</b><small>R7,200 · ≈ US$450</small></div>
+    <input type="range" min="0" max="18000" step="100" value="7200" data-range aria-label="What I can commit, in rands">
+   </div>
+   <div class="row" style="margin-top:8px"><div class="field"><label>Or type it (R)</label><input class="input" data-type value="7200" inputmode="decimal" style="width:140px"></div><span class="xs mut" style="align-self:flex-end;padding-bottom:8px">More than Perfect World is fine.</span></div>
+   <p class="xs mut" style="font-family:ui-monospace,monospace;text-transform:uppercase;font-size:10px;margin-bottom:0">Dollar figures are a guide at R16 = US$1 (September 2026). We pay in rands.</p>
+  </div>
+  <div class="card"><p class="ct">By when can you pay it? <span class="mut sm" data-opt-when style="font-weight:400"></span></p>
+   <div class="oc two" data-oc style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+    <label><span class="dot"></span><b>All of it by the end of November</b></label>
+    <label><span class="dot"></span><b>All of it by the end of December</b></label>
+    <label class="on"><span class="dot"></span><span><b>Part by the end of November</b><small>and the rest later</small></span></label>
+    <label><span class="dot"></span><span><b>Part by the end of December</b><small>and the rest later</small></span></label>
+    <label><span class="dot"></span><b>All of it by 15 January 2027</b></label>
+    <label><span class="dot"></span><b>I'll talk to a captain</b></label>
+   </div></div>
+  <div class="card"><label class="chk" style="margin:0"><input type="checkbox" data-subsidy><span><b>I need a subsidy: please talk to me</b><br><span class="sm mut">South African, a student, or short on cash? Pay what you can: nothing is okay. Someone from Communications &amp; HR will message you.</span></span></label>
+   <p class="sm hidden" data-subnote style="border-left:2px solid var(--blue);padding-left:8px;margin-bottom:0">R0 is fine, and "By when" is optional. Nobody else sees that you asked.</p></div>
+  <div class="row" style="justify-content:flex-end;margin-top:16px"><span class="btn o">Back</span><span class="btn">Send</span></div>
+ </div></div></div>
+
+ <div class="phone" style="height:auto;min-height:740px">
+  <div class="phead">404 OS<span class="tray" style="margin-left:auto"><span class="tbox">🔔<span class="pip">2</span></span></span></div>
+  <div class="pwin"><div class="bar">▣ My forms<span class="b"><i></i></span></div><div class="body">
+   <h1 style="font-size:18px">Coming this year?</h1>
+   <p class="ct" style="margin-top:12px">Are you coming?</p>
+   <div class="seg" style="grid-template-columns:1fr 1fr 1fr"><span class="on">Coming</span><span>Maybe</span><span>Not coming</span></div>
+   <div data-scale class="ph">
+    <p class="ct" style="margin-top:16px">What can you commit?</p><p class="cd">Pay what you can afford. Slide, or type it.</p>
+    <div class="out"><span class="big" data-amt>R7,200.00</span><span class="usd" data-usd>≈ US$450.00</span><span class="pill" data-pill>Recommended</span></div>
+    <div class="scale">
+     <div class="track"><div class="hatch" style="width:19.44%"></div><div class="needle" data-needle style="left:40%"></div></div>
+     <div class="mk up" style="left:19.44%"><b>Essential</b><i></i></div>
+     <div class="mk up" style="left:44.44%"><b>Ideal</b><i></i></div>
+     <div class="mk up end" style="left:88.89%"><b>Perfect World</b><i></i></div>
+     <div class="mk dn" style="left:33.33%"><i></i><b>Reasonable</b></div>
+     <div class="mk dn rec" style="left:40%"><i></i><b>★ Recommended</b></div>
+     <input type="range" min="0" max="18000" step="100" value="7200" data-range aria-label="What I can commit, in rands">
+    </div>
+    <div class="field" style="margin-top:8px"><label>Or type it (R)</label><input class="input" data-type value="7200" inputmode="decimal"></div>
+    <p class="xs mut">≈ dollars at R16 = US$1. We pay in rands.</p>
+   </div>
+   <p class="ct" style="margin-top:16px">By when can you pay it?</p>
+   <div class="oc" style="gap:4px" data-oc>
+    <label style="padding:8px 12px"><span class="dot"></span><b>All by end of November</b></label>
+    <label style="padding:8px 12px"><span class="dot"></span><b>All by end of December</b></label>
+    <label class="on" style="padding:8px 12px"><span class="dot"></span><b>Part by end of Nov, rest later</b></label>
+    <label style="padding:8px 12px"><span class="dot"></span><b>Part by end of Dec, rest later</b></label>
+    <label style="padding:8px 12px"><span class="dot"></span><b>All by 15 January 2027</b></label>
+    <label style="padding:8px 12px"><span class="dot"></span><b>I'll talk to a captain</b></label>
+   </div>
+   <label class="chk" style="margin-top:12px"><input type="checkbox"><span><b>I need a subsidy: please talk to me</b><br><span class="xs mut">Then R0 is fine and "By when" is optional.</span></span></label>
+   <span class="btn w" style="margin-top:12px">Send</span>
+  </div></div>
+  <div class="pbot"><span>⌂<br>Home</span><span>⌕<br>Search</span><span>☰<br>Windows</span><span>▤<br>Start</span></div>
+ </div>
+</div>
+
+<!-- ============ STEP 4 ============ -->
+<h2>4 · The pay guide: only while collecting is on and you owe</h2>
+<p class="why">It talks about the NEXT payment, not the whole fee. "Remind me tomorrow" hides it for a day. Click the collapsed card to open it; switch South Africa / abroad.</p>
+<div class="grid">
+ <div class="opt"><div class="optlab">Option A <span class="picked">Picked</span><span>A balloon from the tray: one card that grows</span></div>
+  <div class="desk" style="height:300px"><div class="pg" data-pg="a1" style="cursor:pointer" data-expand="a-exp">
+    <span class="x" title="Remind me tomorrow">×</span><div class="in">
+    <div class="eye">Camp fee</div><b style="font-size:15px;display:block;margin-top:4px">R3,600.00 is due by 30 Nov</b>
+    <div class="sm mut">Your first payment. You have paid R0.00 of R7,200.00.</div>
+    <div class="row" style="margin-top:12px"><span class="btn s">Show me how to pay</span><span class="btn g s">Remind me tomorrow</span></div></div></div>
+   <div class="taskbar"><span class="start">404</span><span class="tbtn">Calendar</span><span class="tray"><span class="tbox">🔔<span class="pip">2</span></span><span class="tbox clock">14:05<small>TUE 27 OCT</small></span></span></div></div>
+  <div class="desk" style="height:860px" id="a-exp"><div class="pg" style="bottom:60px">
+    <span class="x" title="Close">×</span><div class="in">
+    <div class="eye">Camp fee</div><b style="font-size:15px;display:block;margin-top:4px">Your first payment of R3,600.00 is due by 30 Nov.</b>
+    <div class="sm mut">You have paid R0.00 of R7,200.00.</div>
+    <div class="prog"><i style="width:0"></i></div>
+    <div class="lb">Your payment reference</div>
+    <div class="ref"><code>C404-M017</code><span class="btn o s" data-copy>Copy</span></div>
+    <div class="xs mut" style="margin-top:4px">Put it on the payment so Finance knows it is you.</div>
+    <div class="lb">How are you paying?</div>
+    <div class="seg" data-seg="a"><span class="on">From South Africa</span><span>From abroad</span></div>
+    <div data-pane="a-0"><dl class="bank"><dt>Bank</dt><dd>FNB</dd><dt>Account name</dt><dd>Camp 404</dd><dt>Account number</dt><dd>6280 000 0000</dd><dt>Branch code</dt><dd>250655</dd><dt>Reference</dt><dd>C404-M017</dd><dt>Amount</dt><dd>R3,600.00</dd></dl></div>
+    <div data-pane="a-1" class="hidden"><dl class="bank"><dt>SWIFT code</dt><dd>FIRNZAJJ</dd><dt>Bank</dt><dd>First National Bank, Johannesburg</dd><dt>Account name</dt><dd>Camp 404</dd><dt>Account number</dt><dd>6280 000 0000</dd><dt>Reference</dt><dd>C404-M017</dd><dt>Amount</dt><dd>R3,600.00</dd></dl>
+     <p class="xs mut">South Africa has no IBAN. If your bank asks for one, type the account number.</p>
+     <p class="xs" style="border-left:2px solid var(--warn);padding-left:8px">Banks take fees on the way, so less may land. Choose "OUR" for the fees (you pay them all), or add R150.</p></div>
+    <div class="lb">Then</div>
+    <span class="btn w">⇪ Send your proof of payment</span>
+    <div class="xs mut" style="margin-top:4px">A photo or PDF of the bank's confirmation.</div>
+    <div class="row" style="justify-content:space-between;margin-top:12px"><span class="link sm">Open My dues</span><span class="btn g s">Remind me tomorrow</span></div>
+   </div></div>
+   <div class="taskbar"><span class="start">404</span><span class="tbtn">Calendar</span><span class="tray"><span class="tbox">🔔<span class="pip">2</span></span><span class="tbox clock">14:05<small>TUE 27 OCT</small></span></span></div></div>
+ </div>
+
+ <div class="opt notpicked"><div class="optlab">Option B <span>A small window with three steps; it minimises to a chip</span></div>
+  <div class="desk" style="height:300px">
+   <div class="mini" style="cursor:pointer;padding:8px 12px;border-color:var(--mag)" data-expand="b-exp"><span class="eye" style="font-size:11px">Camp fee</span><b class="num">R3,600.00 by 30 Nov</b><span class="mut">▴</span></div>
+   <div class="taskbar"><span class="start">404</span><span class="tbtn">Calendar</span><span class="tray"><span class="tbox">🔔<span class="pip">2</span></span><span class="tbox clock">14:05<small>TUE 27 OCT</small></span></span></div></div>
+  <div class="desk" style="height:860px" id="b-exp"><div class="pg" style="border-color:var(--line);width:380px">
+   <div class="bar">▣ Pay your camp fee<span class="b"><i title="Minimise"></i><i></i></span></div><div class="in">
+    <b style="font-size:15px">Your first payment of R3,600.00 is due by 30 Nov.</b>
+    <div class="sm mut">You have paid R0.00 of R7,200.00.</div>
+    <ol class="steps" style="margin-top:16px">
+     <li><span class="n">1</span><div><b>Copy your reference</b><div class="ref" style="margin-top:4px"><code>C404-M017</code><span class="btn o s" data-copy>Copy</span></div></div></li>
+     <li><span class="n">2</span><div><b>Pay by bank transfer</b>
+      <div class="row" style="margin-top:4px" data-seg="b"><span class="btn s on">Paying from South Africa</span><span class="btn o s">Paying from abroad</span></div>
+      <div data-pane="b-0" style="margin-top:8px"><dl class="bank"><dt>Bank</dt><dd>FNB</dd><dt>Account name</dt><dd>Camp 404</dd><dt>Account number</dt><dd>6280 000 0000</dd><dt>Branch code</dt><dd>250655</dd><dt>Reference</dt><dd>C404-M017</dd></dl></div>
+      <div data-pane="b-1" class="hidden" style="margin-top:8px"><dl class="bank"><dt>SWIFT code</dt><dd>FIRNZAJJ</dd><dt>Bank</dt><dd>First National Bank, Johannesburg</dd><dt>Account name</dt><dd>Camp 404</dd><dt>Account number</dt><dd>6280 000 0000</dd><dt>Reference</dt><dd>C404-M017</dd></dl>
+       <p class="xs mut">No IBAN in South Africa: use the account number.</p><p class="xs" style="border-left:2px solid var(--warn);padding-left:8px">Less may land after bank fees. Choose "OUR", or add R150.</p></div></div></li>
+     <li><span class="n">3</span><div><b>Send your proof of payment</b><div class="xs mut">A photo or PDF of the bank's confirmation.</div><span class="btn o s" style="margin-top:4px">⇪ Upload proof</span></div></li>
+    </ol>
+    <div class="row" style="justify-content:flex-end;margin-top:12px"><span class="btn g s">Remind me tomorrow</span></div>
+   </div></div>
+   <div class="taskbar"><span class="start">404</span><span class="tbtn">Calendar</span><span class="tbtn" style="border-color:var(--mag);color:var(--fg)">Pay your camp fee</span><span class="tray"><span class="tbox">🔔<span class="pip">2</span></span><span class="tbox clock">14:05<small>TUE 27 OCT</small></span></span></div></div>
+ </div>
+</div>
+
+<div class="lb" style="font-size:11px;color:var(--blue)">Phone: a banner above the bottom bar; it opens as a sheet</div>
+<div class="flow">
+ <div class="opt" style="flex:0 1 360px"><div class="optlab">A · closed</div>
+  <div class="phone"><div class="phead">404 OS<span class="tray" style="margin-left:auto"><span class="tbox">🔔<span class="pip">2</span></span></span></div>
+   <div style="flex:1;padding:16px;color:var(--mut);font:10px Silkscreen;text-align:center">HOME SCREEN</div>
+   <div class="pbanner" data-expand="pa-open"><span style="flex:1"><b>R3,600.00 due by 30 Nov</b><br><span class="xs mut">Your first camp fee payment</span></span><span class="btn s">How to pay</span><span class="mut" style="padding:4px">×</span></div>
+   <div class="pbot"><span>⌂<br>Home</span><span>⌕<br>Search</span><span>☰<br>Windows</span><span>▤<br>Start</span></div></div></div>
+ <div class="opt" style="flex:0 1 360px"><div class="optlab">A · open</div>
+  <div class="phone" id="pa-open"><div class="phead">404 OS<span class="tray" style="margin-left:auto"><span class="tbox">🔔<span class="pip">2</span></span></span></div><div style="flex:1"></div>
+   <div class="scrim"></div><div class="sheet"><div class="grab"></div><div class="in">
+    <b style="font-size:15px">Your first payment of R3,600.00 is due by 30 Nov.</b><div class="sm mut">You have paid R0.00 of R7,200.00.</div>
+    <div class="lb">Your reference</div><div class="ref"><code>C404-M017</code><span class="btn o s" data-copy>Copy</span></div>
+    <div class="seg" data-seg="p"><span class="on">From South Africa</span><span>From abroad</span></div>
+    <div data-pane="p-0"><dl class="bank"><dt>Bank</dt><dd>FNB</dd><dt>Account name</dt><dd>Camp 404</dd><dt>Account no.</dt><dd>6280 000 0000</dd><dt>Branch code</dt><dd>250655</dd><dt>Reference</dt><dd>C404-M017</dd></dl></div>
+    <div data-pane="p-1" class="hidden"><dl class="bank"><dt>SWIFT</dt><dd>FIRNZAJJ</dd><dt>Account name</dt><dd>Camp 404</dd><dt>Account no.</dt><dd>6280 000 0000</dd><dt>Reference</dt><dd>C404-M017</dd></dl><p class="xs mut">No IBAN in South Africa. Less may land after bank fees: choose "OUR", or add R150.</p></div>
+    <span class="btn w" style="margin-top:12px">⇪ Send your proof of payment</span>
+    <span class="btn g s w" style="margin-top:4px">Remind me tomorrow</span>
+   </div></div>
+   <div class="pbot" style="position:absolute;bottom:0;left:0;right:0"><span>⌂<br>Home</span><span>⌕<br>Search</span><span>☰<br>Windows</span><span>▤<br>Start</span></div></div></div>
+ <div class="opt notpicked" style="flex:0 1 360px"><div class="optlab">B · open (a full-screen window)</div>
+  <div class="phone"><div class="phead">404 OS<span class="tray" style="margin-left:auto"><span class="tbox">🔔<span class="pip">2</span></span></span></div>
+   <div class="pwin"><div class="bar">▣ Pay your camp fee<span class="b"><i></i><i></i></span></div><div class="body">
+    <b style="font-size:15px">Your first payment of R3,600.00 is due by 30 Nov.</b><div class="sm mut">You have paid R0.00 of R7,200.00.</div>
+    <ol class="steps" style="margin-top:16px">
+     <li><span class="n">1</span><div><b>Copy your reference</b><div class="ref" style="margin-top:4px"><code>C404-M017</code><span class="btn o s" data-copy>Copy</span></div></div></li>
+     <li><span class="n">2</span><div><b>Pay by bank transfer</b><div style="display:flex;flex-direction:column;gap:4px;margin-top:4px"><span class="btn s w">Paying from South Africa</span><span class="btn o s w">Paying from abroad</span></div></div></li>
+     <li><span class="n">3</span><div><b>Send your proof of payment</b><div class="xs mut">A photo or PDF of the confirmation.</div><span class="btn o s" style="margin-top:4px">⇪ Upload proof</span></div></li>
+    </ol>
+    <span class="btn g s w" style="margin-top:12px">Remind me tomorrow</span>
+   </div></div>
+   <div class="pbot"><span>⌂<br>Home</span><span>⌕<br>Search</span><span>☰<br>Windows</span><span>▤<br>Start</span></div></div></div>
+</div>
+
+<!-- ============ STEP 5 ============ -->
+<h2>5 · My dues: "Next payment" at the top</h2>
+<div class="flow">
+ <div class="desk" style="flex:2 1 520px"><div class="win"><div class="bar">▣ My dues<span class="b"><i></i><i></i></span></div><div class="body" style="max-width:720px">
+  <div class="eye">Me / My dues</div><h1>My dues</h1><p class="desc">What you pay the camp this year, and what you've paid. Pay by bank transfer with your reference, then send us your proof.</p>
+  <div class="callout"><div class="head"><div><div class="eye">Next payment</div><b style="font-size:18px" class="num">R3,600.00 by 30 Nov</b><div class="sm mut">Your first payment. You have paid R0.00 of R7,200.00.</div></div><span class="btn">How to pay</span></div></div>
+  <div class="card"><p class="ct">This year</p><p style="font-size:22px;font-weight:600;margin:4px 0">You owe R7,200.00</p>
+   <div class="row sm mut" style="gap:24px"><span>Charged <b class="num" style="color:var(--fg)">R7,200.00</b></span><span>Paid <b class="num" style="color:var(--fg)">R0.00</b></span></div>
+   <p class="sm" style="border-top:1px solid var(--line);padding-top:12px;margin-top:12px">You pledged <b>R7,200.00</b> (near Ideal). <span class="mut">Ask the Finance team if it needs to change.</span></p></div>
+  <div class="ref" style="padding:16px"><div><b>Your payment reference</b><div><code>C404-M017</code></div><div class="xs mut">Use it when you pay camp dues by EFT.</div></div><span class="btn o s" data-copy>Copy</span></div>
+  <div class="card"><p class="ct">Your payment plan</p><ul class="hist" style="margin:0"><li style="color:var(--fg)"><span>30 Nov 2026 · next</span><span class="num">R3,600.00</span></li><li><span>31 Dec 2026</span><span class="num">R3,600.00</span></li></ul></div>
+ </div></div></div>
+ <div class="phone"><div class="phead">404 OS<span class="tray" style="margin-left:auto"><span class="tbox">🔔<span class="pip">2</span></span></span></div>
+  <div class="pwin"><div class="bar">▣ My dues<span class="b"><i></i></span></div><div class="body">
+   <h1 style="font-size:18px">My dues</h1>
+   <div class="callout" style="margin-top:12px"><div class="eye">Next payment</div><b style="font-size:17px" class="num">R3,600.00 by 30 Nov</b><div class="sm mut">You have paid R0.00 of R7,200.00.</div><span class="btn w" style="margin-top:12px">How to pay</span></div>
+   <div class="card" style="margin-top:12px"><p class="ct">This year</p><p style="font-size:20px;font-weight:600;margin:4px 0">You owe R7,200.00</p><div class="sm mut">Charged R7,200.00 · Paid R0.00</div></div>
+   <div class="ref" style="margin-top:12px"><div><b class="sm">Your reference</b><div><code>C404-M017</code></div></div><span class="btn o s" data-copy>Copy</span></div>
+  </div></div>
+  <div class="pbot"><span>⌂<br>Home</span><span>⌕<br>Search</span><span>☰<br>Windows</span><span>▤<br>Start</span></div></div>
+</div>
+
+<!-- ============ STEP 6 ============ -->
+<h2>6 · The bell: one "profile isn't finished" notice, with a checklist</h2>
+<p class="why">The profile gaps are ONE notice beside the fee notice. It opens a short checklist; each line goes to the place to fix it and ticks itself when done. The same checklist is a small card on Profile. It never blocks anything. On a desktop the bell is in the taskbar's tray (bottom right); on a phone it is at the top right.</p>
+<div class="flow">
+ <div class="desk" style="height:640px;flex:1 1 480px"><div class="notes" style="position:absolute;right:16px;bottom:60px;width:400px">
+  <div class="hd"><div><b>Notifications</b><div class="xs mut">2 unread</div></div><span class="btn g s">Mark all read</span></div>
+  <div class="nrow"><span class="d"></span><div><span class="k">Camp fee</span><b>R3,600.00 is due by 30 Nov</b><span class="sm mut">Your first payment. Open to see how to pay.</span></div></div>
+  <div class="nrow" style="cursor:pointer;background:color-mix(in oklch,var(--mag) 8%,transparent)" data-toggle="gap-list"><span class="d"></span><div><span class="k">Your profile</span><b>Your profile isn't finished: 3 things missing <span class="mut" style="float:right">▾</span></b>
+   <ul class="gaps" id="gap-list">
+    <li><span class="tick"></span><span><span class="link">Connect Telegram</span> to get your notices from Ol' Jeb<span class="xs mut" style="display:block">Profile › Telegram card</span></span></li>
+    <li><span class="tick"></span><span><span class="link">Add your Telegram username</span><span class="xs mut" style="display:block">So Ol' Jeb can tag you in the camp's chat</span></span></li>
+    <li><span class="tick"></span><span><span class="link">Pick a display name</span><span class="xs mut" style="display:block">Yours is still your email address</span></span></li>
+    <li class="done"><span class="tick">✓</span><span>Add an emergency contact</span></li>
+   </ul></div></div>
+  <div class="nrow"><span class="d read"></span><div><span class="k">Announcement</span><b class="mut">Build week dates are set</b><span class="xs mut">2 days ago</span></div></div>
+  <div class="foot">Open the inbox →</div></div>
+  <div class="taskbar"><span class="start">404</span><span class="tbtn">My dues</span><span class="tray"><span class="tbox on">🔔<span class="pip">2</span></span><span class="tbox clock">14:05<small>TUE 27 OCT</small></span></span></div></div>
+ <div class="desk" style="flex:1 1 420px"><div class="win"><div class="bar">▣ Profile<span class="b"><i></i><i></i></span></div><div class="body">
+  <div class="eye">Me / Profile</div><h1>lerato.m@gmail.com</h1><p class="desc">Your burner profile and how the camp reaches you.</p>
+  <div class="card" style="border-left:4px solid var(--blue)"><div class="head"><p class="ct" style="margin:0">Finish your profile</p><span class="xs mut">1 of 4 done</span></div>
+   <div class="prog"><i style="width:25%"></i></div>
+   <ul class="gaps" style="margin-top:8px">
+    <li><span class="tick"></span><span><span class="link">Connect Telegram</span> to get your notices from Ol' Jeb</span></li>
+    <li><span class="tick"></span><span><span class="link">Add your Telegram username</span></span></li>
+    <li><span class="tick"></span><span><span class="link">Pick a display name</span> <span class="xs mut">(yours is still your email address)</span></span></li>
+    <li class="done"><span class="tick">✓</span><span>Add an emergency contact</span></li>
+   </ul></div>
+  <div class="card"><p class="ct">Telegram</p><p class="cd">Get your notices from Ol' Jeb in a private chat.</p><span class="btn">Connect Telegram</span></div>
+ </div></div></div>
+ <div class="phone"><div class="phead">404 OS<span class="tray" style="margin-left:auto"><span class="tbox on">🔔<span class="pip">2</span></span></span></div>
+  <div style="background:var(--panel);border-bottom:2px solid var(--line)">
+   <div class="nrow"><span class="d"></span><div><span class="k">Camp fee</span><b>R3,600.00 is due by 30 Nov</b><span class="sm mut">Open to see how to pay.</span></div></div>
+   <div class="nrow"><span class="d"></span><div><span class="k">Your profile</span><b>Your profile isn't finished: 3 things missing</b>
+    <ul class="gaps"><li><span class="tick"></span><span class="link">Connect Telegram</span></li><li><span class="tick"></span><span class="link">Add your Telegram username</span></li><li><span class="tick"></span><span class="link">Pick a display name</span></li><li class="done"><span class="tick">✓</span><span>Add an emergency contact</span></li></ul></div></div>
+   <div class="foot">Open the inbox →</div></div><div style="flex:1"></div>
+  <div class="pbot"><span>⌂<br>Home</span><span>⌕<br>Search</span><span>☰<br>Windows</span><span>▤<br>Start</span></div></div>
+</div>
+
+<!-- ============ STEP 7 ============ -->
+<h2>7 · Captain's member panel: send a password reset link</h2>
+<p class="why">In the side column, under Decision. Click the button for the confirm, then "Send link" for the sent state.</p>
+<div class="desk"><div class="win"><div class="bar">▣ Camp management<span class="b"><i></i><i></i></span></div><div class="body">
+ <div class="eye">Captains / Camp management</div><h1>Lerato</h1><p class="desc">Approved member · Kitchen</p>
+ <div class="rail"><div><div class="card"><p class="ct">Overview</p><dl class="fl"><div><dt>Email</dt><dd>lerato•••@gmail.com</dd></div><div><dt>Coming this year?</dt><dd>Coming · Accepted</dd></div><div><dt>Telegram</dt><dd class="mut">Not connected</dd></div><div><dt>Camp fee</dt><dd>R7,200.00 · R0.00 paid</dd></div></dl></div></div>
+  <div><div class="card" style="border-color:color-mix(in oklch,var(--mag) 40%,var(--line))"><p class="ct">Decision</p><p class="cd" style="margin:0">Approved on 3 Oct.</p></div>
+   <div class="card"><p class="ct">Sign-in</p><p class="cd">Can't get in? Email them a link to set a new password.</p>
+    <div id="rs-idle"><span class="btn o w" data-open="dlg-reset">Send password reset link</span></div>
+    <div id="rs-sent" class="hidden"><p class="sm" style="margin:0"><span class="badge b-ok">Sent</span> Today at 14:05. The link works for 1 hour.</p><span class="btn g s" style="padding-left:0" data-open="dlg-reset">Send another</span></div>
+    <p class="xs mut" style="margin-bottom:0">🔒 Every link sent is logged to the audit trail.</p></div></div></div>
+</div></div>
+ <div class="flow" style="margin-top:16px"><div class="dlg" id="dlg-reset" style="flex:1 1 420px"><div class="bar">▣ Send password reset link<span class="b"><i></i></span></div><div class="body">
+  <h3>Send Lerato a password reset link?</h3>
+  <p class="sm mut">We email a link to lerato•••@gmail.com. It works for 1 hour. Their password keeps working until they set a new one, and you never see it.</p>
+  <div class="row" style="justify-content:flex-end"><span class="btn o" data-close="dlg-reset">Cancel</span><span class="btn" data-sendreset>Send link</span></div></div></div>
+ <div style="flex:0 1 420px"><div class="optlab" style="margin-bottom:8px">After "Send link"</div><div class="card"><p class="ct">Sign-in</p><p class="cd">Can't get in? Email them a link to set a new password.</p><p class="sm" style="margin:0"><span class="badge b-ok">Sent</span> Today at 14:05. The link works for 1 hour.</p><span class="btn g s" style="padding-left:0">Send another</span><p class="xs mut" style="margin-bottom:0">🔒 Every link sent is logged to the audit trail.</p></div>
+ <div class="toast" style="margin-top:16px"><span style="color:var(--ok)">✓</span> Reset link sent to Lerato.</div></div></div>
+</div>
+
+<!-- ============ STEP 8 ============ -->
+<h2>8 · Group sends leave out who said Not coming</h2>
+<p class="why">Everyone-wide sends skip members who said Not coming this year, and the audience line says so. "Who?" lists the names. The remind dialog in step 2 says the same.</p>
+<div class="grid">
+ <div class="opt"><div class="optlab">Questionnaire · Send</div>
+  <div class="desk"><div class="win"><div class="bar">▣ Questionnaires<span class="b"><i></i><i></i></span></div><div class="body">
+   <div class="eye">Questionnaires / Send</div><h1>Send "Build week shifts"</h1>
+   <div class="card"><p class="ct">Audience</p>
+    <div class="oc two" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))" data-oc><label class="on"><span class="dot"></span><span><b>Everyone in camp</b><small>All approved members</small></span></label><label><span class="dot"></span><span><b>A team</b><small>One team's members</small></span></label><label><span class="dot"></span><span><b>Team leads</b><small>Every lead this year</small></span></label><label><span class="dot"></span><span><b>Specific people</b><small>Pick members</small></span></label></div>
+    <p class="aud" style="margin-top:12px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 13c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M11 3a2.5 2.5 0 010 5M12.5 9.5c1.3.5 2 1.8 2 3.5"/></svg><span>Reaches 14 people. Left out: 3 who said Not coming this year. <span class="link" data-who="who-q">Who?</span></span></p>
+    <p class="who open" id="who-q">Bongi, Kyle, Tash</p></div>
+   <div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:16px;margin-top:16px"><span class="xs mut" style="max-width:300px">Sending asks everyone this audience matches now, and anyone who joins it while the send is open.</span><span class="row"><span class="btn o">Cancel</span><span class="btn">➤ Send questionnaire</span></span></div>
+  </div></div></div></div>
+ <div class="opt"><div class="optlab">Announcements · Composer</div>
+  <div class="desk"><div class="win"><div class="bar">▣ Announcements<span class="b"><i></i><i></i></span></div><div class="body">
+   <div class="eye">Captains / Announcements</div><h1>New announcement</h1>
+   <div class="card">
+    <div class="field"><label>Title</label><input class="input" value="Build week: what to bring"></div>
+    <div class="field" style="margin-top:12px"><label>Message</label><div class="input" style="min-height:72px;color:var(--mut)">Headlamp, gloves, water bottle…</div></div>
+    <div class="field" style="margin-top:12px"><label>Audience</label><div class="input" style="display:flex;justify-content:space-between">Everyone in camp<span class="mut">▾</span></div></div>
+    <p class="aud" style="margin-top:8px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"><circle cx="6" cy="5" r="2.5"/><path d="M1.5 13c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M11 3a2.5 2.5 0 010 5M12.5 9.5c1.3.5 2 1.8 2 3.5"/></svg><span>Reaches 14 people. Left out: 3 who said Not coming this year. <span class="link" data-who="who-a">Who?</span></span></p>
+    <p class="who" id="who-a">Bongi, Kyle, Tash</p>
+    <label class="chk"><input type="checkbox" checked><span>Also post in Telegram</span></label>
+   </div>
+   <div class="row" style="justify-content:flex-end;margin-top:16px"><span class="btn o">Save draft</span><span class="btn">Publish</span></div>
+  </div></div></div></div>
+</div>
+
+<script>
+document.querySelectorAll('[data-chips],[data-oc]').forEach(g=>g.addEventListener('click',e=>{const t=e.target.closest('span,label');if(!t||t.parentElement!==g)return;[...g.children].forEach(c=>c.classList.toggle('on',c===t));}));
+document.querySelectorAll('[data-seg]').forEach(g=>{const k=g.dataset.seg;[...g.children].forEach((c,i)=>c.addEventListener('click',()=>{[...g.children].forEach((d,j)=>{d.classList.toggle('on',j===i);if(d.classList.contains('btn'))d.classList.toggle('o',j!==i)});document.querySelectorAll('[data-pane^="'+k+'-"]').forEach(p=>p.classList.toggle('hidden',p.dataset.pane!==k+'-'+i));}))});
+document.querySelectorAll('[data-who]').forEach(l=>l.addEventListener('click',()=>document.getElementById(l.dataset.who).classList.toggle('open')));
+document.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',()=>{b.textContent='✓ Copied';setTimeout(()=>b.textContent='Copy',1500)}));
+document.querySelectorAll('[data-switch]').forEach(s=>s.addEventListener('click',()=>{s.classList.toggle('on');s.querySelector('span').textContent=s.classList.contains('on')?'On':'Off'}));
+document.querySelectorAll('[data-paid]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const tr=b.closest('tr');const st=tr.querySelector('.badge');if(st){st.className='badge b-ok';st.textContent='Paid';}b.textContent='Undo';b.classList.add('o')}));
+document.querySelectorAll('[data-expand]').forEach(el=>el.addEventListener('click',e=>{if(e.target.closest('.x,.btn.g'))return;const t=document.getElementById(el.dataset.expand);t.scrollIntoView({behavior:'smooth',block:'center'});t.animate([{outline:'2px solid var(--mag)'},{outline:'2px solid transparent'}],{duration:1200})}));
+document.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',()=>{const d=document.getElementById(b.dataset.open);d.classList.remove('hidden');d.scrollIntoView({behavior:'smooth',block:'center'})}));
+document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.close).classList.add('hidden')));
+const TIERS=[["Essential",3500],["Reasonable",6000],["Ideal",8000],["Perfect World",16000]];
+const fmt=n=>"R"+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+const usd=n=>"≈ US$"+(n/16).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+document.querySelectorAll('[data-scale]').forEach(sc=>{const r=sc.querySelector('[data-range]'),t=sc.querySelector('[data-type]');
+ const set=(v,from)=>{v=Math.max(0,Math.round(v)||0);sc.querySelector('[data-amt]').textContent=fmt(v);sc.querySelector('[data-usd]').textContent=usd(v);
+  const pill=sc.querySelector('[data-pill]'),note=sc.querySelector('[data-note]');let name,txt="";
+  if(v===7200){name="Recommended";txt="About US$450: what we suggest if you can.";}
+  else if(v<3500){name="Subsidy";txt="Pay what you can: nothing is okay.";}
+  else{const n=TIERS.reduce((a,b)=>Math.abs(b[1]-v)<Math.abs(a[1]-v)?b:a);name=(n[1]===v?"":"near ")+n[0];if(n[0]==="Ideal")txt="Where we hope most people can land.";if(v>16000)txt="More than Perfect World: thank you. It helps subsidise the starving artists.";}
+  pill.textContent=name;pill.classList.toggle('sub',name==="Subsidy");if(note)note.textContent=txt;
+  sc.querySelector('[data-needle]').style.left=Math.min(100,v/180)+"%";if(from!=='r')r.value=Math.min(v,18000);if(from!=='t')t.value=v;};
+ r.addEventListener('input',()=>set(+r.value,'r'));t.addEventListener('input',()=>set(+t.value.replace(/[^0-9.]/g,''),'t'));});
+document.querySelectorAll('[data-subsidy]').forEach(c=>c.addEventListener('change',()=>{document.querySelector('[data-subnote]').classList.toggle('hidden',!c.checked);document.querySelector('[data-opt-when]').textContent=c.checked?'(optional)':'';}));
+document.querySelectorAll('[data-toggle]').forEach(r=>r.addEventListener('click',()=>document.getElementById(r.dataset.toggle).classList.toggle('shut')));
+document.querySelector('[data-sendreset]').addEventListener('click',()=>{document.getElementById('dlg-reset').classList.add('hidden');document.getElementById('rs-idle').classList.add('hidden');document.getElementById('rs-sent').classList.remove('hidden')});
+</script>
+</body></html>
