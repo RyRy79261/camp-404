@@ -17,6 +17,9 @@ vi.mock("@/lib/member-gate", () => ({
     },
   })),
 }));
+vi.mock("@/lib/profile-checklist", () => ({
+  getProfileChecklist: vi.fn(async () => null),
+}));
 vi.mock("@/lib/users", () => ({ isTeamLead: vi.fn(async () => false) }));
 vi.mock("@/lib/payments", () => ({
   getMemberRefCode: vi.fn(async () => null),
@@ -59,6 +62,8 @@ vi.mock("@/components/profile/profile-sections", () => ({
 
 import { getMyParticipation } from "@/lib/participations";
 import { getMyTicket } from "@/lib/tickets";
+import { getProfileChecklist } from "@/lib/profile-checklist";
+import { profileChecklist } from "@camp404/core";
 import ProfilePage from "./page";
 
 async function renderWith(status: ParticipationStatus | null) {
@@ -179,6 +184,41 @@ describe("profile: the member's own ticket", () => {
     ).toBeTruthy();
     expect(
       screen.queryByRole("radiogroup", { name: "Your ticket" }),
+    ).toBeNull();
+  });
+});
+
+describe("profile: Finish your profile (step 6)", () => {
+  it("shows the checklist card while a line is missing, each line linking to its fix", async () => {
+    vi.mocked(getProfileChecklist).mockResolvedValueOnce(
+      profileChecklist(
+        {
+          approved: true,
+          held: false,
+          displayName: "nova@example.com",
+          telegramHandle: null,
+          telegramConnected: false,
+          hasEmergencyContact: true,
+        },
+        { telegramOffered: false },
+      ),
+    );
+    await renderWith("accepted");
+    expect(
+      screen.getByRole("heading", { name: "Finish your profile" }),
+    ).toBeTruthy();
+    expect(screen.getAllByText("1 of 3 done").length).toBeGreaterThan(0);
+    expect(
+      screen
+        .getByRole("link", { name: "Pick a display name" })
+        .getAttribute("href"),
+    ).toBe("/profile/edit");
+  });
+
+  it("shows no card when the member gets no checklist", async () => {
+    await renderWith("accepted");
+    expect(
+      screen.queryByRole("heading", { name: "Finish your profile" }),
     ).toBeNull();
   });
 });

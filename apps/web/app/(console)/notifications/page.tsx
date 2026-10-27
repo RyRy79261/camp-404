@@ -14,6 +14,8 @@ import {
 } from "@/lib/users";
 import { getIncomingPromotionsForUser } from "@/lib/promotion";
 import { QueueCard } from "@/components/questionnaire/queue-card";
+import { ProfileChecklistNotice } from "@/components/profile/profile-checklist";
+import { getProfileChecklist } from "@/lib/profile-checklist";
 import { InboxFeed } from "./inbox-feed";
 import { NotificationFilterTabs } from "./filter-tabs";
 import {
@@ -94,7 +96,9 @@ export default async function NotificationsPage({
   // Snapshot the first page (with pre-read state), then clear the badge for
   // exactly those rows — a delivery that arrives after the snapshot stays
   // unread, and so do older ones until they are scrolled into view.
-  const [written, waiting, promotions, { items, nextCursor }] =
+  // The profile's gaps (step 6): one grouped notice at the top, for an
+  // approved member who is not held (null otherwise; never a block).
+  const [written, waiting, promotions, { items, nextCursor }, profile] =
     await Promise.all([
       syncOpenGates(campUser.id),
       getPendingQuestionnaires(campUser.id),
@@ -102,7 +106,9 @@ export default async function NotificationsPage({
         ? getIncomingPromotionsForUser(campUser.id)
         : Promise.resolve([]),
       listInbox(campUser.id, { filter }),
+      getProfileChecklist(campUser.id),
     ]);
+  const profileGaps = profile !== null && profile.missing > 0;
   const pending =
     written > 0 ? await getPendingQuestionnaires(campUser.id) : waiting;
   if (marksPageRead(filter)) {
@@ -131,6 +137,15 @@ export default async function NotificationsPage({
 
       <div className="flex flex-col gap-6">
         <NotificationFilterTabs filter={filter} unreadCount={unreadCount} />
+
+        {profileGaps && (
+          <section aria-label="Your profile">
+            <ProfileChecklistNotice
+              checklist={profile}
+              className="overflow-hidden rounded-md border"
+            />
+          </section>
+        )}
 
         {promotions.length > 0 && (
           <section aria-label="Captain request" className="flex flex-col gap-3">
@@ -181,7 +196,8 @@ export default async function NotificationsPage({
 
         {items.length === 0 ? (
           pending.length === 0 &&
-          promotions.length === 0 && (
+          promotions.length === 0 &&
+          !profileGaps && (
             <EmptyState
               icon={EMPTY[filter].icon}
               title={EMPTY[filter].title}

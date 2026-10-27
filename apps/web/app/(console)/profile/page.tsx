@@ -38,6 +38,8 @@ import { SignOutLink } from "@/components/auth/sign-out-link";
 import { ReportSettingsCard } from "@/components/feedback/report-settings-card";
 import { ProfileSections } from "@/components/profile/profile-sections";
 import { TelegramCard } from "@/components/profile/telegram-card";
+import { ProfileChecklistCard } from "@/components/profile/profile-checklist";
+import { getProfileChecklist } from "@/lib/profile-checklist";
 import { telegramBotUsername } from "@/lib/telegram";
 import { getTelegramConnection } from "@/lib/telegram-connection";
 import { MyTicket } from "./my-ticket";
@@ -69,7 +71,7 @@ export default async function ProfilePage() {
   // The same pill the roster shows: a team lead reads "Team Lead", not "Member".
   // Ol' Jeb's card shows only once the bot is set up (its username is known).
   const telegramOn = telegramBotUsername() !== null;
-  const [lead, refCode, participation, ticket, dues, telegram] =
+  const [lead, refCode, participation, ticket, dues, telegram, checklist] =
     await Promise.all([
       isTeamLead(campUser.id),
       getMemberRefCode(campUser.id),
@@ -80,6 +82,8 @@ export default async function ProfilePage() {
         getMemberDues(campUser.id, cycle, { forFinance: false }),
       ),
       telegramOn ? getTelegramConnection(campUser.id) : null,
+      // Step 6: what is missing from the profile, worked out on this read.
+      getProfileChecklist(campUser.id),
     ]);
   // A ticket matters only to someone who might come: not before they answer,
   // and not once they say No.
@@ -144,6 +148,8 @@ export default async function ProfilePage() {
               </CardContent>
             </Card>
 
+            <ProfileChecklistCard checklist={checklist} />
+
             {refCode && <PaymentReference code={refCode} />}
 
             {dues && (
@@ -207,6 +213,7 @@ export default async function ProfilePage() {
 
             {telegram && (
               <TelegramCard
+                id="telegram"
                 connected={telegram.connected}
                 handle={telegram.handle}
                 notices={telegram.notices}

@@ -81,6 +81,7 @@ function loaded(overrides: Partial<NotificationPanelData> = {}) {
       recent: [DELIVERY],
       pending: [QUESTIONNAIRE],
       clearable: 1,
+      profile: null,
       ...overrides,
     },
   };
@@ -105,6 +106,83 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+/** Two of four lines done: Telegram and the display name are missing. */
+const GAPS = {
+  missing: 2,
+  items: [
+    {
+      key: "telegram_connect" as const,
+      label: "Connect Telegram",
+      hint: "to get your notices from Ol' Jeb",
+      href: "/profile#telegram",
+      done: false,
+    },
+    {
+      key: "telegram_username" as const,
+      label: "Add your Telegram username",
+      hint: null,
+      href: "/tools/forms/burner_profile",
+      done: true,
+    },
+    {
+      key: "display_name" as const,
+      label: "Pick a display name",
+      hint: "Yours is still your email address",
+      href: "/profile/edit",
+      done: false,
+    },
+    {
+      key: "emergency_contact" as const,
+      label: "Add an emergency contact",
+      hint: null,
+      href: "/tools/forms/burner_profile",
+      done: true,
+    },
+  ],
+};
+
+describe("NotificationPanel: the profile checklist (step 6)", () => {
+  it("leads with one grouped notice that opens to the lines, each linking to its fix", async () => {
+    vi.mocked(fetchNotificationPanelAction).mockResolvedValue(
+      loaded({ profile: GAPS }),
+    );
+    render(panel(3));
+    openBell();
+    const toggle = await screen.findByRole("button", {
+      name: /Your profile isn't finished: 2 things missing/,
+    });
+    expect(
+      screen.queryByRole("link", { name: "Pick a display name" }),
+    ).toBeNull();
+    fireEvent.click(toggle);
+    expect(
+      screen
+        .getByRole("link", { name: "Pick a display name" })
+        .getAttribute("href"),
+    ).toBe("/profile/edit");
+    expect(
+      screen
+        .getByRole("link", { name: "Connect Telegram" })
+        .getAttribute("href"),
+    ).toBe("/profile#telegram");
+    // A done line ticks and is no longer a link.
+    expect(
+      screen.queryByRole("link", { name: "Add an emergency contact" }),
+    ).toBeNull();
+    expect(screen.getByText("Add an emergency contact")).toBeTruthy();
+  });
+
+  it("draws nothing when every line is done or there is no checklist", async () => {
+    vi.mocked(fetchNotificationPanelAction).mockResolvedValue(
+      loaded({ profile: { ...GAPS, missing: 0 } }),
+    );
+    render(panel(2));
+    openBell();
+    await screen.findByText("Gates open at noon");
+    expect(screen.queryByText(/Your profile isn't finished/)).toBeNull();
+  });
+});
 
 describe("NotificationPanel", () => {
   it("fetches nothing until the bell is opened", () => {

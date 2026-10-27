@@ -12,6 +12,9 @@ vi.mock("@/lib/auth", () => ({
     primaryEmail: "member@example.com",
   })),
 }));
+vi.mock("@/lib/profile-checklist", () => ({
+  getProfileChecklist: vi.fn(async () => null),
+}));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(async () => ({ id: "u1" })),
   hasCampAccess: () => true,

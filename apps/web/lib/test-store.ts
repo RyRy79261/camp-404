@@ -83,6 +83,7 @@ import {
   taskMoveProblem,
   taskRemoveProblem,
   CAPTAIN_ONLY,
+  type ProfileFacts,
 } from "@camp404/core";
 import {
   DRAFT_MISSING,
@@ -2255,6 +2256,21 @@ export const testStore = {
   },
   getEmergencyContacts(userId: string): EmergencyContact[] | null {
     return emergencyContactsByUserId.get(userId) ?? null;
+  },
+
+  /** Twin of getProfileFacts in @camp404/db/burner-profile. */
+  getProfileFacts(userId: string): ProfileFacts | null {
+    const user = findUserById(userId);
+    if (!user) return null;
+    return {
+      approved: user.approvalStatus === "approved",
+      held: this.getPendingRequiredActions(userId).length > 0,
+      displayName: user.displayName,
+      telegramHandle: user.telegramHandle,
+      telegramConnected: telegramState.get(userId)?.dmAt != null,
+      hasEmergencyContact:
+        (emergencyContactsByUserId.get(userId)?.length ?? 0) > 0,
+    };
   },
 
   // --- Questionnaire edit log -------------------------------------------

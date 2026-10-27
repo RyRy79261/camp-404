@@ -32,6 +32,8 @@ export interface TelegramCardProps {
   /** The member's Telegram handle, without "@". */
   handle: string | null;
   notices: "mine" | "all";
+  /** The card's id, so the profile checklist can link to it (`#telegram`). */
+  id?: string;
 }
 
 /** How often the Waiting state checks, and for how long (the link's life). */
@@ -42,6 +44,7 @@ export function TelegramCard({
   connected,
   handle,
   notices,
+  id,
 }: TelegramCardProps) {
   const router = useRouter();
   const [link, setLink] = useState<string | null>(null);
@@ -124,7 +127,7 @@ export function TelegramCard({
   const state = connected ? "on" : link ? "waiting" : "off";
 
   return (
-    <Card data-telegram-card={state}>
+    <Card id={id} className="scroll-mt-4" data-telegram-card={state}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <Send className="h-4 w-4 text-accent" aria-hidden />

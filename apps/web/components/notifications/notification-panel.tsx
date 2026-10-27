@@ -14,6 +14,7 @@ import {
   fetchNotificationPanelAction,
   type NotificationPanelData,
 } from "@/app/(console)/notifications/actions";
+import { ProfileChecklistNotice } from "@/components/profile/profile-checklist";
 import { MarkAllReadButton } from "./mark-all-read-button";
 import {
   PanelNotificationRow,
@@ -133,6 +134,7 @@ export function NotificationPanel({
 
   const data = state.status === "ready" ? state.data : null;
   const rows = data ? data.pending.length + data.recent.length : 0;
+  const profileGaps = (data?.profile?.missing ?? 0) > 0;
 
   return (
     <Popover open={open} onOpenChange={changeOpen}>
@@ -181,6 +183,13 @@ export function NotificationPanel({
         {pinned?.(() => changeOpen(false))}
 
         <div className="max-h-[60vh] overflow-y-auto">
+          {/* Step 6: the profile's gaps, one grouped notice at the top. */}
+          {data && (
+            <ProfileChecklistNotice
+              checklist={data.profile}
+              onNavigate={() => changeOpen(false)}
+            />
+          )}
           {state.status === "loading" ? (
             <p className={NOTE}>Loading…</p>
           ) : state.status === "error" ? (
@@ -199,7 +208,7 @@ export function NotificationPanel({
                 Try again
               </Button>
             </div>
-          ) : rows === 0 ? (
+          ) : rows === 0 && profileGaps ? null : rows === 0 ? (
             <p className={NOTE}>
               Nothing here yet — announcements, captain requests and
               questionnaires land here as they are sent.
