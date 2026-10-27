@@ -379,6 +379,7 @@ export async function createCampEvent(
         body: meetingPostBody({
           ...row!,
           teamLabel: row!.team ? (labels[row!.team] ?? row!.team) : null,
+          audience: row!.audience,
         }),
         refId: null,
         buttonText: TELEGRAM_OPEN_BUTTON,

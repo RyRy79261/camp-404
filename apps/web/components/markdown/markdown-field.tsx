@@ -80,9 +80,12 @@ export function MarkdownField({
   return (
     <div
       data-slot="markdown-field"
-      className={cn("flex min-w-0 flex-col gap-2", className)}
+      // Side by side only when the FIELD has room (a container query on the
+      // field, not the window: in a narrow panel of a wide window, such as
+      // the Calendar's event form, two panes would each be a sliver).
+      className={cn("@container/md flex min-w-0 flex-col gap-2", className)}
     >
-      <div className="page-md:hidden">
+      <div className="@min-[40rem]/md:hidden">
         <SegmentedControl
           aria-label={`${label}: write or preview`}
           value={view}
@@ -93,18 +96,18 @@ export function MarkdownField({
           ]}
         />
       </div>
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 page-md:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 @min-[40rem]/md:grid-cols-2">
         <div
           data-testid="markdown-write"
           className={cn(
             PANE,
             "focus-within:ring-2 focus-within:ring-ring",
-            view === "write" ? "flex" : "hidden page-md:flex",
+            view === "write" ? "flex" : "hidden @min-[40rem]/md:flex",
           )}
         >
           {labelWrite ? (
             // On a phone the Write | Preview switch already names the pane.
-            <div className="hidden page-md:block">
+            <div className="hidden @min-[40rem]/md:block">
               <PaneLabel icon={<PenLine className="h-3 w-3" aria-hidden />}>
                 Write
               </PaneLabel>
@@ -124,7 +127,7 @@ export function MarkdownField({
           data-testid="markdown-preview"
           className={cn(
             PANE,
-            view === "preview" ? "flex" : "hidden page-md:flex",
+            view === "preview" ? "flex" : "hidden @min-[40rem]/md:flex",
           )}
         >
           <PaneLabel icon={<Eye className="h-3 w-3" aria-hidden />}>

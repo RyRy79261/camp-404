@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { X } from "lucide-react";
+import { CAMP_GMT } from "@camp404/core";
 import { useWindowDirty } from "@camp404/os";
 import { NewCampEventInput } from "@camp404/types";
 import { Checkbox } from "@camp404/ui/components/checkbox";
@@ -98,6 +99,83 @@ const GOOGLE_NOTE = {
     "Saved. Google didn't take it just now; it goes on the camp's Google Calendar shortly.",
 } as const;
 
+const WIDTH_KEY = "camp404:calendar-form-width";
+const MIN_WIDTH = 320;
+
+/** The form's width as this browser last dragged it, or null for the default. */
+function useFormWidth(): [number | null, (w: number) => void] {
+  const [width, setWidth] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    const saved = Number(localStorage.getItem(WIDTH_KEY));
+    // Read after mount: the server draws the default width.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- browser-only value
+    if (saved >= MIN_WIDTH) setWidth(saved);
+  }, []);
+  const set = React.useCallback((w: number) => {
+    setWidth(w);
+    try {
+      localStorage.setItem(WIDTH_KEY, String(Math.round(w)));
+    } catch {
+      // Storage off: the width lasts until the page is left.
+    }
+  }, []);
+  return [width, set];
+}
+
+/**
+ * The form's left edge, dragged to make it wider or narrower (owner,
+ * 2026-10-27). Wide windows only: on a phone the form is full screen. The
+ * calendar keeps at least 22rem. Arrow keys move it 32px.
+ */
+function PanelResizeHandle({
+  panel,
+  onResize,
+}: {
+  panel: React.RefObject<HTMLElement | null>;
+  onResize: (width: number) => void;
+}) {
+  const clamp = (w: number) => {
+    const row = panel.current?.parentElement?.getBoundingClientRect().width;
+    const max = row ? Math.max(MIN_WIDTH, row - 352) : 900;
+    return Math.min(Math.max(w, MIN_WIDTH), max);
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the event form"
+      tabIndex={0}
+      onPointerDown={(e) => {
+        const box = panel.current;
+        if (!box) return;
+        e.preventDefault();
+        const startX = e.clientX;
+        const startW = box.getBoundingClientRect().width;
+        const target = e.currentTarget;
+        target.setPointerCapture(e.pointerId);
+        const move = (ev: PointerEvent) =>
+          onResize(clamp(startW + (startX - ev.clientX)));
+        const up = () => {
+          target.removeEventListener("pointermove", move);
+          target.removeEventListener("pointerup", up);
+          target.removeEventListener("pointercancel", up);
+        };
+        target.addEventListener("pointermove", move);
+        target.addEventListener("pointerup", up);
+        target.addEventListener("pointercancel", up);
+      }}
+      onKeyDown={(e) => {
+        const box = panel.current;
+        if (!box || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+        e.preventDefault();
+        const w = box.getBoundingClientRect().width;
+        onResize(clamp(w + (e.key === "ArrowLeft" ? 32 : -32)));
+      }}
+      className="absolute inset-y-0 -left-1.5 z-10 hidden w-3 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-transparent hover:after:bg-primary focus-visible:outline-none focus-visible:after:bg-primary @min-[56rem]/page:block"
+    />
+  );
+}
+
 export function EventForm({
   mode,
   teams,
@@ -159,6 +237,8 @@ export function EventForm({
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
   const [confirming, setConfirming] = React.useState(false);
+  const panel = React.useRef<HTMLElement>(null);
+  const [width, setWidth] = useFormWidth();
 
   const values = {
     team,
@@ -299,7 +379,23 @@ export function EventForm({
   );
 
   return (
-    <aside aria-label={heading} data-calendar-panel className={PANEL_FRAME}>
+    <aside
+      ref={panel}
+      aria-label={heading}
+      data-calendar-panel
+      // The form is wider than an open event: the agenda editor needs room.
+      // Dragging its left edge sets its own width (--form-w), kept per browser.
+      style={
+        width
+          ? ({ "--form-w": `${width}px` } as React.CSSProperties)
+          : undefined
+      }
+      className={cn(
+        PANEL_FRAME,
+        "relative @min-[56rem]/page:w-[var(--form-w,23.75rem)] @min-[72rem]/page:w-[var(--form-w,30rem)] @min-[90rem]/page:w-[var(--form-w,36rem)]",
+      )}
+    >
+      <PanelResizeHandle panel={panel} onResize={setWidth} />
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border py-2.5 pl-4 pr-3 max-md:border-0 max-md:bg-primary max-md:text-primary-foreground">
         <span
           className={cn(
@@ -512,7 +608,11 @@ export function EventForm({
             </Field>
           ) : (
             <div className="grid grid-cols-2 gap-2.5">
-              <Field label="Starts" htmlFor="event-start" error={errors.start}>
+              <Field
+                label={`Starts (${CAMP_GMT})`}
+                htmlFor="event-start"
+                error={errors.start}
+              >
                 <Input
                   id="event-start"
                   type="time"
@@ -521,7 +621,11 @@ export function EventForm({
                   disabled={pending}
                 />
               </Field>
-              <Field label="Ends" htmlFor="event-end" error={errors.end}>
+              <Field
+                label={`Ends (${CAMP_GMT})`}
+                htmlFor="event-end"
+                error={errors.end}
+              >
                 <Input
                   id="event-end"
                   type="time"

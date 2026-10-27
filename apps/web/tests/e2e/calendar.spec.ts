@@ -282,6 +282,42 @@ test.describe("the Calendar (test-mode)", () => {
     await page.screenshot({ path: testInfo.outputPath("event-people.png") });
   });
 
+  test("the event form is dragged wider from its left edge, and keeps the width", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, "a phone's form is full screen");
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await captain(page, request, "cal-cap");
+    await openCalendar(page);
+    await page.getByRole("button", { name: "New event" }).first().click();
+    const form = page.getByRole("complementary", { name: "New event" });
+    await expect(form.getByText("Starts (GMT+2)")).toBeVisible();
+    const before = (await form.boundingBox())!.width;
+    const edge = page.getByRole("separator", { name: "Resize the event form" });
+    const b = (await edge.boundingBox())!;
+    await page.mouse.move(b.x + b.width / 2, b.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(b.x - 120, b.y + 100, { steps: 5 });
+    await page.mouse.up();
+    await expect
+      .poll(async () => (await form.boundingBox())!.width)
+      .toBeGreaterThan(before + 60);
+    const wider = (await form.boundingBox())!.width;
+    // Closed and opened again, it keeps the width this browser chose.
+    await form.getByRole("button", { name: "Cancel" }).click();
+    await page.getByRole("button", { name: "New event" }).first().click();
+    await expect
+      .poll(async () =>
+        Math.round(
+          (await page
+            .getByRole("complementary", { name: "New event" })
+            .boundingBox())!.width,
+        ),
+      )
+      .toBe(Math.round(wider));
+  });
+
   test("last month's meeting opens with its minutes; a team member writes the minutes of another", async ({
     page,
     request,

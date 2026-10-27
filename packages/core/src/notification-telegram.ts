@@ -13,6 +13,7 @@ import type {
   ParticipationStatus,
 } from "@camp404/types";
 import { plainPreview } from "./markdown-text";
+import { CAMP_GMT } from "./time-zone";
 import { notificationLink } from "./notification-links";
 import {
   INTENT_LABEL,
@@ -406,13 +407,22 @@ export function meetingPostBody(meeting: {
   endDate: string;
   startTime: string | null;
   teamLabel: string | null;
+  /** Who it is for; a team-leads event says so (owner, 2026-10-27). */
+  audience?: string;
 }): string {
   const when = meeting.allDay
     ? meeting.endDate && meeting.endDate !== meeting.startDate
       ? `${postDay(meeting.startDate)} to ${postDay(meeting.endDate)}`
       : postDay(meeting.startDate)
-    : `${postDay(meeting.startDate)}${meeting.startTime ? `, ${meeting.startTime}` : ""}`;
-  const who = meeting.teamLabel ? `${meeting.teamLabel} team` : "Whole camp";
+    : `${postDay(meeting.startDate)}${meeting.startTime ? `, ${meeting.startTime} ${CAMP_GMT}` : ""}`;
+  const who =
+    meeting.audience === "team_leads"
+      ? "Team leads"
+      : meeting.audience === "people"
+        ? "Picked people"
+        : meeting.teamLabel
+          ? `${meeting.teamLabel} team`
+          : "Whole camp";
   return `${when} · ${who}`;
 }
 
