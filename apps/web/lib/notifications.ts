@@ -124,6 +124,8 @@ const storeNotifications = {
     testStore.explainDraftRefusal({ id, senderId }),
   countAnnouncementAudience: (senderId: string, audience: Audience) =>
     testStore.countAnnouncementAudience(senderId, audience),
+  previewAnnouncementAudience: (senderId: string, audience: Audience) =>
+    testStore.previewAnnouncementAudience(senderId, audience),
   getAnnouncementPickerData: (senderId: string) =>
     testStore.getAnnouncementPickerData(senderId),
   listPinnedForUser: (userId: string) => testStore.listPinnedForUser(userId),
@@ -153,6 +155,7 @@ const inbox = twin(db, storeNotifications, [
   "publishAnnouncement",
   "explainDraftRefusal",
   "countAnnouncementAudience",
+  "previewAnnouncementAudience",
   "getAnnouncementPickerData",
   "listPinnedForUser",
   "getAnnouncementPinContext",
@@ -199,6 +202,13 @@ export const publishAnnouncement = inbox.publishAnnouncement;
 export const explainDraftRefusal = inbox.explainDraftRefusal;
 
 export const countAnnouncementAudience = inbox.countAnnouncementAudience;
+
+/**
+ * The composer's "Reaches N people. Left out: M who said Not coming this
+ * year." line: the count and the left-out members by name. Gate the caller,
+ * and give the names only to a viewer who may read participation.
+ */
+export const previewAnnouncementAudience = inbox.previewAnnouncementAudience;
 
 /**
  * Who a captain may pick for "specific people", and who "Drivers this year"

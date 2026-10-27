@@ -461,6 +461,9 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
             memberships: membershipsByCycle.get(row.activationCycle!) ?? [],
             driverUserIds: [],
             targetUserIds: targetsByActivation.get(row.activationId) ?? [],
+            // The re-gated send opens in the NEW year, which nobody has
+            // answered "Coming this year?" for yet, so nobody is left out.
+            notComingUserIds: [],
           },
           null,
         )
@@ -1009,6 +1012,8 @@ export async function advanceCycle(
           memberships: [],
           driverUserIds: [],
           targetUserIds: [],
+          // The camp has just moved to a year nobody has answered for yet.
+          notComingUserIds: [],
         },
         input.actorUserId,
       );

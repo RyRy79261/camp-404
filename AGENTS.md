@@ -740,6 +740,26 @@ Decisions baked into the schema — keep new code consistent with them:
   back Maybe; My forms edits that answer, and the same write rewrites the
   answer stored with the "Coming this year?" questionnaire so its results
   agree with the roster. Erasure deletes every year's row.
+  [CORRECTION 2026-10-27] "Gates nothing ... every audience" no longer holds
+  (owner: "Not coming = no group sends"). A member whose status this year is
+  `not_attending` is left out of every GROUP send, captains included:
+  `computeAudience` (`packages/db/src/audience.ts`) takes `notComingUserIds`
+  (required, so no caller forgets) for announcements, questionnaire sends
+  and `reconcileOpenActivations`, the car, and the opt-in note; reminders
+  (`sendReminder`, `remindRequiredActionsDueSoon`), Ol' Jeb's tags and the
+  "Post in Telegram" dialog, and a team-leads event's invites keep to the same
+  rule (`hasNotSaidNotComing` in `@camp404/db/participations`). Someone
+  picked by name (`individual`, a people event) and notices about their own
+  account still reach them; Maybe and not answered still get group sends.
+  Saying Not coming (`applyParticipationIntent`) also turns `blocking` off
+  on their pending gates of that year's open sends, in the same transaction,
+  a compare-and-set on `pending` and the `blocking` it expects; the gates stay
+  pending, so they may still answer (the "Coming this year?" form included).
+  Taking the answer back puts `blocking` back from the send's own setting.
+  The questionnaire Send page and the announcements composer say "Reaches N
+  people. Left out: M who said Not coming this year. Who?" (`splitAudience`,
+  `components/audience-reach.tsx`); the names go only to team lead and up.
+  The new year after a rollover has no answers, so nobody is left out there.
 - **The member's answer and the captains' decision are two things** (owner,
   2026-09-28). "Coming" / "Maybe" / "Not coming" is what the member said
   (`intent`); "Accepted" (on the camp's list this year) and "Waiting list"

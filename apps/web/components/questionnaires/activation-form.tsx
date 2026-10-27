@@ -45,6 +45,11 @@ import { CHOICE_OFF, CHOICE_ON } from "@camp404/ui/lib/choice";
 import { cn } from "@camp404/ui/lib/utils";
 import { BlockingBadge } from "@/components/questionnaire/blocking-chrome";
 import {
+  NotComingNote,
+  reachesText,
+  type NotComing,
+} from "@/components/audience-reach";
+import {
   closeActivationAction,
   previewAudienceCount,
   sendAction,
@@ -290,8 +295,13 @@ export function ActivationForm({
         if (cancelled) return;
         setPreview(
           result.ok
-            ? { loading: false, count: result.count, error: null }
-            : { loading: false, count: null, error: result.error },
+            ? {
+                loading: false,
+                count: result.count,
+                notComing: result.notComing,
+                error: null,
+              }
+            : { ...NO_COUNT, error: result.error },
         );
       })();
     }, 300);
@@ -936,11 +946,24 @@ function Chip({ active, label }: { active: boolean; label: string }) {
 interface PreviewState {
   loading: boolean;
   count: number | null;
+  /** Who the scope leaves out because they said Not coming this year. */
+  notComing: NotComing;
   error: string | null;
 }
 
-const COUNTING: PreviewState = { loading: true, count: null, error: null };
-const NO_COUNT: PreviewState = { loading: false, count: null, error: null };
+const NOBODY_LEFT_OUT: NotComing = { count: 0, names: null };
+const COUNTING: PreviewState = {
+  loading: true,
+  count: null,
+  notComing: NOBODY_LEFT_OUT,
+  error: null,
+};
+const NO_COUNT: PreviewState = {
+  loading: false,
+  count: null,
+  notComing: NOBODY_LEFT_OUT,
+  error: null,
+};
 
 /** The preview before the server answers: counting, or nothing to count. */
 function previewBeforeCount(specKey: string): PreviewState {
@@ -978,17 +1001,19 @@ function AudiencePreview({
       ) : preview.count === 0 ? (
         <>
           <TriangleAlert className="h-4 w-4 text-warning" aria-hidden />
-          <span className="font-medium text-warning">
-            Nobody matches this audience — this send would reach no members.
+          <span>
+            <span className="font-medium text-warning">
+              Nobody matches this audience — this send would reach no members.
+            </span>
+            <NotComingNote notComing={preview.notComing} />
           </span>
         </>
       ) : preview.count !== null ? (
         <>
-          <Users className="h-4 w-4 text-accent" aria-hidden />
+          <Users className="h-4 w-4 shrink-0 text-accent" aria-hidden />
           <span>
-            <span className="font-semibold tabular-nums">{preview.count}</span>{" "}
-            {preview.count === 1 ? "member" : "members"} will receive this right
-            now.
+            {reachesText(preview.count)}
+            <NotComingNote notComing={preview.notComing} />
           </span>
         </>
       ) : (

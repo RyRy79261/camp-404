@@ -103,6 +103,7 @@ import {
   type TeamAnnouncement,
   inboxSentTo,
   type AnnouncementPickerData,
+  type AnnouncementAudiencePreview,
   type InboxSentTo,
 } from "@camp404/db/broadcasts";
 import {
@@ -168,7 +169,7 @@ import {
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
 import type { PendingRequiredAction } from "@camp404/db/activations";
-import { computeAudience } from "@camp404/db/audience";
+import { splitAudience, type AudienceSplit } from "@camp404/db/audience";
 import {
   TELEGRAM_LINK_MINUTES,
   type TelegramConnection,
@@ -2464,8 +2465,14 @@ export const testStore = {
    * teams, leads and drivers, never the sender.
    */
   announcementRecipients(senderId: string, audience: Audience): TestUser[] {
+    const wanted = new Set(this.announcementSplit(senderId, audience).reaches);
+    return [...usersByAuthId.values()].filter((u) => wanted.has(u.id));
+  },
+
+  /** Twin of resolveAudienceSplit: who it reaches, and who said Not coming. */
+  announcementSplit(senderId: string, audience: Audience): AudienceSplit {
     const cycle = currentCycleNumber();
-    const ids = computeAudience(
+    return splitAudience(
       {
         scope: audience.scope,
         team: audience.scope === "team" ? audience.team : null,
@@ -2483,11 +2490,32 @@ export const testStore = {
           .map((d) => d.userId),
         targetUserIds:
           audience.scope === "individual" ? [...audience.userIds] : [],
+        notComingUserIds: [...participations.values()]
+          .filter((p) => p.cycle === cycle && p.status === "not_attending")
+          .map((p) => p.userId),
       },
       senderId,
     );
-    const wanted = new Set(ids);
-    return [...usersByAuthId.values()].filter((u) => wanted.has(u.id));
+  },
+
+  /** Twin of previewAnnouncementAudience in @camp404/db/broadcasts. */
+  previewAnnouncementAudience(
+    senderId: string,
+    audience: Audience = { scope: "everyone" },
+  ): AnnouncementAudiencePreview {
+    const split = this.announcementSplit(senderId, audience);
+    return {
+      reaches: split.reaches.length,
+      notComing: split.notComing
+        .map((id) => ({
+          id,
+          name: findUserById(id)?.displayName?.trim() || "Camp member",
+        }))
+        .sort(
+          (a, b) =>
+            a.name.localeCompare(b.name, "en") || a.id.localeCompare(b.id),
+        ),
+    };
   },
 
   countAnnouncementAudience(

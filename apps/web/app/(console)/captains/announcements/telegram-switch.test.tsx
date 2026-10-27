@@ -18,6 +18,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("./actions", () => ({
   deleteDraftAction: vi.fn(),
   previewPublishAction: vi.fn(),
+  previewAudienceAction: vi.fn(async () => ({ ok: false, error: "No." })),
   publishAction: vi.fn(),
   saveDraftAction: vi.fn(async () => ({ ok: true, data: { id: "a-1" } })),
   setPinnedAction: vi.fn(),
@@ -31,7 +32,7 @@ vi.mock("@camp404/ui/components/toast", () => ({
 }));
 
 import { DraftWindow } from "@/tests/draft-window";
-import { saveDraftAction } from "./actions";
+import { previewAudienceAction, saveDraftAction } from "./actions";
 import { AnnouncementsManager } from "./announcements-manager";
 
 function composer(telegramChats: string[], preferredAudience?: string) {
@@ -91,5 +92,32 @@ describe("Also post in Telegram", () => {
     composer(["Camp 404 Announcements"], "team:kitchen");
     expect(screen.getByLabelText("Title")).toBeTruthy();
     expect(telegramSwitch()).toBeNull();
+  });
+});
+
+// The reach line under "Who it's for" (owner's mock-up, step 8, 2026-10-27).
+describe("the reach line", () => {
+  it("says who it reaches and who said Not coming; Who? names them", async () => {
+    vi.mocked(previewAudienceAction).mockResolvedValue({
+      ok: true,
+      data: {
+        reaches: 14,
+        notComing: { count: 3, names: ["Bongi", "Kyle", "Tash"] },
+      },
+    });
+    composer([]);
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          /Reaches 14 people\. Left out: 3 who said Not coming this year\./,
+        ),
+      ).toBeTruthy(),
+    );
+    expect(vi.mocked(previewAudienceAction).mock.calls[0]![0]).toEqual({
+      scope: "everyone",
+    });
+    expect(screen.queryByText("Bongi, Kyle, Tash")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    expect(screen.getByText("Bongi, Kyle, Tash")).toBeTruthy();
   });
 });

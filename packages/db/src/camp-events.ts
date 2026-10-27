@@ -24,6 +24,7 @@ import { lockSenderReach } from "./broadcasts";
 import { resolveTeamsConfig, teamLabelMap } from "./camp-config";
 import { queueTelegramPosts } from "./telegram-posts";
 import { currentCycleNumber } from "./cycles";
+import { hasNotSaidNotComing } from "./participations";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
 
@@ -344,6 +345,10 @@ async function guestCandidates(
           eq(schema.teamMemberships.cycle, cycle),
           eq(schema.teamMemberships.isLead, true),
           here,
+          // A group invite: a lead who said Not coming this year is left
+          // out (owner, 2026-10-27). Picked people are named one by one, so
+          // they are asked whatever they said, as an `individual` send is.
+          hasNotSaidNotComing(schema.users.id, cycle),
         ),
       )
       .orderBy(asc(schema.users.displayName))

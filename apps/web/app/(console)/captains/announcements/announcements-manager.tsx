@@ -80,8 +80,10 @@ import { useVoiceSupported } from "@/components/voice/use-voice-recorder";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
 import {
   deleteDraftAction,
+  previewAudienceAction,
   previewPublishAction,
   publishAction,
+  type AudienceReach,
   saveDraftAction,
   setPinnedAction,
   updateDraftAction,
@@ -94,6 +96,7 @@ import {
   publishLabel,
 } from "./audience-words";
 import { AudienceLine, PeoplePicker } from "./people-picker";
+import { NotComingNote, reachesText } from "@/components/audience-reach";
 
 // Captain composer + list, laid out like the AfrikaBurn console's bulletins: the
 // drafts and published announcements as cards in the main column, the composer
@@ -756,6 +759,9 @@ function AnnouncementsManagerView({
             {form.audience === "drivers" && (
               <AudienceLine>{driversSummary(driverNames)}</AudienceLine>
             )}
+            {form.audience !== "individual" && (
+              <ComposerReach audience={form.audience} />
+            )}
           </div>
 
           {form.audience === "individual" && picker && (
@@ -926,6 +932,45 @@ function AnnouncementsManagerView({
 }
 
 type DraftAction = "delete" | "publish" | "pin";
+
+/**
+ * The composer's live line under "Who it's for" (owner's mock-up, step 8):
+ * "Reaches 14 people. Left out: 3 who said Not coming this year. Who?",
+ * asked of the server with the publish's own gate and audience rule. A group
+ * audience only: the people picker names a picked audience itself. Nothing is
+ * shown until the server answers, and a refusal shows nothing here (the
+ * publish says it).
+ */
+function ComposerReach({ audience }: { audience: string }) {
+  const [reach, setReach] = useState<{
+    audience: string;
+    data: AudienceReach;
+  } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const result = await previewAudienceAction(
+          audienceFromValue(audience, []),
+        );
+        if (cancelled) return;
+        setReach(result.ok ? { audience, data: result.data } : null);
+      })();
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [audience]);
+  // A count for another audience is never shown while the next one loads.
+  if (!reach || reach.audience !== audience) return null;
+  return (
+    <AudienceLine>
+      {reachesText(reach.data.reaches)}
+      <NotComingNote key={audience} notComing={reach.data.notComing} />
+    </AudienceLine>
+  );
+}
 
 function members(n: number): string {
   return `${n} member${n === 1 ? "" : "s"}`;

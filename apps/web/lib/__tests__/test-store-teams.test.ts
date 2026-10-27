@@ -327,6 +327,7 @@ function audienceData(): AudienceData {
     ),
     driverUserIds: [],
     targetUserIds: [],
+    notComingUserIds: [],
   };
 }
 

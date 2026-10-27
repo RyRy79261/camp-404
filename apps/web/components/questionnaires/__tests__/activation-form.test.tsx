@@ -78,7 +78,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(sendAction).mockResolvedValue({ ok: true, activationId: "act1" });
   vi.mocked(closeActivationAction).mockResolvedValue({ ok: true });
-  vi.mocked(previewAudienceCount).mockResolvedValue({ ok: true, count: 7 });
+  vi.mocked(previewAudienceCount).mockResolvedValue({
+    ok: true,
+    count: 7,
+    notComing: { count: 0, names: null },
+  });
 });
 
 describe("ActivationForm — sending", () => {
@@ -331,7 +335,7 @@ describe("ActivationForm — who answers (optional questionnaires)", () => {
       screen.getByText("Opens for 2027 in My forms. No message goes out."),
     ).toBeTruthy();
     // Nothing to count: nobody is asked.
-    expect(screen.queryByText(/will receive this/)).toBeNull();
+    expect(screen.queryByText(/Reaches \d/)).toBeNull();
   });
 
   it("puts it in My forms quietly by default", async () => {
@@ -426,9 +430,7 @@ describe("ActivationForm — audience preview", () => {
   it("shows the previewed count once the debounce settles", async () => {
     renderForm();
     await waitFor(() =>
-      expect(preview().textContent).toBe(
-        "7 members will receive this right now.",
-      ),
+      expect(preview().textContent).toBe("Reaches 7 people."),
     );
     expect(previewAudienceCount).toHaveBeenCalledWith({
       scope: "everyone",
@@ -438,21 +440,58 @@ describe("ActivationForm — audience preview", () => {
   });
 
   it("renders the singular for exactly one", async () => {
-    vi.mocked(previewAudienceCount).mockResolvedValue({ ok: true, count: 1 });
+    vi.mocked(previewAudienceCount).mockResolvedValue({
+      ok: true,
+      count: 1,
+      notComing: { count: 0, names: null },
+    });
     renderForm();
     await waitFor(() =>
-      expect(preview().textContent).toBe(
-        "1 member will receive this right now.",
-      ),
+      expect(preview().textContent).toBe("Reaches 1 person."),
     );
   });
 
   it("shows a zero-recipient send instead of letting it look fine", async () => {
-    vi.mocked(previewAudienceCount).mockResolvedValue({ ok: true, count: 0 });
+    vi.mocked(previewAudienceCount).mockResolvedValue({
+      ok: true,
+      count: 0,
+      notComing: { count: 0, names: null },
+    });
     renderForm();
     await waitFor(() =>
       expect(preview().textContent).toMatch(/would reach no members/i),
     );
+  });
+
+  it("says who it leaves out for saying Not coming, and Who? names them", async () => {
+    vi.mocked(previewAudienceCount).mockResolvedValue({
+      ok: true,
+      count: 14,
+      notComing: { count: 3, names: ["Bongi", "Kyle", "Tash"] },
+    });
+    renderForm();
+    await waitFor(() =>
+      expect(preview().textContent).toBe(
+        "Reaches 14 people. Left out: 3 who said Not coming this year. Who?",
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Who?" }));
+    expect(preview().textContent).toContain("Bongi, Kyle, Tash");
+  });
+
+  it("gives no Who? when the names were not sent", async () => {
+    vi.mocked(previewAudienceCount).mockResolvedValue({
+      ok: true,
+      count: 14,
+      notComing: { count: 3, names: null },
+    });
+    renderForm();
+    await waitFor(() =>
+      expect(preview().textContent).toBe(
+        "Reaches 14 people. Left out: 3 who said Not coming this year.",
+      ),
+    );
+    expect(screen.queryByRole("button", { name: "Who?" })).toBeNull();
   });
 
   it("shows the server's refusal rather than a number", async () => {

@@ -30,6 +30,7 @@ import {
 } from "./activations";
 import { carryOverFor, currentCycleNumber } from "./cycles";
 import { writeAuditEvent } from "./audit";
+import { hasNotSaidNotComing } from "./participations";
 import {
   campDayKey,
   listTelegramPlaces,
@@ -760,6 +761,7 @@ export async function notifyOptInOpened(input: {
       title: schema.questionnaireActivations.title,
       status: schema.questionnaireActivations.status,
       scope: schema.questionnaireActivations.scope,
+      cycle: schema.questionnaireActivations.cycle,
     })
     .from(schema.questionnaireActivations)
     .where(eq(schema.questionnaireActivations.id, input.activationId))
@@ -775,6 +777,8 @@ export async function notifyOptInOpened(input: {
           eq(schema.users.isSystem, false),
           eq(schema.users.sanitised, false),
           eq(schema.users.approvalStatus, "approved"),
+          // A group note: who said Not coming this year is left out.
+          hasNotSaidNotComing(schema.users.id, act.cycle),
         ),
       );
     const targets = members.map((m) => m.id);
@@ -883,6 +887,7 @@ export async function sendReminder(input: {
       status: schema.questionnaireActivations.status,
       dueAt: schema.questionnaireActivations.dueAt,
       scope: schema.questionnaireActivations.scope,
+      cycle: schema.questionnaireActivations.cycle,
     })
     .from(schema.questionnaireActivations)
     .where(eq(schema.questionnaireActivations.id, input.activationId))
@@ -946,6 +951,9 @@ export async function sendReminder(input: {
           // A departed or system account holds no obligation worth pushing.
           eq(schema.users.isSystem, false),
           eq(schema.users.sanitised, false),
+          // Nor does a member who said Not coming in the send's year: they
+          // may still answer, but nobody nudges them (owner, 2026-10-27).
+          hasNotSaidNotComing(schema.users.id, act.cycle),
         ),
       );
 
@@ -1102,6 +1110,7 @@ export async function remindRequiredActionsDueSoon(
 
   // One transaction, one connection: every query goes through `tx`.
   return await withTransaction(async (tx) => {
+    const cycle = await currentCycleNumber(tx);
     const due = await tx
       .select({
         id: schema.requiredActions.id,
@@ -1123,6 +1132,8 @@ export async function remindRequiredActionsDueSoon(
           eq(schema.users.isSystem, false),
           eq(schema.users.sanitised, false),
           ne(schema.users.approvalStatus, "rejected"),
+          // Who said Not coming this year is not nudged (owner, 2026-10-27).
+          hasNotSaidNotComing(schema.users.id, cycle),
         ),
       )
       .orderBy(asc(schema.requiredActions.id))

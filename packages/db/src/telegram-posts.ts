@@ -448,19 +448,25 @@ export async function questionnairePostCandidates(
         eq(schema.users.sanitised, false),
       ),
     );
-  return rows
-    .map((r) => ({
-      userId: r.userId,
-      name: r.name?.trim() || "Camp member",
-      intent: r.intent ?? null,
-      status: r.status ?? null,
-      mention: telegramMention(r.handle),
-      connected: r.dmAt !== null,
-    }))
-    .sort(
-      (a, b) =>
-        a.name.localeCompare(b.name, "en") || a.userId.localeCompare(b.userId),
-    );
+  return (
+    rows
+      // A member who said Not coming is not chased in the camp's chat, nor
+      // messaged about it (owner, 2026-10-27); they may still answer.
+      .filter((r) => r.status !== "not_attending")
+      .map((r) => ({
+        userId: r.userId,
+        name: r.name?.trim() || "Camp member",
+        intent: r.intent ?? null,
+        status: r.status ?? null,
+        mention: telegramMention(r.handle),
+        connected: r.dmAt !== null,
+      }))
+      .sort(
+        (a, b) =>
+          a.name.localeCompare(b.name, "en") ||
+          a.userId.localeCompare(b.userId),
+      )
+  );
 }
 
 /** What the "Post in Telegram" dialog shows for an open send. */
