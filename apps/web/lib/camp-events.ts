@@ -82,17 +82,19 @@ function googleDetails(row: CampEventRow): string {
   const tail = [row.kind === "meeting" ? MEETING_NOTE : null, APP_NOTE]
     .filter(Boolean)
     .join("\n\n");
+  // A pasted call link goes first, where people in Google look for it.
+  const call = row.callUrl ? `Join the call: ${row.callUrl}\n\n` : "";
   let details = row.description
     ? row.kind === "meeting"
       ? plainTextWithLists(row.description)
       : row.description.trim()
     : "";
-  if (!details) return tail;
-  const room = GOOGLE_DETAILS_MAX - tail.length - 2;
+  if (!details) return `${call}${tail}`;
+  const room = GOOGLE_DETAILS_MAX - call.length - tail.length - 2;
   if (details.length > room) {
     details = `${details.slice(0, room - CUT_NOTE.length - 1).trimEnd()}\n${CUT_NOTE}`;
   }
-  return `${details}\n\n${tail}`;
+  return `${call}${details}\n\n${tail}`;
 }
 
 /**
@@ -213,6 +215,9 @@ function fieldsOf(
   input: Pick<
     NewCampEventInput,
     | "team"
+    | "audience"
+    | "people"
+    | "callUrl"
     | "title"
     | "allDay"
     | "date"
@@ -225,6 +230,9 @@ function fieldsOf(
 ): CampEventFields {
   return {
     team: input.team,
+    audience: input.audience,
+    people: input.people,
+    callUrl: input.callUrl,
     title: input.title,
     allDay: input.allDay,
     startDate: input.date,

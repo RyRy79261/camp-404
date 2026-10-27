@@ -1,0 +1,1 @@
+ALTER TYPE "public"."telegram_post_kind" ADD VALUE 'lead';

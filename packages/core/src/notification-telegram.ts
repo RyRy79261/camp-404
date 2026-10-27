@@ -155,7 +155,8 @@ export type TelegramPostKind =
   | "announcement"
   | "reminder"
   | "meeting"
-  | "questionnaire";
+  | "questionnaire"
+  | "lead";
 
 export interface TelegramPost {
   /** Plain text, sent with no parse mode. */
@@ -183,9 +184,12 @@ export function renderTelegramPost(
     buttonPath: string | null;
     tags?: readonly string[];
     untagged?: number;
+    /** A new lead's name and `@handle`, read as the post is sent. */
+    lead?: { name: string; mention: string | null };
   },
   siteUrl: string,
 ): TelegramPost {
+  if (post.kind === "lead") return leadPost(post, siteUrl);
   const lines = [post.title.trim()];
   const body = plainPreview(post.body);
   if (body) lines.push(body);
@@ -208,6 +212,42 @@ export function renderTelegramPost(
     full.length <= TELEGRAM_MESSAGE_MAX
       ? full
       : `${full.slice(0, TELEGRAM_MESSAGE_MAX - 1).trimEnd()}…`;
+  return { text, button };
+}
+
+/** A new lead post's first line. */
+export const TELEGRAM_LEAD_TITLE = "New team lead";
+
+/**
+ * A captain's "Tell the camp on Telegram" after making someone a lead: the
+ * body holds only the team's name; the person is read as it is sent, so an
+ * erased member's name is never stored in the post.
+ */
+function leadPost(
+  post: {
+    body: string;
+    buttonText: string | null;
+    buttonPath: string | null;
+    lead?: { name: string; mention: string | null };
+  },
+  siteUrl: string,
+): TelegramPost {
+  const team = post.body.trim();
+  const who = post.lead
+    ? post.lead.mention
+      ? `${post.lead.name} (${post.lead.mention})`
+      : post.lead.name
+    : "Someone";
+  const text = clip(
+    `${TELEGRAM_LEAD_TITLE}\n\n${who} is now a ${team} lead. Give them a shout if you want to help out.`,
+  );
+  const button =
+    post.buttonText && post.buttonPath
+      ? {
+          text: post.buttonText,
+          url: `${siteUrl.replace(/\/+$/, "")}${post.buttonPath}`,
+        }
+      : null;
   return { text, button };
 }
 

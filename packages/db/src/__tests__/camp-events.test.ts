@@ -1,4 +1,6 @@
-import { eq } from "drizzle-orm";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import {
   MEETING_HAS_MINUTES,
@@ -18,6 +20,7 @@ import {
   listCampEvents,
   listCampEventsToSync,
   markCampEventCalendarSynced,
+  PICK_SOMEONE,
   removeCampEvent,
   type CampEventFields,
 } from "../camp-events";
@@ -541,6 +544,152 @@ describe("camp events", () => {
         openActionItems: 0,
       });
       expect(await listMeetingNotes({ eventIds: [] })).toHaveLength(0);
+    });
+  });
+
+  describe("who an event is for (owner, 2026-10-27)", () => {
+    it("lets a captain make one for the team leads, with no team", async () => {
+      const { captain } = await people();
+      const made = await createCampEvent({
+        actorId: captain.id,
+        kind: "meeting",
+        agenda: "1. Budgets",
+        newEventId: newId(),
+        ...fields({ team: "kitchen", audience: "team_leads" }),
+      });
+      expect(made.ok).toBe(true);
+      if (!made.ok) return;
+      expect(made.row).toMatchObject({
+        audience: "team_leads",
+        team: null,
+        peopleUserIds: [],
+      });
+      const note = await getMeetingNoteByEvent(made.row.calendarEventId);
+      expect(note?.team).toBeNull();
+      const rows = await audits("calendar.event_created");
+      expect(rows[0]!.metadata).toMatchObject({ audience: "team_leads" });
+    });
+
+    it("keeps only approved members who are still here on a people event", async () => {
+      const db = h.db();
+      const { captain, member } = await people();
+      const pending = await makeUser(db, { approvalStatus: "pending" });
+      const erased = await makeUser(db, { sanitised: true });
+      const made = await createCampEvent({
+        actorId: captain.id,
+        kind: "event",
+        agenda: "",
+        newEventId: newId(),
+        ...fields({
+          audience: "people",
+          people: [member.id, member.id, pending.id, erased.id, "nope"],
+        }),
+      });
+      expect(made.ok).toBe(true);
+      if (!made.ok) return;
+      expect(made.row).toMatchObject({
+        audience: "people",
+        team: null,
+        peopleUserIds: [member.id],
+      });
+      expect(
+        await createCampEvent({
+          actorId: captain.id,
+          kind: "event",
+          agenda: "",
+          newEventId: newId(),
+          ...fields({ audience: "people", people: [pending.id] }),
+        }),
+      ).toEqual({ ok: false, error: PICK_SOMEONE });
+    });
+
+    it("refuses a lead an event for the team leads or for picked people", async () => {
+      const { lead, member } = await people();
+      for (const audience of ["team_leads", "people"] as const) {
+        expect(
+          await createCampEvent({
+            actorId: lead.id,
+            kind: "event",
+            agenda: "",
+            newEventId: newId(),
+            ...fields({ audience, people: [member.id] }),
+          }),
+        ).toEqual({ ok: false, error: WHOLE_CAMP_EVENTS_ARE_CAPTAINS });
+      }
+    });
+
+    it("refuses a lead who moves their team's event to the team leads", async () => {
+      const { lead } = await people();
+      const made = await createCampEvent({
+        actorId: lead.id,
+        kind: "event",
+        agenda: "",
+        newEventId: newId(),
+        ...fields(),
+      });
+      if (!made.ok) throw new Error(made.error);
+      expect(
+        await editCampEvent({
+          actorId: lead.id,
+          calendarEventId: made.row.calendarEventId,
+          expectedVersion: made.row.version,
+          ...fields({ audience: "team_leads" }),
+        }),
+      ).toEqual({ ok: false, error: WHOLE_CAMP_EVENTS_ARE_CAPTAINS });
+    });
+
+    it("makes an older team event its team's (migration 0121), twice over", async () => {
+      const db = h.db();
+      const { captain } = await people();
+      const made = await createCampEvent({
+        actorId: captain.id,
+        kind: "event",
+        agenda: "",
+        newEventId: newId(),
+        ...fields(),
+      });
+      const camp = await createCampEvent({
+        actorId: captain.id,
+        kind: "event",
+        agenda: "",
+        newEventId: newId(),
+        ...fields({ team: null }),
+      });
+      if (!made.ok || !camp.ok) throw new Error("not made");
+      // As a row written before the column: on its default.
+      await db
+        .update(schema.campEvents)
+        .set({ audience: "camp" })
+        .where(eq(schema.campEvents.id, made.row.id));
+      const dir = path.join(__dirname, "../../migrations");
+      const file = readdirSync(dir).find((f) =>
+        f.startsWith("0121_camp_event_audience_backfill"),
+      )!;
+      const fix = readFileSync(path.join(dir, file), "utf8");
+      await db.execute(sql.raw(fix));
+      await db.execute(sql.raw(fix));
+      expect((await getCampEventRow(made.row.id))?.audience).toBe("team");
+      expect((await getCampEventRow(camp.row.id))?.audience).toBe("camp");
+    });
+
+    it("keeps a pasted call link, and a change can clear it", async () => {
+      const { captain } = await people();
+      const made = await createCampEvent({
+        actorId: captain.id,
+        kind: "event",
+        agenda: "",
+        newEventId: newId(),
+        ...fields({ callUrl: "https://meet.google.com/abc-defg-hij" }),
+      });
+      if (!made.ok) throw new Error(made.error);
+      expect(made.row.callUrl).toBe("https://meet.google.com/abc-defg-hij");
+      const changed = await editCampEvent({
+        actorId: captain.id,
+        calendarEventId: made.row.calendarEventId,
+        expectedVersion: made.row.version,
+        ...fields({ callUrl: null }),
+      });
+      expect(changed.ok && changed.row.callUrl).toBeNull();
     });
   });
 });

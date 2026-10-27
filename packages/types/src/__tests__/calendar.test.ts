@@ -26,6 +26,40 @@ function firstError(input: unknown): string | undefined {
 }
 
 describe("NewCampEventInput", () => {
+  it("takes a pasted https call link, and an empty box as none", () => {
+    expect(
+      NewCampEventInput.parse({
+        ...base,
+        callUrl: " https://meet.google.com/abc-defg-hij ",
+      }).callUrl,
+    ).toBe("https://meet.google.com/abc-defg-hij");
+    expect(
+      NewCampEventInput.parse({ ...base, callUrl: "" }).callUrl,
+    ).toBeNull();
+    expect(firstError({ ...base, callUrl: "meet.google.com/abc" })).toBe(
+      "Paste the whole link, starting with https://.",
+    );
+    expect(firstError({ ...base, callUrl: "http://zoom.us/j/1" })).toBe(
+      "Paste the whole link, starting with https://.",
+    );
+  });
+
+  it("needs a team for a team event and someone for a people event", () => {
+    expect(firstError({ ...base, team: null, audience: "team" })).toBe(
+      "Pick a team.",
+    );
+    expect(
+      firstError({ ...base, team: null, audience: "people", people: [] }),
+    ).toBe("Pick at least one person.");
+    expect(
+      NewCampEventInput.safeParse({
+        ...base,
+        team: null,
+        audience: "team_leads",
+      }).success,
+    ).toBe(true);
+  });
+
   it("trims the title and turns empty description, place and last day into null", () => {
     const parsed = NewCampEventInput.parse({
       ...base,

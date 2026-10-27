@@ -26,6 +26,9 @@ function entry(extra: Partial<CalendarEntry>): CalendarEntry {
     source: "app",
     version: 1,
     meeting: null,
+    audience: "camp",
+    people: [],
+    callUrl: null,
     ...extra,
   };
 }
@@ -38,6 +41,7 @@ function show(e: CalendarEntry) {
         note: null,
         canEditEvent: false,
         canWriteMinutes: false,
+        peopleNames: [],
         teamLabels: {},
       }}
       today="2026-10-11"

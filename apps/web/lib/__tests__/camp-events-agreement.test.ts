@@ -296,6 +296,62 @@ describe("the Calendar's events: the database and the test store agree", () => {
     expect(store).toEqual(db);
   });
 
+  it("says who an event is for: the team leads, or picked people who are still approved", async () => {
+    const { db, store } = await bothWays(mode, h, async (p, seed) => {
+      const waiting = await seed.user("Waiting", { approval: "pending" });
+      const leads = await createCampEvent(
+        p.captain,
+        event(KITCHEN, "Leads sync", { audience: "team_leads" }),
+      );
+      tick();
+      const picked = await createCampEvent(
+        p.captain,
+        event(null, "Budget chat", {
+          audience: "people",
+          people: [p.member, waiting, p.member],
+          callUrl: "https://meet.google.com/abc-defg-hij",
+        }),
+      );
+      const nobody = await createCampEvent(
+        p.captain,
+        event(null, "Nobody", { audience: "people", people: [waiting] }),
+      );
+      const byLead = await createCampEvent(
+        p.kitchenLead,
+        event(null, "Leads only", { audience: "team_leads" }),
+      );
+      const shape = (r: Awaited<ReturnType<typeof createCampEvent>>) =>
+        r.ok
+          ? {
+              audience: r.row.audience,
+              team: r.row.team,
+              people: r.row.peopleUserIds,
+              callUrl: r.row.callUrl,
+            }
+          : r;
+      return {
+        leads: shape(leads),
+        picked: shape(picked),
+        nobody: shape(nobody),
+        byLead: shape(byLead),
+      };
+    });
+    expect(store).toEqual(db);
+    expect(db).toMatchObject({
+      leads: { audience: "team_leads", team: null, people: [] },
+      picked: {
+        audience: "people",
+        team: null,
+        callUrl: "https://meet.google.com/abc-defg-hij",
+      },
+      nobody: { ok: false },
+      byLead: { ok: false },
+    });
+    expect(
+      (db as { picked: { people: unknown[] } }).picked.people,
+    ).toHaveLength(1);
+  });
+
   it("gives a meeting its note in step with it, and keeps a meeting with minutes on the calendar", async () => {
     const { db, store } = await bothWays(mode, h, async (p) => {
       at = START.getTime();

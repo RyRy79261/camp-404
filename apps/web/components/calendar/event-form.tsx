@@ -52,7 +52,10 @@ import {
 export interface EventFormTeams {
   /** The teams this person may add events for. */
   teams: { value: string; label: string }[];
+  /** A captain: the whole camp, the team leads and picked people too. */
   canPickWholeCamp: boolean;
+  /** Approved members, for an event for picked people (captains only). */
+  members: { value: string; label: string }[];
 }
 
 type Mode =
@@ -65,6 +68,15 @@ type Mode =
   | { kind: "edit"; entry: CalendarEntry };
 
 const WHOLE_CAMP = "__camp__";
+const TEAM_LEADS = "__leads__";
+const PEOPLE = "__people__";
+
+/** The "Who is it for" value an event opens with. */
+function whoOf(entry: CalendarEntry): string {
+  if (entry.audience === "team_leads") return TEAM_LEADS;
+  if (entry.audience === "people") return PEOPLE;
+  return entry.team?.key ?? WHOLE_CAMP;
+}
 
 type FieldName =
   | "title"
@@ -74,7 +86,9 @@ type FieldName =
   | "end"
   | "place"
   | "description"
-  | "agenda";
+  | "agenda"
+  | "people"
+  | "callUrl";
 
 const GOOGLE_NOTE = {
   synced: null,
@@ -103,7 +117,7 @@ export function EventForm({
   // team a lead leads.
   const filtered = mode.kind === "new" ? mode.team : null;
   const firstTeam = editing
-    ? (editing.team?.key ?? WHOLE_CAMP)
+    ? whoOf(editing)
     : filtered && teams.teams.some((t) => t.value === filtered)
       ? filtered
       : teams.canPickWholeCamp
@@ -123,6 +137,8 @@ export function EventForm({
     place: editing?.place ?? "",
     description: editing?.description ?? "",
     agenda: "",
+    people: editing?.people ?? ([] as string[]),
+    callUrl: editing?.callUrl ?? "",
   };
   const [team, setTeam] = React.useState(initial.team);
   const [title, setTitle] = React.useState(initial.title);
@@ -134,6 +150,9 @@ export function EventForm({
   const [place, setPlace] = React.useState(initial.place);
   const [description, setDescription] = React.useState(initial.description);
   const [agenda, setAgenda] = React.useState(initial.agenda);
+  const [people, setPeople] = React.useState<string[]>(initial.people);
+  const [peopleFilter, setPeopleFilter] = React.useState("");
+  const [callUrl, setCallUrl] = React.useState(initial.callUrl);
   const [errors, setErrors] = React.useState<
     Partial<Record<FieldName, string>>
   >({});
@@ -152,6 +171,8 @@ export function EventForm({
     place,
     description,
     agenda,
+    people,
+    callUrl,
   };
   const dirty = JSON.stringify(values) !== JSON.stringify(initial);
   const settle = useWindowDirty(
@@ -168,7 +189,17 @@ export function EventForm({
     const newAgenda = editing ? "" : agenda;
     const fields = {
       kind: newAgenda.trim() ? ("meeting" as const) : ("event" as const),
-      team: team === WHOLE_CAMP ? null : team,
+      team: [WHOLE_CAMP, TEAM_LEADS, PEOPLE].includes(team) ? null : team,
+      audience:
+        team === WHOLE_CAMP
+          ? ("camp" as const)
+          : team === TEAM_LEADS
+            ? ("team_leads" as const)
+            : team === PEOPLE
+              ? ("people" as const)
+              : ("team" as const),
+      people: team === PEOPLE ? people : [],
+      callUrl,
       title,
       date,
       endDate: allDay ? endDate : "",
@@ -199,6 +230,8 @@ export function EventForm({
             "place",
             "description",
             "agenda",
+            "people",
+            "callUrl",
           ].includes(key)
         ) {
           next[key] ??= issue.message;
@@ -259,8 +292,11 @@ export function EventForm({
 
   const heading = editing ? "Edit event" : "New event";
   const teamHelp = teams.canPickWholeCamp
-    ? "Whole camp events are for captains."
-    : "A team you lead. Whole camp events are for captains.";
+    ? "Every member still sees it. This says whose it is."
+    : "A team you lead. Events for the whole camp, the team leads or picked people are for captains.";
+  const shownPeople = teams.members.filter((m) =>
+    m.label.toLowerCase().includes(peopleFilter.trim().toLowerCase()),
+  );
 
   return (
     <aside aria-label={heading} data-calendar-panel className={PANEL_FRAME}>
@@ -348,14 +384,18 @@ export function EventForm({
             </Field>
           )}
 
-          <Field label="Team" htmlFor="event-team" help={teamHelp}>
+          <Field label="Who is it for" htmlFor="event-team" help={teamHelp}>
             <Select value={team} onValueChange={setTeam} disabled={pending}>
               <SelectTrigger id="event-team">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {teams.canPickWholeCamp ? (
-                  <SelectItem value={WHOLE_CAMP}>Whole camp</SelectItem>
+                  <>
+                    <SelectItem value={WHOLE_CAMP}>Whole camp</SelectItem>
+                    <SelectItem value={TEAM_LEADS}>Team leads</SelectItem>
+                    <SelectItem value={PEOPLE}>Pick people</SelectItem>
+                  </>
                 ) : null}
                 {teams.teams.map((t) => (
                   <SelectItem key={t.value} value={t.value}>
@@ -371,6 +411,62 @@ export function EventForm({
               </SelectContent>
             </Select>
           </Field>
+
+          {team === PEOPLE ? (
+            <Field
+              label="People"
+              htmlFor="event-people-filter"
+              required
+              help={
+                people.length === 1
+                  ? "1 person picked."
+                  : `${people.length} people picked.`
+              }
+              error={errors.people}
+            >
+              <div className="flex flex-col gap-2">
+                <Input
+                  id="event-people-filter"
+                  value={peopleFilter}
+                  placeholder="Find someone"
+                  onChange={(e) => setPeopleFilter(e.target.value)}
+                  disabled={pending}
+                />
+                <ul
+                  aria-label="People"
+                  className="flex max-h-48 flex-col overflow-y-auto border border-border"
+                >
+                  {shownPeople.map((m) => {
+                    const on = people.includes(m.value);
+                    return (
+                      <li key={m.value}>
+                        <label className="flex min-h-9 cursor-pointer items-center gap-2 px-2.5 text-sm">
+                          <Checkbox
+                            checked={on}
+                            onCheckedChange={(next) =>
+                              setPeople((list) =>
+                                next === true
+                                  ? [...list, m.value]
+                                  : list.filter((id) => id !== m.value),
+                              )
+                            }
+                            disabled={pending}
+                            aria-label={m.label}
+                          />
+                          {m.label}
+                        </label>
+                      </li>
+                    );
+                  })}
+                  {shownPeople.length === 0 ? (
+                    <li className="px-2.5 py-2 text-sm text-muted-foreground">
+                      Nobody by that name.
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+            </Field>
+          ) : null}
 
           <div className="grid grid-cols-2 items-start gap-2.5">
             <Field
@@ -443,6 +539,24 @@ export function EventForm({
               maxLength={200}
               placeholder="An address, or Online"
               onChange={(e) => setPlace(e.target.value)}
+              disabled={pending}
+            />
+          </Field>
+
+          <Field
+            label="Video call link"
+            htmlFor="event-call"
+            help="Paste a Google Meet or Zoom link, or leave it empty. It goes on the Google event too."
+            error={errors.callUrl}
+          >
+            <Input
+              id="event-call"
+              type="url"
+              inputMode="url"
+              value={callUrl}
+              maxLength={500}
+              placeholder="https://meet.google.com/…"
+              onChange={(e) => setCallUrl(e.target.value)}
               disabled={pending}
             />
           </Field>

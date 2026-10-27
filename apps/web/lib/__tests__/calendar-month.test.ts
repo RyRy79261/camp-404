@@ -43,6 +43,9 @@ function app(overrides: Partial<AppEventLike> = {}): AppEventLike {
     place: "The workshop",
     description: "Up and down once, timed.",
     version: 1,
+    audience: "camp",
+    peopleUserIds: [],
+    callUrl: null,
     ...overrides,
   };
 }
@@ -309,6 +312,9 @@ function entry(overrides: Partial<CalendarEntry>): CalendarEntry {
     source: "app",
     version: 1,
     meeting: null,
+    audience: overrides.team ? "team" : "camp",
+    people: [],
+    callUrl: null,
     ...overrides,
   };
 }
@@ -323,6 +329,17 @@ describe("filterEntries", () => {
     }),
     entry({ id: "kitchen-event", team: { key: "kitchen", label: "Kitchen" } }),
   ];
+  it("keeps a team-leads or people event out of Whole camp", () => {
+    const more = [
+      ...list,
+      entry({ id: "leads", audience: "team_leads" }),
+      entry({ id: "people", audience: "people", people: ["u1"] }),
+    ];
+    expect(
+      filterEntries(more, { team: "camp", type: "all" }).map((e) => e.id),
+    ).toEqual(["camp"]);
+    expect(filterEntries(more, { team: null, type: "all" })).toHaveLength(5);
+  });
   it("keeps one team's, the whole camp's, meetings or events", () => {
     const ids = (f: Parameters<typeof filterEntries>[1]) =>
       filterEntries(list, f).map((e) => e.id);

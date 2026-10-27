@@ -7,6 +7,7 @@ import {
   campEventRefusal,
   hasMinutes,
   MEETING_HAS_MINUTES,
+  storedCampEventAudience,
   storedCampEventWhen,
   type CampEventKind,
 } from "@camp404/core";
@@ -47,6 +48,20 @@ const copy = (row: CampEventRow): CampEventRow => ({ ...row });
 
 function refusal(actorId: string, team: Team | null): string | null {
   return campEventRefusal(testStore.senderReach(actorId), team);
+}
+
+/** Twin of storedAudience: the store's members, core's rule. */
+function storedAudience(fields: CampEventFields) {
+  const kept =
+    fields.audience === "people"
+      ? [...new Set(fields.people ?? [])].filter((id) => {
+          const user = testStore.findUserById(id);
+          return (
+            !!user && !user.sanitised && user.approvalStatus === "approved"
+          );
+        })
+      : [];
+  return storedCampEventAudience<Team>(fields, kept);
 }
 
 export const campEventsTestStore = {
@@ -107,7 +122,9 @@ export const campEventsTestStore = {
       newEventId: string;
     },
   ): CampEventWriteResult<{ row: CampEventRow; noteId: string | null }> {
-    const refused = refusal(input.actorId, input.team);
+    const who = storedAudience(input);
+    if (!who.ok) return who;
+    const refused = refusal(input.actorId, who.team);
     if (refused) return { ok: false, error: refused };
     const kind = campEventKindFor(input.kind, input.agenda);
     const now = new Date();
@@ -115,7 +132,10 @@ export const campEventsTestStore = {
       id: randomUUID(),
       cycle: testStore.currentCycleNumber(),
       kind,
-      team: input.team,
+      team: who.team,
+      audience: who.audience,
+      peopleUserIds: who.peopleUserIds,
+      callUrl: input.callUrl ?? null,
       title: input.title,
       ...storedCampEventWhen(input),
       place: input.place,
@@ -153,17 +173,22 @@ export const campEventsTestStore = {
       (r) => r.calendarEventId === input.calendarEventId && !r.removedAt,
     );
     if (!row) return { ok: false, error: EVENT_GONE };
+    const who = storedAudience(input);
+    if (!who.ok) return who;
     const refused = campEventChangeRefusal(
       testStore.senderReach(input.actorId),
       row.team,
-      input.team,
+      who.team,
     );
     if (refused) return { ok: false, error: refused };
     if (row.version !== input.expectedVersion) {
       return { ok: false, error: EVENT_CHANGED };
     }
     Object.assign(row, {
-      team: input.team,
+      team: who.team,
+      audience: who.audience,
+      peopleUserIds: who.peopleUserIds,
+      callUrl: input.callUrl ?? null,
       title: input.title,
       ...storedCampEventWhen(input),
       place: input.place,
@@ -226,6 +251,9 @@ export const campEventsTestStore = {
         cycle: note.cycle,
         kind: "meeting",
         team: note.team,
+        audience: note.team ? "team" : "camp",
+        peopleUserIds: [],
+        callUrl: null,
         title: note.title,
         allDay: false,
         startDate: day,

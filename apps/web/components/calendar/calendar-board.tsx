@@ -58,6 +58,8 @@ export interface SelectedEvent {
   canWriteMinutes: boolean;
   /** Every team's name by key, for the team each action item is filed in. */
   teamLabels: Record<string, string>;
+  /** The names of the people a `people` event is for, still here. */
+  peopleNames: string[];
 }
 
 export interface CalendarBoardProps {

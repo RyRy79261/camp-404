@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { mayOfferLeadPost } from "@/lib/telegram-places";
 import { canPickTeamLead, roleKeeper, type Actor } from "@camp404/core";
 import {
   CopyTeamRolesInput,
@@ -142,7 +143,7 @@ export async function setKeenAction(input: unknown): Promise<ActionResult> {
  */
 export async function giveTeamRoleAction(
   input: unknown,
-): Promise<ActionResult<{ joinedTeam: boolean }>> {
+): Promise<ActionResult<{ joinedTeam: boolean; offerLeadPost: boolean }>> {
   return runAction("giveTeamRoleAction", async () => {
     const gate = await keeperGate();
     if (!gate.ok) return gate;
@@ -157,7 +158,15 @@ export async function giveTeamRoleAction(
     if (!result.ok) return result;
     revalidatePath(HELP_WANTED_PATH);
     revalidateManifest();
-    return { ok: true, data: { joinedTeam: result.joinedTeam } };
+    return {
+      ok: true,
+      data: {
+        joinedTeam: result.joinedTeam,
+        // A new lead: offer Ol' Jeb's post (owner, 2026-10-27).
+        offerLeadPost:
+          parsed.data.roleId === null && (await mayOfferLeadPost()),
+      },
+    };
   });
 }
 

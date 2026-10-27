@@ -42,6 +42,10 @@ vi.mock("@/lib/camp-config", async (importOriginal) => ({
   getTeamsConfig: vi.fn(),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/telegram-places", () => ({
+  mayOfferLeadPost: vi.fn(async () => false),
+  postTeamLeadInTelegram: vi.fn(),
+}));
 
 import {
   assignTeamAction,
@@ -51,6 +55,7 @@ import {
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, hasCampAccess, isApproved } from "@/lib/users";
 import { getTeamsConfig } from "@/lib/camp-config";
+import { mayOfferLeadPost } from "@/lib/telegram-places";
 import {
   assignTeam,
   getTeamMemberships,
@@ -195,6 +200,7 @@ describe("setTeamLeadAction", () => {
     expect(await setTeamLeadAction("member-1", "kitchen", true)).toEqual({
       ok: true,
       teams: [],
+      offerLeadPost: false,
     });
     expect(setLead).toHaveBeenCalledWith({
       userId: "member-1",
@@ -202,6 +208,19 @@ describe("setTeamLeadAction", () => {
       isLead: true,
       actorId: CAPTAIN,
     });
+  });
+
+  it("offers Ol' Jeb's post only for a new lead, when he has a camp chat", async () => {
+    signInAsCaptain();
+    vi.mocked(mayOfferLeadPost).mockResolvedValue(true);
+    const made = await setTeamLeadAction("member-1", "kitchen", true);
+    expect(made).toMatchObject({ ok: true, offerLeadPost: true });
+    const unset = await setTeamLeadAction("member-1", "kitchen", false);
+    expect(unset).toMatchObject({ ok: true, offerLeadPost: false });
+    vi.mocked(setLead).mockResolvedValueOnce({ ok: true, changed: false });
+    const again = await setTeamLeadAction("member-1", "kitchen", true);
+    expect(again).toMatchObject({ ok: true, offerLeadPost: false });
+    vi.mocked(mayOfferLeadPost).mockResolvedValue(false);
   });
 
   it("tells the captain to assign the team first when they aren't on it", async () => {

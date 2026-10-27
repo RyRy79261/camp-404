@@ -2,7 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Clock, MapPin, Pencil, SquareKanban } from "lucide-react";
+import {
+  Clock,
+  MapPin,
+  Pencil,
+  SquareKanban,
+  Users,
+  Video,
+} from "lucide-react";
 import { MarkdownBody } from "@camp404/ui/components/markdown-body";
 import { cn } from "@camp404/ui/lib/utils";
 import { entryWhen, isPastEntry, shortDayLabel } from "@/lib/calendar-month";
@@ -72,6 +79,35 @@ export function EventDetail({
               <MapPin className="h-4 w-4" aria-label="Where" />
             </dt>
             <dd>{entry.place}</dd>
+          </>
+        ) : null}
+        {entry.audience === "people" ? (
+          <>
+            <dt className="pt-0.5 text-muted-foreground">
+              <Users className="h-4 w-4" aria-label="For" />
+            </dt>
+            <dd>
+              {selected.peopleNames.length > 0
+                ? selected.peopleNames.join(", ")
+                : "Nobody who is still in the camp"}
+            </dd>
+          </>
+        ) : null}
+        {entry.callUrl ? (
+          <>
+            <dt className="pt-0.5 text-muted-foreground">
+              <Video className="h-4 w-4" aria-label="Video call" />
+            </dt>
+            <dd>
+              <a
+                href={entry.callUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-primary underline underline-offset-2"
+              >
+                Join the call
+              </a>
+            </dd>
           </>
         ) : null}
       </dl>

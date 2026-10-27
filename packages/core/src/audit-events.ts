@@ -33,6 +33,8 @@ interface CalendarEvent {
   kind: string;
   date: string;
   allDay: boolean;
+  /** Who it is for; rows written before 2026-10-27 have none. */
+  audience?: string;
 }
 
 interface RentalItem {
@@ -111,7 +113,10 @@ export interface AuditEvents {
   "announcement.pinned": { scope: string; team: string | null };
   "announcement.unpinned": { scope: string; team: string | null };
   "calendar.event_created": CalendarEvent;
-  "calendar.event_changed": CalendarEvent & { fromTeam?: string | null };
+  "calendar.event_changed": CalendarEvent & {
+    fromTeam?: string | null;
+    fromAudience?: string;
+  };
   "calendar.event_removed": CalendarEvent;
   "car.rider_added": MemberCar;
   "car.rider_removed": MemberCar;
@@ -578,6 +583,7 @@ export interface AuditEvents {
     tagged: number;
     messaged: number;
   };
+  "telegram.lead_posted": { team: string; cycle: number; places: number };
   "telegram.posts_set": {
     announcements: boolean;
     reminders: boolean;

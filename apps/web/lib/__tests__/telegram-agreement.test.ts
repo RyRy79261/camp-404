@@ -27,6 +27,7 @@ import {
   addTelegramPlace,
   getTelegramPostSettings,
   listTelegramPlaces,
+  postTeamLeadInTelegram,
   removeTelegramPlace,
   setTelegramPostSettings,
 } from "../telegram-places";
@@ -185,6 +186,37 @@ describe("a member's Telegram: the database and the test store agree", () => {
     expect(db).toEqual({
       dialog: null,
       post: { ok: false, error: "That send no longer exists." },
+    });
+  });
+
+  it("tells the camp about a new lead: a captain, once, only for a lead", async () => {
+    const { db, store } = await bothWays(mode, h, async (p) => {
+      const press = (actorId: string, userId: string) =>
+        postTeamLeadInTelegram({
+          actorId,
+          userId,
+          team: "kitchen",
+          teamLabel: "Kitchen",
+        });
+      const noPlace = await press(p.captain, p.kitchenLead);
+      await addTelegramPlace({
+        telegramUserId: "990",
+        chatId: "-100990",
+        threadId: null,
+        title: "Camp chat",
+        username: null,
+      });
+      return {
+        noPlace,
+        member: await press(p.member, p.kitchenLead),
+        notLead: await press(p.captain, p.member),
+      };
+    });
+    expect(store).toEqual(db);
+    expect(db).toMatchObject({
+      noPlace: { ok: false },
+      member: { ok: false },
+      notLead: { ok: false },
     });
   });
 });

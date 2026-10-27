@@ -3,6 +3,9 @@ import {
   anHourAfter,
   campEventCalendarStep,
   campEventChangeRefusal,
+  PICK_A_TEAM,
+  PICK_SOMEONE,
+  storedCampEventAudience,
   campEventRefusal,
   canCreateCampEvents,
   canManageCampEvent,
@@ -166,5 +169,54 @@ describe("anHourAfter", () => {
     expect(anHourAfter("18:30")).toBe("19:30");
     expect(anHourAfter("09:05")).toBe("10:05");
     expect(anHourAfter("23:30")).toBe("23:59");
+  });
+});
+
+describe("storedCampEventAudience (owner, 2026-10-27)", () => {
+  it("defaults to the team's, or the camp's with no team", () => {
+    expect(storedCampEventAudience({ team: "kitchen" }, [])).toEqual({
+      ok: true,
+      audience: "team",
+      team: "kitchen",
+      peopleUserIds: [],
+    });
+    expect(storedCampEventAudience({ team: null }, [])).toMatchObject({
+      ok: true,
+      audience: "camp",
+      team: null,
+    });
+  });
+
+  it("keeps a team only on a team event, and people only on a people one", () => {
+    expect(
+      storedCampEventAudience({ audience: "team_leads", team: "kitchen" }, [
+        "u1",
+      ]),
+    ).toEqual({
+      ok: true,
+      audience: "team_leads",
+      team: null,
+      peopleUserIds: [],
+    });
+    expect(
+      storedCampEventAudience({ audience: "people", team: "kitchen" }, ["u1"]),
+    ).toEqual({
+      ok: true,
+      audience: "people",
+      team: null,
+      peopleUserIds: ["u1"],
+    });
+  });
+
+  it("refuses a team event with no team, and a people event with nobody left", () => {
+    expect(
+      storedCampEventAudience({ audience: "team", team: null }, []),
+    ).toEqual({
+      ok: false,
+      error: PICK_A_TEAM,
+    });
+    expect(
+      storedCampEventAudience({ audience: "people", team: null }, []),
+    ).toEqual({ ok: false, error: PICK_SOMEONE });
   });
 });

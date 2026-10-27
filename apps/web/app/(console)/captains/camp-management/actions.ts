@@ -62,6 +62,11 @@ import { auditReadAfterResponse } from "@/lib/audit";
 import { resolveSafetyDataForViewer } from "@/lib/safety-data";
 import { decideParticipation } from "@/lib/participations";
 import { deliverAfterResponse } from "@/lib/background-work";
+import { telegramBotUsername } from "@/lib/telegram";
+import {
+  mayOfferLeadPost,
+  postTeamLeadInTelegram,
+} from "@/lib/telegram-places";
 
 export type MemberDetailResult =
   | {
@@ -111,7 +116,20 @@ export interface AssignableTeam {
  * of a write it did not perform.
  */
 export type TeamAssignmentResult =
-  | { ok: true; teams: TeamMembership[] }
+  | {
+      ok: true;
+      teams: TeamMembership[];
+      /**
+       * The member was just made a lead and Ol' Jeb has a camp chat: the
+       * panel offers "Tell the camp on Telegram" (owner, 2026-10-27: an
+       * option, never automatic).
+       */
+      offerLeadPost?: boolean;
+    }
+  | { ok: false; error: string };
+
+export type LeadPostActionResult =
+  | { ok: true; places: number }
   | { ok: false; error: string };
 
 export type PublicMemberProfileResult =
@@ -799,7 +817,40 @@ export async function setTeamLeadAction(
     }
     revalidatePath("/captains/camp-management");
     revalidateManifest();
-    return { ok: true, teams: await getTeamMemberships(userId) };
+    return {
+      ok: true,
+      teams: await getTeamMemberships(userId),
+      offerLeadPost: isLead && result.changed && (await mayOfferLeadPost()),
+    };
+  });
+}
+
+/**
+ * "Tell the camp on Telegram", offered after a captain makes someone a lead:
+ * Ol' Jeb posts it in the camp's chats. The write checks again, under lock,
+ * that they lead the team this year, and posts once per lead and team.
+ */
+export async function postTeamLeadAction(
+  userId: string,
+  team: string,
+): Promise<LeadPostActionResult> {
+  return runAction("postTeamLeadAction", async () => {
+    const gate = await gateTeamWrite(userId, team, true);
+    if (!gate.ok) return gate;
+    if (telegramBotUsername() === null) {
+      return { ok: false, error: "Ol' Jeb is not set up for the camp yet." };
+    }
+    const config = await getTeamsConfig();
+    const label =
+      config.teams.find((t) => t.key === gate.team)?.label ?? gate.team;
+    const result = await postTeamLeadInTelegram({
+      actorId: gate.captainId,
+      userId,
+      team: gate.team,
+      teamLabel: label,
+    });
+    if (result.ok) deliverAfterResponse();
+    return result;
   });
 }
 

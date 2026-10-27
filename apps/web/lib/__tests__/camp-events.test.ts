@@ -67,6 +67,9 @@ function row(overrides: Partial<CampEventRow> = {}): CampEventRow {
     cycle: 2027,
     kind: "meeting",
     team: "kitchen",
+    audience: "team",
+    peopleUserIds: [],
+    callUrl: null,
     title: "Planning",
     allDay: false,
     startDate: "2026-10-15",
@@ -282,6 +285,19 @@ describe("the Calendar's events on Google", () => {
 });
 
 describe("campEventBody", () => {
+  it("puts a pasted call link first in Google's details", () => {
+    const body = campEventBody(
+      row({ kind: "event", callUrl: "https://meet.google.com/abc-defg-hij" }),
+      "Kitchen",
+    );
+    expect(body.description).toMatch(
+      /^Join the call: https:\/\/meet\.google\.com\/abc-defg-hij\n\nThe week's menu\./,
+    );
+    expect(
+      campEventBody(row({ kind: "event" }), "Kitchen").description,
+    ).not.toContain("Join the call");
+  });
+
   it("ends an all-day event the day after its last day, and keeps a whole-camp title plain", () => {
     const body = campEventBody(
       row({

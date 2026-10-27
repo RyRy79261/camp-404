@@ -853,6 +853,16 @@ Decisions baked into the schema — keep new code consistent with them:
   ends the run, 20 hours to live). The welcome wizard offers "Get your
   notices on Telegram" as an optional step to an approved member who has not
   connected (never a `required_actions` row).
+  [2026-10-27] **"Tell the camp on Telegram" after a new lead** (owner: an
+  option offered to the captain, never automatic). Making someone a lead on
+  the roster's Teams card or in Help wanted shows a toast with that button
+  when Ol' Jeb has a camp chat (`mayOfferLeadPost`). The press
+  (`postTeamLeadAction`) is a captain's; `postTeamLeadInTelegram`
+  (`@camp404/db/telegram-posts`) checks under lock that they lead the team
+  this year, queues one `lead` post per place (deduped per year, team and
+  lead), stores the lead as `tag_user_ids[0]`, never a name, and is audited
+  (`telegram.lead_posted`). The drain reads the name and handle when it sends
+  and skips an erased lead.
   [2026-10-27, owner's mock-up `docs/plans/2026-10-27-telegram-questionnaire-post-mockup.png`]
   **"Post in Telegram"** on a sent questionnaire's row (its author or a
   captain, the people who may Remind it; only with Ol' Jeb set up and a
@@ -992,6 +1002,21 @@ Decisions baked into the schema — keep new code consistent with them:
     meeting event of its own (the catch-up puts them on Google).
   - Google's description of an event made in Google is still never read; the
     Calendar shows the description only of events the app made.
+  - **Who an event is for** (owner, 2026-10-27: "I should be able to make
+    events for the team leads or specific members"): `camp_events.audience`
+    is `camp`, `team` (with `team`), `team_leads` or `people`
+    (`people_user_ids`, kept to approved members still here, inside the
+    write). Every member still sees every event (the Google Calendar is
+    shared); the form's "Who is it for" says whose it is. Only a captain
+    makes a team-leads or people event: both have no team, so the whole-camp
+    rule (`campEventRefusal`) covers them. A meeting for picked people is not
+    posted in the camp's Telegram chats.
+  - **A video call link** (owner, 2026-10-27): the event form's "Video call
+    link" takes a pasted https link (Meet, Zoom), kept in
+    `camp_events.call_url`, put first in the Google event's details ("Join
+    the call: ...") and shown as "Join the call". The app never asks Google
+    to make a Meet: the camp is not on Google Workspace, and Google makes no
+    Meet for a plain service account on a shared calendar.
   - **A meeting starts by adding an event with an agenda** (owner,
     2026-10-11). The New event form has no Event/Meeting switch: its Details
     is the Agenda (`MarkdownField`), written into the Google event's details;

@@ -1,6 +1,7 @@
 import "server-only";
 
 import * as db from "@camp404/db/telegram-posts";
+import { telegramBotUsername } from "./telegram";
 import { testStore } from "./test-store";
 import { twin } from "./twin";
 
@@ -16,6 +17,7 @@ const places = twin(db, testStore, [
   "setTelegramPostSettings",
   "removeTelegramPlace",
   "addTelegramPlace",
+  "postTeamLeadInTelegram",
 ]);
 
 export type {
@@ -27,5 +29,21 @@ export const listTelegramPlaces = places.listTelegramPlaces;
 export const getTelegramPostSettings = places.getTelegramPostSettings;
 export const setTelegramPostSettings = places.setTelegramPostSettings;
 export const removeTelegramPlace = places.removeTelegramPlace;
+/** A captain's "Tell the camp on Telegram" after making someone a lead. */
+export const postTeamLeadInTelegram = places.postTeamLeadInTelegram;
 /** For the E2E `/notifyhere` stand-in; the webhook writes the real one. */
 export const addTelegramPlace = places.addTelegramPlace;
+
+/**
+ * Whether to offer "Tell the camp on Telegram" after a lead is made: Ol' Jeb
+ * is set up and posts in at least one camp chat.
+ */
+export async function mayOfferLeadPost(): Promise<boolean> {
+  if (telegramBotUsername() === null) return false;
+  try {
+    return (await listTelegramPlaces()).length > 0;
+  } catch {
+    // The offer is optional: never fail the lead change that came before it.
+    return false;
+  }
+}
