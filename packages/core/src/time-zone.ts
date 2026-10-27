@@ -9,3 +9,10 @@
 // Pass it as the `timeZone` option: `new Intl.DateTimeFormat("en-GB",
 // { day: "numeric", month: "short", timeZone: CAMP_TIME_ZONE })`.
 export const CAMP_TIME_ZONE = "Africa/Johannesburg";
+
+/**
+ * The camp's clock as people say it (owner, 2026-10-27: "I should see the
+ * Timezone in GMT format"): South Africa is two hours ahead of GMT all year
+ * (no daylight saving), the +02:00 every camp time is stored at.
+ */
+export const CAMP_GMT = "GMT+2";

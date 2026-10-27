@@ -389,7 +389,9 @@ building block in `packages/ui`:
   (`splitLayoutClasses`), so a form's rows do not change.
 - **Long text is never a raw Markdown textarea** (owner, 2026-10-01). Use
   `MarkdownField` (`apps/web/components/markdown`): the WYSIWYG Markdown
-  editor with its preview beside it, Write | Preview tabs in a narrow window.
+  editor with its preview beside it, Write | Preview tabs when the FIELD is
+  under 40rem (a container query on the field, 2026-10-27: in the Calendar's
+  side panel of a wide window, page-wide variants drew two slivers).
   The meeting notes (the minutes editor) use it.
 
 ## Database — read this before touching the schema
@@ -1024,7 +1026,18 @@ Decisions baked into the schema — keep new code consistent with them:
     shared); the form's "Who is it for" says whose it is. Only a captain
     makes a team-leads or people event: both have no team, so the whole-camp
     rule (`campEventRefusal`) covers them. A meeting for picked people is not
-    posted in the camp's Telegram chats.
+    posted in the camp's Telegram chats; a team-leads one says "Team leads"
+    (`meetingPostBody`), and its time says GMT+2 (`CAMP_GMT`), as the form's
+    Starts and Ends do. The event form's left edge drags it wider (kept per
+    browser).
+  - **Guests** (owner, 2026-10-27): Google refuses attendees from the camp's
+    service account (no Workspace), so a team-leads or people event names
+    them at the top of its Google details ("For: ...",
+    `listCampEventGuests`), and each of them except its maker gets an
+    `event_invite` notice (inbox, push, email, and Ol' Jeb by DM: it counts
+    as personal), written in the event's own transaction; a change tells only
+    the people it adds. The notice opens the event (`calendar_event` ref, the
+    Google id as a UUID).
   - **A video call link** (owner, 2026-10-27): the event form's "Video call
     link" takes a pasted https link (Meet, Zoom), kept in
     `camp_events.call_url`, put first in the Google event's details ("Join

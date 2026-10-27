@@ -26,6 +26,10 @@ export const NOTIFICATION_KINDS = [
   "car_message",
   // A captain marked the member's pet in, with its hint (Camp pets).
   "pet_in",
+  // A calendar event was made for the member by name, or for the team leads
+  // they are one of (owner, 2026-10-27: Google takes no guests from the
+  // camp's service account, so the app tells them itself).
+  "event_invite",
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

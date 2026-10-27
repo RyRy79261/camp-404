@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { deliverAfterResponse } from "@/lib/background-work";
 import {
   campDayStart,
   canWorkInTeam,
@@ -83,6 +84,8 @@ export async function createCampEventAction(
     }
     const saved = await createCampEvent(gate.campUser.id, parsed.data);
     if (!saved.ok) return saved;
+    // The guests' notices and Ol' Jeb's post go out now, not on a later load.
+    deliverAfterResponse();
     revalidateCalendar([saved.row.team]);
     return {
       ok: true,
@@ -109,6 +112,7 @@ export async function editCampEventAction(
     }
     const saved = await editCampEvent(gate.campUser.id, parsed.data);
     if (!saved.ok) return saved;
+    deliverAfterResponse();
     revalidateCalendar([saved.row.team, parsed.data.team]);
     return {
       ok: true,

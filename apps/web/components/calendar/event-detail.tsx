@@ -10,6 +10,7 @@ import {
   Users,
   Video,
 } from "lucide-react";
+import { CAMP_GMT } from "@camp404/core";
 import { MarkdownBody } from "@camp404/ui/components/markdown-body";
 import { cn } from "@camp404/ui/lib/utils";
 import { entryWhen, isPastEntry, shortDayLabel } from "@/lib/calendar-month";
@@ -72,7 +73,12 @@ export function EventDetail({
         <dt className="pt-0.5 text-muted-foreground">
           <Clock className="h-4 w-4" aria-label="When" />
         </dt>
-        <dd>{entryWhen(entry)}</dd>
+        <dd>
+          {entryWhen(entry)}
+          {entry.allDay ? null : (
+            <span className="text-muted-foreground"> ({CAMP_GMT})</span>
+          )}
+        </dd>
         {entry.place ? (
           <>
             <dt className="pt-0.5 text-muted-foreground">

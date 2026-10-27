@@ -38,6 +38,9 @@ export function shouldEmailNotification(
     // A pet's hint: a nice surprise, not something a member must not miss.
     case "pet_in":
       return false;
+    // An event made for them by name or as a lead: not to be missed.
+    case "event_invite":
+      return true;
     default: {
       const _exhaustive: never = kind;
       return _exhaustive;
@@ -65,6 +68,7 @@ export const NOTIFICATION_EMAIL_LABEL: Readonly<
   task_reminder: "Task due",
   car_message: "From your driver",
   pet_in: "Camp pets",
+  event_invite: "Calendar",
 };
 
 const FOOTER =

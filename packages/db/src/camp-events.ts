@@ -2,7 +2,10 @@ import { and, asc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import {
   campDayStart,
   campEventChangeRefusal,
+  campEventGuestIds,
+  campEventInviteNotification,
   campEventKindFor,
+  campEventWhenText,
   campEventRefusal,
   hasMinutes,
   meetingInstant,
@@ -15,7 +18,8 @@ import {
   TELEGRAM_OPEN_BUTTON,
   type CampEventKind,
 } from "@camp404/core";
-import { writeAuditEvent } from "./audit";
+import { writeAuditEvent, type DbOrTx } from "./audit";
+import { deliveryValues } from "./deliveries";
 import { lockSenderReach } from "./broadcasts";
 import { resolveTeamsConfig, teamLabelMap } from "./camp-config";
 import { queueTelegramPosts } from "./telegram-posts";
@@ -298,6 +302,91 @@ async function storedAudience(
   };
 }
 
+/**
+ * Who an event is for by name (owner, 2026-10-27): its picked people, or
+ * this year's team leads, kept to approved members still here, by name.
+ * Nobody for any other event.
+ */
+async function guestCandidates(
+  db: DbOrTx,
+  row: { audience: CampEventAudience; peopleUserIds: readonly string[] },
+): Promise<{ id: string; name: string }[]> {
+  const here = and(
+    eq(schema.users.sanitised, false),
+    eq(schema.users.isSystem, false),
+    eq(schema.users.approvalStatus, "approved"),
+  );
+  if (row.audience === "people") {
+    if (row.peopleUserIds.length === 0) return [];
+    const found = await db
+      .select({ id: schema.users.id, name: schema.users.displayName })
+      .from(schema.users)
+      .where(and(inArray(schema.users.id, [...row.peopleUserIds]), here));
+    const byId = new Map(
+      found.map((r) => [r.id, r.name?.trim() || "Camp member"]),
+    );
+    return row.peopleUserIds.flatMap((id) =>
+      byId.has(id) ? [{ id, name: byId.get(id)! }] : [],
+    );
+  }
+  if (row.audience !== "team_leads") return [];
+  const cycle = await currentCycleNumber(db);
+  return (
+    await db
+      .selectDistinct({ id: schema.users.id, name: schema.users.displayName })
+      .from(schema.teamMemberships)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.teamMemberships.userId),
+      )
+      .where(
+        and(
+          eq(schema.teamMemberships.cycle, cycle),
+          eq(schema.teamMemberships.isLead, true),
+          here,
+        ),
+      )
+      .orderBy(asc(schema.users.displayName))
+  ).map((r) => ({ id: r.id, name: r.name?.trim() || "Camp member" }));
+}
+
+/**
+ * The names an event is for, for its Google details ("For: ..."): Google
+ * takes no guests from the camp's service account, so the names say it.
+ */
+export async function listCampEventGuests(row: {
+  audience: CampEventAudience;
+  peopleUserIds: readonly string[];
+}): Promise<{ id: string; name: string }[]> {
+  return guestCandidates(createHttpDb(), row);
+}
+
+/** Tell each new guest about the event, in the write's transaction. */
+async function inviteGuests(
+  tx: Tx,
+  row: CampEventRow,
+  userIds: readonly string[],
+): Promise<void> {
+  if (userIds.length === 0) return;
+  const payload = campEventInviteNotification({
+    calendarEventId: row.calendarEventId,
+    title: row.title,
+    when: campEventWhenText(row),
+    forTeamLeads: row.audience === "team_leads",
+    callUrl: row.callUrl,
+  });
+  await tx.insert(schema.notificationDeliveries).values(
+    userIds.map((userId) =>
+      deliveryValues(payload, {
+        userId,
+        broadcastId: null,
+        channel: "both",
+        presentation: "feed",
+      }),
+    ),
+  );
+}
+
 function auditMetadata(
   row: CampEventFields & { kind: CampEventKind; audience: CampEventAudience },
 ) {
@@ -347,6 +436,16 @@ export async function createCampEvent(
         updatedByUserId: input.actorId,
       })
       .returning(COLUMNS);
+    // The people it is for hear about it (Google takes no guests from us).
+    await inviteGuests(
+      tx,
+      row!,
+      campEventGuestIds(
+        row!,
+        (await guestCandidates(tx, row!)).map((g) => g.id),
+        input.actorId,
+      ),
+    );
     let noteId: string | null = null;
     if (kind === "meeting") {
       const [note] = await tx
@@ -379,6 +478,7 @@ export async function createCampEvent(
         body: meetingPostBody({
           ...row!,
           teamLabel: row!.team ? (labels[row!.team] ?? row!.team) : null,
+          audience: row!.audience,
         }),
         refId: null,
         buttonText: TELEGRAM_OPEN_BUTTON,
@@ -447,6 +547,13 @@ export async function editCampEvent(
     );
     if (refusal) refuse(refusal);
     if (before.version !== input.expectedVersion) refuse(EVENT_CHANGED);
+    const invitedBefore = new Set(
+      campEventGuestIds(
+        before,
+        (await guestCandidates(tx, before)).map((g) => g.id),
+        "",
+      ),
+    );
     const [row] = await tx
       .update(e)
       .set({
@@ -463,6 +570,17 @@ export async function editCampEvent(
       .where(and(eq(e.id, before.id), eq(e.version, input.expectedVersion)))
       .returning(COLUMNS);
     if (!row) refuse(EVENT_CHANGED);
+    // Someone the change adds (picked, or the event now for the team leads)
+    // hears about it; anyone already told does not again.
+    await inviteGuests(
+      tx,
+      row,
+      campEventGuestIds(
+        row,
+        (await guestCandidates(tx, row)).map((g) => g.id),
+        input.actorId,
+      ).filter((id) => !invitedBefore.has(id)),
+    );
     if (row.kind === "meeting") {
       await tx
         .update(schema.meetingNotes)

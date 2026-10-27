@@ -56,6 +56,7 @@ const events = twin(db, campEventsTestStore, [
   "createCampEvent",
   "editCampEvent",
   "removeCampEvent",
+  "listCampEventGuests",
 ]);
 
 const APP_NOTE =
@@ -78,12 +79,21 @@ const CUT_NOTE = "… the rest is in the Camp 404 app, under Calendar.";
  * and line breaks stay), then the notes, cut so the whole stays under
  * GOOGLE_DETAILS_MAX.
  */
-function googleDetails(row: CampEventRow): string {
+function googleDetails(row: CampEventRow, guests: readonly string[]): string {
   const tail = [row.kind === "meeting" ? MEETING_NOTE : null, APP_NOTE]
     .filter(Boolean)
     .join("\n\n");
   // A pasted call link goes first, where people in Google look for it.
-  const call = row.callUrl ? `Join the call: ${row.callUrl}\n\n` : "";
+  // Who it is for, by name: Google takes no guests from the camp's service
+  // account, so the details say it (owner, 2026-10-27).
+  const forWhom =
+    guests.length > 0
+      ? `For: ${guests.join(", ")}\n\n`
+      : row.audience === "team_leads"
+        ? "For: the team leads\n\n"
+        : "";
+  const call =
+    forWhom + (row.callUrl ? `Join the call: ${row.callUrl}\n\n` : "");
   let details = row.description
     ? row.kind === "meeting"
       ? plainTextWithLists(row.description)
@@ -108,12 +118,13 @@ function googleDetails(row: CampEventRow): string {
 export function campEventBody(
   row: CampEventRow,
   teamLabel: string | null,
+  guests: readonly string[] = [],
 ): CalendarEventBody {
   const time = (hhmm: string) => ({
     dateTime: `${row.startDate}T${hhmm}:00+02:00`,
     timeZone: CAMP_TIME_ZONE,
   });
-  const description = googleDetails(row);
+  const description = googleDetails(row, guests);
   return {
     summary: teamEventTitle(
       row.team ? (teamLabel ?? row.team) : null,
@@ -143,9 +154,16 @@ async function teamLabels(): Promise<Record<string, string>> {
 }
 
 /** One event row as a mirror target. */
+/** The names an event is for, for its Google details; none for most. */
+async function guestNames(row: CampEventRow): Promise<string[]> {
+  if (row.audience !== "team_leads" && row.audience !== "people") return [];
+  return (await events.listCampEventGuests(row)).map((g) => g.name);
+}
+
 function target(
   row: CampEventRow,
   labels: Record<string, string>,
+  guests: readonly string[],
 ): MirrorTarget {
   const removed = row.removedAt !== null;
   return {
@@ -160,6 +178,7 @@ function target(
           body: campEventBody(
             row,
             row.team ? (labels[row.team] ?? null) : null,
+            guests,
           ),
         },
     mark: (gone: boolean) =>
@@ -173,7 +192,7 @@ function target(
     // never mistaken for a row that is gone.
     latest: async () => {
       const now = await events.getCampEventRow(row.id);
-      return now ? target(now, labels) : undefined;
+      return now ? target(now, labels, await guestNames(now)) : undefined;
     },
   };
 }
@@ -184,7 +203,12 @@ export async function campEventTargets(
 ): Promise<{ row: CampEventRow; target: MirrorTarget }[]> {
   if (rows.length === 0) return [];
   const labels = await teamLabels();
-  return rows.map((row) => ({ row, target: target(row, labels) }));
+  return Promise.all(
+    rows.map(async (row) => ({
+      row,
+      target: target(row, labels, await guestNames(row)),
+    })),
+  );
 }
 
 // --- Reads -------------------------------------------------------------------
@@ -252,7 +276,10 @@ async function afterWrite<T extends object>(
   const labels = await teamLabels();
   return {
     ...saved,
-    calendar: await mirror(target(saved.row, labels), actorId),
+    calendar: await mirror(
+      target(saved.row, labels, await guestNames(saved.row)),
+      actorId,
+    ),
   };
 }
 

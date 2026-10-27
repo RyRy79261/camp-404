@@ -416,7 +416,7 @@ describe("queueing posts", () => {
     expect(rows[0]).toMatchObject({
       kind: "meeting",
       title: "New meeting: Build planning",
-      body: "Mon 2 Nov, 18:00 · Structures team",
+      body: "Mon 2 Nov, 18:00 GMT+2 · Structures team",
     });
     expect(rows[0]!.buttonPath).toContain("event=evtmeet00000000000000000");
   });
@@ -817,6 +817,33 @@ describe("telling the camp about a new lead", () => {
 
 describe("a meeting for picked people", () => {
   const h = useTestDb();
+
+  it("posts a team-leads meeting as the team leads', not the whole camp's", async () => {
+    const db = h.db();
+    const captain = await connectedCaptain(db, "961");
+    await addPlace("961");
+    await createCampEvent({
+      actorId: captain.id,
+      kind: "meeting",
+      agenda: "1. Orders",
+      newEventId: "evtleads0000000000000000",
+      title: "Finalize Structure Order",
+      team: null,
+      audience: "team_leads",
+      allDay: false,
+      startDate: "2026-10-27",
+      endDate: "2026-10-27",
+      startTime: "21:00",
+      endTime: "22:00",
+      place: null,
+      description: null,
+    });
+    const rows = await queuedPosts(db);
+    expect(rows[0]).toMatchObject({
+      title: "New meeting: Finalize Structure Order",
+      body: "Tue 27 Oct, 21:00 GMT+2 · Team leads",
+    });
+  });
 
   it("is not posted in the camp's chats", async () => {
     const db = h.db();

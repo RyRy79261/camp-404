@@ -16,6 +16,7 @@ import {
   editCampEvent,
   getCampEvent,
   getCampEventRow,
+  listCampEventGuests,
   linkUnlinkedMeetingNotes,
   listCampEvents,
   listCampEventsToSync,
@@ -670,6 +671,82 @@ describe("camp events", () => {
       await db.execute(sql.raw(fix));
       expect((await getCampEventRow(made.row.id))?.audience).toBe("team");
       expect((await getCampEventRow(camp.row.id))?.audience).toBe("camp");
+    });
+
+    it("tells the team leads about a team-leads event, not its maker", async () => {
+      const db = h.db();
+      const { captain, lead, member } = await people();
+      const otherLead = await makeUser(db, { displayName: "Finance Lead" });
+      await makeMembership(db, {
+        userId: otherLead.id,
+        team: "finance",
+        isLead: true,
+      });
+      // The captain leads a team too: they made it, so they get no notice.
+      await makeMembership(db, {
+        userId: captain.id,
+        team: "structures",
+        isLead: true,
+      });
+      const made = await createCampEvent({
+        actorId: captain.id,
+        kind: "event",
+        agenda: "",
+        newEventId: "0123456789abcdef0123456789abcdef",
+        ...fields({
+          audience: "team_leads",
+          callUrl: "https://meet.google.com/abc-defg-hij",
+        }),
+      });
+      if (!made.ok) throw new Error(made.error);
+      const notices = await db
+        .select()
+        .from(schema.notificationDeliveries)
+        .where(eq(schema.notificationDeliveries.kind, "event_invite"));
+      expect(notices.map((n) => n.userId).sort()).toEqual(
+        [lead.id, otherLead.id].sort(),
+      );
+      expect(notices[0]).toMatchObject({
+        title: "You're invited: Kitchen planning",
+        body: "Thu 15 Oct, 19:00 GMT+2 · For the team leads. · Join the call: https://meet.google.com/abc-defg-hij",
+        refType: "calendar_event",
+        refId: "01234567-89ab-cdef-0123-456789abcdef",
+        channel: "both",
+      });
+      expect(notices.some((n) => n.userId === member.id)).toBe(false);
+      // Google's details name all of them, the maker included.
+      const names = (await listCampEventGuests(made.row)).map((g) => g.name);
+      expect(names).toHaveLength(3);
+      expect(names).toEqual(
+        expect.arrayContaining(["Finance Lead", "Kitchen Lead"]),
+      );
+    });
+
+    it("tells picked people, and on a change only the ones it adds", async () => {
+      const db = h.db();
+      const { captain, lead, member } = await people();
+      const made = await createCampEvent({
+        actorId: captain.id,
+        kind: "event",
+        agenda: "",
+        newEventId: newId(),
+        ...fields({ audience: "people", people: [member.id] }),
+      });
+      if (!made.ok) throw new Error(made.error);
+      const changed = await editCampEvent({
+        actorId: captain.id,
+        calendarEventId: made.row.calendarEventId,
+        expectedVersion: made.row.version,
+        ...fields({ audience: "people", people: [member.id, lead.id] }),
+      });
+      expect(changed.ok).toBe(true);
+      const notices = await db
+        .select({ userId: schema.notificationDeliveries.userId })
+        .from(schema.notificationDeliveries)
+        .where(eq(schema.notificationDeliveries.kind, "event_invite"));
+      expect(notices.map((n) => n.userId).sort()).toEqual(
+        [member.id, lead.id].sort(),
+      );
     });
 
     it("keeps a pasted call link, and a change can clear it", async () => {

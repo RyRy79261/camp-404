@@ -203,7 +203,7 @@ describe("meetingPostBody", () => {
         startTime: "18:00",
         teamLabel: "Structures",
       }),
-    ).toBe("Mon 2 Nov, 18:00 · Structures team");
+    ).toBe("Mon 2 Nov, 18:00 GMT+2 · Structures team");
     expect(
       meetingPostBody({
         allDay: true,
@@ -213,6 +213,19 @@ describe("meetingPostBody", () => {
         teamLabel: null,
       }),
     ).toBe("Mon 2 Nov to Wed 4 Nov · Whole camp");
+  });
+
+  it("says a team-leads meeting is for the team leads, not the whole camp", () => {
+    expect(
+      meetingPostBody({
+        allDay: false,
+        startDate: "2026-10-27",
+        endDate: "2026-10-27",
+        startTime: "21:00",
+        teamLabel: null,
+        audience: "team_leads",
+      }),
+    ).toBe("Tue 27 Oct, 21:00 GMT+2 · Team leads");
   });
 });
 

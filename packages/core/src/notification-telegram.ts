@@ -13,6 +13,7 @@ import type {
   ParticipationStatus,
 } from "@camp404/types";
 import { plainPreview } from "./markdown-text";
+import { CAMP_GMT } from "./time-zone";
 import { notificationLink } from "./notification-links";
 import {
   INTENT_LABEL,
@@ -41,6 +42,7 @@ export function isPersonalNotification(kind: NotificationKind): boolean {
     case "captain_promotion":
     case "car_message":
     case "pet_in":
+    case "event_invite":
       return true;
     case "announcement":
     case "questionnaire_release":
@@ -397,6 +399,37 @@ function postDay(day: string): string {
 }
 
 /**
+ * When an event is, as a post or a notice says it: "Sat 2 Nov, 18:00 GMT+2",
+ * or its days ("Mon 2 Nov to Wed 4 Nov") when it is all day.
+ */
+export function campEventWhenText(event: {
+  allDay: boolean;
+  startDate: string;
+  endDate: string;
+  startTime: string | null;
+}): string {
+  return event.allDay
+    ? event.endDate && event.endDate !== event.startDate
+      ? `${postDay(event.startDate)} to ${postDay(event.endDate)}`
+      : postDay(event.startDate)
+    : `${postDay(event.startDate)}${event.startTime ? `, ${event.startTime} ${CAMP_GMT}` : ""}`;
+}
+
+/**
+ * Who an event is for by name, out of `candidates` (the picked people still
+ * approved, or this year's team leads), never the person who made or changed
+ * it. Only a team-leads or people event has any.
+ */
+export function campEventGuestIds(
+  event: { audience: string },
+  candidates: readonly string[],
+  actorId: string,
+): string[] {
+  if (event.audience !== "team_leads" && event.audience !== "people") return [];
+  return [...new Set(candidates)].filter((id) => id !== actorId);
+}
+
+/**
  * A new meeting's second line: "Sat 2 Nov, 18:00 · Structures team", or the
  * days of an all-day one, and "Whole camp" with no team.
  */
@@ -406,13 +439,18 @@ export function meetingPostBody(meeting: {
   endDate: string;
   startTime: string | null;
   teamLabel: string | null;
+  /** Who it is for; a team-leads event says so (owner, 2026-10-27). */
+  audience?: string;
 }): string {
-  const when = meeting.allDay
-    ? meeting.endDate && meeting.endDate !== meeting.startDate
-      ? `${postDay(meeting.startDate)} to ${postDay(meeting.endDate)}`
-      : postDay(meeting.startDate)
-    : `${postDay(meeting.startDate)}${meeting.startTime ? `, ${meeting.startTime}` : ""}`;
-  const who = meeting.teamLabel ? `${meeting.teamLabel} team` : "Whole camp";
+  const when = campEventWhenText(meeting);
+  const who =
+    meeting.audience === "team_leads"
+      ? "Team leads"
+      : meeting.audience === "people"
+        ? "Picked people"
+        : meeting.teamLabel
+          ? `${meeting.teamLabel} team`
+          : "Whole camp";
   return `${when} · ${who}`;
 }
 

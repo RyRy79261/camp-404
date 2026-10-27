@@ -28,6 +28,19 @@ export const CAPTAIN_PROMOTION_REF_TYPE = "captain_promotion";
 export const TASK_REF_TYPE = "task";
 /** The reference a pet's notice carries: the pet. */
 export const PET_REF_TYPE = "pet";
+/**
+ * The reference an event invite carries: the event's Google id (the app's are
+ * 32 hex digits, a UUID without its dashes), written as a UUID to fit the
+ * column; the link takes the dashes out again.
+ */
+export const CALENDAR_EVENT_REF_TYPE = "calendar_event";
+
+/** An app event's Google id as the uuid column holds it, or null. */
+export function calendarEventRefId(calendarEventId: string): string | null {
+  const hex = calendarEventId.toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(hex)) return null;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 /** The reference a driver's message carries: its own broadcast. */
 export const CAR_MESSAGE_REF_TYPE = "car_message";
 /**
@@ -242,6 +255,37 @@ export function petInNotification(input: {
     body: `Your pet is in. Hint: ${input.hint}`,
     refType: PET_REF_TYPE,
     refId: input.petId,
+  };
+}
+
+/**
+ * A calendar event made for the member: by name, or for the team leads they
+ * are one of. It says what, when (camp time, GMT+2) and the call link, and
+ * the tap opens the event in the Calendar.
+ */
+export function campEventInviteNotification(input: {
+  calendarEventId: string;
+  title: string;
+  /** "Tue 27 Oct, 21:00 GMT+2", as the Telegram post says it. */
+  when: string;
+  forTeamLeads: boolean;
+  callUrl: string | null;
+}): NotificationPayload {
+  const why = input.forTeamLeads
+    ? "For the team leads."
+    : "You're on the list.";
+  return {
+    kind: "event_invite",
+    title: `You're invited: ${input.title}`,
+    body: [
+      input.when,
+      why,
+      input.callUrl ? `Join the call: ${input.callUrl}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    refType: CALENDAR_EVENT_REF_TYPE,
+    refId: calendarEventRefId(input.calendarEventId),
   };
 }
 

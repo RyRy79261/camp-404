@@ -285,6 +285,19 @@ describe("the Calendar's events on Google", () => {
 });
 
 describe("campEventBody", () => {
+  it("names who an event is for at the top of Google's details", () => {
+    const body = campEventBody(
+      row({ kind: "event", audience: "people", peopleUserIds: ["a", "b"] }),
+      null,
+      ["Moda", "Prince"],
+    );
+    expect(body.description).toMatch(/^For: Moda, Prince\n\nThe week's menu\./);
+    expect(
+      campEventBody(row({ kind: "event", audience: "team_leads" }), null, [])
+        .description,
+    ).toMatch(/^For: the team leads\n\n/);
+  });
+
   it("puts a pasted call link first in Google's details", () => {
     const body = campEventBody(
       row({ kind: "event", callUrl: "https://meet.google.com/abc-defg-hij" }),
