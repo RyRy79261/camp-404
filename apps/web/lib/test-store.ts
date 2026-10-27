@@ -2168,6 +2168,28 @@ export const testStore = {
     );
   },
   /** One system notice to one member, from a builder in @camp404/core. */
+  /**
+   * This year's team leads who are approved and still here, by name (the
+   * twin of the team-leads half of guestCandidates).
+   */
+  currentLeadsInStore(): { id: string; name: string }[] {
+    const cycle = currentCycleNumber();
+    const ids = [
+      ...new Set(
+        teamMemberships
+          .filter((m) => m.cycle === cycle && m.isLead)
+          .map((m) => m.userId),
+      ),
+    ];
+    return ids
+      .map((id) => findUserById(id))
+      .filter(
+        (u): u is TestUser =>
+          !!u && !u.sanitised && u.approvalStatus === "approved",
+      )
+      .map((u) => ({ id: u.id, name: u.displayName?.trim() || "Camp member" }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  },
   pushNotice(userId: string, payload: NotificationPayload): void {
     pushDelivery(payload, { userId, broadcastId: null, presentation: "feed" });
   },

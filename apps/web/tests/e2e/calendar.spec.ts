@@ -280,6 +280,18 @@ test.describe("the Calendar (test-mode)", () => {
       chat.getByRole("link", { name: "Join the call" }),
     ).toHaveAttribute("href", "https://meet.google.com/abc-defg-hij");
     await page.screenshot({ path: testInfo.outputPath("event-people.png") });
+
+    // Google takes no guests from the camp's account, so the app tells them:
+    // the picked person has the invite in their inbox; the other does not.
+    await login(page, { id: "cal-pick", email: "cal-pick@example.com" });
+    await page.goto("/notifications");
+    await expect(page.getByText("You're invited: Budget chat")).toBeVisible();
+    await login(page, { id: "cal-other", email: "cal-other@example.com" });
+    await page.goto("/notifications");
+    await expect(
+      page.getByRole("heading", { level: 1, name: /Inbox|Notifications/i }),
+    ).toBeVisible();
+    await expect(page.getByText("You're invited: Budget chat")).toHaveCount(0);
   });
 
   test("the event form is dragged wider from its left edge, and keeps the width", async ({
@@ -289,8 +301,7 @@ test.describe("the Calendar (test-mode)", () => {
     desktopOnly(testInfo, "a phone's form is full screen");
     await page.setViewportSize({ width: 1920, height: 1080 });
     await captain(page, request, "cal-cap");
-    await openCalendar(page);
-    await page.getByRole("button", { name: "New event" }).first().click();
+    await openCalendar(page, `/calendar?new=${TODAY}`);
     const form = page.getByRole("complementary", { name: "New event" });
     await expect(form.getByText("Starts (GMT+2)")).toBeVisible();
     const before = (await form.boundingBox())!.width;

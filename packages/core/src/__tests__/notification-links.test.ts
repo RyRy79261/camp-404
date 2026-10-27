@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { calendarEventRefId } from "../notifications";
 import {
   NOTIFICATION_FALLBACK_LINK,
   notificationLink,
@@ -42,5 +43,15 @@ describe("notificationLink", () => {
     ] as const) {
       expect(notificationLink(type, id)).toBe(NOTIFICATION_FALLBACK_LINK);
     }
+  });
+
+  it("opens an event invite in the Calendar, from its Google id", () => {
+    const ref = calendarEventRefId("0123456789ABCDEF0123456789abcdef");
+    expect(ref).toBe("01234567-89ab-cdef-0123-456789abcdef");
+    expect(notificationLink("calendar_event", ref)).toBe(
+      "/calendar?event=0123456789abcdef0123456789abcdef",
+    );
+    expect(calendarEventRefId("not-hex")).toBeNull();
+    expect(notificationLink("calendar_event", null)).toBe("/notifications");
   });
 });

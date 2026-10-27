@@ -7,6 +7,9 @@ import {
   campEventRefusal,
   hasMinutes,
   MEETING_HAS_MINUTES,
+  campEventGuestIds,
+  campEventInviteNotification,
+  campEventWhenText,
   storedCampEventAudience,
   storedCampEventWhen,
   type CampEventKind,
@@ -15,6 +18,7 @@ import {
   campEventStart,
   EVENT_CHANGED,
   EVENT_GONE,
+  type CampEventAudience,
   type CampEventFields,
   type CampEventRow,
   type CampEventWriteResult,
@@ -64,7 +68,41 @@ function storedAudience(fields: CampEventFields) {
   return storedCampEventAudience<Team>(fields, kept);
 }
 
+/** Twin of guestCandidates: who an event is for by name. */
+function guestCandidates(row: {
+  audience: CampEventAudience;
+  peopleUserIds: readonly string[];
+}): { id: string; name: string }[] {
+  if (row.audience === "team_leads") return testStore.currentLeadsInStore();
+  if (row.audience !== "people") return [];
+  return row.peopleUserIds.flatMap((id) => {
+    const u = testStore.findUserById(id);
+    return u && !u.sanitised && u.approvalStatus === "approved"
+      ? [{ id, name: u.displayName?.trim() || "Camp member" }]
+      : [];
+  });
+}
+
+/** Twin of inviteGuests. */
+function inviteGuests(row: CampEventRow, userIds: readonly string[]): void {
+  const payload = campEventInviteNotification({
+    calendarEventId: row.calendarEventId,
+    title: row.title,
+    when: campEventWhenText(row),
+    forTeamLeads: row.audience === "team_leads",
+    callUrl: row.callUrl,
+  });
+  for (const id of userIds) testStore.pushNotice(id, payload);
+}
+
 export const campEventsTestStore = {
+  listCampEventGuests(row: {
+    audience: CampEventAudience;
+    peopleUserIds: readonly string[];
+  }): { id: string; name: string }[] {
+    return guestCandidates(row);
+  },
+
   listCampEvents(input: {
     from: string;
     to: string;
@@ -148,6 +186,14 @@ export const campEventsTestStore = {
       updatedAt: now,
     };
     rows().push(row);
+    inviteGuests(
+      row,
+      campEventGuestIds(
+        row,
+        guestCandidates(row).map((g) => g.id),
+        input.actorId,
+      ),
+    );
     const noteId =
       kind === "meeting"
         ? testStore.meetingNoteForEvent.add({
@@ -184,6 +230,13 @@ export const campEventsTestStore = {
     if (row.version !== input.expectedVersion) {
       return { ok: false, error: EVENT_CHANGED };
     }
+    const invitedBefore = new Set(
+      campEventGuestIds(
+        row,
+        guestCandidates(row).map((g) => g.id),
+        "",
+      ),
+    );
     Object.assign(row, {
       team: who.team,
       audience: who.audience,
@@ -196,6 +249,14 @@ export const campEventsTestStore = {
       version: row.version + 1,
       updatedAt: new Date(),
     });
+    inviteGuests(
+      row,
+      campEventGuestIds(
+        row,
+        guestCandidates(row).map((g) => g.id),
+        input.actorId,
+      ).filter((id) => !invitedBefore.has(id)),
+    );
     if (row.kind === "meeting") {
       testStore.meetingNoteForEvent.follow(row.calendarEventId, {
         team: row.team,

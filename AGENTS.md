@@ -1030,6 +1030,14 @@ Decisions baked into the schema — keep new code consistent with them:
     (`meetingPostBody`), and its time says GMT+2 (`CAMP_GMT`), as the form's
     Starts and Ends do. The event form's left edge drags it wider (kept per
     browser).
+  - **Guests** (owner, 2026-10-27): Google refuses attendees from the camp's
+    service account (no Workspace), so a team-leads or people event names
+    them at the top of its Google details ("For: ...",
+    `listCampEventGuests`), and each of them except its maker gets an
+    `event_invite` notice (inbox, push, email, and Ol' Jeb by DM: it counts
+    as personal), written in the event's own transaction; a change tells only
+    the people it adds. The notice opens the event (`calendar_event` ref, the
+    Google id as a UUID).
   - **A video call link** (owner, 2026-10-27): the event form's "Video call
     link" takes a pasted https link (Meet, Zoom), kept in
     `camp_events.call_url`, put first in the Google event's details ("Join

@@ -42,6 +42,10 @@ export function notificationLink(
   if (refType === "shift_minimum") {
     return "/shifts";
   }
+  // An event invite opens the event in the Calendar (on its own month).
+  if (refType === "calendar_event" && refId && UUID.test(refId)) {
+    return `/calendar?event=${refId.replaceAll("-", "").toLowerCase()}`;
+  }
   // A pet's notice opens Camp pets, where its card carries the hint.
   if (refType === "pet") {
     return "/pets";
