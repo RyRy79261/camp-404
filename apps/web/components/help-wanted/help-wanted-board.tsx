@@ -870,6 +870,7 @@ function Picker({
           />
           <Input
             className="pl-9"
+            emoji={false}
             placeholder="Search by name"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

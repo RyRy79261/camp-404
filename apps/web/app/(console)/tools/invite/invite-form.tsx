@@ -151,6 +151,7 @@ export function InviteForm({
             <Label htmlFor="code">Invite code</Label>
             <div className="flex gap-2">
               <Input
+                emoji={false}
                 id="code"
                 name="code"
                 value={code}

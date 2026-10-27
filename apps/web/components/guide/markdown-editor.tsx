@@ -18,6 +18,10 @@ import { Button } from "@camp404/ui/components/button";
 import { Input } from "@camp404/ui/components/input";
 import { cn } from "@camp404/ui/lib/utils";
 import {
+  EditorEmojiButton,
+  EditorShortcodes,
+} from "@/components/markdown/editor-emoji";
+import {
   CHAPTER_EDITOR_EXTENSIONS,
   editorMarkdown,
   NOTES_EDITOR_EXTENSIONS,
@@ -194,6 +198,8 @@ function MarksToolbar({ editor }: { editor: Editor }) {
       >
         <Italic className="h-4 w-4" aria-hidden />
       </ToolbarButton>
+      <span className="ml-auto" />
+      <EditorEmojiButton editor={editor} />
     </div>
   );
 }
@@ -303,6 +309,8 @@ function Toolbar({
             </button>
           </>
         ) : null}
+        <span className="ml-auto" />
+        <EditorEmojiButton editor={editor} />
       </div>
       {linking ? (
         <LinkRow editor={editor} onDone={() => setLinking(false)} />
@@ -402,6 +410,7 @@ export function MarkdownEditor({
           <Toolbar editor={editor} membersOnly={membersOnly} />
         )
       ) : null}
+      {editor ? <EditorShortcodes editor={editor} /> : null}
       <EditorContent
         editor={editor}
         className={cn(

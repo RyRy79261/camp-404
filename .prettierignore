@@ -9,3 +9,4 @@ playwright-report
 test-results
 pnpm-lock.yaml
 packages/db/migrations
+packages/ui/src/lib/emoji-list.json

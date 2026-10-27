@@ -11,6 +11,10 @@ import { StarterKit } from "@tiptap/starter-kit";
 import { Bold, Heading3, Italic, List, ListOrdered } from "lucide-react";
 import type { SourceDoc } from "@camp404/types";
 import { cn } from "@camp404/ui/lib/utils";
+import {
+  EditorEmojiButton,
+  EditorShortcodes,
+} from "@/components/markdown/editor-emoji";
 
 // One section of a recipe's source (#243, Kitchen): AfrikaBurn's bulletin
 // MarkdownEditor (packages/ui/src/components/markdown-editor), with Tiptap
@@ -113,6 +117,8 @@ function Toolbar({ editor }: { editor: Editor }) {
       >
         <Heading3 className="h-4 w-4" aria-hidden />
       </ToolbarButton>
+      <span className="ml-auto" />
+      <EditorEmojiButton editor={editor} />
     </div>
   );
 }
@@ -167,6 +173,7 @@ export function SourceSectionEditor({
       )}
     >
       {editor ? <Toolbar editor={editor} /> : null}
+      {editor ? <EditorShortcodes editor={editor} /> : null}
       <EditorContent editor={editor} />
     </div>
   );
