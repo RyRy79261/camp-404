@@ -151,17 +151,64 @@ export type DuesYearInput = z.infer<typeof DuesYearInput>;
 // --- A member's own -----------------------------------------------------------
 
 /**
- * A member's pledge: one of the year's tiers, or less than the lowest tier,
- * with the amount they can pay (a valid answer, #240).
+ * When a member says they can pay their pledge (owner, 2026-10-27): one of six
+ * fixed answers, never a date the member types. The order is the order the
+ * question asks them in. The words, and the days each one means for a burn
+ * year, are in @camp404/core (`FEE_TIMING_LABELS`, `feeTimingSchedule`).
  */
-export const PledgeInput = z.discriminatedUnion(
-  "kind",
-  [
-    z.object({ kind: z.literal("tier"), tierId: RowId }),
-    z.object({ kind: z.literal("below"), amountCents: Cents }),
-  ],
-  { error: "Pick what you can pay." },
-);
+export const FEE_TIMINGS = [
+  "all_by_end_nov",
+  "all_by_end_dec",
+  "part_by_end_nov",
+  "part_by_end_dec",
+  "all_by_15_jan",
+  "talk_to_captain",
+] as const;
+export const FeeTiming = z.enum(FEE_TIMINGS, {
+  error: "Pick when you can pay it.",
+});
+export type FeeTiming = z.infer<typeof FeeTiming>;
+
+/** The most a member may pledge, in cents (R1,000,000). */
+export const MAX_PLEDGE_CENTS = 100_000_000;
+
+/**
+ * A member's pledge (owner, 2026-10-27): any whole-rand amount (no fixed
+ * tiers; the Join site's scale is a guide), when they can pay it, and whether
+ * they need a subsidy. With the subsidy ticked, R0 is fine and "by when" is
+ * optional; without it, the amount is above R0 and "by when" is required.
+ */
+export const PledgeInput = z
+  .object({
+    amountCents: z
+      .number({ error: "Type an amount in rands." })
+      .int({ error: "Type a whole number of rands." })
+      .min(0, { error: "The amount can't be below R0." })
+      .max(MAX_PLEDGE_CENTS, { error: "That amount is too large." })
+      .refine((cents) => cents % 100 === 0, {
+        error: "Type a whole number of rands.",
+      }),
+    payBy: FeeTiming.nullable(),
+    subsidy: z.boolean(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.subsidy) return;
+    if (value.amountCents === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["amountCents"],
+        message:
+          "The amount must be more than R0, or tick that you need a subsidy.",
+      });
+    }
+    if (value.payBy === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["payBy"],
+        message: "Pick when you can pay it.",
+      });
+    }
+  });
 export type PledgeInput = z.infer<typeof PledgeInput>;
 
 /** A payment a member says they made, sent with a proof file. */

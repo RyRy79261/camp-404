@@ -27,6 +27,17 @@ interface FuelCan {
   travelsWithUserId: string | null;
 }
 
+/** What is said of a camp bill, added or changed. */
+interface CampBill {
+  name: string;
+  payee: string | null;
+  amountCents: number;
+  dueOn: string;
+  repeat: string;
+  times: number;
+  planned: boolean;
+}
+
 interface CalendarEvent {
   title: string;
   team: string | null;
@@ -239,6 +250,19 @@ export interface AuditEvents {
     description: string;
     amountCents: number;
   };
+  "dues.collecting_set": { cycle: number; on: boolean };
+  "camp_money.balance_recorded": { amountCents: number; asOf: string };
+  "camp_money.bank_details_saved": { version: number };
+  "camp_money.bill_added": CampBill;
+  "camp_money.bill_changed": CampBill;
+  "camp_money.bill_paid": {
+    name: string;
+    amountCents: number;
+    paidOn: string;
+    /** Which of the bill's payments (from 0). */
+    index: number;
+  };
+  "camp_money.bill_removed": { name: string; amountCents: number };
   "dues.fee_charged": {
     cycle: number;
     description: string;

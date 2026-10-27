@@ -42,6 +42,8 @@ import {
   Questionnaire,
   SUBMIT_TARGET,
   choiceValues,
+  feeTimingOptionsMessage,
+  hasFeeTimingOptions,
   hasParticipationOptions,
   isAllowedBuilderImageUrl,
   isAnswerableBlock,
@@ -82,6 +84,7 @@ export type DefinitionIssueCode =
   | "input_on_content_page"
   | "duplicate_role"
   | "participation_options"
+  | "fee_timing_options"
   | "no_inputs"
   | "no_visible_page";
 
@@ -390,6 +393,18 @@ export function validateQuestionnaireDefinition(
           path: `${blockPath}.options`,
           code: "participation_options",
           message: participationOptionsMessage(block.prompt),
+          ...at,
+        });
+      }
+      if (
+        block.kind === "single_select" &&
+        block.role === "fee_timing" &&
+        !hasFeeTimingOptions(block)
+      ) {
+        publishIssues.push({
+          path: `${blockPath}.options`,
+          code: "fee_timing_options",
+          message: feeTimingOptionsMessage(block.prompt),
           ...at,
         });
       }

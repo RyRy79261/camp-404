@@ -1,3 +1,4 @@
+import { FEE_TIMINGS, type FeeTiming } from "./dues";
 import {
   PARTICIPATION_INTENTS,
   type ParticipationIntent,
@@ -22,6 +23,8 @@ import {
 // `participation_intent` is the one role that writes a member's place rather
 // than a fact about them: its Yes / Maybe / No sets this year's
 // camp_participations row, and a missing answer never clears it.
+// `fee_timing` is the same shape for money: its answer is the "by when" of the
+// member's camp fee pledge for the send's year (dues_accounts.pay_by).
 
 export type BuilderRole = Extract<
   QuestionRole,
@@ -32,6 +35,7 @@ export type BuilderRole = Extract<
   | "arrival_date"
   | "departure_date"
   | "participation_intent"
+  | "fee_timing"
 >;
 
 /** Each builder role: how it reads to a captain, and the kinds that hold it. */
@@ -59,6 +63,10 @@ export const BUILDER_ROLES: Record<
   departure_date: { label: "Departure day", kinds: ["date"] },
   participation_intent: {
     label: "Coming this year (Yes / Maybe / No: sets their place for the year)",
+    kinds: ["single_select"],
+  },
+  fee_timing: {
+    label: 'When they can pay their camp fee (sets their pledge\'s "by when")',
     kinds: ["single_select"],
   },
 };
@@ -93,6 +101,8 @@ export interface RoleMirror {
   driver: DriverMirror | null;
   /** The member's Yes / Maybe / No for the send's year, or null for nothing. */
   participation: { intent: ParticipationIntent } | null;
+  /** The member's camp fee "by when" for the send's year, or null for nothing. */
+  feeTiming: { payBy: FeeTiming } | null;
 }
 
 // --- Coming this year? -------------------------------------------------------
@@ -163,4 +173,49 @@ export function attendanceQuestionnaire(): Questionnaire {
       },
     ],
   });
+}
+
+// --- When can you pay your camp fee? ------------------------------------------
+
+/**
+ * The options a fee_timing question carries, in the order it asks them. The
+ * values are fixed (FEE_TIMINGS): the builder fills them in when a captain
+ * picks the role, and publishing refuses any other set. Labels are the
+ * captain's to word; these are the defaults.
+ */
+export const FEE_TIMING_OPTIONS: readonly {
+  value: FeeTiming;
+  label: string;
+}[] = [
+  { value: "all_by_end_nov", label: "All of it by the end of November" },
+  { value: "all_by_end_dec", label: "All of it by the end of December" },
+  {
+    value: "part_by_end_nov",
+    label: "Part by the end of November and the rest later",
+  },
+  {
+    value: "part_by_end_dec",
+    label: "Part by the end of December and the rest later",
+  },
+  { value: "all_by_15_jan", label: "All of it by 15 January" },
+  { value: "talk_to_captain", label: "I'll talk to a captain" },
+];
+
+/**
+ * True when a fee_timing question can publish: its option values are exactly
+ * the six timings, and it takes no "Other…" answer, which no "by when" could
+ * be read from.
+ */
+export function hasFeeTimingOptions(q: SingleSelectQuestion): boolean {
+  if (q.allowOther) return false;
+  const values = q.options.map((o) => o.value);
+  return (
+    values.length === FEE_TIMINGS.length &&
+    FEE_TIMINGS.every((timing) => values.includes(timing))
+  );
+}
+
+/** The publish refusal for a fee_timing question that fails it. */
+export function feeTimingOptionsMessage(prompt: string): string {
+  return `"${prompt}" sets when each member can pay their camp fee, so its options must be exactly the six fee timings, with "Other" off. Set its use to Nothing else and back to put them back.`;
 }

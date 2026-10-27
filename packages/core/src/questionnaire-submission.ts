@@ -6,7 +6,9 @@
 // Pure — no I/O, no env.
 
 import {
+  FEE_TIMINGS,
   PARTICIPATION_INTENTS,
+  type FeeTiming,
   QuestionnaireResponses,
   isBuilderRole,
   type ParticipationIntent,
@@ -84,6 +86,12 @@ function intentAnswer(value: unknown): ParticipationIntent | null {
     : null;
 }
 
+function feeTimingAnswer(value: unknown): FeeTiming | null {
+  return (FEE_TIMINGS as readonly unknown[]).includes(value)
+    ? (value as FeeTiming)
+    : null;
+}
+
 function textAnswer(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
@@ -99,7 +107,8 @@ function textAnswer(value: unknown): string | null {
  * The one exception is participation_intent: it writes only a Yes, Maybe or
  * No the member was asked and gave. A hidden, unanswered or unknown answer
  * leaves `participation` null, so nothing is written: a missing answer never
- * takes a member's place away.
+ * takes a member's place away. fee_timing is the same: only a timing the
+ * member was asked and gave is written.
  */
 export function questionnaireRoleMirror(
   definition: Questionnaire,
@@ -111,6 +120,7 @@ export function questionnaireRoleMirror(
   const dietary: DietaryMirror = {};
   const driver: DriverMirror = {};
   let participation: RoleMirror["participation"] = null;
+  let feeTiming: RoleMirror["feeTiming"] = null;
   for (const q of allQuestions(definition)) {
     const role = "role" in q ? q.role : undefined;
     if (!isBuilderRole(role)) continue;
@@ -139,11 +149,19 @@ export function questionnaireRoleMirror(
         if (intent) participation = { intent };
         break;
       }
+      case "fee_timing": {
+        // Like participation_intent: only an answer the member gave writes;
+        // a missing one never clears their "by when".
+        const payBy = feeTimingAnswer(value);
+        if (payBy) feeTiming = { payBy };
+        break;
+      }
     }
   }
   return {
     dietary: Object.keys(dietary).length > 0 ? dietary : null,
     driver: Object.keys(driver).length > 0 ? driver : null,
     participation,
+    feeTiming,
   };
 }

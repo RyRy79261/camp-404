@@ -53,9 +53,14 @@
 //     (checkPaymentInput, memberPaymentAllowed) (./payment-references)
 //   - dues: canManageMoney (captains and Finance leads), duesBalance,
 //     duesSettled, nextInstalment, splitEvenly, proposeRefund, the rules both
-//     dues stores apply (resolvePledge, feeStandardCents, isFeeConcession,
+//     dues stores apply (feeStandardCents, isFeeConcession,
 //     settleUpCharges, refundAmount) and the statement import
 //     (parseStatement, proposeStatementMatches) (./dues)
+//   - camp fees: the pledge's "by when" (feeTimingSchedule, feeTimingLabel),
+//     the next fee payment (feeInstalmentsLeft, nextFeePayment), pledgeRefusal,
+//     the Join scale's names (nearestScaleName, recommendedPledgeCents), the
+//     camp's bills (campBillState, campBillPaymentsLeft) and the money
+//     forecast (feeTotals, campForecast) (./camp-fees)
 //   - money: CURRENCIES, DEFAULT_CURRENCY, isCurrency, UnknownCurrencyError,
 //     formatMoney, parseMoneyToMinor, decimalToMinor, sumMinor — money is in
 //     rands (ZAR) only, with one formatter; formatForeignEquivalent (and
@@ -225,6 +230,7 @@ export * from "./member-export";
 export * from "./payment-references";
 export * from "./money";
 export * from "./dues";
+export * from "./camp-fees";
 export * from "./audience-authz";
 export * from "./pinned-order";
 export * from "./csv";
