@@ -414,7 +414,7 @@ export function PayGuideDetails({
             onClick={() => setFrom(value)}
             className={`px-1 py-2 text-xs font-medium ${
               from === value
-                ? "bg-os-primary text-os-primary-fg"
+                ? "bg-os-primary text-os-bg"
                 : "text-os-muted hover:text-os-fg"
             }`}
           >

@@ -181,8 +181,8 @@ export function PledgeStep({
               data-slot="badge"
               className={`px-1.5 py-0.5 font-pixel text-[10px] uppercase ${
                 tag === "Recommended"
-                  ? "bg-os-primary text-os-primary-fg"
-                  : "bg-os-accent text-os-primary-fg"
+                  ? "bg-os-primary text-os-bg"
+                  : "bg-os-accent text-os-bg"
               }`}
             >
               {tag}
