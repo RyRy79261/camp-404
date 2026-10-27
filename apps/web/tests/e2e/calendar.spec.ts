@@ -327,6 +327,34 @@ test.describe("the Calendar (test-mode)", () => {
         ),
       )
       .toBe(Math.round(wider));
+
+    // A width kept from a wide window never squeezes the calendar out of a
+    // narrower one: the form gives way, the month keeps 22rem.
+    await page.evaluate(() =>
+      localStorage.setItem("camp404:calendar-form-width", "4000"),
+    );
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openCalendar(page, `/calendar?new=${TODAY}`);
+    const kept = page.getByRole("complementary", { name: "New event" });
+    await expect(kept).toBeVisible();
+    // The kept width is in play (not the default), so the check below is real.
+    await expect(kept).toHaveAttribute("style", /--form-w: 4000px/);
+    const grid = page.getByRole("heading", {
+      level: 2,
+      name: MONTH_NAME(THIS_MONTH),
+    });
+    await expect(grid).toBeVisible();
+    await expect
+      .poll(async () => {
+        const panel = (await page
+          .getByRole("complementary", { name: "New event" })
+          .boundingBox())!;
+        const row = await page
+          .locator("[data-calendar-panel]")
+          .evaluate((el) => el.parentElement!.getBoundingClientRect().width);
+        return row - panel.width;
+      })
+      .toBeGreaterThanOrEqual(350);
   });
 
   test("last month's meeting opens with its minutes; a team member writes the minutes of another", async ({

@@ -109,7 +109,7 @@ function useFormWidth(): [number | null, (w: number) => void] {
     const saved = Number(localStorage.getItem(WIDTH_KEY));
     // Read after mount: the server draws the default width.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- browser-only value
-    if (saved >= MIN_WIDTH) setWidth(saved);
+    if (Number.isFinite(saved) && saved >= MIN_WIDTH) setWidth(saved);
   }, []);
   const set = React.useCallback((w: number) => {
     setWidth(w);
@@ -392,7 +392,9 @@ export function EventForm({
       }
       className={cn(
         PANEL_FRAME,
-        "relative @min-[56rem]/page:w-[var(--form-w,23.75rem)] @min-[72rem]/page:w-[var(--form-w,30rem)] @min-[90rem]/page:w-[var(--form-w,36rem)]",
+        // Never wider than the row less 22rem, so a width dragged on a big
+        // window leaves the calendar room after the window shrinks.
+        "relative @min-[56rem]/page:w-[min(var(--form-w,23.75rem),calc(100%_-_22rem))] @min-[72rem]/page:w-[min(var(--form-w,30rem),calc(100%_-_22rem))] @min-[90rem]/page:w-[min(var(--form-w,36rem),calc(100%_-_22rem))]",
       )}
     >
       <PanelResizeHandle panel={panel} onResize={setWidth} />
