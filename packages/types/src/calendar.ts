@@ -101,7 +101,8 @@ const eventFields = {
   audience: CampEventAudienceInput.optional(),
   /** The people it is for, when the audience is `people`. */
   people: z
-    .array(z.string().uuid())
+    // Member ids; the write keeps only approved members still here.
+    .array(z.string().min(1).max(100))
     .max(CAMP_EVENT_MAX_PEOPLE, `Pick at most ${CAMP_EVENT_MAX_PEOPLE} people.`)
     .optional(),
   /** A video call link to paste (owner, 2026-10-27); empty for none. */

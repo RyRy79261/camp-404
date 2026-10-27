@@ -240,6 +240,48 @@ test.describe("the Calendar (test-mode)", () => {
     await closeConsoleNav(page);
   });
 
+  test("a captain makes an event for picked people, with a call link; it says who it is for", async ({
+    page,
+    request,
+  }, testInfo) => {
+    desktopOnly(testInfo, GRID);
+    await approvedMember(page, request, "cal-pick", "Picked Person");
+    await approvedMember(page, request, "cal-other", "Someone Else");
+    await captain(page, request, "cal-cap");
+
+    await openCalendar(page);
+    await page.getByRole("button", { name: "New event" }).first().click();
+    const form = page.getByRole("form", { name: "New event" });
+    await form.locator("#event-team").click();
+    await expect(
+      page.getByRole("option", { name: "Team leads" }),
+    ).toBeVisible();
+    await page.getByRole("option", { name: "Pick people" }).click();
+    await form.getByLabel("Title").fill("Budget chat");
+    await form.getByPlaceholder("Find someone").fill("Picked");
+    await form.getByRole("checkbox", { name: "Picked Person" }).click();
+    await expect(form.getByText("1 person picked.")).toBeVisible();
+    await form.locator("#event-team").scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath("people-picker.png") });
+    await form
+      .getByLabel("Video call link")
+      .fill("https://meet.google.com/abc-defg-hij");
+    await page.screenshot({
+      path: testInfo.outputPath("new-event-people.png"),
+    });
+    await form.getByRole("button", { name: "Add to the calendar" }).click();
+    await expect(page.getByText("Added to the calendar")).toBeVisible();
+
+    const chat = panel(page, "Budget chat");
+    await expect(chat.getByText("Picked people")).toBeVisible();
+    await expect(chat.getByText("Picked Person")).toBeVisible();
+    await expect(chat.getByText("Someone Else")).toHaveCount(0);
+    await expect(
+      chat.getByRole("link", { name: "Join the call" }),
+    ).toHaveAttribute("href", "https://meet.google.com/abc-defg-hij");
+    await page.screenshot({ path: testInfo.outputPath("event-people.png") });
+  });
+
   test("last month's meeting opens with its minutes; a team member writes the minutes of another", async ({
     page,
     request,
