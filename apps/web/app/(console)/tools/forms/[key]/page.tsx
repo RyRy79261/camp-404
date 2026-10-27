@@ -7,7 +7,13 @@ import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
 import { requireMemberPage } from "@/lib/member-gate";
-import { getReplayableForm, listFormEdits } from "@/lib/forms";
+import {
+  ATTENDANCE_FORM_KEY,
+  getReplayableForm,
+  listFormEdits,
+} from "@/lib/forms";
+import { getPledgeStep } from "@/lib/pledge-step";
+import { PledgeStep } from "@/components/dues/pledge-step";
 import { FormReplay } from "./form-replay";
 import { ChangeLog } from "./change-log";
 
@@ -43,7 +49,13 @@ export default async function FormReplayPage({
     redirect("/tools/forms");
   }
 
-  const edits = await listFormEdits(campUser.id, form.key);
+  const [edits, pledgeStep] = await Promise.all([
+    listFormEdits(campUser.id, form.key),
+    // "Coming this year?" answered Coming: "What can you commit?" under it
+    // (camp fees sprint, mock-up step 3). Saving the answer refreshes the
+    // page, so a change to Coming brings the step in.
+    form.key === ATTENDANCE_FORM_KEY ? getPledgeStep(campUser.id) : null,
+  ]);
   const lastEdited = state.updatedAt ?? state.completedAt;
 
   return (
@@ -82,6 +94,21 @@ export default async function FormReplayPage({
             />
           </CardContent>
         </Card>
+        {pledgeStep && (
+          <section
+            aria-label="Your pledge"
+            className="flex flex-col page-lg:col-span-2 page-lg:col-start-1"
+          >
+            <PledgeStep
+              scale={pledgeStep.scale}
+              burnYear={pledgeStep.burnYear}
+              pledge={pledgeStep.pledge}
+              knownPayBy={pledgeStep.knownPayBy}
+              amountLocked={pledgeStep.amountLocked}
+              submitLabel={pledgeStep.pledge ? "Save my pledge" : "Send"}
+            />
+          </section>
+        )}
 
         <ChangeLog edits={edits} />
       </div>
