@@ -14,8 +14,8 @@ import {
   setRank,
 } from "./_helpers";
 
-// Dues (#240, test-mode, on the store's twin). A captain sets a fee tier (the
-// Finance settings still keep them); a member with a place pledges their own
+// Dues (#240, test-mode, on the store's twin). A captain types the camp's
+// bank details in Finance settings; a member with a place pledges their own
 // amount and a "by when" (camp fees sprint), and owes it; they send in a proof of payment,
 // which stays "being checked" until a Finance lead marks it received, and the
 // balance drops to paid up. The proof opens for its member and the Finance
@@ -43,7 +43,7 @@ async function heading(page: Page, name: string) {
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 }
 
-async function captainAddsTier(page: Page, request: APIRequestContext) {
+async function captainSetsBank(page: Page, request: APIRequestContext) {
   await login(page, {
     id: "dues-cap",
     email: "god@example.com",
@@ -54,12 +54,15 @@ async function captainAddsTier(page: Page, request: APIRequestContext) {
   await setRank(request, "dues-cap", "captain");
   await page.goto("/captains/payments/settings");
   await heading(page, "Fees and dates");
-  await page.getByLabel("Name").fill("Base");
-  await page.getByLabel("Amount (R)").fill("1500");
-  await page.getByRole("button", { name: "Add tier" }).click();
-  await expect(
-    page.getByRole("list", { name: "Fee tiers" }).getByText("Base"),
-  ).toBeVisible();
+  // The fee tiers editor is gone: the amounts are the Join site's scale.
+  await expect(page.getByRole("list", { name: "Fee tiers" })).toHaveCount(0);
+  await page.getByLabel("Bank", { exact: true }).fill("FNB");
+  await page.getByLabel("Branch code").fill("250655");
+  await page.getByRole("button", { name: "Save bank details" }).click();
+  await expect(page.getByText("Bank details saved")).toBeVisible();
+  await page.reload();
+  await heading(page, "Fees and dates");
+  await expect(page.getByLabel("Bank", { exact: true })).toHaveValue("FNB");
 }
 
 async function memberPledges(page: Page) {
@@ -97,7 +100,7 @@ test.describe("dues (test-mode)", () => {
     await seedTeam(request, "dues-fin", "finance", true);
     await approvedMember(page, request, "dues-kit", "Kit Lead");
     await seedTeam(request, "dues-kit", "kitchen", true);
-    await captainAddsTier(page, request);
+    await captainSetsBank(page, request);
 
     // The member pledges the tier; with a place already, it is their fee.
     await memberPledges(page);
@@ -181,7 +184,7 @@ test.describe("dues (test-mode)", () => {
     await seedParticipation(request, "dues-member", "accepted");
     await approvedMember(page, request, "dues-fin", "Fin Lead");
     await seedTeam(request, "dues-fin", "finance", true);
-    await captainAddsTier(page, request);
+    await captainSetsBank(page, request);
     await memberPledges(page);
     const reference = (
       await page

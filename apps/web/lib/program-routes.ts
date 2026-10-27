@@ -539,6 +539,7 @@ export const PROGRAM_DEFINITIONS = {
     routes: [
       "/captains/payments",
       "/captains/payments/members",
+      "/captains/payments/camp-money",
       "/captains/payments/claims",
       "/captains/payments/budgets",
       "/captains/payments/members/[userId]",

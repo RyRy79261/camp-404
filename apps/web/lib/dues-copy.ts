@@ -8,6 +8,8 @@ export const MY_DUES_PATH = "/dues";
 /** The Finance tools: the ledger first. */
 export const PAYMENTS_PATH = "/captains/payments";
 export const PAYMENTS_OWING_PATH = "/captains/payments/members";
+/** The camp's own money: the bank balance, the bills and the forecast. */
+export const PAYMENTS_CAMP_MONEY_PATH = "/captains/payments/camp-money";
 export const PAYMENTS_IMPORT_PATH = "/captains/payments/import";
 export const PAYMENTS_SETTLE_UP_PATH = "/captains/payments/settle-up";
 export const PAYMENTS_SETTINGS_PATH = "/captains/payments/settings";
@@ -36,6 +38,7 @@ export const MONEY_LOCK_MESSAGE =
 export const PAYMENTS_TABS = [
   { href: PAYMENTS_PATH, label: "Payments" },
   { href: PAYMENTS_OWING_PATH, label: "Who owes what" },
+  { href: PAYMENTS_CAMP_MONEY_PATH, label: "Camp money" },
   { href: PAYMENTS_CLAIMS_PATH, label: "Claims" },
   { href: PAYMENTS_BUDGETS_PATH, label: "Budgets" },
   { href: PAYMENTS_IMPORT_PATH, label: "Bank statement" },
