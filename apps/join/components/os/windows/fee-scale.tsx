@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { FeeScaleTrack, feeScaleMax } from "@camp404/os";
 import {
   formatRands,
   formatUsdLabel as usd,
@@ -10,7 +11,9 @@ import {
 import { useJoinData } from "../join-data";
 
 // The camp fee as a floating scale: a subsidy zone, four marked tiers and a
-// slider to see where an amount lands. It is a guide; nothing is sent.
+// slider to see where an amount lands. It is a guide; nothing is sent. The
+// track is @camp404/os's FeeScaleTrack, the same one the console's "What can
+// you commit?" draws.
 export function FeeScale() {
   const id = useId();
   const FEE = useJoinData().content.fee;
@@ -20,13 +23,12 @@ export function FeeScale() {
   const PERFECT = FEE.tiers[FEE.tiers.length - 1]!.rands;
   const ESSENTIAL = FEE.tiers[0]!.rands;
   // Room past the top tier, so its marker is not on the very edge.
-  const SCALE_MAX = Math.round((PERFECT * 1.125) / 100) * 100;
+  const SCALE_MAX = feeScaleMax(PERFECT);
   // Start on "ideal" when a tier has that name, else the middle tier.
   const IDEAL = (
     FEE.tiers.find((t) => t.key === "ideal") ??
     FEE.tiers[Math.floor(FEE.tiers.length / 2)]!
   ).rands;
-  const pct = (rands: number) => `${(rands / SCALE_MAX) * 100}%`;
   const [amount, setAmount] = useState(IDEAL);
   const tier = tierFor(randsToMinor(amount), FEE.tiers);
   const label = tier?.name ?? FEE.subsidy.name;
@@ -65,73 +67,24 @@ export function FeeScale() {
         {note && <span className="basis-full text-sm text-os-fg">{note}</span>}
       </output>
 
-      <div className="relative px-1 pb-14 pt-12">
-        {/* The track: blue at the subsidy end, magenta at Perfect World. */}
-        <div
-          aria-hidden
-          className="relative h-4 border border-os-line bg-gradient-to-r from-os-accent via-os-primary/70 to-os-primary"
-        >
-          <div
-            className="absolute inset-y-0 left-0 bg-[repeating-linear-gradient(135deg,rgb(0_0_0/0.45)_0_4px,transparent_4px_8px)]"
-            style={{ width: pct(ESSENTIAL) }}
-          />
-          <span className="absolute left-1 top-1/2 -translate-y-1/2 font-pixel text-[8px] uppercase text-os-fg">
-            {FEE.subsidy.name}
-          </span>
-          <div
-            className="absolute -top-1 bottom-[-4px] w-0.5 -translate-x-1/2 bg-os-fg shadow-[0_0_8px_var(--color-os-fg)]"
-            style={{ left: pct(amount) }}
-          />
-        </div>
-
-        {FEE.tiers.map((t, i) => {
-          const above = i % 2 === 0;
-          const ideal = t.key === "ideal";
-          return (
-            <div
-              key={t.key}
-              aria-hidden
-              className={`absolute flex -translate-x-1/2 flex-col items-center text-center ${
-                above
-                  ? "bottom-[calc(100%-2.75rem)] flex-col-reverse"
-                  : "top-[4.25rem]"
-              }`}
-              style={{ left: `calc(0.25rem + ${pct(t.rands)})` }}
-            >
-              <span
-                className={`h-3 w-px ${ideal ? "bg-os-primary" : "bg-os-fg/60"}`}
-              />
-              <span
-                className={`whitespace-nowrap font-pixel text-[9px] uppercase ${
-                  ideal ? "text-os-primary" : "text-os-fg"
-                }`}
-              >
-                {ideal && "★ "}
-                {t.name}
-              </span>
-              <span className="hidden whitespace-nowrap font-mono text-[10px] text-os-muted sm:inline">
-                {formatRands(t.rands)} ·{" "}
-                {formatUsdLabel(t.rands).replace("≈ ", "")}
-              </span>
-            </div>
-          );
-        })}
-
-        <label htmlFor={`${id}-range`} className="sr-only">
-          What I could pay, in rands
-        </label>
-        <input
-          id={`${id}-range`}
-          type="range"
-          min={0}
-          max={SCALE_MAX}
-          step={100}
-          value={amount}
-          onChange={(e) => setAmount(Number(e.target.value))}
-          aria-valuetext={`${formatRands(amount)}, ${formatUsdLabel(amount)}, ${label}`}
-          className="os-range absolute inset-x-1 top-12 h-4 cursor-pointer"
-        />
-      </div>
+      <FeeScaleTrack
+        id={`${id}-range`}
+        rands={amount}
+        onRandsChange={setAmount}
+        max={SCALE_MAX}
+        subsidyBelow={ESSENTIAL}
+        subsidyName={FEE.subsidy.name}
+        marks={FEE.tiers.map((t, i) => ({
+          key: t.key,
+          name: t.key === "ideal" ? `★ ${t.name}` : t.name,
+          rands: t.rands,
+          detail: `${formatRands(t.rands)} · ${formatUsdLabel(t.rands).replace("≈ ", "")}`,
+          side: i % 2 === 0 ? "above" : "below",
+          lit: t.key === "ideal",
+        }))}
+        label="What I could pay, in rands"
+        valueText={`${formatRands(amount)}, ${formatUsdLabel(amount)}, ${label}`}
+      />
 
       <ul className="grid grid-cols-2 gap-1 sm:grid-cols-4">
         {FEE.tiers.map((t) => (
