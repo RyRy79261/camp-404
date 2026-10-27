@@ -47,6 +47,7 @@ describe("completeBuilderResponse with role answers", () => {
       dietary: { allergies: "Peanuts", isAnaphylactic: true },
       driver: null,
       participation: null,
+      feeTiming: null,
     });
 
     const [row] = await db
@@ -77,6 +78,7 @@ describe("completeBuilderResponse with role answers", () => {
     await submit(member.id, act.id, {
       dietary: null,
       participation: null,
+      feeTiming: null,
       driver: {
         intendsToDrive: true,
         arrivalAt: new Date("2027-04-26T00:00:00.000Z"),
@@ -108,11 +110,13 @@ describe("completeBuilderResponse with role answers", () => {
     await submit(member.id, act.id, {
       dietary: null,
       participation: null,
+      feeTiming: null,
       driver: { intendsToDrive: true },
     });
     await submit(member.id, act.id, {
       dietary: null,
       participation: null,
+      feeTiming: null,
       driver: { intendsToDrive: false },
     });
 
@@ -135,6 +139,7 @@ describe("completeBuilderResponse with role answers", () => {
     const drive = {
       dietary: null,
       participation: null,
+      feeTiming: null,
       driver: { intendsToDrive: true },
     };
     const stamp = async () => {
@@ -226,7 +231,12 @@ describe("completeBuilderResponse with a Coming this year answer", () => {
       cycle: 2027,
       responses: { coming: intent },
       activationId,
-      mirror: { dietary: null, driver: null, participation: { intent } },
+      mirror: {
+        dietary: null,
+        driver: null,
+        participation: { intent },
+        feeTiming: null,
+      },
     });
   }
 
@@ -337,5 +347,57 @@ describe("completeBuilderResponse with a Coming this year answer", () => {
       .from(schema.campParticipations)
       .where(eq(schema.campParticipations.userId, member.id));
     expect(row).toEqual({ status: "applied", intent: "yes" });
+  });
+});
+
+describe("completeBuilderResponse with a fee timing answer", () => {
+  const h = useTestDb();
+
+  it("writes the pledge's by-when for the send's year, and keeps the amount", async () => {
+    const db = h.db();
+    const member = await makeUser(db);
+    const act = await makeActivation(db, {
+      questionnaireKey: "camp-fees-the-money-oracle",
+    });
+    await db.insert(schema.duesAccounts).values({
+      userId: member.id,
+      cycle: 2027,
+      pledgedAmountCents: 720_000,
+    });
+    const submit = (payBy: "part_by_end_dec" | "all_by_15_jan" | null) =>
+      completeBuilderResponse({
+        userId: member.id,
+        definitionKey: "camp-fees-the-money-oracle",
+        definitionVersion: "1",
+        cycle: 2027,
+        responses: {},
+        activationId: act.id,
+        mirror: {
+          dietary: null,
+          driver: null,
+          participation: null,
+          feeTiming: payBy ? { payBy } : null,
+        },
+      });
+    const account = async () =>
+      (
+        await db
+          .select({
+            payBy: schema.duesAccounts.payBy,
+            amount: schema.duesAccounts.pledgedAmountCents,
+          })
+          .from(schema.duesAccounts)
+          .where(eq(schema.duesAccounts.userId, member.id))
+      )[0];
+    await submit("part_by_end_dec");
+    expect(await account()).toEqual({
+      payBy: "part_by_end_dec",
+      amount: 720_000,
+    });
+    // No answer never clears it.
+    await submit(null);
+    expect((await account())?.payBy).toBe("part_by_end_dec");
+    await submit("all_by_15_jan");
+    expect((await account())?.payBy).toBe("all_by_15_jan");
   });
 });

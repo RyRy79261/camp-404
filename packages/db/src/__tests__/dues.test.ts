@@ -17,11 +17,9 @@ import {
   getMemberDues,
   listDuesAccounts,
   listFeeTiers,
-  NO_TIERS_YET,
   NOT_A_MONEY_KEEPER,
   NOT_YOUR_PAYMENT,
   PLAN_CHANGED,
-  PLEDGE_NOT_BELOW,
   publishSettleUp,
   REFUND_ALREADY_OPEN,
   REFUND_CHANGED,
@@ -32,13 +30,17 @@ import {
   requestRefund,
   saveDuesYear,
   savePledge,
+  setCollectingFees,
   setFee,
   setPaymentPlan,
+  setPledgeTiming,
   SETTLE_UP_CHANGED,
   settleUpCandidates,
   YEAR_CHANGED,
+  COLLECTING_CHANGED,
   MoneyRefused,
 } from "../dues";
+import { withTransaction } from "../index";
 import { decideParticipation } from "../participations";
 import { listPayments, recordPayment, setPaymentStatus } from "../payments";
 import { getCampManagementRoster } from "../roster";
@@ -304,47 +306,164 @@ describe("dues", () => {
     });
   });
 
+  describe("collecting fees", () => {
+    it("switches on and off for the Finance team only, a compare-and-set, audited", async () => {
+      const { captain, financeLead, member } = await people();
+      expect(await getDuesYear(YEAR)).toMatchObject({
+        collectingFees: false,
+        version: 0,
+      });
+      expect(
+        await setCollectingFees({
+          cycle: YEAR,
+          on: true,
+          expectedVersion: 0,
+          actorId: member.id,
+        }),
+      ).toEqual({ ok: false, error: NOT_A_MONEY_KEEPER });
+      expect(
+        await setCollectingFees({
+          cycle: YEAR,
+          on: true,
+          expectedVersion: 0,
+          actorId: financeLead.id,
+        }),
+      ).toEqual({ ok: true, version: 1 });
+      expect(
+        await setCollectingFees({
+          cycle: YEAR,
+          on: false,
+          expectedVersion: 0,
+          actorId: captain.id,
+        }),
+      ).toEqual({ ok: false, error: COLLECTING_CHANGED });
+      expect(await getDuesYear(YEAR)).toMatchObject({
+        collectingFees: true,
+        version: 1,
+      });
+      const set: AuditAction = "dues.collecting_set";
+      const rows = await h
+        .db()
+        .select({ metadata: schema.auditLog.metadata })
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.action, set));
+      expect(rows).toEqual([{ metadata: { cycle: YEAR, on: true } }]);
+    });
+  });
+
   describe("pledges and the fee", () => {
-    it("needs tiers, and a below-the-base pledge below the lowest tier", async () => {
-      const { member, captain } = await people();
+    it("takes any whole-rand amount with a by-when, and a subsidy with R0", async () => {
+      const { member, kitchenLead: other } = await people();
       expect(
         await savePledge({
           userId: member.id,
           cycle: YEAR,
-          pledge: { kind: "below", amountCents: 100 },
-        }),
-      ).toEqual({ ok: false, error: NO_TIERS_YET });
-      await tiers(captain.id);
-      expect(
-        await savePledge({
-          userId: member.id,
-          cycle: YEAR,
-          pledge: { kind: "below", amountCents: 200_000 },
-        }),
-      ).toEqual({ ok: false, error: PLEDGE_NOT_BELOW });
-      expect(
-        await savePledge({
-          userId: member.id,
-          cycle: YEAR,
-          pledge: { kind: "below", amountCents: 120_000 },
+          pledge: {
+            amountCents: 720_000,
+            payBy: "part_by_end_nov",
+            subsidy: false,
+          },
         }),
       ).toEqual({ ok: true, charged: false });
+      const dues = await getMemberDues(member.id, YEAR, {
+        forFinance: false,
+        today: "2026-10-27",
+      });
+      expect(dues).toMatchObject({
+        pledge: { tierId: null, tierLabel: null, amountCents: 720_000 },
+        payBy: "part_by_end_nov",
+        subsidy: false,
+        feeTotalCents: 720_000,
+        feeOwingCents: 720_000,
+        feeNext: {
+          kind: "due",
+          dueOn: "2026-11-30",
+          amountCents: 360_000,
+          first: true,
+          source: "pledge",
+        },
+      });
+      // A subsidy pledge of R0, with no by-when, is fine and owes nothing yet.
+      expect(
+        await savePledge({
+          userId: other.id,
+          cycle: YEAR,
+          pledge: { amountCents: 0, payBy: null, subsidy: true },
+        }),
+      ).toEqual({ ok: true, charged: false });
+      expect(
+        await getMemberDues(other.id, YEAR, { forFinance: false }),
+      ).toMatchObject({
+        pledge: { amountCents: 0 },
+        subsidy: true,
+        feeNext: { kind: "subsidy" },
+      });
+      // The database refuses R0 without the subsidy flag.
+      await expect(
+        h
+          .db()
+          .update(schema.duesAccounts)
+          .set({ subsidy: false })
+          .where(eq(schema.duesAccounts.userId, other.id)),
+      ).rejects.toThrow();
+    });
+
+    it("keeps a pledge made on a fee tier before readable, with its label", async () => {
+      const { member, captain } = await people();
+      const { base } = await tiers(captain.id);
+      await h.db().insert(schema.duesAccounts).values({
+        userId: member.id,
+        cycle: YEAR,
+        pledgedTierId: base,
+        pledgedAmountCents: 200_000,
+      });
+      await archiveFeeTier({ tierId: base, actorId: captain.id });
       const dues = await getMemberDues(member.id, YEAR, { forFinance: false });
-      expect(dues?.pledge).toMatchObject({
-        tierId: null,
-        tierLabel: null,
-        amountCents: 120_000,
+      expect(dues).toMatchObject({
+        pledge: { tierLabel: "Base", amountCents: 200_000 },
+        payBy: null,
+        subsidy: false,
+        feeNext: { kind: "no_date", amountCents: 200_000 },
+      });
+    });
+
+    it("writes a fee_timing answer's by-when without touching the amount", async () => {
+      const { member } = await people();
+      await savePledge({
+        userId: member.id,
+        cycle: YEAR,
+        pledge: {
+          amountCents: 500_000,
+          payBy: "all_by_end_nov",
+          subsidy: false,
+        },
+      });
+      await withTransaction((tx) =>
+        setPledgeTiming(tx, {
+          userId: member.id,
+          cycle: YEAR,
+          payBy: "talk_to_captain",
+        }),
+      );
+      expect(
+        await getMemberDues(member.id, YEAR, { forFinance: false }),
+      ).toMatchObject({
+        pledge: { amountCents: 500_000 },
+        payBy: "talk_to_captain",
       });
     });
 
     it("becomes the fee when a captain accepts the member, once", async () => {
       const { member, captain } = await people();
-      const { supporter } = await tiers(captain.id);
       await place(h.db(), member.id, "applied");
       await savePledge({
         userId: member.id,
         cycle: YEAR,
-        pledge: { kind: "tier", tierId: supporter },
+        pledge: {
+          amountCents: 300_000,
+          payBy: "all_by_end_dec",
+          subsidy: false,
+        },
       });
       expect(
         await decideParticipation({
@@ -358,7 +477,7 @@ describe("dues", () => {
       expect(dues?.charges).toMatchObject([
         {
           kind: "fee",
-          description: "Camp fee: Supporter",
+          description: "Camp fee: pledged amount",
           amountCents: 300_000,
           cancelled: false,
         },
@@ -382,42 +501,68 @@ describe("dues", () => {
       });
       const again = await getMemberDues(member.id, YEAR, { forFinance: true });
       expect(again?.charges.filter((c) => c.kind === "fee")).toHaveLength(1);
-      // And the pledge is locked now the fee is charged.
+      // And the amount is locked now the fee is charged; the by-when is not.
       expect(
         await savePledge({
           userId: member.id,
           cycle: YEAR,
-          pledge: { kind: "below", amountCents: 1 },
+          pledge: { amountCents: 100, payBy: "all_by_end_dec", subsidy: false },
         }),
       ).toEqual({ ok: false, error: FEE_ALREADY_SET });
+      expect(
+        await savePledge({
+          userId: member.id,
+          cycle: YEAR,
+          pledge: {
+            amountCents: 300_000,
+            payBy: "part_by_end_dec",
+            subsidy: false,
+          },
+        }),
+      ).toEqual({ ok: true, charged: false });
+      expect(
+        (await getMemberDues(member.id, YEAR, { forFinance: true }))?.payBy,
+      ).toBe("part_by_end_dec");
     });
 
     it("charges an already accepted member at once when they pledge", async () => {
       const { member, captain } = await people();
-      const { base } = await tiers(captain.id);
       await place(h.db(), member.id, "accepted");
       expect(
         await savePledge({
           userId: member.id,
           cycle: YEAR,
-          pledge: { kind: "tier", tierId: base },
+          pledge: {
+            amountCents: 200_000,
+            payBy: "all_by_end_nov",
+            subsidy: false,
+          },
         }),
       ).toEqual({ ok: true, charged: true });
-      // An archived tier keeps the pledge's label and amount.
-      await archiveFeeTier({ tierId: base, actorId: captain.id });
       const dues = await getMemberDues(member.id, YEAR, { forFinance: false });
-      expect(dues?.pledge?.tierLabel).toBe("Base");
       expect(dues?.balance.chargedCents).toBe(200_000);
+      // A subsidy pledge of R0 by an accepted member charges nothing yet.
+      await place(h.db(), captain.id, "accepted");
+      expect(
+        await savePledge({
+          userId: captain.id,
+          cycle: YEAR,
+          pledge: { amountCents: 0, payBy: null, subsidy: true },
+        }),
+      ).toEqual({ ok: true, charged: false });
     });
 
     it("sets a concession as a compare-and-set, its reason for the Finance team only", async () => {
       const { member, captain, financeLead } = await people();
-      const { base } = await tiers(captain.id);
       await place(h.db(), member.id, "accepted");
       await savePledge({
         userId: member.id,
         cycle: YEAR,
-        pledge: { kind: "tier", tierId: base },
+        pledge: {
+          amountCents: 200_000,
+          payBy: "all_by_end_nov",
+          subsidy: false,
+        },
       });
       const before = await getMemberDues(member.id, YEAR, { forFinance: true });
       const feeId = before!.charges[0]!.id;

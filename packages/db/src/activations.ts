@@ -1,3 +1,4 @@
+import { setPledgeTiming } from "./dues";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction, type PooledDatabase } from "./index";
 import * as schema from "./schema";
@@ -1024,6 +1025,17 @@ async function writeRoleMirror(
       userId: input.userId,
       cycle: input.cycle,
       intent: participation.intent,
+      now,
+    });
+  }
+  const feeTiming = input.mirror?.feeTiming;
+  if (feeTiming) {
+    // The camp fee's "by when" for the send's year (a fee_timing question),
+    // in the same transaction as the answer.
+    await setPledgeTiming(tx, {
+      userId: input.userId,
+      cycle: input.cycle,
+      payBy: feeTiming.payBy,
       now,
     });
   }

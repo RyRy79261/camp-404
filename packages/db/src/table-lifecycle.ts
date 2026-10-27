@@ -251,6 +251,27 @@ export const TABLE_LIFECYCLE = {
       userId: ledger,
     },
   },
+  // The camp's own money (camp fees sprint): not year-scoped, no member data;
+  // only who typed or changed it.
+  campBankDetails: {
+    year: "none",
+    erasure: {
+      updatedByUserId: byWhom,
+    },
+  },
+  campBalances: {
+    year: "none",
+    erasure: {
+      recordedByUserId: byWhom,
+    },
+  },
+  campBills: {
+    year: "none",
+    erasure: {
+      createdByUserId: byWhom,
+      updatedByUserId: byWhom,
+    },
+  },
   paymentRefunds: {
     year: "as-is",
     erasure: {
