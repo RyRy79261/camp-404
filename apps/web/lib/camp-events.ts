@@ -132,6 +132,17 @@ export function campEventBody(
         camp404Kind: row.kind,
       },
     },
+    // A Meet link, asked for until Google has given one (owner, 2026-10-27).
+    ...(row.meet && !row.meetUrl
+      ? {
+          conferenceData: {
+            createRequest: {
+              requestId: `camp404-${row.calendarEventId}`,
+              conferenceSolutionKey: { type: "hangoutsMeet" as const },
+            },
+          },
+        }
+      : {}),
   };
 }
 
@@ -160,11 +171,12 @@ function target(
             row.team ? (labels[row.team] ?? null) : null,
           ),
         },
-    mark: (gone: boolean) =>
+    mark: (gone: boolean, meetUrl?: string | null) =>
       events.markCampEventCalendarSynced({
         id: row.id,
         version: row.version,
         removed: gone,
+        meetUrl,
       }),
     // The row as it stands, synced or not, removed or not: a newer save that
     // another step already put on Google is put again (the mark matches it),
@@ -213,6 +225,8 @@ function fieldsOf(
   input: Pick<
     NewCampEventInput,
     | "team"
+    | "audience"
+    | "people"
     | "title"
     | "allDay"
     | "date"
@@ -225,6 +239,8 @@ function fieldsOf(
 ): CampEventFields {
   return {
     team: input.team,
+    audience: input.audience,
+    people: input.people,
     title: input.title,
     allDay: input.allDay,
     startDate: input.date,
@@ -264,6 +280,7 @@ export async function createCampEvent(
     kind: input.kind,
     agenda: input.agenda,
     newEventId: newCalendarEventId(),
+    meet: input.meet,
   };
   const saved = await events.createCampEvent(args);
   return afterWrite(saved, actorId);

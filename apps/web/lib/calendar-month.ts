@@ -4,7 +4,7 @@ import {
   readTeamEvent,
   type CalendarTeam,
 } from "@camp404/core";
-import { CALENDAR_EVENT_ID } from "@camp404/types";
+import { CALENDAR_EVENT_ID, type CampEventAudience } from "@camp404/types";
 import type { CalendarEvent } from "./google-calendar";
 
 // The Calendar program (owner, 2026-10-10: one Calendar; meetings are a type
@@ -249,6 +249,15 @@ export interface CalendarEntry {
   /** The app's row version, for a change; null for anything else. */
   version: number | null;
   meeting: CalendarMeetingSummary | null;
+  /**
+   * Who it is for (owner, 2026-10-27). An event from Google, or a note, is
+   * its team's, or the camp's.
+   */
+  audience: CampEventAudience;
+  /** The people a `people` event is for, by id; empty for any other. */
+  people: string[];
+  /** The Google Meet link Google made for it, once it has. */
+  meetUrl: string | null;
 }
 
 /** An event the app made, as the merge needs it. */
@@ -265,6 +274,9 @@ export interface AppEventLike {
   place: string | null;
   description: string | null;
   version: number;
+  audience: CampEventAudience;
+  peopleUserIds: string[];
+  meetUrl: string | null;
 }
 
 /** A meeting note, as the merge needs it. */
@@ -366,6 +378,9 @@ export function appEntry(
     source: "app",
     version: row.version,
     meeting: row.kind === "meeting" ? meetingOf(note) : null,
+    audience: row.audience,
+    people: row.peopleUserIds,
+    meetUrl: row.meetUrl,
   };
 }
 
@@ -393,6 +408,9 @@ export function googleEntry(
         : "google",
     version: null,
     meeting: note ? meetingOf(note) : null,
+    audience: read.team ? "team" : "camp",
+    people: [],
+    meetUrl: null,
   };
 }
 
@@ -418,6 +436,9 @@ export function noteEntry(
     source: "note",
     version: null,
     meeting: meetingOf(note),
+    audience: note.team ? "team" : "camp",
+    people: [],
+    meetUrl: null,
   };
 }
 

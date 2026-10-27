@@ -46,6 +46,7 @@ import {
   setLeadPlacesAction,
   takeTeamRoleAction,
 } from "@/app/(console)/help-wanted/actions";
+import { postTeamLeadAction } from "@/app/(console)/captains/camp-management/actions";
 import { withArticle } from "@/lib/help-wanted-copy";
 import type {
   HelpWantedRoleView,
@@ -819,11 +820,29 @@ function Picker({
         setError(result.error);
         return;
       }
-      toast.success(
-        row.isLead
-          ? `${chosen.name} is a lead of ${team.label} now.`
-          : `${chosen.name} is ${withArticle(row.name)} in ${team.label} now.`,
-      );
+      const said = row.isLead
+        ? `${chosen.name} is a lead of ${team.label} now.`
+        : `${chosen.name} is ${withArticle(row.name)} in ${team.label} now.`;
+      if (result.data?.offerLeadPost) {
+        // Nothing goes to Telegram unless the captain presses it.
+        const userId = chosen.userId;
+        toast.success(said, {
+          duration: 15_000,
+          action: {
+            label: "Tell the camp on Telegram",
+            onClick: () => {
+              void postTeamLeadAction(userId, team.key).then((res) => {
+                if (!res.ok) toast.error(res.error);
+                else if (res.places === 0)
+                  toast.info("Ol' Jeb has already posted this.");
+                else toast.success("Ol' Jeb will post it in the camp's chats.");
+              });
+            },
+          },
+        });
+      } else {
+        toast.success(said);
+      }
       onClose();
       router.refresh();
     });

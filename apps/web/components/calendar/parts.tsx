@@ -108,7 +108,20 @@ export function MeetingBadge() {
 }
 
 /** The team's badge: its colour as a square, and its name. */
-export function TeamBadge({ entry }: { entry: Pick<CalendarEntry, "team"> }) {
+/** Who an event is for, in the badge's words. */
+export function audienceLabel(
+  entry: Pick<CalendarEntry, "team"> & Partial<Pick<CalendarEntry, "audience">>,
+): string {
+  if (entry.audience === "team_leads") return "Team leads";
+  if (entry.audience === "people") return "Picked people";
+  return entry.team?.label ?? "Whole camp";
+}
+
+export function TeamBadge({
+  entry,
+}: {
+  entry: Pick<CalendarEntry, "team"> & Partial<Pick<CalendarEntry, "audience">>;
+}) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap border border-border px-2 py-0.5 text-[11px] font-semibold leading-4 text-foreground">
       <i
@@ -116,7 +129,7 @@ export function TeamBadge({ entry }: { entry: Pick<CalendarEntry, "team"> }) {
         className="block h-2 w-2 shrink-0"
         style={{ background: entryColour(entry) }}
       />
-      {entry.team?.label ?? "Whole camp"}
+      {audienceLabel(entry)}
     </span>
   );
 }

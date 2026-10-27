@@ -43,6 +43,9 @@ function app(overrides: Partial<AppEventLike> = {}): AppEventLike {
     place: "The workshop",
     description: "Up and down once, timed.",
     version: 1,
+    audience: "camp",
+    peopleUserIds: [],
+    meetUrl: null,
     ...overrides,
   };
 }
@@ -309,6 +312,9 @@ function entry(overrides: Partial<CalendarEntry>): CalendarEntry {
     source: "app",
     version: 1,
     meeting: null,
+    audience: "camp",
+    people: [],
+    meetUrl: null,
     ...overrides,
   };
 }

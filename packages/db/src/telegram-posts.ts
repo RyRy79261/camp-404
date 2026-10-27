@@ -7,6 +7,8 @@ import {
   questionnaireReminderNotification,
   type TagCandidate,
   renderTelegramPost,
+  TELEGRAM_LEAD_TITLE,
+  TELEGRAM_OPEN_BUTTON,
   telegramMention,
   type TelegramPost,
   type TelegramPostKind,
@@ -269,7 +271,7 @@ export async function moveTelegramChat(
 // --- Queueing -------------------------------------------------------------
 
 /** The posts Camp settings' ticks switch on and off (a hand post is never off). */
-type TickedPostKind = Exclude<TelegramPostKind, "questionnaire">;
+type TickedPostKind = Exclude<TelegramPostKind, "questionnaire" | "lead">;
 
 const SETTING: Record<TickedPostKind, keyof TelegramPostSettings> = {
   announcement: "announcements",
@@ -522,6 +524,113 @@ async function questionnairePostTags(
   return [...new Set(tags)].sort();
 }
 
+// --- A new team lead ----------------------------------------------------------
+
+export const LEAD_POST_CAPTAINS_ONLY =
+  "Only a captain can tell the camp about a new lead.";
+export const LEAD_POST_NOT_A_LEAD =
+  "They don't lead that team this year any more. Reload the page.";
+export const LEAD_POST_NO_PLACE =
+  "Ol' Jeb has no camp chat to post in yet. Send /notifyhere in one first.";
+
+export type LeadPostResult =
+  | { ok: true; places: number }
+  | { ok: false; error: string };
+
+/**
+ * A captain's "Tell the camp on Telegram" after making someone a lead (owner,
+ * 2026-10-27: an option offered after the switch, never automatic). Checked
+ * under lock: the captain, and that the member leads `team` this year. One
+ * post per place, deduped per lead, team and year, so a second press posts
+ * nothing. The lead is stored as an id; the drain reads their name when it
+ * sends. Audited.
+ */
+export async function postTeamLeadInTelegram(input: {
+  actorId: string;
+  userId: string;
+  team: string;
+  teamLabel: string;
+}): Promise<LeadPostResult> {
+  return withTransaction(async (tx) => {
+    if (!CAPTAIN_ONLY.allows(await lockActor(tx, input.actorId))) {
+      return { ok: false, error: LEAD_POST_CAPTAINS_ONLY };
+    }
+    const cycle = await currentCycleNumber(tx);
+    const [membership] = await tx
+      .select({ isLead: schema.teamMemberships.isLead })
+      .from(schema.teamMemberships)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.teamMemberships.userId),
+      )
+      .where(
+        and(
+          eq(schema.teamMemberships.userId, input.userId),
+          sql`${schema.teamMemberships.team} = ${input.team}`,
+          eq(schema.teamMemberships.cycle, cycle),
+          eq(schema.users.sanitised, false),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!membership?.isLead) return { ok: false, error: LEAD_POST_NOT_A_LEAD };
+    const places = await listTelegramPlaces(tx);
+    if (places.length === 0) return { ok: false, error: LEAD_POST_NO_PLACE };
+    const rows = await tx
+      .insert(posts)
+      .values(
+        places.map((place) => ({
+          chatId: place.chatId,
+          threadId: place.threadId,
+          kind: "lead" as const,
+          title: TELEGRAM_LEAD_TITLE,
+          body: input.teamLabel,
+          refId: null,
+          tagUserIds: [input.userId],
+          buttonText: TELEGRAM_OPEN_BUTTON,
+          buttonPath: "/help-wanted",
+          dedupeKey: `lead:${cycle}:${input.team}:${input.userId}:${place.chatId}`,
+        })),
+      )
+      .onConflictDoNothing()
+      .returning({ id: posts.id });
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "telegram.lead_posted",
+      target: input.userId,
+      metadata: { team: input.team, cycle, places: rows.length },
+    });
+    return { ok: true, places: rows.length };
+  });
+}
+
+/** A lead post's person, read as it is sent; null when they are gone. */
+async function leadForPost(
+  userId: string | undefined,
+  db: DbOrTx,
+): Promise<{ name: string; mention: string | null } | null> {
+  if (!userId) return null;
+  const [row] = await db
+    .select({
+      name: schema.users.displayName,
+      handle: schema.users.telegramHandle,
+    })
+    .from(schema.users)
+    .where(
+      and(
+        eq(schema.users.id, userId),
+        eq(schema.users.sanitised, false),
+        eq(schema.users.isSystem, false),
+      ),
+    )
+    .limit(1);
+  if (!row) return null;
+  return {
+    name: row.name?.trim() || "Camp member",
+    mention: telegramMention(row.handle),
+  };
+}
+
 // --- The drain ------------------------------------------------------------
 
 export type TelegramPostSend = (
@@ -654,8 +763,19 @@ export async function drainTelegramPosts(
       }
       tags = picked;
     }
+    let lead: { name: string; mention: string | null } | undefined;
+    if (row.kind === "lead") {
+      // The lead, read now: an erased or departed member is not posted.
+      const found = await leadForPost(row.tagUserIds?.[0], db);
+      if (!found) {
+        await finish(row.id, "skipped");
+        result.skipped += 1;
+        continue;
+      }
+      lead = found;
+    }
     const post = renderTelegramPost(
-      { ...row, tags, untagged },
+      { ...row, tags, untagged, lead },
       options.siteUrl,
     );
     const outcome: TelegramSendResult = await send(

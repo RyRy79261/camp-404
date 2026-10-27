@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import {
   campDayStart,
   campEventChangeRefusal,
@@ -46,6 +46,8 @@ import * as schema from "./schema";
 // `tx`, never createHttpDb().
 
 type Team = (typeof schema.teamEnum.enumValues)[number];
+export type CampEventAudience =
+  (typeof schema.campEventAudienceEnum.enumValues)[number];
 
 export type CampEventWriteResult<T = object> =
   | ({ ok: true } & T)
@@ -63,6 +65,12 @@ export interface CampEventRow {
   cycle: number;
   kind: CampEventKind;
   team: Team | null;
+  /** Who it is for: the camp, `team`, the team leads, or `peopleUserIds`. */
+  audience: CampEventAudience;
+  peopleUserIds: string[];
+  /** Whether Google is asked for a Meet link, and the one it gave. */
+  meet: boolean;
+  meetUrl: string | null;
   title: string;
   allDay: boolean;
   startDate: string;
@@ -85,6 +93,10 @@ const COLUMNS = {
   cycle: e.cycle,
   kind: e.kind,
   team: e.team,
+  audience: e.audience,
+  peopleUserIds: e.peopleUserIds,
+  meet: e.meet,
+  meetUrl: e.meetUrl,
   title: e.title,
   allDay: e.allDay,
   startDate: e.startDate,
@@ -201,6 +213,10 @@ export async function listCampEventsToSync(): Promise<CampEventRow[]> {
 
 export interface CampEventFields {
   team: Team | null;
+  /** Absent: the team's, or the camp's when there is no team. */
+  audience?: CampEventAudience;
+  /** The people a `people` event is for; ignored for any other. */
+  people?: readonly string[];
   title: string;
   allDay: boolean;
   startDate: string;
@@ -232,13 +248,61 @@ async function assertManager(
   if (refusal) refuse(refusal);
 }
 
-function auditMetadata(row: CampEventFields & { kind: CampEventKind }) {
+export const PICK_SOMEONE = "Pick at least one person.";
+
+/**
+ * Who an event is for, as stored: a team only on a `team` event, and the
+ * people only on a `people` one, kept to members who are still here and
+ * approved (read inside the write). Refused when a `people` event is left
+ * with nobody.
+ */
+async function storedAudience(
+  tx: Tx,
+  fields: CampEventFields,
+): Promise<{
+  team: Team | null;
+  audience: CampEventAudience;
+  peopleUserIds: string[];
+}> {
+  const audience = fields.audience ?? (fields.team ? "team" : "camp");
+  if (audience === "team") {
+    if (!fields.team) refuse("Pick a team.");
+    return { team: fields.team, audience, peopleUserIds: [] };
+  }
+  if (audience !== "people") {
+    return { team: null, audience, peopleUserIds: [] };
+  }
+  const asked = [...new Set(fields.people ?? [])].filter((id) => UUID.test(id));
+  const found =
+    asked.length === 0
+      ? []
+      : await tx
+          .select({ id: schema.users.id })
+          .from(schema.users)
+          .where(
+            and(
+              inArray(schema.users.id, asked),
+              eq(schema.users.sanitised, false),
+              eq(schema.users.isSystem, false),
+              eq(schema.users.approvalStatus, "approved"),
+            ),
+          );
+  const here = new Set(found.map((r) => r.id));
+  const peopleUserIds = asked.filter((id) => here.has(id));
+  if (peopleUserIds.length === 0) refuse(PICK_SOMEONE);
+  return { team: null, audience, peopleUserIds };
+}
+
+function auditMetadata(
+  row: CampEventFields & { kind: CampEventKind; audience: CampEventAudience },
+) {
   return {
     title: row.title,
     team: row.team,
     kind: row.kind,
     date: row.startDate,
     allDay: row.allDay,
+    audience: row.audience,
   };
 }
 
@@ -253,20 +317,24 @@ export async function createCampEvent(
     /** The agenda: when it is not empty, the event is a meeting. */
     agenda: string;
     newEventId: string;
+    /** Ask Google for a Meet link when it goes on the calendar. */
+    meet?: boolean;
   },
 ): Promise<CampEventWriteResult<{ row: CampEventRow; noteId: string | null }>> {
   // An event with an agenda is a meeting (owner, 2026-10-11: a meeting
   // starts by adding an event with its agenda); one with none stays plain.
   const kind = campEventKindFor(input.kind, input.agenda);
   return write(async (tx) => {
-    await assertManager(tx, input.actorId, input.team);
+    const who = await storedAudience(tx, input);
+    await assertManager(tx, input.actorId, who.team);
     const cycle = await currentCycleNumber(tx);
     const [row] = await tx
       .insert(e)
       .values({
         cycle,
         kind,
-        team: input.team,
+        ...who,
+        meet: input.meet ?? false,
         title: input.title,
         ...storedCampEventWhen(input),
         place: input.place,
@@ -282,7 +350,7 @@ export async function createCampEvent(
         .insert(schema.meetingNotes)
         .values({
           cycle,
-          team: input.team,
+          team: who.team,
           title: input.title,
           heldAt: campEventStart(row!),
           calendarEventId: input.newEventId,
@@ -293,7 +361,10 @@ export async function createCampEvent(
         })
         .returning({ id: schema.meetingNotes.id });
       noteId = note!.id;
-      // Ol' Jeb tells the camp's chats about a new meeting.
+    }
+    // Ol' Jeb tells the camp's chats about a new meeting, but not one only
+    // for people picked by name.
+    if (kind === "meeting" && who.audience !== "people") {
       const [settings] = await tx
         .select({ config: schema.campSettings.config })
         .from(schema.campSettings)
@@ -316,7 +387,7 @@ export async function createCampEvent(
       actorId: input.actorId,
       action: "calendar.event_created",
       target: `calendar_event:${input.newEventId}`,
-      metadata: auditMetadata({ ...input, kind }),
+      metadata: auditMetadata({ ...input, ...who, kind }),
     });
     return { row: row!, noteId };
   });
@@ -365,17 +436,18 @@ export async function editCampEvent(
 ): Promise<CampEventWriteResult<{ row: CampEventRow }>> {
   return write(async (tx) => {
     const before = await lockEvent(tx, input.calendarEventId);
+    const who = await storedAudience(tx, input);
     const refusal = campEventChangeRefusal(
       await lockReach(tx, input.actorId),
       before.team,
-      input.team,
+      who.team,
     );
     if (refusal) refuse(refusal);
     if (before.version !== input.expectedVersion) refuse(EVENT_CHANGED);
     const [row] = await tx
       .update(e)
       .set({
-        team: input.team,
+        ...who,
         title: input.title,
         ...storedCampEventWhen(input),
         place: input.place,
@@ -405,6 +477,9 @@ export async function editCampEvent(
       metadata: {
         ...auditMetadata(row),
         ...(before.team !== row.team ? { fromTeam: before.team } : {}),
+        ...(before.audience !== row.audience
+          ? { fromAudience: before.audience }
+          : {}),
       },
     });
     return { row };
@@ -497,11 +572,13 @@ export async function linkUnlinkedMeetingNotes(): Promise<number> {
                   n.updated_by_user_id, p.event_id, p.local_at
       )
       insert into camp_events (
-        cycle, kind, team, title, all_day, start_date, end_date,
+        cycle, kind, team, audience, title, all_day, start_date, end_date,
         start_time, end_time, calendar_event_id, calendar_synced_version,
         version, created_by_user_id, updated_by_user_id
       )
-      select cycle, 'meeting', team, title, false,
+      select cycle, 'meeting', team,
+             (case when team is null then 'camp' else 'team' end)::camp_event_audience,
+             title, false,
              local_at::date, local_at::date,
              to_char(local_at, 'HH24:MI'),
              to_char(least(local_at + interval '1 hour',
@@ -524,6 +601,8 @@ export async function markCampEventCalendarSynced(input: {
   id: string;
   version: number;
   removed: boolean;
+  /** The Meet link Google gave with this put, kept once it has one. */
+  meetUrl?: string | null;
 }): Promise<boolean> {
   const db = createHttpDb();
   if (input.removed) {
@@ -541,7 +620,10 @@ export async function markCampEventCalendarSynced(input: {
   }
   const rows = await db
     .update(e)
-    .set({ calendarSyncedVersion: input.version })
+    .set({
+      calendarSyncedVersion: input.version,
+      ...(input.meetUrl ? { meetUrl: input.meetUrl } : {}),
+    })
     .where(and(eq(e.id, input.id), eq(e.version, input.version)))
     .returning({ id: e.id });
   return rows.length > 0;

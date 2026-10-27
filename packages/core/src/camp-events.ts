@@ -64,8 +64,10 @@ export function canCreateCampEvents(
 
 export const NOT_AN_EVENT_MAKER =
   "Only captains and team leads can add events to the calendar.";
+// An event for the team leads or for people picked by name has no team, so
+// it is a captain's like a whole-camp one (owner, 2026-10-27).
 export const WHOLE_CAMP_EVENTS_ARE_CAPTAINS =
-  "Whole camp events are for captains. Pick a team you lead.";
+  "Events for the whole camp, the team leads or picked people are for captains. Pick a team you lead.";
 export const NOT_YOUR_EVENT_TEAM =
   "You can add and change events only for a team you lead.";
 

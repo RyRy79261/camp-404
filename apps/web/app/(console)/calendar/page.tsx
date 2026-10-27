@@ -1,3 +1,4 @@
+import { listAssignableMembers } from "@/lib/tasks";
 import { Suspense } from "react";
 import {
   campDayKey,
@@ -103,11 +104,13 @@ async function CalendarBody({
   canCreate: boolean;
   searchParams: SearchParams;
 }) {
-  const [config, memberships, raw] = await Promise.all([
+  const [config, memberships, raw, members] = await Promise.all([
     getTeamsConfig(),
     getMyTeams(userId),
     searchParams,
+    listAssignableMembers(),
   ]);
+  const memberName = new Map(members.map((m) => [m.id, m.displayName]));
   const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
   const today = campDayKey(new Date());
   let state: CalendarState = parseCalendarState(raw, today, teams);
@@ -136,6 +139,12 @@ async function CalendarBody({
           canWorkInTeam(rank, memberTeams, found.entry.team?.key ?? null),
         // Each action item's task is filed under a team, said by name.
         teamLabels: Object.fromEntries(teams.map((t) => [t.key, t.label])),
+        // Approved members only: someone erased or no longer approved drops
+        // out of the list.
+        peopleNames: found.entry.people.flatMap((id) => {
+          const name = memberName.get(id);
+          return name ? [name] : [];
+        }),
       }
     : null;
 
@@ -170,7 +179,15 @@ async function CalendarBody({
       teamOptions={teamOptions}
       form={
         canCreate
-          ? { teams: formTeams, canPickWholeCamp: rank === "captain" }
+          ? {
+              teams: formTeams,
+              canPickWholeCamp: rank === "captain",
+              // Only a captain makes an event for picked people.
+              members:
+                rank === "captain"
+                  ? members.map((m) => ({ value: m.id, label: m.displayName }))
+                  : [],
+            }
           : null
       }
     />

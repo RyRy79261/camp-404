@@ -9,7 +9,11 @@ import {
   addTelegramPlace,
   drainTelegramPosts,
   getTelegramPostSettings,
+  LEAD_POST_CAPTAINS_ONLY,
+  LEAD_POST_NO_PLACE,
+  LEAD_POST_NOT_A_LEAD,
   listTelegramPlaces,
+  postTeamLeadInTelegram,
   queueTelegramPosts,
   reminderTags,
   removeTelegramPlace,
@@ -700,5 +704,143 @@ describe("drainTelegramPosts", () => {
     expect(send).toHaveBeenCalledOnce();
     expect(await statusOf(db, first)).toBe("queued");
     expect(await statusOf(db, second)).toBe("queued");
+  });
+});
+
+describe("telling the camp about a new lead", () => {
+  const h = useTestDb();
+
+  const press = (actorId: string, userId: string) =>
+    postTeamLeadInTelegram({
+      actorId,
+      userId,
+      team: "kitchen",
+      teamLabel: "Kitchen",
+    });
+
+  it("queues one post per place for a captain, once, audited", async () => {
+    const db = h.db();
+    const captain = await connectedCaptain(db, "950");
+    await addPlace("950", "-100500");
+    await addPlace("950", "-100600", null, "Camp 404 Chat");
+    const lead = await makeUser(db, { displayName: "Moda" });
+    await makeMembership(db, {
+      userId: lead.id,
+      team: "kitchen",
+      isLead: true,
+    });
+
+    expect(await press(captain.id, lead.id)).toEqual({ ok: true, places: 2 });
+    expect(await press(captain.id, lead.id)).toEqual({ ok: true, places: 0 });
+    const rows = await queuedPosts(db);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      kind: "lead",
+      body: "Kitchen",
+      tagUserIds: [lead.id],
+      buttonPath: "/help-wanted",
+    });
+    // The name is read when it is sent, never stored.
+    expect(JSON.stringify(rows)).not.toContain("Moda");
+    const audit = await audits(db, "telegram.lead_posted");
+    expect(audit).toHaveLength(2);
+    expect(audit[0]!.metadata).toMatchObject({ team: "kitchen", places: 2 });
+  });
+
+  it("refuses a non-captain, someone who is not the lead, and no place", async () => {
+    const db = h.db();
+    const captain = await connectedCaptain(db, "951");
+    const member = await makeUser(db);
+    const lead = await makeUser(db);
+    const notLead = await makeUser(db);
+    await makeMembership(db, {
+      userId: lead.id,
+      team: "kitchen",
+      isLead: true,
+    });
+    await makeMembership(db, { userId: notLead.id, team: "kitchen" });
+
+    expect(await press(captain.id, lead.id)).toEqual({
+      ok: false,
+      error: LEAD_POST_NO_PLACE,
+    });
+    await addPlace("951");
+    expect(await press(member.id, lead.id)).toEqual({
+      ok: false,
+      error: LEAD_POST_CAPTAINS_ONLY,
+    });
+    expect(await press(captain.id, notLead.id)).toEqual({
+      ok: false,
+      error: LEAD_POST_NOT_A_LEAD,
+    });
+    expect(await queuedPosts(db)).toHaveLength(0);
+  });
+
+  it("names the lead when it sends, and skips one erased since", async () => {
+    const db = h.db();
+    const captain = await connectedCaptain(db, "952");
+    await addPlace("952");
+    const lead = await makeUser(db, {
+      displayName: "Moda",
+      telegramHandle: "moda_404",
+    });
+    const gone = await makeUser(db, { displayName: "Lost" });
+    await makeMembership(db, {
+      userId: lead.id,
+      team: "kitchen",
+      isLead: true,
+    });
+    await makeMembership(db, {
+      userId: gone.id,
+      team: "kitchen",
+      isLead: true,
+    });
+    await press(captain.id, lead.id);
+    await press(captain.id, gone.id);
+    await db
+      .update(schema.users)
+      .set({ sanitised: true })
+      .where(eq(schema.users.id, gone.id));
+
+    const send = vi.fn<TelegramPostSend>(async () => ({ ok: true }));
+    const result = await drainTelegramPosts(send, { siteUrl: SITE });
+    expect(result).toMatchObject({ sent: 1, skipped: 1 });
+    expect(send).toHaveBeenCalledTimes(1);
+    const post = send.mock.calls[0]![2];
+    expect(post.text).toContain("Moda (@moda_404) is now a Kitchen lead.");
+    expect(post.button).toEqual({
+      text: "Open in Camp 404",
+      url: `${SITE}/help-wanted`,
+    });
+  });
+});
+
+describe("a meeting for picked people", () => {
+  const h = useTestDb();
+
+  it("is not posted in the camp's chats", async () => {
+    const db = h.db();
+    const captain = await connectedCaptain(db, "960");
+    await addPlace("960");
+    const someone = await makeUser(db);
+    const saved = await createCampEvent({
+      actorId: captain.id,
+      kind: "meeting",
+      agenda: "1. Budget",
+      newEventId: "evtpeople000000000000000",
+      title: "Budget chat",
+      team: null,
+      audience: "people",
+      people: [someone.id],
+      allDay: false,
+      startDate: "2026-11-02",
+      endDate: "2026-11-02",
+      startTime: "18:00",
+      endTime: "19:00",
+      place: null,
+      description: null,
+    });
+    expect(saved.ok).toBe(true);
+    expect(await queuedPosts(db)).toHaveLength(0);
   });
 });

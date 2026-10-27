@@ -180,6 +180,10 @@ import {
   type TelegramPlace,
   type TelegramPostSettings,
   type TelegramWriteResult,
+  LEAD_POST_CAPTAINS_ONLY,
+  LEAD_POST_NO_PLACE,
+  LEAD_POST_NOT_A_LEAD,
+  type LeadPostResult,
 } from "@camp404/db/telegram-posts";
 import type { TelegramNotices } from "@camp404/core";
 import type { AuditEvent } from "@camp404/db/audit";
@@ -909,6 +913,8 @@ interface TestStoreState {
   telegram?: Map<string, TestTelegram>;
   /** The chats Ol' Jeb posts in, and Camp settings' three ticks. */
   telegramPlaces?: TestTelegramPlace[];
+  /** Lead posts already queued: cycle:team:user. */
+  leadPosts?: string[];
   telegramPosts?: TelegramPostSettings;
   /** `telegram_link_codes`, by the code itself (the store keeps no hash). */
   telegramCodes?: Map<
@@ -4535,7 +4541,7 @@ export const testStore = {
     id: string;
     body: CalendarEventBody;
     actorId: string;
-  }): void {
+  }): { meetUrl: string | null } {
     const { body } = input;
     const allDay = "date" in body.start;
     const start = "date" in body.start ? body.start.date : body.start.dateTime;
@@ -4561,6 +4567,12 @@ export const testStore = {
     const at = calendarEvents.findIndex((e) => e.id === input.id);
     if (at === -1) calendarEvents.push(event);
     else calendarEvents[at] = event;
+    // A Meet request gets a stand-in link, as Google gives one.
+    return {
+      meetUrl: body.conferenceData
+        ? `https://meet.google.com/e2e-${input.id.slice(0, 10)}`
+        : null,
+    };
   },
 
   /** Twin of deleteCalendarEvent: gone, or never there. */
@@ -6969,6 +6981,7 @@ export const testStore = {
     telegramState.clear();
     telegramCodes.clear();
     telegramPlaces.length = 0;
+    S.leadPosts = [];
     S.telegramPosts = { ...DEFAULT_TELEGRAM_POST_SETTINGS };
     resetDuesStore();
     resetRentalStore();
@@ -7327,6 +7340,36 @@ export const testStore = {
     });
   },
   // --- Ol' Jeb's posts (the twin of @camp404/db/telegram-posts) -----------
+
+  /** The store sends nothing: it checks as the database does and counts. */
+  postTeamLeadInTelegram(input: {
+    actorId: string;
+    userId: string;
+    team: string;
+    teamLabel: string;
+  }): LeadPostResult {
+    if (!CAPTAIN_ONLY.allows(testStore.actorInStore(input.actorId))) {
+      return { ok: false, error: LEAD_POST_CAPTAINS_ONLY };
+    }
+    const cycle = currentCycleNumber();
+    const lead = teamMemberships.find(
+      (m) =>
+        m.userId === input.userId &&
+        m.team === input.team &&
+        m.cycle === cycle &&
+        m.isLead,
+    );
+    if (!lead || findUserById(input.userId)?.sanitised) {
+      return { ok: false, error: LEAD_POST_NOT_A_LEAD };
+    }
+    const places = testStore.listTelegramPlaces();
+    if (places.length === 0) return { ok: false, error: LEAD_POST_NO_PLACE };
+    const key = `${cycle}:${input.team}:${input.userId}`;
+    S.leadPosts ??= [];
+    if (S.leadPosts.includes(key)) return { ok: true, places: 0 };
+    S.leadPosts.push(key);
+    return { ok: true, places: places.length };
+  },
 
   listTelegramPlaces(): TelegramPlace[] {
     return telegramPlaces

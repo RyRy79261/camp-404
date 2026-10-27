@@ -31,6 +31,7 @@ import {
   INVENTORY_LOCATIONS,
   LOAD_CATEGORIES,
   LOGISTICS_PHASES,
+  CAMP_EVENT_AUDIENCE_VALUES,
   CAMP_EVENT_KIND_VALUES,
   ATTENDANCE_ANSWERS,
   SHIFT_SLOT_STATUSES,
@@ -450,6 +451,9 @@ export const telegramPostKindEnum = pgEnum("telegram_post_kind", [
   // A questionnaire a captain or its author posts by hand ("Post in
   // Telegram"), tagging the members they picked (`tag_user_ids`).
   "questionnaire",
+  // A captain's "Tell the camp on Telegram" after making someone a lead: the
+  // lead is `tag_user_ids[0]`, read when it is sent; the body is the team.
+  "lead",
 ]);
 
 // --- Sign-in identity (Better Auth) --------------------------------------
@@ -3420,6 +3424,13 @@ export const campEventKindEnum = pgEnum(
   CAMP_EVENT_KIND_VALUES,
 );
 
+// Who an event is for (owner, 2026-10-27): the camp, one team (`team` set),
+// the team leads, or people picked by name (`people_user_ids`).
+export const campEventAudienceEnum = pgEnum(
+  "camp_event_audience",
+  CAMP_EVENT_AUDIENCE_VALUES,
+);
+
 export const campEvents = pgTable(
   "camp_events",
   {
@@ -3428,6 +3439,19 @@ export const campEvents = pgTable(
     kind: campEventKindEnum("kind").notNull(),
     // Null: a whole-camp event.
     team: teamEnum("team"),
+    // Who it is for. `team` only with a team; the rest have none. Every
+    // member still sees every event; this says whose it is.
+    audience: campEventAudienceEnum("audience").notNull().default("camp"),
+    // The people a `people` event is for, as ids (like tag_user_ids): a
+    // reader drops anyone erased since.
+    peopleUserIds: uuid("people_user_ids")
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    // Ask Google for a Meet link when the event goes on the calendar
+    // (owner, 2026-10-27), and the link Google gave, once it did.
+    meet: boolean("meet").notNull().default(false),
+    meetUrl: text("meet_url"),
     title: text("title").notNull(),
     allDay: boolean("all_day").notNull(),
     // Camp days; the end is the last day, counted. A timed event is one day.

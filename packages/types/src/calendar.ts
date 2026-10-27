@@ -57,6 +57,24 @@ export const CalendarEventId = z
 export const CAMP_EVENT_KIND_VALUES = ["event", "meeting"] as const;
 export const CampEventKindInput = z.enum(CAMP_EVENT_KIND_VALUES);
 
+/**
+ * Who an event is for (owner, 2026-10-27: "I should be able to make events
+ * for the team leads or specific members"): the whole camp, one team, the
+ * team leads, or people picked by name. Every member still sees every event
+ * (the camp's Google Calendar is shared); this says whose it is.
+ */
+export const CAMP_EVENT_AUDIENCE_VALUES = [
+  "camp",
+  "team",
+  "team_leads",
+  "people",
+] as const;
+export const CampEventAudienceInput = z.enum(CAMP_EVENT_AUDIENCE_VALUES);
+export type CampEventAudience = z.infer<typeof CampEventAudienceInput>;
+
+/** How many people one event may be for by name: the whole camp, roughly. */
+export const CAMP_EVENT_MAX_PEOPLE = 100;
+
 /** How long an all-day event may run: two weeks is a long build. */
 export const CAMP_EVENT_MAX_DAYS = 31;
 
@@ -79,6 +97,15 @@ const eventFields = {
   ),
   place: optionalText(200, "Keep the place under 200 characters."),
   team: Team.nullable(),
+  /** Who it is for; absent means the team's, or the camp's with no team. */
+  audience: CampEventAudienceInput.optional(),
+  /** The people it is for, when the audience is `people`. */
+  people: z
+    .array(z.string().uuid())
+    .max(CAMP_EVENT_MAX_PEOPLE, `Pick at most ${CAMP_EVENT_MAX_PEOPLE} people.`)
+    .optional(),
+  /** Ask Google for a Meet link (owner, 2026-10-27). */
+  meet: z.boolean().optional(),
   date: day("Pick a date for the event."),
   /** The last day of an all-day event, counted; empty for one day. */
   endDate: z
@@ -94,6 +121,9 @@ const eventFields = {
 };
 
 type EventFields = {
+  team: string | null;
+  audience?: CampEventAudience;
+  people?: string[];
   date: string;
   endDate: string | null;
   allDay: boolean;
@@ -101,7 +131,30 @@ type EventFields = {
   end?: string;
 };
 
+/** The audience a form asked for, with the old forms' default. */
+export function campEventAudienceOf(value: {
+  team: string | null;
+  audience?: CampEventAudience;
+}): CampEventAudience {
+  return value.audience ?? (value.team ? "team" : "camp");
+}
+
+function checkAudience(value: EventFields, ctx: z.RefinementCtx): void {
+  const audience = campEventAudienceOf(value);
+  if (audience === "team" && !value.team) {
+    ctx.addIssue({ code: "custom", path: ["team"], message: "Pick a team." });
+  }
+  if (audience === "people" && (value.people ?? []).length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["people"],
+      message: "Pick at least one person.",
+    });
+  }
+}
+
 function checkWhen(value: EventFields, ctx: z.RefinementCtx): void {
+  checkAudience(value, ctx);
   if (value.allDay) {
     if (value.endDate && value.endDate < value.date) {
       ctx.addIssue({

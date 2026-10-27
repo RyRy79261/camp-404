@@ -175,6 +175,7 @@ export const AUDIT_ACTION_LABELS = {
   "telegram.chat_removed": "Stopped Ol' Jeb posting in a Telegram chat",
   "telegram.posts_set": "Changed what Ol' Jeb posts in the camp's chats",
   "telegram.questionnaire_posted": "Posted a questionnaire in Telegram",
+  "telegram.lead_posted": "Told the camp's Telegram chats about a new lead",
   "ticket.pass_changed": "Changed a member's ticket, DDT or WAP",
 } as const;
 
@@ -440,6 +441,8 @@ export function auditDetail(
     case "telegram.chat_added":
     case "telegram.chat_removed":
       return stored(action, metadata).text("title");
+    case "telegram.lead_posted":
+      return stored(action, metadata).text("team");
     case "telegram.questionnaire_posted": {
       const m = stored(action, metadata);
       const title = m.text("title");

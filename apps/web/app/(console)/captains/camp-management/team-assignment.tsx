@@ -19,6 +19,7 @@ import { teamLabel } from "./roster-presentation";
 import {
   assignTeamAction,
   removeTeamAction,
+  postTeamLeadAction,
   setTeamLeadAction,
   type AssignableTeam,
   type TeamAssignmentResult,
@@ -82,7 +83,7 @@ export function TeamAssignment({
     (t) => !assignableTeams.some((a) => a.key === t.team),
   );
 
-  function run(action: () => Promise<TeamAssignmentResult>) {
+  function run(action: () => Promise<TeamAssignmentResult>, leadOf?: string) {
     startTransition(async () => {
       const res = await action();
       if (!res.ok) {
@@ -90,6 +91,26 @@ export function TeamAssignment({
         return;
       }
       onChange(res.teams);
+      if (leadOf && res.offerLeadPost) offerLeadPost(leadOf);
+    });
+  }
+
+  // Making someone a lead offers Ol' Jeb's post; nothing goes out unless the
+  // captain presses it (owner, 2026-10-27).
+  function offerLeadPost(team: string) {
+    toast.success("They lead the team now.", {
+      duration: 15_000,
+      action: {
+        label: "Tell the camp on Telegram",
+        onClick: () => {
+          void postTeamLeadAction(userId, team).then((res) => {
+            if (!res.ok) toast.error(res.error);
+            else if (res.places === 0)
+              toast.info("Ol' Jeb has already posted this.");
+            else toast.success("Ol' Jeb will post it in the camp's chats.");
+          });
+        },
+      },
     });
   }
 
@@ -151,12 +172,14 @@ export function TeamAssignment({
                         checked={current.isLead}
                         disabled={isPending}
                         onCheckedChange={(checked) =>
-                          run(() =>
-                            setTeamLeadAction(
-                              userId,
-                              team.key,
-                              checked === true,
-                            ),
+                          run(
+                            () =>
+                              setTeamLeadAction(
+                                userId,
+                                team.key,
+                                checked === true,
+                              ),
+                            team.key,
                           )
                         }
                       />

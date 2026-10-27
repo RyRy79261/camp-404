@@ -39,7 +39,7 @@ vi.mock("@camp404/db/deadlines", async (importOriginal) => ({
 }));
 vi.mock("../google-calendar", async (importOriginal) => ({
   ...(await importOriginal<typeof GoogleCalendar>()),
-  putCalendarEvent: vi.fn(async () => undefined),
+  putCalendarEvent: vi.fn(async () => ({ meetUrl: null })),
   deleteCalendarEvent: vi.fn(async () => true),
 }));
 
@@ -67,6 +67,10 @@ function row(overrides: Partial<CampEventRow> = {}): CampEventRow {
     cycle: 2027,
     kind: "meeting",
     team: "kitchen",
+    audience: "team",
+    peopleUserIds: [],
+    meet: false,
+    meetUrl: null,
     title: "Planning",
     allDay: false,
     startDate: "2026-10-15",
@@ -164,6 +168,7 @@ describe("the Calendar's events on Google", () => {
       id: row().id,
       version: 1,
       removed: false,
+      meetUrl: null,
     });
   });
 
@@ -206,6 +211,7 @@ describe("the Calendar's events on Google", () => {
       id: row().id,
       version: 1,
       removed: false,
+      meetUrl: null,
     });
   });
 
@@ -236,6 +242,7 @@ describe("the Calendar's events on Google", () => {
       id: row().id,
       version: 2,
       removed: false,
+      meetUrl: null,
     });
   });
 
@@ -282,6 +289,25 @@ describe("the Calendar's events on Google", () => {
 });
 
 describe("campEventBody", () => {
+  it("asks Google for a Meet link only until it has one", () => {
+    const asks = campEventBody(row({ meet: true }), "Kitchen");
+    expect(asks.conferenceData).toEqual({
+      createRequest: {
+        requestId: "camp404-claimedevent0001",
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    });
+    expect(
+      campEventBody(
+        row({ meet: true, meetUrl: "https://meet.google.com/abc-defg-hij" }),
+        "Kitchen",
+      ),
+    ).not.toHaveProperty("conferenceData");
+    expect(campEventBody(row(), "Kitchen")).not.toHaveProperty(
+      "conferenceData",
+    );
+  });
+
   it("ends an all-day event the day after its last day, and keeps a whole-camp title plain", () => {
     const body = campEventBody(
       row({
