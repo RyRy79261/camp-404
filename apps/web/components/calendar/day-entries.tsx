@@ -2,7 +2,7 @@
 
 import { Plus } from "lucide-react";
 import type { CalendarEntry } from "@/lib/calendar-month";
-import { entryColour, MeetingMark, SMALL_BUTTON } from "./parts";
+import { audienceLabel, entryColour, MeetingMark, SMALL_BUTTON } from "./parts";
 
 // One day's events as rows (the mock-up's day list): the time, the title, the
 // team and, for a meeting, whether its minutes are written. Under a phone's
@@ -44,7 +44,7 @@ export function DayEntries({
       {on.map((entry) => {
         const colour = entryColour(entry);
         const what = [
-          entry.team?.label ?? "Whole camp",
+          audienceLabel(entry),
           entry.meeting
             ? entry.meeting.minutes
               ? "Meeting, minutes written"

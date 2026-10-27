@@ -7,6 +7,7 @@ import {
   campEventRefusal,
   hasMinutes,
   MEETING_HAS_MINUTES,
+  storedCampEventAudience,
   storedCampEventWhen,
   type CampEventKind,
 } from "@camp404/core";
@@ -14,8 +15,6 @@ import {
   campEventStart,
   EVENT_CHANGED,
   EVENT_GONE,
-  PICK_SOMEONE,
-  type CampEventAudience,
   type CampEventFields,
   type CampEventRow,
   type CampEventWriteResult,
@@ -51,29 +50,18 @@ function refusal(actorId: string, team: Team | null): string | null {
   return campEventRefusal(testStore.senderReach(actorId), team);
 }
 
-/** Twin of storedAudience: who an event is for, as stored. */
-function storedAudience(fields: CampEventFields):
-  | {
-      ok: true;
-      team: Team | null;
-      audience: CampEventAudience;
-      peopleUserIds: string[];
-    }
-  | { ok: false; error: string } {
-  const audience = fields.audience ?? (fields.team ? "team" : "camp");
-  if (audience === "team") {
-    if (!fields.team) return { ok: false, error: "Pick a team." };
-    return { ok: true, team: fields.team, audience, peopleUserIds: [] };
-  }
-  if (audience !== "people") {
-    return { ok: true, team: null, audience, peopleUserIds: [] };
-  }
-  const peopleUserIds = [...new Set(fields.people ?? [])].filter((id) => {
-    const user = testStore.findUserById(id);
-    return !!user && !user.sanitised && user.approvalStatus === "approved";
-  });
-  if (peopleUserIds.length === 0) return { ok: false, error: PICK_SOMEONE };
-  return { ok: true, team: null, audience, peopleUserIds };
+/** Twin of storedAudience: the store's members, core's rule. */
+function storedAudience(fields: CampEventFields) {
+  const kept =
+    fields.audience === "people"
+      ? [...new Set(fields.people ?? [])].filter((id) => {
+          const user = testStore.findUserById(id);
+          return (
+            !!user && !user.sanitised && user.approvalStatus === "approved"
+          );
+        })
+      : [];
+  return storedCampEventAudience<Team>(fields, kept);
 }
 
 export const campEventsTestStore = {

@@ -16,6 +16,19 @@ const detail = <A extends AuditAction>(
   teamLabel?: (key: string) => string,
 ) => auditDetail(action, metadata, teamLabel);
 
+describe("telegram.lead_posted", () => {
+  it("names the team by its label", () => {
+    expect(
+      detail(
+        "telegram.lead_posted",
+        { team: "power_and_lighting", cycle: 2027, places: 1 },
+        (k) => (k === "power_and_lighting" ? "Power and Lighting" : k),
+      ),
+    ).toBe("Power and Lighting");
+    expect(detail("telegram.lead_posted", {})).toBeNull();
+  });
+});
+
 describe("auditActionLabel", () => {
   it("labels a known action and leaves an unknown one as stored", () => {
     expect(auditActionLabel("payment.recorded")).toBe("Recorded a payment");

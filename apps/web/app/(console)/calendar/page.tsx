@@ -104,13 +104,11 @@ async function CalendarBody({
   canCreate: boolean;
   searchParams: SearchParams;
 }) {
-  const [config, memberships, raw, members] = await Promise.all([
+  const [config, memberships, raw] = await Promise.all([
     getTeamsConfig(),
     getMyTeams(userId),
     searchParams,
-    listAssignableMembers(),
   ]);
-  const memberName = new Map(members.map((m) => [m.id, m.displayName]));
   const teams = config.teams.map((t) => ({ key: t.key, label: t.label }));
   const today = campDayKey(new Date());
   let state: CalendarState = parseCalendarState(raw, today, teams);
@@ -125,6 +123,14 @@ async function CalendarBody({
 
   const days = await readCalendarDays(stateRange(state, today), teams);
   const entries = filterEntries(days.entries, state);
+
+  // The members, only when something needs them: a captain's form (Pick
+  // people), or an open event for picked people (their names).
+  const members =
+    rank === "captain" || found?.entry.audience === "people"
+      ? await listAssignableMembers()
+      : [];
+  const memberName = new Map(members.map((m) => [m.id, m.displayName]));
 
   const memberTeams = memberships.map((m) => m.team);
   const selected = found

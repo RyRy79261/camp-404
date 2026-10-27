@@ -441,8 +441,10 @@ export function auditDetail(
     case "telegram.chat_added":
     case "telegram.chat_removed":
       return stored(action, metadata).text("title");
-    case "telegram.lead_posted":
-      return stored(action, metadata).text("team");
+    case "telegram.lead_posted": {
+      const team = stored(action, metadata).text("team");
+      return team ? teamLabel(team) : null;
+    }
     case "telegram.questionnaire_posted": {
       const m = stored(action, metadata);
       const title = m.text("title");

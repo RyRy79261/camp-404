@@ -8,7 +8,10 @@ import {
   meetingInstant,
   meetingPostBody,
   MEETING_HAS_MINUTES,
+  storedCampEventAudience,
   storedCampEventWhen,
+  PICK_SOMEONE,
+  type CampEventAudience,
   TELEGRAM_OPEN_BUTTON,
   type CampEventKind,
 } from "@camp404/core";
@@ -46,8 +49,7 @@ import * as schema from "./schema";
 // `tx`, never createHttpDb().
 
 type Team = (typeof schema.teamEnum.enumValues)[number];
-export type CampEventAudience =
-  (typeof schema.campEventAudienceEnum.enumValues)[number];
+export type { CampEventAudience };
 
 export type CampEventWriteResult<T = object> =
   | ({ ok: true } & T)
@@ -248,7 +250,7 @@ async function assertManager(
   if (refusal) refuse(refusal);
 }
 
-export const PICK_SOMEONE = "Pick at least one person.";
+export { PICK_SOMEONE };
 
 /**
  * Who an event is for, as stored: a team only on a `team` event, and the
@@ -264,15 +266,11 @@ async function storedAudience(
   audience: CampEventAudience;
   peopleUserIds: string[];
 }> {
-  const audience = fields.audience ?? (fields.team ? "team" : "camp");
-  if (audience === "team") {
-    if (!fields.team) refuse("Pick a team.");
-    return { team: fields.team, audience, peopleUserIds: [] };
-  }
-  if (audience !== "people") {
-    return { team: null, audience, peopleUserIds: [] };
-  }
-  const asked = [...new Set(fields.people ?? [])].filter((id) => UUID.test(id));
+  // Only a people event reads its members; the rule is core's.
+  const asked =
+    (fields.audience ?? null) === "people"
+      ? [...new Set(fields.people ?? [])].filter((id) => UUID.test(id))
+      : [];
   const found =
     asked.length === 0
       ? []
@@ -288,9 +286,16 @@ async function storedAudience(
             ),
           );
   const here = new Set(found.map((r) => r.id));
-  const peopleUserIds = asked.filter((id) => here.has(id));
-  if (peopleUserIds.length === 0) refuse(PICK_SOMEONE);
-  return { team: null, audience, peopleUserIds };
+  const stored = storedCampEventAudience(
+    fields,
+    asked.filter((id) => here.has(id)),
+  );
+  if (!stored.ok) refuse(stored.error);
+  return {
+    team: stored.team,
+    audience: stored.audience,
+    peopleUserIds: stored.peopleUserIds,
+  };
 }
 
 function auditMetadata(

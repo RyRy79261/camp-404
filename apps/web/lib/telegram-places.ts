@@ -40,5 +40,10 @@ export const addTelegramPlace = places.addTelegramPlace;
  */
 export async function mayOfferLeadPost(): Promise<boolean> {
   if (telegramBotUsername() === null) return false;
-  return (await listTelegramPlaces()).length > 0;
+  try {
+    return (await listTelegramPlaces()).length > 0;
+  } catch {
+    // The offer is optional: never fail the lead change that came before it.
+    return false;
+  }
 }

@@ -502,7 +502,8 @@ export function filterEntries(
   filter: Pick<CalendarState, "team" | "type">,
 ): CalendarEntry[] {
   return entries.filter((e) => {
-    if (filter.team === WHOLE_CAMP && e.team !== null) return false;
+    // Team-leads and picked-people events have no team either: not the camp's.
+    if (filter.team === WHOLE_CAMP && e.audience !== "camp") return false;
     if (
       filter.team &&
       filter.team !== WHOLE_CAMP &&

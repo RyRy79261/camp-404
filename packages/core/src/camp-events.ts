@@ -18,6 +18,44 @@ import { ViewerRank } from "@camp404/types";
 
 export type CampEventKind = "event" | "meeting";
 
+/** Who an event is for (owner, 2026-10-27). */
+export type CampEventAudience = "camp" | "team" | "team_leads" | "people";
+
+export const PICK_A_TEAM = "Pick a team.";
+export const PICK_SOMEONE = "Pick at least one person.";
+
+/**
+ * Who an event is for, as stored, or the refusal: a form that names no
+ * audience is its team's, or the camp's with no team; only a `team` event
+ * keeps a team. `keptPeople` are the picked members the write found still
+ * approved and here (each side reads its own members); a `people` event with
+ * none is refused, and any other audience keeps nobody.
+ */
+export function storedCampEventAudience<T extends string>(
+  fields: { audience?: CampEventAudience; team: T | null },
+  keptPeople: readonly string[],
+):
+  | {
+      ok: true;
+      audience: CampEventAudience;
+      team: T | null;
+      peopleUserIds: string[];
+    }
+  | { ok: false; error: string } {
+  const audience = fields.audience ?? (fields.team ? "team" : "camp");
+  if (audience === "team") {
+    return fields.team
+      ? { ok: true, audience, team: fields.team, peopleUserIds: [] }
+      : { ok: false, error: PICK_A_TEAM };
+  }
+  if (audience !== "people") {
+    return { ok: true, audience, team: null, peopleUserIds: [] };
+  }
+  return keptPeople.length > 0
+    ? { ok: true, audience, team: null, peopleUserIds: [...keptPeople] }
+    : { ok: false, error: PICK_SOMEONE };
+}
+
 export const CAMP_EVENT_KINDS: readonly CampEventKind[] = ["event", "meeting"];
 
 /**
