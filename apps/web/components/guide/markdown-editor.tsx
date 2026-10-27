@@ -144,6 +144,8 @@ function LinkRow({ editor, onDone }: { editor: Editor; onDone: () => void }) {
           Link to
         </label>
         <Input
+          // A web address: no emoji.
+          emoji={false}
           id={inputId}
           value={address}
           autoFocus
