@@ -4,6 +4,7 @@ import {
   feePledgeAskNotification,
   feeReminderAudience,
   feeReminderDue,
+  feeTimingDays,
   formatMoney,
   isPersonalNotification,
   notificationLink,
@@ -71,6 +72,16 @@ describe("fee reminder audiences", () => {
     expect(
       feeReminderDue({ kind: "no_date", amountCents: 1 }, "2026-12-02"),
     ).toBe(false);
+  });
+});
+
+describe("fee days on the sentinel year", () => {
+  it("are still valid days, so a notice can say them", () => {
+    expect(feeTimingDays(1)).toEqual({
+      endNov: "0000-11-30",
+      endDec: "0000-12-31",
+      jan15: "0001-01-15",
+    });
   });
 });
 

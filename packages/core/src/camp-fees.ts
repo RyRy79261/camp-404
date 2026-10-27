@@ -26,10 +26,13 @@ export function feeTimingDays(burnYear: number): {
   endDec: string;
   jan15: string;
 } {
+  // Four-digit years, so a day is always a valid YYYY-MM-DD (a camp that
+  // has not named its founding year is on the sentinel year 1).
+  const year = (y: number) => String(y).padStart(4, "0");
   return {
-    endNov: `${burnYear - 1}-11-30`,
-    endDec: `${burnYear - 1}-12-31`,
-    jan15: `${burnYear}-01-15`,
+    endNov: `${year(burnYear - 1)}-11-30`,
+    endDec: `${year(burnYear - 1)}-12-31`,
+    jan15: `${year(burnYear)}-01-15`,
   };
 }
 

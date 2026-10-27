@@ -115,27 +115,29 @@ export function MoneyLines({ rows }: { rows: MoneyLineRow[] }) {
       header: "Actions",
       role: "actions",
       hideHeader: true,
-      cell: (r) => (
-        <RowActions
-          label={r.bill ? `Actions for ${r.name}` : undefined}
-          primary={
-            r.bill?.next ? (
-              <Button
-                type="button"
-                size="sm"
-                disabled={pending}
-                onClick={() => markPaid(r)}
-              >
-                {pending && marking === r.key && (
-                  <Loader2 className="animate-spin" aria-hidden />
-                )}
-                Mark paid
-              </Button>
-            ) : null
-          }
-          secondary={r.bill ? <BillDialog bill={r.bill.edit} /> : null}
-        />
-      ),
+      // A fee or budget line has nothing to do: no empty row in its card.
+      cell: (r) =>
+        r.bill && (
+          <RowActions
+            label={`Actions for ${r.name}`}
+            primary={
+              r.bill.next ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => markPaid(r)}
+                >
+                  {pending && marking === r.key && (
+                    <Loader2 className="animate-spin" aria-hidden />
+                  )}
+                  Mark paid
+                </Button>
+              ) : null
+            }
+            secondary={<BillDialog bill={r.bill.edit} />}
+          />
+        ),
     },
   ];
 

@@ -199,9 +199,10 @@ const FEE_DAY = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
 });
 
-/** "30 Nov", from a YYYY-MM-DD day. */
+/** "30 Nov", from a YYYY-MM-DD day (the day as written if it is not one). */
 function feeDay(day: string): string {
-  return FEE_DAY.format(new Date(`${day}T00:00:00Z`));
+  const date = new Date(`${day}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? day : FEE_DAY.format(date);
 }
 
 /**
