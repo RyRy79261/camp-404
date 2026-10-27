@@ -29,6 +29,8 @@ import { getMyParticipation } from "@/lib/participations";
 import { getMemberDues } from "@/lib/dues";
 import { MY_DUES_PATH } from "@/lib/dues-copy";
 import { balanceSentence } from "@/lib/dues-view";
+import { getFeeScale } from "@/lib/join-site";
+import { feeTimingPhrase, pledgeWithScale } from "@/lib/pledge-view";
 import { getMemberRefCode, ledgerCycle } from "@/lib/payments";
 import { getMyTicket } from "@/lib/tickets";
 import { isTeamLead } from "@/lib/users";
@@ -77,10 +79,15 @@ export default async function ProfilePage() {
       getMemberRefCode(campUser.id),
       getMyParticipation(campUser.id),
       getMyTicket(campUser.id),
-      // Their own balance for the year (#240); never anyone else's.
-      ledgerCycle().then((cycle) =>
-        getMemberDues(campUser.id, cycle, { forFinance: false }),
-      ),
+      // Their own balance and pledge for the year (#240); never anyone
+      // else's. The scale names the pledge ("near Ideal").
+      ledgerCycle().then(async (cycle) => {
+        const [mine, scale] = await Promise.all([
+          getMemberDues(campUser.id, cycle, { forFinance: false }),
+          getFeeScale(cycle),
+        ]);
+        return mine ? { ...mine, scale } : null;
+      }),
       telegramOn ? getTelegramConnection(campUser.id) : null,
       // Step 6: what is missing from the profile, worked out on this read.
       getProfileChecklist(campUser.id),
@@ -163,8 +170,37 @@ export default async function ProfilePage() {
                     {balanceSentence(dues.balance)}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <Button asChild variant="secondary" size="sm">
+                <CardContent className="flex flex-col gap-3">
+                  {/* Their pledge, read-only here; it changes on My dues. */}
+                  {dues.pledge && (
+                    <div
+                      data-testid="profile-pledge"
+                      className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm"
+                    >
+                      <p>
+                        You pledged{" "}
+                        <span className="font-medium tabular-nums">
+                          {pledgeWithScale(dues.pledge.amountCents, dues.scale)}
+                        </span>
+                        {dues.payBy
+                          ? `, ${feeTimingPhrase(dues.payBy, dues.cycle)}`
+                          : ""}
+                        {dues.subsidy ? ", and asked for a subsidy" : ""}.
+                      </p>
+                      <Link
+                        href={MY_DUES_PATH}
+                        className="font-medium text-primary underline-offset-4 hover:underline"
+                      >
+                        Change your pledge
+                      </Link>
+                    </div>
+                  )}
+                  <Button
+                    asChild
+                    variant="secondary"
+                    size="sm"
+                    className="self-start"
+                  >
                     <Link href={MY_DUES_PATH}>Open My dues</Link>
                   </Button>
                 </CardContent>

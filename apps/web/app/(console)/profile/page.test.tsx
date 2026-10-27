@@ -36,6 +36,10 @@ vi.mock("@/lib/dues", () => ({
     },
   })),
 }));
+vi.mock("@/lib/join-site", async () => {
+  const { DEFAULT_JOIN_CONTENT } = await import("@camp404/types");
+  return { getFeeScale: vi.fn(async () => DEFAULT_JOIN_CONTENT.fee) };
+});
 vi.mock("@/lib/participations", () => ({ getMyParticipation: vi.fn() }));
 vi.mock("@/lib/tickets", () => ({
   getMyTicket: vi.fn(async () => ({
@@ -60,6 +64,7 @@ vi.mock("@/components/profile/profile-sections", () => ({
   ProfileSections: () => null,
 }));
 
+import { getMemberDues } from "@/lib/dues";
 import { getMyParticipation } from "@/lib/participations";
 import { getMyTicket } from "@/lib/tickets";
 import { getProfileChecklist } from "@/lib/profile-checklist";
@@ -92,6 +97,41 @@ describe("profile: Your dues", () => {
     expect(
       screen.getByRole("link", { name: "Open My dues" }).getAttribute("href"),
     ).toBe("/dues");
+  });
+});
+
+describe("profile: the member's pledge", () => {
+  it("shows it read-only, with the scale's name and by when, linking to change it", async () => {
+    vi.mocked(getMemberDues).mockResolvedValueOnce({
+      cycle: 2027,
+      pledge: { amountCents: 720_000 },
+      payBy: "part_by_end_nov",
+      subsidy: false,
+      balance: {
+        chargedCents: 0,
+        paidCents: 0,
+        pendingCents: 0,
+        refundedCents: 0,
+        balanceCents: 0,
+      },
+    } as unknown as Awaited<ReturnType<typeof getMemberDues>>);
+    await renderWith("applied");
+    const line = screen.getByTestId("profile-pledge");
+    expect(line.textContent).toMatch(
+      /^You pledged R\s7\s200,00 \(near Ideal\), part by the end of November and the rest later\./,
+    );
+    expect(
+      screen
+        .getByRole("link", { name: "Change your pledge" })
+        .getAttribute("href"),
+    ).toBe("/dues");
+    // Nothing to change it with here.
+    expect(screen.queryByRole("slider")).toBeNull();
+  });
+
+  it("says nothing of a pledge the member has not made", async () => {
+    await renderWith("applied");
+    expect(screen.queryByTestId("profile-pledge")).toBeNull();
   });
 });
 
