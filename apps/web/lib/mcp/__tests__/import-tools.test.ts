@@ -42,6 +42,7 @@ vi.mock("@/lib/google-calendar", async (importOriginal) => ({
   putCalendarEvent: vi.fn(
     async (_env: unknown, id: string, body: { summary: string }) => {
       calendar.put.push({ id, summary: body.summary });
+      return { meetUrl: null };
     },
   ),
   deleteCalendarEvent: vi.fn(async () => true),
