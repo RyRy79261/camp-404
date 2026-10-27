@@ -171,6 +171,11 @@ import type { MyLift } from "@camp404/db/cars";
 import type { PendingRequiredAction } from "@camp404/db/activations";
 import { splitAudience, type AudienceSplit } from "@camp404/db/audience";
 import {
+  RESET_CAPTAINS_ONLY,
+  RESET_NO_SIGN_IN,
+  type PasswordResetLinkResult,
+} from "@camp404/db/password-reset";
+import {
   TELEGRAM_LINK_MINUTES,
   type TelegramConnection,
 } from "@camp404/db/telegram-dm";
@@ -3363,6 +3368,27 @@ export const testStore = {
           : null,
       }))
       .sort((a, b) => (a.displayName ?? "").localeCompare(b.displayName ?? ""));
+  },
+
+  // --- A captain's password reset link (mirrors @camp404/db/password-reset) --
+
+  /**
+   * Twin of recordPasswordResetLink: the same captain and member checks and
+   * sentences. The store keeps no audit log and no sign-in email, so it
+   * answers `email: null` and the caller sends nothing.
+   */
+  recordPasswordResetLink(input: {
+    actorId: string;
+    userId: string;
+  }): PasswordResetLinkResult {
+    if (findUserById(input.actorId)?.rank !== "captain") {
+      return { ok: false, error: RESET_CAPTAINS_ONLY };
+    }
+    const member = findUserById(input.userId);
+    if (!member || member.sanitised) {
+      return { ok: false, error: RESET_NO_SIGN_IN };
+    }
+    return { ok: true, email: null };
   },
 
   // --- Who is coming this year (mirrors @camp404/db/participations) -----

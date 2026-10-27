@@ -103,6 +103,7 @@ export const AUDIT_ACTION_LABELS = {
   "member.id_document.viewed": "Viewed an ID number",
   "member.note_added": "Added a captain note",
   "member.notes.viewed": "Read captain notes",
+  "member.password_reset_sent": "Sent a password reset link",
   "member.rank_changed": "Changed a rank",
   "member.sheet_viewed": "Opened the camp sheet",
   "member.team_assigned": "Added a member to a team",

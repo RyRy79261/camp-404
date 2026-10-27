@@ -396,6 +396,8 @@ export interface AuditEvents {
   "member.id_document.viewed": SensitiveRead & { idType: string | null };
   "member.note_added": { length: number };
   "member.notes.viewed": { count: number };
+  /** A captain emailed the member Better Auth's reset link (member panel). */
+  "member.password_reset_sent": { via: "member_panel" };
   "member.rank_changed": {
     from: string | null;
     to: string;

@@ -48,6 +48,7 @@ import { AssignCaptainDialog } from "./assign-captain-dialog";
 import { MemberNotes } from "./member-notes";
 import { RejectConfirmDialog } from "./reject-confirm-dialog";
 import { MemberQuestionnaires } from "./member-questionnaires";
+import { PasswordResetCard } from "./password-reset-card";
 import { ProfileHead } from "./roster-presentation";
 import { TeamAssignment } from "./team-assignment";
 
@@ -71,6 +72,8 @@ type DetailState =
       state: "loaded";
       member: PresentedMember;
       canAssignCaptain: boolean;
+      /** The member's sign-in email, for the reset link's confirm. */
+      signInEmail: string | null;
       promotionStep: { sent: boolean; accepted: boolean };
       promotionRequestId: string | null;
       promotionRequestIsMine: boolean;
@@ -174,6 +177,7 @@ export function MemberProfile({
                 state: "loaded",
                 member: res.member,
                 canAssignCaptain: res.canAssignCaptain,
+                signInEmail: res.signInEmail,
                 promotionStep: res.promotionStep,
                 promotionRequestId: res.promotionRequestId,
                 promotionRequestIsMine: res.promotionRequestIsMine,
@@ -303,6 +307,7 @@ export function MemberProfile({
 
   const member = detail.state === "loaded" ? detail.member : null;
   const canAssignCaptain = detail.state === "loaded" && detail.canAssignCaptain;
+  const signInEmail = detail.state === "loaded" ? detail.signInEmail : null;
   const promotionStep =
     detail.state === "loaded"
       ? detail.promotionStep
@@ -516,6 +521,14 @@ export function MemberProfile({
                 </p>
               </CardContent>
             </Card>
+
+            {/* Step 7: a captain emails Better Auth's reset link. */}
+            <PasswordResetCard
+              key={row.id}
+              userId={row.id}
+              name={row.displayName}
+              email={signInEmail}
+            />
 
             {canAssignCaptain && (
               <Card>

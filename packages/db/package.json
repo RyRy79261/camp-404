@@ -44,6 +44,7 @@
     "./email": "./src/email.ts",
     "./questionnaire-results": "./src/questionnaire-results.ts",
     "./actor": "./src/actor.ts",
+    "./password-reset": "./src/password-reset.ts",
     "./broadcasts": "./src/broadcasts.ts",
     "./report-screenshots": "./src/report-screenshots.ts",
     "./tasks": "./src/tasks.ts",
