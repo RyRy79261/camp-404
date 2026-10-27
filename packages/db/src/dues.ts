@@ -118,7 +118,7 @@ export class MoneyRefused extends Error {
   }
 }
 
-function refuse(sentence: string): never {
+export function refuse(sentence: string): never {
   throw new MoneyRefused(sentence);
 }
 
@@ -131,7 +131,7 @@ function isUniqueViolation(err: unknown): boolean {
   return false;
 }
 
-async function write<T extends object>(
+export async function write<T extends object>(
   fn: (tx: Tx) => Promise<T>,
   onUnique?: string,
 ): Promise<MoneyResult<T>> {
@@ -148,7 +148,10 @@ async function write<T extends object>(
   }
 }
 
-async function assertMoneyKeeper(tx: Tx, actorId: string): Promise<void> {
+export async function assertMoneyKeeper(
+  tx: Tx,
+  actorId: string,
+): Promise<void> {
   if (!(await lockAllowed(tx, actorId, MONEY_KEEPER))) {
     refuse(NOT_A_MONEY_KEEPER);
   }
