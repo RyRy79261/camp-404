@@ -70,7 +70,11 @@ async function memberPledges(page: Page) {
   // Nothing charged yet: saying what they can commit is the one thing to do,
   // and there is no proof form for money they do not owe.
   await expect(page.getByLabel("Proof of payment")).toHaveCount(0);
-  await page.getByLabel("What you can commit (R)").fill("1500");
+  // "What can you commit?" (the Join site's scale): typed, not slid.
+  await expect(
+    page.getByRole("slider", { name: "What I can commit, in rands" }),
+  ).toBeVisible();
+  await page.getByLabel("Or type it (R)").fill("1500");
   await page
     .getByRole("radio", { name: "All of it by the end of November" })
     .click();
@@ -160,7 +164,7 @@ test.describe("dues (test-mode)", () => {
       page.getByRole("button", { name: "Send another proof" }),
     ).toBeVisible();
     await expect(page.getByTestId("my-pledge")).toContainText(
-      /You pledged R\s1\s500,00\./,
+      /You pledged R\s1\s500,00 \(near Essential\), all of it by the end of November\./,
     );
     // A member reads only their own: the Finance tools stay locked.
     await page.goto("/captains/payments/members");
