@@ -5,6 +5,8 @@ import {
   duesBalance,
   duesSettled,
   feeFigures,
+  FEE_PLEDGE_ACTION_KEY,
+  FEE_PLEDGE_REF_TYPE,
   feeStandardCents,
   isFeeConcession,
   MAX_FEE_TIERS,
@@ -626,6 +628,9 @@ export const duesTestStore = {
     account.payBy = payBy;
     account.subsidy = subsidy;
     state().accounts.set(key, account);
+    // The Finance team's "Ask everyone to pledge", answered.
+    testStore.satisfyRequiredAction(input.userId, FEE_PLEDGE_ACTION_KEY);
+    testStore.readNotices(input.userId, FEE_PLEDGE_REF_TYPE);
     const charged =
       testStore.getParticipation(input.userId, input.cycle)?.status ===
       "accepted"

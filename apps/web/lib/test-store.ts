@@ -83,6 +83,8 @@ import {
   taskMoveProblem,
   taskRemoveProblem,
   CAPTAIN_ONLY,
+  FEE_PAYMENT_ACTION_KEY,
+  FEE_PAYMENT_REF_TYPE,
   type ProfileFacts,
 } from "@camp404/core";
 import {
@@ -138,6 +140,7 @@ import {
 } from "./test-store-dues";
 import { eraseClaimsOf, resetClaimsStore } from "./test-store-claims";
 import { resetCampMoneyStore } from "./test-store-camp-money";
+import { resetFeeReminderStore } from "./test-store-fee-reminders";
 import { petsTestStore, resetPetsStore } from "./test-store-pets";
 import { eraseDietaryOf } from "./test-store-dietary";
 import { eraseInventoryOf } from "./test-store-inventory";
@@ -4738,6 +4741,11 @@ export const testStore = {
       updatedAt: now,
     };
     payments.push(row);
+    // A member who sends a proof has answered "Remind who still owes".
+    if (source === "member") {
+      this.satisfyRequiredAction(input.userId, FEE_PAYMENT_ACTION_KEY);
+      this.readNotices(input.userId, FEE_PAYMENT_REF_TYPE);
+    }
     return { id: row.id, reference: row.reference };
   },
 
@@ -7072,6 +7080,7 @@ export const testStore = {
     S.telegramPosts = { ...DEFAULT_TELEGRAM_POST_SETTINGS };
     resetDuesStore();
     resetCampMoneyStore();
+    resetFeeReminderStore();
     resetRentalStore();
     resetLogisticsStore();
     resetCampEventsStore();
