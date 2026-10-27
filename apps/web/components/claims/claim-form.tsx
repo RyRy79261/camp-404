@@ -336,6 +336,7 @@ export function ClaimForm({
       >
         <Textarea
           id={ID.account}
+          emoji={false}
           rows={3}
           maxLength={CLAIM_ACCOUNT_MAX}
           value={account}

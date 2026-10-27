@@ -373,6 +373,20 @@ building block in `packages/ui`:
   (`components/row-actions`): one `primary` action, the same variant on every
   row (only its words may change), then quiet ghost icons in a `secondary`
   slot that keeps its width (`secondarySlots`) even on rows that have none.
+- **Every text box offers emoji, Telegram's way** (owner's approved mock-up,
+  2026-10-27). The kit's `Input` and `Textarea` draw a ☺ button at their right
+  edge that opens the panel (search, Recent, every group, the group tabs along
+  the bottom; a sheet from the bottom on a phone), and typing `:` and two
+  letters opens a row of matches (← → Enter, Esc). The long-text editors have
+  the same in their toolbar (`components/markdown/editor-emoji.tsx`). The
+  list is `packages/ui/src/lib/emoji-list.json`, built from emojibase-data
+  (a dev dependency) by `packages/ui/scripts/build-emoji-list.mjs` and
+  fetched on first use; Recent lives in the browser (only the emoji). An
+  `Input` offers it only as a plain text box (`offersEmojiByDefault`: no other
+  type, `inputMode` or browser `autoComplete`); pass `emoji={false}` for a box
+  that holds a code, an ID, bank details, a handle or a search. A box's layout
+  classes (width, flex, margins, grid cells) move to its frame
+  (`splitLayoutClasses`), so a form's rows do not change.
 - **Long text is never a raw Markdown textarea** (owner, 2026-10-01). Use
   `MarkdownField` (`apps/web/components/markdown`): the WYSIWYG Markdown
   editor with its preview beside it, Write | Preview tabs in a narrow window.

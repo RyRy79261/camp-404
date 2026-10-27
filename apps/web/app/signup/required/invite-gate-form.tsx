@@ -30,6 +30,7 @@ export function InviteGateForm({ email }: { email: string | null }) {
       <div className="flex flex-col gap-2">
         <Label htmlFor="invite-code">Invite code</Label>
         <Input
+          emoji={false}
           id="invite-code"
           name="code"
           placeholder="CAMP-XXXX-XXXX"

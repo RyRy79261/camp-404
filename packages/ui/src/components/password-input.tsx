@@ -102,6 +102,8 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
           <Input
             ref={ref}
             id={id}
+            // A password never takes emoji, shown or hidden.
+            emoji={false}
             type={visible ? "text" : "password"}
             // Revealed, the field is type="text" and React keeps its value
             // attribute in step: the 404 OS desktop blanks it in a copy.

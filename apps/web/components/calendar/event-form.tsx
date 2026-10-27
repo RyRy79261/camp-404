@@ -426,6 +426,7 @@ export function EventForm({
             >
               <div className="flex flex-col gap-2">
                 <Input
+                  emoji={false}
                   id="event-people-filter"
                   value={peopleFilter}
                   placeholder="Find someone"

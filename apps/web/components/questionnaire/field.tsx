@@ -268,6 +268,11 @@ function Control({
           id={fieldId}
           maxLength={question.maxLength}
           {...FORMAT_INPUT[question.format ?? "text"]}
+          // Emoji only in free text: never in a code, a handle or an ID.
+          emoji={
+            (question.format ?? "text") === "text" &&
+            !isPrivateQuestion(question)
+          }
           value={typeof value === "string" ? value : ""}
           placeholder={question.placeholder}
           {...inputAria}

@@ -536,6 +536,7 @@ export function ActivationForm({
                     <Input
                       value={query}
                       onChange={(e) => setQuery(e.currentTarget.value)}
+                      emoji={false}
                       placeholder="Search members"
                       aria-label="Search members"
                       className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"

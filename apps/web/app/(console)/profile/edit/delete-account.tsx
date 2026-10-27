@@ -25,6 +25,7 @@ export function DeleteAccountForm() {
       <div className="flex max-w-sm flex-col gap-1.5">
         <Label htmlFor="confirm">Confirmation</Label>
         <Input
+          emoji={false}
           id="confirm"
           name="confirm"
           placeholder="DELETE"
