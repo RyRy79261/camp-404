@@ -50,6 +50,8 @@ vi.mock("./inbox-feed", () => ({
 }));
 
 import { countUnread, listInbox, markRead } from "@/lib/notifications";
+import { getProfileChecklist } from "@/lib/profile-checklist";
+import { profileChecklist } from "@camp404/core";
 import NotificationsPage from "./page";
 
 /** Render the page on a tab (default: the All tab, i.e. no ?filter=). */
@@ -111,6 +113,34 @@ describe("notifications page", () => {
     expect(headings[0]?.tagName).toBe("H1");
     expect(headings[0]?.textContent).toBe("Notifications");
     expect(screen.getByText("No notifications yet.")).toBeTruthy();
+  });
+
+  it("leads with the profile's gaps as one grouped notice (step 6)", async () => {
+    vi.mocked(listInbox).mockResolvedValue({
+      items: [],
+      nextCursor: null,
+    } as never);
+    vi.mocked(getProfileChecklist).mockResolvedValueOnce(
+      profileChecklist(
+        {
+          approved: true,
+          held: false,
+          displayName: "Nova",
+          telegramHandle: null,
+          telegramConnected: false,
+          hasEmergencyContact: false,
+        },
+        { telegramOffered: false },
+      ),
+    );
+
+    render(await renderPage());
+
+    expect(
+      screen.getByRole("button", {
+        name: /Your profile isn't finished: 2 things missing/,
+      }),
+    ).toBeTruthy();
   });
 });
 

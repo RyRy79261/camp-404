@@ -3,7 +3,6 @@ import "server-only";
 import { cache } from "react";
 import { countUnreadSplit } from "./notifications";
 import { getPendingQuestionnaires } from "./users";
-import { getProfileChecklist } from "./profile-checklist";
 
 // The one count of "what is new in your inbox". The bell in the desktop's tray
 // and the Notifications tile on Home (called Announcements until 2026-09-24)
@@ -20,13 +19,7 @@ export interface InboxBadge {
   notices: number;
   /** Questionnaires the member still has to answer on an open send. */
   waiting: number;
-  /**
-   * 1 while "Your profile isn't finished" has a line not done (one grouped
-   * notice, however many lines), else 0. Never for a held or unapproved
-   * member: the checklist is null for them.
-   */
-  profile: number;
-  /** What the bell and the Notifications tile show: notices + waiting + profile. */
+  /** What the bell and the Notifications tile show: notices + waiting. */
   total: number;
 }
 
@@ -56,10 +49,9 @@ export const getInboxBadge = cache(
     // delivery, split by the questionnaire it points at, less the notices of
     // the forms still waiting. The same number as countUnread with those ids
     // left out (packages/db count-unread.test.ts), one database wait sooner.
-    const [pending, unread, checklist] = await Promise.all([
+    const [pending, unread] = await Promise.all([
       getPendingQuestionnaires(userId),
       countUnreadSplit(userId),
-      getProfileChecklist(userId),
     ]);
     const waitingIds = new Set(pending.map((q) => q.activationId));
     let notices = unread.total;
@@ -67,7 +59,6 @@ export const getInboxBadge = cache(
       notices -= unread.byQuestionnaire.get(id) ?? 0;
     }
     const waiting = pending.length;
-    const profile = checklist && checklist.missing > 0 ? 1 : 0;
-    return { notices, waiting, profile, total: notices + waiting + profile };
+    return { notices, waiting, total: notices + waiting };
   },
 );

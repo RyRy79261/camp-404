@@ -196,8 +196,7 @@ export default async function NotificationsPage({
 
         {items.length === 0 ? (
           pending.length === 0 &&
-          promotions.length === 0 &&
-          !profileGaps && (
+          promotions.length === 0 && (
             <EmptyState
               icon={EMPTY[filter].icon}
               title={EMPTY[filter].title}

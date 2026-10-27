@@ -134,7 +134,6 @@ export function NotificationPanel({
 
   const data = state.status === "ready" ? state.data : null;
   const rows = data ? data.pending.length + data.recent.length : 0;
-  const profileGaps = (data?.profile?.missing ?? 0) > 0;
 
   return (
     <Popover open={open} onOpenChange={changeOpen}>
@@ -208,7 +207,7 @@ export function NotificationPanel({
                 Try again
               </Button>
             </div>
-          ) : rows === 0 && profileGaps ? null : rows === 0 ? (
+          ) : rows === 0 ? (
             <p className={NOTE}>
               Nothing here yet — announcements, captain requests and
               questionnaires land here as they are sent.
