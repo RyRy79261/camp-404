@@ -654,3 +654,113 @@ export function campForecast(input: {
     lines,
   };
 }
+
+// --- Reminders ----------------------------------------------------------------------
+//
+// Finance's "Ask everyone to pledge" and "Remind who still owes" are nudges on
+// the gate spine (packages/db/src/nudges.ts), never a block: one NON-blocking
+// `required_actions` row per member and one notice, never a second while the
+// first is unread. Each notice is about the member's OWN pledge or next
+// payment. The camp's Telegram chats get only a general post that names nobody
+// and shows no amount (owner, 2026-10-27, 2A). Nobody who said Not coming this
+// year is asked or reminded, and nobody who asked for a subsidy is reminded.
+
+/** The `required_actions.action_key` of the ask to pledge. */
+export const FEE_PLEDGE_ACTION_KEY = "fee_pledge";
+export const FEE_PLEDGE_ACTION_TITLE = "Say what you can put in to camp fees";
+/** The `ref_type` of its notice, which opens My dues. */
+export const FEE_PLEDGE_REF_TYPE = "fee_pledge";
+
+/** The `required_actions.action_key` of the reminder to pay. */
+export const FEE_PAYMENT_ACTION_KEY = "fee_payment";
+export const FEE_PAYMENT_ACTION_TITLE = "Pay your camp fee";
+/** The `ref_type` of a payment reminder (by Finance or automatic). */
+export const FEE_PAYMENT_REF_TYPE = "fee_payment";
+
+export const REMINDERS_NEED_COLLECTING =
+  "Switch on Collecting fees before you remind anyone.";
+
+/** The general post in the camp's Telegram chats: nobody named, no amounts. */
+export const FEE_TELEGRAM_TITLE = "Camp fees are coming due";
+export const FEE_TELEGRAM_BODY =
+  "Check My dues in Camp 404 to see what you owe and how to pay.";
+export const FEE_TELEGRAM_BUTTON = "Open My dues";
+
+/** How many days before an instalment is due its automatic reminder goes. */
+export const FEE_REMINDER_DAYS_AHEAD = 3;
+
+/** One member's fee, as the reminders read it. */
+export interface FeeReminderMember {
+  userId: string;
+  name: string;
+  participation: ParticipationStatus | null;
+  subsidy: boolean;
+  feeOwingCents: number;
+  feeNext: NextFeePayment;
+  /** A pledge or a charged fee. */
+  hasPledge: boolean;
+}
+
+export interface FeeReminderAudience<M> {
+  /** Who it reaches. */
+  reach: M[];
+  /** Who it would have reached but said Not coming this year. */
+  notComing: M[];
+  /** Who asked for a subsidy and is not reminded. */
+  subsidy: M[];
+}
+
+/** Whether a member said Not coming this year. */
+function saidNotComing(m: { participation: ParticipationStatus | null }) {
+  return m.participation === "not_attending";
+}
+
+/**
+ * Who "Remind who still owes" reaches: everyone who owes money on their fee,
+ * did not ask for a subsidy and did not say Not coming this year. A Maybe who
+ * pledged is reminded too (group sends leave out only Not coming).
+ */
+export function feeReminderAudience<M extends FeeReminderMember>(
+  members: readonly M[],
+): FeeReminderAudience<M> {
+  const owing = members.filter((m) => m.feeOwingCents > 0);
+  return {
+    reach: owing.filter((m) => !m.subsidy && !saidNotComing(m)),
+    notComing: members.filter(saidNotComing),
+    subsidy: members.filter((m) => m.subsidy && !saidNotComing(m)),
+  };
+}
+
+/**
+ * Who "Ask everyone to pledge" reaches: everyone with no pledge and no fee
+ * yet, who did not ask for a subsidy and did not say Not coming this year.
+ */
+export function pledgeAskAudience<M extends FeeReminderMember>(
+  members: readonly M[],
+): FeeReminderAudience<M> {
+  return {
+    reach: members.filter(
+      (m) => !m.hasPledge && !m.subsidy && !saidNotComing(m),
+    ),
+    notComing: members.filter(saidNotComing),
+    subsidy: [],
+  };
+}
+
+/** Days from `from` to `to` (both YYYY-MM-DD), by the platform's UTC dates. */
+function daysBetween(from: string, to: string): number {
+  return Math.round(
+    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) /
+      86_400_000,
+  );
+}
+
+/**
+ * Whether a member's next instalment is near enough for its automatic
+ * reminder: within FEE_REMINDER_DAYS_AHEAD days, or already due. The caller
+ * sends it once per instalment day.
+ */
+export function feeReminderDue(next: NextFeePayment, today: string): boolean {
+  if (next.kind !== "due") return false;
+  return daysBetween(today, next.dueOn) <= FEE_REMINDER_DAYS_AHEAD;
+}

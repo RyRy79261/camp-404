@@ -2,6 +2,9 @@ import { and, asc, eq, isNotNull, lt, sql } from "drizzle-orm";
 import {
   campDayKey,
   CAPTAIN_ONLY,
+  FEE_TELEGRAM_BODY,
+  FEE_TELEGRAM_BUTTON,
+  FEE_TELEGRAM_TITLE,
   isComingThisYear,
   plainPreview,
   questionnaireReminderNotification,
@@ -322,6 +325,39 @@ export async function queueTelegramPosts(
         buttonText: post.buttonText,
         buttonPath: post.buttonPath,
         dedupeKey: `${post.dedupe}:${place.chatId}`,
+      })),
+    )
+    .onConflictDoNothing()
+    .returning({ id: posts.id });
+  return rows.length;
+}
+
+/**
+ * The Finance team's general camp fee reminder in each of Ol' Jeb's chats
+ * (camp fees sprint, owner 2A): it names nobody and shows no amount, and
+ * opens My dues. Once a camp day per chat; a hand post, so Camp settings'
+ * ticks do not switch it off. Inside the caller's transaction. Returns how
+ * many were queued.
+ */
+export async function queueFeeReminderPost(
+  tx: Tx,
+  input: { cycle: number; day: string },
+): Promise<number> {
+  const places = await listTelegramPlaces(tx);
+  if (places.length === 0) return 0;
+  const rows = await tx
+    .insert(posts)
+    .values(
+      places.map((place) => ({
+        chatId: place.chatId,
+        threadId: place.threadId,
+        kind: "announcement" as const,
+        title: FEE_TELEGRAM_TITLE,
+        body: FEE_TELEGRAM_BODY,
+        refId: null,
+        buttonText: FEE_TELEGRAM_BUTTON,
+        buttonPath: "/dues",
+        dedupeKey: `fees:${input.cycle}:${input.day}:${place.chatId}`,
       })),
     )
     .onConflictDoNothing()

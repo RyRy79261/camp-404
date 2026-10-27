@@ -265,6 +265,14 @@ export const TABLE_LIFECYCLE = {
       recordedByUserId: byWhom,
     },
   },
+  feePaymentReminders: {
+    year: "as-is",
+    erasure: {
+      userId: keep(
+        "a marker that the reminder went (no words of theirs); deleting it could send the same reminder again",
+      ),
+    },
+  },
   campBills: {
     year: "none",
     erasure: {

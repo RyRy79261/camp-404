@@ -251,6 +251,9 @@ export interface AuditEvents {
     amountCents: number;
   };
   "dues.collecting_set": { cycle: number; on: boolean };
+  "dues.pledges_asked": Asked;
+  /** `posted`: general posts queued in the camp's Telegram chats. */
+  "dues.fees_reminded": Asked & { posted: number };
   "camp_money.balance_recorded": { amountCents: number; asOf: string };
   "camp_money.bank_details_saved": { version: number };
   "camp_money.bill_added": CampBill;

@@ -61,6 +61,8 @@ export const AUDIT_ACTION_LABELS = {
   "dues.charge_added": "Added a charge to a member's dues",
   "dues.charge_cancelled": "Cancelled a charge on a member's dues",
   "dues.collecting_set": "Switched collecting camp fees on or off",
+  "dues.fees_reminded": "Reminded members who owe camp fees",
+  "dues.pledges_asked": "Asked members to pledge camp fees",
   "dues.fee_charged": "Charged a member's camp fee",
   "dues.fee_set": "Set a member's camp fee",
   "dues.plan_set": "Set a member's payment plan",
@@ -538,6 +540,8 @@ export function auditDetail(
       const cents = m.count("totalCents");
       return cents === null ? null : formatMoney(cents);
     }
+    case "dues.pledges_asked":
+    case "dues.fees_reminded":
     case "rental.orders_asked": {
       const m = stored(action, metadata);
       const asked = m.count("asked");

@@ -9,6 +9,8 @@ import {
   MAX_FEE_TIERS,
   COLLECTING_CHANGED,
   FEE_ALREADY_SET,
+  FEE_PLEDGE_ACTION_KEY,
+  FEE_PLEDGE_REF_TYPE,
   feeFigures,
   pledgeRefusal,
   proposeRefund,
@@ -43,6 +45,7 @@ import type {
   SettleUpInput,
 } from "@camp404/types";
 import { lockAllowed } from "./actor";
+import { closeNudge } from "./nudges";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
@@ -866,6 +869,13 @@ export async function savePledge(input: {
         target: [schema.duesAccounts.userId, schema.duesAccounts.cycle],
         set: { ...values, updatedAt: now },
       });
+    // The Finance team's "Ask everyone to pledge", answered.
+    await closeNudge(tx, {
+      userId: input.userId,
+      actionKey: FEE_PLEDGE_ACTION_KEY,
+      refType: FEE_PLEDGE_REF_TYPE,
+      now,
+    });
     const [place] = await tx
       .select({ status: schema.campParticipations.status })
       .from(schema.campParticipations)
@@ -1173,12 +1183,13 @@ export interface DuesAccountRow {
 /**
  * Every member's dues for a year, for the Finance team's list of who owes
  * what: approved, real, not erased. Six reads side by side, joined here.
+ * Inside a transaction (the fee reminders) pass its `tx`.
  */
 export async function listDuesAccounts(
   cycle: number,
   today: string,
+  db: DbOrTx = createHttpDb(),
 ): Promise<DuesAccountRow[]> {
-  const db = createHttpDb();
   const [members, accounts, charges, payments, refunds, instalments] =
     await Promise.all([
       db

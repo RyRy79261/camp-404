@@ -13,6 +13,13 @@
 
 import type { NotificationPayload } from "@camp404/types";
 import { notificationLink } from "./notification-links";
+import {
+  FEE_PAYMENT_REF_TYPE,
+  FEE_PLEDGE_ACTION_TITLE,
+  FEE_PLEDGE_REF_TYPE,
+  type NextFeePayment,
+} from "./camp-fees";
+import { formatMoney } from "./money";
 import { GEAR_ORDER_ACTION_TITLE, GEAR_ORDER_REF_TYPE } from "./rental";
 import { CAMP_TIME_ZONE } from "./time-zone";
 
@@ -182,6 +189,73 @@ export function gearOrderAskNotification(input: {
     title: GEAR_ORDER_ACTION_TITLE,
     body: "The captains are putting the camp's gear order together. Open My gear and say what you have and what you need.",
     refType: GEAR_ORDER_REF_TYPE,
+    refId: input.requiredActionId,
+  };
+}
+
+const FEE_DAY = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+/** "30 Nov", from a YYYY-MM-DD day. */
+function feeDay(day: string): string {
+  return FEE_DAY.format(new Date(`${day}T00:00:00Z`));
+}
+
+/**
+ * The Finance team asked the member to say what they can put in to camp fees
+ * (camp fees sprint, owner 2026-10-27). Personal: it is about their own
+ * pledge, so it goes by Ol' Jeb too. Opens My dues.
+ */
+export function feePledgeAskNotification(input: {
+  requiredActionId: string | null;
+}): NotificationPayload {
+  return {
+    kind: "fee_reminder",
+    title: FEE_PLEDGE_ACTION_TITLE,
+    body: "Say how much you can put in to camp fees this year and by when. Any amount helps, and you can ask for a subsidy. Open My dues.",
+    refType: FEE_PLEDGE_REF_TYPE,
+    refId: input.requiredActionId,
+  };
+}
+
+/**
+ * A reminder about the member's OWN next camp fee payment: how much and by
+ * when, what they paid of what, and their payment reference. Sent by the
+ * Finance team's "Remind who still owes" and automatically as an instalment
+ * comes due. Never names anyone else. Opens My dues.
+ */
+export function feePaymentReminderNotification(input: {
+  requiredActionId: string | null;
+  next: NextFeePayment;
+  owingCents: number;
+  paidCents: number;
+  totalCents: number;
+  refCode: string | null;
+}): NotificationPayload {
+  const title =
+    input.next.kind === "due"
+      ? `Your camp fee: ${formatMoney(input.next.amountCents)} by ${feeDay(input.next.dueOn)}`
+      : `Your camp fee: ${formatMoney(input.owingCents)} still to pay`;
+  const body = [
+    `You have paid ${formatMoney(input.paidCents)} of ${formatMoney(input.totalCents)}.`,
+    input.next.kind === "due" && input.next.overdue
+      ? "That day has passed, so please pay when you can or talk to the Finance team."
+      : null,
+    input.next.kind === "no_date"
+      ? "Talk to a captain about when you can pay it."
+      : null,
+    input.refCode ? `Your reference is ${input.refCode}.` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return {
+    kind: "fee_reminder",
+    title,
+    body,
+    refType: FEE_PAYMENT_REF_TYPE,
     refId: input.requiredActionId,
   };
 }

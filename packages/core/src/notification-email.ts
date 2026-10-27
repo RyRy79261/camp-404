@@ -41,6 +41,9 @@ export function shouldEmailNotification(
     // An event made for them by name or as a lead: not to be missed.
     case "event_invite":
       return true;
+    // Their own camp fee: what and by when. Not to be missed.
+    case "fee_reminder":
+      return true;
     default: {
       const _exhaustive: never = kind;
       return _exhaustive;
@@ -69,6 +72,7 @@ export const NOTIFICATION_EMAIL_LABEL: Readonly<
   car_message: "From your driver",
   pet_in: "Camp pets",
   event_invite: "Calendar",
+  fee_reminder: "Camp fees",
 };
 
 const FOOTER =

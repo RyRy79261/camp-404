@@ -22,6 +22,7 @@
     "./payments": "./src/payments.ts",
     "./dues": "./src/dues.ts",
     "./camp-money": "./src/camp-money.ts",
+    "./fee-reminders": "./src/fee-reminders.ts",
     "./rental": "./src/rental.ts",
     "./e2e": "./src/e2e.ts",
     "./mcp-oauth": "./src/mcp-oauth.ts",

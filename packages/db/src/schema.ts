@@ -1496,6 +1496,25 @@ export const campBills = pgTable(
   }),
 );
 
+// The automatic camp fee reminder (camp fees sprint, 2026-10-27): one row per
+// member, year and instalment day it went out for, so the page-load reminder
+// (runDueWork) reminds a member once per instalment, never on every load.
+export const feePaymentReminders = pgTable(
+  "fee_payment_reminders",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    // The instalment's day.
+    dueOn: date("due_on", { mode: "string" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    pk: primaryKey({ columns: [r.userId, r.cycle, r.dueOn] }),
+  }),
+);
+
 // A refund of a received payment (owner, 2026-09-24: "there should be a refund
 // state"): asked for, then refunded or declined with a reason. The amount is
 // proposed from the year's schedule and the day the member withdrew; the
