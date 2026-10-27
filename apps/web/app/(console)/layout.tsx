@@ -13,6 +13,7 @@ import { prefetchMemberState, resolveMemberState } from "@/lib/member-gate";
 import { listPinnedForUser } from "@/lib/notifications";
 import { isPrinceKeeper, reunionDelayMs } from "@/lib/prince-keeper";
 import { getProgramManifest, manifestModeFor } from "@/lib/program-manifest";
+import { getMyPayGuide } from "@/lib/camp-money";
 import { getCampHeadcount } from "@/lib/roster";
 import { isE2ETestMode } from "@/lib/test-mode";
 import { getInboxBadge } from "@/lib/inbox-badge";
@@ -136,6 +137,10 @@ export default async function ConsoleLayout({
     .sort((a, b) => a.order - b.order)
     .filter((t) => led.has(t.key))
     .map((t) => t.label);
+  // The pay guide: a full desktop only, never held. Its own read, beside
+  // the manifest, never in it; a failure leaves the guide off, not the desktop.
+  const payGuide =
+    full && !held ? await getMyPayGuide(campUser.id).catch(() => null) : null;
   const cycle = settings.current;
   const account = {
     name: campUser.displayName ?? authUser.primaryEmail ?? "Signed in",
@@ -201,6 +206,7 @@ export default async function ConsoleLayout({
       // no, decided here; the address list never leaves the server.
       princeKeeper={isPrinceKeeper(process.env, authUser)}
       telegramOffer={telegramOffer}
+      payGuide={payGuide}
       // The empty clock's 30 s wait before she walks on; shorter under
       // the E2E harness only.
       reunionDelayMs={reunionDelayMs()}

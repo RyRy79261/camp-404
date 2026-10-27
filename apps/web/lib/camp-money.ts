@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   budgetsUnspentCents,
+  campDayKey,
   campForecast,
   feeTotals,
   nearestScaleName,
@@ -31,6 +32,8 @@ import {
   type DuesYear,
 } from "./dues";
 import { getFeeScale } from "./join-site";
+import { ledgerCycle } from "./payments";
+import type { PayGuideData } from "./pledge-view";
 import { campMoneyTestStore } from "./test-store-camp-money";
 import { twin } from "./twin";
 
@@ -216,5 +219,29 @@ export async function getMyFeePayment(
     bank: bank.details,
     showPayGuide:
       year.collectingFees && dues.feeOwingCents > 0 && !dues.subsidy,
+  };
+}
+
+/**
+ * The pay guide's figures for the signed-in member, or null when it does not
+ * show: the year is not collecting fees, they owe nothing, or they asked for
+ * a subsidy. The console layout reads it for a full desktop only (never the
+ * held one); the caller gates nothing else, and the bank details are the
+ * camp's own.
+ */
+export async function getMyPayGuide(
+  userId: string,
+): Promise<PayGuideData | null> {
+  const cycle = await ledgerCycle();
+  // Most of the year nothing is collected: one small read, then stop.
+  if (!(await getDuesYear(cycle)).collectingFees) return null;
+  const mine = await getMyFeePayment(userId, cycle, campDayKey(new Date()));
+  if (!mine?.showPayGuide) return null;
+  return {
+    refCode: mine.refCode,
+    feeTotalCents: mine.feeTotalCents,
+    paidCents: mine.paidCents,
+    next: mine.next,
+    bank: mine.bank,
   };
 }
