@@ -24,7 +24,7 @@ export async function savePledgeAction(
     if (!parsed.success) {
       return {
         ok: false,
-        error: parsed.error.issues[0]?.message ?? "Pick what you can pay.",
+        error: parsed.error.issues[0]?.message ?? "Pick what you can commit.",
       };
     }
     const result = await savePledge({

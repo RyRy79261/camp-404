@@ -178,6 +178,36 @@ describe("BlockEditor — what the app uses the answer for", () => {
     expect("allowOther" in next || "otherLabel" in next).toBe(false);
   });
 
+  it("fills in the six fee timings when a choice becomes the fee timing question", async () => {
+    const { onChange } = renderEditor(
+      Question.parse({
+        id: "q_27b642d9",
+        kind: "single_select",
+        prompt: "When can you pay?",
+        allowOther: true,
+        options: [
+          { value: "option_1", label: "Soon" },
+          { value: "option_2", label: "Later" },
+        ],
+      }),
+    );
+    await choose(
+      screen.getByRole("combobox", { name: "The app uses this answer as" }),
+      /^When they can pay their camp fee/,
+    );
+    const next = lastChange(onChange);
+    expect(next.role).toBe("fee_timing");
+    expect((next.options as { value: string }[]).map((o) => o.value)).toEqual([
+      "all_by_end_nov",
+      "all_by_end_dec",
+      "part_by_end_nov",
+      "part_by_end_dec",
+      "all_by_15_jan",
+      "talk_to_captain",
+    ]);
+    expect("allowOther" in next).toBe(false);
+  });
+
   it("leaves the options alone when the attendance use is removed", async () => {
     const options = [
       { value: "yes", label: "Yes, I'm coming" },

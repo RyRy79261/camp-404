@@ -14,21 +14,29 @@ vi.mock("@camp404/ui/components/toast", () => ({
 
 import { PledgeForm } from "./my-dues-forms";
 
-// A below-tier pledge is shown back the way the member typed it, with a comma
-// for cents, like every other money form, not as a JavaScript number.
+// A saved pledge is shown back in whole rands, the way the member typed it,
+// with the "by when" and the subsidy answer they gave.
 
 describe("PledgeForm", () => {
-  it("shows a saved below-tier pledge with a comma for the cents", () => {
+  it("shows a saved pledge back as the member typed it", () => {
     render(
       <PledgeForm
-        tiers={[{ id: "t1", label: "Standard", amountCents: 300000 }]}
-        pledge={{ tierId: null, amountCents: 125050 }}
+        burnYear={2027}
+        pledge={{ amountCents: 720_000, payBy: "all_by_15_jan", subsidy: true }}
         locked={false}
       />,
     );
     const input = screen.getByLabelText<HTMLInputElement>(
-      "What you can pay (R)",
+      "What you can commit (R)",
     );
-    expect(input.value).toBe("1250,50");
+    expect(input.value).toBe("7200");
+    expect(
+      screen
+        .getByRole("radio", { name: "All of it by 15 January 2027" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(screen.getByRole("checkbox").getAttribute("aria-checked")).toBe(
+      "true",
+    );
   });
 });

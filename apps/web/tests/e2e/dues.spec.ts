@@ -14,8 +14,9 @@ import {
   setRank,
 } from "./_helpers";
 
-// Dues (#240, test-mode, on the store's twin). A captain sets a fee tier; a
-// member with a place pledges it and owes it; they send in a proof of payment,
+// Dues (#240, test-mode, on the store's twin). A captain sets a fee tier (the
+// Finance settings still keep them); a member with a place pledges their own
+// amount and a "by when" (camp fees sprint), and owes it; they send in a proof of payment,
 // which stays "being checked" until a Finance lead marks it received, and the
 // balance drops to paid up. The proof opens for its member and the Finance
 // team only: a lead of another team is refused the file and the Finance tools
@@ -66,10 +67,13 @@ async function memberPledges(page: Page) {
   await page.goto("/dues");
   await heading(page, "My dues");
   await expect(page.getByText("Nothing to pay yet.")).toBeVisible();
-  // Nothing charged yet: picking what they can pay is the one thing to do,
+  // Nothing charged yet: saying what they can commit is the one thing to do,
   // and there is no proof form for money they do not owe.
   await expect(page.getByLabel("Proof of payment")).toHaveCount(0);
-  await page.getByRole("radio", { name: /Base: R\s1\s500,00/ }).click();
+  await page.getByLabel("What you can commit (R)").fill("1500");
+  await page
+    .getByRole("radio", { name: "All of it by the end of November" })
+    .click();
   await page.getByRole("button", { name: "Save my pledge" }).click();
   await expect(page.getByText("You owe R 1 500,00.")).toBeVisible();
 }
@@ -156,7 +160,7 @@ test.describe("dues (test-mode)", () => {
       page.getByRole("button", { name: "Send another proof" }),
     ).toBeVisible();
     await expect(page.getByTestId("my-pledge")).toContainText(
-      /You pledged R\s1\s500,00 \(Base\)\./,
+      /You pledged R\s1\s500,00\./,
     );
     // A member reads only their own: the Finance tools stay locked.
     await page.goto("/captains/payments/members");

@@ -3,9 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Pencil, ReceiptText, Send } from "lucide-react";
-import { formatMoney, parseMoneyToMinor } from "@camp404/core";
-import type { PaymentMethod } from "@camp404/types";
+import { feeTimingLabel, formatMoney, parseMoneyToMinor } from "@camp404/core";
+import {
+  FEE_TIMINGS,
+  type FeeTiming,
+  type PaymentMethod,
+} from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
+import { Checkbox } from "@camp404/ui/components/checkbox";
 import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
 import { DateControl } from "@camp404/ui/components/date-control";
 import {
@@ -35,7 +40,6 @@ import { requestMyRefundAction, savePledgeAction } from "./actions";
 // phone the dialog fills the screen).
 
 const TYPE_AMOUNT = "Type the amount in rands, like 1250 or 1250,50.";
-const BELOW = "below";
 
 /** A dialog that fills a phone's screen and scrolls when it is long. */
 const DIALOG_CLASS =
@@ -44,33 +48,39 @@ const DIALOG_CLASS =
 const selectClass =
   "h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
+/** What a pledge form starts from: the member's saved pledge, if any. */
+export interface PledgeValue {
+  amountCents: number;
+  payBy: FeeTiming | null;
+  subsidy: boolean;
+}
+
+/**
+ * The member's pledge (owner, 2026-10-27): any amount in whole rands, when
+ * they can pay it, and whether they need a subsidy (then R0 is fine and "by
+ * when" optional). A plain form until the "What can you commit?" step of
+ * "Coming this year?" replaces it (mock-up step 3).
+ */
 export function PledgeForm({
-  tiers,
   pledge,
+  burnYear,
   locked,
   onSaved,
 }: {
-  tiers: { id: string; label: string; amountCents: number }[];
-  pledge: { tierId: string | null; amountCents: number } | null;
+  pledge: PledgeValue | null;
+  burnYear: number;
   locked: boolean;
   onSaved?: () => void;
 }) {
   const router = useRouter();
-  const [choice, setChoice] = useState(pledge ? (pledge.tierId ?? BELOW) : "");
-  const [below, setBelow] = useState(
-    pledge && pledge.tierId === null ? typedRands(pledge.amountCents) : "",
+  const [amount, setAmount] = useState(
+    pledge ? typedRands(pledge.amountCents) : "",
   );
+  const [payBy, setPayBy] = useState<string>(pledge?.payBy ?? "");
+  const [subsidy, setSubsidy] = useState(pledge?.subsidy ?? false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  if (tiers.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        The Finance team hasn&rsquo;t set this year&rsquo;s fees yet. Check back
-        soon.
-      </p>
-    );
-  }
   if (locked) {
     return pledge ? (
       <p className="text-sm">
@@ -85,20 +95,17 @@ export function PledgeForm({
 
   function save() {
     setError(null);
-    let input: unknown;
-    if (choice === BELOW) {
-      const cents = parseMoneyToMinor(below);
-      if (cents === null || cents <= 0) {
-        setError(TYPE_AMOUNT);
-        return;
-      }
-      input = { kind: "below", amountCents: cents };
-    } else if (choice) {
-      input = { kind: "tier", tierId: choice };
-    } else {
-      setError("Pick what you can pay.");
+    const cents =
+      amount.trim() === "" && subsidy ? 0 : parseMoneyToMinor(amount);
+    if (cents === null || cents < 0) {
+      setError(TYPE_AMOUNT);
       return;
     }
+    const input = {
+      amountCents: cents,
+      payBy: payBy === "" ? null : payBy,
+      subsidy,
+    };
     start(async () => {
       const res = await savePledgeAction(input);
       if (!res.ok) {
@@ -117,32 +124,36 @@ export function PledgeForm({
 
   return (
     <div className="flex flex-col gap-4">
-      <OptionCardGroup
-        aria-label="What you can pay"
-        value={choice}
-        onValueChange={setChoice}
-        options={[
-          ...tiers.map((t) => ({
-            value: t.id,
-            label: `${t.label}: ${formatMoney(t.amountCents)}`,
-          })),
-          {
-            value: BELOW,
-            label: "Less than that",
-            description: "Say what you can pay.",
-          },
-        ]}
+      <InputField
+        label="What you can commit (R)"
+        inputMode="numeric"
+        emoji={false}
+        className="max-w-48"
+        value={amount}
+        onChange={(e) => setAmount(e.currentTarget.value)}
+        disabled={pending}
       />
-      {choice === BELOW && (
-        <InputField
-          label="What you can pay (R)"
-          inputMode="decimal"
-          className="max-w-48"
-          value={below}
-          onChange={(e) => setBelow(e.currentTarget.value)}
+      <OptionCardGroup
+        aria-label="By when can you pay it?"
+        value={payBy}
+        onValueChange={setPayBy}
+        options={FEE_TIMINGS.map((timing) => ({
+          value: timing,
+          label: feeTimingLabel(timing, burnYear),
+        }))}
+      />
+      <div className="flex items-start gap-2">
+        <Checkbox
+          id="pledge-subsidy"
+          checked={subsidy}
           disabled={pending}
+          onCheckedChange={(v) => setSubsidy(v === true)}
         />
-      )}
+        <Label htmlFor="pledge-subsidy" className="font-normal">
+          I need a subsidy: please talk to me. Then R0 is fine, and &ldquo;by
+          when&rdquo; is optional.
+        </Label>
+      </div>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -151,7 +162,7 @@ export function PledgeForm({
       <Button
         type="button"
         className="self-start"
-        disabled={pending || !choice}
+        disabled={pending}
         onClick={save}
       >
         {pending && <Loader2 className="animate-spin" aria-hidden />}
@@ -163,11 +174,11 @@ export function PledgeForm({
 
 /** "Change" beside a pledge that is not charged yet: the form in a dialog. */
 export function PledgeDialog({
-  tiers,
   pledge,
+  burnYear,
 }: {
-  tiers: { id: string; label: string; amountCents: number }[];
-  pledge: { tierId: string | null; amountCents: number };
+  pledge: PledgeValue;
+  burnYear: number;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -180,15 +191,14 @@ export function PledgeDialog({
       </DialogTrigger>
       <DialogContent className={DIALOG_CLASS}>
         <DialogHeader>
-          <DialogTitle>What you can pay</DialogTitle>
+          <DialogTitle>What you can commit</DialogTitle>
           <DialogDescription>
-            You can change it until your fee is charged. Less than the lowest
-            tier is fine too.
+            You can change it until your fee is charged.
           </DialogDescription>
         </DialogHeader>
         <PledgeForm
-          tiers={tiers}
           pledge={pledge}
+          burnYear={burnYear}
           locked={false}
           onSaved={() => setOpen(false)}
         />

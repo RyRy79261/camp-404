@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import {
   BUILDER_ROLES,
+  FEE_TIMING_OPTIONS,
   PARTICIPATION_INTENT_OPTIONS,
   RATING_GRID_MAX_POINTS,
   RATING_GRID_MIN_POINTS,
@@ -464,23 +465,25 @@ function RoleSelect({
             // Removing a role leaves the options as they are.
             onChange(rest as PageBlock);
           } else if (
-            v === "participation_intent" &&
+            (v === "participation_intent" || v === "fee_timing") &&
             block.kind === "single_select"
           ) {
-            // Its answer sets each member's place, so the options are the
-            // fixed Yes / Maybe / No, and "Other…" can't be offered.
+            // Its answer sets each member's place (Yes / Maybe / No) or their
+            // camp fee's "by when" (the six timings), so the options are
+            // fixed, and "Other…" can't be offered.
             const {
               allowOther: _other,
               otherLabel: _otherLabel,
               ...fixed
             } = rest as SingleSelectQuestion;
+            const options =
+              v === "fee_timing"
+                ? FEE_TIMING_OPTIONS
+                : PARTICIPATION_INTENT_OPTIONS;
             onChange({
               ...fixed,
               role: v,
-              options: PARTICIPATION_INTENT_OPTIONS.map(({ value, label }) => ({
-                value,
-                label,
-              })),
+              options: options.map(({ value, label }) => ({ value, label })),
             } as PageBlock);
           } else {
             onChange({ ...rest, role: v } as PageBlock);

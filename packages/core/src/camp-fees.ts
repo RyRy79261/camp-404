@@ -223,6 +223,41 @@ export function nextFeePayment(
   return { kind: "paid_up" };
 }
 
+/**
+ * A member's fee figures from their rows, the same in both dues stores: what
+ * the fee is (the live camp fee, else the pledge, else 0), what is still owed
+ * of it after every payment received or waived, and what they pay next.
+ */
+export function feeFigures(input: {
+  liveFeeCents: number | null;
+  pledgedCents: number | null;
+  payBy: FeeTiming | null;
+  subsidy: boolean;
+  paidCents: number;
+  plan: readonly Instalment[];
+  /** The burn year (the dues' cycle). */
+  cycle: number;
+  today: string;
+}): { feeTotalCents: number; feeOwingCents: number; feeNext: NextFeePayment } {
+  const feeTotalCents = input.liveFeeCents ?? input.pledgedCents ?? 0;
+  return {
+    feeTotalCents,
+    feeOwingCents: Math.max(0, feeTotalCents - input.paidCents),
+    feeNext: nextFeePayment(
+      {
+        totalCents: feeTotalCents,
+        paidCents: input.paidCents,
+        payBy: input.payBy,
+        plan: input.plan,
+        hasPledge: input.pledgedCents !== null || input.liveFeeCents !== null,
+        subsidy: input.subsidy,
+      },
+      input.cycle,
+      input.today,
+    ),
+  };
+}
+
 // --- The pledge -----------------------------------------------------------------
 
 export const FEE_ALREADY_SET =

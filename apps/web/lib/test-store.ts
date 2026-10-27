@@ -135,6 +135,7 @@ import {
   resetDuesStore,
 } from "./test-store-dues";
 import { eraseClaimsOf, resetClaimsStore } from "./test-store-claims";
+import { resetCampMoneyStore } from "./test-store-camp-money";
 import { petsTestStore, resetPetsStore } from "./test-store-pets";
 import { eraseDietaryOf } from "./test-store-dietary";
 import { eraseInventoryOf } from "./test-store-inventory";
@@ -7000,6 +7001,7 @@ export const testStore = {
     S.leadPosts = [];
     S.telegramPosts = { ...DEFAULT_TELEGRAM_POST_SETTINGS };
     resetDuesStore();
+    resetCampMoneyStore();
     resetRentalStore();
     resetLogisticsStore();
     resetCampEventsStore();

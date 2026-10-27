@@ -98,19 +98,16 @@ describe("the dues twin", () => {
 
   it("charges the pledged fee when a captain accepts the member, once, and locks the pledge", () => {
     const { captain, member } = people();
-    const tier = duesTestStore.addFeeTier({
-      cycle: YEAR,
-      label: "Base",
-      amountCents: 200_000,
-      actorId: captain.id,
-    });
-    if (!tier.ok) throw new Error(tier.error);
     testStore.seedParticipation({ userId: member.id, status: "applied" });
     expect(
       duesTestStore.savePledge({
         userId: member.id,
         cycle: YEAR,
-        pledge: { kind: "tier", tierId: tier.id },
+        pledge: {
+          amountCents: 200_000,
+          payBy: "all_by_end_nov",
+          subsidy: false,
+        },
       }),
     ).toEqual({ ok: true, charged: false });
     testStore.decideParticipation({
@@ -123,13 +120,17 @@ describe("the dues twin", () => {
       forFinance: true,
     })!;
     expect(dues.charges).toMatchObject([
-      { kind: "fee", description: "Camp fee: Base", amountCents: 200_000 },
+      {
+        kind: "fee",
+        description: "Camp fee: pledged amount",
+        amountCents: 200_000,
+      },
     ]);
     expect(
       duesTestStore.savePledge({
         userId: member.id,
         cycle: YEAR,
-        pledge: { kind: "below", amountCents: 1 },
+        pledge: { amountCents: 100, payBy: "all_by_end_nov", subsidy: false },
       }),
     ).toEqual({ ok: false, error: FEE_ALREADY_SET });
 

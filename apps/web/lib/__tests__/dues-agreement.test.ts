@@ -4,6 +4,8 @@ import {
   FEE_ALREADY_SET,
   FEE_CHANGED,
   CHARGE_GONE,
+  COLLECTING_CHANGED,
+  NO_SUCH_MEMBER,
   NOT_A_MONEY_KEEPER,
   NOT_YOUR_PAYMENT,
   PLAN_CHANGED,
@@ -13,8 +15,6 @@ import {
   YEAR_CHANGED,
 } from "@camp404/db/dues";
 import {
-  NO_TIERS_YET,
-  PLEDGE_NOT_BELOW,
   REFUND_TOO_LARGE,
   SETTLE_UP_CHANGED,
   SETTLE_UP_NOBODY,
@@ -22,7 +22,7 @@ import {
   TOO_MANY_TIERS,
   MAX_FEE_TIERS,
 } from "@camp404/core";
-import { MANUAL_CHARGE_KINDS } from "@camp404/types";
+import { MANUAL_CHARGE_KINDS, type FeeTiming } from "@camp404/types";
 import { useTestDb } from "../../../../packages/db/src/__tests__/_harness";
 import { bothWays, outcome, YEAR, type People } from "./_agreement";
 
@@ -56,6 +56,7 @@ import {
   requestRefund,
   saveDuesYear,
   savePledge,
+  setCollectingFees,
   setFee,
   setPaymentPlan,
   settleUpCandidates,
@@ -215,30 +216,31 @@ describe("dues: the database and the test store agree", () => {
         userId: string,
         input: Parameters<typeof savePledge>[0]["pledge"],
       ) => savePledge({ userId, cycle: YEAR, pledge: input });
-      const before = await pledge(p.member, {
-        kind: "below",
-        amountCents: 50_000,
+      const own = (
+        amountCents: number,
+        payBy: FeeTiming | null = "part_by_end_nov",
+      ) => ({
+        amountCents,
+        payBy,
+        subsidy: false,
       });
-      const tiers = await threeTiers(p);
       await seed.participation(p.member, "accepted");
       await seed.participation(p.other, "applied");
+      await seed.participation(p.kitchenLead, "accepted");
       const out = {
-        before,
-        notBelow: await pledge(p.other, {
-          kind: "below",
-          amountCents: tiers[0]!.amountCents,
+        nobody: await pledge(NOBODY, own(500_000)),
+        notAccepted: await pledge(p.other, own(720_000, "talk_to_captain")),
+        accepted: await pledge(p.member, own(720_000)),
+        again: await pledge(p.member, own(800_000)),
+        sameAmountNewWhen: await pledge(
+          p.member,
+          own(720_000, "all_by_15_jan"),
+        ),
+        subsidy: await pledge(p.kitchenLead, {
+          amountCents: 0,
+          payBy: null,
+          subsidy: true,
         }),
-        tierGone: await pledge(p.other, { kind: "tier", tierId: NOBODY }),
-        nobody: await pledge(NOBODY, { kind: "tier", tierId: tiers[1]!.id }),
-        notAccepted: await pledge(p.other, {
-          kind: "below",
-          amountCents: 40_000,
-        }),
-        accepted: await pledge(p.member, {
-          kind: "tier",
-          tierId: tiers[1]!.id,
-        }),
-        again: await pledge(p.member, { kind: "tier", tierId: tiers[0]!.id }),
       };
       const fee = await liveFeeId(p.member);
       const setTo = (
@@ -293,11 +295,11 @@ describe("dues: the database and the test store agree", () => {
       };
     });
     expect(db).toMatchObject({
-      before: { ok: false, error: NO_TIERS_YET },
-      notBelow: { ok: false, error: PLEDGE_NOT_BELOW },
-      tierGone: { ok: false, error: TIER_GONE },
+      nobody: { ok: false, error: NO_SUCH_MEMBER },
       notAccepted: { ok: true, charged: false },
       accepted: { ok: true, charged: true },
+      sameAmountNewWhen: { ok: true, charged: false },
+      subsidy: { ok: true, charged: false },
       again: { ok: false, error: FEE_ALREADY_SET },
       feeByKitchen: { ok: false, error: NOT_A_MONEY_KEEPER },
       feeByMember: { ok: false, error: NOT_A_MONEY_KEEPER },
@@ -305,7 +307,60 @@ describe("dues: the database and the test store agree", () => {
       concession: { ok: true },
       feeForOther: { ok: true },
       nobodyDues: null,
-      own: { charges: [{ concessionReason: null }, { concession: false }] },
+      own: {
+        charges: [{ concessionReason: null }, { concession: false }],
+        payBy: "all_by_15_jan",
+        subsidy: false,
+        feeTotalCents: 150_000,
+        feeNext: { kind: "due", dueOn: "2027-01-15", amountCents: 150_000 },
+      },
+    });
+    const accounts = (db as { accounts: Record<string, unknown>[] }).accounts;
+    expect(accounts.find((a) => a.userId === "@kitchenLead")).toMatchObject({
+      pledgeCents: 0,
+      subsidy: true,
+      feeNext: { kind: "subsidy" },
+    });
+    expect(accounts.find((a) => a.userId === "@other")).toMatchObject({
+      // Finance set their fee lower: the fee, not the pledge, is what is owed.
+      pledgeCents: 720_000,
+      feeCents: 90_000,
+      payBy: "talk_to_captain",
+      feeOwingCents: 90_000,
+      feeNext: { kind: "no_date", amountCents: 90_000 },
+    });
+    expect(store).toEqual(db);
+  });
+
+  it("switches collecting fees for the Finance team only, a compare-and-set", async () => {
+    const { db, store } = await bothWays(mode, h, async (p) => {
+      const set = (actorId: string, on: boolean, expectedVersion: number) =>
+        setCollectingFees({ cycle: YEAR, on, expectedVersion, actorId });
+      return {
+        before: await getDuesYear(YEAR),
+        member: await set(p.member, true, 0),
+        kitchen: await set(p.kitchenLead, true, 0),
+        on: await set(p.financeLead, true, 0),
+        stale: await set(p.captain, false, 0),
+        dates: await saveDuesYear({
+          ...noDates,
+          deadline: `${YEAR}-04-01`,
+          cycle: YEAR,
+          expectedVersion: 1,
+          actorId: p.captain,
+        }),
+        after: await getDuesYear(YEAR),
+      };
+    });
+    expect(db).toMatchObject({
+      before: { collectingFees: false, version: 0 },
+      member: { ok: false, error: NOT_A_MONEY_KEEPER },
+      kitchen: { ok: false, error: NOT_A_MONEY_KEEPER },
+      on: { ok: true, version: 1 },
+      stale: { ok: false, error: COLLECTING_CHANGED },
+      dates: { ok: true, version: 2 },
+      // Saving the dates keeps the switch.
+      after: { collectingFees: true, deadline: `${YEAR}-04-01`, version: 2 },
     });
     expect(store).toEqual(db);
   });

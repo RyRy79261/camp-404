@@ -4,20 +4,21 @@ import {
   campDayKey,
   duesBalance,
   duesSettled,
+  feeFigures,
   feeStandardCents,
   isFeeConcession,
   MAX_FEE_TIERS,
   nextInstalment,
   paymentFigures,
   proposeRefund,
+  pledgeRefusal,
   refundAmount,
-  resolvePledge,
   settleUpCharges,
   MONEY_KEEPER,
 } from "@camp404/core";
 import {
   CHARGE_GONE,
-  FEE_ALREADY_SET,
+  COLLECTING_CHANGED,
   FEE_CHANGED,
   NO_SUCH_MEMBER,
   NOT_A_MONEY_KEEPER,
@@ -47,6 +48,7 @@ import type {
   ChargeKind,
   DuesYearInput,
   FeeTierInput,
+  FeeTiming,
   PaymentPlanInput,
   PledgeInput,
   RefundStatus,
@@ -79,6 +81,8 @@ interface AccountRow {
   pledgedTierId: string | null;
   pledgedAmountCents: number | null;
   pledgedAt: Date | null;
+  payBy: FeeTiming | null;
+  subsidy: boolean;
   planVersion: number;
 }
 
@@ -290,10 +294,30 @@ function liveTiers(cycle: number): TierRow[] {
     );
 }
 
-/** The twin of chargeFeeFromPledge. */
+/** A new account row with nothing in it. */
+function emptyAccount(userId: string, cycle: number): AccountRow {
+  return {
+    userId,
+    cycle,
+    pledgedTierId: null,
+    pledgedAmountCents: null,
+    pledgedAt: null,
+    payBy: null,
+    subsidy: false,
+    planVersion: 0,
+  };
+}
+
+/** The twin of chargeFeeFromPledge (a subsidy pledge of R0 charges nothing). */
 function chargeFromPledge(userId: string, cycle: number): boolean {
   const account = state().accounts.get(accountKey(userId, cycle));
-  if (!account || account.pledgedAmountCents === null) return false;
+  if (
+    !account ||
+    account.pledgedAmountCents === null ||
+    account.pledgedAmountCents <= 0
+  ) {
+    return false;
+  }
   if (liveCharges(userId, cycle).some((c) => c.kind === "fee")) return false;
   const tier = state().tiers.find((t) => t.id === account.pledgedTierId);
   state().charges.push({
@@ -352,9 +376,29 @@ export const duesTestStore = {
         fullRefundUntil: null,
         partialRefundUntil: null,
         partialRefundPct: null,
+        collectingFees: false,
         version: 0,
       }
     );
+  },
+
+  setCollectingFees(input: {
+    cycle: number;
+    on: boolean;
+    expectedVersion: number;
+    actorId: string;
+  }): MoneyResult<{ version: number }> {
+    return keeper(input.actorId, () => {
+      const current = this.getDuesYear(input.cycle);
+      if (current.version !== input.expectedVersion) return COLLECTING_CHANGED;
+      const version = input.expectedVersion + 1;
+      state().years.set(input.cycle, {
+        ...current,
+        collectingFees: input.on,
+        version,
+      });
+      return { version };
+    });
   },
 
   saveDuesYear(
@@ -365,6 +409,7 @@ export const duesTestStore = {
       if (current.version !== input.expectedVersion) return YEAR_CHANGED;
       const version = input.expectedVersion + 1;
       state().years.set(input.cycle, {
+        ...current,
         cycle: input.cycle,
         deadline: input.deadline,
         fullRefundUntil: input.fullRefundUntil,
@@ -521,6 +566,8 @@ export const duesTestStore = {
               pledgedAt: account.pledgedAt,
             }
           : null,
+      payBy: account?.payBy ?? null,
+      subsidy: account?.subsidy ?? false,
       planVersion: account?.planVersion ?? 0,
       instalments,
       charges: chargeRows,
@@ -540,6 +587,18 @@ export const duesTestStore = {
         balance.paidCents,
         options.today ?? campDayKey(new Date()),
       ),
+      ...feeFigures({
+        liveFeeCents:
+          liveCharges(userId, cycle).find((c) => c.kind === "fee")
+            ?.amountCents ?? null,
+        pledgedCents: account?.pledgedAmountCents ?? null,
+        payBy: account?.payBy ?? null,
+        subsidy: account?.subsidy ?? false,
+        paidCents: balance.paidCents,
+        plan: instalments,
+        cycle,
+        today: options.today ?? campDayKey(new Date()),
+      }),
     };
   },
 
@@ -549,24 +608,23 @@ export const duesTestStore = {
     pledge: PledgeInput;
   }): MoneyResult<{ charged: boolean }> {
     if (!isMember(input.userId)) return { ok: false, error: NO_SUCH_MEMBER };
-    const pledged = resolvePledge(input.pledge, liveTiers(input.cycle));
-    if (typeof pledged === "string") return { ok: false, error: pledged };
-    const { tierId, amountCents } = pledged;
-    if (liveCharges(input.userId, input.cycle).some((c) => c.kind === "fee")) {
-      return { ok: false, error: FEE_ALREADY_SET };
-    }
+    const { amountCents, payBy, subsidy } = input.pledge;
     const key = accountKey(input.userId, input.cycle);
-    const account = state().accounts.get(key) ?? {
-      userId: input.userId,
-      cycle: input.cycle,
-      pledgedTierId: null,
-      pledgedAmountCents: null,
-      pledgedAt: null,
-      planVersion: 0,
-    };
-    account.pledgedTierId = tierId;
+    const account =
+      state().accounts.get(key) ?? emptyAccount(input.userId, input.cycle);
+    const refusal = pledgeRefusal({
+      feeCents:
+        liveCharges(input.userId, input.cycle).find((c) => c.kind === "fee")
+          ?.amountCents ?? null,
+      pledgedCents: account.pledgedAmountCents,
+      amountCents,
+    });
+    if (refusal) return { ok: false, error: refusal };
+    account.pledgedTierId = null;
     account.pledgedAmountCents = amountCents;
     account.pledgedAt = new Date();
+    account.payBy = payBy;
+    account.subsidy = subsidy;
     state().accounts.set(key, account);
     const charged =
       testStore.getParticipation(input.userId, input.cycle)?.status ===
@@ -651,14 +709,8 @@ export const duesTestStore = {
     return keeper(input.actorId, () => {
       if (!isMember(input.userId)) return NO_SUCH_MEMBER;
       const key = accountKey(input.userId, input.cycle);
-      const account = state().accounts.get(key) ?? {
-        userId: input.userId,
-        cycle: input.cycle,
-        pledgedTierId: null,
-        pledgedAmountCents: null,
-        pledgedAt: null,
-        planVersion: 0,
-      };
+      const account =
+        state().accounts.get(key) ?? emptyAccount(input.userId, input.cycle);
       if (account.planVersion !== input.expectedVersion) return PLAN_CHANGED;
       account.planVersion = input.expectedVersion + 1;
       state().accounts.set(key, account);
@@ -695,6 +747,8 @@ export const duesTestStore = {
           participation: dues.participation?.status ?? null,
           pledgeLabel: dues.pledge?.tierLabel ?? null,
           pledgeCents: dues.pledge?.amountCents ?? null,
+          payBy: dues.payBy,
+          subsidy: dues.subsidy,
           feeCents: fee?.amountCents ?? null,
           concession: fee ? isFeeConcession(fee) : false,
           balance: dues.balance,
@@ -706,6 +760,10 @@ export const duesTestStore = {
           openRefunds: refundsOf(u.id, cycle).filter(
             (r) => r.status === "requested",
           ).length,
+          plan: dues.instalments,
+          feeTotalCents: dues.feeTotalCents,
+          feeOwingCents: dues.feeOwingCents,
+          feeNext: dues.feeNext,
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));

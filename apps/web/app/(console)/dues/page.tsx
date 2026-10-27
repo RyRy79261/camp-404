@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { getDuesYear, getMemberDues, listFeeTiers } from "@/lib/dues";
+import { getDuesYear, getMemberDues } from "@/lib/dues";
 import { paymentProofPath } from "@/lib/dues-copy";
 import {
   balanceSentence,
@@ -58,9 +58,8 @@ export default async function MyDuesPage() {
   const { campUser } = await requireMemberPage();
   const cycle = await ledgerCycle();
   const today = campDayKey(new Date());
-  const [dues, tiers, year, refCode] = await Promise.all([
+  const [dues, year, refCode] = await Promise.all([
     getMemberDues(campUser.id, cycle, { forFinance: false, today }),
-    listFeeTiers(cycle),
     getDuesYear(cycle),
     getMemberRefCode(campUser.id),
   ]);
@@ -69,11 +68,6 @@ export default async function MyDuesPage() {
   const charges = dues.charges.filter((c) => !c.cancelled);
   const feeCharged = charges.some((c) => c.kind === "fee");
   const notComing = dues.participation?.status === "not_attending";
-  const tierChoices = tiers.map((t) => ({
-    id: t.id,
-    label: t.label,
-    amountCents: t.amountCents,
-  }));
   // The pledge form is the next step only for a member who has not pledged.
   const mustPledge = !dues.pledge && !feeCharged;
   // Something left to pay that no proof covers yet: the form stays open.
@@ -199,12 +193,13 @@ export default async function MyDuesPage() {
                       : "It is charged once you have a place."}
                   </span>
                 </p>
-                {!feeCharged && tierChoices.length > 0 && (
+                {!feeCharged && (
                   <PledgeDialog
-                    tiers={tierChoices}
+                    burnYear={cycle}
                     pledge={{
-                      tierId: dues.pledge.tierId,
                       amountCents: dues.pledge.amountCents,
+                      payBy: dues.payBy,
+                      subsidy: dues.subsidy,
                     }}
                   />
                 )}
@@ -216,15 +211,15 @@ export default async function MyDuesPage() {
         {mustPledge && (
           <Card className="border-l-4 border-l-accent">
             <CardHeader className="p-5 pb-3">
-              <CardTitle className="text-base">What you can pay</CardTitle>
+              <CardTitle className="text-base">What you can commit</CardTitle>
               <CardDescription>
-                Pick the tier you can pay this year. Less than the lowest tier
-                is fine too. Your fee is charged from it once you have a place;
-                then you pay by EFT with your reference.
+                Pay what you can afford, and say by when. Your fee is charged
+                from it once you have a place; then you pay by EFT with your
+                reference.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5 pt-0">
-              <PledgeForm tiers={tierChoices} pledge={null} locked={false} />
+              <PledgeForm burnYear={cycle} pledge={null} locked={false} />
             </CardContent>
           </Card>
         )}

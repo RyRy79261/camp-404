@@ -9,7 +9,7 @@ import {
   MAX_FEE_TIERS,
   COLLECTING_CHANGED,
   FEE_ALREADY_SET,
-  nextFeePayment,
+  feeFigures,
   pledgeRefusal,
   proposeRefund,
   refundAmount,
@@ -539,36 +539,6 @@ export interface MemberDues {
   feeOwingCents: number;
   /** Their next fee payment: the plan's, else the pledge's "by when". */
   feeNext: NextFeePayment;
-}
-
-/** A fee's figures from its rows: what it is, owed, and paid next. */
-function feeFigures(input: {
-  liveFeeCents: number | null;
-  pledgedCents: number | null;
-  payBy: FeeTiming | null;
-  subsidy: boolean;
-  paidCents: number;
-  plan: readonly Instalment[];
-  cycle: number;
-  today: string;
-}): { feeTotalCents: number; feeOwingCents: number; feeNext: NextFeePayment } {
-  const feeTotalCents = input.liveFeeCents ?? input.pledgedCents ?? 0;
-  return {
-    feeTotalCents,
-    feeOwingCents: Math.max(0, feeTotalCents - input.paidCents),
-    feeNext: nextFeePayment(
-      {
-        totalCents: feeTotalCents,
-        paidCents: input.paidCents,
-        payBy: input.payBy,
-        plan: input.plan,
-        hasPledge: input.pledgedCents !== null || input.liveFeeCents !== null,
-        subsidy: input.subsidy,
-      },
-      input.cycle,
-      input.today,
-    ),
-  };
 }
 
 /**
