@@ -166,6 +166,7 @@ describe("0105_adopt_sentinel_year_rows", () => {
       "team_roles",
       "team_role_keen",
       "team_role_settings",
+      "fee_payment_reminders",
     ]);
     for (const { table_name } of rows.filter(
       (r) => !madeLater.has(r.table_name),
