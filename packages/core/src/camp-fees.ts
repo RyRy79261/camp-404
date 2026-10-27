@@ -721,7 +721,6 @@ export const FEE_REMINDER_DAYS_AHEAD = 3;
 export interface FeeReminderMember {
   userId: string;
   name: string;
-  participation: ParticipationStatus | null;
   subsidy: boolean;
   feeOwingCents: number;
   feeNext: NextFeePayment;
@@ -738,19 +737,23 @@ export interface FeeReminderAudience<M> {
   subsidy: M[];
 }
 
-/** Whether a member said Not coming this year. */
-function saidNotComing(m: { participation: ParticipationStatus | null }) {
-  return m.participation === "not_attending";
-}
+// Who said Not coming is not decided here: the caller passes the same list
+// every group send leaves out (`listNotComingUserIds` in
+// @camp404/db/participations, the `notComingUserIds` of `splitAudience`), so
+// the rule has one owner. Required, so no caller can forget it.
 
 /**
  * Who "Remind who still owes" reaches: everyone who owes money on their fee,
- * did not ask for a subsidy and did not say Not coming this year. A Maybe who
- * pledged is reminded too (group sends leave out only Not coming).
+ * did not ask for a subsidy and did not say Not coming this year
+ * (`notComingUserIds`). A Maybe who pledged is reminded too (group sends
+ * leave out only Not coming).
  */
 export function feeReminderAudience<M extends FeeReminderMember>(
   members: readonly M[],
+  notComingUserIds: readonly string[],
 ): FeeReminderAudience<M> {
+  const notComing = new Set(notComingUserIds);
+  const saidNotComing = (m: M) => notComing.has(m.userId);
   const owing = members.filter((m) => m.feeOwingCents > 0);
   return {
     reach: owing.filter((m) => !m.subsidy && !saidNotComing(m)),
@@ -761,11 +764,15 @@ export function feeReminderAudience<M extends FeeReminderMember>(
 
 /**
  * Who "Ask everyone to pledge" reaches: everyone with no pledge and no fee
- * yet, who did not ask for a subsidy and did not say Not coming this year.
+ * yet, who did not ask for a subsidy and did not say Not coming this year
+ * (`notComingUserIds`).
  */
 export function pledgeAskAudience<M extends FeeReminderMember>(
   members: readonly M[],
+  notComingUserIds: readonly string[],
 ): FeeReminderAudience<M> {
+  const notComing = new Set(notComingUserIds);
+  const saidNotComing = (m: M) => notComing.has(m.userId);
   return {
     reach: members.filter(
       (m) => !m.hasPledge && !m.subsidy && !saidNotComing(m),

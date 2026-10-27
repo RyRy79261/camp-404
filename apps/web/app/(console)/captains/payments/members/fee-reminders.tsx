@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "@camp404/ui/components/dialog";
 import { toast } from "@camp404/ui/components/toast";
+import { NotComingNote } from "@/components/audience-reach";
 import { shortDay } from "@/lib/camp-money-view";
 import {
   askForPledgesAction,
@@ -33,10 +34,6 @@ import {
 // for saying Not coming this year (with "Who?"), who asked for a subsidy and
 // is not reminded, and the tick for a general Telegram post that names
 // nobody. The server works the audience out again when it sends.
-//
-// The audience line is this page's own small copy of the shared one that
-// Part A adds (components/audience-reach.tsx on feat/camp-fees); switch to
-// it once both are merged.
 
 export interface ReminderPreview {
   collecting: boolean;
@@ -78,7 +75,12 @@ function nextWords(next: NextFeePayment, owingCents: number): string {
   }
 }
 
-/** "Reaches N people … Left out: M who said Not coming this year. Who?" */
+/**
+ * "Reaches N people who still owe. Left out: M who said Not coming this year.
+ * Who?" The left-out half is the send screens' own (components/audience-reach),
+ * so every send says it the same way. The Finance team reads participation
+ * (a Finance lead is a team lead), so the names come with it.
+ */
 function AudienceLine({
   reach,
   notComing,
@@ -86,33 +88,16 @@ function AudienceLine({
   reach: string;
   notComing: readonly string[];
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-col gap-1 text-sm">
-      <p className="flex items-start gap-2">
-        <Users className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        <span>
-          {reach}
-          {notComing.length > 0 && (
-            <>
-              {" "}
-              Left out: {notComing.length} who said Not coming this year.{" "}
-              <button
-                type="button"
-                className="underline underline-offset-2 hover:text-accent"
-                aria-expanded={open}
-                onClick={() => setOpen((o) => !o)}
-              >
-                Who?
-              </button>
-            </>
-          )}
-        </span>
-      </p>
-      {open && (
-        <p className="pl-6 text-muted-foreground">{notComing.join(", ")}</p>
-      )}
-    </div>
+    <p className="flex items-start gap-2 text-sm">
+      <Users className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <span>
+        {reach}
+        <NotComingNote
+          notComing={{ count: notComing.length, names: [...notComing] }}
+        />
+      </span>
+    </p>
   );
 }
 

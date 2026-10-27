@@ -2493,6 +2493,13 @@ export const testStore = {
     return [...usersByAuthId.values()].filter((u) => wanted.has(u.id));
   },
 
+  /** Twin of listNotComingUserIds: who said Not coming for one year. */
+  notComingUserIds(cycle: number): string[] {
+    return [...participations.values()]
+      .filter((p) => p.cycle === cycle && p.status === "not_attending")
+      .map((p) => p.userId);
+  },
+
   /** Twin of resolveAudienceSplit: who it reaches, and who said Not coming. */
   announcementSplit(senderId: string, audience: Audience): AudienceSplit {
     const cycle = currentCycleNumber();
@@ -2514,9 +2521,7 @@ export const testStore = {
           .map((d) => d.userId),
         targetUserIds:
           audience.scope === "individual" ? [...audience.userIds] : [],
-        notComingUserIds: [...participations.values()]
-          .filter((p) => p.cycle === cycle && p.status === "not_attending")
-          .map((p) => p.userId),
+        notComingUserIds: this.notComingUserIds(cycle),
       },
       senderId,
     );

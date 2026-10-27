@@ -53,8 +53,9 @@ export const feeReminderTestStore = {
     const members = duesTestStore
       .listDuesAccounts(cycle, day)
       .map(feeReminderMemberOf);
-    const remind = feeReminderAudience(members);
-    const ask = pledgeAskAudience(members);
+    const notComing = testStore.notComingUserIds(cycle);
+    const remind = feeReminderAudience(members, notComing);
+    const ask = pledgeAskAudience(members, notComing);
     return {
       collecting: duesTestStore.getDuesYear(cycle).collectingFees,
       remind: {
@@ -87,6 +88,7 @@ export const feeReminderTestStore = {
       duesTestStore
         .listDuesAccounts(input.cycle, today())
         .map(feeReminderMemberOf),
+      testStore.notComingUserIds(input.cycle),
     ).reach;
     let notified = 0;
     for (const t of targets) {
@@ -119,6 +121,7 @@ export const feeReminderTestStore = {
     const day = today();
     const targets = feeReminderAudience(
       duesTestStore.listDuesAccounts(input.cycle, day).map(feeReminderMemberOf),
+      testStore.notComingUserIds(input.cycle),
     ).reach;
     let notified = 0;
     for (const t of targets) {

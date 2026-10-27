@@ -23,7 +23,6 @@ function member(
   return {
     userId: name,
     name,
-    participation: "applied",
     subsidy: false,
     feeOwingCents: 0,
     feeNext: { kind: "no_pledge" },
@@ -36,23 +35,25 @@ describe("fee reminder audiences", () => {
   const owing = { feeOwingCents: 360_000, hasPledge: true };
   const people = [
     member("Lerato", owing),
-    member("Mo", { ...owing, participation: "maybe" }),
-    member("Bongi", { ...owing, participation: "not_attending" }),
+    member("Mo", owing),
+    member("Bongi", owing),
     member("Sam", { hasPledge: true, subsidy: true }),
     member("Alex", { hasPledge: true }),
     member("Quiet"),
-    member("Nope", { participation: "not_attending" }),
+    member("Nope"),
   ];
+  // Who said Not coming this year, as listNotComingUserIds reads it.
+  const notComing = ["Bongi", "Nope"];
 
   it("reminds who owes, never Not coming and never a subsidy", () => {
-    const a = feeReminderAudience(people);
+    const a = feeReminderAudience(people, notComing);
     expect(a.reach.map((m) => m.name)).toEqual(["Lerato", "Mo"]);
     expect(a.notComing.map((m) => m.name)).toEqual(["Bongi", "Nope"]);
     expect(a.subsidy.map((m) => m.name)).toEqual(["Sam"]);
   });
 
   it("asks who has not pledged, never Not coming", () => {
-    const a = pledgeAskAudience(people);
+    const a = pledgeAskAudience(people, notComing);
     expect(a.reach.map((m) => m.name)).toEqual(["Quiet"]);
     expect(a.notComing.map((m) => m.name)).toEqual(["Bongi", "Nope"]);
   });

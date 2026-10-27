@@ -29,6 +29,7 @@ import {
 } from "./dues";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import { openNudges } from "./nudges";
+import { listNotComingUserIds } from "./participations";
 import * as schema from "./schema";
 import { listTelegramPlaces, queueFeeReminderPost } from "./telegram-posts";
 
@@ -52,7 +53,8 @@ import { listTelegramPlaces, queueFeeReminderPost } from "./telegram-posts";
 //    member who asked for a subsidy or said Not coming this year.
 //
 // Who is reached is @camp404/core's (feeReminderAudience, pledgeAskAudience),
-// the same rule the test store's twin applies.
+// the same rule the test store's twin applies. Who said Not coming is the
+// list every group send leaves out (listNotComingUserIds, ./participations).
 //
 // PGlite has ONE connection: inside a transaction everything goes through `tx`.
 
@@ -65,7 +67,6 @@ export function feeReminderMemberOf(
   return {
     userId: row.userId,
     name: row.name,
-    participation: row.participation,
     subsidy: row.subsidy,
     feeOwingCents: row.feeOwingCents,
     feeNext: row.feeNext,
@@ -131,7 +132,7 @@ export async function feeReminderPreview(
   today: string,
 ): Promise<FeeReminderPreview> {
   const db = createHttpDb();
-  const [accounts, year, places] = await Promise.all([
+  const [accounts, year, places, notComing] = await Promise.all([
     listDuesAccounts(cycle, today, db),
     db
       .select({ collecting: schema.duesYears.collectingFees })
@@ -139,10 +140,11 @@ export async function feeReminderPreview(
       .where(eq(schema.duesYears.cycle, cycle))
       .limit(1),
     listTelegramPlaces(db),
+    listNotComingUserIds(db, cycle),
   ]);
   const members = accounts.map(feeReminderMemberOf);
-  const remind = feeReminderAudience(members);
-  const ask = pledgeAskAudience(members);
+  const remind = feeReminderAudience(members, notComing);
+  const ask = pledgeAskAudience(members, notComing);
   const connected = await telegramConnected(
     remind.reach.map((m) => m.userId),
     db,
@@ -192,7 +194,10 @@ export async function askForPledges(input: {
     await assertMoneyKeeper(tx, input.actorId);
     const today = campDayKey(new Date());
     const accounts = await listDuesAccounts(input.cycle, today, tx);
-    const targets = pledgeAskAudience(accounts.map(feeReminderMemberOf)).reach;
+    const targets = pledgeAskAudience(
+      accounts.map(feeReminderMemberOf),
+      await listNotComingUserIds(tx, input.cycle),
+    ).reach;
     if (targets.length === 0) return { asked: 0, notified: 0 };
     const notified = await openNudges(tx, {
       userIds: targets.map((t) => t.userId),
@@ -237,6 +242,7 @@ export async function remindFeesOwed(input: {
     const accounts = await listDuesAccounts(input.cycle, today, tx);
     const targets = feeReminderAudience(
       accounts.map(feeReminderMemberOf),
+      await listNotComingUserIds(tx, input.cycle),
     ).reach;
     const rowOf = new Map(targets.map((t) => [t.userId, t.row]));
     const notified =
@@ -296,9 +302,12 @@ export async function remindFeesDueSoon(
     const cycle = await currentCycleNumber(tx);
     if (!(await lockCollecting(tx, cycle))) return { reminded: 0 };
     const accounts = await listDuesAccounts(cycle, today, tx);
-    const due = feeReminderAudience(accounts.map(feeReminderMemberOf))
-      .reach// Only a Coming or Maybe member with a day to pay.
-      .filter((m) => feeReminderDue(m.feeNext, today));
+    const due = feeReminderAudience(
+      accounts.map(feeReminderMemberOf),
+      await listNotComingUserIds(tx, cycle),
+    )
+      // Only a Coming or Maybe member with a day to pay.
+      .reach.filter((m) => feeReminderDue(m.feeNext, today));
     if (due.length === 0) return { reminded: 0 };
     const unread = await tx
       .select({ userId: schema.notificationDeliveries.userId })
