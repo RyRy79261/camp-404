@@ -104,8 +104,24 @@ const eventFields = {
     .array(z.string().uuid())
     .max(CAMP_EVENT_MAX_PEOPLE, `Pick at most ${CAMP_EVENT_MAX_PEOPLE} people.`)
     .optional(),
-  /** Ask Google for a Meet link (owner, 2026-10-27). */
-  meet: z.boolean().optional(),
+  /** A video call link to paste (owner, 2026-10-27); empty for none. */
+  callUrl: z
+    .string()
+    .trim()
+    .max(500, "Keep the link under 500 characters.")
+    .nullable()
+    .transform((v) => (v ? v : null))
+    .pipe(
+      z
+        .string()
+        .url("Paste the whole link, starting with https://.")
+        .refine(
+          (v) => v.startsWith("https://"),
+          "Paste the whole link, starting with https://.",
+        )
+        .nullable(),
+    )
+    .optional(),
   date: day("Pick a date for the event."),
   /** The last day of an all-day event, counted; empty for one day. */
   endDate: z

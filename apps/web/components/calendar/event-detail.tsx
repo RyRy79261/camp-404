@@ -93,19 +93,19 @@ export function EventDetail({
             </dd>
           </>
         ) : null}
-        {entry.meetUrl ? (
+        {entry.callUrl ? (
           <>
             <dt className="pt-0.5 text-muted-foreground">
               <Video className="h-4 w-4" aria-label="Video call" />
             </dt>
             <dd>
               <a
-                href={entry.meetUrl}
+                href={entry.callUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="font-medium text-primary underline underline-offset-2"
               >
-                Join on Google Meet
+                Join the call
               </a>
             </dd>
           </>

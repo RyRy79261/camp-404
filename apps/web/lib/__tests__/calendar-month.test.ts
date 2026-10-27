@@ -45,7 +45,7 @@ function app(overrides: Partial<AppEventLike> = {}): AppEventLike {
     version: 1,
     audience: "camp",
     peopleUserIds: [],
-    meetUrl: null,
+    callUrl: null,
     ...overrides,
   };
 }
@@ -314,7 +314,7 @@ function entry(overrides: Partial<CalendarEntry>): CalendarEntry {
     meeting: null,
     audience: "camp",
     people: [],
-    meetUrl: null,
+    callUrl: null,
     ...overrides,
   };
 }

@@ -309,6 +309,7 @@ describe("the Calendar's events: the database and the test store agree", () => {
         event(null, "Budget chat", {
           audience: "people",
           people: [p.member, waiting, p.member],
+          callUrl: "https://meet.google.com/abc-defg-hij",
         }),
       );
       const nobody = await createCampEvent(
@@ -325,6 +326,7 @@ describe("the Calendar's events: the database and the test store agree", () => {
               audience: r.row.audience,
               team: r.row.team,
               people: r.row.peopleUserIds,
+              callUrl: r.row.callUrl,
             }
           : r;
       return {
@@ -337,7 +339,11 @@ describe("the Calendar's events: the database and the test store agree", () => {
     expect(store).toEqual(db);
     expect(db).toMatchObject({
       leads: { audience: "team_leads", team: null, people: [] },
-      picked: { audience: "people", team: null },
+      picked: {
+        audience: "people",
+        team: null,
+        callUrl: "https://meet.google.com/abc-defg-hij",
+      },
       nobody: { ok: false },
       byLead: { ok: false },
     });

@@ -28,7 +28,7 @@ function entry(extra: Partial<CalendarEntry>): CalendarEntry {
     meeting: null,
     audience: "camp",
     people: [],
-    meetUrl: null,
+    callUrl: null,
     ...extra,
   };
 }

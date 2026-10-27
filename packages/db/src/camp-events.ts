@@ -68,9 +68,8 @@ export interface CampEventRow {
   /** Who it is for: the camp, `team`, the team leads, or `peopleUserIds`. */
   audience: CampEventAudience;
   peopleUserIds: string[];
-  /** Whether Google is asked for a Meet link, and the one it gave. */
-  meet: boolean;
-  meetUrl: string | null;
+  /** A video call link the maker pasted, or null. */
+  callUrl: string | null;
   title: string;
   allDay: boolean;
   startDate: string;
@@ -95,8 +94,7 @@ const COLUMNS = {
   team: e.team,
   audience: e.audience,
   peopleUserIds: e.peopleUserIds,
-  meet: e.meet,
-  meetUrl: e.meetUrl,
+  callUrl: e.callUrl,
   title: e.title,
   allDay: e.allDay,
   startDate: e.startDate,
@@ -217,6 +215,8 @@ export interface CampEventFields {
   audience?: CampEventAudience;
   /** The people a `people` event is for; ignored for any other. */
   people?: readonly string[];
+  /** A pasted video call link; absent or null for none. */
+  callUrl?: string | null;
   title: string;
   allDay: boolean;
   startDate: string;
@@ -317,8 +317,6 @@ export async function createCampEvent(
     /** The agenda: when it is not empty, the event is a meeting. */
     agenda: string;
     newEventId: string;
-    /** Ask Google for a Meet link when it goes on the calendar. */
-    meet?: boolean;
   },
 ): Promise<CampEventWriteResult<{ row: CampEventRow; noteId: string | null }>> {
   // An event with an agenda is a meeting (owner, 2026-10-11: a meeting
@@ -334,7 +332,7 @@ export async function createCampEvent(
         cycle,
         kind,
         ...who,
-        meet: input.meet ?? false,
+        callUrl: input.callUrl ?? null,
         title: input.title,
         ...storedCampEventWhen(input),
         place: input.place,
@@ -448,6 +446,7 @@ export async function editCampEvent(
       .update(e)
       .set({
         ...who,
+        callUrl: input.callUrl ?? null,
         title: input.title,
         ...storedCampEventWhen(input),
         place: input.place,
@@ -601,8 +600,6 @@ export async function markCampEventCalendarSynced(input: {
   id: string;
   version: number;
   removed: boolean;
-  /** The Meet link Google gave with this put, kept once it has one. */
-  meetUrl?: string | null;
 }): Promise<boolean> {
   const db = createHttpDb();
   if (input.removed) {
@@ -620,10 +617,7 @@ export async function markCampEventCalendarSynced(input: {
   }
   const rows = await db
     .update(e)
-    .set({
-      calendarSyncedVersion: input.version,
-      ...(input.meetUrl ? { meetUrl: input.meetUrl } : {}),
-    })
+    .set({ calendarSyncedVersion: input.version })
     .where(and(eq(e.id, input.id), eq(e.version, input.version)))
     .returning({ id: e.id });
   return rows.length > 0;

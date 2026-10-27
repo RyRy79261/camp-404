@@ -39,14 +39,8 @@ export interface MirrorTarget {
   eventId: string | null;
   /** The event to put, when the step is `put`. */
   event: { body: CalendarEventBody } | null;
-  /**
-   * Record that the calendar matches this version, with the Meet link Google
-   * gave with the put, if any. False: a newer one landed.
-   */
-  mark: (
-    removed: boolean,
-    meetUrl?: string | null,
-  ) => Promise<boolean> | boolean;
+  /** Record that the calendar matches this version. False: a newer one landed. */
+  mark: (removed: boolean) => Promise<boolean> | boolean;
   /** The row as it stands now, to follow a newer save. */
   latest: () => Promise<MirrorTarget | undefined>;
 }
@@ -105,12 +99,12 @@ export async function mirror(
   try {
     let marked = true;
     if (step === "put" && eventId && target.event) {
-      const put = await google.putEvent({
+      await google.putEvent({
         id: eventId,
         body: target.event.body,
         actorId: actorId ?? "",
       });
-      marked = await target.mark(false, put.meetUrl);
+      marked = await target.mark(false);
     } else if (step === "remove" && eventId) {
       if (!(await removeEvent(eventId))) return "failed";
       marked = await target.mark(true);

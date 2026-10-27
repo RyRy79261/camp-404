@@ -1011,14 +1011,12 @@ Decisions baked into the schema — keep new code consistent with them:
     makes a team-leads or people event: both have no team, so the whole-camp
     rule (`campEventRefusal`) covers them. A meeting for picked people is not
     posted in the camp's Telegram chats.
-  - **A Google Meet link** (owner, 2026-10-27): the New event form's "Add a
-    Google Meet link" (ticked by default) sets `camp_events.meet`; the mirror
-    sends a `conferenceData` create request with `conferenceDataVersion=1`
-    until Google returns a `hangoutLink`, kept in `meet_url` and shown as
-    "Join on Google Meet". A later put leaves the version out, so Google keeps
-    the link. Google refuses a Meet to a service account outside Google
-    Workspace (400); the event then goes on with no link, and the next
-    catch-up asks again.
+  - **A video call link** (owner, 2026-10-27): the event form's "Video call
+    link" takes a pasted https link (Meet, Zoom), kept in
+    `camp_events.call_url`, put first in the Google event's details ("Join
+    the call: ...") and shown as "Join the call". The app never asks Google
+    to make a Meet: the camp is not on Google Workspace, and Google makes no
+    Meet for a plain service account on a shared calendar.
   - **A meeting starts by adding an event with an agenda** (owner,
     2026-10-11). The New event form has no Event/Meeting switch: its Details
     is the Agenda (`MarkdownField`), written into the Google event's details;

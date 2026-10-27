@@ -39,7 +39,7 @@ vi.mock("@camp404/db/deadlines", async (importOriginal) => ({
 }));
 vi.mock("../google-calendar", async (importOriginal) => ({
   ...(await importOriginal<typeof GoogleCalendar>()),
-  putCalendarEvent: vi.fn(async () => ({ meetUrl: null })),
+  putCalendarEvent: vi.fn(async () => undefined),
   deleteCalendarEvent: vi.fn(async () => true),
 }));
 
@@ -69,8 +69,7 @@ function row(overrides: Partial<CampEventRow> = {}): CampEventRow {
     team: "kitchen",
     audience: "team",
     peopleUserIds: [],
-    meet: false,
-    meetUrl: null,
+    callUrl: null,
     title: "Planning",
     allDay: false,
     startDate: "2026-10-15",
@@ -168,7 +167,6 @@ describe("the Calendar's events on Google", () => {
       id: row().id,
       version: 1,
       removed: false,
-      meetUrl: null,
     });
   });
 
@@ -211,7 +209,6 @@ describe("the Calendar's events on Google", () => {
       id: row().id,
       version: 1,
       removed: false,
-      meetUrl: null,
     });
   });
 
@@ -242,7 +239,6 @@ describe("the Calendar's events on Google", () => {
       id: row().id,
       version: 2,
       removed: false,
-      meetUrl: null,
     });
   });
 
@@ -289,23 +285,17 @@ describe("the Calendar's events on Google", () => {
 });
 
 describe("campEventBody", () => {
-  it("asks Google for a Meet link only until it has one", () => {
-    const asks = campEventBody(row({ meet: true }), "Kitchen");
-    expect(asks.conferenceData).toEqual({
-      createRequest: {
-        requestId: "camp404-claimedevent0001",
-        conferenceSolutionKey: { type: "hangoutsMeet" },
-      },
-    });
-    expect(
-      campEventBody(
-        row({ meet: true, meetUrl: "https://meet.google.com/abc-defg-hij" }),
-        "Kitchen",
-      ),
-    ).not.toHaveProperty("conferenceData");
-    expect(campEventBody(row(), "Kitchen")).not.toHaveProperty(
-      "conferenceData",
+  it("puts a pasted call link first in Google's details", () => {
+    const body = campEventBody(
+      row({ kind: "event", callUrl: "https://meet.google.com/abc-defg-hij" }),
+      "Kitchen",
     );
+    expect(body.description).toMatch(
+      /^Join the call: https:\/\/meet\.google\.com\/abc-defg-hij\n\nThe week's menu\./,
+    );
+    expect(
+      campEventBody(row({ kind: "event" }), "Kitchen").description,
+    ).not.toContain("Join the call");
   });
 
   it("ends an all-day event the day after its last day, and keeps a whole-camp title plain", () => {

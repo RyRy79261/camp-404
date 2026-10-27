@@ -87,7 +87,8 @@ type FieldName =
   | "place"
   | "description"
   | "agenda"
-  | "people";
+  | "people"
+  | "callUrl";
 
 const GOOGLE_NOTE = {
   synced: null,
@@ -137,7 +138,7 @@ export function EventForm({
     description: editing?.description ?? "",
     agenda: "",
     people: editing?.people ?? ([] as string[]),
-    meet: editing ? editing.meetUrl !== null : true,
+    callUrl: editing?.callUrl ?? "",
   };
   const [team, setTeam] = React.useState(initial.team);
   const [title, setTitle] = React.useState(initial.title);
@@ -151,7 +152,7 @@ export function EventForm({
   const [agenda, setAgenda] = React.useState(initial.agenda);
   const [people, setPeople] = React.useState<string[]>(initial.people);
   const [peopleFilter, setPeopleFilter] = React.useState("");
-  const [meet, setMeet] = React.useState(initial.meet);
+  const [callUrl, setCallUrl] = React.useState(initial.callUrl);
   const [errors, setErrors] = React.useState<
     Partial<Record<FieldName, string>>
   >({});
@@ -171,7 +172,7 @@ export function EventForm({
     description,
     agenda,
     people,
-    meet,
+    callUrl,
   };
   const dirty = JSON.stringify(values) !== JSON.stringify(initial);
   const settle = useWindowDirty(
@@ -198,8 +199,7 @@ export function EventForm({
               ? ("people" as const)
               : ("team" as const),
       people: team === PEOPLE ? people : [],
-      // A new event only: an event already on Google keeps what it has.
-      meet: editing ? false : meet,
+      callUrl,
       title,
       date,
       endDate: allDay ? endDate : "",
@@ -231,6 +231,7 @@ export function EventForm({
             "description",
             "agenda",
             "people",
+            "callUrl",
           ].includes(key)
         ) {
           next[key] ??= issue.message;
@@ -242,7 +243,7 @@ export function EventForm({
     }
     setErrors({});
     startTransition(async () => {
-      const { kind: _kind, agenda: _agenda, meet: _meet, ...rest } = fields;
+      const { kind: _kind, agenda: _agenda, ...rest } = fields;
       const meeting = fields.kind === "meeting";
       const result = editing
         ? await editCampEventAction({
@@ -542,24 +543,23 @@ export function EventForm({
             />
           </Field>
 
-          {editing === null ? (
-            <label className="flex cursor-pointer items-start gap-2 text-sm">
-              <Checkbox
-                checked={meet}
-                onCheckedChange={(on) => setMeet(on === true)}
-                disabled={pending}
-                aria-label="Add a Google Meet link"
-                className="mt-0.5"
-              />
-              <span>
-                Add a Google Meet link
-                <span className="block text-xs text-muted-foreground">
-                  Google makes the link when the event goes on the camp&apos;s
-                  calendar.
-                </span>
-              </span>
-            </label>
-          ) : null}
+          <Field
+            label="Video call link"
+            htmlFor="event-call"
+            help="Paste a Google Meet or Zoom link, or leave it empty. It goes on the Google event too."
+            error={errors.callUrl}
+          >
+            <Input
+              id="event-call"
+              type="url"
+              inputMode="url"
+              value={callUrl}
+              maxLength={500}
+              placeholder="https://meet.google.com/…"
+              onChange={(e) => setCallUrl(e.target.value)}
+              disabled={pending}
+            />
+          </Field>
 
           {error ? (
             <p role="alert" className="text-sm font-medium text-destructive">

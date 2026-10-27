@@ -256,8 +256,8 @@ export interface CalendarEntry {
   audience: CampEventAudience;
   /** The people a `people` event is for, by id; empty for any other. */
   people: string[];
-  /** The Google Meet link Google made for it, once it has. */
-  meetUrl: string | null;
+  /** A video call link its maker pasted; null for none or a Google event. */
+  callUrl: string | null;
 }
 
 /** An event the app made, as the merge needs it. */
@@ -276,7 +276,7 @@ export interface AppEventLike {
   version: number;
   audience: CampEventAudience;
   peopleUserIds: string[];
-  meetUrl: string | null;
+  callUrl: string | null;
 }
 
 /** A meeting note, as the merge needs it. */
@@ -380,7 +380,7 @@ export function appEntry(
     meeting: row.kind === "meeting" ? meetingOf(note) : null,
     audience: row.audience,
     people: row.peopleUserIds,
-    meetUrl: row.meetUrl,
+    callUrl: row.callUrl,
   };
 }
 
@@ -410,7 +410,7 @@ export function googleEntry(
     meeting: note ? meetingOf(note) : null,
     audience: read.team ? "team" : "camp",
     people: [],
-    meetUrl: null,
+    callUrl: null,
   };
 }
 
@@ -438,7 +438,7 @@ export function noteEntry(
     meeting: meetingOf(note),
     audience: note.team ? "team" : "camp",
     people: [],
-    meetUrl: null,
+    callUrl: null,
   };
 }
 

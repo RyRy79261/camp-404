@@ -1,6 +1,6 @@
 {
-  "id": "83ef1864-f31d-41b6-88ea-a578e4fda4a0",
-  "prevId": "87730604-6418-4d2b-bcfa-1efaf704a312",
+  "id": "9743fbc2-e223-427a-ad1c-ba44b905e911",
+  "prevId": "343ed0df-b2af-4cae-8d39-841fb6890681",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1018,15 +1018,8 @@
           "notNull": true,
           "default": "'{}'::uuid[]"
         },
-        "meet": {
-          "name": "meet",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "meet_url": {
-          "name": "meet_url",
+        "call_url": {
+          "name": "call_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false

@@ -4541,7 +4541,7 @@ export const testStore = {
     id: string;
     body: CalendarEventBody;
     actorId: string;
-  }): { meetUrl: string | null } {
+  }): void {
     const { body } = input;
     const allDay = "date" in body.start;
     const start = "date" in body.start ? body.start.date : body.start.dateTime;
@@ -4567,12 +4567,6 @@ export const testStore = {
     const at = calendarEvents.findIndex((e) => e.id === input.id);
     if (at === -1) calendarEvents.push(event);
     else calendarEvents[at] = event;
-    // A Meet request gets a stand-in link, as Google gives one.
-    return {
-      meetUrl: body.conferenceData
-        ? `https://meet.google.com/e2e-${input.id.slice(0, 10)}`
-        : null,
-    };
   },
 
   /** Twin of deleteCalendarEvent: gone, or never there. */

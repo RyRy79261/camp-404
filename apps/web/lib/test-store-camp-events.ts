@@ -132,7 +132,6 @@ export const campEventsTestStore = {
       kind: CampEventKind;
       agenda: string;
       newEventId: string;
-      meet?: boolean;
     },
   ): CampEventWriteResult<{ row: CampEventRow; noteId: string | null }> {
     const who = storedAudience(input);
@@ -148,8 +147,7 @@ export const campEventsTestStore = {
       team: who.team,
       audience: who.audience,
       peopleUserIds: who.peopleUserIds,
-      meet: input.meet ?? false,
-      meetUrl: null,
+      callUrl: input.callUrl ?? null,
       title: input.title,
       ...storedCampEventWhen(input),
       place: input.place,
@@ -202,6 +200,7 @@ export const campEventsTestStore = {
       team: who.team,
       audience: who.audience,
       peopleUserIds: who.peopleUserIds,
+      callUrl: input.callUrl ?? null,
       title: input.title,
       ...storedCampEventWhen(input),
       place: input.place,
@@ -266,8 +265,7 @@ export const campEventsTestStore = {
         team: note.team,
         audience: note.team ? "team" : "camp",
         peopleUserIds: [],
-        meet: false,
-        meetUrl: null,
+        callUrl: null,
         title: note.title,
         allDay: false,
         startDate: day,
@@ -293,7 +291,6 @@ export const campEventsTestStore = {
     id: string;
     version: number;
     removed: boolean;
-    meetUrl?: string | null;
   }): boolean {
     const list = rows();
     const at = list.findIndex(
@@ -306,7 +303,6 @@ export const campEventsTestStore = {
       return true;
     }
     list[at]!.calendarSyncedVersion = input.version;
-    if (input.meetUrl) list[at]!.meetUrl = input.meetUrl;
     return true;
   },
 };

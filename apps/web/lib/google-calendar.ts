@@ -466,34 +466,6 @@ export interface CalendarEventBody {
   extendedProperties?: {
     private: Record<string, string>;
   };
-  /**
-   * Ask Google for a Meet link (owner, 2026-10-27). Sent only while the row
-   * has none; a later put leaves out `conferenceDataVersion`, so Google keeps
-   * the link it made.
-   */
-  conferenceData?: {
-    createRequest: {
-      requestId: string;
-      conferenceSolutionKey: { type: "hangoutsMeet" };
-    };
-  };
-}
-
-/** What Google answered to a put: the Meet link, when it made one. */
-export interface PutCalendarResult {
-  meetUrl: string | null;
-}
-
-/** The Meet link in Google's answer, when it is a meet.google.com one. */
-export function meetUrlFrom(answer: unknown): string | null {
-  const link =
-    answer && typeof answer === "object" && "hangoutLink" in answer
-      ? (answer as { hangoutLink?: unknown }).hangoutLink
-      : null;
-  return typeof link === "string" &&
-    /^https:\/\/meet\.google\.com\/[A-Za-z0-9-]+$/.test(link)
-    ? link
-    : null;
 }
 
 /**
@@ -584,7 +556,7 @@ export async function putCalendarEvent(
   body: CalendarEventBody,
   now: Date = new Date(),
   timeoutMs: number = CALENDAR_TIMEOUT_MS,
-): Promise<PutCalendarResult> {
+): Promise<void> {
   const config = calendarWriteConfig(env);
   if (!config) throw new Error("calendar not configured");
   try {
@@ -599,40 +571,18 @@ export async function putCalendarEvent(
         },
         body: JSON.stringify(payload),
       });
-    const { id: _id, conferenceData, ...rest } = body;
-    // Put it with the Meet request when there is one. Google refuses one it
-    // cannot make (400: a service account outside Google Workspace may not
-    // make a Meet), and then the event still goes on, with no link.
-    const put = async (meet: boolean) => {
-      const extra = meet && conferenceData ? { conferenceData } : {};
-      const url = (u: URL) => {
-        if (meet && conferenceData)
-          u.searchParams.set("conferenceDataVersion", "1");
-        return u;
-      };
-      const updated = await send(
-        "PUT",
-        url(eventsUrl(config.calendarId, eventId)),
-        { ...rest, ...extra, status: "confirmed" },
-      );
-      if (updated.ok || updated.status !== 404) {
-        return { res: updated, step: "update" };
-      }
-      const created = await send("POST", url(eventsUrl(config.calendarId)), {
-        ...rest,
-        ...extra,
-        id: eventId,
-      });
-      return { res: created, step: "create" };
-    };
-    let answer = await put(true);
-    if (!answer.res.ok && answer.res.status === 400 && conferenceData) {
-      console.error("camp calendar: Google made no Meet link", 400);
-      answer = await put(false);
-    }
-    if (!answer.res.ok) throw new Error(`${answer.step} ${answer.res.status}`);
-    if (!conferenceData) return { meetUrl: null };
-    return { meetUrl: meetUrlFrom(await answer.res.json().catch(() => null)) };
+    const { id: _id, ...rest } = body;
+    const updated = await send("PUT", eventsUrl(config.calendarId, eventId), {
+      ...rest,
+      status: "confirmed",
+    });
+    if (updated.ok) return;
+    if (updated.status !== 404) throw new Error(`update ${updated.status}`);
+    const created = await send("POST", eventsUrl(config.calendarId), {
+      ...rest,
+      id: eventId,
+    });
+    if (!created.ok) throw new Error(`create ${created.status}`);
   } catch (error) {
     const line = logSafe(error, env);
     console.error("camp calendar write failed", line);

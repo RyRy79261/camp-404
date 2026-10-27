@@ -672,29 +672,24 @@ describe("camp events", () => {
       expect((await getCampEventRow(camp.row.id))?.audience).toBe("camp");
     });
 
-    it("keeps the Meet link Google gave, and asks no more", async () => {
+    it("keeps a pasted call link, and a change can clear it", async () => {
       const { captain } = await people();
       const made = await createCampEvent({
         actorId: captain.id,
         kind: "event",
         agenda: "",
         newEventId: newId(),
-        meet: true,
-        ...fields(),
+        ...fields({ callUrl: "https://meet.google.com/abc-defg-hij" }),
       });
       if (!made.ok) throw new Error(made.error);
-      expect(made.row).toMatchObject({ meet: true, meetUrl: null });
-      expect(
-        await markCampEventCalendarSynced({
-          id: made.row.id,
-          version: made.row.version,
-          removed: false,
-          meetUrl: "https://meet.google.com/abc-defg-hij",
-        }),
-      ).toBe(true);
-      expect((await getCampEventRow(made.row.id))?.meetUrl).toBe(
-        "https://meet.google.com/abc-defg-hij",
-      );
+      expect(made.row.callUrl).toBe("https://meet.google.com/abc-defg-hij");
+      const changed = await editCampEvent({
+        actorId: captain.id,
+        calendarEventId: made.row.calendarEventId,
+        expectedVersion: made.row.version,
+        ...fields({ callUrl: null }),
+      });
+      expect(changed.ok && changed.row.callUrl).toBeNull();
     });
   });
 });

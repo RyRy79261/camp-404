@@ -82,17 +82,19 @@ function googleDetails(row: CampEventRow): string {
   const tail = [row.kind === "meeting" ? MEETING_NOTE : null, APP_NOTE]
     .filter(Boolean)
     .join("\n\n");
+  // A pasted call link goes first, where people in Google look for it.
+  const call = row.callUrl ? `Join the call: ${row.callUrl}\n\n` : "";
   let details = row.description
     ? row.kind === "meeting"
       ? plainTextWithLists(row.description)
       : row.description.trim()
     : "";
-  if (!details) return tail;
-  const room = GOOGLE_DETAILS_MAX - tail.length - 2;
+  if (!details) return `${call}${tail}`;
+  const room = GOOGLE_DETAILS_MAX - call.length - tail.length - 2;
   if (details.length > room) {
     details = `${details.slice(0, room - CUT_NOTE.length - 1).trimEnd()}\n${CUT_NOTE}`;
   }
-  return `${details}\n\n${tail}`;
+  return `${call}${details}\n\n${tail}`;
 }
 
 /**
@@ -132,17 +134,6 @@ export function campEventBody(
         camp404Kind: row.kind,
       },
     },
-    // A Meet link, asked for until Google has given one (owner, 2026-10-27).
-    ...(row.meet && !row.meetUrl
-      ? {
-          conferenceData: {
-            createRequest: {
-              requestId: `camp404-${row.calendarEventId}`,
-              conferenceSolutionKey: { type: "hangoutsMeet" as const },
-            },
-          },
-        }
-      : {}),
   };
 }
 
@@ -171,12 +162,11 @@ function target(
             row.team ? (labels[row.team] ?? null) : null,
           ),
         },
-    mark: (gone: boolean, meetUrl?: string | null) =>
+    mark: (gone: boolean) =>
       events.markCampEventCalendarSynced({
         id: row.id,
         version: row.version,
         removed: gone,
-        meetUrl,
       }),
     // The row as it stands, synced or not, removed or not: a newer save that
     // another step already put on Google is put again (the mark matches it),
@@ -227,6 +217,7 @@ function fieldsOf(
     | "team"
     | "audience"
     | "people"
+    | "callUrl"
     | "title"
     | "allDay"
     | "date"
@@ -241,6 +232,7 @@ function fieldsOf(
     team: input.team,
     audience: input.audience,
     people: input.people,
+    callUrl: input.callUrl,
     title: input.title,
     allDay: input.allDay,
     startDate: input.date,
@@ -280,7 +272,6 @@ export async function createCampEvent(
     kind: input.kind,
     agenda: input.agenda,
     newEventId: newCalendarEventId(),
-    meet: input.meet,
   };
   const saved = await events.createCampEvent(args);
   return afterWrite(saved, actorId);

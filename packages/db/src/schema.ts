@@ -3448,10 +3448,10 @@ export const campEvents = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::uuid[]`),
-    // Ask Google for a Meet link when the event goes on the calendar
-    // (owner, 2026-10-27), and the link Google gave, once it did.
-    meet: boolean("meet").notNull().default(false),
-    meetUrl: text("meet_url"),
+    // A video call link the maker pasted (Meet, Zoom...; owner, 2026-10-27).
+    // Google makes no Meet for a service account outside Workspace, so the
+    // link is typed, never asked of Google. https only.
+    callUrl: text("call_url"),
     title: text("title").notNull(),
     allDay: boolean("all_day").notNull(),
     // Camp days; the end is the last day, counted. A timed event is one day.

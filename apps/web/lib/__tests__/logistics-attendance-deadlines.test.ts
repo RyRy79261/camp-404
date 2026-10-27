@@ -44,7 +44,7 @@ vi.mock("@camp404/db/camp-events", async (importOriginal) => ({
 }));
 vi.mock("../google-calendar", async (importOriginal) => ({
   ...(await importOriginal<typeof GoogleCalendar>()),
-  putCalendarEvent: vi.fn(async () => ({ meetUrl: null })),
+  putCalendarEvent: vi.fn(async () => undefined),
   deleteCalendarEvent: vi.fn(async () => true),
 }));
 
