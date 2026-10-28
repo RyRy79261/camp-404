@@ -97,7 +97,7 @@ test.describe("camp money (test-mode)", () => {
     await seedParticipation(request, "money-owes", "applied");
     await page.goto("/dues");
     await heading(page, "My dues");
-    await page.getByLabel("What you can commit (R)").fill("7200");
+    await page.getByLabel("Or type it (R)").fill("7200");
     await page
       .getByRole("radio", {
         name: "Part by the end of November and the rest later",
