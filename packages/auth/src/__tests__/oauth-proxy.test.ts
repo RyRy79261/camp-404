@@ -382,6 +382,52 @@ describe("Google sign-in on a preview", () => {
       `/auth/sign-in?error=${OAUTH_PROXY_REFUSED}`,
     );
   });
+
+  it("refuses a proxy package whose sealed sign-in state is missing or will not open", async () => {
+    const production = instance(PROD_ENV, emptyDb());
+    const noInner = await seal("oauth-proxy-package", {
+      isOAuthProxy: true,
+      state: "s",
+    });
+    const wrongKey = await seal("oauth-proxy-package", {
+      isOAuthProxy: true,
+      state: "s",
+      // Sealed for another purpose: names no destination the guard can check.
+      stateCookie: await seal("oauth-proxy-profile", {
+        callbackURL: `${BRANCH}${PROXY_COMPLETION}`,
+      }),
+    });
+    for (const forged of [noInner, wrongKey]) {
+      expect(await proxyTargets(PROXY_SECRET, forged)).toBeNull();
+      const res = await googleCallback(production, PROD, forged);
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toBe(
+        `/auth/sign-in?error=${OAUTH_PROXY_REFUSED}`,
+      );
+    }
+    expect(google.fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a forged state posted in the body, as a form_post callback sends it", async () => {
+    const production = instance(PROD_ENV, emptyDb());
+    const forged = await forgeState({
+      callbackURL: `https://evil.example${PROXY_COMPLETION}?callbackURL=%2F`,
+      codeVerifier: "v",
+      expiresAt: Date.now() + 60_000,
+    });
+    const res = await production.handler(
+      new Request(`${PROD}/api/auth/callback/google`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ code: "the-code", state: forged }),
+      }),
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toContain(
+      `error=${OAUTH_PROXY_REFUSED}`,
+    );
+    expect(google.fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("the preview's own error page", () => {
@@ -391,16 +437,19 @@ describe("the preview's own error page", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  async function sealedErrorURL(errorCallbackURL: string) {
+  async function sealedErrorURL(
+    errorCallbackURL: string | undefined,
+    host = BRANCH,
+  ) {
     const preview = instance(PREVIEW_ENV, emptyDb());
     const res = await preview.handler(
-      new Request(`${BRANCH}/api/auth/sign-in/social`, {
+      new Request(`${host}/api/auth/sign-in/social`, {
         method: "POST",
         headers: { "content-type": "application/json", origin: BRANCH },
         body: JSON.stringify({
           provider: "google",
           callbackURL: "/",
-          errorCallbackURL,
+          ...(errorCallbackURL === undefined ? {} : { errorCallbackURL }),
         }),
       }),
     );
@@ -413,6 +462,21 @@ describe("the preview's own error page", () => {
   it("is this preview's address for a path on this site", async () => {
     const sealed = await sealedErrorURL("/auth/sign-in");
     expect(sealed.targets?.errorURL).toBe(`${BRANCH}/auth/sign-in`);
+  });
+
+  it("is this preview's sign-in form when the sign-in names none", async () => {
+    const sealed = await sealedErrorURL(undefined);
+    expect(sealed.targets?.errorURL).toBe(`${BRANCH}/auth/sign-in`);
+  });
+
+  it("is never the address of a host the preview does not trust", async () => {
+    // The request reached the app under a host that is not this deployment
+    // (a spoofed Host). Its origin must not become where errors are sent.
+    const sealed = await sealedErrorURL(
+      "/auth/sign-in",
+      "https://evil.example",
+    );
+    expect(sealed.targets?.errorURL ?? "").not.toContain("evil.example");
   });
 
   it("is never built from a protocol-relative address, which names another host", async () => {
