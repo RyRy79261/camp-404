@@ -5,6 +5,7 @@ import {
   CampBillInput,
   EMPTY_CAMP_BANK_DETAILS,
   MarkCampBillPaidInput,
+  offeredAbroadWays,
 } from "../camp-money";
 
 // The camp's own money (camp fees sprint): bank details, the bank balance
@@ -30,6 +31,47 @@ describe("camp money shapes", () => {
         branchCode: "250655",
       },
     });
+  });
+
+  it("offers abroad only the ways ticked, each with its main field", () => {
+    const abroad = (over: Record<string, unknown>) =>
+      CampBankDetails.safeParse({ southAfrica: {}, abroad: over });
+    const wise = abroad({
+      ways: { payLink: true },
+      payLink: " https://wise.com/pay/me/camp404 ",
+    });
+    expect(wise.data?.abroad.payLink).toBe("https://wise.com/pay/me/camp404");
+    expect(offeredAbroadWays(wise.data!.abroad)).toEqual(["payLink"]);
+    expect(first(abroad({ ways: { payLink: true } }))).toBe(
+      "Add the pay link, or untick Pay link.",
+    );
+    expect(first(abroad({ payLink: "http://wise.com/x" }))).toBe(
+      "Paste the whole link, starting with https://.",
+    );
+    expect(first(abroad({ ways: { swift: true } }))).toMatch(/SWIFT code/);
+    expect(first(abroad({ ways: { iban: true } }))).toBe(
+      "Add the IBAN, or untick IBAN account.",
+    );
+    const iban = abroad({
+      ways: { iban: true, payLink: true },
+      payLink: "https://wise.com/x",
+      iban: { iban: "de89 3704 0044 0532 0130 00" },
+    });
+    expect(iban.data?.abroad.iban.iban).toBe("DE89370400440532013000");
+    expect(offeredAbroadWays(iban.data!.abroad)).toEqual(["payLink", "iban"]);
+    expect(
+      first(abroad({ ways: { iban: true }, iban: { iban: "12345" } })),
+    ).toMatch(/IBAN doesn't look right/);
+  });
+
+  it("reads details saved before the ticks: a SWIFT code meant that way", () => {
+    const old = (swift: string | null) =>
+      CampBankDetails.parse({
+        southAfrica: {},
+        abroad: { swift, accountNumber: null, bankAddress: null, note: null },
+      }).abroad;
+    expect(offeredAbroadWays(old("FIRNZAJJ"))).toEqual(["swift"]);
+    expect(offeredAbroadWays(old(null))).toEqual([]);
   });
 
   it("takes a balance below zero (an overdraft) on a real day", () => {

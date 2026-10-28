@@ -13,8 +13,13 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { Check, Copy, Upload, X } from "lucide-react";
+import { Check, Copy, ExternalLink, Upload, X } from "lucide-react";
 import { campDayKey, formatMoney } from "@camp404/core";
+import {
+  ABROAD_WAY_LABEL,
+  offeredAbroadWays,
+  type AbroadWay,
+} from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import {
   Dialog,
@@ -342,6 +347,9 @@ export function PayGuideDetails({
   const fromId = useId();
   const [from, setFrom] = useState<"za" | "abroad">("za");
   const { southAfrica: za, abroad } = data.bank;
+  const ways = offeredAbroadWays(abroad);
+  const [pickedWay, setWay] = useState<AbroadWay | null>(null);
+  const way = pickedWay && ways.includes(pickedWay) ? pickedWay : ways[0];
   const ref = data.refCode;
   const amount = formatMoney(words.amountCents);
   const zaRows = rows([
@@ -350,12 +358,23 @@ export function PayGuideDetails({
     ["Account number", za.accountNumber],
     ["Branch code", za.branchCode],
   ]);
-  const abroadRows = rows([
-    ["SWIFT code", abroad.swift],
-    ["Bank", abroad.bankAddress],
-    ["Account name", za.accountName],
-    ["Account number", abroad.accountNumber ?? za.accountNumber],
-  ]);
+  // Only the way Finance ticked, never the South African account by default.
+  const abroadRows =
+    way === "swift"
+      ? rows([
+          ["SWIFT code", abroad.swift],
+          ["Bank", abroad.bankAddress],
+          ["Account name", za.accountName],
+          ["Account number", abroad.accountNumber ?? za.accountNumber],
+        ])
+      : way === "iban"
+        ? rows([
+            ["Account name", abroad.iban.accountName],
+            ["IBAN", abroad.iban.iban],
+            ["BIC / SWIFT", abroad.iban.bic],
+            ["Bank", abroad.iban.bank],
+          ])
+        : [];
   const shown = from === "za" ? zaRows : abroadRows;
   return (
     <div className="flex flex-col">
@@ -417,7 +436,33 @@ export function PayGuideDetails({
           </button>
         ))}
       </div>
-      {shown.length > 0 ? (
+      {from === "abroad" && ways.length > 1 && (
+        <div
+          role="group"
+          aria-label="Which way?"
+          className="mt-1 grid gap-1 border border-os-line p-1"
+          style={{ gridTemplateColumns: `repeat(${ways.length}, 1fr)` }}
+        >
+          {ways.map((w) => (
+            <button
+              key={w}
+              type="button"
+              aria-pressed={way === w}
+              onClick={() => setWay(w)}
+              className={`px-1 py-2 text-xs font-medium ${
+                way === w
+                  ? "bg-os-primary text-os-bg"
+                  : "text-os-muted hover:text-os-fg"
+              }`}
+            >
+              {ABROAD_WAY_LABEL[w]}
+            </button>
+          ))}
+        </div>
+      )}
+      {from === "abroad" && way === "payLink" && abroad.payLink ? (
+        <PayLink link={abroad.payLink} amount={amount} refCode={ref} />
+      ) : shown.length > 0 ? (
         <dl
           aria-label={
             from === "za"
@@ -441,16 +486,19 @@ export function PayGuideDetails({
         </dl>
       ) : (
         <p className="mt-2 text-sm text-os-muted">
-          The Finance team hasn&rsquo;t put the bank details here yet. Ask them
-          where to pay.
+          {from === "abroad" && ways.length === 0
+            ? "The Finance team hasn’t said how to pay from abroad yet. Ask them how to pay."
+            : "The Finance team hasn’t put the bank details here yet. Ask them where to pay."}
         </p>
       )}
-      {from === "abroad" && (
+      {from === "abroad" && ways.length > 0 && (
         <>
-          <p className="mt-2 text-xs text-os-muted">
-            South Africa has no IBAN. If your bank asks for one, type the
-            account number.
-          </p>
+          {way === "swift" && (
+            <p className="mt-2 text-xs text-os-muted">
+              South Africa has no IBAN. If your bank asks for one, type the
+              account number.
+            </p>
+          )}
           {abroad.note && (
             <p className="mt-2 border-l-2 border-os-primary pl-2 text-xs">
               {abroad.note}
@@ -490,6 +538,53 @@ export function PayGuideDetails({
         )}
       </div>
     </div>
+  );
+}
+
+/** The service a pay link opens, by its address ("Wise"), else null. */
+export function payLinkName(link: string): string | null {
+  let host: string;
+  try {
+    host = new URL(link).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  const at = (domain: string) => host === domain || host.endsWith(`.${domain}`);
+  if (at("wise.com")) return "Wise";
+  if (at("paypal.com") || at("paypal.me")) return "PayPal";
+  if (at("revolut.com") || at("revolut.me")) return "Revolut";
+  return null;
+}
+
+function PayLink({
+  link,
+  amount,
+  refCode,
+}: {
+  link: string;
+  amount: string;
+  refCode: string | null;
+}) {
+  const name = payLinkName(link);
+  return (
+    <>
+      <Button asChild variant="outline" className="mt-2 w-full">
+        <a href={link} target="_blank" rel="noopener noreferrer">
+          {name ? `Pay ${amount} with ${name}` : `Pay ${amount} online`}
+          <ExternalLink aria-hidden />
+        </a>
+      </Button>
+      <p className="mt-1 text-xs text-os-muted">
+        Opens {name ?? "the pay link"}.
+        {refCode && (
+          <>
+            {" "}
+            Put <span className="font-semibold text-os-fg">{refCode}</span> in
+            the payment note.
+          </>
+        )}
+      </p>
+    </>
   );
 }
 

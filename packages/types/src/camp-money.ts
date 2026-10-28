@@ -27,12 +27,123 @@ const optionalText = (max: number) =>
       .default(null),
   );
 
+/** A pay link (Wise, PayPal, Revolut): https only; blank means none. */
+const optionalPayLink = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+  z
+    .string()
+    .trim()
+    .max(BANK_NOTE_MAX, {
+      error: `Keep the link under ${BANK_NOTE_MAX} characters.`,
+    })
+    .refine((v) => /^https:\/\/[^\s/$.?#][^\s]*$/i.test(v), {
+      error: "Paste the whole link, starting with https://.",
+    })
+    .nullable()
+    .default(null),
+);
+
+/** An IBAN as typed, kept in capitals with no spaces; blank means none. */
+const optionalIban = z.preprocess(
+  (value) =>
+    typeof value === "string"
+      ? value.replace(/\s+/g, "").toUpperCase() || null
+      : value,
+  z
+    .string()
+    .regex(/^[A-Z]{2}[0-9]{2}[A-Z0-9]{10,30}$/, {
+      error:
+        "That IBAN doesn't look right. It starts with 2 letters and 2 numbers.",
+    })
+    .nullable()
+    .default(null),
+);
+
 /**
- * Where members pay the camp: an account in South Africa, and what someone
- * paying from abroad needs (SWIFT, the bank's address, a note on transfer
- * fees). Every field may be left blank until Finance types it; nothing is
- * seeded. The camp's own account, shown to every member who owes, so it is
- * not a member's private bank details and is not encrypted.
+ * The ways someone abroad may pay, ticked by Finance (owner, 2026-10-28:
+ * "right now you may only do international payments via Wise, but in future
+ * it might just be IBAN, or it might be both"). Members see only the ticked
+ * ways. A ticked way needs its main field.
+ */
+export const ABROAD_WAYS = ["payLink", "swift", "iban"] as const;
+export type AbroadWay = (typeof ABROAD_WAYS)[number];
+
+/** Each way's name, on Finance's ticks and the member's choice. */
+export const ABROAD_WAY_LABEL: Record<AbroadWay, string> = {
+  payLink: "Pay link",
+  swift: "Bank transfer (SWIFT)",
+  iban: "IBAN account",
+};
+
+const AbroadDetails = z.preprocess(
+  (value) => {
+    // Saved before the ticks existed: a SWIFT code meant the SWIFT way.
+    if (value && typeof value === "object" && !("ways" in value)) {
+      const swift = (value as { swift?: unknown }).swift;
+      return {
+        ...value,
+        ways: {
+          swift: typeof swift === "string" && swift.trim() !== "",
+        },
+      };
+    }
+    return value;
+  },
+  z
+    .object({
+      ways: z
+        .object({
+          payLink: z.boolean().default(false),
+          swift: z.boolean().default(false),
+          iban: z.boolean().default(false),
+        })
+        .default({ payLink: false, swift: false, iban: false }),
+      /** The pay link way: one link to press. */
+      payLink: optionalPayLink,
+      /** The SWIFT way: the South African account, from abroad. */
+      swift: optionalText(BANK_FIELD_MAX),
+      accountNumber: optionalText(BANK_FIELD_MAX),
+      bankAddress: optionalText(BANK_FIELD_MAX),
+      /** The IBAN way: an account abroad. */
+      iban: z
+        .object({
+          accountName: optionalText(BANK_FIELD_MAX),
+          iban: optionalIban,
+          bic: optionalText(BANK_FIELD_MAX),
+          bank: optionalText(BANK_FIELD_MAX),
+        })
+        .default({ accountName: null, iban: null, bic: null, bank: null }),
+      note: optionalText(BANK_NOTE_MAX),
+    })
+    .superRefine((a, ctx) => {
+      if (a.ways.payLink && !a.payLink)
+        ctx.addIssue({
+          code: "custom",
+          path: ["payLink"],
+          message: "Add the pay link, or untick Pay link.",
+        });
+      if (a.ways.swift && !a.swift)
+        ctx.addIssue({
+          code: "custom",
+          path: ["swift"],
+          message: "Add the SWIFT code, or untick Bank transfer (SWIFT).",
+        });
+      if (a.ways.iban && !a.iban.iban)
+        ctx.addIssue({
+          code: "custom",
+          path: ["iban", "iban"],
+          message: "Add the IBAN, or untick IBAN account.",
+        });
+    }),
+);
+
+/**
+ * Where members pay the camp: an account in South Africa, and the ways
+ * someone abroad may pay (a pay link, a SWIFT transfer to the South African
+ * account, an IBAN account), each offered only when Finance ticks it, with a
+ * note on transfer fees. Every field may be left blank until Finance types
+ * it; nothing is seeded. The camp's own account, shown to every member who
+ * owes, so it is not a member's private bank details and is not encrypted.
  */
 export const CampBankDetails = z.object({
   southAfrica: z.object({
@@ -41,14 +152,16 @@ export const CampBankDetails = z.object({
     accountNumber: optionalText(BANK_FIELD_MAX),
     branchCode: optionalText(BANK_FIELD_MAX),
   }),
-  abroad: z.object({
-    swift: optionalText(BANK_FIELD_MAX),
-    accountNumber: optionalText(BANK_FIELD_MAX),
-    bankAddress: optionalText(BANK_FIELD_MAX),
-    note: optionalText(BANK_NOTE_MAX),
-  }),
+  abroad: AbroadDetails,
 });
 export type CampBankDetails = z.infer<typeof CampBankDetails>;
+
+/** The ways abroad a member is offered, in order: only the ticked ones. */
+export function offeredAbroadWays(
+  abroad: CampBankDetails["abroad"],
+): AbroadWay[] {
+  return ABROAD_WAYS.filter((way) => abroad.ways[way]);
+}
 
 /** Bank details with nothing typed yet. */
 export const EMPTY_CAMP_BANK_DETAILS: CampBankDetails = {
@@ -58,7 +171,15 @@ export const EMPTY_CAMP_BANK_DETAILS: CampBankDetails = {
     accountNumber: null,
     branchCode: null,
   },
-  abroad: { swift: null, accountNumber: null, bankAddress: null, note: null },
+  abroad: {
+    ways: { payLink: false, swift: false, iban: false },
+    payLink: null,
+    swift: null,
+    accountNumber: null,
+    bankAddress: null,
+    iban: { accountName: null, iban: null, bic: null, bank: null },
+    note: null,
+  },
 };
 
 /** The bank details, saved: a compare-and-set on the version Finance saw. */

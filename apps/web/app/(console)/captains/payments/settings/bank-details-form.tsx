@@ -3,8 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import type { CampBankDetails } from "@camp404/types";
+import type { AbroadWay, CampBankDetails } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
+import { Checkbox } from "@camp404/ui/components/checkbox";
 import {
   Card,
   CardContent,
@@ -24,9 +25,13 @@ import { saveCampBankDetailsAction } from "../camp-money-actions";
 // real values (nothing is seeded); a save is a compare-and-set on the version
 // read, audited. A typing problem shows beside the form.
 
+type AbroadText = Exclude<keyof CampBankDetails["abroad"], "ways" | "iban">;
+
 type Fields = {
-  [K in keyof CampBankDetails]: {
-    [F in keyof CampBankDetails[K]]: string;
+  southAfrica: { [F in keyof CampBankDetails["southAfrica"]]: string };
+  abroad: { [F in AbroadText]: string } & {
+    ways: CampBankDetails["abroad"]["ways"];
+    iban: { [F in keyof CampBankDetails["abroad"]["iban"]]: string };
   };
 };
 
@@ -39,13 +44,31 @@ function toFields(d: CampBankDetails): Fields {
       branchCode: d.southAfrica.branchCode ?? "",
     },
     abroad: {
+      ways: { ...d.abroad.ways },
+      payLink: d.abroad.payLink ?? "",
       swift: d.abroad.swift ?? "",
       accountNumber: d.abroad.accountNumber ?? "",
       bankAddress: d.abroad.bankAddress ?? "",
+      iban: {
+        accountName: d.abroad.iban.accountName ?? "",
+        iban: d.abroad.iban.iban ?? "",
+        bic: d.abroad.iban.bic ?? "",
+        bank: d.abroad.iban.bank ?? "",
+      },
       note: d.abroad.note ?? "",
     },
   };
 }
+
+/** What Finance ticks: each way's words on the form. */
+const WAY_TICKS: { way: AbroadWay; label: string }[] = [
+  { way: "payLink", label: "Pay link (Wise, PayPal, Revolut)" },
+  {
+    way: "swift",
+    label: "Bank transfer to the South African account (SWIFT)",
+  },
+  { way: "iban", label: "IBAN account" },
+];
 
 export function BankDetailsForm({
   details,
@@ -64,8 +87,19 @@ export function BankDetailsForm({
       ...f,
       southAfrica: { ...f.southAfrica, [key]: value },
     }));
-  const abroad = (key: keyof Fields["abroad"], value: string) =>
+  const abroad = (key: AbroadText, value: string) =>
     setFields((f) => ({ ...f, abroad: { ...f.abroad, [key]: value } }));
+  const iban = (key: keyof Fields["abroad"]["iban"], value: string) =>
+    setFields((f) => ({
+      ...f,
+      abroad: { ...f.abroad, iban: { ...f.abroad.iban, [key]: value } },
+    }));
+  const tick = (way: AbroadWay, on: boolean) =>
+    setFields((f) => ({
+      ...f,
+      abroad: { ...f.abroad, ways: { ...f.abroad.ways, [way]: on } },
+    }));
+  const ways = fields.abroad.ways;
 
   function save() {
     setError(null);
@@ -134,26 +168,112 @@ export function BankDetailsForm({
         </fieldset>
         <fieldset className="flex flex-col gap-3">
           <legend className="mb-2 text-sm font-semibold">From abroad</legend>
-          <div className="grid gap-3 page-sm:grid-cols-2">
-            <InputField
-              label="SWIFT code"
-              value={fields.abroad.swift}
-              onChange={(e) => abroad("swift", e.currentTarget.value)}
-              {...field}
-            />
-            <InputField
-              label="Account number"
-              value={fields.abroad.accountNumber}
-              onChange={(e) => abroad("accountNumber", e.currentTarget.value)}
-              {...field}
-            />
+          <div
+            role="group"
+            aria-labelledby="abroad-ways-label"
+            className="flex flex-col gap-2"
+          >
+            <p
+              id="abroad-ways-label"
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Ways members abroad can pay
+            </p>
+            {WAY_TICKS.map(({ way, label }) => (
+              <div key={way} className="flex items-center gap-2">
+                <Checkbox
+                  id={`abroad-way-${way}`}
+                  checked={ways[way]}
+                  disabled={pending}
+                  onCheckedChange={(v) => tick(way, v === true)}
+                />
+                {/* A plain label: the kit's Label wears the chrome's pixel
+                    capitals, and these are choices in a sentence. */}
+                <label
+                  htmlFor={`abroad-way-${way}`}
+                  className="cursor-pointer text-sm"
+                >
+                  {label}
+                </label>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              Members see only the ways you tick.
+            </p>
           </div>
-          <InputField
-            label="Bank address"
-            value={fields.abroad.bankAddress}
-            onChange={(e) => abroad("bankAddress", e.currentTarget.value)}
-            {...field}
-          />
+          {ways.payLink && (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-semibold">Pay link</p>
+              <InputField
+                label="Link"
+                type="url"
+                helper="Must start with https://."
+                value={fields.abroad.payLink}
+                onChange={(e) => abroad("payLink", e.currentTarget.value)}
+                {...field}
+                maxLength={500}
+              />
+            </div>
+          )}
+          {ways.swift && (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-semibold">Bank transfer (SWIFT)</p>
+              <div className="grid gap-3 page-sm:grid-cols-2">
+                <InputField
+                  label="SWIFT code"
+                  value={fields.abroad.swift}
+                  onChange={(e) => abroad("swift", e.currentTarget.value)}
+                  {...field}
+                />
+                <InputField
+                  label="Account number from abroad"
+                  helper="Leave it empty to use the South African one."
+                  value={fields.abroad.accountNumber}
+                  onChange={(e) =>
+                    abroad("accountNumber", e.currentTarget.value)
+                  }
+                  {...field}
+                />
+              </div>
+              <InputField
+                label="Bank address"
+                value={fields.abroad.bankAddress}
+                onChange={(e) => abroad("bankAddress", e.currentTarget.value)}
+                {...field}
+              />
+            </div>
+          )}
+          {ways.iban && (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-semibold">IBAN account</p>
+              <div className="grid gap-3 page-sm:grid-cols-2">
+                <InputField
+                  label="IBAN account name"
+                  value={fields.abroad.iban.accountName}
+                  onChange={(e) => iban("accountName", e.currentTarget.value)}
+                  {...field}
+                />
+                <InputField
+                  label="IBAN"
+                  value={fields.abroad.iban.iban}
+                  onChange={(e) => iban("iban", e.currentTarget.value)}
+                  {...field}
+                />
+                <InputField
+                  label="BIC / SWIFT"
+                  value={fields.abroad.iban.bic}
+                  onChange={(e) => iban("bic", e.currentTarget.value)}
+                  {...field}
+                />
+                <InputField
+                  label="IBAN bank"
+                  value={fields.abroad.iban.bank}
+                  onChange={(e) => iban("bank", e.currentTarget.value)}
+                  {...field}
+                />
+              </div>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bank-transfer-note">Note on transfer fees</Label>
             <Textarea

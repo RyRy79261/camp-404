@@ -58,11 +58,20 @@ async function captainSetsBank(page: Page, request: APIRequestContext) {
   await expect(page.getByRole("list", { name: "Fee tiers" })).toHaveCount(0);
   await page.getByLabel("Bank", { exact: true }).fill("FNB");
   await page.getByLabel("Branch code").fill("250655");
+  // Abroad, Finance ticks the ways the camp takes: a Wise link today.
+  await page.getByLabel("Pay link (Wise, PayPal, Revolut)").check();
+  await page
+    .getByLabel("Link", { exact: true })
+    .fill("https://wise.com/pay/me/camp404");
   await page.getByRole("button", { name: "Save bank details" }).click();
   await expect(page.getByText("Bank details saved")).toBeVisible();
   await page.reload();
   await heading(page, "Fees and dates");
   await expect(page.getByLabel("Bank", { exact: true })).toHaveValue("FNB");
+  await expect(page.getByLabel("Link", { exact: true })).toHaveValue(
+    "https://wise.com/pay/me/camp404",
+  );
+  await expect(page.getByLabel("SWIFT code")).toHaveCount(0);
 }
 
 async function memberPledges(page: Page) {

@@ -54,9 +54,12 @@ const DETAILS = {
     branchCode: "250655",
   },
   abroad: {
+    ways: { payLink: true, swift: true, iban: false },
+    payLink: "https://wise.com/pay/me/camp404",
     swift: "FIRNZAJJ",
     accountNumber: "62800000000",
     bankAddress: "First National Bank, Johannesburg",
+    iban: { accountName: null, iban: null, bic: null, bank: null },
     note: null,
   },
 };
