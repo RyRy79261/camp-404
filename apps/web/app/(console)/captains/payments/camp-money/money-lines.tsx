@@ -34,6 +34,8 @@ function money(cents: number): string {
   return cents < 0 ? `−${formatMoney(-cents)}` : formatMoney(cents);
 }
 
+// Every cell sits in the middle of its row: a bill's row is as tall as its
+// "Mark paid" button, and its date and words line up with it (mock-up step 1).
 export function MoneyLines({ rows }: { rows: MoneyLineRow[] }) {
   const router = useRouter();
   const [marking, setMarking] = useState<string | null>(null);
@@ -61,14 +63,14 @@ export function MoneyLines({ rows }: { rows: MoneyLineRow[] }) {
       id: "day",
       header: "Date",
       headClassName: "w-24",
-      cellClassName: "whitespace-nowrap tabular-nums",
+      cellClassName: "whitespace-nowrap align-middle tabular-nums",
       cell: (r) => r.day,
     },
     {
       id: "what",
       header: "What",
       role: "title",
-      cellClassName: "whitespace-normal",
+      cellClassName: "whitespace-normal align-middle",
       cell: (r) => (
         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
           <span className={cn(r.bill ? "font-medium" : undefined)}>
@@ -86,7 +88,7 @@ export function MoneyLines({ rows }: { rows: MoneyLineRow[] }) {
       header: "In / out",
       align: "right",
       headClassName: "w-36",
-      cellClassName: cn("whitespace-nowrap tabular-nums"),
+      cellClassName: "whitespace-nowrap align-middle tabular-nums",
       cell: (r) => (
         <span className={r.incoming ? "text-success" : undefined}>
           {signed(r.amountCents)}
@@ -98,7 +100,7 @@ export function MoneyLines({ rows }: { rows: MoneyLineRow[] }) {
       header: "Money after",
       align: "right",
       headClassName: "w-36",
-      cellClassName: "whitespace-nowrap tabular-nums",
+      cellClassName: "whitespace-nowrap align-middle tabular-nums",
       cell: (r) => (
         <span
           className={cn(
@@ -115,6 +117,7 @@ export function MoneyLines({ rows }: { rows: MoneyLineRow[] }) {
       header: "Actions",
       role: "actions",
       hideHeader: true,
+      cellClassName: "align-middle",
       // A fee or budget line has nothing to do: no empty row in its card.
       cell: (r) =>
         r.bill && (
