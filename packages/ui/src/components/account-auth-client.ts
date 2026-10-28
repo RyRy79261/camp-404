@@ -4,7 +4,7 @@
 // better-auth: the app passes its own `authClient` (apps/web/lib/auth-client.ts,
 // with twoFactorClient() + passkeyClient()), which structurally satisfies it.
 //
-// The shapes mirror @better-auth 1.6.25 (twoFactor + @better-auth/passkey client
+// The shapes mirror @better-auth 1.7.14 (twoFactor + @better-auth/passkey client
 // plugins). Methods are declared as METHODS (bivariant) so the real client — whose
 // methods accept extra optional args and return wider discriminated unions — is
 // assignable here without `any`.
@@ -14,11 +14,14 @@ export type ClientResult<T> =
   | { data: T; error: null }
   | { data: null; error: { message?: string | undefined } | null };
 
-/** What `authClient.twoFactor.enable` returns: the TOTP URI + one-time backup codes. */
-export interface TwoFactorEnableData {
-  totpURI: string;
-  backupCodes: string[];
-}
+/**
+ * What `authClient.twoFactor.enable` returns. Since better-auth 1.7 it names
+ * its `method`: "totp" (the default, the only one the UI asks for) carries the
+ * TOTP URI and the one-time backup codes; "otp" (emailed codes) carries neither.
+ */
+export type TwoFactorEnableData =
+  | { method: "totp"; totpURI: string; backupCodes: string[] }
+  | { method: "otp" };
 
 /** What `authClient.twoFactor.generateBackupCodes` returns. */
 export interface BackupCodesData {

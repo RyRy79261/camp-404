@@ -12,7 +12,9 @@ import {
 import {
   OAUTH_PROXY_REFUSED,
   proxyDestination,
+  proxyPurposeKey,
   proxyTargets,
+  type OAuthProxyPurpose,
 } from "../oauth-proxy";
 
 // Google sign-in on a preview, run end to end: a real Better Auth instance for
@@ -26,6 +28,26 @@ const BRANCH =
 const PROXY_SECRET = "proxy-secret-shared-by-prod-and-preview-0001";
 
 const GOOGLE = { GOOGLE_CLIENT_ID: "gid", GOOGLE_CLIENT_SECRET: "gsecret" };
+
+/** Seals data the way the plugin does, under the proxy secret's purpose key. */
+async function seal(purpose: OAuthProxyPurpose, data: object) {
+  return symmetricEncrypt({
+    key: await proxyPurposeKey(PROXY_SECRET, purpose),
+    data: JSON.stringify(data),
+  });
+}
+
+/** A proxy state package holding `stored` as its sealed sign-in state. */
+async function forgeState(stored: object) {
+  return seal("oauth-proxy-package", {
+    isOAuthProxy: true,
+    state: "s",
+    stateCookie: await seal("oauth-proxy-state", stored),
+  });
+}
+
+/** Where a preview's proxied sign-in comes back to (better-auth >= 1.7.7). */
+const PROXY_COMPLETION = "/api/auth/callback/google/oauth-proxy";
 
 const PROD_ENV: AuthEnv = {
   ...GOOGLE,
@@ -188,7 +210,7 @@ describe("Google sign-in on a preview", () => {
     expect(destination).toBeTruthy();
     const sealed = new URL(destination!);
     expect(sealed.origin).toBe(BRANCH);
-    expect(sealed.pathname).toBe("/api/auth/oauth-proxy-callback");
+    expect(sealed.pathname).toBe(PROXY_COMPLETION);
 
     // Google calls production back. Production swaps the code with ITS
     // redirect URI (Google insists they match) and sends the browser back to
@@ -198,7 +220,7 @@ describe("Google sign-in on a preview", () => {
     expect(back.status).toBe(302);
     const location = new URL(back.headers.get("location")!);
     expect(location.origin).toBe(BRANCH);
-    expect(location.pathname).toBe("/api/auth/oauth-proxy-callback");
+    expect(location.pathname).toBe(PROXY_COMPLETION);
     expect(google.redirectURIs).toEqual([`${PROD}/api/auth/callback/google`]);
     // Production wrote nothing: the preview need not share its database.
     expect(prodDb.user).toHaveLength(0);
@@ -277,27 +299,56 @@ describe("Google sign-in on a preview", () => {
     expect(await proxyDestination(PROXY_SECRET, start.state)).toBeUndefined();
   });
 
-  it("does not mount the profile-replay endpoint on production", async () => {
+  it("does not mount the profile-replay endpoints on production", async () => {
     const production = instance(PROD_ENV, emptyDb());
-    const res = await production.handler(
-      new Request(`${PROD}/api/auth/oauth-proxy-callback?callbackURL=%2F`),
+    for (const path of [
+      "/api/auth/oauth-proxy-callback",
+      PROXY_COMPLETION,
+      // Not a literal disabled path: the route-level refusal catches it.
+      "/api/auth/callback/other/oauth-proxy",
+    ]) {
+      const res = await production.handler(
+        new Request(`${PROD}${path}?callbackURL=%2F&profile=x`),
+      );
+      expect(res.status, path).toBe(404);
+    }
+    // A preview mounts the new one (its sign-ins come back there).
+    const preview = instance(PREVIEW_ENV, emptyDb());
+    const res = await preview.handler(
+      new Request(`${BRANCH}${PROXY_COMPLETION}?callbackURL=%2F&profile=x`),
     );
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(302);
+  });
+
+  it("does not take a package sealed with the bare proxy secret (pre-1.7.7)", async () => {
+    // One key for every purpose was GHSA-r4xp-prcw-77qf. A package sealed the
+    // old way is no proxy state now, for the plugin and for the guard.
+    const old = (data: object) =>
+      symmetricEncrypt({ key: PROXY_SECRET, data: JSON.stringify(data) });
+    const forged = await old({
+      isOAuthProxy: true,
+      state: "s",
+      stateCookie: await old({ callbackURL: `${BRANCH}${PROXY_COMPLETION}` }),
+    });
+    expect(await proxyTargets(PROXY_SECRET, forged)).toBeUndefined();
+    // And a state sealed for one purpose does not open as another.
+    const misused = await seal("oauth-proxy-profile", {
+      isOAuthProxy: true,
+      state: "s",
+      stateCookie: await seal("oauth-proxy-state", {
+        callbackURL: `${BRANCH}${PROXY_COMPLETION}`,
+      }),
+    });
+    expect(await proxyTargets(PROXY_SECRET, misused)).toBeUndefined();
   });
 
   it("refuses a sealed state that names a host outside this project's previews", async () => {
     const production = instance(PROD_ENV, emptyDb());
-    const seal = (data: object) =>
-      symmetricEncrypt({ key: PROXY_SECRET, data: JSON.stringify(data) });
-    const forged = await seal({
-      isOAuthProxy: true,
-      state: "s",
-      stateCookie: await seal({
-        callbackURL:
-          "https://camp-404-web-git-x-someone-else.vercel.app/api/auth/oauth-proxy-callback?callbackURL=%2F",
-        codeVerifier: "v",
-        expiresAt: Date.now() + 60_000,
-      }),
+    const forged = await forgeState({
+      callbackURL:
+        "https://camp-404-web-git-x-someone-else.vercel.app/api/auth/callback/google/oauth-proxy?callbackURL=%2F",
+      codeVerifier: "v",
+      expiresAt: Date.now() + 60_000,
     });
 
     const res = await googleCallback(production, PROD, forged);
@@ -311,17 +362,11 @@ describe("Google sign-in on a preview", () => {
 
   it("refuses a sealed state whose error page is outside this project's previews", async () => {
     const production = instance(PROD_ENV, emptyDb());
-    const seal = (data: object) =>
-      symmetricEncrypt({ key: PROXY_SECRET, data: JSON.stringify(data) });
-    const forged = await seal({
-      isOAuthProxy: true,
-      state: "s",
-      stateCookie: await seal({
-        callbackURL: `${BRANCH}/api/auth/oauth-proxy-callback?callbackURL=%2F`,
-        errorURL: "https://evil.example/phish",
-        codeVerifier: "v",
-        expiresAt: Date.now() + 60_000,
-      }),
+    const forged = await forgeState({
+      callbackURL: `${BRANCH}${PROXY_COMPLETION}?callbackURL=%2F`,
+      errorURL: "https://evil.example/phish",
+      codeVerifier: "v",
+      expiresAt: Date.now() + 60_000,
     });
 
     // A cancelled consent would otherwise send the browser to errorURL.
@@ -379,12 +424,9 @@ describe("the preview's own error page", () => {
   });
 
   it("is no destination when a sealed state's error page is not text", async () => {
-    const seal = (data: object) =>
-      symmetricEncrypt({ key: PROXY_SECRET, data: JSON.stringify(data) });
-    const forged = await seal({
-      isOAuthProxy: true,
-      state: "s",
-      stateCookie: await seal({ callbackURL: `${BRANCH}/x`, errorURL: 5 }),
+    const forged = await forgeState({
+      callbackURL: `${BRANCH}/x`,
+      errorURL: 5,
     });
     expect(await proxyTargets(PROXY_SECRET, forged)).toBeNull();
   });
@@ -439,6 +481,16 @@ describe("resolveOAuthProxy", () => {
       /AUTH_OAUTH_PROXY_SECRET/,
     );
   });
+
+  it("warns when the proxy secret is the main secret", () => {
+    const same = { ...PROD_ENV, BETTER_AUTH_SECRET: ` ${PROXY_SECRET} ` };
+    expect(authConfigWarnings(same).join(" ")).toMatch(
+      /AUTH_OAUTH_PROXY_SECRET is the same as BETTER_AUTH_SECRET/,
+    );
+    expect(authConfigWarnings(PROD_ENV).join(" ")).not.toMatch(
+      /same as BETTER_AUTH_SECRET/,
+    );
+  });
 });
 
 describe("isProjectPreviewOrigin", () => {
@@ -446,7 +498,7 @@ describe("isProjectPreviewOrigin", () => {
     expect(isProjectPreviewOrigin(BRANCH)).toBe(true);
     expect(
       isProjectPreviewOrigin(
-        "https://camp-404-y0kcnxz7w-ryry79261s-projects.vercel.app/api/auth/oauth-proxy-callback?callbackURL=%2F",
+        "https://camp-404-y0kcnxz7w-ryry79261s-projects.vercel.app/api/auth/callback/google/oauth-proxy?callbackURL=%2F",
       ),
     ).toBe(true);
   });

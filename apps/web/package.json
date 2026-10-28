@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
-    "@better-auth/passkey": "1.6.25",
+    "@better-auth/passkey": "1.7.14",
     "@camp404/ai-prompts": "workspace:*",
     "@camp404/auth": "workspace:*",
     "@camp404/core": "workspace:*",
@@ -41,7 +41,7 @@
     "@tiptap/react": "3.31.3",
     "@tiptap/starter-kit": "3.31.3",
     "@vercel/blob": "^2.4.0",
-    "better-auth": "1.6.25",
+    "better-auth": "1.7.14",
     "drizzle-orm": "^0.45.2",
     "firebase": "^12.14.0",
     "firebase-admin": "^13.10.0",

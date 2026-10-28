@@ -372,8 +372,8 @@ export const OAUTH_PROXY_SECRET_MIN_LENGTH = 32;
  * (https://www.camp-404.com/api/auth/callback/google), with its state sealed
  * under the shared secret. Production opens the seal, swaps the code for
  * Google's profile, seals the profile, and sends the browser back to the
- * preview's /api/auth/oauth-proxy-callback. The preview checks the state it
- * issued, and signs the member in against its OWN database. Production writes
+ * preview's /api/auth/callback/google/oauth-proxy. The preview checks the
+ * state it issued, and signs the member in against its OWN database. Production writes
  * nothing, so a preview on its own Neon branch works the same as one on the
  * production database.
  *
@@ -465,6 +465,15 @@ export function authConfigWarnings(env: AuthEnv): string[] {
         "production. Set AUTH_OAUTH_PROXY_SECRET (the same value as " +
         "production's, 32+ characters) and AUTH_OAUTH_PROXY_URL (production's " +
         "origin) for Preview.",
+    );
+  }
+  const proxySecret = trimmed(env.AUTH_OAUTH_PROXY_SECRET);
+  if (proxySecret && proxySecret === trimmed(env.BETTER_AUTH_SECRET)) {
+    // The shape GHSA-r4xp-prcw-77qf needed (fixed in better-auth 1.7.7). The
+    // proxy secret is shared with every preview; the main one must not be.
+    warnings.push(
+      "AUTH_OAUTH_PROXY_SECRET is the same as BETTER_AUTH_SECRET. Give the " +
+        "OAuth proxy its own secret: everyone who can deploy a preview holds it.",
     );
   }
   return warnings;
