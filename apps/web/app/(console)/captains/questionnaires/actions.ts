@@ -618,9 +618,11 @@ export async function previewAudienceCount(
     // through `computeAudience` means the preview and the send apply ONE rule.
     //
     // The roster is captain-only data, and a team lead can now reach this line.
-    // Nothing of it crosses the boundary: the only value returned is a COUNT,
-    // and the audience it counts is one the gate above has already said this
-    // actor may address — for a lead, the size of the team they lead.
+    // What crosses the boundary: the COUNT of the audience the gate above has
+    // already said this actor may address (a lead may address the whole camp),
+    // the count left out for saying Not coming this year, and those people's
+    // names only when `canReadMemberField(..., "campParticipations.status")`
+    // allows it (team lead and up). Nothing else of the roster leaves.
     const roster = await getCampManagementRoster();
     const split = splitAudience(
       // An optional questionnaire shows to the whole camp: count `everyone`.
