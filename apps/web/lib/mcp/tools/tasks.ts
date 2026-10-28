@@ -5,6 +5,7 @@ import { activeTeams, getTeamsConfig } from "../../camp-config";
 import { deadlineFromDay, presentTask } from "../../task-board";
 import { addTask, listBoardTasks, moveTask } from "../../tasks";
 import { siteUrl } from "../capabilities";
+import { scopeActor } from "../scope";
 import { runTool, ToolError, truncateList } from "../tool-utils";
 
 // The shared task board over MCP, through the board's own functions
@@ -52,12 +53,11 @@ export function registerTaskTools(server: McpServer): void {
           const teamLabels = Object.fromEntries(
             config.teams.map((t) => [t.key, t.label]),
           );
-          // The page passes lead teams only for a team lead; a captain leads
-          // every team on the board.
+          // A captain leads every team on the board.
           const viewer = {
             id: scope.campUserId,
             isCaptain: scope.isCaptain,
-            leadTeams: scope.viewerRank === "team_lead" ? scope.leadTeams : [],
+            leadTeams: scopeActor(scope).ledTeams,
           };
           const cards = tasks
             .map((task) => presentTask(task, { viewer, now, teamLabels }))

@@ -25,7 +25,7 @@ import {
   Team,
 } from "@camp404/types";
 import { guideSlugFor } from "../../guide-copy";
-import type { McpScope } from "../scope";
+import { scopeActor, type McpScope } from "../scope";
 import {
   deny,
   notFound,
@@ -52,7 +52,8 @@ function firstIssue(error: z.ZodError): string {
 }
 
 function writer(scope: McpScope) {
-  return { rank: scope.viewerRank, led: scope.leadTeams };
+  const actor = scopeActor(scope);
+  return { rank: actor.rank, led: actor.ledTeams };
 }
 
 async function writableDocument(scope: McpScope, slug: string) {

@@ -79,11 +79,7 @@ const typeFields = {
 
 /** The Shifts page's roster for this caller, as the page reads it. */
 function rosterFor(scope: McpScope) {
-  return getShiftsView({
-    userId: scope.campUserId,
-    rank: scope.viewerRank,
-    ledTeams: scope.viewerRank === "team_lead" ? scope.leadTeams : [],
-  });
+  return getShiftsView({ userId: scope.campUserId, ...scopeActor(scope) });
 }
 
 /**

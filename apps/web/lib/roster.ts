@@ -1,7 +1,11 @@
 import "server-only";
 
 import * as rosterDb from "@camp404/db/roster";
-import type { CampHeadcount, CampManagementMember } from "@camp404/db/roster";
+import type {
+  CampHeadcount,
+  CampManagementMember,
+  NamedMember,
+} from "@camp404/db/roster";
 import * as teams from "@camp404/db/team-memberships";
 import type {
   SetLeadResult,
@@ -22,7 +26,13 @@ import { twin } from "./twin";
 // `lib/camp-roster.ts`. lib/__tests__/memberships-agreement.test.ts holds the
 // two sides equal.
 
-export type { CampHeadcount, CampManagementMember, TeamCoverage, TeamPerson };
+export type {
+  CampHeadcount,
+  CampManagementMember,
+  NamedMember,
+  TeamCoverage,
+  TeamPerson,
+};
 
 // The store keeps no audit log, so the captain's id stops here; it models no
 // captain notes, so a panel opened in E2E has none.
@@ -47,6 +57,8 @@ const roster = twin(rosterDb, testStore, [
   "getCampHeadcount",
   "getCampManagementRoster",
   "getCampMemberDetail",
+  "listNameableMembers",
+  "listDisplayNames",
 ]);
 const team = twin(teams, storeTeams, [
   "getTeamCoverage",
@@ -68,6 +80,15 @@ const captainNotes = twin(
  * header. Captain-only; the console layout asks only for a captain.
  */
 export const getCampHeadcount = roster.getCampHeadcount;
+
+/**
+ * Every member a captain may name (approved or waiting, never rejected or an
+ * erased stub): voice matches a spoken name against it.
+ */
+export const listNameableMembers = roster.listNameableMembers;
+
+/** Display names of the members `ids` names, for those that exist. */
+export const listDisplayNames = roster.listDisplayNames;
 
 /** Pass `includeEmail` only for a captain viewer. */
 export const getCampManagementRoster = roster.getCampManagementRoster;

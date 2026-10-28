@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { canEditTeamProgram } from "@camp404/core";
+import { teamProgramEditor } from "@camp404/core";
 import { currentCycleNumber } from "@camp404/db/cycles";
 import * as schema from "@camp404/db/schema";
 import { listBudgetTotals } from "@camp404/db/team-budgets";
@@ -18,7 +18,7 @@ import {
 } from "../../team-program-copy";
 import { getTeamProgram, saveTeamProgram } from "../../team-programs";
 import { siteUrl } from "../capabilities";
-import type { McpScope } from "../scope";
+import { scopeActor, type McpScope } from "../scope";
 import { deny, runTool, ToolError } from "../tool-utils";
 
 const TeamEnum = z.enum(schema.teamEnum.enumValues);
@@ -52,7 +52,7 @@ function presentProgram(
     description: program.description,
     version: program.version,
     updatedAt: program.updatedAt,
-    canEdit: canEditTeamProgram(scope.viewerRank, scope.leadTeams, team),
+    canEdit: teamProgramEditor(team).allows(scopeActor(scope)),
     url: siteUrl(teamProgramPath(team)),
   };
 }
@@ -148,9 +148,7 @@ export function registerTeamTools(server: McpServer): void {
           fields: ["description"],
         },
         handler: async ({ scope }) => {
-          if (
-            !canEditTeamProgram(scope.viewerRank, scope.leadTeams, args.team)
-          ) {
+          if (!teamProgramEditor(args.team).allows(scopeActor(scope))) {
             deny(
               `${TEAM_PROGRAM_REFUSAL} On the website: ${siteUrl(teamProgramPath(args.team))}`,
             );

@@ -1,10 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { canApproveRecipe, canRunLounge } from "@camp404/core";
+import { KITCHEN_REVIEWER, LOUNGE_RUNNER } from "@camp404/core";
 import type { SearchViewer } from "@camp404/db/search";
 import { searchCamp } from "../../search";
 import { siteUrl } from "../capabilities";
-import type { McpScope } from "../scope";
+import { scopeActor, type McpScope } from "../scope";
 import { runTool } from "../tool-utils";
 
 // Ctrl+K's "Everything" over MCP (#326, #350), through the box's own function
@@ -16,14 +16,12 @@ import { runTool } from "../tool-utils";
 
 /** The search route's viewer, from the connector's scope. */
 export function searchViewerOf(scope: McpScope): SearchViewer {
-  // The route reads lead teams only for a team lead; a captain's rules do not
-  // depend on them.
-  const leadTeams = scope.viewerRank === "team_lead" ? scope.leadTeams : [];
+  const actor = scopeActor(scope);
   return {
     userId: scope.campUserId,
     rank: scope.viewerRank,
-    runsLounge: canRunLounge(scope.viewerRank, leadTeams),
-    reviewsRecipes: canApproveRecipe(scope.viewerRank, leadTeams),
+    runsLounge: LOUNGE_RUNNER.allows(actor),
+    reviewsRecipes: KITCHEN_REVIEWER.allows(actor),
   };
 }
 

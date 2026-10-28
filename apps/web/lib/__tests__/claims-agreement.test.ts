@@ -42,6 +42,7 @@ import {
   listClaimsForApproval,
   listClaimsForFinance,
   listMyClaims,
+  listReimbursementsForReview,
   payClaim,
   readClaimAccount,
   setTeamBudget,
@@ -261,6 +262,49 @@ describe("budgets and claims: the database and the test store agree", () => {
         },
         [FINANCE]: { budgetCents: null, spentCents: 0 },
       },
+    });
+    expect(store).toEqual(db);
+  });
+
+  it("lists claims for review by id, team and status, as the connector and voice read them", async () => {
+    const { db, store } = await bothWays(mode, h, async (p) => {
+      const kitchenClaim = await claimFor(p.member, KITCHEN, 4_000);
+      const financeClaim = await claimFor(p.other, FINANCE, 6_000);
+      await decideClaim({
+        claimId: financeClaim,
+        decision: "approved",
+        note: null,
+        actorId: p.captain,
+      });
+      return {
+        byId: await listReimbursementsForReview({ id: kitchenClaim }),
+        noSuchId: await listReimbursementsForReview({ id: NOBODY }),
+        kitchen: await listReimbursementsForReview({ teams: [KITCHEN] }),
+        noTeams: await listReimbursementsForReview({ teams: [] }),
+        waiting: await listReimbursementsForReview({ status: "submitted" }),
+        approved: await listReimbursementsForReview({ status: "approved" }),
+        general: await listReimbursementsForReview({ generalOnly: true }),
+        count: (await listReimbursementsForReview()).length,
+      };
+    });
+    expect(db).toMatchObject({
+      byId: [
+        {
+          team: KITCHEN,
+          submitterId: "@member",
+          amountCents: 4_000,
+          status: "submitted",
+          receiptCount: 1,
+          cycle: YEAR,
+        },
+      ],
+      noSuchId: [],
+      kitchen: [{ team: KITCHEN }],
+      noTeams: [],
+      waiting: [{ team: KITCHEN }],
+      approved: [{ team: FINANCE, approverId: "@captain" }],
+      general: [],
+      count: 2,
     });
     expect(store).toEqual(db);
   });

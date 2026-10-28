@@ -1,9 +1,4 @@
 import { formatMoney, shiftTimeText } from "@camp404/core";
-import { getDocumentBySlug } from "@camp404/db/documents";
-import { findInviteCodeByCode } from "@camp404/db/invite-codes";
-import { listReimbursementsForReview } from "@camp404/db/reimbursements";
-import { listBudgetTotals } from "@camp404/db/team-budgets";
-import { getTeamMemberships } from "@camp404/db/team-memberships";
 import {
   ALLERGEN_LABELS,
   ATTENDANCE_ANSWER_LABELS,
@@ -24,6 +19,9 @@ import {
   type LogisticsPhase,
   type Questionnaire,
 } from "@camp404/types";
+import { findInviteCodeByCode } from "../access-control";
+import { listBudgetTotals, listReimbursementsForReview } from "../claims";
+import { getGuideDraft } from "../guide";
 import { getInventoryItem } from "../inventory";
 import { CONDITION_LABELS, LOCATION_LABELS } from "../inventory-copy";
 import { getMeetingNote } from "../meeting-notes";
@@ -31,15 +29,15 @@ import { meetingHref } from "../meeting-notes-view";
 import { getQuestionnaireForPicker } from "../questionnaire-config";
 import { recipePath } from "../recipe-copy";
 import { getRecipeDetail, getRecipeSource } from "../recipes";
+import { getTeamMemberships } from "../roster";
 import { getAttendanceView, listLogisticsPhases } from "../logistics";
-import type { McpScope } from "../mcp/scope";
+import { scopeActor, type McpScope } from "../mcp/scope";
 import { ledgerCycle } from "../payments";
 import { getShiftsView } from "../shifts";
 import { TASK_COLUMN_LABEL, presentTask } from "../task-board";
 import { listBoardTasks } from "../tasks";
 import { teamProgramPath } from "../team-program-copy";
 import { getTeamProgram } from "../team-programs";
-import { usesTestStore } from "../test-mode";
 import { readNames, readTeamLabels, readTeamPeople } from "./reads";
 
 // What the captain is shown for each action before Do (#356, "no mistakes"
@@ -151,8 +149,7 @@ function blocked(
 async function findSlot(ctx: PreviewCtx, slotId: string) {
   const view = await getShiftsView({
     userId: ctx.scope.campUserId,
-    rank: ctx.scope.viewerRank,
-    ledTeams: ctx.scope.viewerRank === "team_lead" ? ctx.scope.leadTeams : [],
+    ...scopeActor(ctx.scope),
     now: ctx.now,
   });
   for (const day of view.days) {
@@ -229,8 +226,7 @@ const shiftPreviews: Record<string, PreviewFn> = {
   async update_shift_type(args, ctx) {
     const view = await getShiftsView({
       userId: ctx.scope.campUserId,
-      rank: ctx.scope.viewerRank,
-      ledTeams: ctx.scope.viewerRank === "team_lead" ? ctx.scope.leadTeams : [],
+      ...scopeActor(ctx.scope),
       now: ctx.now,
     });
     const type = view.types.find((t) => t.id === str(args.id));
@@ -299,8 +295,7 @@ const taskPreviews: Record<string, PreviewFn> = {
       viewer: {
         id: ctx.scope.campUserId,
         isCaptain: ctx.scope.isCaptain,
-        leadTeams:
-          ctx.scope.viewerRank === "team_lead" ? ctx.scope.leadTeams : [],
+        leadTeams: scopeActor(ctx.scope).ledTeams,
       },
       now: ctx.now,
       teamLabels: labels,
@@ -406,9 +401,7 @@ async function claimPreview(
   decision: "approved" | "rejected",
 ): Promise<Preview> {
   const id = str(args.id);
-  const [claim] = usesTestStore()
-    ? []
-    : await listReimbursementsForReview({ id });
+  const [claim] = await listReimbursementsForReview({ id });
   const verb = decision === "approved" ? "Approve" : "Turn down";
   if (!claim) {
     return blocked(
@@ -466,18 +459,10 @@ const claimPreviews: Record<string, PreviewFn> = {
 
 // --- Teams and leads -------------------------------------------------------------
 
-async function membershipsOf(userId: string) {
-  if (usesTestStore()) {
-    const { testStore } = await import("../test-store");
-    return testStore.getTeamMemberships(userId as never);
-  }
-  return getTeamMemberships(userId);
-}
-
 async function teamFacts(userId: string, team: string) {
   const [labels, mine, people, name] = await Promise.all([
     readTeamLabels(),
-    membershipsOf(userId),
+    getTeamMemberships(userId),
     readTeamPeople(team),
     personName(userId),
   ]);
@@ -714,10 +699,8 @@ const otherPreviews: Record<string, PreviewFn> = {
     };
   },
   async keep_document_members_only(args) {
-    const doc = usesTestStore()
-      ? null
-      : await getDocumentBySlug(str(args.slug));
-    if (!doc && !usesTestStore())
+    const doc = await getGuideDraft(str(args.slug));
+    if (!doc)
       return blocked(
         "Keep a guide chapter members only",
         "No chapter with that slug.",
@@ -725,7 +708,7 @@ const otherPreviews: Record<string, PreviewFn> = {
         "/guide",
       );
     return {
-      sentence: `Keep ${quote(doc?.title ?? str(args.slug))} members only`,
+      sentence: `Keep ${quote(doc.title)} members only`,
       facts: "Survival Guide · off the public site; members still read it",
       path: "/guide",
       args,
@@ -734,9 +717,7 @@ const otherPreviews: Record<string, PreviewFn> = {
   },
   async revoke_invite_code(args) {
     const code = str(args.code);
-    const row = usesTestStore()
-      ? null
-      : await findInviteCodeByCode(code.trim().toUpperCase());
+    const row = await findInviteCodeByCode(code.trim());
     return {
       sentence: `Revoke the invite code ${code}`,
       facts: row
@@ -865,10 +846,8 @@ const otherPreviews: Record<string, PreviewFn> = {
     };
   },
   async update_document(args) {
-    const doc = usesTestStore()
-      ? null
-      : await getDocumentBySlug(str(args.slug));
-    if (!doc && !usesTestStore())
+    const doc = await getGuideDraft(str(args.slug));
+    if (!doc)
       return blocked(
         "Change a guide draft",
         "No chapter with that slug.",
@@ -894,35 +873,31 @@ const otherPreviews: Record<string, PreviewFn> = {
       change.push(...cardLines(args.card as Args));
     }
     return {
-      sentence: `Change the draft of ${quote(doc?.title ?? str(args.slug))}`,
+      sentence: `Change the draft of ${quote(doc.title)}`,
       facts: "Survival Guide · as you read it",
       change,
       path: "/guide",
-      args: { ...args, expectedVersion: doc?.version ?? args.expectedVersion },
+      args: { ...args, expectedVersion: doc.version },
       keys: [`doc:${str(args.slug)}`],
     };
   },
   async publish_document(args) {
-    const doc = usesTestStore()
-      ? null
-      : await getDocumentBySlug(str(args.slug));
-    if (!doc && !usesTestStore())
+    const doc = await getGuideDraft(str(args.slug));
+    if (!doc)
       return blocked(
         "Publish a guide chapter",
         "No chapter with that slug.",
         args,
         "/guide",
       );
-    const title = quote(doc?.title ?? str(args.slug));
+    const title = quote(doc.title);
     return {
       sentence: args.published
         ? `Publish ${title} for members`
         : `Take ${title} off the guide`,
       facts: "Survival Guide · the version you read",
       path: "/guide",
-      args: args.published
-        ? { ...args, expectedVersion: doc?.version ?? args.expectedVersion }
-        : args,
+      args: args.published ? { ...args, expectedVersion: doc.version } : args,
       keys: [`doc:${str(args.slug)}`],
     };
   },

@@ -11,9 +11,15 @@ import {
 import { testStore } from "./test-store";
 import { twin } from "./twin";
 
-// A stored invite code is spent in the database or, under E2E, the test store
+// A stored invite code is read and spent in the database or, under E2E, the test store
 // (twin); the env codes and the founder list are read the same way on both.
-const codes = twin(invites, testStore, ["consumeInviteCode"]);
+const codes = twin(invites, testStore, [
+  "consumeInviteCode",
+  "findInviteCodeByCode",
+]);
+
+/** A stored invite code in any state (revoked, used up), or null. */
+export const findInviteCodeByCode = codes.findInviteCodeByCode;
 
 export interface ClaimedInvite {
   code: string;

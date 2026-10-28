@@ -2337,6 +2337,10 @@ export const testStore = {
     inviteCodes.set(row.code, row);
     return row;
   },
+  /** Mirrors @camp404/db/invite-codes.findInviteCodeByCode: any state. */
+  findInviteCodeByCode(code: string): TestInviteCode | null {
+    return inviteCodes.get(normalizeInviteCode(code)) ?? null;
+  },
   findUsableInviteCode(code: string): TestInviteCode | null {
     const row = inviteCodes.get(normalizeInviteCode(code));
     if (!row) return null;
@@ -3617,6 +3621,21 @@ export const testStore = {
     row.updatedAt = now;
     tickets.set(key, row);
     return true;
+  },
+
+  /** Mirrors @camp404/db/roster.listNameableMembers. */
+  listNameableMembers(): { id: string; name: string }[] {
+    return Array.from(usersByAuthId.values())
+      .filter((u) => !u.sanitised && u.approvalStatus !== "rejected")
+      .map((u) => ({ id: u.id, name: u.displayName ?? "Unnamed member" }));
+  },
+
+  /** Mirrors @camp404/db/roster.listDisplayNames. */
+  listDisplayNames(ids: readonly string[]): { id: string; name: string }[] {
+    return ids.flatMap((id) => {
+      const u = findUserById(id);
+      return u ? [{ id, name: u.displayName ?? "Unnamed member" }] : [];
+    });
   },
 
   // Camp-management roster (mirrors @camp404/db/roster.getCampManagementRoster).

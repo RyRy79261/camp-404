@@ -27,8 +27,8 @@ vi.mock("../../questionnaire-config", () => ({
     ],
   })),
 }));
-vi.mock("@camp404/db/documents", () => ({
-  getDocumentBySlug: vi.fn(async () => ({ title: "Water", version: 3 })),
+vi.mock("../../guide", () => ({
+  getGuideDraft: vi.fn(async () => ({ title: "Water", version: 3 })),
 }));
 
 import { getInventoryItem } from "../../inventory";

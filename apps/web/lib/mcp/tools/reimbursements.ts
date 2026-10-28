@@ -1,14 +1,16 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { claimReviewScope } from "@camp404/core";
+import { canApproveClaim, claimReviewScope } from "@camp404/core";
 import * as schema from "@camp404/db/schema";
+import type {
+  ClaimResult,
+  ReimbursementTeam,
+} from "@camp404/db/reimbursements";
 import {
   decideClaim,
   listMyClaims,
   listReimbursementsForReview,
-  type ClaimResult,
-  type ReimbursementTeam,
-} from "@camp404/db/reimbursements";
+} from "../../claims";
 import { scopeActor } from "../scope";
 import { deny, runTool, ToolError, truncateList } from "../tool-utils";
 
@@ -107,18 +109,24 @@ function registerReviewTools(server: McpServer): void {
         handler: async ({ scope }) => {
           // The website's rule: a captain or a Finance lead every claim, as
           // the Finance page; a lead the teams they lead.
-          const reviewScope = claimReviewScope(scopeActor(scope));
+          const actor = scopeActor(scope);
+          const reviewScope = claimReviewScope(actor);
           let teams: ReimbursementTeam[] | undefined;
           if (reviewScope !== "all") {
-            if (args.team === "general") {
-              deny("Claims under no team are a captain's to review.");
+            // A team asked for is one whose claims they may decide
+            // (canApproveClaim), the rule decideClaim asks again.
+            const team = args.team === "general" ? null : args.team;
+            if (
+              team !== undefined &&
+              !canApproveClaim(actor.rank, actor.ledTeams, team)
+            ) {
+              deny(
+                team === null
+                  ? "Claims under no team are a captain's to review."
+                  : "You don't lead that team this year.",
+              );
             }
-            teams = args.team
-              ? reviewScope.filter((t) => t === args.team)
-              : [...reviewScope];
-            if (args.team && teams.length === 0) {
-              deny("You don't lead that team this year.");
-            }
+            teams = team ? [team] : [...reviewScope];
           } else if (args.team && args.team !== "general") {
             teams = [args.team];
           }

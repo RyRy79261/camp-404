@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { canEditInventory } from "@camp404/core";
+import { inventoryEditor } from "@camp404/core";
 import {
   ITEM_CHANGED,
   ITEM_GONE,
@@ -30,6 +30,7 @@ import {
   whereText,
 } from "../../inventory-copy";
 import { siteUrl } from "../capabilities";
+import { scopeActor } from "../scope";
 import { runTool, ToolError, truncateList } from "../tool-utils";
 
 // The camp's gear over MCP (#246, for the Notion import #239), on the
@@ -111,7 +112,7 @@ export function registerInventoryTools(server: McpServer): void {
           ]);
           const labels = teamLabelMap(config);
           const canEdit = (team: string) =>
-            canEditInventory(scope.viewerRank, scope.leadTeams, team);
+            inventoryEditor(team).allows(scopeActor(scope));
           const q = args.q?.trim().toLowerCase();
           const now = new Date();
           const shown = items.filter((item) => {
