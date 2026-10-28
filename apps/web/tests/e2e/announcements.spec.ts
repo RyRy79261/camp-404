@@ -69,9 +69,10 @@ test.describe("captain announcements (test-mode)", () => {
     await expect(
       panel.getByRole("heading", { name: "Notifications" }),
     ).toBeVisible();
-    // The panel fetches its rows on open; an empty inbox says so, and the way
-    // through to the inbox is always there.
-    await expect(panel.getByText(/Nothing here yet/)).toBeVisible();
+    // The panel fetches its rows on open; an empty inbox says so ("else"
+    // under the profile notice, which a new member has), and the way through
+    // to the inbox is always there.
+    await expect(panel.getByText(/Nothing (here|else) yet/)).toBeVisible();
     await panel.getByRole("link", { name: /See all/ }).click();
     await expect(page).toHaveURL(/\/notifications$/);
     await expect(
