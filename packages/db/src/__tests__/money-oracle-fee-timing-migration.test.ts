@@ -248,6 +248,37 @@ describe("0124_money_oracle_fee_timing", () => {
     expect(await db.select().from(schema.duesAccounts)).toEqual([]);
   });
 
+  it("leaves an answer to an older version whose options do not fit alone", async () => {
+    const db = h.db();
+    await store(oracle());
+    // Version 0 asked with five options, so its option_2 is not his option_2.
+    const older = oracle();
+    const when = older.pages[0]!.blocks[1]!;
+    if (when.kind === "question" && "options" in when.question) {
+      when.question.options = when.question.options!.slice(0, 5);
+    }
+    await db.insert(schema.questionnaireVersions).values({
+      definitionKey: KEY,
+      version: "0",
+      definition: older as never,
+    });
+    const member = await makeUser(db);
+    await db.insert(schema.questionnaireResponses).values({
+      userId: member.id,
+      definitionKey: KEY,
+      definitionVersion: "0",
+      cycle: 2027,
+      responses: { [Q]: "option_2" },
+      completedAt: new Date(),
+    });
+    await run();
+    const [row] = await db
+      .select({ responses: schema.questionnaireResponses.responses })
+      .from(schema.questionnaireResponses);
+    expect(row!.responses).toEqual({ [Q]: "option_2" });
+    expect(await db.select().from(schema.duesAccounts)).toEqual([]);
+  });
+
   it("leaves a question whose options are not his six alone", async () => {
     const db = h.db();
     const changed = oracle(["a", "b", "c", "d", "e", "f"]);

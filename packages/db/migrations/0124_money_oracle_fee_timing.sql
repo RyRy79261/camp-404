@@ -111,7 +111,8 @@ $$;
 --> statement-breakpoint
 -- Map the stored answers first, while the definition still says which
 -- options are Andrew's (a definition whose options do not fit is left alone,
--- and so are its answers).
+-- and so are its answers). The version each answer was given against must fit
+-- too: an older version's option_N may have meant something else.
 UPDATE "questionnaire_responses" AS r
 SET "responses" = jsonb_set(
       r."responses",
@@ -126,6 +127,12 @@ WHERE r."definition_key" = 'camp-fees-the-money-oracle'
     SELECT 1 FROM "questionnaire_definitions" AS d
     WHERE d."key" = r."definition_key"
       AND camp404_mo_fits(d."definition")
+  )
+  AND EXISTS (
+    SELECT 1 FROM "questionnaire_versions" AS v
+    WHERE v."definition_key" = r."definition_key"
+      AND v."version" = r."definition_version"
+      AND camp404_mo_fits(v."definition")
   );
 --> statement-breakpoint
 UPDATE "questionnaire_versions"
