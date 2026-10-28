@@ -179,7 +179,7 @@ export function PayGuideOverlay({ covered = false }: { covered?: boolean }) {
         <section
           aria-label="Camp fee"
           data-pay-guide
-          className="absolute bottom-2 right-12 z-40 w-[22.5rem] max-w-[calc(100%-4rem)] select-text border-2 border-os-primary bg-os-panel text-os-fg shadow-[6px_6px_0_0_rgb(0_0_0/0.55)] max-md:hidden"
+          className="absolute bottom-2 right-12 z-40 w-[25rem] max-w-[calc(100%-4rem)] select-text border-2 border-os-primary bg-os-panel text-os-fg shadow-[6px_6px_0_0_rgb(0_0_0/0.55)] max-md:hidden"
         >
           {expanded ? (
             <GuideBody
@@ -207,7 +207,7 @@ export function PayGuideOverlay({ covered = false }: { covered?: boolean }) {
               <p className="text-sm text-os-muted">
                 {words.lead} {words.paid}
               </p>
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
                 <Button
                   type="button"
                   size="sm"
