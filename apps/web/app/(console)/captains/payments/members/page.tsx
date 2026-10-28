@@ -77,7 +77,7 @@ function checkChips(r: FeeOverviewRow): string[] {
   return chips;
 }
 
-function columns(burnYear: number): ResponsiveColumn<FeeOverviewRow>[] {
+function columns(): ResponsiveColumn<FeeOverviewRow>[] {
   return [
     {
       id: "member",
@@ -136,7 +136,7 @@ function columns(burnYear: number): ResponsiveColumn<FeeOverviewRow>[] {
       headClassName: "w-44",
       cell: (r) =>
         r.payBy ? (
-          feeTimingShortLabel(r.payBy, burnYear)
+          feeTimingShortLabel(r.payBy, r.burnYear)
         ) : (
           <span className="text-muted-foreground">Not answered</span>
         ),
@@ -330,7 +330,7 @@ export default async function WhoOwesWhatPage({
             <EmptyState icon={<Users aria-hidden />} title={EMPTY[show]} />
           ) : (
             <ResponsiveDataTable
-              columns={columns(data.cycle)}
+              columns={columns()}
               data={visible}
               getRowKey={(r) => r.userId}
               label="Members' fees"
