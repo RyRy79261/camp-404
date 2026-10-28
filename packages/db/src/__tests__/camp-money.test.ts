@@ -102,9 +102,12 @@ describe("camp money", () => {
         branchCode: "250655",
       },
       abroad: {
+        ways: { payLink: false, swift: true, iban: false },
+        payLink: null,
         swift: "FIRNZAJJ",
         accountNumber: "62800000000",
         bankAddress: "First National Bank, Johannesburg",
+        iban: { accountName: null, iban: null, bic: null, bank: null },
         note: "Choose OUR for the fees, or add R150.",
       },
     };

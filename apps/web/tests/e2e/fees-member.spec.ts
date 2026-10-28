@@ -176,7 +176,11 @@ test.describe("camp fees: the member's side", () => {
         card.getByRole("button", { name: /^Copy C404-M\d{3}$/ }),
       ).toBeVisible();
       await card.getByRole("button", { name: "From abroad" }).click();
-      await expect(card).toContainText("South Africa has no IBAN");
+      // Finance ticked no way abroad: the South African account is not
+      // passed off as one.
+      await expect(card).toContainText(
+        "hasn’t said how to pay from abroad yet",
+      );
       await card.getByRole("button", { name: "Remind me tomorrow" }).click();
       await expect(card).toHaveCount(0);
     }

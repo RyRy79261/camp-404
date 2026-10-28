@@ -27,7 +27,7 @@ import { BankDetailsForm } from "./bank-details-form";
 afterEach(cleanup);
 
 describe("Where members pay", () => {
-  it("sends both accounts against the version read, and shows a refusal", async () => {
+  it("sends the account and the ticked ways abroad against the version read, and shows a refusal", async () => {
     render(<BankDetailsForm details={EMPTY_CAMP_BANK_DETAILS} version={2} />);
     fireEvent.change(screen.getByLabelText("Bank"), {
       target: { value: "FNB" },
@@ -35,9 +35,15 @@ describe("Where members pay", () => {
     fireEvent.change(screen.getByLabelText("Branch code"), {
       target: { value: "250655" },
     });
-    fireEvent.change(screen.getByLabelText("SWIFT code"), {
-      target: { value: "FIRNZAJJ" },
+    // A way's fields show only once it is ticked.
+    expect(screen.queryByLabelText("SWIFT code")).toBeNull();
+    expect(screen.queryByLabelText("Link")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Pay link (Wise, PayPal, Revolut)"));
+    fireEvent.change(screen.getByLabelText("Link"), {
+      target: { value: "https://wise.com/pay/me/camp404" },
     });
+    expect(screen.queryByLabelText("SWIFT code")).toBeNull();
+    expect(screen.queryByLabelText("IBAN")).toBeNull();
     fireEvent.change(screen.getByLabelText("Note on transfer fees"), {
       target: { value: "The sender pays the fees." },
     });
@@ -55,9 +61,12 @@ describe("Where members pay", () => {
           branchCode: "250655",
         },
         abroad: {
-          swift: "FIRNZAJJ",
+          ways: { payLink: true, swift: false, iban: false },
+          payLink: "https://wise.com/pay/me/camp404",
+          swift: "",
           accountNumber: "",
           bankAddress: "",
+          iban: { accountName: "", iban: "", bic: "", bank: "" },
           note: "The sender pays the fees.",
         },
       },

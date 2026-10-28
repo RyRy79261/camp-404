@@ -14,6 +14,7 @@ import {
   HowToPayButton,
   PayGuideOverlay,
   PayGuideProvider,
+  payLinkName,
   type PayGuideData,
 } from "./pay-guide";
 import { dayAfter, PAY_GUIDE_HIDDEN_KEY } from "@/lib/pay-guide-hidden";
@@ -46,9 +47,12 @@ const DATA: PayGuideData = {
       branchCode: "250655",
     },
     abroad: {
+      ways: { payLink: false, swift: true, iban: false },
+      payLink: null,
       swift: "FIRNZAJJ",
       accountNumber: null,
       bankAddress: "First National Bank, Johannesburg",
+      iban: { accountName: null, iban: null, bic: null, bank: null },
       note: "Banks take fees on the way: choose OUR, or add R150.",
     },
   },
@@ -105,6 +109,79 @@ describe("the pay guide", () => {
     expect(dl?.textContent).toContain("62800000000");
     expect(c.textContent).toContain("South Africa has no IBAN");
     expect(c.textContent).toContain("choose OUR, or add R150");
+  });
+
+  it("offers only the ways abroad Finance ticked, and lets the member pick", () => {
+    const abroad = (over: Partial<PayGuideData["bank"]["abroad"]>) => {
+      cleanup();
+      const { container } = guide({
+        ...DATA,
+        bank: { ...DATA.bank, abroad: { ...DATA.bank.abroad, ...over } },
+      });
+      fireEvent.click(
+        screen.getByRole("button", { name: "Show me how to pay" }),
+      );
+      const c = card(container)!;
+      fireEvent.click(
+        Array.from(c.querySelectorAll("button")).find(
+          (b) => b.textContent === "From abroad",
+        )!,
+      );
+      return c;
+    };
+
+    // Wise only: one button to Wise, no SWIFT and no South African account.
+    let c = abroad({
+      ways: { payLink: true, swift: false, iban: false },
+      payLink: "https://wise.com/pay/me/camp404",
+    });
+    const wise = c.querySelector<HTMLAnchorElement>(
+      "a[href='https://wise.com/pay/me/camp404']",
+    );
+    expect(wise?.textContent).toMatch(/Pay R\s3\s600,00 with Wise/);
+    expect(wise?.target).toBe("_blank");
+    expect(c.textContent).toContain("Put C404-M017 in the payment note.");
+    expect(c.textContent).not.toContain("FIRNZAJJ");
+    expect(c.textContent).not.toContain("62800000000");
+    expect(c.querySelector("[aria-label='Which way?']")).toBeNull();
+
+    // IBAN and the link: the member picks; the IBAN shows its own account.
+    c = abroad({
+      ways: { payLink: true, swift: false, iban: true },
+      payLink: "https://paypal.me/camp404",
+      iban: {
+        accountName: "Camp 404 e.V.",
+        iban: "DE89370400440532013000",
+        bic: "COBADEFFXXX",
+        bank: "Commerzbank",
+      },
+    });
+    const which = c.querySelector("[aria-label='Which way?']")!;
+    expect(
+      Array.from(which.querySelectorAll("button")).map((b) => b.textContent),
+    ).toEqual(["Pay link", "IBAN account"]);
+    expect(c.textContent).toMatch(/with PayPal/);
+    fireEvent.click(
+      Array.from(which.querySelectorAll("button")).find(
+        (b) => b.textContent === "IBAN account",
+      )!,
+    );
+    const dl = c.querySelector("dl[aria-label='Bank details from abroad']");
+    expect(dl?.textContent).toContain("DE89370400440532013000");
+    expect(dl?.textContent).toContain("C404-M017");
+    expect(c.textContent).not.toContain("South Africa has no IBAN");
+
+    // Nothing ticked: no South African account passed off as one abroad.
+    c = abroad({ ways: { payLink: false, swift: false, iban: false } });
+    expect(c.textContent).toContain("hasn’t said how to pay from abroad yet");
+    expect(c.textContent).not.toContain("62800000000");
+  });
+
+  it("names a pay link's service only when it knows it", () => {
+    expect(payLinkName("https://wise.com/pay/me/x")).toBe("Wise");
+    expect(payLinkName("https://www.paypal.com/paypalme/x")).toBe("PayPal");
+    expect(payLinkName("https://revolut.me/x")).toBe("Revolut");
+    expect(payLinkName("https://notwise.com/x")).toBeNull();
   });
 
   it("says so when Finance has not typed the bank details", () => {
