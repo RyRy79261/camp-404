@@ -229,6 +229,8 @@ export async function remindFeesOwed(input: {
   cycle: number;
   actorId: string;
   postInTelegram: boolean;
+  /** The moment of the press (tests pass a fixed one). */
+  now?: Date;
 }): Promise<
   MoneyResult<{ reminded: number; notified: number; posted: number }>
 > {
@@ -237,7 +239,7 @@ export async function remindFeesOwed(input: {
     if (!(await lockCollecting(tx, input.cycle))) {
       refuse(REMINDERS_NEED_COLLECTING);
     }
-    const now = new Date();
+    const now = input.now ?? new Date();
     const today = campDayKey(now);
     const accounts = await listDuesAccounts(input.cycle, today, tx);
     const targets = feeReminderAudience(

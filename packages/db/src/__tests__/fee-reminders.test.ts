@@ -224,11 +224,15 @@ describe("fee reminders", () => {
     const { financeLead, lerato, sam, maybe, bongi } = await camp();
     await collecting(financeLead.id);
     await addPlace("-100");
+    // A fixed day, so the next payment is not overdue once the real date
+    // passes 30 Nov.
+    const now = new Date("2026-10-28T10:00:00+02:00");
     expect(
       await remindFeesOwed({
         cycle: YEAR,
         actorId: financeLead.id,
         postInTelegram: true,
+        now,
       }),
     ).toEqual({ ok: true, reminded: 2, notified: 2, posted: 1 });
 
@@ -273,6 +277,7 @@ describe("fee reminders", () => {
         cycle: YEAR,
         actorId: financeLead.id,
         postInTelegram: true,
+        now,
       }),
     ).toEqual({ ok: true, reminded: 2, notified: 0, posted: 0 });
     expect(await noticesOf(lerato.id)).toHaveLength(1);
