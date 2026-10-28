@@ -173,6 +173,16 @@ describe("NotificationPanel: the profile checklist (step 6)", () => {
     expect(screen.getByText("Add an emergency contact")).toBeTruthy();
   });
 
+  it("says Nothing else yet under the notice when the inbox is empty", async () => {
+    vi.mocked(fetchNotificationPanelAction).mockResolvedValue(
+      loaded({ profile: GAPS, recent: [], pending: [], clearable: 0 }),
+    );
+    render(panel(0));
+    openBell();
+    expect(await screen.findByText(/Nothing else yet/)).toBeTruthy();
+    expect(screen.queryByText(/Nothing here yet/)).toBeNull();
+  });
+
   it("draws nothing when every line is done or there is no checklist", async () => {
     vi.mocked(fetchNotificationPanelAction).mockResolvedValue(
       loaded({ profile: { ...GAPS, missing: 0 } }),

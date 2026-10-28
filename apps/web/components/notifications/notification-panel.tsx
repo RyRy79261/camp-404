@@ -209,8 +209,13 @@ export function NotificationPanel({
             </div>
           ) : rows === 0 ? (
             <p className={NOTE}>
-              Nothing here yet — announcements, captain requests and
-              questionnaires land here as they are sent.
+              {/* With the profile notice above it, "nothing here" would
+                  contradict the row the member is looking at. */}
+              {(data?.profile?.missing ?? 0) > 0
+                ? "Nothing else yet"
+                : "Nothing here yet"}{" "}
+              — announcements, captain requests and questionnaires land here as
+              they are sent.
             </p>
           ) : (
             <ul className="flex flex-col">
