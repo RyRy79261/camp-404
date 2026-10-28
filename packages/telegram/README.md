@@ -16,9 +16,10 @@ A small Telegram Bot API client, the update handlers and the webhook check.
   drain's send (`@camp404/db/telegram-posts`), into the topic when there is
   one.
 - **Status:** the group invite on approval (`issueGroupInviteForUser`) is
-  built and tested but deliberately not called. `queueAnnouncement` and
-  `dispatchPendingAnnouncements` are superseded by the post drain; do not
-  call them. See [`DEFERRED.md`](../../DEFERRED.md).
+  built and tested but deliberately not called. The old announcement queue
+  (`queueAnnouncement`, `dispatchPendingAnnouncements`) was deleted
+  (2026-10-28): the post drain replaced it. See
+  [`DEFERRED.md`](../../DEFERRED.md).
 
 ```bash
 pnpm --filter @camp404/telegram test
