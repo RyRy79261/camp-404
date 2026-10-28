@@ -45,16 +45,18 @@ function Line({
       <span
         aria-hidden
         className={cn(
-          "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+          // A square tick box, as the mock-up (step 6) draws it: an empty
+          // box must read as one, so its border is the muted text colour.
+          "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
           item.done
             ? "border-success bg-success/20 text-success"
-            : "border-border",
+            : "border-muted-foreground",
         )}
       >
         {item.done && <Check className="h-3 w-3" />}
       </span>
       {item.done ? (
-        <span>
+        <span className="line-through">
           <span className="sr-only">Done: </span>
           {item.label}
         </span>
