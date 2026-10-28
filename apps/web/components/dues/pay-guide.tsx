@@ -207,7 +207,7 @@ export function PayGuideOverlay({ covered = false }: { covered?: boolean }) {
               <p className="text-sm text-os-muted">
                 {words.lead} {words.paid}
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <Button
                   type="button"
                   size="sm"
@@ -215,14 +215,9 @@ export function PayGuideOverlay({ covered = false }: { covered?: boolean }) {
                 >
                   Show me how to pay
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={state.remindTomorrow}
-                >
+                <QuietButton onClick={state.remindTomorrow}>
                   Remind me tomorrow
-                </Button>
+                </QuietButton>
               </div>
             </div>
           )}
@@ -489,14 +484,9 @@ export function PayGuideDetails({
           Open My dues
         </Link>
         {onRemindTomorrow && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={onRemindTomorrow}
-          >
+          <QuietButton onClick={onRemindTomorrow}>
             Remind me tomorrow
-          </Button>
+          </QuietButton>
         )}
       </div>
     </div>
@@ -585,5 +575,28 @@ export function HowToPayButton({
         </Dialog>
       )}
     </>
+  );
+}
+
+/**
+ * "Remind me tomorrow": a quiet line of text beside the one main button, as
+ * the mock-up (step 4) draws it. The kit's ghost button wears the chrome's
+ * pixel capitals in the skin, too wide to sit beside "Show me how to pay".
+ */
+function QuietButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-h-9 px-1 text-sm text-os-muted underline-offset-4 hover:text-os-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {children}
+    </button>
   );
 }
