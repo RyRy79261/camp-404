@@ -1,5 +1,5 @@
 // Google sign-in on preview deployments: Better Auth's OAuth proxy, set up by
-// resolveOAuthProxy (env.ts), plus one guard of our own.
+// resolveOAuthProxy (env.ts), plus guards of our own.
 //
 // The guard. Production, handed a proxied callback, sends the browser (and a
 // sealed copy of the member's Google profile) to whatever preview URL the
@@ -9,15 +9,19 @@
 // secret still cannot have production post a profile to someone else's site.
 //
 // The guard reads the state package the way the plugin writes it (better-auth
-// 1.6.25, plugins/oauth-proxy): `state` is the encrypted JSON
-// `{ isOAuthProxy, state, stateCookie }`, and `stateCookie` is the encrypted
-// JSON of the stored state, whose `callbackURL` is the preview's
-// /oauth-proxy-callback. If a Better Auth upgrade changes that shape, the
-// guard stops recognising proxy states and refuses nothing: the flow test in
+// 1.7.14, plugins/oauth-proxy): `state` is the JSON
+// `{ isOAuthProxy, state, stateCookie }` sealed under the proxy secret's
+// "oauth-proxy-package" key, and `stateCookie` is the JSON of the stored
+// state, sealed under its "oauth-proxy-state" key, whose `callbackURL` is the
+// preview's /callback/google/oauth-proxy. Since 1.7.7 each purpose has its own
+// key derived from the proxy secret (the fix for GHSA-r4xp-prcw-77qf, where
+// one key for every purpose let a sealed sign-in state pass for a sealed
+// profile). If a Better Auth upgrade changes that shape, the guard stops
+// recognising proxy states and refuses nothing: the flow test in
 // __tests__/oauth-proxy.test.ts goes red first.
 
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { symmetricDecrypt } from "better-auth/crypto";
 import { oAuthProxy } from "better-auth/plugins/oauth-proxy";
 import { isProjectPreviewOrigin, type OAuthProxyMode } from "./env";
@@ -25,10 +29,55 @@ import { isProjectPreviewOrigin, type OAuthProxyMode } from "./env";
 /** The error code the sign-in form receives when the guard refuses. */
 export const OAUTH_PROXY_REFUSED = "oauth_proxy_refused";
 
-async function decryptJSON(secret: string, data: unknown): Promise<unknown> {
+/** What each sealed part of a proxied sign-in is sealed for. */
+export type OAuthProxyPurpose =
+  | "oauth-proxy-package"
+  | "oauth-proxy-state"
+  | "oauth-proxy-profile";
+
+const encoder = new TextEncoder();
+
+/**
+ * The key the OAuth proxy plugin seals one purpose with: HKDF-SHA-256 over the
+ * proxy secret, hex encoded, as better-auth's own `derivePurposeKey`
+ * (crypto/purpose.ts, which it does not export). Web Crypto, so no new
+ * dependency.
+ */
+export async function proxyPurposeKey(
+  secret: string,
+  purpose: OAuthProxyPurpose,
+): Promise<string> {
+  const ikm = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    "HKDF",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "HKDF",
+      hash: "SHA-256",
+      salt: encoder.encode("better-auth:oauth-encryption:v1"),
+      info: encoder.encode(`better-auth:${purpose}:v1`),
+    },
+    ikm,
+    256,
+  );
+  return Array.from(new Uint8Array(bits), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+async function decryptJSON(
+  secret: string,
+  purpose: OAuthProxyPurpose,
+  data: unknown,
+): Promise<unknown> {
   if (typeof data !== "string" || !data) return undefined;
   try {
-    return JSON.parse(await symmetricDecrypt({ key: secret, data }));
+    const key = await proxyPurposeKey(secret, purpose);
+    return JSON.parse(await symmetricDecrypt({ key, data }));
   } catch {
     return undefined;
   }
@@ -46,13 +95,15 @@ export async function proxyTargets(
   secret: string,
   state: unknown,
 ): Promise<{ callbackURL: string; errorURL?: string } | undefined | null> {
-  const pkg = (await decryptJSON(secret, state)) as
+  const pkg = (await decryptJSON(secret, "oauth-proxy-package", state)) as
     | { isOAuthProxy?: unknown; stateCookie?: unknown }
     | undefined;
   if (!pkg || pkg.isOAuthProxy !== true) return undefined;
-  const stored = (await decryptJSON(secret, pkg.stateCookie)) as
-    | { callbackURL?: unknown; errorURL?: unknown }
-    | undefined;
+  const stored = (await decryptJSON(
+    secret,
+    "oauth-proxy-state",
+    pkg.stateCookie,
+  )) as { callbackURL?: unknown; errorURL?: unknown } | undefined;
   // A proxy package whose inner state will not open names no destination.
   // Null, so the guard refuses it rather than waving it through.
   if (typeof stored?.callbackURL !== "string") return null;
@@ -158,6 +209,39 @@ export function oauthProxyPreviewErrorReturn(): BetterAuthPlugin {
 }
 
 /**
+ * The endpoints that turn a sealed profile into a session: since 1.7.7
+ * /callback/:id/oauth-proxy, and the deprecated /oauth-proxy-callback that
+ * calls it.
+ */
+export const OAUTH_PROXY_COMPLETION_PATHS: ReadonlySet<string> = new Set([
+  "/callback/:id/oauth-proxy",
+  "/oauth-proxy-callback",
+]);
+
+/**
+ * On production, answers 404 on the profile-replay endpoints, so the proxy
+ * secret cannot mint a production session (production's own sign-ins are
+ * never proxied, so it never needs them). It matches the route, not the URL,
+ * so no provider id or spelling of the path gets past it;
+ * `oauthProxyDisabledPaths` is the first lock, on the literal paths.
+ */
+export function oauthProxyCompletionOff(): BetterAuthPlugin {
+  return {
+    id: "camp404-oauth-proxy-completion-off",
+    hooks: {
+      before: [
+        {
+          matcher: (ctx) => OAUTH_PROXY_COMPLETION_PATHS.has(ctx.path ?? ""),
+          handler: createAuthMiddleware(async () => {
+            throw new APIError("NOT_FOUND");
+          }),
+        },
+      ],
+    },
+  };
+}
+
+/**
  * The plugins that carry Google sign-in across to a preview, or none. The
  * guard comes first: plugin hooks run in order, so it sees the callback
  * before the proxy acts on it.
@@ -166,7 +250,9 @@ export function oauthProxyPlugins(mode: OAuthProxyMode | undefined) {
   if (!mode) return [];
   return [
     oauthProxyDestinationGuard(mode.secret),
-    ...(mode.role === "preview" ? [oauthProxyPreviewErrorReturn()] : []),
+    ...(mode.role === "preview"
+      ? [oauthProxyPreviewErrorReturn()]
+      : [oauthProxyCompletionOff()]),
     oAuthProxy({
       productionURL: mode.productionURL,
       secret: mode.secret,
@@ -180,13 +266,17 @@ export function oauthProxyPlugins(mode: OAuthProxyMode | undefined) {
 }
 
 /**
- * Paths production must not mount. /oauth-proxy-callback turns a sealed
- * profile into a session; production never needs it (its own sign-ins are not
- * proxied), so it stays off there and the proxy secret cannot mint a
- * production session.
+ * Paths production must not mount. /callback/google/oauth-proxy (and the
+ * deprecated /oauth-proxy-callback) turn a sealed profile into a session;
+ * production never needs them (its own sign-ins are not proxied), so they stay
+ * off there and the proxy secret cannot mint a production session. Google is
+ * the only provider; `oauthProxyCompletionOff` refuses the route whatever the
+ * provider id.
  */
 export function oauthProxyDisabledPaths(
   mode: OAuthProxyMode | undefined,
 ): string[] {
-  return mode?.role === "production" ? ["/oauth-proxy-callback"] : [];
+  return mode?.role === "production"
+    ? ["/callback/google/oauth-proxy", "/oauth-proxy-callback"]
+    : [];
 }

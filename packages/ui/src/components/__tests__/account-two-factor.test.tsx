@@ -29,7 +29,7 @@ function makeClient(
 ) {
   const enable = vi.fn().mockResolvedValue(
     over.enable ?? {
-      data: { totpURI: TOTP_URI, backupCodes: CODES },
+      data: { method: "totp", totpURI: TOTP_URI, backupCodes: CODES },
       error: null,
     },
   );
@@ -111,7 +111,7 @@ describe("the setup key", () => {
   it("shows no setup key rather than throwing when the URI is malformed", async () => {
     const { client } = makeClient({
       enable: {
-        data: { totpURI: "not-a-uri", backupCodes: CODES },
+        data: { method: "totp", totpURI: "not-a-uri", backupCodes: CODES },
         error: null,
       },
     });
@@ -129,6 +129,25 @@ describe("the setup key", () => {
     // is withheld. A thrown URL parse here would blank the whole panel.
     await screen.findByText("Scan this with your app");
     expect(screen.queryByText(/JBSW/)).toBeNull();
+  });
+
+  it("never shows an empty scan step for an answer with no code to scan", async () => {
+    // better-auth 1.7's emailed-code method carries no URI and no backup codes.
+    const { client } = makeClient({
+      enable: { data: { method: "otp" }, error: null },
+    });
+    render(
+      <AccountTwoFactor
+        client={client}
+        enabled={false}
+        requiresPassword={false}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Turn on two-factor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeNull());
+    expect(screen.queryByText("Scan this with your app")).toBeNull();
   });
 });
 

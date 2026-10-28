@@ -21,7 +21,7 @@ function client(): AccountAuthClient {
   return {
     twoFactor: {
       enable: vi.fn().mockResolvedValue({
-        data: { totpURI: TOTP_URI, backupCodes: CODES },
+        data: { method: "totp", totpURI: TOTP_URI, backupCodes: CODES },
         error: null,
       }),
       verifyTotp: vi.fn().mockResolvedValue({ data: {}, error: null }),

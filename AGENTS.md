@@ -436,6 +436,16 @@ Sign-in rules worth knowing before you touch `packages/auth`:
   the sealed profile rides in the preview's URL. Vercel Authentication on
   previews narrows all three, and also means only someone signed in to Vercel
   can finish a Google sign-in on a preview inside the plugin's 60 seconds.
+  [CORRECTION 2026-10-28] Since better-auth 1.7.7 (the fix for
+  GHSA-r4xp-prcw-77qf) a preview's sign-in comes back to
+  `/callback/google/oauth-proxy` (`/oauth-proxy-callback` is deprecated and
+  calls it; the state-cookie check is still skipped), and each sealed part
+  (state package, stored state, profile) has its own key derived from the
+  proxy secret; the guard derives the same keys (`proxyPurposeKey` in
+  `oauth-proxy.ts`). Production refuses both completion routes. Keep
+  `AUTH_OAUTH_PROXY_SECRET` different from `BETTER_AUTH_SECRET` (a boot
+  warning says so), and upgrade production and previews together: a state
+  sealed by one version does not open on the other.
 - **Keep `changeEmail` unmounted** until a flow that notifies the CURRENT
   address exists (AfrikaBurn's finding: the stock flow turns a stolen session
   into an account takeover).
