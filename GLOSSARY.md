@@ -62,3 +62,24 @@ directly, checked with `satisfies`;
 worded for a captain by `auditDetail`, which reads a stored row's keys by that
 shape and checks each value, because an old row keeps the JSON it was written
 with.
+
+**Fee pledge.** What a member says they can pay toward this year's camp
+fee: their own whole-rand amount, when they can pay it (`payBy`) and whether
+they need a subsidy, on their `dues_accounts` row (`savePledge`,
+`@camp404/db/dues`; `Pledge` in `@camp404/core`). It is not a charge: it
+becomes the camp fee when a captain accepts them (or when they pledge once
+accepted), through `feeChargeFromPledge`. A subsidy pledge of R0 charges
+nothing. Not a gear pledge.
+
+**Gear pledge.** A member's "I'm bringing 2 camping chairs" against a team's
+inventory need this year: one `inventory_pledges` row per member per need
+(`pledgeToNeed`, `@camp404/db/inventory`). It counts against what is still
+needed and has nothing to do with money. Not a fee pledge.
+
+**Member dues.** One member's year of dues as a screen reads it: charges,
+payments with their refunds, the fee pledge, the plan, the balance and the
+next payment (`MemberDues`). Built once, from plain rows either dues store
+fetches, by `memberDues(rows, viewer)` in `packages/core/src/member-dues.ts`;
+the Finance team's list line is `duesAccountRow`. The viewer decides the
+masking there: on a member's own read the concession (its reason, the
+standard amount, the flag) and the ledger and refund notes are null.

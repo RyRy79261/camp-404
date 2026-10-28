@@ -2,21 +2,21 @@ import "server-only";
 
 import {
   campDayKey,
-  duesBalance,
   duesSettled,
-  feeFigures,
   FEE_PLEDGE_ACTION_KEY,
   FEE_PLEDGE_REF_TYPE,
   feeStandardCents,
   isFeeConcession,
   MAX_FEE_TIERS,
-  nextInstalment,
-  paymentFigures,
   proposeRefund,
   pledgeRefusal,
   refundAmount,
   settleUpCharges,
   MONEY_KEEPER,
+  memberDues,
+  duesAccountRow,
+  feeChargeFromPledge,
+  type MemberDuesRows,
 } from "@camp404/core";
 import {
   CHARGE_GONE,
@@ -35,9 +35,6 @@ import {
   TOO_MANY_TIERS,
   YEAR_CHANGED,
   type DuesAccountRow,
-  type DuesChargeRow,
-  type DuesPaymentRow,
-  type DuesRefundRow,
   type DuesYear,
   type FeeTier,
   type MemberDues,
@@ -310,31 +307,78 @@ function emptyAccount(userId: string, cycle: number): AccountRow {
   };
 }
 
-/** The twin of chargeFeeFromPledge (a subsidy pledge of R0 charges nothing). */
+/** The twin of chargeFeeFromPledge (feeChargeFromPledge decides and words it). */
 function chargeFromPledge(userId: string, cycle: number): boolean {
   const account = state().accounts.get(accountKey(userId, cycle));
-  if (
-    !account ||
-    account.pledgedAmountCents === null ||
-    account.pledgedAmountCents <= 0
-  ) {
-    return false;
-  }
+  const tier = account
+    ? state().tiers.find((t) => t.id === account.pledgedTierId)
+    : undefined;
+  const charge = feeChargeFromPledge(
+    account && {
+      amountCents: account.pledgedAmountCents,
+      tierLabel: tier?.label ?? null,
+    },
+  );
+  if (!charge) return false;
   if (liveCharges(userId, cycle).some((c) => c.kind === "fee")) return false;
-  const tier = state().tiers.find((t) => t.id === account.pledgedTierId);
   state().charges.push({
     id: crypto.randomUUID(),
     userId,
     cycle,
     kind: "fee",
-    description: tier ? `Camp fee: ${tier.label}` : "Camp fee: pledged amount",
-    amountCents: account.pledgedAmountCents,
+    description: charge.description,
+    amountCents: charge.amountCents,
     standardAmountCents: null,
     concessionReason: null,
     cancelledAt: null,
     createdAt: new Date(),
   });
   return true;
+}
+
+/**
+ * One member's dues rows as the database module fetches them (charges oldest
+ * first, payments and refunds newest first, the plan by day), for memberDues.
+ * Null when there is no such member.
+ */
+function memberRows(userId: string, cycle: number): MemberDuesRows | null {
+  const user = testStore.findUserById(userId);
+  if (!user) return null;
+  const d = state();
+  const account = d.accounts.get(accountKey(userId, cycle));
+  const tier = account
+    ? d.tiers.find((t) => t.id === account.pledgedTierId)
+    : undefined;
+  return {
+    userId,
+    cycle,
+    name: user.displayName,
+    refCode: testStore.memberRefCode(userId),
+    account: account
+      ? {
+          tierId: account.pledgedTierId,
+          tierLabel: tier?.label ?? null,
+          amountCents: account.pledgedAmountCents,
+          pledgedAt: account.pledgedAt,
+          payBy: account.payBy,
+          subsidy: account.subsidy,
+          planVersion: account.planVersion,
+        }
+      : null,
+    charges: d.charges
+      .filter((c) => c.userId === userId && c.cycle === cycle)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map(zar),
+    payments: testStore
+      .duesPayments(cycle)
+      .filter((p) => p.userId === userId)
+      .reverse(),
+    refunds: [...refundsOf(userId, cycle)].reverse().map(zar),
+    instalments: d.instalments
+      .filter((i) => i.userId === userId && i.cycle === cycle)
+      .sort((a, b) => a.dueOn.localeCompare(b.dueOn)),
+    participation: testStore.getParticipation(userId, cycle) ?? null,
+  };
 }
 
 /** decideParticipation's twin calls this when a member is accepted. */
@@ -491,117 +535,12 @@ export const duesTestStore = {
     cycle: number,
     options: { forFinance: boolean; today?: string },
   ): MemberDues | null {
-    const user = testStore.findUserById(userId);
-    if (!user) return null;
-    const d = state();
-    const account = d.accounts.get(accountKey(userId, cycle));
-    const tier = account
-      ? d.tiers.find((t) => t.id === account.pledgedTierId)
-      : undefined;
-    const charges = d.charges
-      .filter((c) => c.userId === userId && c.cycle === cycle)
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    const payments = testStore
-      .duesPayments(cycle)
-      .filter((p) => p.userId === userId)
-      .reverse();
-    const refunds = refundsOf(userId, cycle);
-    const refundRows: DuesRefundRow[] = [...refunds].reverse().map((r) => ({
-      id: r.id,
-      paymentId: r.paymentId,
-      status: r.status,
-      proposedCents: r.proposedCents,
-      amountCents: r.amountCents,
-      currency: "ZAR",
-      note: options.forFinance ? r.note : null,
-      declineReason: r.declineReason,
-      decidedAt: r.decidedAt,
-      createdAt: r.createdAt,
-    }));
-    const chargeRows: DuesChargeRow[] = charges.map((c) => ({
-      id: c.id,
-      kind: c.kind,
-      description: c.description,
-      amountCents: c.amountCents,
-      currency: "ZAR",
-      standardAmountCents: options.forFinance ? c.standardAmountCents : null,
-      concessionReason: options.forFinance ? c.concessionReason : null,
-      concession: options.forFinance ? isFeeConcession(c) : false,
-      cancelled: c.cancelledAt !== null,
-      createdAt: c.createdAt,
-    }));
-    const paymentRows: DuesPaymentRow[] = payments.map((p) => ({
-      id: p.id,
-      reference: p.reference,
-      amountCents: p.amountCents,
-      currency: p.currency,
-      status: p.status,
-      source: p.source,
-      method: p.method,
-      paidOn: p.paidOn,
-      hasProof: p.proofPathname !== null,
-      note: options.forFinance ? p.note : null,
-      createdAt: p.createdAt,
-      refund: refundRows.find((r) => r.paymentId === p.id) ?? null,
-    }));
-    const instalments = d.instalments
-      .filter((i) => i.userId === userId && i.cycle === cycle)
-      .sort((a, b) => a.dueOn.localeCompare(b.dueOn))
-      .map((i) => ({ dueOn: i.dueOn, amountCents: i.amountCents }));
-    const balance = duesBalance({
-      charges: liveCharges(userId, cycle).map(zar),
-      payments,
-      refunds: refunds.map(zar),
+    const rows = memberRows(userId, cycle);
+    if (!rows) return null;
+    return memberDues(rows, {
+      forFinance: options.forFinance,
+      today: options.today ?? campDayKey(new Date()),
     });
-    const place = testStore.getParticipation(userId, cycle);
-    return {
-      userId,
-      cycle,
-      name: nameOf(userId),
-      refCode: testStore.memberRefCode(userId),
-      pledge:
-        account && account.pledgedAmountCents !== null
-          ? {
-              tierId: account.pledgedTierId,
-              tierLabel: tier?.label ?? null,
-              amountCents: account.pledgedAmountCents,
-              pledgedAt: account.pledgedAt,
-            }
-          : null,
-      payBy: account?.payBy ?? null,
-      subsidy: account?.subsidy ?? false,
-      planVersion: account?.planVersion ?? 0,
-      instalments,
-      charges: chargeRows,
-      payments: paymentRows,
-      participation: place
-        ? {
-            status: place.status,
-            withdrewOn:
-              place.status === "not_attending"
-                ? campDayKey(place.updatedAt)
-                : null,
-          }
-        : null,
-      balance,
-      next: nextInstalment(
-        instalments,
-        balance.paidCents,
-        options.today ?? campDayKey(new Date()),
-      ),
-      ...feeFigures({
-        liveFeeCents:
-          liveCharges(userId, cycle).find((c) => c.kind === "fee")
-            ?.amountCents ?? null,
-        pledgedCents: account?.pledgedAmountCents ?? null,
-        payBy: account?.payBy ?? null,
-        subsidy: account?.subsidy ?? false,
-        paidCents: balance.paidCents,
-        plan: instalments,
-        cycle,
-        today: options.today ?? campDayKey(new Date()),
-      }),
-    };
   },
 
   savePledge(input: {
@@ -739,39 +678,7 @@ export const duesTestStore = {
     return testStore
       .allUsers()
       .filter((u) => !u.sanitised && u.approvalStatus === "approved")
-      .map((u) => {
-        const dues = this.getMemberDues(u.id, cycle, {
-          forFinance: true,
-          today,
-        })!;
-        const fee = liveCharges(u.id, cycle).find((c) => c.kind === "fee");
-        return {
-          userId: u.id,
-          name: dues.name,
-          refCode: dues.refCode,
-          participation: dues.participation?.status ?? null,
-          pledgeLabel: dues.pledge?.tierLabel ?? null,
-          pledgeCents: dues.pledge?.amountCents ?? null,
-          payBy: dues.payBy,
-          subsidy: dues.subsidy,
-          feeCents: fee?.amountCents ?? null,
-          concession: fee ? isFeeConcession(fee) : false,
-          balance: dues.balance,
-          next: dues.next,
-          pendingProofs: dues.payments.filter(
-            (p) => p.status === "pending" && p.source === "member",
-          ).length,
-          figures: paymentFigures(dues.payments),
-          openRefunds: refundsOf(u.id, cycle).filter(
-            (r) => r.status === "requested",
-          ).length,
-          plan: dues.instalments,
-          burnYear: dues.burnYear,
-          feeTotalCents: dues.feeTotalCents,
-          feeOwingCents: dues.feeOwingCents,
-          feeNext: dues.feeNext,
-        };
-      })
+      .map((u) => duesAccountRow(memberRows(u.id, cycle)!, today))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 

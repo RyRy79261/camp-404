@@ -32,6 +32,12 @@ export const FINANCE_TEAM = "finance";
 export const MONEY_KEEPER: Rule = captainOrLeadOf(FINANCE_TEAM);
 
 /**
+ * The one sentence said to anyone MONEY_KEEPER refuses: the database's money
+ * writes, the web's Finance gate and the Claude connector's money tools.
+ */
+export const MONEY_REFUSAL = "Only captains and Finance leads can do this.";
+
+/**
  * Whether someone may work in the Finance tools (dues, payments, refunds,
  * the statement import and the settle-up), and read every member's dues: a
  * captain, or a lead of Finance. `ledTeams` are the team keys they lead this

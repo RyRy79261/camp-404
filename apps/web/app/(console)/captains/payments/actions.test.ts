@@ -121,15 +121,15 @@ describe("recordPaymentAction", () => {
   it("refuses anyone the rank gate refuses", async () => {
     vi.mocked(captainActionGate).mockResolvedValue({
       ok: false,
-      error: "Payments are for captains and Finance leads.",
+      error: "Only captains and Finance leads can do this.",
     });
     expect(await recordPaymentAction(VALID)).toEqual({
       ok: false,
-      error: "Payments are for captains and Finance leads.",
+      error: "Only captains and Finance leads can do this.",
     });
     expect(captainActionGate).toHaveBeenCalledWith(
       "team_lead",
-      "Payments are for captains and Finance leads.",
+      "Only captains and Finance leads can do this.",
     );
     expect(recordPayment).not.toHaveBeenCalled();
   });
@@ -157,7 +157,7 @@ describe("recordPaymentAction", () => {
     vi.mocked(getLeadTeams).mockResolvedValue(["kitchen"]);
     expect(await recordPaymentAction(VALID)).toEqual({
       ok: false,
-      error: "Payments are for captains and Finance leads.",
+      error: "Only captains and Finance leads can do this.",
     });
     expect(recordPayment).not.toHaveBeenCalled();
   });

@@ -56,7 +56,7 @@ beforeEach(() => {
   });
   vi.mocked(moneyActionGate).mockResolvedValue({
     ok: false,
-    error: "Payments are for captains and Finance leads.",
+    error: "Only captains and Finance leads can do this.",
   });
 });
 

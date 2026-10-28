@@ -24,8 +24,9 @@ export function paymentProofPath(paymentId: string): string {
   return `/api/payment-proof/${encodeURIComponent(paymentId)}`;
 }
 
-/** Said to anyone who is not a captain or a Finance lead. */
-export const MONEY_REFUSAL = "Payments are for captains and Finance leads.";
+/** Said to anyone who is not a captain or a Finance lead (one sentence,
+ * the same as the money writes and the Claude connector). */
+export { MONEY_REFUSAL } from "@camp404/core";
 
 /**
  * The lock a member sees on the Finance tools. What they almost always want

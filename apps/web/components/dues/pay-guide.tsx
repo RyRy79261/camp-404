@@ -17,7 +17,9 @@ import { Check, Copy, ExternalLink, Upload, X } from "lucide-react";
 import { campDayKey, formatMoney } from "@camp404/core";
 import {
   ABROAD_WAY_LABEL,
+  abroadWayShown,
   offeredAbroadWays,
+  payDetailRows,
   type AbroadWay,
 } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
@@ -346,36 +348,13 @@ export function PayGuideDetails({
 }) {
   const fromId = useId();
   const [from, setFrom] = useState<"za" | "abroad">("za");
-  const { southAfrica: za, abroad } = data.bank;
+  const { abroad } = data.bank;
   const ways = offeredAbroadWays(abroad);
   const [pickedWay, setWay] = useState<AbroadWay | null>(null);
-  const way = pickedWay && ways.includes(pickedWay) ? pickedWay : ways[0];
+  const way = abroadWayShown(abroad, pickedWay);
   const ref = data.refCode;
   const amount = formatMoney(words.amountCents);
-  const zaRows = rows([
-    ["Bank", za.bank],
-    ["Account name", za.accountName],
-    ["Account number", za.accountNumber],
-    ["Branch code", za.branchCode],
-  ]);
-  // Only the way Finance ticked, never the South African account by default.
-  const abroadRows =
-    way === "swift"
-      ? rows([
-          ["SWIFT code", abroad.swift],
-          ["Bank", abroad.bankAddress],
-          ["Account name", za.accountName],
-          ["Account number", abroad.accountNumber ?? za.accountNumber],
-        ])
-      : way === "iban"
-        ? rows([
-            ["Account name", abroad.iban.accountName],
-            ["IBAN", abroad.iban.iban],
-            ["BIC / SWIFT", abroad.iban.bic],
-            ["Bank", abroad.iban.bank],
-          ])
-        : [];
-  const shown = from === "za" ? zaRows : abroadRows;
+  const shown = payDetailRows(data.bank, from === "za" ? "za" : way);
   return (
     <div className="flex flex-col">
       <p className="font-pixel text-[10px] uppercase text-os-primary">
@@ -586,12 +565,6 @@ function PayLink({
       </p>
     </>
   );
-}
-
-function rows(
-  entries: readonly (readonly [string, string | null])[],
-): (readonly [string, string])[] {
-  return entries.filter((e): e is readonly [string, string] => !!e[1]);
 }
 
 function CopyRef({ code }: { code: string }) {
