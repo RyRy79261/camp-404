@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { canSendToAudience, deriveViewerRank } from "@camp404/core";
-import { computeAudience, type AudienceData } from "@camp404/db/audience";
+import { splitAudience, type AudienceData } from "@camp404/db/recipients";
 import type { CampConfig, TeamsConfig } from "@camp404/db/camp-config";
 import { testStore } from "../test-store";
 
@@ -20,7 +20,7 @@ import { testStore } from "../test-store";
 //   1. mirrors packages/db/src/__tests__/team-memberships.test.ts case for
 //      case — the same scenarios, the same expectations, against the store;
 //   2. feeds the store's rows to the SAME pure production functions the real
-//      backend's rows are fed to (`computeAudience`, `canSendToAudience`,
+//      backend's rows are fed to (`splitAudience`, `canSendToAudience`,
 //      `deriveViewerRank`), so the agreement is asserted rather than asserted
 //      *about*. (A live side-by-side against the PGlite harness would need
 //      @electric-sql/pglite as an apps/web devDependency — see the note in the
@@ -343,7 +343,8 @@ describe("a team send reaches the members a captain just assigned", () => {
     testStore.assignTeam({ userId: builder.id, team: "structures" });
 
     expect(
-      computeAudience({ scope: "team", team: "kitchen" }, audienceData(), null),
+      splitAudience({ scope: "team", team: "kitchen" }, audienceData(), null)
+        .reaches,
     ).toEqual([cook.id]);
   });
 
@@ -353,20 +354,14 @@ describe("a team send reaches the members a captain just assigned", () => {
     testStore.assignTeam({ userId: cook.id, team: "kitchen" });
 
     expect(
-      computeAudience(
-        { scope: "team_leads", team: null },
-        audienceData(),
-        null,
-      ),
+      splitAudience({ scope: "team_leads", team: null }, audienceData(), null)
+        .reaches,
     ).toEqual([]);
 
     testStore.setLead({ userId: cook.id, team: "kitchen", isLead: true });
     expect(
-      computeAudience(
-        { scope: "team_leads", team: null },
-        audienceData(),
-        null,
-      ),
+      splitAudience({ scope: "team_leads", team: null }, audienceData(), null)
+        .reaches,
     ).toEqual([cook.id]);
   });
 
@@ -380,13 +375,15 @@ describe("a team send reaches the members a captain just assigned", () => {
     foundedAt(2027);
 
     expect(
-      computeAudience({ scope: "team", team: "kitchen" }, audienceData(), null),
+      splitAudience({ scope: "team", team: "kitchen" }, audienceData(), null)
+        .reaches,
     ).toEqual([]);
 
     // Re-established for 2027 through the store's writer, and it lands.
     testStore.assignTeam({ userId: cook.id, team: "kitchen" });
     expect(
-      computeAudience({ scope: "team", team: "kitchen" }, audienceData(), null),
+      splitAudience({ scope: "team", team: "kitchen" }, audienceData(), null)
+        .reaches,
     ).toEqual([cook.id]);
   });
 });

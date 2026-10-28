@@ -451,6 +451,8 @@ export const telegramAnnouncementStatusEnum = pgEnum(
 
 // What a post in a camp chat is: a captain's announcement, a questionnaire
 // reminder that tags who still owes it, or a new meeting in the Calendar.
+// Each kind's entry (its tick, what it reads as it is sent, how it renders)
+// is in TELEGRAM_POST_KINDS (./telegram-post-kinds).
 export const telegramPostKindEnum = pgEnum("telegram_post_kind", [
   "announcement",
   "reminder",
@@ -461,6 +463,9 @@ export const telegramPostKindEnum = pgEnum("telegram_post_kind", [
   // A captain's "Tell the camp on Telegram" after making someone a lead: the
   // lead is `tag_user_ids[0]`, read when it is sent; the body is the team.
   "lead",
+  // The Finance team's general camp fee reminder (names nobody, no amount).
+  // Rows queued before it existed are stored as `announcement`.
+  "fee",
 ]);
 
 // --- Sign-in identity (Better Auth) --------------------------------------
@@ -5026,12 +5031,9 @@ export const telegramInvites = pgTable(
   }),
 );
 
-// Outbound message to a Telegram chat (typically the announcement
-// channel). A queue drained by the dispatch cron: rows are inserted
-// `queued`, the worker calls `sendMessage`, and on success the row is
-// flipped to `sent` with the returned `message_id`. Optional
-// `broadcastId` cross-references a `broadcasts` row when the announcement
-// was created as part of an in-app broadcast.
+// Ol' Jeb's posts in the camp's chats: rows are queued in the
+// transaction of the write they are about and sent at most once by the
+// outbox drain (`drainTelegramPosts`, ./telegram-posts).
 export const telegramAnnouncements = pgTable(
   "telegram_announcements",
   {

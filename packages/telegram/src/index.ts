@@ -20,12 +20,8 @@ export {
 
 export {
   DEFAULT_INVITE_TTL_SECONDS,
-  dispatchPendingAnnouncements,
   handleChatMemberUpdate,
   issueGroupInviteForUser,
-  queueAnnouncement,
-  type DispatchResult,
-  type EnqueueAnnouncementInput,
   type IssueInviteResult,
 } from "./handlers";
 

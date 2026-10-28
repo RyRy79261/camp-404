@@ -29,11 +29,12 @@ import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
 import {
-  splitAudience,
+  leftOutNames,
+  sendAudience,
   type AudienceSplit,
   type BroadcastScope,
-} from "./audience";
-import { listNotComingUserIds } from "./participations";
+  type LeftOutMember,
+} from "./recipients";
 import { currentCycleNumber } from "./cycles";
 import { queueTelegramPosts } from "./telegram-posts";
 
@@ -225,11 +226,7 @@ export async function countAnnouncementAudience(
   return ids.length;
 }
 
-/** A member a group send leaves out, by name, for the send screens. */
-export interface LeftOutMember {
-  id: string;
-  name: string;
-}
+export type { LeftOutMember } from "./recipients";
 
 /** Who a publish to an audience would reach, and who it would leave out. */
 export interface AnnouncementAudiencePreview {
@@ -264,28 +261,11 @@ export async function previewAnnouncementAudience(
   };
 }
 
-/** The display names of members a send leaves out, A to Z. */
-export async function leftOutNames(
-  db: DbOrTx,
-  ids: readonly string[],
-): Promise<LeftOutMember[]> {
-  if (ids.length === 0) return [];
-  const rows = await db
-    .select({ id: schema.users.id, name: schema.users.displayName })
-    .from(schema.users)
-    .where(inArray(schema.users.id, [...ids]));
-  return rows
-    .map((r) => ({ id: r.id, name: r.name?.trim() || "Camp member" }))
-    .sort(
-      (a, b) => a.name.localeCompare(b.name, "en") || a.id.localeCompare(b.id),
-    );
-}
-
 /**
  * Recipient user ids for a broadcast, resolved by scope — the single audience
  * primitive the inline publish and the scheduled dispatch worker share. Reads
- * via the stateless HTTP driver; the pure scope→ids mapping lives in
- * ./audience so it can be unit-tested without a database.
+ * via the stateless HTTP driver; who a scope reaches is ./recipients'
+ * (`sendAudience`).
  *
  * Team membership and driver intent are year-scoped, so a `team`, `team_leads`
  * or `drivers` broadcast resolves against THIS YEAR's roster. Unscoped it would
@@ -320,58 +300,28 @@ export async function resolveAudienceSplit(
   db: DbOrTx = createHttpDb(),
 ): Promise<AudienceSplit> {
   const cycle = await currentCycleNumber(db);
-  const [members, memberships, drivers, targets, carRiders, notComing] =
-    await Promise.all([
-      db
-        .select({
-          id: schema.users.id,
-          isSystem: schema.users.isSystem,
-          sanitised: schema.users.sanitised,
-          approvalStatus: schema.users.approvalStatus,
-        })
-        .from(schema.users),
-      db
-        .select({
-          userId: schema.teamMemberships.userId,
-          team: schema.teamMemberships.team,
-          isLead: schema.teamMemberships.isLead,
-        })
-        .from(schema.teamMemberships)
-        .where(eq(schema.teamMemberships.cycle, cycle)),
-      db
-        .select({ userId: schema.driverProfiles.userId })
-        .from(schema.driverProfiles)
-        .where(
-          and(
-            eq(schema.driverProfiles.intendsToDrive, true),
-            eq(schema.driverProfiles.cycle, cycle),
-          ),
-        ),
-      broadcast.scope === "individual" && broadcast.targetUserIds
-        ? Promise.resolve(broadcast.targetUserIds.map((userId) => ({ userId })))
-        : broadcast.scope === "individual"
-          ? db
-              .select({ userId: schema.broadcastTargets.userId })
-              .from(schema.broadcastTargets)
-              .where(eq(schema.broadcastTargets.broadcastId, broadcast.id))
-          : Promise.resolve([] as { userId: string }[]),
-      broadcast.scope === "car" && senderId
-        ? carRidersOf(db, senderId, cycle)
+  const [targets, carRiders] = await Promise.all([
+    broadcast.scope === "individual" && broadcast.targetUserIds
+      ? Promise.resolve(broadcast.targetUserIds.map((userId) => ({ userId })))
+      : broadcast.scope === "individual"
+        ? db
+            .select({ userId: schema.broadcastTargets.userId })
+            .from(schema.broadcastTargets)
+            .where(eq(schema.broadcastTargets.broadcastId, broadcast.id))
         : Promise.resolve([] as { userId: string }[]),
-      listNotComingUserIds(db, cycle),
-    ]);
-
-  return splitAudience(
-    broadcast,
+    broadcast.scope === "car" && senderId
+      ? carRidersOf(db, senderId, cycle)
+      : Promise.resolve([] as { userId: string }[]),
+  ]);
+  return sendAudience(
+    db,
     {
-      members,
-      memberships,
-      driverUserIds: drivers.map((d) => d.userId),
+      scope: broadcast.scope,
+      team: broadcast.team,
       targetUserIds: targets.map((t) => t.userId),
       carRiderUserIds: carRiders.map((r) => r.userId),
-      notComingUserIds: notComing,
     },
-    senderId,
+    { cycle, senderId },
   );
 }
 

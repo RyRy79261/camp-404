@@ -189,7 +189,7 @@ async function seedCamp(db: DB) {
   // rollover's own receipt may land in audit_log for these tests to count.
   await withTransaction((tx) => closeActivationTx(tx, alreadyClosed.id));
 
-  // Left the camp AFTER being gated: computeAudience excludes them from the
+  // Left the camp AFTER being gated: splitAudience excludes them from the
   // replacement, so their expired gate is the one that survives the rollover.
   await db
     .update(schema.users)
@@ -214,7 +214,7 @@ describe("planRollover", () => {
     // burn types 2028 over it.
     expect(plan.suggestedYear).toBe(2027);
 
-    // fresh + open send → re-gate. The count is computeAudience's, i.e. the
+    // fresh + open send → re-gate. The count is splitAudience's, i.e. the
     // number that will actually be gated: three real members (the sanitised
     // one is excluded).
     expect(plan.reGate).toEqual([

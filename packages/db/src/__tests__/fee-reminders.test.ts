@@ -258,6 +258,7 @@ describe("fee reminders", () => {
     const posts = await h
       .db()
       .select({
+        kind: schema.telegramAnnouncements.kind,
         title: schema.telegramAnnouncements.title,
         body: schema.telegramAnnouncements.body,
         buttonPath: schema.telegramAnnouncements.buttonPath,
@@ -265,6 +266,7 @@ describe("fee reminders", () => {
       .from(schema.telegramAnnouncements);
     expect(posts).toEqual([
       {
+        kind: "fee",
         title: "Camp fees are coming due",
         body: "Check My dues in Camp 404 to see what you owe and how to pay.",
         buttonPath: "/dues",

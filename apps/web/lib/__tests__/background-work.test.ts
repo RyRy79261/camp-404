@@ -31,6 +31,9 @@ vi.mock("@camp404/db/telegram-dm", () => ({
   drainQueuedTelegram: vi.fn(),
   pruneTelegramUpdates: vi.fn(),
 }));
+vi.mock("@camp404/db/telegram-posts", () => ({
+  drainTelegramPosts: vi.fn(),
+}));
 vi.mock("@/lib/telegram", () => ({
   isTelegramConfigured: vi.fn(),
   getTelegramClient: vi.fn(() => ({})),
@@ -74,6 +77,7 @@ import {
   drainQueuedTelegram,
   pruneTelegramUpdates,
 } from "@camp404/db/telegram-dm";
+import { drainTelegramPosts } from "@camp404/db/telegram-posts";
 import { isTelegramConfigured } from "@/lib/telegram";
 
 // 12:00 in camp (UTC+2), inside reminder hours; 02:00 in camp, outside.
@@ -107,11 +111,12 @@ describe("deliverDue", () => {
     process.env.VERCEL_ENV = "production";
   });
 
-  it("sends push, email and Telegram", async () => {
+  it("sends push, email and Telegram, private notices and the camp chats' posts", async () => {
     await deliverDue();
     expect(drainQueuedPush).toHaveBeenCalledOnce();
     expect(drainQueuedEmail).toHaveBeenCalledOnce();
     expect(drainQueuedTelegram).toHaveBeenCalledOnce();
+    expect(drainTelegramPosts).toHaveBeenCalledOnce();
   });
 
   it("leaves push, email and Telegram queued while their service is not set up", async () => {
@@ -122,6 +127,7 @@ describe("deliverDue", () => {
     expect(drainQueuedPush).not.toHaveBeenCalled();
     expect(drainQueuedEmail).not.toHaveBeenCalled();
     expect(drainQueuedTelegram).not.toHaveBeenCalled();
+    expect(drainTelegramPosts).not.toHaveBeenCalled();
   });
 
   it("sends no push or email off production: a preview or a laptop holds real members", async () => {
@@ -134,6 +140,7 @@ describe("deliverDue", () => {
       expect(drainQueuedPush).not.toHaveBeenCalled();
       expect(drainQueuedEmail).not.toHaveBeenCalled();
       expect(drainQueuedTelegram).not.toHaveBeenCalled();
+      expect(drainTelegramPosts).not.toHaveBeenCalled();
     }
   });
 

@@ -30,7 +30,12 @@ import {
 } from "./activations";
 import { carryOverFor, currentCycleNumber } from "./cycles";
 import { writeAuditEvent } from "./audit";
-import { hasNotSaidNotComing } from "./participations";
+import {
+  DEADLINE_REMINDER,
+  GROUP_SEND,
+  OWED_NUDGE,
+  reachWhere,
+} from "./recipients";
 import {
   campDayKey,
   listTelegramPlaces,
@@ -772,15 +777,8 @@ export async function notifyOptInOpened(input: {
     const members = await tx
       .select({ id: schema.users.id })
       .from(schema.users)
-      .where(
-        and(
-          eq(schema.users.isSystem, false),
-          eq(schema.users.sanitised, false),
-          eq(schema.users.approvalStatus, "approved"),
-          // A group note: who said Not coming this year is left out.
-          hasNotSaidNotComing(schema.users.id, act.cycle),
-        ),
-      );
+      // A group note: who said Not coming this year is left out.
+      .where(reachWhere(GROUP_SEND, act.cycle));
     const targets = members.map((m) => m.id);
     if (targets.length === 0) return 0;
     const payload = optInQuestionnaireNotification({
@@ -948,12 +946,10 @@ export async function sendReminder(input: {
           eq(schema.requiredActions.actionKey, act.questionnaireKey),
           // The pending bucket, and only it — see the doc comment.
           eq(schema.requiredActions.status, "pending"),
-          // A departed or system account holds no obligation worth pushing.
-          eq(schema.users.isSystem, false),
-          eq(schema.users.sanitised, false),
-          // Nor does a member who said Not coming in the send's year: they
+          // A departed or system account holds no obligation worth pushing,
+          // nor does a member who said Not coming in the send's year: they
           // may still answer, but nobody nudges them (owner, 2026-10-27).
-          hasNotSaidNotComing(schema.users.id, act.cycle),
+          reachWhere(OWED_NUDGE, act.cycle),
         ),
       );
 
@@ -1129,11 +1125,9 @@ export async function remindRequiredActionsDueSoon(
           isNull(schema.requiredActions.activationId),
           gt(schema.requiredActions.dueAt, now),
           lte(schema.requiredActions.dueAt, until),
-          eq(schema.users.isSystem, false),
-          eq(schema.users.sanitised, false),
-          ne(schema.users.approvalStatus, "rejected"),
-          // Who said Not coming this year is not nudged (owner, 2026-10-27).
-          hasNotSaidNotComing(schema.users.id, cycle),
+          // Waiting for approval is still nudged; declined, and who said
+          // Not coming this year, are not (owner, 2026-10-27).
+          reachWhere(DEADLINE_REMINDER, cycle),
         ),
       )
       .orderBy(asc(schema.requiredActions.id))
@@ -1271,26 +1265,21 @@ export async function postQuestionnaireInTelegram(input: {
     });
     // One post per place a minute: a double press queues nothing twice.
     const minute = Math.floor(now.getTime() / 60_000);
-    const rows = await tx
-      .insert(schema.telegramAnnouncements)
-      .values(
-        places.map((place) => ({
-          chatId: place.chatId,
-          threadId: place.threadId,
-          kind: "questionnaire" as const,
-          title: payload.title,
-          body: payload.body,
-          refId: act.id,
-          tagUserIds,
-          buttonText: TELEGRAM_ANSWER_BUTTON,
-          buttonPath: notificationLink(payload.refType, payload.refId),
-          dedupeKey: `questionnaire:${act.id}:${minute}:${place.chatId}`,
-        })),
-      )
-      .onConflictDoNothing()
-      .returning({ id: schema.telegramAnnouncements.id });
-    if (rows.length === 0)
-      return { ok: false, error: POST_IN_TELEGRAM_TOO_SOON };
+    const queued = await queueTelegramPosts(
+      tx,
+      {
+        kind: "questionnaire",
+        title: payload.title,
+        body: payload.body,
+        refId: act.id,
+        tagUserIds,
+        buttonText: TELEGRAM_ANSWER_BUTTON,
+        buttonPath: notificationLink(payload.refType, payload.refId),
+        dedupe: `questionnaire:${act.id}:${minute}`,
+      },
+      { places },
+    );
+    if (queued === 0) return { ok: false, error: POST_IN_TELEGRAM_TOO_SOON };
 
     // The private reminder goes the way every reminder does (in the app, by
     // push and by Ol' Jeb), to the connected members it still waits on.
@@ -1315,14 +1304,14 @@ export async function postQuestionnaireInTelegram(input: {
       metadata: {
         activationId: act.id,
         title: act.title,
-        places: rows.length,
+        places: queued,
         tagged: tagUserIds.length,
         messaged: messaged.length,
       },
     });
     return {
       ok: true,
-      places: rows.length,
+      places: queued,
       tagged: tagUserIds.length,
       messaged: messaged.length,
     };

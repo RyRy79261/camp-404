@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  computeAudience,
   splitAudience,
   type AudienceData,
   type BroadcastScope,
-} from "../audience";
+} from "../recipients";
 import { broadcastScopeEnum } from "../schema";
 
 // The scope switch used to end in `default: ids = []`, which would have
@@ -29,14 +28,14 @@ const data: AudienceData = {
   notComingUserIds: [],
 };
 
-describe("computeAudience — scope exhaustiveness", () => {
+describe("splitAudience — scope exhaustiveness", () => {
   it("resolves every broadcastScopeEnum member without throwing", () => {
     // Iterates the DB enum itself, not a hand-written list: a member added to
     // the enum and to no case arm fails here as well as at compile time.
     expect(broadcastScopeEnum.enumValues.length).toBeGreaterThan(0);
     for (const scope of broadcastScopeEnum.enumValues) {
-      expect(() =>
-        computeAudience({ scope, team: "kitchen" }, data, null),
+      expect(
+        () => splitAudience({ scope, team: "kitchen" }, data, null).reaches,
       ).not.toThrow();
     }
   });
@@ -45,17 +44,18 @@ describe("computeAudience — scope exhaustiveness", () => {
     // THE REFUSED CASE: the cast simulates a scope that reached the switch
     // without a case arm — an enum grown past the union, or the
     // `as BroadcastScope` laundering in activations.ts. Silence was the defect.
-    expect(() =>
-      computeAudience(
-        { scope: "captains_only" as BroadcastScope, team: null },
-        data,
-        null,
-      ),
+    expect(
+      () =>
+        splitAudience(
+          { scope: "captains_only" as BroadcastScope, team: null },
+          data,
+          null,
+        ).reaches,
     ).toThrow(/Unhandled broadcast scope: captains_only/);
   });
 });
 
-describe("computeAudience — applicants are not members yet", () => {
+describe("splitAudience — applicants are not members yet", () => {
   // Owner's call (2026-09-16): group audiences are approved members only. A
   // pending or rejected applicant must not get the full-screen announcement
   // takeover or a camp-wide questionnaire gate.
@@ -96,20 +96,20 @@ describe("computeAudience — applicants are not members yet", () => {
       "team_leads",
       "drivers",
     ] as const) {
-      expect(computeAudience({ scope, team: "kitchen" }, camp, null)).toEqual([
-        "member",
-      ]);
+      expect(
+        splitAudience({ scope, team: "kitchen" }, camp, null).reaches,
+      ).toEqual(["member"]);
     }
   });
 
   it("still reaches a person a captain picked by name", () => {
     expect(
-      computeAudience({ scope: "individual", team: null }, camp, null),
+      splitAudience({ scope: "individual", team: null }, camp, null).reaches,
     ).toEqual(["pending"]);
   });
 });
 
-describe("computeAudience — the car", () => {
+describe("splitAudience — the car", () => {
   // The riders come from the caller, read from the SENDER's own car; the
   // scope still leaves out the sender, applicants and erased accounts.
   it("reaches the car's approved riders, never the sender", () => {
@@ -133,14 +133,14 @@ describe("computeAudience — the car", () => {
       carRiderUserIds: ["u1", "u2", "gone", "pending", "u3"],
     };
     expect(
-      computeAudience({ scope: "car", team: null }, camp, "u3").sort(),
+      splitAudience({ scope: "car", team: null }, camp, "u3").reaches.sort(),
     ).toEqual(["u1", "u2"]);
   });
 
   it("reaches nobody when the caller read no riders", () => {
-    expect(computeAudience({ scope: "car", team: null }, data, "u3")).toEqual(
-      [],
-    );
+    expect(
+      splitAudience({ scope: "car", team: null }, data, "u3").reaches,
+    ).toEqual([]);
   });
 });
 
@@ -205,9 +205,9 @@ describe("splitAudience — Not coming = no group sends (owner, 2026-10-27)", ()
     ).toEqual({ reaches: ["u2"], notComing: ["u3"] });
   });
 
-  it("computeAudience is the reaches half", () => {
+  it("splitAudience is the reaches half", () => {
     expect(
-      computeAudience({ scope: "everyone", team: null }, camp, null),
+      splitAudience({ scope: "everyone", team: null }, camp, null).reaches,
     ).toEqual(["u2"]);
   });
 });

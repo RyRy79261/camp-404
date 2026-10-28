@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeAudience, type AudienceData } from "@camp404/db/audience";
+import { splitAudience, type AudienceData } from "@camp404/db/recipients";
 
 const data: AudienceData = {
   members: [
@@ -44,53 +44,69 @@ const data: AudienceData = {
   notComingUserIds: [],
 };
 
-describe("computeAudience", () => {
+describe("splitAudience", () => {
   it("everyone = real members minus the sender", () => {
     expect(
-      computeAudience({ scope: "everyone", team: null }, data, "u1").sort(),
+      splitAudience(
+        { scope: "everyone", team: null },
+        data,
+        "u1",
+      ).reaches.sort(),
     ).toEqual(["u2", "u3"]);
   });
 
   it("excludes system actors and sanitised accounts everywhere", () => {
-    const all = computeAudience({ scope: "everyone", team: null }, data, null);
+    const all = splitAudience(
+      { scope: "everyone", team: null },
+      data,
+      null,
+    ).reaches;
     expect(all).not.toContain("sys");
     expect(all).not.toContain("gone");
   });
 
   it("team filters by team membership", () => {
     expect(
-      computeAudience({ scope: "team", team: "kitchen" }, data, null).sort(),
+      splitAudience(
+        { scope: "team", team: "kitchen" },
+        data,
+        null,
+      ).reaches.sort(),
     ).toEqual(["u1", "u2"]);
   });
 
   it("a team-scoped broadcast with no team set reaches nobody", () => {
-    expect(computeAudience({ scope: "team", team: null }, data, null)).toEqual(
-      [],
-    );
+    expect(
+      splitAudience({ scope: "team", team: null }, data, null).reaches,
+    ).toEqual([]);
   });
 
   it("team_leads = users who lead at least one team", () => {
     expect(
-      computeAudience({ scope: "team_leads", team: null }, data, null),
+      splitAudience({ scope: "team_leads", team: null }, data, null).reaches,
     ).toEqual(["u1"]);
   });
 
   it("drivers excludes sanitised accounts", () => {
     expect(
-      computeAudience({ scope: "drivers", team: null }, data, null),
+      splitAudience({ scope: "drivers", team: null }, data, null).reaches,
     ).toEqual(["u2"]); // "gone" is sanitised → dropped
   });
 
   it("individual uses broadcast_targets, excluding system actors", () => {
     expect(
-      computeAudience({ scope: "individual", team: null }, data, null),
+      splitAudience({ scope: "individual", team: null }, data, null).reaches,
     ).toEqual(["u3"]); // "sys" is a system actor → dropped
   });
 
   it("de-duplicates and drops the sender", () => {
     const dupes: AudienceData = { ...data, targetUserIds: ["u1", "u1", "u2"] };
     expect(
-      computeAudience({ scope: "individual", team: null }, dupes, "u2").sort(),
+      splitAudience(
+        { scope: "individual", team: null },
+        dupes,
+        "u2",
+      ).reaches.sort(),
     ).toEqual(["u1"]);
   });
 });

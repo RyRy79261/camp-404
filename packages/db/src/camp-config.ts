@@ -434,7 +434,7 @@ export function teamLabelMap(config: TeamsConfig): Record<string, string> {
 // reads "Power and Lighting". The scope half is static, so the two are joined
 // once and every surface asks the same question. AudienceScope is imported
 // rather than restated so a new scope is a compile error in the map below, the
-// same way it already is in computeAudience's switch.
+// same way it already is in splitAudience's switch (./recipients).
 //
 // Client islands never import this module (it pulls the DB driver) — server
 // pages call it and pass the resolved strings down as props, exactly as they

@@ -8,7 +8,11 @@ import {
 } from "@camp404/core";
 import { createHttpDb, withTransaction, type Database } from "./index";
 import * as schema from "./schema";
-import { computeAudience, type BroadcastScope } from "./audience";
+import {
+  NEW_YEAR_SAID_NOT_COMING,
+  splitAudience,
+  type BroadcastScope,
+} from "./recipients";
 import {
   openActivationTx,
   PUSH_SCOPES,
@@ -130,7 +134,7 @@ export interface RolloverEntry {
   activationId: string | null;
   /**
    * How many members the rollover will GATE for this questionnaire — non-zero
-   * only in `reGate`, and computed with the same `computeAudience` that
+   * only in `reGate`, and computed with the same `splitAudience` that
    * `openActivation` uses, so the preview number IS the number that will be
    * gated. `carriesOver` and `notSent` are both no-ops, hence 0.
    */
@@ -289,7 +293,7 @@ interface OpenActivation {
   scope: (typeof schema.questionnaireScopeEnum.enumValues)[number];
   team: (typeof schema.teamEnum.enumValues)[number] | null;
   blocking: boolean;
-  /** From `computeAudience` — exactly the ids `openActivationTx` will gate. */
+  /** From `splitAudience` — exactly the ids `openActivationTx` will gate. */
   recipientIds: string[];
 }
 
@@ -454,7 +458,7 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
     }
 
     const recipientIds = PUSH_SCOPES.has(row.scope!)
-      ? computeAudience(
+      ? splitAudience(
           { scope: row.scope as BroadcastScope, team: row.team },
           {
             members,
@@ -463,10 +467,10 @@ async function buildPlan(db: PlanReader): Promise<PlanInternals> {
             targetUserIds: targetsByActivation.get(row.activationId) ?? [],
             // The re-gated send opens in the NEW year, which nobody has
             // answered "Coming this year?" for yet, so nobody is left out.
-            notComingUserIds: [],
+            notComingUserIds: NEW_YEAR_SAID_NOT_COMING,
           },
           null,
-        )
+        ).reaches
       : [];
     open.set(row.key, {
       id: row.activationId,
@@ -1005,7 +1009,7 @@ export async function advanceCycle(
           approvalStatus: schema.users.approvalStatus,
         })
         .from(schema.users);
-      const audience = computeAudience(
+      const audience = splitAudience(
         { scope: "everyone", team: null },
         {
           members: recipients,
@@ -1013,10 +1017,10 @@ export async function advanceCycle(
           driverUserIds: [],
           targetUserIds: [],
           // The camp has just moved to a year nobody has answered for yet.
-          notComingUserIds: [],
+          notComingUserIds: NEW_YEAR_SAID_NOT_COMING,
         },
         input.actorUserId,
-      );
+      ).reaches;
       if (audience.length > 0) {
         const payload = announcementNotification({
           broadcastId: broadcast!.id,

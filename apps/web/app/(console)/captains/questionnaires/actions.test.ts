@@ -15,7 +15,9 @@ vi.mock("@/lib/users", () => ({
   isTeamLead: vi.fn(),
   getLeadTeams: vi.fn(),
 }));
-vi.mock("@/lib/roster", () => ({ getCampManagementRoster: vi.fn() }));
+vi.mock("@/lib/questionnaire-audience", () => ({
+  previewSendAudience: vi.fn(),
+}));
 vi.mock("@camp404/db/questionnaire-definitions", () => ({
   getDefinitionMetaRow: vi.fn(),
   setDefinitionAnonymousResults: vi.fn(),
@@ -46,7 +48,6 @@ vi.mock("@/lib/questionnaire-definitions", () => ({
 
 import { attendanceQuestionnaire } from "@camp404/types";
 import { canSendQuestionnaireTo } from "@camp404/core";
-import { computeAudience, type AudienceData } from "@camp404/db/audience";
 import {
   closeActivationAction,
   setCarryOverAction,
@@ -66,7 +67,7 @@ import {
 } from "./actions";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getLeadTeams, isTeamLead } from "@/lib/users";
-import { getCampManagementRoster } from "@/lib/roster";
+import { previewSendAudience } from "@/lib/questionnaire-audience";
 import {
   getDefinitionMetaRow,
   setDefinitionAnonymousResults,
@@ -664,53 +665,21 @@ describe("closeActivationAction", () => {
 // --- previewAudienceCount ---------------------------------------------------
 // The preview exists to make a zero-recipient send VISIBLE, so the cases that
 // matter most are the refusals (which must cost no database round-trip) and
-// the agreement between the count and what a real send would resolve to.
+// that the count is the recipients module's answer for the send's year
+// (`previewSendAudience`, whose agreement with the send itself is pinned on
+// PGlite in packages/db/src/__tests__/send-preview.test.ts).
 
 const ADA = "11111111-1111-4111-8111-111111111111";
 const GRACE = "22222222-2222-4222-8222-222222222222";
-const LIN = "33333333-3333-4333-8333-333333333333";
 
-type RosterRow = Awaited<ReturnType<typeof getCampManagementRoster>>[number];
-
-function rosterRow(id: string, teams: string[], isLead = false): RosterRow {
-  return {
-    id,
-    teams,
-    isLead,
-    approvalStatus: "approved",
-  } as unknown as RosterRow;
-}
-
-const ROSTER: RosterRow[] = [
-  rosterRow(ADA, ["kitchen"], true),
-  rosterRow(GRACE, ["kitchen", "structures"]),
-  rosterRow(LIN, []),
-];
-
-/** The same AudienceData the action builds — so the assertion is not a number
- *  someone typed, but what `computeAudience` itself says. */
-const AUDIENCE_DATA: AudienceData = {
-  members: ROSTER.map((m) => ({
-    id: m.id,
-    isSystem: false,
-    sanitised: false,
-    approvalStatus: m.approvalStatus,
-  })),
-  memberships: ROSTER.flatMap((m) =>
-    m.teams.map((team) => ({ userId: m.id, team, isLead: m.isLead })),
-  ),
-  driverUserIds: [],
-  targetUserIds: [],
-  notComingUserIds: [],
-};
-
-/** Nobody in ROSTER said Not coming. */
+const NOBODY_LEFT_OUT = { reaches: 3, notComing: [] };
+/** Nobody said Not coming. */
 const NONE_LEFT_OUT = { count: 0, names: [] };
 
 describe("previewAudienceCount — refusals cost nothing", () => {
   beforeEach(() => {
     asViewer("captain");
-    vi.mocked(getCampManagementRoster).mockResolvedValue(ROSTER);
+    vi.mocked(previewSendAudience).mockResolvedValue(NOBODY_LEFT_OUT);
   });
 
   it("rejects a scope the send cannot use at all with ZERO database round-trips", async () => {
@@ -719,7 +688,7 @@ describe("previewAudienceCount — refusals cost nothing", () => {
     // Not even the auth/gate reads ran: the scope check is pure and comes first,
     // so a debounced client typing through an audience cannot fan out queries.
     expect(getAuthenticatedUser).not.toHaveBeenCalled();
-    expect(getCampManagementRoster).not.toHaveBeenCalled();
+    expect(previewSendAudience).not.toHaveBeenCalled();
   });
 
   it("refuses an incomplete audience rather than reporting 0", async () => {
@@ -731,47 +700,31 @@ describe("previewAudienceCount — refusals cost nothing", () => {
     expect(
       await previewAudienceCount({ scope: "individual", targetUserIds: [] }),
     ).toEqual({ ok: false, error: "Choose at least one member." });
-    expect(getCampManagementRoster).not.toHaveBeenCalled();
+    expect(previewSendAudience).not.toHaveBeenCalled();
   });
 });
 
 describe("previewAudienceCount — the gate", () => {
+  beforeEach(() => {
+    vi.mocked(previewSendAudience).mockResolvedValue(NOBODY_LEFT_OUT);
+  });
+
   it("gives a team lead a count for the whole camp, like a captain", async () => {
     asViewer("member", ["kitchen"]);
-    vi.mocked(getCampManagementRoster).mockResolvedValue(ROSTER);
-    const expected = computeAudience(
-      { scope: "everyone", team: null },
-      AUDIENCE_DATA,
-      null,
-    ).length;
     expect(await previewAudienceCount({ scope: "everyone" })).toEqual({
       ok: true,
-      count: expected,
+      count: 3,
       notComing: NONE_LEFT_OUT,
     });
   });
 
-  it("counts the team a lead DOES lead, agreeing with computeAudience", async () => {
-    asViewer("member", ["kitchen"]);
-    vi.mocked(getCampManagementRoster).mockResolvedValue(ROSTER);
-    const expected = computeAudience(
-      { scope: "team", team: "kitchen" },
-      AUDIENCE_DATA,
-      null,
-    ).length;
-    expect(
-      await previewAudienceCount({ scope: "team", team: "kitchen" }),
-    ).toEqual({ ok: true, count: expected, notComing: NONE_LEFT_OUT });
-  });
-
   it("gives a plain member no count at all", async () => {
     asViewer("member");
-    vi.mocked(getCampManagementRoster).mockResolvedValue(ROSTER);
     expect(await previewAudienceCount({ scope: "everyone" })).toEqual({
       ok: false,
       error: "Team-lead access only.",
     });
-    expect(getCampManagementRoster).not.toHaveBeenCalled();
+    expect(previewSendAudience).not.toHaveBeenCalled();
   });
 
   it("gives a signed-out visitor no count", async () => {
@@ -783,51 +736,43 @@ describe("previewAudienceCount — the gate", () => {
   });
 });
 
-describe("previewAudienceCount — the count agrees with the send", () => {
+describe("previewAudienceCount — asks what the send would reach", () => {
   beforeEach(() => {
     asViewer("captain");
-    vi.mocked(getCampManagementRoster).mockResolvedValue(ROSTER);
+    vi.mocked(previewSendAudience).mockResolvedValue(NOBODY_LEFT_OUT);
   });
 
-  it("matches computeAudience for everyone", async () => {
-    const expected = computeAudience(
-      { scope: "everyone", team: null },
-      AUDIENCE_DATA,
-      null,
-    ).length;
-    expect(await previewAudienceCount({ scope: "everyone" })).toEqual({
-      ok: true,
-      count: expected,
-      notComing: NONE_LEFT_OUT,
+  it("asks for the scope, team and people the send would use", async () => {
+    await previewAudienceCount({ scope: "team", team: "kitchen" });
+    await previewAudienceCount({
+      scope: "individual",
+      targetUserIds: [ADA, GRACE],
     });
+    expect(vi.mocked(previewSendAudience).mock.calls).toEqual([
+      [{ scope: "team", team: "kitchen", targetUserIds: [] }],
+      [{ scope: "individual", team: null, targetUserIds: [ADA, GRACE] }],
+    ]);
   });
 
   it("counts the whole camp for an optional questionnaire (#313)", async () => {
-    const expected = computeAudience(
-      { scope: "everyone", team: null },
-      AUDIENCE_DATA,
-      null,
-    ).length;
     expect(await previewAudienceCount({ scope: "opt_in" })).toEqual({
       ok: true,
-      count: expected,
+      count: 3,
       notComing: NONE_LEFT_OUT,
     });
-  });
-
-  it("matches computeAudience for a team", async () => {
-    const expected = computeAudience(
-      { scope: "team", team: "kitchen" },
-      AUDIENCE_DATA,
-      null,
-    ).length;
-    expect(
-      await previewAudienceCount({ scope: "team", team: "kitchen" }),
-    ).toEqual({ ok: true, count: expected, notComing: NONE_LEFT_OUT });
+    expect(previewSendAudience).toHaveBeenCalledWith({
+      scope: "everyone",
+      team: null,
+      targetUserIds: [],
+    });
   });
 
   it("reports 0 — not a refusal — for a team nobody is on", async () => {
     // The whole point of the item: a send that would reach nobody says so.
+    vi.mocked(previewSendAudience).mockResolvedValue({
+      reaches: 0,
+      notComing: [],
+    });
     expect(
       await previewAudienceCount({
         scope: "team",
@@ -835,52 +780,20 @@ describe("previewAudienceCount — the count agrees with the send", () => {
       }),
     ).toEqual({ ok: true, count: 0, notComing: NONE_LEFT_OUT });
   });
-
-  it("reports 0 for team_leads when the camp has no leads", async () => {
-    vi.mocked(getCampManagementRoster).mockResolvedValue([
-      rosterRow(GRACE, ["kitchen"]),
-    ]);
-    expect(await previewAudienceCount({ scope: "team_leads" })).toEqual({
-      ok: true,
-      count: 0,
-      notComing: NONE_LEFT_OUT,
-    });
-  });
-
-  it("counts only the chosen members for an individual send", async () => {
-    const expected = computeAudience(
-      { scope: "individual", team: null },
-      { ...AUDIENCE_DATA, targetUserIds: [ADA, GRACE] },
-      null,
-    ).length;
-    expect(
-      await previewAudienceCount({
-        scope: "individual",
-        targetUserIds: [ADA, GRACE],
-      }),
-    ).toEqual({ ok: true, count: expected, notComing: NONE_LEFT_OUT });
-  });
 });
 
 describe("previewAudienceCount — who said Not coming (owner, 2026-10-27)", () => {
   const AWAY = "55555555-5555-4555-8555-555555555555";
-  const away = {
-    ...rosterRow(AWAY, ["kitchen"]),
-    displayName: "Tash",
-    participation: "not_attending",
-  } as unknown as RosterRow;
 
   beforeEach(() => {
-    vi.mocked(getCampManagementRoster).mockResolvedValue([...ROSTER, away]);
+    vi.mocked(previewSendAudience).mockResolvedValue({
+      reaches: 2,
+      notComing: [{ id: AWAY, name: "Tash" }],
+    });
   });
 
   it("leaves them out of the count and names them to a captain", async () => {
     asViewer("captain");
-    expect(await previewAudienceCount({ scope: "everyone" })).toEqual({
-      ok: true,
-      count: 3,
-      notComing: { count: 1, names: ["Tash"] },
-    });
     expect(
       await previewAudienceCount({ scope: "team", team: "kitchen" }),
     ).toEqual({
@@ -895,16 +808,6 @@ describe("previewAudienceCount — who said Not coming (owner, 2026-10-27)", () 
     expect(
       await previewAudienceCount({ scope: "team", team: "kitchen" }),
     ).toMatchObject({ notComing: { count: 1, names: ["Tash"] } });
-  });
-
-  it("still counts someone picked by name", async () => {
-    asViewer("captain");
-    expect(
-      await previewAudienceCount({
-        scope: "individual",
-        targetUserIds: [AWAY],
-      }),
-    ).toEqual({ ok: true, count: 1, notComing: NONE_LEFT_OUT });
   });
 });
 

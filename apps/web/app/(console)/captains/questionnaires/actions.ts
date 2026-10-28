@@ -19,7 +19,6 @@ import type { GridRow } from "@camp404/types";
 import { getMealPlan } from "@/lib/meal-plan";
 import { carryOverFor } from "@camp404/db/cycles";
 import { PUSH_SCOPES } from "@camp404/db/activations";
-import { splitAudience } from "@camp404/db/audience";
 import {
   getDefinitionMetaRow,
   setDefinitionAnonymousResults,
@@ -39,7 +38,7 @@ import { captainActionGate } from "@/lib/captain-gate";
 import { canEditQuestionnaire } from "@/lib/questionnaire-authoring";
 import type { CampUser } from "@/lib/users";
 import { runAction } from "@/lib/action-result";
-import { getCampManagementRoster } from "@/lib/roster";
+import { previewSendAudience } from "@/lib/questionnaire-audience";
 import {
   createAttendanceCheck,
   createDraft,
@@ -541,7 +540,7 @@ export async function sendAction(
 // recipients and still toasts success. The preview is what turns that silent
 // failure into a visible one — so it has to be computed by the SAME two things
 // the real send is: this module's send gate (rank + audience), and
-// `computeAudience`. A preview computed a different way is a preview that lies.
+// `sendAudience` for the send's year. A preview computed a different way lies.
 
 const PreviewSpec = z.object({
   // `opt_in` asks nobody; its count is the camp members who will see it under
@@ -612,58 +611,33 @@ export async function previewAudienceCount(
     const allowed = allowSendTo(gate, { scope, team });
     if (!allowed.ok) return allowed;
 
-    // The roster read is already cycle-scoped (this year's teams and leads) and
-    // already excludes system actors and sanitised accounts — the same three
-    // facts openActivation reads out of users + team_memberships. Feeding it
-    // through `computeAudience` means the preview and the send apply ONE rule.
+    // Who the send would gate, read for the year the send will freeze, by
+    // the same recipients rule (`sendAudience`) openActivation fans out over,
+    // so the preview and the send agree.
     //
-    // The roster is captain-only data, and a team lead can now reach this line.
-    // What crosses the boundary: the COUNT of the audience the gate above has
-    // already said this actor may address (a lead may address the whole camp),
-    // the count left out for saying Not coming this year, and those people's
-    // names only when `canReadMemberField(..., "campParticipations.status")`
-    // allows it (team lead and up). Nothing else of the roster leaves.
-    const roster = await getCampManagementRoster();
-    const split = splitAudience(
+    // A team lead can reach this line. What crosses the boundary: the COUNT
+    // of the audience the gate above has already said this actor may address
+    // (a lead may address the whole camp), the count left out for saying Not
+    // coming this year, and those people's names only when
+    // `canReadMemberField(..., "campParticipations.status")` allows it (team
+    // lead and up).
+    const preview = await previewSendAudience({
       // An optional questionnaire shows to the whole camp: count `everyone`.
-      { scope: scope === "opt_in" ? "everyone" : scope, team },
-      {
-        members: roster.map((m) => ({
-          id: m.id,
-          isSystem: false,
-          sanitised: false,
-          approvalStatus: m.approvalStatus,
-        })),
-        memberships: roster.flatMap((m) =>
-          m.teams.map((t) => ({ userId: m.id, team: t, isLead: m.isLead })),
-        ),
-        // A questionnaire never targets the driver axis, and an activation has
-        // no sender to exclude — both match openActivation's call.
-        driverUserIds: [],
-        targetUserIds,
-        // This year's "Not coming" answers, as openActivation reads them.
-        notComingUserIds: roster
-          .filter((m) => m.participation === "not_attending")
-          .map((m) => m.id),
-      },
-      null,
-    );
-    const nameOf = new Map(
-      roster.map((m) => [m.id, m.displayName?.trim() || "Camp member"]),
-    );
+      scope: scope === "opt_in" ? "everyone" : scope,
+      team,
+      targetUserIds,
+    });
     return {
       ok: true,
-      count: split.reaches.length,
+      count: preview.reaches,
       notComing: {
-        count: split.notComing.length,
+        count: preview.notComing.length,
         // Who said Not coming reads at team lead and up (MEMBER_FIELD_READERS).
         names: canReadMemberField(
           { rank: gate.rank, isSelf: false },
           "campParticipations.status",
         )
-          ? split.notComing
-              .map((id) => nameOf.get(id) ?? "Camp member")
-              .sort((a, b) => a.localeCompare(b, "en"))
+          ? preview.notComing.map((m) => m.name)
           : null,
       },
     };

@@ -29,7 +29,7 @@ import {
 } from "./dues";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import { openNudges } from "./nudges";
-import { listNotComingUserIds } from "./participations";
+import { saidNotComing } from "./recipients";
 import * as schema from "./schema";
 import { listTelegramPlaces, queueFeeReminderPost } from "./telegram-posts";
 
@@ -54,7 +54,7 @@ import { listTelegramPlaces, queueFeeReminderPost } from "./telegram-posts";
 //
 // Who is reached is @camp404/core's (feeReminderAudience, pledgeAskAudience),
 // the same rule the test store's twin applies. Who said Not coming is the
-// list every group send leaves out (listNotComingUserIds, ./participations).
+// list every group send leaves out (saidNotComing, ./recipients).
 //
 // PGlite has ONE connection: inside a transaction everything goes through `tx`.
 
@@ -140,7 +140,7 @@ export async function feeReminderPreview(
       .where(eq(schema.duesYears.cycle, cycle))
       .limit(1),
     listTelegramPlaces(db),
-    listNotComingUserIds(db, cycle),
+    saidNotComing(db, cycle),
   ]);
   const members = accounts.map(feeReminderMemberOf);
   const remind = feeReminderAudience(members, notComing);
@@ -196,7 +196,7 @@ export async function askForPledges(input: {
     const accounts = await listDuesAccounts(input.cycle, today, tx);
     const targets = pledgeAskAudience(
       accounts.map(feeReminderMemberOf),
-      await listNotComingUserIds(tx, input.cycle),
+      await saidNotComing(tx, input.cycle),
     ).reach;
     if (targets.length === 0) return { asked: 0, notified: 0 };
     const notified = await openNudges(tx, {
@@ -244,7 +244,7 @@ export async function remindFeesOwed(input: {
     const accounts = await listDuesAccounts(input.cycle, today, tx);
     const targets = feeReminderAudience(
       accounts.map(feeReminderMemberOf),
-      await listNotComingUserIds(tx, input.cycle),
+      await saidNotComing(tx, input.cycle),
     ).reach;
     const rowOf = new Map(targets.map((t) => [t.userId, t.row]));
     const notified =
@@ -306,7 +306,7 @@ export async function remindFeesDueSoon(
     const accounts = await listDuesAccounts(cycle, today, tx);
     const due = feeReminderAudience(
       accounts.map(feeReminderMemberOf),
-      await listNotComingUserIds(tx, cycle),
+      await saidNotComing(tx, cycle),
     )
       // Only a Coming or Maybe member with a day to pay.
       .reach.filter((m) => feeReminderDue(m.feeNext, today));

@@ -7,7 +7,9 @@ import {
   meetingPostBody,
   OL_JEB_SAYS,
   parseBotCommand,
-  renderTelegramPost,
+  renderPlainPost,
+  renderQuestionnairePost,
+  renderReminderPost,
   telegramMention,
   renderTelegramNotice,
   tagCandidateStanding,
@@ -150,7 +152,7 @@ describe("telegramMention", () => {
   });
 });
 
-describe("renderTelegramPost", () => {
+describe("renderReminderPost", () => {
   const base = {
     title: "Form due Friday: Coming this year?",
     body: "Please **answer** by Friday.",
@@ -159,10 +161,9 @@ describe("renderTelegramPost", () => {
   };
 
   it("tags who still owes a reminder and counts who has no username", () => {
-    const post = renderTelegramPost(
+    const post = renderReminderPost(
       {
         ...base,
-        kind: "reminder",
         tags: ["@cloud_404", "@mike_404"],
         untagged: 2,
       },
@@ -179,17 +180,14 @@ describe("renderTelegramPost", () => {
 
   it("says how many when nobody has a username, and tags only reminders", () => {
     expect(
-      renderTelegramPost(
-        { ...base, kind: "reminder", tags: [], untagged: 1 },
+      renderReminderPost(
+        { ...base, tags: [], untagged: 1 },
         "https://camp-404.com",
       ).text,
     ).toContain("Still to answer: 1 person without a Telegram username.");
-    expect(
-      renderTelegramPost(
-        { ...base, kind: "announcement", tags: ["@cloud_404"], untagged: 3 },
-        "https://camp-404.com",
-      ).text,
-    ).not.toContain("Still to answer");
+    expect(renderPlainPost(base, "https://camp-404.com").text).toBe(
+      "Form due Friday: Coming this year?\n\nPlease answer by Friday.",
+    );
   });
 });
 
@@ -280,9 +278,8 @@ describe("Post in Telegram: who a chip ticks", () => {
   });
 });
 
-describe("renderTelegramPost: a questionnaire posted by hand", () => {
+describe("renderQuestionnairePost", () => {
   const base = {
-    kind: "questionnaire" as const,
     title: "Coming this year?",
     body: "Tell us if you're coming.",
     buttonText: "Answer in Camp 404",
@@ -290,7 +287,7 @@ describe("renderTelegramPost: a questionnaire posted by hand", () => {
   };
 
   it("ends with every tag", () => {
-    const post = renderTelegramPost(
+    const post = renderQuestionnairePost(
       { ...base, tags: ["@a_404", "@b_404"] },
       "https://camp-404.com",
     );
@@ -302,9 +299,10 @@ describe("renderTelegramPost: a questionnaire posted by hand", () => {
   });
 
   it("posts with no tag line when nobody is tagged", () => {
-    expect(renderTelegramPost(base, "https://camp-404.com").text).toBe(
-      "Coming this year?\n\nTell us if you're coming.",
-    );
+    expect(
+      renderQuestionnairePost({ ...base, tags: [] }, "https://camp-404.com")
+        .text,
+    ).toBe("Coming this year?\n\nTell us if you're coming.");
   });
 
   it("sends every tag, in more messages past Telegram's limit", () => {
@@ -312,7 +310,10 @@ describe("renderTelegramPost: a questionnaire posted by hand", () => {
       { length: 400 },
       (_, i) => `@member_${String(i).padStart(4, "0")}`,
     );
-    const post = renderTelegramPost({ ...base, tags }, "https://camp-404.com");
+    const post = renderQuestionnairePost(
+      { ...base, tags },
+      "https://camp-404.com",
+    );
     const all = [post.text, ...(post.more ?? [])];
     for (const text of all) expect(text.length).toBeLessThanOrEqual(4096);
     expect(post.more?.length).toBeGreaterThan(0);

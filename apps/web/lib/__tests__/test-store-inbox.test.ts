@@ -14,7 +14,7 @@ import { testStore } from "../test-store";
 // the set the cursor walks, and mark-all touches only the caller's rows.
 
 // Approved members: a camp-wide announcement reaches approved members only,
-// as computeAudience says (a pending sign-up is not in the camp yet).
+// as splitAudience says (a pending sign-up is not in the camp yet).
 function seed() {
   const captain = testStore.createUser({
     authUserId: "auth-captain",

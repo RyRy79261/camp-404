@@ -8,6 +8,12 @@ import {
 } from "@camp404/core";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
+import {
+  drainTelegramOutbox,
+  type TelegramDrainResult,
+  type TelegramOutbox,
+  type TelegramSendResult,
+} from "./telegram-outbox";
 
 // A member's private chat with Ol' Jeb, the camp's Telegram bot. Telegram lets
 // a bot send a private message only to someone who opened a chat with it, so a
@@ -223,204 +229,132 @@ export async function pruneTelegramUpdates(): Promise<void> {
 
 // --- The drain ----------------------------------------------------------
 
-/**
- * What a send answered. `rateLimited` (429) stops the run; `blocked` (403:
- * the member blocked Ol' Jeb, or never opened the chat) disconnects them;
- * `retryable` (Telegram down, no answer) leaves the row queued.
- */
-export type TelegramSendResult =
-  | { ok: true }
-  | {
-      ok: false;
-      error: string;
-      rateLimited?: boolean;
-      blocked?: boolean;
-      retryable?: boolean;
-    };
+export {
+  TELEGRAM_DRAIN_LIMIT,
+  TELEGRAM_MAX_DEFERRALS_IN_A_ROW,
+  TELEGRAM_MAX_QUEUED_HOURS,
+  type TelegramDrainResult,
+  type TelegramSendResult,
+} from "./telegram-outbox";
 
 export type TelegramSend = (
   chatId: string,
   notice: TelegramNotice,
 ) => Promise<TelegramSendResult>;
 
-export interface TelegramDrainResult {
-  sent: number;
-  failed: number;
-  skipped: number;
-  deferred: number;
-  expired: number;
-}
-
-/** How long a queued notice may wait; older ones are not sent late. */
-export const TELEGRAM_MAX_QUEUED_HOURS = 20;
-
-/** How many notices one run sends; a later page load sends the rest. */
-export const TELEGRAM_DRAIN_LIMIT = 25;
-
-/** "Not now" answers in a row that end the run: Telegram is down. */
-export const TELEGRAM_MAX_DEFERRALS_IN_A_ROW = 3;
+const deliveries = schema.notificationDeliveries;
 
 /**
- * Send queued Telegram notices, oldest first. Telegram has no idempotency key,
- * so a notice is sent at most once: a short transaction claims the rows
- * (FOR UPDATE SKIP LOCKED, so two runs never take the same row) and marks the
- * ones to send `sending`; it commits before anything is sent, and each send's
- * outcome is then written on its own. A run cut short after a send leaves the
- * row `sending`, never `queued`, so it is never sent again.
- *
- * A member who is not connected (or connected after the notice was written),
- * erased, a system account, or who wants only the notices about them when this
- * one is not, is `skipped`. A notice queued longer than
- * TELEGRAM_MAX_QUEUED_HOURS is `failed` unsent, and so is one left `sending`
- * that long.
+ * The private notices as an outbox: each delivery queued for Telegram, to its
+ * member's chat with Ol' Jeb. A member who is not connected (or connected
+ * after the notice was written), erased, a system account, or who wants only
+ * the notices about them when this one is not, is `skipped` at the claim. A
+ * member who blocked Ol' Jeb is disconnected, and the rest of theirs in the
+ * run skipped.
  */
-export async function drainQueuedTelegram(
+function noticeOutbox(
   send: TelegramSend,
-  options: { siteUrl: string; limit?: number },
-): Promise<TelegramDrainResult> {
-  const result: TelegramDrainResult = {
-    sent: 0,
-    failed: 0,
-    skipped: 0,
-    deferred: 0,
-    expired: 0,
-  };
-
-  const toSend = await withTransaction(async (tx) => {
-    // A run that stopped mid-send left these: give up on them, unsent again.
-    await tx
-      .update(schema.notificationDeliveries)
-      .set({ telegramStatus: "failed" })
-      .where(
-        and(
-          eq(schema.notificationDeliveries.telegramStatus, "sending"),
-          lt(
-            schema.notificationDeliveries.createdAt,
-            sql`now() - make_interval(hours => ${TELEGRAM_MAX_QUEUED_HOURS})`,
+  siteUrl: string,
+): TelegramOutbox<NoticeRow> {
+  const blocked = new Set<string>();
+  return {
+    async failStuck(tx, cutoff) {
+      await tx
+        .update(deliveries)
+        .set({ telegramStatus: "failed" })
+        .where(
+          and(
+            eq(deliveries.telegramStatus, "sending"),
+            lt(deliveries.createdAt, cutoff),
           ),
-        ),
-      );
-
-    const queued = await tx
-      .select({
-        id: schema.notificationDeliveries.id,
-        userId: schema.notificationDeliveries.userId,
-        kind: schema.notificationDeliveries.kind,
-        title: schema.notificationDeliveries.title,
-        body: schema.notificationDeliveries.body,
-        refType: schema.notificationDeliveries.refType,
-        refId: schema.notificationDeliveries.refId,
-        telegramUserId: schema.users.telegramUserId,
-        notices: schema.users.telegramNotices,
-        isSystem: schema.users.isSystem,
-        sanitised: schema.users.sanitised,
-        connectedBefore: sql<boolean>`${schema.users.telegramDmAt} IS NOT NULL AND ${schema.users.telegramDmAt} <= ${schema.notificationDeliveries.createdAt}`,
-        expired: sql<boolean>`${schema.notificationDeliveries.createdAt} < now() - make_interval(hours => ${TELEGRAM_MAX_QUEUED_HOURS})`,
-      })
-      .from(schema.notificationDeliveries)
-      .innerJoin(
-        schema.users,
-        eq(schema.users.id, schema.notificationDeliveries.userId),
-      )
-      .where(eq(schema.notificationDeliveries.telegramStatus, "queued"))
-      .orderBy(asc(schema.notificationDeliveries.createdAt))
-      .limit(options.limit ?? TELEGRAM_DRAIN_LIMIT)
-      .for("update", { of: schema.notificationDeliveries, skipLocked: true });
-
-    const claimed: Array<(typeof queued)[number] & { telegramUserId: string }> =
-      [];
-    for (const row of queued) {
-      let status: "sending" | "failed" | "skipped";
-      if (
+        );
+    },
+    claim(tx, limit, cutoff) {
+      return tx
+        .select({
+          id: deliveries.id,
+          userId: deliveries.userId,
+          kind: deliveries.kind,
+          title: deliveries.title,
+          body: deliveries.body,
+          refType: deliveries.refType,
+          refId: deliveries.refId,
+          telegramUserId: schema.users.telegramUserId,
+          notices: schema.users.telegramNotices,
+          isSystem: schema.users.isSystem,
+          sanitised: schema.users.sanitised,
+          connectedBefore: sql<boolean>`${schema.users.telegramDmAt} IS NOT NULL AND ${schema.users.telegramDmAt} <= ${deliveries.createdAt}`,
+          expired: sql<boolean>`${deliveries.createdAt} < ${cutoff}`,
+        })
+        .from(deliveries)
+        .innerJoin(schema.users, eq(schema.users.id, deliveries.userId))
+        .where(eq(deliveries.telegramStatus, "queued"))
+        .orderBy(asc(deliveries.createdAt))
+        .limit(limit)
+        .for("update", { of: deliveries, skipLocked: true });
+    },
+    async skipAtClaim() {
+      return (row) =>
         !row.telegramUserId ||
         !row.connectedBefore ||
         row.isSystem ||
         row.sanitised ||
-        !shouldTelegramNotification(row.kind, row.notices)
-      ) {
-        status = "skipped";
-      } else if (row.expired) {
-        status = "failed";
-        result.expired += 1;
-      } else {
-        status = "sending";
-        claimed.push({ ...row, telegramUserId: row.telegramUserId });
-      }
-      await tx
-        .update(schema.notificationDeliveries)
+        !shouldTelegramNotification(row.kind, row.notices);
+    },
+    async mark(db, id, status, fromSending) {
+      await db
+        .update(deliveries)
         .set({ telegramStatus: status })
-        .where(eq(schema.notificationDeliveries.id, row.id));
-      if (status !== "sending") result[status] += 1;
-    }
-    return claimed;
-  });
-
-  const db = createHttpDb();
-  const finish = async (
-    id: string,
-    status: "queued" | "sent" | "failed" | "skipped",
-  ) => {
-    await db
-      .update(schema.notificationDeliveries)
-      .set({ telegramStatus: status })
-      .where(
-        and(
-          eq(schema.notificationDeliveries.id, id),
-          eq(schema.notificationDeliveries.telegramStatus, "sending"),
-        ),
-      );
-  };
-
-  // A member who blocked the bot in this run: skip the rest of theirs.
-  const blocked = new Set<string>();
-  let deferralsInARow = 0;
-  for (let i = 0; i < toSend.length; i += 1) {
-    const row = toSend[i]!;
-    if (blocked.has(row.userId)) {
-      await finish(row.id, "skipped");
-      result.skipped += 1;
-      continue;
-    }
-    const notice = renderTelegramNotice(row, options.siteUrl);
-    const outcome: TelegramSendResult = await send(
-      row.telegramUserId,
-      notice,
-    ).catch((err: unknown) => ({
-      ok: false,
-      error: err instanceof Error ? err.message : "send failed",
-      retryable: true,
-    }));
-    if (!outcome.ok && (outcome.rateLimited || outcome.retryable)) {
-      // Telegram did not take it: safe to try again on a later run.
-      await finish(row.id, "queued");
-      result.deferred += 1;
-      deferralsInARow += 1;
-      if (
-        outcome.rateLimited ||
-        deferralsInARow >= TELEGRAM_MAX_DEFERRALS_IN_A_ROW
-      ) {
-        // Hand back the ones this run claimed but never tried.
-        for (const rest of toSend.slice(i + 1)) {
-          await finish(rest.id, "queued");
-        }
-        break;
-      }
-      continue;
-    }
-    deferralsInARow = 0;
-    if (!outcome.ok && outcome.blocked) {
+        .where(
+          fromSending
+            ? and(
+                eq(deliveries.id, id),
+                eq(deliveries.telegramStatus, "sending"),
+              )
+            : eq(deliveries.id, id),
+        );
+    },
+    async prepare(row) {
+      // A member who blocked the bot in this run: skip the rest of theirs.
+      if (blocked.has(row.userId) || !row.telegramUserId) return null;
+      const chatId = row.telegramUserId;
+      const notice = renderTelegramNotice(row, siteUrl);
+      return { send: () => send(chatId, notice) };
+    },
+    async onBlocked(row, db) {
       blocked.add(row.userId);
       await db
         .update(schema.users)
         .set({ telegramDmAt: null, updatedAt: new Date() })
         .where(eq(schema.users.id, row.userId));
-      await finish(row.id, "skipped");
-      result.skipped += 1;
-    } else {
-      const status = outcome.ok ? "sent" : "failed";
-      await finish(row.id, status);
-      result[status] += 1;
-    }
-  }
-  return result;
+    },
+  };
+}
+
+interface NoticeRow {
+  id: string;
+  userId: string;
+  kind: (typeof deliveries.$inferSelect)["kind"];
+  title: string;
+  body: string;
+  refType: string | null;
+  refId: string | null;
+  telegramUserId: string | null;
+  notices: TelegramNotices;
+  isSystem: boolean;
+  sanitised: boolean;
+  connectedBefore: boolean;
+}
+
+/**
+ * Send queued Telegram notices, oldest first, at most once each, by the
+ * outbox drain (`./telegram-outbox`, which holds the protocol).
+ */
+export async function drainQueuedTelegram(
+  send: TelegramSend,
+  options: { siteUrl: string; limit?: number },
+): Promise<TelegramDrainResult> {
+  return drainTelegramOutbox(noticeOutbox(send, options.siteUrl), {
+    limit: options.limit,
+  });
 }

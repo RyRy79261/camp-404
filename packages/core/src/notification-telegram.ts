@@ -150,17 +150,6 @@ export function telegramMention(
 
 export const TELEGRAM_ANSWER_BUTTON = "Answer in Camp 404";
 
-/**
- * What Ol' Jeb posts in a camp chat. `questionnaire` is a questionnaire a
- * captain or its author posts by hand, tagging the people they picked.
- */
-export type TelegramPostKind =
-  | "announcement"
-  | "reminder"
-  | "meeting"
-  | "questionnaire"
-  | "lead";
-
 export interface TelegramPost {
   /** Plain text, sent with no parse mode. */
   text: string;
@@ -174,48 +163,79 @@ export interface TelegramPost {
 }
 
 /**
- * The post itself: its title, the plain body, and for a reminder the tags of
- * who still owes the form ("Still to answer: @a @b and 2 more without a
- * Telegram username."). `tags` are already `telegramMention` values.
+ * A queued post as it is stored: its title, its body and its button. Which
+ * of the renderers below draws it is its kind's (`TELEGRAM_POST_KINDS` in
+ * `@camp404/db/telegram-post-kinds`).
  */
-export function renderTelegramPost(
-  post: {
-    kind: TelegramPostKind;
-    title: string;
-    body: string;
-    buttonText: string | null;
-    buttonPath: string | null;
-    tags?: readonly string[];
-    untagged?: number;
-    /** A new lead's name and `@handle`, read as the post is sent. */
-    lead?: { name: string; mention: string | null };
-  },
+export interface TelegramPostFields {
+  title: string;
+  body: string;
+  buttonText: string | null;
+  buttonPath: string | null;
+}
+
+function postButton(
+  post: TelegramPostFields,
   siteUrl: string,
-): TelegramPost {
-  if (post.kind === "lead") return leadPost(post, siteUrl);
+): TelegramPost["button"] {
+  return post.buttonText && post.buttonPath
+    ? {
+        text: post.buttonText,
+        url: `${siteUrl.replace(/\/+$/, "")}${post.buttonPath}`,
+      }
+    : null;
+}
+
+function postLines(post: TelegramPostFields): string[] {
   const lines = [post.title.trim()];
   const body = plainPreview(post.body);
   if (body) lines.push(body);
-  const button =
-    post.buttonText && post.buttonPath
-      ? {
-          text: post.buttonText,
-          url: `${siteUrl.replace(/\/+$/, "")}${post.buttonPath}`,
-        }
-      : null;
-  if (post.kind === "questionnaire") {
-    return questionnairePost(lines, post.tags ?? [], button);
-  }
-  if (post.kind === "reminder") {
-    const line = stillToAnswer(post.tags ?? [], post.untagged ?? 0);
-    if (line) lines.push(line);
-  }
-  const full = lines.filter(Boolean).join("\n\n");
-  const text =
-    full.length <= TELEGRAM_MESSAGE_MAX
-      ? full
-      : `${full.slice(0, TELEGRAM_MESSAGE_MAX - 1).trimEnd()}…`;
-  return { text, button };
+  return lines;
+}
+
+/** A post's title and plain body, with its button. */
+export function renderPlainPost(
+  post: TelegramPostFields,
+  siteUrl: string,
+): TelegramPost {
+  return {
+    text: clip(postLines(post).filter(Boolean).join("\n\n")),
+    button: postButton(post, siteUrl),
+  };
+}
+
+/**
+ * A reminder: its title, the plain body, and the tags of who still owes the
+ * form ("Still to answer: @a @b and 2 more without a Telegram username.").
+ * `tags` are already `telegramMention` values.
+ */
+export function renderReminderPost(
+  post: TelegramPostFields & { tags: readonly string[]; untagged: number },
+  siteUrl: string,
+): TelegramPost {
+  const lines = postLines(post);
+  const line = stillToAnswer(post.tags, post.untagged);
+  if (line) lines.push(line);
+  return {
+    text: clip(lines.filter(Boolean).join("\n\n")),
+    button: postButton(post, siteUrl),
+  };
+}
+
+/**
+ * A questionnaire posted by hand: its title and line, then every tag the
+ * poster picked ("@a @b, this one's for you."). Every tag is sent: the ones
+ * that do not fit under Telegram's limit go in the messages after it.
+ */
+export function renderQuestionnairePost(
+  post: TelegramPostFields & { tags: readonly string[] },
+  siteUrl: string,
+): TelegramPost {
+  return questionnairePost(
+    postLines(post),
+    post.tags,
+    postButton(post, siteUrl),
+  );
 }
 
 /** A new lead post's first line. */
@@ -226,42 +246,28 @@ export const TELEGRAM_LEAD_TITLE = "New team lead";
  * body holds only the team's name; the person is read as it is sent, so an
  * erased member's name is never stored in the post.
  */
-function leadPost(
-  post: {
-    body: string;
-    buttonText: string | null;
-    buttonPath: string | null;
-    lead?: { name: string; mention: string | null };
+export function renderLeadPost(
+  post: TelegramPostFields & {
+    lead: { name: string; mention: string | null };
   },
   siteUrl: string,
 ): TelegramPost {
   const team = post.body.trim();
-  const who = post.lead
-    ? post.lead.mention
-      ? `${post.lead.name} (${post.lead.mention})`
-      : post.lead.name
-    : "Someone";
-  const text = clip(
-    `${TELEGRAM_LEAD_TITLE}\n\n${who} is now a ${team} lead. Give them a shout if you want to help out.`,
-  );
-  const button =
-    post.buttonText && post.buttonPath
-      ? {
-          text: post.buttonText,
-          url: `${siteUrl.replace(/\/+$/, "")}${post.buttonPath}`,
-        }
-      : null;
-  return { text, button };
+  const who = post.lead.mention
+    ? `${post.lead.name} (${post.lead.mention})`
+    : post.lead.name;
+  return {
+    text: clip(
+      `${TELEGRAM_LEAD_TITLE}\n\n${who} is now a ${team} lead. Give them a shout if you want to help out.`,
+    ),
+    button: postButton(post, siteUrl),
+  };
 }
 
 /** The words after a hand-posted questionnaire's tags. */
 export const QUESTIONNAIRE_TAG_TAIL = "this one's for you.";
 
-/**
- * A questionnaire posted by hand: its title and line, then every tag the
- * poster picked ("@a @b, this one's for you."). Every tag is sent: the ones
- * that do not fit under Telegram's limit go in the messages after it.
- */
+/** {@link renderQuestionnairePost}'s tags, split under Telegram's limit. */
 function questionnairePost(
   lines: string[],
   tags: readonly string[],
