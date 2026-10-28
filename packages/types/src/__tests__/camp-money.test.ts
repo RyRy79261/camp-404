@@ -5,6 +5,7 @@ import {
   CampBillInput,
   EMPTY_CAMP_BANK_DETAILS,
   MarkCampBillPaidInput,
+  isValidIban,
   offeredAbroadWays,
 } from "../camp-money";
 
@@ -45,9 +46,13 @@ describe("camp money shapes", () => {
     expect(first(abroad({ ways: { payLink: true } }))).toBe(
       "Add the pay link, or untick Pay link.",
     );
-    expect(first(abroad({ payLink: "http://wise.com/x" }))).toBe(
-      "Paste the whole link, starting with https://.",
-    );
+    expect(
+      first(abroad({ ways: { payLink: true }, payLink: "http://wise.com/x" })),
+    ).toBe("Paste the whole link, starting with https://.");
+    // Unticked, a way keeps what was typed, unchecked, for when it comes back.
+    const kept = abroad({ payLink: "http://wise.com/x", iban: { iban: "12" } });
+    expect(kept.data?.abroad.payLink).toBe("http://wise.com/x");
+    expect(kept.data?.abroad.iban.iban).toBe("12");
     expect(first(abroad({ ways: { swift: true } }))).toMatch(/SWIFT code/);
     expect(first(abroad({ ways: { iban: true } }))).toBe(
       "Add the IBAN, or untick IBAN account.",
@@ -62,6 +67,16 @@ describe("camp money shapes", () => {
     expect(
       first(abroad({ ways: { iban: true }, iban: { iban: "12345" } })),
     ).toMatch(/IBAN doesn't look right/);
+    // One digit off: the right shape, the wrong check digits.
+    expect(
+      first(
+        abroad({
+          ways: { iban: true },
+          iban: { iban: "DE89370400440532013001" },
+        }),
+      ),
+    ).toMatch(/IBAN doesn't look right/);
+    expect(isValidIban("GB82WEST12345698765432")).toBe(true);
   });
 
   it("reads details saved before the ticks: a SWIFT code meant that way", () => {

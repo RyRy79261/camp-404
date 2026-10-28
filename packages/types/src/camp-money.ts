@@ -27,21 +27,8 @@ const optionalText = (max: number) =>
       .default(null),
   );
 
-/** A pay link (Wise, PayPal, Revolut): https only; blank means none. */
-const optionalPayLink = z.preprocess(
-  (value) => (typeof value === "string" && value.trim() === "" ? null : value),
-  z
-    .string()
-    .trim()
-    .max(BANK_NOTE_MAX, {
-      error: `Keep the link under ${BANK_NOTE_MAX} characters.`,
-    })
-    .refine((v) => /^https:\/\/[^\s/$.?#][^\s]*$/i.test(v), {
-      error: "Paste the whole link, starting with https://.",
-    })
-    .nullable()
-    .default(null),
-);
+/** A pay link (Wise, PayPal, Revolut): https only, checked when ticked. */
+const PAY_LINK = /^https:\/\/[^\s/$.?#][^\s]*$/i;
 
 /** An IBAN as typed, kept in capitals with no spaces; blank means none. */
 const optionalIban = z.preprocess(
@@ -49,15 +36,24 @@ const optionalIban = z.preprocess(
     typeof value === "string"
       ? value.replace(/\s+/g, "").toUpperCase() || null
       : value,
-  z
-    .string()
-    .regex(/^[A-Z]{2}[0-9]{2}[A-Z0-9]{10,30}$/, {
-      error:
-        "That IBAN doesn't look right. It starts with 2 letters and 2 numbers.",
-    })
-    .nullable()
-    .default(null),
+  z.string().max(BANK_FIELD_MAX).nullable().default(null),
 );
+
+/**
+ * An IBAN's shape and its check digits (ISO 13616: move the first four
+ * characters to the end, letters to numbers, the whole is 1 modulo 97), so a
+ * typo is caught before members are shown it.
+ */
+export function isValidIban(iban: string): boolean {
+  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{10,30}$/.test(iban)) return false;
+  const moved = iban.slice(4) + iban.slice(0, 4);
+  let rest = 0;
+  for (const ch of moved) {
+    const n = ch >= "A" ? ch.charCodeAt(0) - 55 : Number(ch);
+    rest = (rest * (n > 9 ? 100 : 10) + n) % 97;
+  }
+  return rest === 1;
+}
 
 /**
  * The ways someone abroad may pay, ticked by Finance (owner, 2026-10-28:
@@ -99,7 +95,7 @@ const AbroadDetails = z.preprocess(
         })
         .default({ payLink: false, swift: false, iban: false }),
       /** The pay link way: one link to press. */
-      payLink: optionalPayLink,
+      payLink: optionalText(BANK_NOTE_MAX),
       /** The SWIFT way: the South African account, from abroad. */
       swift: optionalText(BANK_FIELD_MAX),
       accountNumber: optionalText(BANK_FIELD_MAX),
@@ -115,12 +111,20 @@ const AbroadDetails = z.preprocess(
         .default({ accountName: null, iban: null, bic: null, bank: null }),
       note: optionalText(BANK_NOTE_MAX),
     })
+    // A way's fields are kept while it is unticked, so ticking it again
+    // brings them back; they are checked only while it is offered.
     .superRefine((a, ctx) => {
       if (a.ways.payLink && !a.payLink)
         ctx.addIssue({
           code: "custom",
           path: ["payLink"],
           message: "Add the pay link, or untick Pay link.",
+        });
+      else if (a.ways.payLink && a.payLink && !PAY_LINK.test(a.payLink))
+        ctx.addIssue({
+          code: "custom",
+          path: ["payLink"],
+          message: "Paste the whole link, starting with https://.",
         });
       if (a.ways.swift && !a.swift)
         ctx.addIssue({
@@ -133,6 +137,13 @@ const AbroadDetails = z.preprocess(
           code: "custom",
           path: ["iban", "iban"],
           message: "Add the IBAN, or untick IBAN account.",
+        });
+      else if (a.ways.iban && a.iban.iban && !isValidIban(a.iban.iban))
+        ctx.addIssue({
+          code: "custom",
+          path: ["iban", "iban"],
+          message:
+            "That IBAN doesn't look right. Check it against the bank's letter.",
         });
     }),
 );
