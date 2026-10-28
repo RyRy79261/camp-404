@@ -32,6 +32,7 @@ import {
   listPinnedForUser,
   markAllRead,
   markRead,
+  previewAnnouncementAudience,
   publishAnnouncement,
   setAnnouncementPinned,
   updateAnnouncementDraft,
@@ -221,6 +222,42 @@ describe("announcements and the inbox: the database and the test store agree", (
       twice: { ok: false },
       pinned: ["Soup tonight"],
       othersPins: [],
+    });
+    expect(store).toEqual(db);
+  });
+
+  it("leaves who said Not coming out of a group send, and names them; a picked person still counts", async () => {
+    const { db, store } = await bothWays(mode, h, async (p, seed) => {
+      await seed.join(p.member, KITCHEN);
+      await seed.participation(p.member, "not_attending");
+      await seed.participation(p.other, "maybe");
+      const camp = await previewAnnouncementAudience(p.captain, {
+        scope: "everyone",
+      });
+      const kitchen = await previewAnnouncementAudience(p.captain, {
+        scope: "team",
+        team: KITCHEN,
+      });
+      const picked = await previewAnnouncementAudience(p.captain, {
+        scope: "individual",
+        userIds: [p.member],
+      });
+      const sent = await draft(p.captain, "Gate opens", { scope: "everyone" });
+      await publishAnnouncement({ id: sent.id, senderId: p.captain });
+      return {
+        camp,
+        kitchen,
+        picked,
+        awayInbox: (await inboxOf(p.member)).titles,
+        maybeInbox: (await inboxOf(p.other)).titles,
+      };
+    });
+    expect(db).toMatchObject({
+      camp: { reaches: 3, notComing: [{ name: "Nova" }] },
+      kitchen: { reaches: 1, notComing: [{ name: "Nova" }] },
+      picked: { reaches: 1, notComing: [] },
+      awayInbox: [],
+      maybeInbox: ["Gate opens"],
     });
     expect(store).toEqual(db);
   });

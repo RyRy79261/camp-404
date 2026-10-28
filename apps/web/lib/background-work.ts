@@ -3,6 +3,7 @@ import "server-only";
 import { after } from "next/server";
 import { CAMP_TIME_ZONE, errorLogText } from "@camp404/core";
 import { drainQueuedEmail } from "@camp404/db/email";
+import { remindFeesDueSoon } from "@camp404/db/fee-reminders";
 import {
   backfillIdEncryption,
   listLiveAuthUserIds,
@@ -209,6 +210,10 @@ export async function runDueWork(
       remindRequiredActionsDueSoon({ now }),
     );
     await step("task reminders", () => remindTaskDeadlines({ now }));
+    // A member's next camp fee instalment within three days (or past): once
+    // per instalment, only while Collecting fees is on, never to a subsidy
+    // or a Not coming member (deduped in fee_payment_reminders).
+    await step("fee reminders", () => remindFeesDueSoon({ now }));
   }
   await deliverDue();
   // Logistics phases, AfrikaBurn deadlines and the Calendar's own events the

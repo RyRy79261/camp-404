@@ -1,4 +1,12 @@
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  sql,
+  type AnyColumn,
+  type SQL,
+} from "drizzle-orm";
 import {
   isParticipationDecision,
   participationAfterIntent,
@@ -85,6 +93,7 @@ export async function applyParticipationIntent(
     // Bare RETURNING: a column list does not type-check on the DbOrTx union.
     .returning();
   if (inserted) {
+    await followNotComing(tx, input.userId, input.cycle, null, inserted.status);
     return {
       status: inserted.status,
       changed: true,
@@ -129,6 +138,15 @@ export async function applyParticipationIntent(
       updatedAt: now,
     })
     .where(where);
+  if (change) {
+    await followNotComing(
+      tx,
+      input.userId,
+      input.cycle,
+      current.status,
+      change.next,
+    );
+  }
   if (change?.withdrew) {
     await writeAuditEvent(tx, {
       actorId: input.userId,
@@ -143,6 +161,56 @@ export async function applyParticipationIntent(
     answerChanged,
     withdrew: change?.withdrew ?? false,
   };
+}
+
+/**
+ * Saying Not coming stops that year's questionnaire sends blocking the member
+ * (owner, 2026-10-27, choice A). The gates stay `pending`, so the member may
+ * still answer any of them ("Coming this year?" included) and the results
+ * still count them as owing; only `blocking` goes off, and the reminders and
+ * Ol' Jeb's tags leave them out (they read the participation row). Taking the
+ * answer back puts `blocking` back from the send's own setting, so the member
+ * is where they would have been. Only the gates of an open send of that year
+ * move: a gate written by hand (no send) keeps its own setting.
+ *
+ * Each update is a compare-and-set on the gate's state (`pending`, and the
+ * `blocking` it expects), on the caller's transaction, so it commits with the
+ * answer or not at all.
+ */
+async function followNotComing(
+  tx: DbOrTx,
+  userId: string,
+  cycle: number,
+  from: ParticipationStatus | null,
+  to: ParticipationStatus,
+): Promise<void> {
+  const was = from === "not_attending";
+  const is = to === "not_attending";
+  if (was === is) return;
+  const acts = schema.questionnaireActivations;
+  const gates = schema.requiredActions;
+  const sends = tx
+    .select({ id: acts.id })
+    .from(acts)
+    .where(
+      and(
+        eq(acts.cycle, cycle),
+        eq(acts.status, "open"),
+        // Back to the send's own setting: only a blocking send blocks again.
+        ...(is ? [] : [eq(acts.blocking, true)]),
+      ),
+    );
+  await tx
+    .update(gates)
+    .set({ blocking: !is })
+    .where(
+      and(
+        eq(gates.userId, userId),
+        eq(gates.status, "pending"),
+        eq(gates.blocking, is),
+        inArray(gates.activationId, sends),
+      ),
+    );
 }
 
 /** One change-log entry for the member's own attendance form. */
@@ -303,4 +371,42 @@ export async function getParticipation(
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Who said Not coming for one year: the members every group send leaves out
+ * (`notComingUserIds` in ./audience). On the caller's handle, so a send's
+ * transaction reads it on its own connection.
+ */
+export async function listNotComingUserIds(
+  db: DbOrTx,
+  cycle: number,
+): Promise<string[]> {
+  const rows = await db
+    .select({ userId: schema.campParticipations.userId })
+    .from(schema.campParticipations)
+    .where(
+      and(
+        eq(schema.campParticipations.cycle, cycle),
+        eq(schema.campParticipations.status, "not_attending"),
+      ),
+    );
+  return rows.map((r) => r.userId);
+}
+
+/**
+ * A WHERE fragment: the member in `userId` did NOT say Not coming for `cycle`.
+ * The reminders and tags of a group send keep to it, as `computeAudience`
+ * does for the send itself.
+ */
+export function hasNotSaidNotComing(
+  userId: AnyColumn,
+  cycle: number | SQL,
+): SQL {
+  return sql`not exists (
+    select 1 from ${schema.campParticipations}
+    where ${schema.campParticipations.userId} = ${userId}
+      and ${schema.campParticipations.cycle} = ${cycle}
+      and ${schema.campParticipations.status} = 'not_attending'
+  )`;
 }

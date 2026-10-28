@@ -46,6 +46,11 @@ export function notificationLink(
   if (refType === "calendar_event" && refId && UUID.test(refId)) {
     return `/calendar?event=${refId.replaceAll("-", "").toLowerCase()}`;
   }
+  // The Finance team's ask to pledge and a fee reminder open My dues, where
+  // the member pledges and sees how to pay.
+  if (refType === "fee_pledge" || refType === "fee_payment") {
+    return "/dues";
+  }
   // A pet's notice opens Camp pets, where its card carries the hint.
   if (refType === "pet") {
     return "/pets";

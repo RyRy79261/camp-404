@@ -19,6 +19,7 @@ vi.mock("./actions", () => ({
   // Imported at module scope by AssignCaptainDialog.
   sendCaptainPromotionAction: vi.fn(),
   cancelCaptainPromotionAction: vi.fn(),
+  sendPasswordResetLinkAction: vi.fn(),
 }));
 
 import { MemberProfile } from "./member-profile";
@@ -85,6 +86,7 @@ function detail(
       profileSections: [],
     },
     canAssignCaptain: false,
+    signInEmail: "lerato.m@gmail.com",
     promotionStep: { sent: false, accepted: false },
     promotionRequestId: null,
     promotionRequestIsMine: false,

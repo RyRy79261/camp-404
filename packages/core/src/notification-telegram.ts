@@ -43,6 +43,7 @@ export function isPersonalNotification(kind: NotificationKind): boolean {
     case "car_message":
     case "pet_in":
     case "event_invite":
+    case "fee_reminder":
       return true;
     case "announcement":
     case "questionnaire_release":

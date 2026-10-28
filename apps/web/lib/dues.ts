@@ -45,6 +45,7 @@ const dues = twin(db, duesTestStore, [
   "getPaymentProof",
   "statementContext",
   "saveDuesYear",
+  "setCollectingFees",
   "addFeeTier",
   "editFeeTier",
   "archiveFeeTier",
@@ -71,6 +72,7 @@ export const statementContext = dues.statementContext;
 // --- Writes -------------------------------------------------------------------
 
 export const saveDuesYear = dues.saveDuesYear;
+export const setCollectingFees = dues.setCollectingFees;
 export const addFeeTier = dues.addFeeTier;
 export const editFeeTier = dues.editFeeTier;
 export const archiveFeeTier = dues.archiveFeeTier;

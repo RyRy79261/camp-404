@@ -436,6 +436,16 @@ Sign-in rules worth knowing before you touch `packages/auth`:
   the sealed profile rides in the preview's URL. Vercel Authentication on
   previews narrows all three, and also means only someone signed in to Vercel
   can finish a Google sign-in on a preview inside the plugin's 60 seconds.
+  [CORRECTION 2026-10-28] Since better-auth 1.7.7 (the fix for
+  GHSA-r4xp-prcw-77qf) a preview's sign-in comes back to
+  `/callback/google/oauth-proxy` (`/oauth-proxy-callback` is deprecated and
+  calls it; the state-cookie check is still skipped), and each sealed part
+  (state package, stored state, profile) has its own key derived from the
+  proxy secret; the guard derives the same keys (`proxyPurposeKey` in
+  `oauth-proxy.ts`). Production refuses both completion routes. Keep
+  `AUTH_OAUTH_PROXY_SECRET` different from `BETTER_AUTH_SECRET` (a boot
+  warning says so), and upgrade production and previews together: a state
+  sealed by one version does not open on the other.
 - **Keep `changeEmail` unmounted** until a flow that notifies the CURRENT
   address exists (AfrikaBurn's finding: the stock flow turns a stolen session
   into an account takeover).
@@ -740,6 +750,26 @@ Decisions baked into the schema — keep new code consistent with them:
   back Maybe; My forms edits that answer, and the same write rewrites the
   answer stored with the "Coming this year?" questionnaire so its results
   agree with the roster. Erasure deletes every year's row.
+  [CORRECTION 2026-10-27] "Gates nothing ... every audience" no longer holds
+  (owner: "Not coming = no group sends"). A member whose status this year is
+  `not_attending` is left out of every GROUP send, captains included:
+  `computeAudience` (`packages/db/src/audience.ts`) takes `notComingUserIds`
+  (required, so no caller forgets) for announcements, questionnaire sends
+  and `reconcileOpenActivations`, the car, and the opt-in note; reminders
+  (`sendReminder`, `remindRequiredActionsDueSoon`), Ol' Jeb's tags and the
+  "Post in Telegram" dialog, and a team-leads event's invites keep to the same
+  rule (`hasNotSaidNotComing` in `@camp404/db/participations`). Someone
+  picked by name (`individual`, a people event) and notices about their own
+  account still reach them; Maybe and not answered still get group sends.
+  Saying Not coming (`applyParticipationIntent`) also turns `blocking` off
+  on their pending gates of that year's open sends, in the same transaction,
+  a compare-and-set on `pending` and the `blocking` it expects; the gates stay
+  pending, so they may still answer (the "Coming this year?" form included).
+  Taking the answer back puts `blocking` back from the send's own setting.
+  The questionnaire Send page and the announcements composer say "Reaches N
+  people. Left out: M who said Not coming this year. Who?" (`splitAudience`,
+  `components/audience-reach.tsx`); the names go only to team lead and up.
+  The new year after a rollover has no answers, so nobody is left out there.
 - **The member's answer and the captains' decision are two things** (owner,
   2026-09-28). "Coming" / "Maybe" / "Not coming" is what the member said
   (`intent`); "Accepted" (on the camp's list this year) and "Waiting list"

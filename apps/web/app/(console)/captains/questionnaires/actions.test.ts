@@ -701,7 +701,11 @@ const AUDIENCE_DATA: AudienceData = {
   ),
   driverUserIds: [],
   targetUserIds: [],
+  notComingUserIds: [],
 };
+
+/** Nobody in ROSTER said Not coming. */
+const NONE_LEFT_OUT = { count: 0, names: [] };
 
 describe("previewAudienceCount — refusals cost nothing", () => {
   beforeEach(() => {
@@ -743,6 +747,7 @@ describe("previewAudienceCount — the gate", () => {
     expect(await previewAudienceCount({ scope: "everyone" })).toEqual({
       ok: true,
       count: expected,
+      notComing: NONE_LEFT_OUT,
     });
   });
 
@@ -756,7 +761,7 @@ describe("previewAudienceCount — the gate", () => {
     ).length;
     expect(
       await previewAudienceCount({ scope: "team", team: "kitchen" }),
-    ).toEqual({ ok: true, count: expected });
+    ).toEqual({ ok: true, count: expected, notComing: NONE_LEFT_OUT });
   });
 
   it("gives a plain member no count at all", async () => {
@@ -793,6 +798,7 @@ describe("previewAudienceCount — the count agrees with the send", () => {
     expect(await previewAudienceCount({ scope: "everyone" })).toEqual({
       ok: true,
       count: expected,
+      notComing: NONE_LEFT_OUT,
     });
   });
 
@@ -805,6 +811,7 @@ describe("previewAudienceCount — the count agrees with the send", () => {
     expect(await previewAudienceCount({ scope: "opt_in" })).toEqual({
       ok: true,
       count: expected,
+      notComing: NONE_LEFT_OUT,
     });
   });
 
@@ -816,7 +823,7 @@ describe("previewAudienceCount — the count agrees with the send", () => {
     ).length;
     expect(
       await previewAudienceCount({ scope: "team", team: "kitchen" }),
-    ).toEqual({ ok: true, count: expected });
+    ).toEqual({ ok: true, count: expected, notComing: NONE_LEFT_OUT });
   });
 
   it("reports 0 — not a refusal — for a team nobody is on", async () => {
@@ -826,7 +833,7 @@ describe("previewAudienceCount — the count agrees with the send", () => {
         scope: "team",
         team: "ministry_of_memes",
       }),
-    ).toEqual({ ok: true, count: 0 });
+    ).toEqual({ ok: true, count: 0, notComing: NONE_LEFT_OUT });
   });
 
   it("reports 0 for team_leads when the camp has no leads", async () => {
@@ -836,6 +843,7 @@ describe("previewAudienceCount — the count agrees with the send", () => {
     expect(await previewAudienceCount({ scope: "team_leads" })).toEqual({
       ok: true,
       count: 0,
+      notComing: NONE_LEFT_OUT,
     });
   });
 
@@ -850,7 +858,53 @@ describe("previewAudienceCount — the count agrees with the send", () => {
         scope: "individual",
         targetUserIds: [ADA, GRACE],
       }),
-    ).toEqual({ ok: true, count: expected });
+    ).toEqual({ ok: true, count: expected, notComing: NONE_LEFT_OUT });
+  });
+});
+
+describe("previewAudienceCount — who said Not coming (owner, 2026-10-27)", () => {
+  const AWAY = "55555555-5555-4555-8555-555555555555";
+  const away = {
+    ...rosterRow(AWAY, ["kitchen"]),
+    displayName: "Tash",
+    participation: "not_attending",
+  } as unknown as RosterRow;
+
+  beforeEach(() => {
+    vi.mocked(getCampManagementRoster).mockResolvedValue([...ROSTER, away]);
+  });
+
+  it("leaves them out of the count and names them to a captain", async () => {
+    asViewer("captain");
+    expect(await previewAudienceCount({ scope: "everyone" })).toEqual({
+      ok: true,
+      count: 3,
+      notComing: { count: 1, names: ["Tash"] },
+    });
+    expect(
+      await previewAudienceCount({ scope: "team", team: "kitchen" }),
+    ).toEqual({
+      ok: true,
+      count: 2,
+      notComing: { count: 1, names: ["Tash"] },
+    });
+  });
+
+  it("names them to a team lead too, who reads participation", async () => {
+    asViewer("member", true);
+    expect(
+      await previewAudienceCount({ scope: "team", team: "kitchen" }),
+    ).toMatchObject({ notComing: { count: 1, names: ["Tash"] } });
+  });
+
+  it("still counts someone picked by name", async () => {
+    asViewer("captain");
+    expect(
+      await previewAudienceCount({
+        scope: "individual",
+        targetUserIds: [AWAY],
+      }),
+    ).toEqual({ ok: true, count: 1, notComing: NONE_LEFT_OUT });
   });
 });
 

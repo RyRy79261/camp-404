@@ -25,6 +25,8 @@ import {
   type InboxPage,
 } from "@/lib/notifications";
 import { getPendingQuestionnaires } from "@/lib/users";
+import { getProfileChecklist } from "@/lib/profile-checklist";
+import type { ProfileChecklist } from "@camp404/core";
 import { feedIds, marksPageRead, parseInboxFilter } from "./filter";
 
 /** What accept/decline hand back: the error is copy the recipient can read. */
@@ -232,6 +234,12 @@ export interface NotificationPanelData {
    * total unread.
    */
   clearable: number;
+  /**
+   * "Your profile isn't finished" (step 6): the member's own checklist, drawn
+   * as one grouped row at the top while a line is not done. Null for a member
+   * who gets none (not approved, or held).
+   */
+  profile: ProfileChecklist | null;
 }
 
 /** How many inbox rows the header panel shows before "See all". */
@@ -268,6 +276,7 @@ export async function fetchNotificationPanelAction(): Promise<
       recent: [],
       pending: [],
       clearable: 0,
+      profile: null,
     };
     const authUser = await getAuthenticatedUser();
     if (!authUser) return { ok: true, data: empty };
@@ -275,10 +284,11 @@ export async function fetchNotificationPanelAction(): Promise<
     if (!hasCampAccess(campUser, authUser.primaryEmail)) {
       return { ok: true, data: empty };
     }
-    const [page, pending, clearable] = await Promise.all([
+    const [page, pending, clearable, profile] = await Promise.all([
       listInbox(campUser.id, { limit: PANEL_LIMIT }),
       getPendingQuestionnaires(campUser.id),
       unreadClearableCount(campUser.id),
+      getProfileChecklist(campUser.id),
     ]);
     return {
       ok: true,
@@ -291,6 +301,7 @@ export async function fetchNotificationPanelAction(): Promise<
           dueAt: q.dueAt,
         })),
         clearable,
+        profile,
       },
     };
   });

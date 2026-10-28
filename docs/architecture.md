@@ -122,7 +122,7 @@ sequenceDiagram
   P->>G: Redirect with production's callback<br/>and a state sealed with the proxy secret
   G->>Prod: /api/auth/callback/google
   Prod->>G: Swap the code for the profile
-  Prod->>P: /api/auth/oauth-proxy-callback<br/>with the sealed profile
+  Prod->>P: /api/auth/callback/google/oauth-proxy<br/>with the sealed profile
   P->>P: Check its own state, sign in<br/>against the preview's own database
   P-->>M: Signed in (production wrote nothing)
 ```

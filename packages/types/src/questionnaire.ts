@@ -259,6 +259,10 @@ export const QUESTION_ROLES = [
   // option values are fixed as PARTICIPATION_INTENTS; publishing refuses any
   // other set.
   "participation_intent",
+  // "By when can you pay your camp fee?": one of six fixed answers
+  // (FEE_TIMINGS in ./dues) whose answer is the member's pledge's "by when"
+  // for the year (dues_accounts.pay_by). Publishing refuses any other set.
+  "fee_timing",
 ] as const;
 export type QuestionRole = (typeof QUESTION_ROLES)[number];
 
@@ -304,8 +308,9 @@ export const SingleSelectQuestion = z.object({
   otherLabel: z.string().optional(),
   shuffleOptions: z.boolean().optional(),
   ...camp404QuestionFields,
-  // The only kind that can say Yes / Maybe / No with fixed values.
-  role: z.literal("participation_intent").optional(),
+  // The only kind that can carry a fixed set of option values: Yes / Maybe /
+  // No, or the six camp fee timings.
+  role: z.enum(["participation_intent", "fee_timing"]).optional(),
 });
 export type SingleSelectQuestion = z.infer<typeof SingleSelectQuestion>;
 

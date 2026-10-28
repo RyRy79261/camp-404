@@ -83,6 +83,9 @@ import {
   taskMoveProblem,
   taskRemoveProblem,
   CAPTAIN_ONLY,
+  FEE_PAYMENT_ACTION_KEY,
+  FEE_PAYMENT_REF_TYPE,
+  type ProfileFacts,
 } from "@camp404/core";
 import {
   DRAFT_MISSING,
@@ -103,6 +106,7 @@ import {
   type TeamAnnouncement,
   inboxSentTo,
   type AnnouncementPickerData,
+  type AnnouncementAudiencePreview,
   type InboxSentTo,
 } from "@camp404/db/broadcasts";
 import {
@@ -135,6 +139,8 @@ import {
   resetDuesStore,
 } from "./test-store-dues";
 import { eraseClaimsOf, resetClaimsStore } from "./test-store-claims";
+import { resetCampMoneyStore } from "./test-store-camp-money";
+import { resetFeeReminderStore } from "./test-store-fee-reminders";
 import { petsTestStore, resetPetsStore } from "./test-store-pets";
 import { eraseDietaryOf } from "./test-store-dietary";
 import { eraseInventoryOf } from "./test-store-inventory";
@@ -167,7 +173,12 @@ import {
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
 import type { PendingRequiredAction } from "@camp404/db/activations";
-import { computeAudience } from "@camp404/db/audience";
+import { splitAudience, type AudienceSplit } from "@camp404/db/audience";
+import {
+  RESET_CAPTAINS_ONLY,
+  RESET_NO_SIGN_IN,
+  type PasswordResetLinkResult,
+} from "@camp404/db/password-reset";
 import {
   TELEGRAM_LINK_MINUTES,
   type TelegramConnection,
@@ -2250,6 +2261,21 @@ export const testStore = {
     return emergencyContactsByUserId.get(userId) ?? null;
   },
 
+  /** Twin of getProfileFacts in @camp404/db/burner-profile. */
+  getProfileFacts(userId: string): ProfileFacts | null {
+    const user = findUserById(userId);
+    if (!user) return null;
+    return {
+      approved: user.approvalStatus === "approved",
+      held: this.getPendingRequiredActions(userId).length > 0,
+      displayName: user.displayName,
+      telegramHandle: user.telegramHandle,
+      telegramConnected: telegramState.get(userId)?.dmAt != null,
+      hasEmergencyContact:
+        (emergencyContactsByUserId.get(userId)?.length ?? 0) > 0,
+    };
+  },
+
   // --- Questionnaire edit log -------------------------------------------
 
   recordQuestionnaireEdit(input: {
@@ -2463,8 +2489,21 @@ export const testStore = {
    * teams, leads and drivers, never the sender.
    */
   announcementRecipients(senderId: string, audience: Audience): TestUser[] {
+    const wanted = new Set(this.announcementSplit(senderId, audience).reaches);
+    return [...usersByAuthId.values()].filter((u) => wanted.has(u.id));
+  },
+
+  /** Twin of listNotComingUserIds: who said Not coming for one year. */
+  notComingUserIds(cycle: number): string[] {
+    return [...participations.values()]
+      .filter((p) => p.cycle === cycle && p.status === "not_attending")
+      .map((p) => p.userId);
+  },
+
+  /** Twin of resolveAudienceSplit: who it reaches, and who said Not coming. */
+  announcementSplit(senderId: string, audience: Audience): AudienceSplit {
     const cycle = currentCycleNumber();
-    const ids = computeAudience(
+    return splitAudience(
       {
         scope: audience.scope,
         team: audience.scope === "team" ? audience.team : null,
@@ -2482,11 +2521,30 @@ export const testStore = {
           .map((d) => d.userId),
         targetUserIds:
           audience.scope === "individual" ? [...audience.userIds] : [],
+        notComingUserIds: this.notComingUserIds(cycle),
       },
       senderId,
     );
-    const wanted = new Set(ids);
-    return [...usersByAuthId.values()].filter((u) => wanted.has(u.id));
+  },
+
+  /** Twin of previewAnnouncementAudience in @camp404/db/broadcasts. */
+  previewAnnouncementAudience(
+    senderId: string,
+    audience: Audience = { scope: "everyone" },
+  ): AnnouncementAudiencePreview {
+    const split = this.announcementSplit(senderId, audience);
+    return {
+      reaches: split.reaches.length,
+      notComing: split.notComing
+        .map((id) => ({
+          id,
+          name: findUserById(id)?.displayName?.trim() || "Camp member",
+        }))
+        .sort(
+          (a, b) =>
+            a.name.localeCompare(b.name, "en") || a.id.localeCompare(b.id),
+        ),
+    };
   },
 
   countAnnouncementAudience(
@@ -3334,6 +3392,27 @@ export const testStore = {
           : null,
       }))
       .sort((a, b) => (a.displayName ?? "").localeCompare(b.displayName ?? ""));
+  },
+
+  // --- A captain's password reset link (mirrors @camp404/db/password-reset) --
+
+  /**
+   * Twin of recordPasswordResetLink: the same captain and member checks and
+   * sentences. The store keeps no audit log and no sign-in email, so it
+   * answers `email: null` and the caller sends nothing.
+   */
+  recordPasswordResetLink(input: {
+    actorId: string;
+    userId: string;
+  }): PasswordResetLinkResult {
+    if (findUserById(input.actorId)?.rank !== "captain") {
+      return { ok: false, error: RESET_CAPTAINS_ONLY };
+    }
+    const member = findUserById(input.userId);
+    if (!member || member.sanitised) {
+      return { ok: false, error: RESET_NO_SIGN_IN };
+    }
+    return { ok: true, email: null };
   },
 
   // --- Who is coming this year (mirrors @camp404/db/participations) -----
@@ -4667,6 +4746,11 @@ export const testStore = {
       updatedAt: now,
     };
     payments.push(row);
+    // A member who sends a proof has answered "Remind who still owes".
+    if (source === "member") {
+      this.satisfyRequiredAction(input.userId, FEE_PAYMENT_ACTION_KEY);
+      this.readNotices(input.userId, FEE_PAYMENT_REF_TYPE);
+    }
     return { id: row.id, reference: row.reference };
   },
 
@@ -7000,6 +7084,8 @@ export const testStore = {
     S.leadPosts = [];
     S.telegramPosts = { ...DEFAULT_TELEGRAM_POST_SETTINGS };
     resetDuesStore();
+    resetCampMoneyStore();
+    resetFeeReminderStore();
     resetRentalStore();
     resetLogisticsStore();
     resetCampEventsStore();

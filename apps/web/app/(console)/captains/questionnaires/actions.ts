@@ -6,6 +6,7 @@ import { Questionnaire, Team, questionsWithRole } from "@camp404/types";
 import type { ViewerRank } from "@camp404/types";
 import {
   CAMP_TIME_ZONE,
+  canReadMemberField,
   canSendQuestionnaireTo,
   canViewBuilderDefinition,
   definitionLimitErrors,
@@ -18,7 +19,7 @@ import type { GridRow } from "@camp404/types";
 import { getMealPlan } from "@/lib/meal-plan";
 import { carryOverFor } from "@camp404/db/cycles";
 import { PUSH_SCOPES } from "@camp404/db/activations";
-import { computeAudience } from "@camp404/db/audience";
+import { splitAudience } from "@camp404/db/audience";
 import {
   getDefinitionMetaRow,
   setDefinitionAnonymousResults,
@@ -551,7 +552,16 @@ const PreviewSpec = z.object({
 });
 
 export type PreviewCountResult =
-  | { ok: true; count: number }
+  | {
+      ok: true;
+      count: number;
+      /**
+       * The members the scope matched but leaves out because they said Not
+       * coming this year (owner, 2026-10-27). `names` is set only for a
+       * viewer who may read participation (team lead and up).
+       */
+      notComing: { count: number; names: string[] | null };
+    }
   | { ok: false; error: string };
 
 /**
@@ -608,11 +618,13 @@ export async function previewAudienceCount(
     // through `computeAudience` means the preview and the send apply ONE rule.
     //
     // The roster is captain-only data, and a team lead can now reach this line.
-    // Nothing of it crosses the boundary: the only value returned is a COUNT,
-    // and the audience it counts is one the gate above has already said this
-    // actor may address — for a lead, the size of the team they lead.
+    // What crosses the boundary: the COUNT of the audience the gate above has
+    // already said this actor may address (a lead may address the whole camp),
+    // the count left out for saying Not coming this year, and those people's
+    // names only when `canReadMemberField(..., "campParticipations.status")`
+    // allows it (team lead and up). Nothing else of the roster leaves.
     const roster = await getCampManagementRoster();
-    const count = computeAudience(
+    const split = splitAudience(
       // An optional questionnaire shows to the whole camp: count `everyone`.
       { scope: scope === "opt_in" ? "everyone" : scope, team },
       {
@@ -629,10 +641,32 @@ export async function previewAudienceCount(
         // no sender to exclude — both match openActivation's call.
         driverUserIds: [],
         targetUserIds,
+        // This year's "Not coming" answers, as openActivation reads them.
+        notComingUserIds: roster
+          .filter((m) => m.participation === "not_attending")
+          .map((m) => m.id),
       },
       null,
-    ).length;
-    return { ok: true, count };
+    );
+    const nameOf = new Map(
+      roster.map((m) => [m.id, m.displayName?.trim() || "Camp member"]),
+    );
+    return {
+      ok: true,
+      count: split.reaches.length,
+      notComing: {
+        count: split.notComing.length,
+        // Who said Not coming reads at team lead and up (MEMBER_FIELD_READERS).
+        names: canReadMemberField(
+          { rank: gate.rank, isSelf: false },
+          "campParticipations.status",
+        )
+          ? split.notComing
+              .map((id) => nameOf.get(id) ?? "Camp member")
+              .sort((a, b) => a.localeCompare(b, "en"))
+          : null,
+      },
+    };
   });
 }
 

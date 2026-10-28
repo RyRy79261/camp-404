@@ -2,6 +2,8 @@ import { and, count, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   checkPaymentInput,
+  FEE_PAYMENT_ACTION_KEY,
+  FEE_PAYMENT_REF_TYPE,
   type Currency,
   formatMemberRefCode,
   memberPaymentAllowed,
@@ -20,6 +22,7 @@ import {
   REFUND_PAID_HOLDS_PAYMENT,
 } from "./dues";
 import { createHttpDb, withTransaction } from "./index";
+import { closeNudge } from "./nudges";
 import * as schema from "./schema";
 
 // The payments ledger (owner's call, 2026-09-16). The app never moves money:
@@ -183,6 +186,16 @@ export async function recordPayment(
             source,
           },
         });
+        // A member who sends a proof has answered "Remind who still owes":
+        // their reminder is done and its notice read.
+        if (source === "member") {
+          await closeNudge(tx, {
+            userId: input.userId,
+            actionKey: FEE_PAYMENT_ACTION_KEY,
+            refType: FEE_PAYMENT_REF_TYPE,
+            now: new Date(),
+          });
+        }
         return { id: row!.id, reference };
       });
     } catch (err) {

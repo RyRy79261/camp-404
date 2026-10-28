@@ -271,6 +271,8 @@ export const MEMBER_FIELD_READERS: Readonly<Record<string, ViewerRank>> = {
   "duesAccounts.pledgedTierId": "captain",
   "duesAccounts.pledgedAmountCents": "captain",
   "duesAccounts.pledgedAt": "captain",
+  "duesAccounts.payBy": "captain",
+  "duesAccounts.subsidy": "captain",
   "duesAccounts.planVersion": "captain",
   "duesAccounts.createdAt": "captain",
   "duesAccounts.updatedAt": "captain",

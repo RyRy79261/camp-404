@@ -1,82 +1,83 @@
 import Link from "next/link";
 import { ChevronRight, Users } from "lucide-react";
-import { campDayKey, formatMoney } from "@camp404/core";
+import {
+  campDayKey,
+  feeTimingShortLabel,
+  formatMoney,
+  isComingThisYear,
+} from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
 import { EmptyState } from "@camp404/ui/components/empty-state";
 import {
   ResponsiveDataTable,
   type ResponsiveColumn,
 } from "@camp404/ui/components/responsive-data-table";
-import { cn } from "@camp404/ui/lib/utils";
-import { DuesStats, duesStatsFigures } from "@/components/dues/dues-stats";
+import { FilterLinks, MoneyFigures } from "@/components/dues/money-kit";
 import { PaymentsFrame } from "@/components/dues/payments-frame";
-import { programPage } from "@/lib/program-page";
-import { getDuesYear, listDuesAccounts, type DuesAccountRow } from "@/lib/dues";
+import { getFeeOverview, type FeeOverviewRow } from "@/lib/camp-money";
+import { shortDay } from "@/lib/camp-money-view";
 import { memberDuesPath, PAYMENTS_OWING_PATH } from "@/lib/dues-copy";
-import { balanceLabel, formatDay, PLACE_WORDS } from "@/lib/dues-view";
+import { feeReminderPreview } from "@/lib/fee-reminders";
 import { ledgerCycle } from "@/lib/payments";
+import { programPage } from "@/lib/program-page";
+import { CollectingSwitch } from "./collecting-switch";
+import { FeeReminderButtons } from "./fee-reminders";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Who owes what — Camp 404" };
 
-// Who owes what (#240): every approved member's dues for the year, for the
-// Finance team (captains and Finance leads). The balance is charges less
-// payments received or excused, plus refunds paid out. Filtered in the URL:
-// members who owe, members with something to check (a proof they sent in, a
-// payment recorded as promised, or a refund they asked for), or everyone. A
-// row opens the member's account. The balance is always a figure (R 0,00
-// dimmed), and what the row needs sits in its own Status chip, so the money
-// lines up down the right edge. The columns keep their widths across the
-// filters, and Next instalment shows only when someone has a plan.
+// Who owes what (#240; camp fees sprint, mock-up step 2): every approved
+// member's pledge (their own amount, with the nearest name on the Join site's
+// scale under it), when they said they can pay, what they paid, what they
+// still owe and their next instalment, for the Finance team (captains and
+// Finance leads). Filtered in the URL: Coming, Maybe, Owe money, Subsidy,
+// Everyone, and "To check" while a proof or a promised payment waits. The
+// "Collecting fees" switch and the two reminder buttons sit above. A row opens
+// the member's account.
 
-const SHOW = ["owing", "check", "all"] as const;
+const SHOW = ["coming", "maybe", "owing", "subsidy", "check", "all"] as const;
 type Show = (typeof SHOW)[number];
 
-function shown(rows: DuesAccountRow[], show: Show): DuesAccountRow[] {
-  if (show === "owing") return rows.filter((r) => r.balance.balanceCents > 0);
-  if (show === "check") {
-    return rows.filter(
-      (r) =>
-        r.pendingProofs > 0 || r.figures.promisedCount > 0 || r.openRefunds > 0,
-    );
-  }
-  return rows;
+const FILTERS: Record<Show, (r: FeeOverviewRow) => boolean> = {
+  coming: (r) => isComingThisYear(r.participation),
+  maybe: (r) => r.participation === "maybe",
+  owing: (r) => r.feeOwingCents > 0,
+  subsidy: (r) => r.subsidy,
+  check: (r) =>
+    r.pendingProofs > 0 || r.figures.promisedCount > 0 || r.openRefunds > 0,
+  all: () => true,
+};
+
+const EMPTY: Record<Show, string> = {
+  coming: "Nobody has said Coming yet.",
+  maybe: "Nobody said Maybe.",
+  owing: "Nobody owes money right now.",
+  subsidy: "Nobody asked for a subsidy.",
+  check: "Nothing to check.",
+  all: "No approved members yet.",
+};
+
+function money(cents: number) {
+  return formatMoney(cents);
 }
 
-/** The status chip: what Finance has to do, else where the balance stands. */
-function statusChips(r: DuesAccountRow) {
-  const chips: {
-    text: string;
-    variant: "warning" | "success" | "secondary" | "outline";
-  }[] = [];
+/** What Finance has to check on a row: proofs sent in, promised, refunds. */
+function checkChips(r: FeeOverviewRow): string[] {
+  const chips: string[] = [];
   if (r.pendingProofs > 0) {
-    chips.push({
-      text:
-        r.pendingProofs === 1
-          ? "Proof to check"
-          : `${r.pendingProofs} proofs to check`,
-      variant: "warning",
-    });
+    chips.push(
+      r.pendingProofs === 1
+        ? "Proof to check"
+        : `${r.pendingProofs} proofs to check`,
+    );
   }
-  if (r.figures.promisedCount > 0) {
-    chips.push({ text: "Promised", variant: "warning" });
-  }
-  if (r.openRefunds > 0)
-    chips.push({ text: "Refund asked", variant: "warning" });
-  if (chips.length === 0) {
-    const label = balanceLabel(r.balance);
-    if (label.tone === "clear")
-      chips.push({ text: "Paid up", variant: "success" });
-    else if (label.tone === "credit")
-      chips.push({ text: "To give back", variant: "secondary" });
-    else if (label.tone === "none")
-      chips.push({ text: "Nothing charged", variant: "outline" });
-  }
+  if (r.figures.promisedCount > 0) chips.push("Promised");
+  if (r.openRefunds > 0) chips.push("Refund asked");
   return chips;
 }
 
-function columns(withPlan: boolean): ResponsiveColumn<DuesAccountRow>[] {
+function columns(): ResponsiveColumn<FeeOverviewRow>[] {
   return [
     {
       id: "member",
@@ -84,101 +85,109 @@ function columns(withPlan: boolean): ResponsiveColumn<DuesAccountRow>[] {
       role: "title",
       cellClassName: "whitespace-normal",
       cell: (r) => (
-        <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="flex min-w-0 flex-col items-start gap-1">
           <Link
             href={memberDuesPath(r.userId)}
             className="font-medium hover:text-accent"
           >
             {r.name}
           </Link>
-          {r.refCode && (
-            <span className="font-mono text-xs tracking-normal text-muted-foreground">
-              {r.refCode}
+          {(r.subsidy || checkChips(r).length > 0) && (
+            <span className="flex flex-wrap gap-1">
+              {r.subsidy && (
+                <Badge variant="secondary">Subsidy: talk to them</Badge>
+              )}
+              {checkChips(r).map((chip) => (
+                <Badge key={chip} variant="warning">
+                  {chip}
+                </Badge>
+              ))}
             </span>
           )}
         </span>
       ),
     },
     {
-      id: "place",
-      header: "Place",
-      headClassName: "w-32",
+      id: "pledged",
+      header: "Pledged",
+      align: "right",
+      headClassName: "w-36",
       cell: (r) =>
-        r.participation ? (
-          PLACE_WORDS[r.participation]
-        ) : (
-          <span className="text-muted-foreground">No answer</span>
-        ),
-    },
-    {
-      id: "fee",
-      header: "Camp fee",
-      headClassName: "w-48",
-      cell: (r) =>
-        r.feeCents !== null ? (
-          <span className="flex flex-wrap items-center gap-1.5">
-            <span className="tabular-nums">{formatMoney(r.feeCents)}</span>
-            {r.concession && <Badge variant="outline">Lowered</Badge>}
-          </span>
-        ) : r.pledgeCents !== null ? (
-          <span className="text-muted-foreground">
-            Pledged {formatMoney(r.pledgeCents)}
-            {r.pledgeLabel ? ` (${r.pledgeLabel})` : ""}
-          </span>
-        ) : (
+        r.pledgeCents === null && r.feeCents === null ? (
           <span className="text-muted-foreground">No pledge yet</span>
+        ) : (
+          <span className="flex flex-col items-end">
+            <span className="tabular-nums">{money(r.feeTotalCents)}</span>
+            {r.scaleName && (
+              <span className="text-xs text-muted-foreground">
+                {r.subsidy && r.feeTotalCents === 0
+                  ? "Subsidy"
+                  : r.scaleName.exact
+                    ? r.scaleName.name
+                    : `near ${r.scaleName.name}`}
+              </span>
+            )}
+          </span>
         ),
     },
-    ...(withPlan
-      ? [
-          {
-            id: "next",
-            header: "Next instalment",
-            headClassName: "w-44",
-            cell: (r: DuesAccountRow) =>
-              r.next ? (
-                <span className="flex flex-wrap items-center gap-1.5">
-                  <span className="tabular-nums">
-                    {formatMoney(r.next.amountCents)} by{" "}
-                    {formatDay(r.next.dueOn)}
-                  </span>
-                  {r.next.overdue && <Badge variant="destructive">Late</Badge>}
-                </span>
-              ) : null,
-          } satisfies ResponsiveColumn<DuesAccountRow>,
-        ]
-      : []),
     {
-      id: "status",
-      header: "Status",
-      role: "badge",
-      headClassName: "w-40",
-      cell: (r) => (
-        <span className="flex flex-wrap gap-1.5">
-          {statusChips(r).map((chip) => (
-            <Badge key={chip.text} variant={chip.variant}>
-              {chip.text}
-            </Badge>
-          ))}
-        </span>
-      ),
+      id: "when",
+      header: "When they can pay",
+      headClassName: "w-44",
+      cell: (r) =>
+        r.payBy ? (
+          feeTimingShortLabel(r.payBy, r.burnYear)
+        ) : (
+          <span className="text-muted-foreground">Not answered</span>
+        ),
     },
     {
-      id: "balance",
-      header: "Balance",
+      id: "paid",
+      header: "Paid",
       align: "right",
       headClassName: "w-32",
-      cellClassName: "whitespace-nowrap font-medium tabular-nums",
+      cellClassName: "whitespace-nowrap tabular-nums",
+      cell: (r) => money(r.balance.paidCents),
+    },
+    {
+      id: "owing",
+      header: "Still owing",
+      align: "right",
+      headClassName: "w-32",
+      cellClassName: "whitespace-nowrap tabular-nums",
       cell: (r) =>
-        r.balance.balanceCents > 0 ? (
-          formatMoney(r.balance.balanceCents)
-        ) : r.balance.balanceCents < 0 ? (
-          <span className="text-muted-foreground">
-            − {formatMoney(-r.balance.balanceCents)}
-          </span>
+        r.feeOwingCents > 0 ? (
+          money(r.feeOwingCents)
         ) : (
-          <span className="text-muted-foreground">{formatMoney(0)}</span>
+          <span className="text-muted-foreground">{money(0)}</span>
         ),
+    },
+    {
+      id: "next",
+      header: "Next instalment",
+      headClassName: "w-44",
+      cell: (r) => {
+        const next = r.feeNext;
+        switch (next.kind) {
+          case "due":
+            return (
+              <span className="flex flex-wrap items-center gap-1.5">
+                <span className="tabular-nums">
+                  {money(next.amountCents)} by {shortDay(next.dueOn)}
+                </span>
+                {next.overdue && <Badge variant="destructive">Late</Badge>}
+              </span>
+            );
+          case "paid_up":
+            return <Badge variant="success">Paid up</Badge>;
+          case "no_date":
+            return <span className="text-muted-foreground">No date yet</span>;
+          case "subsidy":
+            return <span className="text-muted-foreground">After a talk</span>;
+          case "no_pledge":
+            return <span className="text-muted-foreground">—</span>;
+        }
+      },
     },
     {
       id: "open",
@@ -207,88 +216,124 @@ export default async function WhoOwesWhatPage({
   searchParams: Promise<{ show?: string }>;
 }) {
   const gate = await programPage("payments");
-  const cleared = gate.allowed;
   const { show: raw } = await searchParams;
   const show: Show = (SHOW as readonly string[]).includes(raw ?? "")
     ? (raw as Show)
-    : "owing";
+    : "coming";
 
-  const data = cleared
+  const data = gate.allowed
     ? await (async () => {
         const cycle = await ledgerCycle();
-        const [rows, year] = await Promise.all([
-          listDuesAccounts(cycle, campDayKey(new Date())),
-          getDuesYear(cycle),
+        const today = campDayKey(new Date());
+        const [overview, preview] = await Promise.all([
+          getFeeOverview(cycle, today),
+          feeReminderPreview(cycle, today),
         ]);
-        return { rows, year };
+        return { cycle, overview, preview };
       })()
     : null;
 
-  const visible = data ? shown(data.rows, show) : [];
+  const rows = data?.overview.rows ?? [];
+  const visible = rows.filter(FILTERS[show]);
+  const count = (s: Show) => rows.filter(FILTERS[s]).length;
+  const t = data?.overview.totals;
+  const toCheck = count("check");
 
   return (
     <PaymentsFrame
       active={PAYMENTS_OWING_PATH}
       title="Who owes what"
-      description="Each member's camp fee, other charges and what they've paid this year. Open a member to change their fee, add a charge or set up a payment plan."
+      description="Each member's pledge, when they said they can pay, and what they have paid this year."
+      actions={data ? <FeeReminderButtons preview={data.preview} /> : null}
       cleared={data !== null}
     >
-      {data && (
+      {data && t && (
         <div className="flex flex-col gap-6">
-          <DuesStats
-            figures={duesStatsFigures(data.rows)}
-            deadline={data.year.deadline}
+          <CollectingSwitch
+            on={data.overview.year.collectingFees}
+            version={data.overview.year.version}
           />
 
-          <nav
-            aria-label="Show"
-            className="inline-flex w-full rounded-md border p-1 page-sm:w-auto page-sm:self-start"
-          >
-            {(
-              [
-                ["owing", "Owe money"],
-                ["check", "To check"],
-                ["all", "Everyone"],
-              ] as const
-            ).map(([value, label]) => (
-              <Link
-                key={value}
-                href={`${PAYMENTS_OWING_PATH}?show=${value}`}
-                aria-current={show === value ? "page" : undefined}
-                className={cn(
-                  "flex-1 whitespace-nowrap rounded-sm px-3 py-2 text-center text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  show === value
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
+          <MoneyFigures
+            label="This year's fees"
+            figures={[
+              {
+                term: "Pledged",
+                value: money(t.pledgedCents),
+                hint: `${t.comingCount} said Coming${
+                  t.subsidyCount > 0
+                    ? ` · ${t.subsidyCount} ${t.subsidyCount === 1 ? "asks" : "ask"} for a subsidy`
+                    : ""
+                }`,
+              },
+              {
+                term: "Paid",
+                value: money(t.paidCents),
+                hint: `${t.paidUpCount} paid up · ${t.partPaidCount} part paid`,
+              },
+              {
+                term: "Still expected",
+                value: money(t.stillExpectedCents),
+                hint:
+                  t.owingCount === 1
+                    ? "1 member owes"
+                    : `${t.owingCount} members owe`,
+              },
+              t.nextDue
+                ? {
+                    term: `Due by ${shortDay(t.nextDue.dueOn)}`,
+                    value: money(t.nextDue.amountCents),
+                    hint:
+                      t.nextDue.count === 1
+                        ? "1 member"
+                        : `${t.nextDue.count} members`,
+                  }
+                : { term: "Next due", value: "—", hint: "No fee days yet" },
+            ]}
+          />
+
+          <FilterLinks
+            label="Show"
+            links={[
+              ...(
+                [
+                  ["coming", "Coming"],
+                  ["maybe", "Maybe"],
+                  ["owing", "Owe money"],
+                  ["subsidy", "Subsidy"],
+                ] as const
+              ).map(([value, label]) => ({
+                href: `${PAYMENTS_OWING_PATH}?show=${value}`,
+                label,
+                count: count(value),
+                current: show === value,
+              })),
+              ...(toCheck > 0 || show === "check"
+                ? [
+                    {
+                      href: `${PAYMENTS_OWING_PATH}?show=check`,
+                      label: "To check",
+                      count: toCheck,
+                      current: show === "check",
+                    },
+                  ]
+                : []),
+              {
+                href: `${PAYMENTS_OWING_PATH}?show=all`,
+                label: "Everyone",
+                current: show === "all",
+              },
+            ]}
+          />
 
           {visible.length === 0 ? (
-            <EmptyState
-              icon={<Users aria-hidden />}
-              title={
-                show === "owing"
-                  ? "Nobody owes money right now."
-                  : show === "check"
-                    ? "Nothing to check."
-                    : "No approved members yet."
-              }
-              description={
-                show === "owing"
-                  ? "Members show here once they are charged a fee and have not paid it all."
-                  : "Payments members send in and refunds they ask for show here."
-              }
-            />
+            <EmptyState icon={<Users aria-hidden />} title={EMPTY[show]} />
           ) : (
             <ResponsiveDataTable
-              columns={columns(visible.some((r) => r.next !== null))}
+              columns={columns()}
               data={visible}
               getRowKey={(r) => r.userId}
-              label="Members' dues"
+              label="Members' fees"
               framed
             />
           )}

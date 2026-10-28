@@ -14,6 +14,7 @@ vi.mock("@camp404/db/questionnaire-lifecycle", () => ({
   remindRequiredActionsDueSoon: vi.fn(),
 }));
 vi.mock("@camp404/db/tasks", () => ({ remindTaskDeadlines: vi.fn() }));
+vi.mock("@camp404/db/fee-reminders", () => ({ remindFeesDueSoon: vi.fn() }));
 vi.mock("@camp404/db/rate-limit", () => ({ consumeRateLimit: vi.fn() }));
 vi.mock("@camp404/db/maintenance", () => ({
   backfillIdEncryption: vi.fn(),
@@ -59,6 +60,7 @@ import {
   remindRequiredActionsDueSoon,
 } from "@camp404/db/questionnaire-lifecycle";
 import { remindTaskDeadlines } from "@camp404/db/tasks";
+import { remindFeesDueSoon } from "@camp404/db/fee-reminders";
 import { consumeRateLimit } from "@camp404/db/rate-limit";
 import {
   backfillIdEncryption,
@@ -176,6 +178,7 @@ describe("runDueWork", () => {
     expect(remindDueSoon).toHaveBeenCalledWith({ now: NOON });
     expect(remindRequiredActionsDueSoon).toHaveBeenCalledWith({ now: NOON });
     expect(remindTaskDeadlines).toHaveBeenCalledWith({ now: NOON });
+    expect(remindFeesDueSoon).toHaveBeenCalledWith({ now: NOON });
     expect(drainQueuedPush).toHaveBeenCalledOnce();
     expect(backfillIdEncryption).toHaveBeenCalledOnce();
   });
@@ -206,6 +209,7 @@ describe("runDueWork", () => {
     expect(remindDueSoon).not.toHaveBeenCalled();
     expect(remindRequiredActionsDueSoon).not.toHaveBeenCalled();
     expect(remindTaskDeadlines).not.toHaveBeenCalled();
+    expect(remindFeesDueSoon).not.toHaveBeenCalled();
     expect(drainQueuedPush).toHaveBeenCalledOnce();
   });
 

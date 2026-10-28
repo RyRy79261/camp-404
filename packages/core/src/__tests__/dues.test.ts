@@ -7,15 +7,11 @@ import {
   feeStandardCents,
   FINANCE_TEAM,
   isFeeConcession,
-  NO_TIERS_YET,
-  PLEDGE_NOT_BELOW,
   refundAmount,
   REFUND_TOO_LARGE,
-  resolvePledge,
   SETTLE_UP_CHANGED,
   SETTLE_UP_NOBODY,
   settleUpCharges,
-  TIER_GONE,
   findMemberRef,
   nextInstalment,
   paymentFigures,
@@ -494,29 +490,6 @@ describe("proposeStatementMatches", () => {
 });
 
 describe("the rules both dues stores apply", () => {
-  const tiers = [
-    { id: "low", amountCents: 100 },
-    { id: "high", amountCents: 300 },
-  ];
-
-  it("resolves a pledge to a live tier or an amount below the lowest", () => {
-    expect(resolvePledge({ kind: "tier", tierId: "x" }, [])).toBe(NO_TIERS_YET);
-    expect(resolvePledge({ kind: "tier", tierId: "high" }, tiers)).toEqual({
-      tierId: "high",
-      amountCents: 300,
-    });
-    expect(resolvePledge({ kind: "tier", tierId: "gone" }, tiers)).toBe(
-      TIER_GONE,
-    );
-    expect(resolvePledge({ kind: "below", amountCents: 99 }, tiers)).toEqual({
-      tierId: null,
-      amountCents: 99,
-    });
-    expect(resolvePledge({ kind: "below", amountCents: 100 }, tiers)).toBe(
-      PLEDGE_NOT_BELOW,
-    );
-  });
-
   it("calls a fee a concession when it has a reason or sits below its standard", () => {
     const fee = {
       kind: "fee" as const,

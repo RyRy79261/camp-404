@@ -7,6 +7,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // mocking the data collaborators and leaving @camp404/core REAL.
 
 vi.mock("@/lib/auth", () => ({ getAuthenticatedUser: vi.fn() }));
+vi.mock("@/lib/profile-checklist", () => ({
+  getProfileChecklist: vi.fn(async () => null),
+}));
 vi.mock("@/lib/users", () => ({
   ensureCampUser: vi.fn(),
   getPendingQuestionnaires: vi.fn(async () => []),
@@ -472,7 +475,12 @@ describe("fetchNotificationPanelAction", () => {
 
     expect(result).toEqual({
       ok: true,
-      data: { recent: [{ id: "n1" }], pending: [], clearable: 12 },
+      data: {
+        recent: [{ id: "n1" }],
+        pending: [],
+        clearable: 12,
+        profile: null,
+      },
     });
     // The id comes from the session, never from the caller.
     expect(unreadClearableCount).toHaveBeenCalledExactlyOnceWith("user-1");
@@ -496,14 +504,14 @@ describe("fetchNotificationPanelAction", () => {
     vi.mocked(getAuthenticatedUser).mockResolvedValue(null);
     expect(await fetchNotificationPanelAction()).toEqual({
       ok: true,
-      data: { recent: [], pending: [], clearable: 0 },
+      data: { recent: [], pending: [], clearable: 0, profile: null },
     });
 
     vi.mocked(getAuthenticatedUser).mockResolvedValue({ id: "a" } as never);
     vi.mocked(hasCampAccess).mockReturnValue(false);
     expect(await fetchNotificationPanelAction()).toEqual({
       ok: true,
-      data: { recent: [], pending: [], clearable: 0 },
+      data: { recent: [], pending: [], clearable: 0, profile: null },
     });
 
     expect(listInbox).not.toHaveBeenCalled();

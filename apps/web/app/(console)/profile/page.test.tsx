@@ -17,6 +17,9 @@ vi.mock("@/lib/member-gate", () => ({
     },
   })),
 }));
+vi.mock("@/lib/profile-checklist", () => ({
+  getProfileChecklist: vi.fn(async () => null),
+}));
 vi.mock("@/lib/users", () => ({ isTeamLead: vi.fn(async () => false) }));
 vi.mock("@/lib/payments", () => ({
   getMemberRefCode: vi.fn(async () => null),
@@ -33,6 +36,10 @@ vi.mock("@/lib/dues", () => ({
     },
   })),
 }));
+vi.mock("@/lib/join-site", async () => {
+  const { DEFAULT_JOIN_CONTENT } = await import("@camp404/types");
+  return { getFeeScale: vi.fn(async () => DEFAULT_JOIN_CONTENT.fee) };
+});
 vi.mock("@/lib/participations", () => ({ getMyParticipation: vi.fn() }));
 vi.mock("@/lib/tickets", () => ({
   getMyTicket: vi.fn(async () => ({
@@ -57,8 +64,11 @@ vi.mock("@/components/profile/profile-sections", () => ({
   ProfileSections: () => null,
 }));
 
+import { getMemberDues } from "@/lib/dues";
 import { getMyParticipation } from "@/lib/participations";
 import { getMyTicket } from "@/lib/tickets";
+import { getProfileChecklist } from "@/lib/profile-checklist";
+import { profileChecklist } from "@camp404/core";
 import ProfilePage from "./page";
 
 async function renderWith(status: ParticipationStatus | null) {
@@ -87,6 +97,42 @@ describe("profile: Your dues", () => {
     expect(
       screen.getByRole("link", { name: "Open My dues" }).getAttribute("href"),
     ).toBe("/dues");
+  });
+});
+
+describe("profile: the member's pledge", () => {
+  it("shows it read-only, with the scale's name and by when, linking to change it", async () => {
+    vi.mocked(getMemberDues).mockResolvedValueOnce({
+      cycle: 2027,
+      burnYear: 2027,
+      pledge: { amountCents: 720_000 },
+      payBy: "part_by_end_nov",
+      subsidy: false,
+      balance: {
+        chargedCents: 0,
+        paidCents: 0,
+        pendingCents: 0,
+        refundedCents: 0,
+        balanceCents: 0,
+      },
+    } as unknown as Awaited<ReturnType<typeof getMemberDues>>);
+    await renderWith("applied");
+    const line = screen.getByTestId("profile-pledge");
+    expect(line.textContent).toMatch(
+      /^You pledged R\s7\s200,00 \(near Ideal\), part by the end of November and the rest later\./,
+    );
+    expect(
+      screen
+        .getByRole("link", { name: "Change your pledge" })
+        .getAttribute("href"),
+    ).toBe("/dues");
+    // Nothing to change it with here.
+    expect(screen.queryByRole("slider")).toBeNull();
+  });
+
+  it("says nothing of a pledge the member has not made", async () => {
+    await renderWith("applied");
+    expect(screen.queryByTestId("profile-pledge")).toBeNull();
   });
 });
 
@@ -179,6 +225,41 @@ describe("profile: the member's own ticket", () => {
     ).toBeTruthy();
     expect(
       screen.queryByRole("radiogroup", { name: "Your ticket" }),
+    ).toBeNull();
+  });
+});
+
+describe("profile: Finish your profile (step 6)", () => {
+  it("shows the checklist card while a line is missing, each line linking to its fix", async () => {
+    vi.mocked(getProfileChecklist).mockResolvedValueOnce(
+      profileChecklist(
+        {
+          approved: true,
+          held: false,
+          displayName: "nova@example.com",
+          telegramHandle: null,
+          telegramConnected: false,
+          hasEmergencyContact: true,
+        },
+        { telegramOffered: false },
+      ),
+    );
+    await renderWith("accepted");
+    expect(
+      screen.getByRole("heading", { name: "Finish your profile" }),
+    ).toBeTruthy();
+    expect(screen.getAllByText("1 of 3 done").length).toBeGreaterThan(0);
+    expect(
+      screen
+        .getByRole("link", { name: "Pick a display name" })
+        .getAttribute("href"),
+    ).toBe("/profile/edit");
+  });
+
+  it("shows no card when the member gets no checklist", async () => {
+    await renderWith("accepted");
+    expect(
+      screen.queryByRole("heading", { name: "Finish your profile" }),
     ).toBeNull();
   });
 });

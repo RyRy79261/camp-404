@@ -133,3 +133,14 @@ export const getCampBlurb = join.getCampBlurb;
 export const setCampBlurb = join.setCampBlurb;
 
 export { DEFAULT_JOIN_CONTENT };
+
+/**
+ * The camp fee's floating scale for a year, as the Join site shows it (names,
+ * whole-rand amounts, the dollar rate a captain typed, the Subsidy note). The
+ * one source of the scale's amounts: fee_tiers is not (owner, 2026-10-27).
+ */
+export async function getFeeScale(
+  cycle: number,
+): Promise<JoinSiteContent["fee"]> {
+  return (await join.getJoinSiteContent(cycle)).content.fee;
+}

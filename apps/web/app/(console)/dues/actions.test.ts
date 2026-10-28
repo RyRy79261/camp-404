@@ -16,8 +16,6 @@ import { captainActionGate } from "@/lib/captain-gate";
 import { requestRefund, savePledge } from "@/lib/dues";
 import { requestMyRefundAction, savePledgeAction } from "./actions";
 
-const TIER = "5f0c1b9e-6a55-4d2b-9d6f-3a1f2b3c4d5e";
-
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(captainActionGate).mockResolvedValue({
@@ -27,27 +25,35 @@ beforeEach(() => {
   } as never);
 });
 
+const PLEDGE = {
+  amountCents: 720_000,
+  payBy: "part_by_end_nov",
+  subsidy: false,
+};
+
 describe("savePledgeAction", () => {
   it("saves the signed-in member's pledge, whatever id the form carries", async () => {
-    expect(
-      await savePledgeAction({ kind: "tier", tierId: TIER, userId: "someone" }),
-    ).toEqual({ ok: true, data: { charged: true } });
+    expect(await savePledgeAction({ ...PLEDGE, userId: "someone" })).toEqual({
+      ok: true,
+      data: { charged: true },
+    });
     expect(savePledge).toHaveBeenCalledExactlyOnceWith({
       userId: "me",
       cycle: 2027,
-      pledge: { kind: "tier", tierId: TIER },
+      pledge: PLEDGE,
     });
     expect(captainActionGate).toHaveBeenCalledWith("camp_member");
   });
 
   it("says what is wrong with the pledge and saves nothing", async () => {
-    expect(await savePledgeAction({ kind: "below", amountCents: 0 })).toEqual({
+    expect(await savePledgeAction({ ...PLEDGE, amountCents: 0 })).toEqual({
       ok: false,
-      error: "The amount must be more than R0.",
+      error:
+        "The amount must be more than R0, or tick that you need a subsidy.",
     });
-    expect(await savePledgeAction({ kind: "anything" })).toEqual({
+    expect(await savePledgeAction({ ...PLEDGE, payBy: "someday" })).toEqual({
       ok: false,
-      error: "Pick what you can pay.",
+      error: "Pick when you can pay it.",
     });
     expect(savePledge).not.toHaveBeenCalled();
   });
@@ -57,7 +63,7 @@ describe("savePledgeAction", () => {
       ok: false,
       error: "Not signed in.",
     });
-    expect(await savePledgeAction({ kind: "tier", tierId: TIER })).toEqual({
+    expect(await savePledgeAction(PLEDGE)).toEqual({
       ok: false,
       error: "Not signed in.",
     });

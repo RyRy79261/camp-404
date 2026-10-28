@@ -16,6 +16,7 @@ export * from "./kitchen-menu";
 export * from "./dietary";
 export * from "./money";
 export * from "./dues";
+export * from "./camp-money";
 export * from "./rental";
 export * from "./task";
 export * from "./calendar";

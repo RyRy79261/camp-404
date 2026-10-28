@@ -1,3 +1,4 @@
+import { setPledgeTiming } from "./dues";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction, type PooledDatabase } from "./index";
 import * as schema from "./schema";
@@ -7,7 +8,10 @@ import { meetsRequiredVersion } from "./versions";
 import { currentCycleNumber } from "./cycles";
 import type { DbOrTx } from "./audit";
 import { lockOpenSend } from "./questionnaire-responses";
-import { applyParticipationIntent } from "./participations";
+import {
+  applyParticipationIntent,
+  listNotComingUserIds,
+} from "./participations";
 import {
   safeParseStoredDefinition,
   type Questionnaire,
@@ -206,7 +210,7 @@ async function pushRecipients(
   act: typeof schema.questionnaireActivations.$inferSelect,
 ): Promise<string[]> {
   const httpDb = createHttpDb();
-  const [members, memberships, targets] = await Promise.all([
+  const [members, memberships, targets, notComing] = await Promise.all([
     httpDb
       .select({
         id: schema.users.id,
@@ -231,6 +235,9 @@ async function pushRecipients(
       .select({ userId: schema.questionnaireActivationTargets.userId })
       .from(schema.questionnaireActivationTargets)
       .where(eq(schema.questionnaireActivationTargets.activationId, act.id)),
+    // Who said Not coming in the send's frozen year: a group send leaves them
+    // out (owner, 2026-10-27).
+    listNotComingUserIds(httpDb, act.cycle),
   ]);
 
   // Questionnaire scope never targets drivers; pass [] for that axis. No sender
@@ -242,6 +249,7 @@ async function pushRecipients(
       memberships,
       driverUserIds: [],
       targetUserIds: targets.map((t) => t.userId),
+      notComingUserIds: notComing,
     },
     null,
   );
@@ -343,7 +351,7 @@ export async function reconcileOpenActivations(
   ).filter((act) => PUSH_SCOPES.has(act.scope));
   if (open.length === 0) return 0;
 
-  const [meRows, memberships, targets, gates] = await Promise.all([
+  const [meRows, memberships, targets, gates, said] = await Promise.all([
     db
       .select({
         id: schema.users.id,
@@ -394,6 +402,14 @@ export async function reconcileOpenActivations(
           ),
         ),
       ),
+    // The member's own answers, every year: each send asks its own year.
+    db
+      .select({
+        cycle: schema.campParticipations.cycle,
+        status: schema.campParticipations.status,
+      })
+      .from(schema.campParticipations)
+      .where(eq(schema.campParticipations.userId, userId)),
   ]);
   const [me] = meRows;
   if (!me) return 0;
@@ -408,6 +424,11 @@ export async function reconcileOpenActivations(
         memberships: memberships.filter((m) => m.cycle === act.cycle),
         driverUserIds: [],
         targetUserIds: targets.some((t) => t.activationId === act.id)
+          ? [userId]
+          : [],
+        notComingUserIds: said.some(
+          (p) => p.cycle === act.cycle && p.status === "not_attending",
+        )
           ? [userId]
           : [],
       },
@@ -1024,6 +1045,17 @@ async function writeRoleMirror(
       userId: input.userId,
       cycle: input.cycle,
       intent: participation.intent,
+      now,
+    });
+  }
+  const feeTiming = input.mirror?.feeTiming;
+  if (feeTiming) {
+    // The camp fee's "by when" for the send's year (a fee_timing question),
+    // in the same transaction as the answer.
+    await setPledgeTiming(tx, {
+      userId: input.userId,
+      cycle: input.cycle,
+      payBy: feeTiming.payBy,
       now,
     });
   }

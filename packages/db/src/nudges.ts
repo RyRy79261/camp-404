@@ -27,7 +27,8 @@ export async function openNudges(
     actionKey: string;
     title: string;
     refType: string;
-    notice: (requiredActionId: string) => NotificationPayload;
+    /** The notice for one member: their action row's id, and who they are. */
+    notice: (requiredActionId: string, userId: string) => NotificationPayload;
     now: Date;
   },
 ): Promise<number> {
@@ -75,7 +76,7 @@ export async function openNudges(
   if (toNotify.length > 0) {
     await tx.insert(schema.notificationDeliveries).values(
       toNotify.map((row) =>
-        deliveryValues(input.notice(row.id), {
+        deliveryValues(input.notice(row.id, row.userId), {
           userId: row.userId,
           broadcastId: null,
           channel: "both",

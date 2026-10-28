@@ -20,7 +20,9 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
+  CAMP_BILL_REPEATS,
   CHARGE_KINDS,
+  FEE_TIMINGS,
   CLAIM_ACCOUNT_TYPES,
   CLAIM_STATUSES,
   CURRENT_KINDS,
@@ -85,6 +87,7 @@ import {
   type DutyCard,
   type DutyCardDraft,
   type JoinSiteContent,
+  type CampBankDetails,
   type CampLayout,
   type KitchenRecipe,
   type PlateLine,
@@ -228,6 +231,10 @@ export const duesChargeKindEnum = pgEnum("dues_charge_kind", CHARGE_KINDS);
 export const paymentMethodEnum = pgEnum("payment_method", PAYMENT_METHODS);
 export const paymentSourceEnum = pgEnum("payment_source", PAYMENT_SOURCES);
 export const refundStatusEnum = pgEnum("refund_status", REFUND_STATUSES);
+// Camp fees (2026-10-27). Mirror FEE_TIMINGS (dues.ts) and CAMP_BILL_REPEATS
+// (camp-money.ts) in @camp404/types.
+export const feeTimingEnum = pgEnum("fee_timing", FEE_TIMINGS);
+export const campBillRepeatEnum = pgEnum("camp_bill_repeat", CAMP_BILL_REPEATS);
 
 // Mirrors CLAIM_ACCOUNT_TYPES in @camp404/types claims.ts.
 export const reimbursementAccountTypeEnum = pgEnum(
@@ -1197,6 +1204,10 @@ export const duesYears = pgTable(
     fullRefundUntil: date("full_refund_until", { mode: "string" }),
     partialRefundUntil: date("partial_refund_until", { mode: "string" }),
     partialRefundPct: integer("partial_refund_pct"),
+    // "Collecting fees" (owner, 2026-10-27): while on, a member who owes sees
+    // how to pay and Finance may send reminders. Switched by a compare-and-set
+    // on `version`, audited (dues.collecting_set).
+    collectingFees: boolean("collecting_fees").notNull().default(false),
     version: integer("version").notNull().default(0),
     updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -1211,8 +1222,11 @@ export const duesYears = pgTable(
   }),
 );
 
-// The year's fee tiers: what a member may pledge. A tier with pledges is
-// archived, never deleted, so a pledge keeps its label.
+// The year's fee tiers. [CORRECTION 2026-10-27] No longer what a member may
+// pledge: the owner dropped fixed fees, and a pledge is the member's own
+// amount (dues_accounts). The scale's names and amounts are the Join site's
+// (join_site_content `fee`); this table is not a second source of amounts.
+// Kept so a pledge made on a tier before keeps its label.
 export const feeTiers = pgTable(
   "fee_tiers",
   {
@@ -1236,9 +1250,13 @@ export const feeTiers = pgTable(
   }),
 );
 
-// A member's dues account for one year: their pledge (a tier, or an amount
-// below the lowest tier, which is a valid answer), and the version of their
-// payment plan, so a plan edit is a compare-and-set.
+// A member's dues account for one year: their pledge, and the version of their
+// payment plan, so a plan edit is a compare-and-set. [CORRECTION 2026-10-27]
+// A pledge is any whole-rand amount the member commits (no tiers), when they
+// can pay it (`pay_by`, one of six fixed answers, also written by a builder
+// questionnaire's fee_timing question) and whether they asked for a subsidy
+// (then R0 is fine and `pay_by` optional). A pledge made on a tier before
+// keeps `pledged_tier_id` for its label.
 export const duesAccounts = pgTable(
   "dues_accounts",
   {
@@ -1252,6 +1270,8 @@ export const duesAccounts = pgTable(
     // The amount pledged, kept even when the tier is archived.
     pledgedAmountCents: integer("pledged_amount_cents"),
     pledgedAt: timestamp("pledged_at", { mode: "date" }),
+    payBy: feeTimingEnum("pay_by"),
+    subsidy: boolean("subsidy").notNull().default(false),
     planVersion: integer("plan_version").notNull().default(0),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -1260,7 +1280,7 @@ export const duesAccounts = pgTable(
     pk: primaryKey({ columns: [a.userId, a.cycle] }),
     pledgeCheck: check(
       "dues_accounts_pledge_check",
-      sql`${a.pledgedAmountCents} is null or ${a.pledgedAmountCents} > 0`,
+      sql`${a.pledgedAmountCents} is null or ${a.pledgedAmountCents} > 0 or (${a.subsidy} and ${a.pledgedAmountCents} = 0)`,
     ),
   }),
 );
@@ -1373,6 +1393,125 @@ export const duesInstalments = pgTable(
       "dues_instalments_currency_check",
       sql`${i.currency} = 'ZAR'`,
     ),
+  }),
+);
+
+// --- The camp's own money (camp fees sprint, 2026-10-27) -------------------
+// What the camp has and must pay, beside the members' dues: where members pay
+// the camp, the bank balance Finance types in, and the camp's bills. Read and
+// written by the Finance team (MONEY_KEEPER); every write a compare-and-set
+// with its audit row in the same transaction. Not year-scoped: a bill or a
+// balance runs across the burn year's boundary.
+
+// Where members pay the camp (one row): an account in South Africa and what
+// someone paying from abroad needs, a Zod-checked document (CampBankDetails in
+// @camp404/types). The camp's own account, shown to every member who owes, so
+// it is not encrypted like a member's bank details. Nothing is seeded.
+export const campBankDetails = pgTable(
+  "camp_bank_details",
+  {
+    id: boolean("id").primaryKey().default(true),
+    details: jsonb("details").$type<CampBankDetails>().notNull(),
+    version: integer("version").notNull().default(1),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (b) => ({
+    oneRow: check("camp_bank_details_one_row", sql`${b.id}`),
+  }),
+);
+
+// What the bank showed on a day, as Finance typed it. Every balance is kept
+// (the latest by `as_of`, then when it was typed, is the one the forecast
+// reads); below zero is an overdraft.
+export const campBalances = pgTable(
+  "camp_balances",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    asOf: date("as_of", { mode: "string" }).notNull(),
+    recordedByUserId: uuid("recorded_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (b) => ({
+    asOfIdx: index("camp_balances_as_of_idx").on(b.asOf, b.createdAt),
+    currencyCheck: check(
+      "camp_balances_currency_check",
+      sql`${b.currency} = 'ZAR'`,
+    ),
+  }),
+);
+
+// A bill the camp must pay: one time, or monthly for `times` months from
+// `due_on`. `paid_count` says how many of its payments are paid (a one-time
+// bill: 0 or 1); a bill is paid once they all are. `planned` marks one not
+// committed yet. Removed, never deleted (`removed_at`), so its audit rows
+// still name it. `version` makes each change a compare-and-set.
+export const campBills = pgTable(
+  "camp_bills",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    payee: text("payee"),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("ZAR"),
+    dueOn: date("due_on", { mode: "string" }).notNull(),
+    repeat: campBillRepeatEnum("repeat").notNull().default("once"),
+    times: integer("times").notNull().default(1),
+    paidCount: integer("paid_count").notNull().default(0),
+    // The day the latest payment was made.
+    paidOn: date("paid_on", { mode: "string" }),
+    planned: boolean("planned").notNull().default(false),
+    version: integer("version").notNull().default(1),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    removedAt: timestamp("removed_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (b) => ({
+    dueIdx: index("camp_bills_due_on_idx").on(b.dueOn),
+    amountCheck: check("camp_bills_amount_check", sql`${b.amountCents} > 0`),
+    currencyCheck: check(
+      "camp_bills_currency_check",
+      sql`${b.currency} = 'ZAR'`,
+    ),
+    timesCheck: check(
+      "camp_bills_times_check",
+      sql`${b.times} between 1 and 60 and (${b.repeat} = 'monthly' or ${b.times} = 1)`,
+    ),
+    paidCheck: check(
+      "camp_bills_paid_count_check",
+      sql`${b.paidCount} between 0 and ${b.times}`,
+    ),
+  }),
+);
+
+// The automatic camp fee reminder (camp fees sprint, 2026-10-27): one row per
+// member, year and instalment day it went out for, so the page-load reminder
+// (runDueWork) reminds a member once per instalment, never on every load.
+export const feePaymentReminders = pgTable(
+  "fee_payment_reminders",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycle: integer("cycle").notNull(),
+    // The instalment's day.
+    dueOn: date("due_on", { mode: "string" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (r) => ({
+    pk: primaryKey({ columns: [r.userId, r.cycle, r.dueOn] }),
   }),
 );
 

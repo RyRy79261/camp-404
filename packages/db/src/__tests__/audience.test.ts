@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeAudience,
+  splitAudience,
   type AudienceData,
   type BroadcastScope,
 } from "../audience";
@@ -25,6 +26,7 @@ const data: AudienceData = {
   ],
   driverUserIds: ["u3"],
   targetUserIds: ["u2"],
+  notComingUserIds: [],
 };
 
 describe("computeAudience — scope exhaustiveness", () => {
@@ -84,6 +86,7 @@ describe("computeAudience — applicants are not members yet", () => {
     ],
     driverUserIds: ["member", "rejected"],
     targetUserIds: ["pending"],
+    notComingUserIds: [],
   };
 
   it("leaves pending and rejected applicants out of every group audience", () => {
@@ -138,5 +141,73 @@ describe("computeAudience — the car", () => {
     expect(computeAudience({ scope: "car", team: null }, data, "u3")).toEqual(
       [],
     );
+  });
+});
+
+describe("splitAudience — Not coming = no group sends (owner, 2026-10-27)", () => {
+  // u1 is a captain who leads kitchen and drives; u2 is in kitchen; u3 is a
+  // plain member. u1 and u3 said Not coming this year.
+  const camp: AudienceData = {
+    members: [
+      {
+        id: "u1",
+        isSystem: false,
+        sanitised: false,
+        approvalStatus: "approved",
+      },
+      {
+        id: "u2",
+        isSystem: false,
+        sanitised: false,
+        approvalStatus: "approved",
+      },
+      {
+        id: "u3",
+        isSystem: false,
+        sanitised: false,
+        approvalStatus: "approved",
+      },
+    ],
+    memberships: [
+      { userId: "u1", team: "kitchen", isLead: true },
+      { userId: "u2", team: "kitchen", isLead: false },
+    ],
+    driverUserIds: ["u1", "u2"],
+    targetUserIds: ["u1", "u3"],
+    carRiderUserIds: ["u1", "u2"],
+    notComingUserIds: ["u1", "u3"],
+  };
+
+  it("leaves who said Not coming out of every group scope, and says who", () => {
+    expect(
+      splitAudience({ scope: "everyone", team: null }, camp, null),
+    ).toEqual({ reaches: ["u2"], notComing: ["u1", "u3"] });
+    for (const scope of ["team", "drivers", "car"] as const) {
+      expect(splitAudience({ scope, team: "kitchen" }, camp, null)).toEqual({
+        reaches: ["u2"],
+        notComing: ["u1"],
+      });
+    }
+    expect(
+      splitAudience({ scope: "team_leads", team: null }, camp, null),
+    ).toEqual({ reaches: [], notComing: ["u1"] });
+  });
+
+  it("still reaches people picked by name, whatever they said", () => {
+    expect(
+      splitAudience({ scope: "individual", team: null }, camp, null),
+    ).toEqual({ reaches: ["u1", "u3"], notComing: [] });
+  });
+
+  it("counts the sender in neither list", () => {
+    expect(
+      splitAudience({ scope: "everyone", team: null }, camp, "u1"),
+    ).toEqual({ reaches: ["u2"], notComing: ["u3"] });
+  });
+
+  it("computeAudience is the reaches half", () => {
+    expect(
+      computeAudience({ scope: "everyone", team: null }, camp, null),
+    ).toEqual(["u2"]);
   });
 });

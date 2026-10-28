@@ -7,18 +7,23 @@ import {
   feeStandardCents,
   isFeeConcession,
   MAX_FEE_TIERS,
-  NO_TIERS_YET,
-  PLEDGE_NOT_BELOW,
+  COLLECTING_CHANGED,
+  FEE_ALREADY_SET,
+  FEE_PLEDGE_ACTION_KEY,
+  FEE_PLEDGE_REF_TYPE,
+  feeFigures,
+  pledgeRefusal,
   proposeRefund,
   refundAmount,
   REFUND_TOO_LARGE,
-  resolvePledge,
   SETTLE_UP_CHANGED,
   SETTLE_UP_NOBODY,
   settleUpCharges,
   TIER_GONE,
   TOO_MANY_TIERS,
   type DuesBalance,
+  type Instalment,
+  type NextFeePayment,
   type NextInstalment,
   type PaymentFigures,
   type RefundRule,
@@ -29,6 +34,7 @@ import type {
   ChargeInput,
   DuesYearInput,
   FeeTierInput,
+  FeeTiming,
   ParticipationStatus,
   PaymentMethod,
   PaymentPlanInput,
@@ -39,6 +45,7 @@ import type {
   SettleUpInput,
 } from "@camp404/types";
 import { lockAllowed } from "./actor";
+import { closeNudge } from "./nudges";
 import { writeAuditEvent, type DbOrTx } from "./audit";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
@@ -73,16 +80,14 @@ export const YEAR_CHANGED =
 // The sentences of the rules both dues stores share live with those rules in
 // @camp404/core; they are named here too, beside the rest.
 export {
-  NO_TIERS_YET,
-  PLEDGE_NOT_BELOW,
+  COLLECTING_CHANGED,
+  FEE_ALREADY_SET,
   REFUND_TOO_LARGE,
   SETTLE_UP_CHANGED,
   SETTLE_UP_NOBODY,
   TIER_GONE,
   TOO_MANY_TIERS,
 };
-export const FEE_ALREADY_SET =
-  "Your camp fee is already set. Ask the Finance team if it needs to change.";
 export const FEE_CHANGED =
   "Someone changed this member's fee first. Reload the page.";
 export const CHARGE_GONE =
@@ -116,7 +121,7 @@ export class MoneyRefused extends Error {
   }
 }
 
-function refuse(sentence: string): never {
+export function refuse(sentence: string): never {
   throw new MoneyRefused(sentence);
 }
 
@@ -129,7 +134,7 @@ function isUniqueViolation(err: unknown): boolean {
   return false;
 }
 
-async function write<T extends object>(
+export async function write<T extends object>(
   fn: (tx: Tx) => Promise<T>,
   onUnique?: string,
 ): Promise<MoneyResult<T>> {
@@ -146,7 +151,10 @@ async function write<T extends object>(
   }
 }
 
-async function assertMoneyKeeper(tx: Tx, actorId: string): Promise<void> {
+export async function assertMoneyKeeper(
+  tx: Tx,
+  actorId: string,
+): Promise<void> {
   if (!(await lockAllowed(tx, actorId, MONEY_KEEPER))) {
     refuse(NOT_A_MONEY_KEEPER);
   }
@@ -177,6 +185,8 @@ export interface DuesYear {
   fullRefundUntil: string | null;
   partialRefundUntil: string | null;
   partialRefundPct: number | null;
+  /** While on, a member who owes sees how to pay, and reminders may go. */
+  collectingFees: boolean;
   /** 0 before anyone saved the year. */
   version: number;
 }
@@ -188,6 +198,7 @@ function emptyYear(cycle: number): DuesYear {
     fullRefundUntil: null,
     partialRefundUntil: null,
     partialRefundPct: null,
+    collectingFees: false,
     version: 0,
   };
 }
@@ -209,6 +220,7 @@ export async function getDuesYear(
     fullRefundUntil: row.fullRefundUntil,
     partialRefundUntil: row.partialRefundUntil,
     partialRefundPct: row.partialRefundPct,
+    collectingFees: row.collectingFees,
     version: row.version,
   };
 }
@@ -258,6 +270,53 @@ export async function saveDuesYear(
         partialRefundUntil: input.partialRefundUntil,
         partialRefundPct: input.partialRefundPct,
       },
+    });
+    return { version: next };
+  });
+}
+
+/**
+ * Switch collecting the year's fees on or off (owner, 2026-10-27). A
+ * compare-and-set on the year's version the actor saw, audited.
+ */
+export async function setCollectingFees(input: {
+  cycle: number;
+  on: boolean;
+  expectedVersion: number;
+  actorId: string;
+}): Promise<MoneyResult<{ version: number }>> {
+  return write(async (tx) => {
+    await assertMoneyKeeper(tx, input.actorId);
+    const next = input.expectedVersion + 1;
+    const values = {
+      collectingFees: input.on,
+      updatedByUserId: input.actorId,
+      updatedAt: new Date(),
+      version: next,
+    };
+    const rows =
+      input.expectedVersion === 0
+        ? await tx
+            .insert(schema.duesYears)
+            .values({ cycle: input.cycle, ...values })
+            .onConflictDoNothing({ target: schema.duesYears.cycle })
+            .returning({ version: schema.duesYears.version })
+        : await tx
+            .update(schema.duesYears)
+            .set(values)
+            .where(
+              and(
+                eq(schema.duesYears.cycle, input.cycle),
+                eq(schema.duesYears.version, input.expectedVersion),
+              ),
+            )
+            .returning({ version: schema.duesYears.version });
+    if (rows.length === 0) refuse(COLLECTING_CHANGED);
+    await writeAuditEvent(tx, {
+      actorId: input.actorId,
+      action: "dues.collecting_set",
+      target: String(input.cycle),
+      metadata: { cycle: input.cycle, on: input.on },
     });
     return { version: next };
   });
@@ -402,8 +461,9 @@ export async function archiveFeeTier(input: {
 // --- A member's account --------------------------------------------------------------
 
 export interface Pledge {
+  /** Only a pledge made on a fee tier before 2026-10-27 has one. */
   tierId: string | null;
-  /** The tier's label, or null for a pledge below the lowest tier. */
+  /** That tier's label, else null (a pledge of the member's own amount). */
   tierLabel: string | null;
   amountCents: number;
   pledgedAt: Date | null;
@@ -461,6 +521,10 @@ export interface MemberDues {
   name: string;
   refCode: string | null;
   pledge: Pledge | null;
+  /** When they said they can pay (their pledge, or a fee_timing answer). */
+  payBy: FeeTiming | null;
+  /** They asked for a subsidy: talk to them; no fee reminders. */
+  subsidy: boolean;
   planVersion: number;
   instalments: { dueOn: string; amountCents: number }[];
   charges: DuesChargeRow[];
@@ -472,6 +536,15 @@ export interface MemberDues {
   } | null;
   balance: DuesBalance;
   next: NextInstalment | null;
+  /** The burn year the fees are for (feeBurnYear: the cycle, or the next
+   * AfrikaBurn when no year is set). Name a "by when" with it. */
+  burnYear: number;
+  /** What the fee is: the live camp fee, else the pledge, else 0. */
+  feeTotalCents: number;
+  /** What is still owed of it after every payment received or waived. */
+  feeOwingCents: number;
+  /** Their next fee payment: the plan's, else the pledge's "by when". */
+  feeNext: NextFeePayment;
 }
 
 /**
@@ -505,6 +578,8 @@ export async function getMemberDues(
           tierLabel: schema.feeTiers.label,
           amountCents: schema.duesAccounts.pledgedAmountCents,
           pledgedAt: schema.duesAccounts.pledgedAt,
+          payBy: schema.duesAccounts.payBy,
+          subsidy: schema.duesAccounts.subsidy,
           planVersion: schema.duesAccounts.planVersion,
         })
         .from(schema.duesAccounts)
@@ -639,6 +714,8 @@ export async function getMemberDues(
             pledgedAt: account.pledgedAt,
           }
         : null,
+    payBy: account?.payBy ?? null,
+    subsidy: account?.subsidy ?? false,
     planVersion: account?.planVersion ?? 0,
     instalments,
     charges: chargeRows,
@@ -654,6 +731,18 @@ export async function getMemberDues(
       : null,
     balance,
     next: nextInstalment(instalments, balance.paidCents, today),
+    ...feeFigures({
+      liveFeeCents:
+        charges.find((c) => c.kind === "fee" && c.cancelledAt === null)
+          ?.amountCents ?? null,
+      pledgedCents: account?.amountCents ?? null,
+      payBy: account?.payBy ?? null,
+      subsidy: account?.subsidy ?? false,
+      paidCents: balance.paidCents,
+      plan: instalments,
+      cycle,
+      today,
+    }),
   };
 }
 
@@ -684,7 +773,11 @@ export async function chargeFeeFromPledge(
       ),
     )
     .limit(1);
-  if (!account || account.amountCents === null) return false;
+  // A subsidy pledge of R0 charges nothing: the Finance team sets their fee
+  // after the talk.
+  if (!account || account.amountCents === null || account.amountCents <= 0) {
+    return false;
+  }
   const description = account.tierLabel
     ? `Camp fee: ${account.tierLabel}`
     : "Camp fee: pledged amount";
@@ -718,9 +811,11 @@ export async function chargeFeeFromPledge(
 }
 
 /**
- * A member pledges what they can pay this year: a tier, or an amount below the
- * lowest tier. Refused once their fee is charged (the Finance team changes it
- * then). A member already accepted is charged the fee at once.
+ * A member pledges what they can pay this year: their own whole-rand amount,
+ * when they can pay it, and whether they need a subsidy (owner, 2026-10-27).
+ * Once their fee is charged the amount is the Finance team's to change, so a
+ * new amount is refused; a new "by when" or subsidy answer is still saved. A
+ * member already accepted is charged the fee at once.
  */
 export async function savePledge(input: {
   userId: string;
@@ -729,14 +824,9 @@ export async function savePledge(input: {
 }): Promise<MoneyResult<{ charged: boolean }>> {
   return write(async (tx) => {
     await assertMember(tx, input.userId);
-    const pledged = resolvePledge(
-      input.pledge,
-      await listFeeTiers(input.cycle, {}, tx),
-    );
-    if (typeof pledged === "string") refuse(pledged);
-    const { tierId, amountCents } = pledged;
+    const { amountCents, payBy, subsidy } = input.pledge;
     const [fee] = await tx
-      .select({ id: schema.duesCharges.id })
+      .select({ amountCents: schema.duesCharges.amountCents })
       .from(schema.duesCharges)
       .where(
         and(
@@ -748,26 +838,47 @@ export async function savePledge(input: {
       )
       .limit(1)
       .for("update");
-    if (fee) refuse(FEE_ALREADY_SET);
+    const [account] = await tx
+      .select({ amountCents: schema.duesAccounts.pledgedAmountCents })
+      .from(schema.duesAccounts)
+      .where(
+        and(
+          eq(schema.duesAccounts.userId, input.userId),
+          eq(schema.duesAccounts.cycle, input.cycle),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    const refusal = pledgeRefusal({
+      feeCents: fee?.amountCents ?? null,
+      pledgedCents: account?.amountCents ?? null,
+      amountCents,
+    });
+    if (refusal) refuse(refusal);
     const now = new Date();
+    // The member's own amount: a pledge made on a tier before loses the tier
+    // once they pledge again.
+    const values = {
+      pledgedTierId: null,
+      pledgedAmountCents: amountCents,
+      pledgedAt: now,
+      payBy,
+      subsidy,
+    };
     await tx
       .insert(schema.duesAccounts)
-      .values({
-        userId: input.userId,
-        cycle: input.cycle,
-        pledgedTierId: tierId,
-        pledgedAmountCents: amountCents,
-        pledgedAt: now,
-      })
+      .values({ userId: input.userId, cycle: input.cycle, ...values })
       .onConflictDoUpdate({
         target: [schema.duesAccounts.userId, schema.duesAccounts.cycle],
-        set: {
-          pledgedTierId: tierId,
-          pledgedAmountCents: amountCents,
-          pledgedAt: now,
-          updatedAt: now,
-        },
+        set: { ...values, updatedAt: now },
       });
+    // The Finance team's "Ask everyone to pledge", answered.
+    await closeNudge(tx, {
+      userId: input.userId,
+      actionKey: FEE_PLEDGE_ACTION_KEY,
+      refType: FEE_PLEDGE_REF_TYPE,
+      now,
+    });
     const [place] = await tx
       .select({ status: schema.campParticipations.status })
       .from(schema.campParticipations)
@@ -792,6 +903,25 @@ export async function savePledge(input: {
         : false;
     return { charged };
   });
+}
+
+/**
+ * The "by when" a fee_timing question's answer gives (the builder runner's
+ * role mirror), inside the caller's transaction. Only the timing: the amount
+ * and the subsidy answer stay as they are.
+ */
+export async function setPledgeTiming(
+  tx: DbOrTx,
+  input: { userId: string; cycle: number; payBy: FeeTiming; now?: Date },
+): Promise<void> {
+  const now = input.now ?? new Date();
+  await tx
+    .insert(schema.duesAccounts)
+    .values({ userId: input.userId, cycle: input.cycle, payBy: input.payBy })
+    .onConflictDoUpdate({
+      target: [schema.duesAccounts.userId, schema.duesAccounts.cycle],
+      set: { payBy: input.payBy, updatedAt: now },
+    });
 }
 
 /**
@@ -1028,8 +1158,11 @@ export interface DuesAccountRow {
   name: string;
   refCode: string | null;
   participation: ParticipationStatus | null;
+  /** The fee tier's label of a pledge made on one before 2026-10-27. */
   pledgeLabel: string | null;
   pledgeCents: number | null;
+  payBy: FeeTiming | null;
+  subsidy: boolean;
   /** The live camp fee, or null when none is charged. */
   feeCents: number | null;
   /** The live fee was lowered or given with a reason. */
@@ -1042,17 +1175,27 @@ export interface DuesAccountRow {
   figures: PaymentFigures;
   /** Refunds asked for and not decided. */
   openRefunds: number;
+  /** The Finance team's payment plan, by day (empty: none). */
+  plan: Instalment[];
+  /** The burn year the fees are for (feeBurnYear: the cycle, or the next
+   * AfrikaBurn when no year is set). Name a "by when" with it. */
+  burnYear: number;
+  /** What the fee is: the live camp fee, else the pledge, else 0. */
+  feeTotalCents: number;
+  feeOwingCents: number;
+  feeNext: NextFeePayment;
 }
 
 /**
  * Every member's dues for a year, for the Finance team's list of who owes
  * what: approved, real, not erased. Six reads side by side, joined here.
+ * Inside a transaction (the fee reminders) pass its `tx`.
  */
 export async function listDuesAccounts(
   cycle: number,
   today: string,
+  db: DbOrTx = createHttpDb(),
 ): Promise<DuesAccountRow[]> {
-  const db = createHttpDb();
   const [members, accounts, charges, payments, refunds, instalments] =
     await Promise.all([
       db
@@ -1082,6 +1225,8 @@ export async function listDuesAccounts(
           userId: schema.duesAccounts.userId,
           label: schema.feeTiers.label,
           amountCents: schema.duesAccounts.pledgedAmountCents,
+          payBy: schema.duesAccounts.payBy,
+          subsidy: schema.duesAccounts.subsidy,
         })
         .from(schema.duesAccounts)
         .leftJoin(
@@ -1152,6 +1297,9 @@ export async function listDuesAccounts(
       });
       const fee = mine.find((c) => c.kind === "fee");
       const account = accountOf.get(m.id);
+      const plan = (plansOf.get(m.id) ?? [])
+        .map((i) => ({ dueOn: i.dueOn, amountCents: i.amountCents }))
+        .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
       return {
         userId: m.id,
         name: m.name?.trim() || "Unnamed burner",
@@ -1160,15 +1308,28 @@ export async function listDuesAccounts(
         pledgeLabel:
           account?.amountCents != null ? (account.label ?? null) : null,
         pledgeCents: account?.amountCents ?? null,
+        payBy: account?.payBy ?? null,
+        subsidy: account?.subsidy ?? false,
         feeCents: fee?.amountCents ?? null,
         concession: fee ? isFeeConcession(fee) : false,
         balance,
-        next: nextInstalment(plansOf.get(m.id) ?? [], balance.paidCents, today),
+        next: nextInstalment(plan, balance.paidCents, today),
         pendingProofs: paid.filter(
           (p) => p.status === "pending" && p.source === "member",
         ).length,
         figures: paymentFigures(paid),
         openRefunds: refunded.filter((r) => r.status === "requested").length,
+        plan,
+        ...feeFigures({
+          liveFeeCents: fee?.amountCents ?? null,
+          pledgedCents: account?.amountCents ?? null,
+          payBy: account?.payBy ?? null,
+          subsidy: account?.subsidy ?? false,
+          paidCents: balance.paidCents,
+          plan,
+          cycle,
+          today,
+        }),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));

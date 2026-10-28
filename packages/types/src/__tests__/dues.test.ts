@@ -92,13 +92,35 @@ describe("dues shapes", () => {
     );
   });
 
-  it("reads the other shapes", () => {
-    expect(PledgeInput.safeParse({ kind: "tier", tierId: TIER }).success).toBe(
+  it("takes any whole-rand pledge with a by-when, or a subsidy with R0", () => {
+    const pledge = (over: Record<string, unknown>) =>
+      PledgeInput.safeParse({
+        amountCents: 720_000,
+        payBy: "part_by_end_nov",
+        subsidy: false,
+        ...over,
+      });
+    expect(pledge({}).success).toBe(true);
+    expect(pledge({ amountCents: 5_000_000 }).success).toBe(true);
+    expect(first(pledge({ amountCents: 720_050 }))).toBe(
+      "Type a whole number of rands.",
+    );
+    expect(first(pledge({ amountCents: 0 }))).toBe(
+      "The amount must be more than R0, or tick that you need a subsidy.",
+    );
+    expect(first(pledge({ payBy: null }))).toBe("Pick when you can pay it.");
+    expect(first(pledge({ payBy: "someday" }))).toBe(
+      "Pick when you can pay it.",
+    );
+    expect(pledge({ amountCents: 0, payBy: null, subsidy: true }).success).toBe(
       true,
     );
-    expect(
-      PledgeInput.safeParse({ kind: "below", amountCents: 5 }).success,
-    ).toBe(true);
+    expect(first(pledge({ amountCents: -100, subsidy: true }))).toBe(
+      "The amount can't be below R0.",
+    );
+  });
+
+  it("reads the other shapes", () => {
     expect(
       ChargeInput.safeParse({
         userId: "m1",

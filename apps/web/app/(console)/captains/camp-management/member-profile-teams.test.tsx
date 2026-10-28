@@ -12,6 +12,7 @@ vi.mock("./actions", () => ({
   setTeamLeadAction: vi.fn(),
   sendCaptainPromotionAction: vi.fn(),
   cancelCaptainPromotionAction: vi.fn(),
+  sendPasswordResetLinkAction: vi.fn(),
 }));
 
 import { MemberProfile } from "./member-profile";
@@ -62,6 +63,7 @@ function loaded(overrides: Record<string, unknown> = {}) {
       profileSections: [],
     },
     canAssignCaptain: false,
+    signInEmail: "lerato.m@gmail.com",
     promotionStep: { sent: false, accepted: false },
     promotionRequestId: null,
     promotionRequestIsMine: false,

@@ -272,6 +272,7 @@ describe("saveBuilderResponses cycle stamping", () => {
         dietary: null,
         driver: null,
         participation: null,
+        feeTiming: null,
       },
     );
   });
@@ -311,6 +312,7 @@ describe("saveBuilderResponses cycle stamping", () => {
         dietary: null,
         driver: { intendsToDrive: true },
         participation: null,
+        feeTiming: null,
       },
     );
   });
@@ -426,6 +428,7 @@ describe("saveBuilderResponses final submit on the unified model", () => {
       dietary: { allergies: null },
       driver: null,
       participation: null,
+      feeTiming: null,
     });
   });
 });

@@ -3,6 +3,7 @@ import {
   approvalDecisionReason,
   approvalNotification,
   isReviewTransition,
+  type ProfileFacts,
 } from "@camp404/core";
 import type {
   ApprovalStatus,
@@ -629,4 +630,44 @@ export async function saveBurnerProfileReplay(
     }
     return true;
   });
+}
+
+/**
+ * What the "Your profile isn't finished" checklist reads about a member
+ * (`ProfileFacts` in @camp404/core), from their own row in one query: their
+ * approval, whether a blocking questionnaire holds them, their name, Telegram
+ * username and connection, and whether they gave an emergency contact (only
+ * whether: the contacts themselves are not read). Null for no such member.
+ */
+export async function getProfileFacts(
+  userId: string,
+): Promise<ProfileFacts | null> {
+  const [row] = await createHttpDb()
+    .select({
+      approvalStatus: schema.users.approvalStatus,
+      displayName: schema.users.displayName,
+      telegramHandle: schema.users.telegramHandle,
+      telegramDmAt: schema.users.telegramDmAt,
+      hasEmergencyContact: sql<boolean>`coalesce(jsonb_array_length(${schema.users.emergencyContacts}), 0) > 0`,
+      held: sql<boolean>`exists (
+        select 1 from ${schema.requiredActions}
+        -- Spelled out: drizzle leaves a select field's columns unqualified,
+        -- so a bare "id" here would be the action's own id.
+        where "required_actions"."user_id" = "users"."id"
+          and ${schema.requiredActions.status} = 'pending'
+          and ${schema.requiredActions.blocking} = true
+      )`,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  if (!row) return null;
+  return {
+    approved: row.approvalStatus === "approved",
+    held: row.held,
+    displayName: row.displayName,
+    telegramHandle: row.telegramHandle,
+    telegramConnected: row.telegramDmAt !== null,
+    hasEmergencyContact: row.hasEmergencyContact,
+  };
 }

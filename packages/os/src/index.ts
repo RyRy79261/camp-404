@@ -128,3 +128,9 @@ export {
 } from "./tray";
 export { focusFirst, tabStops, trapTab } from "./focus";
 export { OS_BUTTON_PRIMARY, OS_BUTTON_SECONDARY } from "./buttons";
+export {
+  FeeScaleTrack,
+  feeScaleMax,
+  type FeeScaleMark,
+  type FeeScaleTrackProps,
+} from "./fee-scale-track";

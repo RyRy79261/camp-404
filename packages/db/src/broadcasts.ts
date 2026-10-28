@@ -28,7 +28,12 @@ import {
 import { deliveryValues } from "./deliveries";
 import { createHttpDb, withTransaction } from "./index";
 import * as schema from "./schema";
-import { computeAudience, type BroadcastScope } from "./audience";
+import {
+  splitAudience,
+  type AudienceSplit,
+  type BroadcastScope,
+} from "./audience";
+import { listNotComingUserIds } from "./participations";
 import { currentCycleNumber } from "./cycles";
 import { queueTelegramPosts } from "./telegram-posts";
 
@@ -220,6 +225,62 @@ export async function countAnnouncementAudience(
   return ids.length;
 }
 
+/** A member a group send leaves out, by name, for the send screens. */
+export interface LeftOutMember {
+  id: string;
+  name: string;
+}
+
+/** Who a publish to an audience would reach, and who it would leave out. */
+export interface AnnouncementAudiencePreview {
+  reaches: number;
+  /** Said Not coming this year, by name. The caller decides who reads names. */
+  notComing: LeftOutMember[];
+}
+
+/**
+ * The composer's line under "Who it's for": how many members a publish would
+ * reach right now, and the members it leaves out because they said Not coming
+ * this year (owner, 2026-10-27). The same audience publishAnnouncement fans
+ * out to.
+ */
+export async function previewAnnouncementAudience(
+  senderId: string,
+  audience: Audience = { scope: "everyone" },
+): Promise<AnnouncementAudiencePreview> {
+  const db = createHttpDb();
+  const split = await resolveAudienceSplit(
+    {
+      id: "",
+      ...audienceColumns(audience),
+      targetUserIds: audienceTargets(audience),
+    },
+    senderId,
+    db,
+  );
+  return {
+    reaches: split.reaches.length,
+    notComing: await leftOutNames(db, split.notComing),
+  };
+}
+
+/** The display names of members a send leaves out, A to Z. */
+export async function leftOutNames(
+  db: DbOrTx,
+  ids: readonly string[],
+): Promise<LeftOutMember[]> {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({ id: schema.users.id, name: schema.users.displayName })
+    .from(schema.users)
+    .where(inArray(schema.users.id, [...ids]));
+  return rows
+    .map((r) => ({ id: r.id, name: r.name?.trim() || "Camp member" }))
+    .sort(
+      (a, b) => a.name.localeCompare(b.name, "en") || a.id.localeCompare(b.id),
+    );
+}
+
 /**
  * Recipient user ids for a broadcast, resolved by scope — the single audience
  * primitive the inline publish and the scheduled dispatch worker share. Reads
@@ -246,9 +307,21 @@ export async function resolveAudience(
   senderId: string | null,
   db: DbOrTx = createHttpDb(),
 ): Promise<string[]> {
+  return (await resolveAudienceSplit(broadcast, senderId, db)).reaches;
+}
+
+/**
+ * {@link resolveAudience}, with the members the group left out because they
+ * said Not coming this year. The composer's preview shows them.
+ */
+export async function resolveAudienceSplit(
+  broadcast: Parameters<typeof resolveAudience>[0],
+  senderId: string | null,
+  db: DbOrTx = createHttpDb(),
+): Promise<AudienceSplit> {
   const cycle = await currentCycleNumber(db);
-  const [members, memberships, drivers, targets, carRiders] = await Promise.all(
-    [
+  const [members, memberships, drivers, targets, carRiders, notComing] =
+    await Promise.all([
       db
         .select({
           id: schema.users.id,
@@ -285,10 +358,10 @@ export async function resolveAudience(
       broadcast.scope === "car" && senderId
         ? carRidersOf(db, senderId, cycle)
         : Promise.resolve([] as { userId: string }[]),
-    ],
-  );
+      listNotComingUserIds(db, cycle),
+    ]);
 
-  return computeAudience(
+  return splitAudience(
     broadcast,
     {
       members,
@@ -296,6 +369,7 @@ export async function resolveAudience(
       driverUserIds: drivers.map((d) => d.userId),
       targetUserIds: targets.map((t) => t.userId),
       carRiderUserIds: carRiders.map((r) => r.userId),
+      notComingUserIds: notComing,
     },
     senderId,
   );

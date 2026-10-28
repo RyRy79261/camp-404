@@ -6,6 +6,7 @@ import { AnnouncementAudience, ComposeAnnouncementInput } from "@camp404/types";
 import { canSendToAudience, type AudienceActor } from "@camp404/core";
 import {
   countAnnouncementAudience,
+  previewAnnouncementAudience,
   createAnnouncementDraft,
   deleteAnnouncementDraft,
   explainDraftRefusal,
@@ -278,5 +279,49 @@ export async function previewPublishAction(
       parsed.data,
     );
     return { ok: true, data: { recipientCount } };
+  });
+}
+
+/** The composer's reach line: who a publish would reach, and who it leaves out. */
+export interface AudienceReach {
+  reaches: number;
+  /**
+   * Said Not coming this year (owner, 2026-10-27). Names reach only a viewer
+   * who may read participation; every sender here is a team lead or a
+   * captain, who may.
+   */
+  notComing: { count: number; names: string[] | null };
+}
+
+/**
+ * The live line under "Who it's for": "Reaches N people. Left out: M who said
+ * Not coming this year." The same gate and audience rule as the publish.
+ */
+export async function previewAudienceAction(
+  audience: unknown,
+): Promise<ActionResult<AudienceReach>> {
+  return runAction("previewAudienceAction", async () => {
+    const gate = await requireSender();
+    if (!gate.ok) return gate;
+    const parsed = AnnouncementAudience.safeParse(audience);
+    if (!parsed.success) return { ok: false, error: "Pick who it's for." };
+    const refusal = await audienceRefusal(gate, parsed.data);
+    if (refusal) return { ok: false, error: refusal };
+    const preview = await previewAnnouncementAudience(
+      gate.senderId,
+      parsed.data,
+    );
+    return {
+      ok: true,
+      data: {
+        reaches: preview.reaches,
+        notComing: {
+          count: preview.notComing.length,
+          // requireSender lets in team leads and captains only, and both read
+          // participation (MEMBER_FIELD_READERS: campParticipations.status).
+          names: preview.notComing.map((m) => m.name),
+        },
+      },
+    };
   });
 }

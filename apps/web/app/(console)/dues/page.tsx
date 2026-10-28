@@ -14,7 +14,17 @@ import {
   CardTitle,
 } from "@camp404/ui/components/card";
 import { PageHeading } from "@camp404/ui/components/page-heading";
-import { getDuesYear, getMemberDues, listFeeTiers } from "@/lib/dues";
+import { getCampBankDetails } from "@/lib/camp-money";
+import { getDuesYear, getMemberDues } from "@/lib/dues";
+import { getFeeScale } from "@/lib/join-site";
+import {
+  feeTimingPhrase,
+  nextPaymentWords,
+  paymentPlanRows,
+  pledgeWithScale,
+} from "@/lib/pledge-view";
+import { HowToPayButton } from "@/components/dues/pay-guide";
+import { PledgeStep } from "@/components/dues/pledge-step";
 import { paymentProofPath } from "@/lib/dues-copy";
 import {
   balanceSentence,
@@ -28,7 +38,6 @@ import { getMemberRefCode, ledgerCycle } from "@/lib/payments";
 import { PaymentReference } from "../profile/payment-reference";
 import {
   PledgeDialog,
-  PledgeForm,
   ProofDialog,
   ProofForm,
   RefundAsk,
@@ -58,22 +67,39 @@ export default async function MyDuesPage() {
   const { campUser } = await requireMemberPage();
   const cycle = await ledgerCycle();
   const today = campDayKey(new Date());
-  const [dues, tiers, year, refCode] = await Promise.all([
+  const [dues, year, refCode, scale, bank] = await Promise.all([
     getMemberDues(campUser.id, cycle, { forFinance: false, today }),
-    listFeeTiers(cycle),
     getDuesYear(cycle),
     getMemberRefCode(campUser.id),
+    getFeeScale(cycle),
+    getCampBankDetails(),
   ]);
   if (!dues) return null;
+  // "Next payment" (mock-up step 5): the instalment they pay next, with the
+  // same pay guide the desktop shows. Nothing for a member paid up, with no
+  // pledge, or waiting on a subsidy talk.
+  const nextWords = nextPaymentWords(dues.feeNext, {
+    paidCents: dues.balance.paidCents,
+    feeTotalCents: dues.feeTotalCents,
+  });
+  const plan = paymentPlanRows({
+    plan: dues.instalments,
+    payBy: dues.payBy,
+    feeTotalCents: dues.feeTotalCents,
+    burnYear: dues.burnYear,
+    next: dues.feeNext,
+  });
+  const pledgeValue = dues.pledge
+    ? {
+        amountCents: dues.pledge.amountCents,
+        payBy: dues.payBy,
+        subsidy: dues.subsidy,
+      }
+    : null;
 
   const charges = dues.charges.filter((c) => !c.cancelled);
   const feeCharged = charges.some((c) => c.kind === "fee");
   const notComing = dues.participation?.status === "not_attending";
-  const tierChoices = tiers.map((t) => ({
-    id: t.id,
-    label: t.label,
-    amountCents: t.amountCents,
-  }));
   // The pledge form is the next step only for a member who has not pledged.
   const mustPledge = !dues.pledge && !feeCharged;
   // Something left to pay that no proof covers yet: the form stays open.
@@ -123,6 +149,36 @@ export default async function MyDuesPage() {
       />
 
       <div className="flex min-w-0 flex-col gap-6">
+        {nextWords && (
+          <section
+            aria-label="Next payment"
+            data-testid="next-payment"
+            className="flex flex-wrap items-center justify-between gap-3 border border-l-4 border-border border-l-primary bg-muted px-4 py-3"
+          >
+            <div className="min-w-0">
+              <p className="font-pixel text-[10px] uppercase text-primary">
+                Next payment
+              </p>
+              <p className="text-lg font-semibold tabular-nums">
+                {nextWords.figure}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {nextWords.lead} {nextWords.paid}
+              </p>
+            </div>
+            <HowToPayButton
+              className="w-full page-sm:w-auto"
+              data={{
+                refCode,
+                feeTotalCents: dues.feeTotalCents,
+                paidCents: dues.balance.paidCents,
+                next: dues.feeNext,
+                bank: bank.details,
+              }}
+            />
+          </section>
+        )}
+
         <Card>
           <CardHeader className="p-5 pb-3">
             <CardTitle className="text-base">This year</CardTitle>
@@ -161,28 +217,29 @@ export default async function MyDuesPage() {
                 </span>
               )}
             </div>
-            {(dues.next ||
-              (dues.balance.balanceCents > 0 && year.deadline)) && (
-              <p className="text-sm">
-                {dues.next ? (
-                  <>
-                    Next:{" "}
-                    <span className="font-medium tabular-nums">
-                      {formatMoney(dues.next.amountCents)}
-                    </span>{" "}
-                    by {formatDay(dues.next.dueOn)}
-                    {dues.next.overdue && (
-                      <Badge variant="destructive" className="ml-2">
-                        Late
-                      </Badge>
-                    )}
-                  </>
-                ) : (
-                  <>Please pay by {formatDay(year.deadline!)}.</>
-                )}
-              </p>
-            )}
-            {dues.pledge && (
+            {!nextWords &&
+              (dues.next ||
+                (dues.balance.balanceCents > 0 && year.deadline)) && (
+                <p className="text-sm">
+                  {dues.next ? (
+                    <>
+                      Next:{" "}
+                      <span className="font-medium tabular-nums">
+                        {formatMoney(dues.next.amountCents)}
+                      </span>{" "}
+                      by {formatDay(dues.next.dueOn)}
+                      {dues.next.overdue && (
+                        <Badge variant="destructive" className="ml-2">
+                          Late
+                        </Badge>
+                      )}
+                    </>
+                  ) : (
+                    <>Please pay by {formatDay(year.deadline!)}.</>
+                  )}
+                </p>
+              )}
+            {dues.pledge && pledgeValue && (
               <div
                 data-testid="my-pledge"
                 className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3"
@@ -190,62 +247,60 @@ export default async function MyDuesPage() {
                 <p className="text-sm">
                   You pledged{" "}
                   <span className="font-medium tabular-nums">
-                    {formatMoney(dues.pledge.amountCents)}
+                    {pledgeWithScale(dues.pledge.amountCents, scale)}
                   </span>
-                  {dues.pledge.tierLabel ? ` (${dues.pledge.tierLabel})` : ""}.{" "}
+                  {dues.payBy
+                    ? `, ${feeTimingPhrase(dues.payBy, dues.burnYear)}`
+                    : ""}
+                  {dues.subsidy ? ", and asked for a subsidy" : ""}.{" "}
                   <span className="text-muted-foreground">
                     {feeCharged
-                      ? "Ask the Finance team if it needs to change."
-                      : "It is charged once you have a place."}
+                      ? "Ask the Finance team if the amount needs to change."
+                      : "Nothing is charged until you have a place."}
                   </span>
                 </p>
-                {!feeCharged && tierChoices.length > 0 && (
-                  <PledgeDialog
-                    tiers={tierChoices}
-                    pledge={{
-                      tierId: dues.pledge.tierId,
-                      amountCents: dues.pledge.amountCents,
-                    }}
-                  />
-                )}
+                <PledgeDialog
+                  burnYear={dues.burnYear}
+                  scale={scale}
+                  pledge={pledgeValue}
+                  amountLocked={feeCharged}
+                />
               </div>
             )}
           </CardContent>
         </Card>
 
         {mustPledge && (
-          <Card className="border-l-4 border-l-accent">
-            <CardHeader className="p-5 pb-3">
-              <CardTitle className="text-base">What you can pay</CardTitle>
-              <CardDescription>
-                Pick the tier you can pay this year. Less than the lowest tier
-                is fine too. Your fee is charged from it once you have a place;
-                then you pay by EFT with your reference.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-5 pt-0">
-              <PledgeForm tiers={tierChoices} pledge={null} locked={false} />
-            </CardContent>
-          </Card>
+          <PledgeStep
+            burnYear={dues.burnYear}
+            scale={scale}
+            pledge={null}
+            submitLabel="Save my pledge"
+          />
         )}
 
         {refCode && <PaymentReference code={refCode} />}
 
         {proof}
 
-        {dues.instalments.length > 0 && (
+        {plan.length > 0 && (
           <Card>
             <CardHeader className="p-5 pb-3">
               <CardTitle className="text-base">Your payment plan</CardTitle>
             </CardHeader>
             <CardContent className="p-5 pt-0">
               <ul aria-label="Payment plan" className="divide-y divide-border">
-                {dues.instalments.map((i) => (
+                {plan.map((i) => (
                   <li
                     key={i.dueOn}
-                    className="flex items-center justify-between gap-3 py-2 text-sm"
+                    className={`flex items-center justify-between gap-3 py-2 text-sm ${
+                      i.next ? "font-medium" : "text-muted-foreground"
+                    }`}
                   >
-                    <span>{formatDay(i.dueOn)}</span>
+                    <span>
+                      {formatDay(i.dueOn)}
+                      {i.next ? " · next" : ""}
+                    </span>
                     <span className="tabular-nums">
                       {formatMoney(i.amountCents)}
                     </span>

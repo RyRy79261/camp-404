@@ -862,6 +862,27 @@
       "when": 1793110937129,
       "tag": "0122_busy_dagger",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1793140687560,
+      "tag": "0123_camp_fees_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1793140694636,
+      "tag": "0124_money_oracle_fee_timing",
+      "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1793142394428,
+      "tag": "0125_camp_fee_reminders",
+      "breakpoints": true
     }
   ]
 }

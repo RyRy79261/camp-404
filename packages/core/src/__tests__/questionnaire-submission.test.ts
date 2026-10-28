@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BuilderQuestionnaire,
   PARTICIPATION_INTENTS,
+  FEE_TIMING_OPTIONS,
   PARTICIPATION_INTENT_OPTIONS,
   Questionnaire,
   attendanceQuestionnaire,
@@ -146,6 +147,7 @@ describe("questionnaireRoleMirror", () => {
         arrivalAt: new Date("2027-04-26T00:00:00.000Z"),
       },
       participation: null,
+      feeTiming: null,
     });
   });
 
@@ -160,6 +162,7 @@ describe("questionnaireRoleMirror", () => {
       dietary: { allergies: null },
       driver: { intendsToDrive: false, arrivalAt: null },
       participation: null,
+      feeTiming: null,
     });
   });
 
@@ -211,6 +214,7 @@ describe("questionnaireRoleMirror", () => {
       dietary: { isAnaphylactic: true, notes: null },
       driver: { departureAt: null },
       participation: null,
+      feeTiming: null,
     });
   });
 
@@ -265,6 +269,7 @@ describe("questionnaireRoleMirror", () => {
       dietary: { allergies: "Nuts" },
       driver: null,
       participation: null,
+      feeTiming: null,
     });
     expect(
       questionnaireRoleMirror(branching, { eat: "no", allergies: "Nuts" }),
@@ -272,6 +277,7 @@ describe("questionnaireRoleMirror", () => {
       dietary: { allergies: null },
       driver: null,
       participation: null,
+      feeTiming: null,
     });
   });
 
@@ -280,6 +286,7 @@ describe("questionnaireRoleMirror", () => {
       dietary: null,
       driver: null,
       participation: null,
+      feeTiming: null,
     });
   });
 });
@@ -289,7 +296,12 @@ describe("questionnaireRoleMirror: Coming this year", () => {
     for (const intent of PARTICIPATION_INTENTS) {
       expect(
         questionnaireRoleMirror(attendanceQuestionnaire(), { coming: intent }),
-      ).toEqual({ dietary: null, driver: null, participation: { intent } });
+      ).toEqual({
+        dietary: null,
+        driver: null,
+        feeTiming: null,
+        participation: { intent },
+      });
     }
   });
 
@@ -332,5 +344,40 @@ describe("questionnaireRoleMirror: Coming this year", () => {
     expect(
       questionnaireRoleMirror(hidden, { member: false, coming: "no" }),
     ).toMatchObject({ participation: null });
+  });
+});
+
+describe("questionnaireRoleMirror: fee timing", () => {
+  const money = Questionnaire.parse({
+    version: "1",
+    pages: [
+      {
+        id: "p",
+        kind: "questions",
+        title: "Money",
+        questions: [
+          {
+            id: "q_27b642d9",
+            kind: "single_select",
+            prompt: "When can you pay?",
+            role: "fee_timing",
+            required: false,
+            options: FEE_TIMING_OPTIONS,
+          },
+        ],
+      },
+    ],
+  });
+
+  it("writes the timing the member gave, and nothing for none or an unknown one", () => {
+    expect(
+      questionnaireRoleMirror(money, { q_27b642d9: "part_by_end_dec" }),
+    ).toMatchObject({ feeTiming: { payBy: "part_by_end_dec" } });
+    expect(questionnaireRoleMirror(money, {})).toMatchObject({
+      feeTiming: null,
+    });
+    expect(
+      questionnaireRoleMirror(money, { q_27b642d9: "option_1" }),
+    ).toMatchObject({ feeTiming: null });
   });
 });

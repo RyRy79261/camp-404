@@ -41,6 +41,7 @@ const data: AudienceData = {
   ],
   driverUserIds: ["u2", "gone"],
   targetUserIds: ["u3", "sys"],
+  notComingUserIds: [],
 };
 
 describe("computeAudience", () => {

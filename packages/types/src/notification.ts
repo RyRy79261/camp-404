@@ -30,6 +30,9 @@ export const NOTIFICATION_KINDS = [
   // they are one of (owner, 2026-10-27: Google takes no guests from the
   // camp's service account, so the app tells them itself).
   "event_invite",
+  // About the member's own camp fee: the Finance team's ask to pledge, or a
+  // reminder of their next payment (camp fees sprint, 2026-10-27).
+  "fee_reminder",
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];

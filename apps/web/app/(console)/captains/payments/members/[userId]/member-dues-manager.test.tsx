@@ -52,6 +52,12 @@ const DUES: MemberDues = {
     amountCents: 250000,
     pledgedAt: null,
   },
+  payBy: null,
+  subsidy: false,
+  burnYear: 2027,
+  feeTotalCents: 250000,
+  feeOwingCents: 150000,
+  feeNext: { kind: "no_date", amountCents: 150000 },
   planVersion: 0,
   instalments: [],
   charges: [

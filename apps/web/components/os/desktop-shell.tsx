@@ -131,6 +131,11 @@ import {
   useDisplayState,
 } from "./desktop-display";
 import { WelcomeWizard } from "./welcome-wizard";
+import {
+  PayGuideOverlay,
+  PayGuideProvider,
+  type PayGuideData,
+} from "@/components/dues/pay-guide";
 import { DesktopVoice, PhoneVoiceSheet } from "@/components/voice/voice-lazy";
 import { useVoiceCommand } from "@/components/voice/use-voice-command";
 import {
@@ -270,6 +275,14 @@ export interface DesktopProps {
    */
   telegramOffer?: boolean;
   /**
+   * The pay guide's figures (components/dues/pay-guide.tsx): the member's
+   * next fee payment, their reference and the camp's bank details, only when
+   * the year is collecting fees, they owe and asked for no subsidy. Drawn on a
+   * full desktop only, outside every window: never over a blocking form, never
+   * on the held desktop and never in a frozen copy. Not part of the manifest.
+   */
+  payGuide?: PayGuideData | null;
+  /**
    * How long the clock stays empty before she walks on, in ms. Unset: the
    * scene's own 30 s. Only the E2E harness shortens it.
    */
@@ -303,7 +316,11 @@ export function Desktop(props: DesktopProps) {
     <WindowDirtyProvider>
       <DraftOwnerContext.Provider value={props.userId}>
         <DesktopDisplayContext.Provider value={display}>
-          <DesktopInner {...props} />
+          <PayGuideProvider
+            data={props.mode === "full" ? (props.payGuide ?? null) : null}
+          >
+            <DesktopInner {...props} />
+          </PayGuideProvider>
         </DesktopDisplayContext.Provider>
       </DraftOwnerContext.Provider>
     </WindowDirtyProvider>
@@ -1938,6 +1955,11 @@ function DesktopInner({
               telegramOffer={telegramOffer}
               onClose={display.closeWelcome}
             />
+          )}
+          {/* The pay guide: a card from the tray, a banner above a phone's
+              bar. A full desktop only, never over a form. */}
+          {mode === "full" && !held && (
+            <PayGuideOverlay covered={phoneCovered} />
           )}
         </div>
         <div

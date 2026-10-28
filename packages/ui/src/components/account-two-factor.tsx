@@ -122,6 +122,12 @@ export function AccountTwoFactor({
       );
       return;
     }
+    // Asked without a method, the server answers "totp"; anything else has no
+    // code to scan, so say so rather than show an empty step.
+    if (data.method !== "totp") {
+      setError(GENERIC);
+      return;
+    }
     setTotpUri(data.totpURI);
     setBackupCodes(data.backupCodes ?? []);
     setStep("verify");

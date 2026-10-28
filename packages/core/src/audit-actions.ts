@@ -45,6 +45,12 @@ export const AUDIT_ACTION_LABELS = {
   // written before still reads.
   "camp.kitchen_settings.changed": "Changed the kitchen settings",
   "camp.layout.shared": "Shared the camp layout with neighbours",
+  "camp_money.balance_recorded": "Typed in the camp's bank balance",
+  "camp_money.bank_details_saved": "Changed the camp's bank details",
+  "camp_money.bill_added": "Added a camp bill",
+  "camp_money.bill_changed": "Changed a camp bill",
+  "camp_money.bill_paid": "Marked a camp bill paid",
+  "camp_money.bill_removed": "Removed a camp bill",
   "camp.layout.unshared": "Stopped sharing the camp layout",
   "camp.teams.archived": "Archived a team",
   "camp.teams.described": "Changed what a team does",
@@ -54,6 +60,9 @@ export const AUDIT_ACTION_LABELS = {
   "document.created": "Started a Survival Guide chapter",
   "dues.charge_added": "Added a charge to a member's dues",
   "dues.charge_cancelled": "Cancelled a charge on a member's dues",
+  "dues.collecting_set": "Switched collecting camp fees on or off",
+  "dues.fees_reminded": "Reminded members who owe camp fees",
+  "dues.pledges_asked": "Asked members to pledge camp fees",
   "dues.fee_charged": "Charged a member's camp fee",
   "dues.fee_set": "Set a member's camp fee",
   "dues.plan_set": "Set a member's payment plan",
@@ -96,6 +105,7 @@ export const AUDIT_ACTION_LABELS = {
   "member.id_document.viewed": "Viewed an ID number",
   "member.note_added": "Added a captain note",
   "member.notes.viewed": "Read captain notes",
+  "member.password_reset_sent": "Sent a password reset link",
   "member.rank_changed": "Changed a rank",
   "member.sheet_viewed": "Opened the camp sheet",
   "member.team_assigned": "Added a member to a team",
@@ -530,6 +540,8 @@ export function auditDetail(
       const cents = m.count("totalCents");
       return cents === null ? null : formatMoney(cents);
     }
+    case "dues.pledges_asked":
+    case "dues.fees_reminded":
     case "rental.orders_asked": {
       const m = stored(action, metadata);
       const asked = m.count("asked");
@@ -542,6 +554,30 @@ export function auditDetail(
       const label = m.text("label");
       if (!name) return label;
       return label ? `${name}, ${label}` : `${name}, label removed`;
+    }
+    case "dues.collecting_set": {
+      const m = stored(action, metadata);
+      const on = m.flag("on");
+      return on === null ? null : on ? "On" : "Off";
+    }
+    case "camp_money.balance_recorded": {
+      const m = stored(action, metadata);
+      const cents = m.count("amountCents");
+      const asOf = m.text("asOf");
+      if (cents === null) return asOf;
+      return asOf ? `${formatMoney(cents)} on ${asOf}` : formatMoney(cents);
+    }
+    case "camp_money.bill_added":
+    case "camp_money.bill_changed":
+    case "camp_money.bill_paid":
+    case "camp_money.bill_removed": {
+      const m = stored(action, metadata);
+      const name = m.text("name");
+      const cents = m.count("amountCents");
+      const day = m.text("paidOn") ?? m.text("dueOn");
+      const parts = [name, cents === null ? null : formatMoney(cents), day];
+      const shown = parts.filter(Boolean);
+      return shown.length > 0 ? shown.join(", ") : null;
     }
     case "dues.plan_set": {
       const m = stored(action, metadata);

@@ -62,6 +62,11 @@ import { auditReadAfterResponse } from "@/lib/audit";
 import { resolveSafetyDataForViewer } from "@/lib/safety-data";
 import { decideParticipation } from "@/lib/participations";
 import { deliverAfterResponse } from "@/lib/background-work";
+import { auth, authMayServe } from "@camp404/auth";
+import { recordPasswordResetLink } from "@/lib/password-reset";
+import { rateLimiter } from "@/lib/rate-limit";
+import { usesTestStore } from "@/lib/test-mode";
+import { RESET_COPY } from "./reset-copy";
 import { telegramBotUsername } from "@/lib/telegram";
 import {
   mayOfferLeadPost,
@@ -74,6 +79,8 @@ export type MemberDetailResult =
       member: PresentedMember;
       /** Whether the viewing captain may send this member a promotion request. */
       canAssignCaptain: boolean;
+      /** The member's sign-in email (captain-only, like the panel's Email). */
+      signInEmail: string | null;
       /** In-flight two-step tracker for an open request (drives the dialog). */
       promotionStep: { sent: boolean; accepted: boolean };
       /** The open `sent` request's id, for the dialog's cancel action (or null). */
@@ -322,6 +329,7 @@ export async function getMemberDetailAction(
         safety.allowed ? safety : undefined,
       ),
       canAssignCaptain,
+      signInEmail: detail.email ?? null,
       reviewOptions: availableReviewActions({
         status: detail.approvalStatus,
         isSelf: userId === gate.captainId,
@@ -915,5 +923,64 @@ export async function decideParticipationAction(input: {
       };
     }
     return { ok: true };
+  });
+}
+
+/**
+ * A captain's "Send password reset link" on the member panel (owner's
+ * mock-up, step 7). Captains only. It sends the member the SAME Better Auth
+ * reset email the sign-in page's "Forgot password" sends, to the address they
+ * sign in with: the captain never sees a link or a password, and learns
+ * nothing new (the panel already shows the email). The member's password
+ * keeps working until they set a new one.
+ *
+ * Order: the gate, the rate limit, then the audit row (in its own committed
+ * transaction), and only then the email. An email cannot be taken back, so
+ * the row comes first: a link that went out is never missing from the audit
+ * trail, and the worst case is a logged attempt whose email then failed.
+ */
+export async function sendPasswordResetLinkAction(
+  userId: string,
+): Promise<{ ok: true; sentAt: string } | ActionFailure> {
+  return runAction("sendPasswordResetLinkAction", async () => {
+    const gate = await requireCaptain();
+    if (!gate.ok) return gate;
+    if (!UserId.safeParse(userId).success) {
+      return { ok: false, error: "Member not found." };
+    }
+    if (!usesTestStore() && !authMayServe(process.env)) {
+      return { ok: false, error: RESET_COPY.signInOff };
+    }
+    // Per member (a link works for an hour, so a few is plenty) and per
+    // captain, so a slip of the finger can't flood anyone's inbox.
+    const limits = [
+      [`password-reset-link:member:${userId}`, 3],
+      [`password-reset-link:captain:${gate.captainId}`, 20],
+    ] as const;
+    for (const [key, limit] of limits) {
+      const verdict = await rateLimiter.limit(key, {
+        limit,
+        windowMs: 60 * 60 * 1000,
+      });
+      if (!verdict.ok) return { ok: false, error: RESET_COPY.tooMany };
+    }
+
+    const recorded = await recordPasswordResetLink({
+      actorId: gate.captainId,
+      userId,
+    });
+    if (!recorded.ok) return recorded;
+    // The E2E store keeps no sign-in email and has no Better Auth: nothing
+    // to send there.
+    if (recorded.email) {
+      try {
+        await auth.api.requestPasswordReset({
+          body: { email: recorded.email, redirectTo: "/auth/reset-password" },
+        });
+      } catch {
+        return { ok: false, error: RESET_COPY.sendFailed };
+      }
+    }
+    return { ok: true, sentAt: new Date().toISOString() };
   });
 }

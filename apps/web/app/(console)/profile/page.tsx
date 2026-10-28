@@ -29,6 +29,8 @@ import { getMyParticipation } from "@/lib/participations";
 import { getMemberDues } from "@/lib/dues";
 import { MY_DUES_PATH } from "@/lib/dues-copy";
 import { balanceSentence } from "@/lib/dues-view";
+import { getFeeScale } from "@/lib/join-site";
+import { feeTimingPhrase, pledgeWithScale } from "@/lib/pledge-view";
 import { getMemberRefCode, ledgerCycle } from "@/lib/payments";
 import { getMyTicket } from "@/lib/tickets";
 import { isTeamLead } from "@/lib/users";
@@ -38,6 +40,8 @@ import { SignOutLink } from "@/components/auth/sign-out-link";
 import { ReportSettingsCard } from "@/components/feedback/report-settings-card";
 import { ProfileSections } from "@/components/profile/profile-sections";
 import { TelegramCard } from "@/components/profile/telegram-card";
+import { ProfileChecklistCard } from "@/components/profile/profile-checklist";
+import { getProfileChecklist } from "@/lib/profile-checklist";
 import { telegramBotUsername } from "@/lib/telegram";
 import { getTelegramConnection } from "@/lib/telegram-connection";
 import { MyTicket } from "./my-ticket";
@@ -69,17 +73,24 @@ export default async function ProfilePage() {
   // The same pill the roster shows: a team lead reads "Team Lead", not "Member".
   // Ol' Jeb's card shows only once the bot is set up (its username is known).
   const telegramOn = telegramBotUsername() !== null;
-  const [lead, refCode, participation, ticket, dues, telegram] =
+  const [lead, refCode, participation, ticket, dues, telegram, checklist] =
     await Promise.all([
       isTeamLead(campUser.id),
       getMemberRefCode(campUser.id),
       getMyParticipation(campUser.id),
       getMyTicket(campUser.id),
-      // Their own balance for the year (#240); never anyone else's.
-      ledgerCycle().then((cycle) =>
-        getMemberDues(campUser.id, cycle, { forFinance: false }),
-      ),
+      // Their own balance and pledge for the year (#240); never anyone
+      // else's. The scale names the pledge ("near Ideal").
+      ledgerCycle().then(async (cycle) => {
+        const [mine, scale] = await Promise.all([
+          getMemberDues(campUser.id, cycle, { forFinance: false }),
+          getFeeScale(cycle),
+        ]);
+        return mine ? { ...mine, scale } : null;
+      }),
       telegramOn ? getTelegramConnection(campUser.id) : null,
+      // Step 6: what is missing from the profile, worked out on this read.
+      getProfileChecklist(campUser.id),
     ]);
   // A ticket matters only to someone who might come: not before they answer,
   // and not once they say No.
@@ -144,6 +155,8 @@ export default async function ProfilePage() {
               </CardContent>
             </Card>
 
+            <ProfileChecklistCard checklist={checklist} />
+
             {refCode && <PaymentReference code={refCode} />}
 
             {dues && (
@@ -157,8 +170,37 @@ export default async function ProfilePage() {
                     {balanceSentence(dues.balance)}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <Button asChild variant="secondary" size="sm">
+                <CardContent className="flex flex-col gap-3">
+                  {/* Their pledge, read-only here; it changes on My dues. */}
+                  {dues.pledge && (
+                    <div
+                      data-testid="profile-pledge"
+                      className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm"
+                    >
+                      <p>
+                        You pledged{" "}
+                        <span className="font-medium tabular-nums">
+                          {pledgeWithScale(dues.pledge.amountCents, dues.scale)}
+                        </span>
+                        {dues.payBy
+                          ? `, ${feeTimingPhrase(dues.payBy, dues.burnYear)}`
+                          : ""}
+                        {dues.subsidy ? ", and asked for a subsidy" : ""}.
+                      </p>
+                      <Link
+                        href={MY_DUES_PATH}
+                        className="font-medium text-primary underline-offset-4 hover:underline"
+                      >
+                        Change your pledge
+                      </Link>
+                    </div>
+                  )}
+                  <Button
+                    asChild
+                    variant="secondary"
+                    size="sm"
+                    className="self-start"
+                  >
                     <Link href={MY_DUES_PATH}>Open My dues</Link>
                   </Button>
                 </CardContent>
@@ -207,6 +249,7 @@ export default async function ProfilePage() {
 
             {telegram && (
               <TelegramCard
+                id="telegram"
                 connected={telegram.connected}
                 handle={telegram.handle}
                 notices={telegram.notices}

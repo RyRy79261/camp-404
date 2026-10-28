@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   ATTENDANCE_QUESTION_PROMPT,
   BUILDER_ROLES,
+  FEE_TIMING_OPTIONS,
   PARTICIPATION_INTENT_OPTIONS,
   attendanceQuestionnaire,
   builderRolesFor,
+  hasFeeTimingOptions,
   hasParticipationOptions,
 } from "../builder-roles";
+import { FEE_TIMINGS } from "../dues";
 import { PARTICIPATION_INTENTS } from "../participation";
 import { Questionnaire, SingleSelectQuestion } from "../questionnaire";
 import {
@@ -75,7 +78,10 @@ describe("builderRolesFor", () => {
       "dietary_allergies",
       "dietary_notes",
     ]);
-    expect(builderRolesFor("single_select")).toEqual(["participation_intent"]);
+    expect(builderRolesFor("single_select")).toEqual([
+      "participation_intent",
+      "fee_timing",
+    ]);
     expect(builderRolesFor("multi_select")).toEqual([]);
     expect(builderRolesFor("number")).toEqual([]);
   });
@@ -271,5 +277,61 @@ describe("the Coming this year question", () => {
         ]),
       ),
     ).toEqual([refusal]);
+  });
+
+  it("takes the six fee timings, in the question's order, and nothing else", () => {
+    expect(FEE_TIMING_OPTIONS.map((o) => o.value)).toEqual([...FEE_TIMINGS]);
+    const when = (over: Record<string, unknown> = {}) =>
+      SingleSelectQuestion.parse({
+        id: "q_27b642d9",
+        kind: "single_select",
+        prompt: "When can you pay?",
+        role: "fee_timing",
+        options: FEE_TIMING_OPTIONS,
+        ...over,
+      });
+    expect(hasFeeTimingOptions(when())).toBe(true);
+    expect(
+      hasFeeTimingOptions(when({ options: FEE_TIMING_OPTIONS.slice(1) })),
+    ).toBe(false);
+    expect(hasFeeTimingOptions(when({ allowOther: true }))).toBe(false);
+    expect(
+      hasFeeTimingOptions(
+        when({
+          options: FEE_TIMING_OPTIONS.map((o, i) => ({
+            ...o,
+            value: `option_${i + 1}`,
+          })),
+        }),
+      ),
+    ).toBe(false);
+    const form = (options: unknown) =>
+      BuilderQuestionnaire.parse({
+        version: "1",
+        title: "Money",
+        pages: [
+          {
+            id: "p1",
+            type: "question",
+            title: "Money",
+            blocks: [
+              {
+                kind: "question",
+                question: {
+                  id: "when",
+                  kind: "single_select",
+                  prompt: "When?",
+                  role: "fee_timing",
+                  options,
+                },
+              },
+            ],
+          },
+        ],
+      });
+    expect(validateBuilderQuestionnaire(form(FEE_TIMING_OPTIONS))).toEqual([]);
+    expect(
+      validateBuilderQuestionnaire(form(FEE_TIMING_OPTIONS.slice(0, 2))),
+    ).toEqual([expect.stringContaining("the six fee timings")]);
   });
 });

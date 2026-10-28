@@ -32,6 +32,21 @@ export interface AudienceData {
    * empty reaches nobody.
    */
   carRiderUserIds?: string[];
+  /**
+   * Members who said Not coming for the year the audience is read for
+   * (`camp_participations.status = 'not_attending'`). Left out of every group
+   * audience, captains included (owner, 2026-10-27); `individual` still
+   * reaches them. Required, so no caller can forget the rule: a caller that
+   * reads a year nobody has answered yet passes [].
+   */
+  notComingUserIds: readonly string[];
+}
+
+/** Who a send reaches, and who it leaves out because they said Not coming. */
+export interface AudienceSplit {
+  reaches: string[];
+  /** In the group, but said Not coming this year. Empty for `individual`. */
+  notComing: string[];
 }
 
 /**
@@ -44,12 +59,30 @@ export interface AudienceData {
  * not in the camp yet: they must not get the full-screen announcement takeover,
  * nor be gated by a camp-wide questionnaire. `individual` is the exception: a
  * captain picked that person by name.
+ *
+ * A group audience also leaves out every member who said Not coming this year
+ * (`notComingUserIds`), captains included; `individual` still reaches them.
  */
 export function computeAudience(
   broadcast: { scope: BroadcastScope; team: string | null },
   data: AudienceData,
   senderId: string | null,
 ): string[] {
+  return splitAudience(broadcast, data, senderId).reaches;
+}
+
+/**
+ * {@link computeAudience}, with the members it left out because they said Not
+ * coming this year (owner, 2026-10-27: "Not coming = no group sends"). A
+ * member picked by name (`individual`) is never left out: a captain chose
+ * them. The send screens show the left-out count, and names to team leads and
+ * up, who may read participation.
+ */
+export function splitAudience(
+  broadcast: { scope: BroadcastScope; team: string | null },
+  data: AudienceData,
+  senderId: string | null,
+): AudienceSplit {
   const real = new Set(
     data.members.filter((m) => !m.isSystem && !m.sanitised).map((m) => m.id),
   );
@@ -94,5 +127,15 @@ export function computeAudience(
   }
 
   const eligible = broadcast.scope === "individual" ? real : approved;
-  return [...new Set(ids)].filter((id) => eligible.has(id) && id !== senderId);
+  const matched = [...new Set(ids)].filter(
+    (id) => eligible.has(id) && id !== senderId,
+  );
+  if (broadcast.scope === "individual") {
+    return { reaches: matched, notComing: [] };
+  }
+  const notComing = new Set(data.notComingUserIds);
+  return {
+    reaches: matched.filter((id) => !notComing.has(id)),
+    notComing: matched.filter((id) => notComing.has(id)),
+  };
 }

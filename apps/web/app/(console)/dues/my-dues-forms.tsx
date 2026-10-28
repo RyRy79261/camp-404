@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Pencil, ReceiptText, Send } from "lucide-react";
-import { formatMoney, parseMoneyToMinor } from "@camp404/core";
+import { parseMoneyToMinor } from "@camp404/core";
 import type { PaymentMethod } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { ConfirmDialog } from "@camp404/ui/components/confirm-dialog";
@@ -18,15 +18,20 @@ import {
 } from "@camp404/ui/components/dialog";
 import { InputField } from "@camp404/ui/components/input-field";
 import { Label } from "@camp404/ui/components/label";
-import { OptionCardGroup } from "@camp404/ui/components/option-card-group";
 import { Textarea } from "@camp404/ui/components/textarea";
 import { toast } from "@camp404/ui/components/toast";
 import { ReceiptPicker } from "@/components/claims/receipt-picker";
 import { PROOF_MAX_BYTES, PROOF_TYPES } from "@/lib/dues-copy";
+import {
+  PledgeStep,
+  type PledgeStepProps,
+  type PledgeValue,
+} from "@/components/dues/pledge-step";
 import { METHOD_CHOICES, typedRands } from "@/lib/dues-view";
-import { requestMyRefundAction, savePledgeAction } from "./actions";
+import { requestMyRefundAction } from "./actions";
 
-// The member's own dues forms (#240): their pledge, their proof of payment,
+// The member's own dues forms (#240): changing their pledge (the "What can
+// you commit?" step, components/dues/pledge-step.tsx), their proof of payment,
 // and asking for a refund. Problems with what they typed show beside the form.
 // Each form's button is normal width at its foot, on the left, like every
 // other form in the console. Once a member has pledged, or has nothing left
@@ -35,7 +40,6 @@ import { requestMyRefundAction, savePledgeAction } from "./actions";
 // phone the dialog fills the screen).
 
 const TYPE_AMOUNT = "Type the amount in rands, like 1250 or 1250,50.";
-const BELOW = "below";
 
 /** A dialog that fills a phone's screen and scrolls when it is long. */
 const DIALOG_CLASS =
@@ -44,130 +48,21 @@ const DIALOG_CLASS =
 const selectClass =
   "h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
-export function PledgeForm({
-  tiers,
-  pledge,
-  locked,
-  onSaved,
-}: {
-  tiers: { id: string; label: string; amountCents: number }[];
-  pledge: { tierId: string | null; amountCents: number } | null;
-  locked: boolean;
-  onSaved?: () => void;
-}) {
-  const router = useRouter();
-  const [choice, setChoice] = useState(pledge ? (pledge.tierId ?? BELOW) : "");
-  const [below, setBelow] = useState(
-    pledge && pledge.tierId === null ? typedRands(pledge.amountCents) : "",
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  if (tiers.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        The Finance team hasn&rsquo;t set this year&rsquo;s fees yet. Check back
-        soon.
-      </p>
-    );
-  }
-  if (locked) {
-    return pledge ? (
-      <p className="text-sm">
-        You pledged{" "}
-        <span className="font-medium tabular-nums">
-          {formatMoney(pledge.amountCents)}
-        </span>
-        .
-      </p>
-    ) : null;
-  }
-
-  function save() {
-    setError(null);
-    let input: unknown;
-    if (choice === BELOW) {
-      const cents = parseMoneyToMinor(below);
-      if (cents === null || cents <= 0) {
-        setError(TYPE_AMOUNT);
-        return;
-      }
-      input = { kind: "below", amountCents: cents };
-    } else if (choice) {
-      input = { kind: "tier", tierId: choice };
-    } else {
-      setError("Pick what you can pay.");
-      return;
-    }
-    start(async () => {
-      const res = await savePledgeAction(input);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      toast.success(
-        res.data.charged
-          ? "Saved. Your camp fee is on your dues now."
-          : "Saved. Your fee is charged once you have a place.",
-      );
-      onSaved?.();
-      router.refresh();
-    });
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <OptionCardGroup
-        aria-label="What you can pay"
-        value={choice}
-        onValueChange={setChoice}
-        options={[
-          ...tiers.map((t) => ({
-            value: t.id,
-            label: `${t.label}: ${formatMoney(t.amountCents)}`,
-          })),
-          {
-            value: BELOW,
-            label: "Less than that",
-            description: "Say what you can pay.",
-          },
-        ]}
-      />
-      {choice === BELOW && (
-        <InputField
-          label="What you can pay (R)"
-          inputMode="decimal"
-          className="max-w-48"
-          value={below}
-          onChange={(e) => setBelow(e.currentTarget.value)}
-          disabled={pending}
-        />
-      )}
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-      <Button
-        type="button"
-        className="self-start"
-        disabled={pending || !choice}
-        onClick={save}
-      >
-        {pending && <Loader2 className="animate-spin" aria-hidden />}
-        {pledge ? "Change my pledge" : "Save my pledge"}
-      </Button>
-    </div>
-  );
-}
-
-/** "Change" beside a pledge that is not charged yet: the form in a dialog. */
+/**
+ * "Change" beside a saved pledge: the "What can you commit?" step in a
+ * dialog. Once the fee is charged its amount is the Finance team's, so only
+ * "by when" and the subsidy answer change.
+ */
 export function PledgeDialog({
-  tiers,
   pledge,
+  burnYear,
+  scale,
+  amountLocked,
 }: {
-  tiers: { id: string; label: string; amountCents: number }[];
-  pledge: { tierId: string | null; amountCents: number };
+  pledge: PledgeValue;
+  burnYear: number;
+  scale: PledgeStepProps["scale"];
+  amountLocked: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -178,18 +73,21 @@ export function PledgeDialog({
           Change
         </Button>
       </DialogTrigger>
-      <DialogContent className={DIALOG_CLASS}>
+      <DialogContent className={`${DIALOG_CLASS} sm:max-w-2xl`}>
         <DialogHeader>
-          <DialogTitle>What you can pay</DialogTitle>
+          <DialogTitle>Your pledge</DialogTitle>
           <DialogDescription>
-            You can change it until your fee is charged. Less than the lowest
-            tier is fine too.
+            {amountLocked
+              ? "Your fee is charged, so its amount stays. You can still change by when, or ask for a subsidy."
+              : "You can change it until your fee is charged."}
           </DialogDescription>
         </DialogHeader>
-        <PledgeForm
-          tiers={tiers}
+        <PledgeStep
           pledge={pledge}
-          locked={false}
+          burnYear={burnYear}
+          scale={scale}
+          amountLocked={amountLocked}
+          submitLabel="Save"
           onSaved={() => setOpen(false)}
         />
       </DialogContent>
@@ -204,18 +102,26 @@ export function PledgeDialog({
 export function ProofDialog({
   today,
   label = "Send another proof",
+  trigger,
+  amountCents,
 }: {
   today: string;
   label?: string;
+  /** A button of the caller's own (the pay guide's), instead of the quiet one. */
+  trigger?: ReactNode;
+  /** The amount the form starts at (the pay guide's next payment). */
+  amountCents?: number;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" size="sm" variant="outline">
-          <ReceiptText aria-hidden />
-          {label}
-        </Button>
+        {trigger ?? (
+          <Button type="button" size="sm" variant="outline">
+            <ReceiptText aria-hidden />
+            {label}
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className={DIALOG_CLASS}>
         <DialogHeader>
@@ -225,7 +131,11 @@ export function ProofDialog({
             of the bank&rsquo;s confirmation. Never send card numbers.
           </DialogDescription>
         </DialogHeader>
-        <ProofForm today={today} onSent={() => setOpen(false)} />
+        <ProofForm
+          today={today}
+          amountCents={amountCents}
+          onSent={() => setOpen(false)}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -233,13 +143,17 @@ export function ProofDialog({
 
 export function ProofForm({
   today,
+  amountCents,
   onSent,
 }: {
   today: string;
+  amountCents?: number;
   onSent?: () => void;
 }) {
   const router = useRouter();
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(
+    amountCents ? typedRands(amountCents) : "",
+  );
   const [paidOn, setPaidOn] = useState(today);
   const [method, setMethod] = useState<PaymentMethod>("bank_transfer");
   const [note, setNote] = useState("");

@@ -724,3 +724,47 @@ a:hover .pixel-glitch .pixel-glitch-c {
     animation: none !important;
   }
 }
+
+/* The fee scale's slider (fee-scale-track.tsx, the Join site's FEE.CALC and
+   the console's "What can you commit?"): the native range input, invisible but
+   for its thumb, laid over the drawn scale so it stays keyboard- and
+   screen-reader-native. */
+.os-range {
+  appearance: none;
+  background: transparent;
+}
+.os-range::-webkit-slider-runnable-track {
+  height: 1rem;
+  background: transparent;
+}
+.os-range::-moz-range-track {
+  height: 1rem;
+  background: transparent;
+}
+.os-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 26px;
+  margin-top: -5px;
+  background: var(--os-fg);
+  border: 2px solid var(--os-primary);
+  box-shadow: 3px 3px 0 0 rgb(0 0 0 / 0.5);
+}
+.os-range::-moz-range-thumb {
+  width: 14px;
+  height: 26px;
+  border-radius: 0;
+  background: var(--os-fg);
+  border: 2px solid var(--os-primary);
+}
+.os-range:focus-visible {
+  outline: none;
+}
+.os-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--os-primary);
+  outline-offset: 2px;
+}
+.os-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--os-primary);
+  outline-offset: 2px;
+}

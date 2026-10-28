@@ -12,6 +12,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("./actions", () => ({
   deleteDraftAction: vi.fn(),
   previewPublishAction: vi.fn(),
+  previewAudienceAction: vi.fn(async () => ({ ok: false, error: "No." })),
   publishAction: vi.fn(),
   saveDraftAction: vi.fn(),
   setPinnedAction: vi.fn(),

@@ -6684,6 +6684,14 @@ exports[`program census > opens the same window for every console page 1`] = `
     },
   ],
   [
+    "/captains/payments/camp-money",
+    {
+      "genericTitle": "LEDGER.DB",
+      "instanceKey": "payments",
+      "programId": "payments",
+    },
+  ],
+  [
     "/captains/payments/claims",
     {
       "genericTitle": "LEDGER.DB",

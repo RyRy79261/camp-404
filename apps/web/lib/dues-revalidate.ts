@@ -3,6 +3,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import {
   MY_DUES_PATH,
+  PAYMENTS_CAMP_MONEY_PATH,
   PAYMENTS_IMPORT_PATH,
   PAYMENTS_OWING_PATH,
   PAYMENTS_PATH,
@@ -18,6 +19,7 @@ export function revalidateDues(): void {
   for (const path of [
     PAYMENTS_PATH,
     PAYMENTS_OWING_PATH,
+    PAYMENTS_CAMP_MONEY_PATH,
     PAYMENTS_IMPORT_PATH,
     PAYMENTS_SETTLE_UP_PATH,
     PAYMENTS_SETTINGS_PATH,

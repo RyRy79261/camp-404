@@ -12,6 +12,8 @@ import {
   validateOne,
 } from "./questionnaire";
 import {
+  feeTimingOptionsMessage,
+  hasFeeTimingOptions,
   hasParticipationOptions,
   participationOptionsMessage,
 } from "./builder-roles";
@@ -581,6 +583,7 @@ export type BuilderDefinitionIssueCode =
   | "reserved_option_value"
   | "invalid_range"
   | "duplicate_role"
+  | "fee_timing_options"
   | "participation_options"
   | "no_inputs"
   | "no_visible_page";
@@ -776,6 +779,13 @@ export function builderQuestionnaireIssues(
           participationOptionsMessage(field.prompt),
           at,
         );
+      }
+      if (
+        field.kind === "single_select" &&
+        field.role === "fee_timing" &&
+        !hasFeeTimingOptions(field)
+      ) {
+        add("fee_timing_options", feeTimingOptionsMessage(field.prompt), at);
       }
       const role = "role" in field ? field.role : undefined;
       if (role && !role.startsWith("emergency_contact_")) {

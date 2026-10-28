@@ -176,8 +176,11 @@ function isIntent(value: unknown): value is ParticipationIntent {
 // rule as that submit: Yes and Maybe never lower an accepted or waitlisted
 // place, and No always wins (audited when it gives a place up). The form reads
 // back what the member answered, not the captain's decision.
+/** My forms' "Coming this year?": the member's own Yes / Maybe / No. */
+export const ATTENDANCE_FORM_KEY = "attendance";
+
 const ATTENDANCE: ReplayableFormDef = {
-  key: "attendance",
+  key: ATTENDANCE_FORM_KEY,
   title: "Coming this year?",
   description:
     "Whether you're coming to AfrikaBurn with Camp 404 this year. Change it any time.",

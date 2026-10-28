@@ -177,6 +177,21 @@ export async function seedParticipation(
 }
 
 /**
+ * Turn this year's "Collecting fees" switch on or off, as a captain or a
+ * Finance lead (the write checks). The user must have loaded a page.
+ */
+export async function setCollectingFees(
+  request: APIRequestContext,
+  authUserId: string,
+  on: boolean,
+): Promise<void> {
+  const res = await request.post("/api/test/set-collecting-fees", {
+    data: { authUserId, on },
+  });
+  if (!res.ok()) throw new Error(`setCollectingFees failed: ${res.status()}`);
+}
+
+/**
  * Give a test user allergy facts through the test seam (the store does not
  * model the dietary questionnaire). The daily site sheet's twin reads them.
  */

@@ -27,6 +27,17 @@ interface FuelCan {
   travelsWithUserId: string | null;
 }
 
+/** What is said of a camp bill, added or changed. */
+interface CampBill {
+  name: string;
+  payee: string | null;
+  amountCents: number;
+  dueOn: string;
+  repeat: string;
+  times: number;
+  planned: boolean;
+}
+
 interface CalendarEvent {
   title: string;
   team: string | null;
@@ -239,6 +250,22 @@ export interface AuditEvents {
     description: string;
     amountCents: number;
   };
+  "dues.collecting_set": { cycle: number; on: boolean };
+  "dues.pledges_asked": Asked;
+  /** `posted`: general posts queued in the camp's Telegram chats. */
+  "dues.fees_reminded": Asked & { posted: number };
+  "camp_money.balance_recorded": { amountCents: number; asOf: string };
+  "camp_money.bank_details_saved": { version: number };
+  "camp_money.bill_added": CampBill;
+  "camp_money.bill_changed": CampBill;
+  "camp_money.bill_paid": {
+    name: string;
+    amountCents: number;
+    paidOn: string;
+    /** Which of the bill's payments (from 0). */
+    index: number;
+  };
+  "camp_money.bill_removed": { name: string; amountCents: number };
   "dues.fee_charged": {
     cycle: number;
     description: string;
@@ -372,6 +399,8 @@ export interface AuditEvents {
   "member.id_document.viewed": SensitiveRead & { idType: string | null };
   "member.note_added": { length: number };
   "member.notes.viewed": { count: number };
+  /** A captain emailed the member Better Auth's reset link (member panel). */
+  "member.password_reset_sent": { via: "member_panel" };
   "member.rank_changed": {
     from: string | null;
     to: string;

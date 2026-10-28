@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BarChart3 } from "lucide-react";
+import { flattenQuestions } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { Card, CardContent } from "@camp404/ui/components/card";
 import { getActivationById, getRequiredAction } from "@camp404/db/activations";
@@ -10,7 +11,10 @@ import {
   getPendingQuestionnaires,
   getPendingRequiredActions,
   hasCampAccess,
+  isApproved,
 } from "@/lib/users";
+import { getPledgeStep } from "@/lib/pledge-step";
+import { PledgeStep } from "@/components/dues/pledge-step";
 import { nextGate } from "@/lib/required-actions";
 import { getBuilderDefinition } from "@/lib/questionnaire-definitions";
 import { QueueCard } from "@/components/questionnaire/queue-card";
@@ -65,6 +69,19 @@ export default async function QuestionnaireCompletePage({
   ]);
   const next = nextGate(gates);
   const required = pending.filter((q) => q.blocking);
+  // "Coming this year?" answered Coming: "What can you commit?" comes next
+  // (camp fees sprint, mock-up step 3), until they have pledged. Any form
+  // that asks the participation_intent question leads here; the pledge is
+  // the member's own write (savePledgeAction), for an approved member.
+  const asksIntent =
+    builder !== null &&
+    flattenQuestions(builder).some(
+      (q) => "role" in q && q.role === "participation_intent",
+    );
+  const pledgeStep =
+    asksIntent && isApproved(campUser, authUser.primaryEmail)
+      ? await getPledgeStep(campUser.id)
+      : null;
 
   // Bare and full-screen while a required questionnaire still holds the app;
   // in the console once nothing does (RunnerFrame).
@@ -79,6 +96,22 @@ export default async function QuestionnaireCompletePage({
           />
         </CardContent>
       </Card>
+
+      {pledgeStep && !pledgeStep.pledge && !pledgeStep.amountLocked && (
+        <section aria-label="Your pledge" className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            You said you&rsquo;re coming. One more step: what can you put in?
+            Nothing is charged until the captains give you a place, and you can
+            change it on My dues until then.
+          </p>
+          <PledgeStep
+            scale={pledgeStep.scale}
+            burnYear={pledgeStep.burnYear}
+            pledge={null}
+            knownPayBy={pledgeStep.knownPayBy}
+          />
+        </section>
+      )}
 
       {/* A builder questionnaire's results open to everyone who answered
           (owner, 2026-10-23), once nothing holds the app. */}

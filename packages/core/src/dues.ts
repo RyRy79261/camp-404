@@ -2,7 +2,6 @@ import {
   type ChargeKind,
   type PaymentMethod,
   type PaymentSource,
-  type PledgeInput,
   type RefundStatus,
   type SettleUpInput,
 } from "@camp404/types";
@@ -335,10 +334,6 @@ export function proposeRefund(
 
 export const TIER_GONE = "That fee tier isn't there any more. Reload the page.";
 export const TOO_MANY_TIERS = "A year has at most 12 fee tiers.";
-export const NO_TIERS_YET =
-  "The Finance team hasn't set this year's fees yet. Check back soon.";
-export const PLEDGE_NOT_BELOW =
-  "A pledge below the lowest tier must be less than it. Otherwise pick a tier.";
 export const SETTLE_UP_CHANGED =
   "The members to share it across changed. Preview it again.";
 export const SETTLE_UP_NOBODY =
@@ -382,25 +377,6 @@ export function feeStandardCents(
     replaced?.amountCents ??
     null
   );
-}
-
-/**
- * A member's pledge against the year's LIVE tiers, cheapest first: the tier
- * they picked, or an amount below the lowest tier. A refusal is a sentence.
- */
-export function resolvePledge(
-  pledge: PledgeInput,
-  liveTiers: readonly { id: string; amountCents: number }[],
-): { tierId: string | null; amountCents: number } | string {
-  if (liveTiers.length === 0) return NO_TIERS_YET;
-  if (pledge.kind === "tier") {
-    const tier = liveTiers.find((t) => t.id === pledge.tierId);
-    return tier
-      ? { tierId: tier.id, amountCents: tier.amountCents }
-      : TIER_GONE;
-  }
-  if (pledge.amountCents >= liveTiers[0]!.amountCents) return PLEDGE_NOT_BELOW;
-  return { tierId: null, amountCents: pledge.amountCents };
 }
 
 /**
