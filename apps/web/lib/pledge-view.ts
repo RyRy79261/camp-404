@@ -61,13 +61,20 @@ export function pledgeMarks(scale: PledgeScale): FeeScaleMark[] {
     rands: recommended / 100,
     detail: markDetail(recommended, scale),
     side: "below",
+    // Its own row under Reasonable's: R1,200 apart, the two labels collide.
+    row: 2,
     lit: true,
   });
   return marks;
 }
 
+/** "R3 500 · ≈ US$219": a mark's dollars to the whole dollar, as the mock-up. */
 function markDetail(cents: number, scale: PledgeScale): string {
-  return `${formatMoney(cents, "ZAR", { wholeRands: true })} · ${usdLabel(cents, scale)}`;
+  const rate = scale.usdRate.randsPerDollar;
+  const wholeDollarCents = Math.round(
+    Math.round(cents / (rate * 100)) * rate * 100,
+  );
+  return `${formatMoney(cents, "ZAR", { wholeRands: true })} · ${usdLabel(wholeDollarCents, scale)}`;
 }
 
 /**

@@ -21,6 +21,12 @@ export interface FeeScaleMark {
   detail?: string;
   /** Above the track or below it. */
   side: "above" | "below";
+  /**
+   * Below only: a second row under the first, on a longer tick, for a mark
+   * that sits too near a first-row one for both labels to fit (the console's
+   * Recommended, R1,200 from Reasonable). Default 1.
+   */
+  row?: 1 | 2;
   /** Drawn in the accent colour (the Join site's Ideal, the Recommended). */
   lit?: boolean;
 }
@@ -62,8 +68,9 @@ export function FeeScaleTrack({
 }: FeeScaleTrackProps) {
   const pct = (value: number) =>
     `${(Math.min(Math.max(value, 0), max) / max) * 100}%`;
+  const secondRow = marks.some((m) => m.side === "below" && m.row === 2);
   return (
-    <div className="relative px-1 pb-14 pt-12">
+    <div className={`relative px-1 pt-12 ${secondRow ? "pb-24" : "pb-14"}`}>
       {/* The track: blue at the subsidy end, magenta at the top. */}
       <div
         aria-hidden
@@ -97,7 +104,9 @@ export function FeeScaleTrack({
             style={{ left: `calc(0.25rem + ${pct(m.rands)})` }}
           >
             <span
-              className={`h-3 w-px ${m.lit ? "bg-os-primary" : "bg-os-fg/60"}`}
+              className={`w-px ${!above && m.row === 2 ? "h-11" : "h-3"} ${
+                m.lit ? "bg-os-primary" : "bg-os-fg/60"
+              }`}
             />
             <span
               className={`whitespace-nowrap font-pixel text-[9px] uppercase ${

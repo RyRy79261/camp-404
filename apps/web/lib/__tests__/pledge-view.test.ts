@@ -61,7 +61,10 @@ describe("the scale's words", () => {
       ["Perfect World", "above"],
       ["★ Recommended", "below"],
     ]);
-    expect(marks.at(-1)).toMatchObject({ rands: 7_200, lit: true });
+    // Recommended on its own row: R1,200 from Reasonable, the labels collide.
+    expect(marks.at(-1)).toMatchObject({ rands: 7_200, lit: true, row: 2 });
+    // Dollars to the whole dollar: R3,500 at R16 is US$218.75.
+    expect(marks[0]!.detail).toMatch(/· ≈ US\$219$/);
   });
 });
 
