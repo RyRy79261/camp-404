@@ -16,7 +16,6 @@ import {
 } from "@camp404/ui/components/card";
 import { Checkbox } from "@camp404/ui/components/checkbox";
 import { InputField } from "@camp404/ui/components/input-field";
-import { Label } from "@camp404/ui/components/label";
 import { OptionCardGroup } from "@camp404/ui/components/option-card-group";
 import { toast } from "@camp404/ui/components/toast";
 import { savePledgeAction } from "@/app/(console)/dues/actions";
@@ -260,14 +259,20 @@ export function PledgeStep({
               disabled={pending}
               onCheckedChange={(v) => setSubsidy(v === true)}
             />
-            <Label htmlFor={`${id}-subsidy`} className="flex flex-col gap-1">
+            {/* A plain label, not the kit's Label: the skin draws that one in
+                the chrome's pixel capitals, and this is a sentence and a note
+                (mock-up step 3). */}
+            <label
+              htmlFor={`${id}-subsidy`}
+              className="flex cursor-pointer flex-col gap-1 text-sm leading-snug"
+            >
               <span className="font-semibold">
                 I need a subsidy: please talk to me
               </span>
               <span className="text-sm font-normal text-muted-foreground">
                 {scale.subsidy.note}
               </span>
-            </Label>
+            </label>
           </div>
           {subsidy && (
             <p role="status" className="border-l-2 border-accent pl-2 text-sm">
