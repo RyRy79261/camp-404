@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   buildShoppingList,
-  canRunProofread,
+  PROOFREADER,
   mealPlanDayLabel,
   mealPlates,
   snackKey,
@@ -30,6 +30,7 @@ import {
   listReviewQueue,
 } from "../../recipes";
 import { siteUrl } from "../capabilities";
+import { scopeActor } from "../scope";
 import { runTool } from "../tool-utils";
 
 // The Kitchen's pages, read over MCP (#239's import needs them to check what
@@ -233,7 +234,7 @@ export function registerKitchenTools(server: McpServer): void {
             })),
             // The page shows this section to those who may send (the gate
             // already says so; asked again so the rule reads here too).
-            readyForClaude: canRunProofread(scope.viewerRank, scope.leadTeams)
+            readyForClaude: PROOFREADER.allows(scopeActor(scope))
               ? ready.map((r) => ({
                   id: r.id,
                   title: r.title,

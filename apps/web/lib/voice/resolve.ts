@@ -1,6 +1,5 @@
 import { WEBSITE_ONLY } from "../mcp/capabilities";
 import type { McpScope } from "../mcp/scope";
-import { usesTestStore } from "../test-mode";
 import type { LoopOutcome, Proposed, ReadRecord } from "./command";
 import { MAX_ACTIONS, MAX_ANSWERS } from "./command";
 import { lookAlikes, wordsSingleOut } from "./names";
@@ -159,7 +158,7 @@ export interface ResolveDeps {
   sealKey: string;
   now: Date;
   readRoster: () => Promise<RosterPerson[]>;
-  /** Claims waiting for a decision that this captain may see (none in the test store). */
+  /** Claims waiting for a decision that this captain may see. */
   readWaitingClaims: () => Promise<WaitingClaim[]>;
   preview?: (tool: string, args: Record<string, unknown>) => Promise<Preview>;
 }
@@ -396,8 +395,7 @@ export async function resolveOutcome(
   );
   const roster = needsRoster ? await deps.readRoster() : null;
   const needsClaims = checked.some((c) => c.tool.endsWith("_reimbursement"));
-  const claims =
-    needsClaims && !usesTestStore() ? await deps.readWaitingClaims() : null;
+  const claims = needsClaims ? await deps.readWaitingClaims() : null;
   const targeted = new Set(
     checked
       .filter((c) => c.tool.endsWith("_reimbursement"))

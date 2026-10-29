@@ -25,6 +25,7 @@ import {
   type ClaimForFinance,
   type ClaimResult,
   type MyClaim,
+  type ReimbursementReviewRow,
   type SubmitClaimInput,
 } from "@camp404/db/reimbursements";
 import { BUDGET_CHANGED, BUDGET_NOT_FINANCE } from "@camp404/db/team-budgets";
@@ -210,6 +211,39 @@ export const claimsTestStore = {
         approvedAt: c.approvedAt,
         paidAt: c.paidAt,
         files: refs(c),
+      }));
+  },
+
+  listReimbursementsForReview(
+    options: {
+      status?: ClaimStatus;
+      teams?: readonly Team[];
+      generalOnly?: boolean;
+      id?: string;
+    } = {},
+  ): ReimbursementReviewRow[] {
+    if (options.teams && options.teams.length === 0) return [];
+    return state()
+      .claims.filter(
+        (c) =>
+          (!options.status || c.status === options.status) &&
+          (options.id === undefined || c.id === options.id) &&
+          (options.teams
+            ? options.teams.includes(c.team)
+            : // Every claim in the store has a team.
+              !options.generalOnly),
+      )
+      .reverse()
+      .map((c) => ({
+        ...forApproval(c),
+        cycle: c.cycle,
+        status: c.status,
+        accountType: c.accountType,
+        decisionNote: c.decisionNote,
+        approverId: c.approverId,
+        approvedAt: c.approvedAt,
+        paidAt: c.paidAt,
+        receiptCount: c.files.length,
       }));
   },
 

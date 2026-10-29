@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { ParticipationIntent, ParticipationStatus } from "@camp404/types";
 import { createHttpDb } from "./index";
@@ -14,6 +14,43 @@ import { currentCycleNumber } from "./cycles";
 // Deliberately a flat, additive shape: this is an explicitly "growing"
 // surface, so new columns slot on here (and into the table that renders it)
 // without reshaping callers.
+
+/** A member as a captain may name them: their id and display name. */
+export interface NamedMember {
+  id: string;
+  name: string;
+}
+
+/**
+ * Every member a captain may name (voice matches a spoken name against it):
+ * approved or waiting, never rejected, never a system actor or an erased
+ * stub.
+ */
+export async function listNameableMembers(): Promise<NamedMember[]> {
+  const rows = await createHttpDb()
+    .select({ id: schema.users.id, name: schema.users.displayName })
+    .from(schema.users)
+    .where(
+      and(
+        eq(schema.users.isSystem, false),
+        eq(schema.users.sanitised, false),
+        ne(schema.users.approvalStatus, "rejected"),
+      ),
+    );
+  return rows.map((r) => ({ id: r.id, name: r.name ?? "Unnamed member" }));
+}
+
+/** Display names of the members `ids` names, for those that exist. */
+export async function listDisplayNames(
+  ids: readonly string[],
+): Promise<NamedMember[]> {
+  if (ids.length === 0) return [];
+  const rows = await createHttpDb()
+    .select({ id: schema.users.id, name: schema.users.displayName })
+    .from(schema.users)
+    .where(inArray(schema.users.id, [...ids]));
+  return rows.map((r) => ({ id: r.id, name: r.name ?? "Unnamed member" }));
+}
 
 export interface CampManagementMember {
   id: string;

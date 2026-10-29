@@ -1,11 +1,11 @@
 import { deriveViewerRank, type Actor } from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
 import { getMcpScopeRows, type McpScopeRows, type Team } from "@camp404/db/mcp";
+import { usesTestStore } from "../test-mode";
 
-// Intentionally not `import "server-only"` — `resolveMcpScope` is a pure
-// function exercised in unit tests under jsdom, and the DB-bound
-// `getMcpScope` only runs from MCP tool handlers which themselves never
-// reach a client bundle.
+// Server code only: `getMcpScope` runs from the MCP tool handlers and the
+// voice route, and reads the test store through `usesTestStore()` (which is
+// `server-only`). `resolveMcpScope` stays a pure function for unit tests.
 
 /**
  * Effective capability snapshot for one MCP call.
@@ -77,12 +77,8 @@ export async function getMcpScope(
   campUserId: string,
 ): Promise<McpScope | null> {
   // The E2E test store stands in for the database (voice drives the
-  // connector's tools in Playwright, #356). Checked inline: this file stays
-  // free of `server-only` imports for its unit tests.
-  if (
-    process.env.E2E_TEST_MODE === "1" &&
-    process.env.E2E_DATABASE !== "real"
-  ) {
+  // connector's tools in Playwright, #356).
+  if (usesTestStore()) {
     const { testStore } = await import("../test-store");
     const user = testStore.findUserById(campUserId);
     if (!user || user.approvalStatus !== "approved") return null;

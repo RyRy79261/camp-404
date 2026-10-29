@@ -1,9 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { CAMP_TIME_ZONE, campDayKey } from "@camp404/core";
 import type { VoiceCommandContext } from "@camp404/ai-prompts";
-import { listReimbursementsForReview } from "@camp404/db/reimbursements";
 import { LOGISTICS_PHASE_LABELS } from "@camp404/types";
 import { getCampSettings } from "../camp-config";
+import { listReimbursementsForReview } from "../claims";
 import { listLogisticsPhases } from "../logistics";
 import { WEBSITE_ONLY } from "../mcp/capabilities";
 import type { McpScope } from "../mcp/scope";

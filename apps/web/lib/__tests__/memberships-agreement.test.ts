@@ -55,7 +55,9 @@ import {
   getTeamCoverage,
   getTeamMemberships as rosterGetTeamMemberships,
   listMemberNotes,
+  listDisplayNames,
   listMemberQuestionnaireGates,
+  listNameableMembers,
   listTeamPeople,
   removeTeam as rosterRemoveTeam,
   setLead as rosterSetLead,
@@ -391,6 +393,45 @@ describe("the captain roster and team writes: the database and the test store ag
       gates: [
         { actionKey: "burner_profile", status: "pending", blocking: true },
       ],
+    });
+    expect(fromStore).toEqual(db);
+  });
+
+  it("names the members a captain may name, and display names by id, the same way", async () => {
+    const { db, store: fromStore } = await bothWays(
+      store,
+      h,
+      async (p, seed) => {
+        const late = await seed.user("Late", { approval: "pending" });
+        const byName = (a: { name: string }, b: { name: string }) =>
+          a.name.localeCompare(b.name);
+        return {
+          nameable: (await listNameableMembers()).sort(byName),
+          names: (
+            await listDisplayNames([
+              p.member,
+              late,
+              "00000000-0000-4000-8000-000000000000",
+            ])
+          ).sort(byName),
+          none: await listDisplayNames([]),
+        };
+      },
+    );
+    expect(db).toEqual({
+      nameable: [
+        { id: "@captain", name: "Cap" },
+        { id: "@kitchenLead", name: "Cook" },
+        { id: "@financeLead", name: "Fin" },
+        { id: "#6", name: "Late" },
+        { id: "@member", name: "Nova" },
+        { id: "@other", name: "Zed" },
+      ],
+      names: [
+        { id: "#6", name: "Late" },
+        { id: "@member", name: "Nova" },
+      ],
+      none: [],
     });
     expect(fromStore).toEqual(db);
   });

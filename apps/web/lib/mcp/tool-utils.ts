@@ -4,6 +4,7 @@ import { appendMcpAuditLog as dbAppendMcpAuditLog } from "@camp404/db/mcp";
 import { getCampUserIdFromAuth } from "./auth";
 import { refusalFor, TOOL_CAPABILITIES } from "./capabilities";
 import { getMcpScope, type McpScope } from "./scope";
+import { usesTestStore } from "../test-mode";
 
 /**
  * The connector's audit row. In the E2E test store (voice drives these tools
@@ -12,10 +13,7 @@ import { getMcpScope, type McpScope } from "./scope";
 async function appendMcpAuditLog(
   row: Parameters<typeof dbAppendMcpAuditLog>[0],
 ): Promise<void> {
-  if (
-    process.env.E2E_TEST_MODE === "1" &&
-    process.env.E2E_DATABASE !== "real"
-  ) {
+  if (usesTestStore()) {
     const { voiceTestStore } = await import("../test-store-voice");
     voiceTestStore.appendAudit({
       campUserId: row.campUserId,

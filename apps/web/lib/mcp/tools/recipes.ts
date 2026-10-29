@@ -8,7 +8,7 @@ import {
   suggestRecipe,
   suggestionTitle,
 } from "@camp404/db/recipes";
-import { canApproveRecipe } from "@camp404/core";
+import { KITCHEN_REVIEWER } from "@camp404/core";
 import {
   AddLessonInput,
   LINK_ONLY_REFUSAL,
@@ -28,6 +28,7 @@ import {
   retypeRecipeText,
 } from "../../recipes";
 import { siteUrl } from "../capabilities";
+import { scopeActor, type McpScope } from "../scope";
 import { ToolError, notFound, runTool, truncateList } from "../tool-utils";
 
 // Recipes through the Claude connector (#243). A member may suggest one by
@@ -103,19 +104,12 @@ function sectionsAreOnlyLinks(sections: Sections): boolean {
  * before that, its submitter and the Kitchen's reviewers. Anyone else is told
  * it does not exist.
  */
-async function readableRecipe(
-  recipeId: string,
-  scope: {
-    campUserId: string;
-    viewerRank: string;
-    leadTeams: readonly string[];
-  },
-) {
+async function readableRecipe(recipeId: string, scope: McpScope) {
   const detail = await getRecipeDetail(recipeId);
   const privileged =
     detail !== null &&
     (detail.submitterId === scope.campUserId ||
-      canApproveRecipe(scope.viewerRank, scope.leadTeams));
+      KITCHEN_REVIEWER.allows(scopeActor(scope)));
   if (!detail || (!privileged && detail.acceptedVersionId === null)) {
     notFound("No recipe with that id.");
   }
@@ -275,10 +269,7 @@ export function registerRecipeTools(server: McpServer): void {
           const current = detail.currentVersion;
           // The source version retype_recipe_text names: for the Kitchen's
           // reviewers, who alone may retype (0 when it has none).
-          const sourceVersion = canApproveRecipe(
-            scope.viewerRank,
-            scope.leadTeams,
-          )
+          const sourceVersion = KITCHEN_REVIEWER.allows(scopeActor(scope))
             ? ((await getRecipeSource(detail.id))?.version ?? 0)
             : undefined;
           if (!current) {

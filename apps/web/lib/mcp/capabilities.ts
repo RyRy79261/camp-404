@@ -108,7 +108,10 @@ export const GATES = {
   // item's team).
   inventoryEditor: {
     who: "Captains, and team leads for their own team's gear",
-    allows: (s) => canEditAnyInventory(s.viewerRank, s.leadTeams),
+    allows: (s) => {
+      const actor = scopeActor(s);
+      return canEditAnyInventory(actor.rank, actor.ledTeams);
+    },
     refusal:
       "Only a captain or a lead of the item's team can add or change gear. Any member can suggest a change to an item instead.",
   },

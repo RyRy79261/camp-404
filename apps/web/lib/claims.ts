@@ -61,6 +61,7 @@ const claim = twin(claims, claimsTestStore, [
   "listMyClaims",
   "listClaimsForApproval",
   "listClaimsForFinance",
+  "listReimbursementsForReview",
   "getClaimFile",
   "decideClaim",
   "payClaim",
@@ -76,6 +77,8 @@ const bank = twin(sealed, claimsTestStore, ["submitClaim", "readClaimAccount"]);
 export const listMyClaims = claim.listMyClaims;
 export const listClaimsForApproval = claim.listClaimsForApproval;
 export const listClaimsForFinance = claim.listClaimsForFinance;
+/** Claims for the connector's review tools and voice's previews. */
+export const listReimbursementsForReview = claim.listReimbursementsForReview;
 export const listBudgetTotals = budget.listBudgetTotals;
 export const getClaimFile = claim.getClaimFile;
 
