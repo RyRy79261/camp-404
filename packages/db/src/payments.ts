@@ -380,31 +380,35 @@ export async function receivedTotal(cycle: number): Promise<number> {
  * SQL for "this member's dues are settled for `cycle`", the same rule as
  * duesSettled in @camp404/core: with live charges (#240), the balance is paid
  * down to zero or below; with none, any payment that year received or waived.
- * The roster and the member panel both read this.
+ * The roster reads it, one column per member; dues-settled-sql.test.ts pins
+ * it to duesSettled on the same rows.
  */
 export function duesSettledSql(userId: typeof schema.users.id, cycle: number) {
+  // Qualified by hand: in a select with no join, drizzle writes a column bare
+  // ("id"), which inside these subqueries would read the inner table's id.
+  const user = sql`${userId.table}.${sql.identifier(userId.name)}`;
   return sql<boolean>`case
     when exists (
       select 1 from dues_charges c
-      where c.user_id = ${userId} and c.cycle = ${cycle} and c.cancelled_at is null
+      where c.user_id = ${user} and c.cycle = ${cycle} and c.cancelled_at is null
     ) then (
       coalesce((
         select sum(c.amount_cents) from dues_charges c
-        where c.user_id = ${userId} and c.cycle = ${cycle} and c.cancelled_at is null
+        where c.user_id = ${user} and c.cycle = ${cycle} and c.cancelled_at is null
       ), 0)
       - coalesce((
         select sum(p.amount_cents) from payments p
-        where p.user_id = ${userId} and p.cycle = ${cycle}
+        where p.user_id = ${user} and p.cycle = ${cycle}
           and p.status in ('reconciled', 'waived')
       ), 0)
       + coalesce((
         select sum(r.amount_cents) from payment_refunds r
-        where r.user_id = ${userId} and r.cycle = ${cycle} and r.status = 'refunded'
+        where r.user_id = ${user} and r.cycle = ${cycle} and r.status = 'refunded'
       ), 0)
     ) <= 0
     else exists (
       select 1 from payments p
-      where p.user_id = ${userId} and p.cycle = ${cycle}
+      where p.user_id = ${user} and p.cycle = ${cycle}
         and p.status in ('reconciled', 'waived')
     )
   end`;

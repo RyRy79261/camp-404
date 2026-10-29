@@ -44,7 +44,7 @@ import {
   remindFeesOwedAction,
 } from "./camp-money-actions";
 
-const REFUSAL = "Payments are for captains and Finance leads.";
+const REFUSAL = "Only captains and Finance leads can do this.";
 
 function as(rank: "captain" | "team_lead", led: string[] = []) {
   vi.mocked(captainActionGate).mockResolvedValue({

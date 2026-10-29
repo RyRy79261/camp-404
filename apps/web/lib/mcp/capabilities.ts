@@ -3,6 +3,7 @@ import {
   hasClearance,
   LOGISTICS_EDITOR,
   MONEY_KEEPER,
+  MONEY_REFUSAL,
   PROOFREADER,
   RENTAL_MANAGER,
   TRANSPORT_EDITOR,
@@ -72,7 +73,7 @@ export const GATES = {
   money: {
     who: "Captains and Finance leads",
     allows: byRule(MONEY_KEEPER),
-    refusal: "Only a captain or a Finance lead can do this.",
+    refusal: MONEY_REFUSAL,
   },
   // Website-only gates: no tool uses them, what_can_i_do does.
   driver: {

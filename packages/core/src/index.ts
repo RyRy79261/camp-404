@@ -55,7 +55,11 @@
 //     duesSettled, nextInstalment, splitEvenly, proposeRefund, the rules both
 //     dues stores apply (feeStandardCents, isFeeConcession,
 //     settleUpCharges, refundAmount) and the statement import
-//     (parseStatement, proposeStatementMatches) (./dues)
+//     (parseStatement, proposeStatementMatches), and MONEY_REFUSAL, the
+//     one sentence a refused money action says (./dues)
+//   - a member's dues record: memberDues (with the Finance-only masking),
+//     duesAccountRow (the Finance team's list) and feeChargeFromPledge, built
+//     from rows either dues store fetches (./member-dues)
 //   - camp fees: the pledge's "by when" (feeTimingSchedule, feeTimingLabel),
 //     the next fee payment (feeInstalmentsLeft, nextFeePayment), pledgeRefusal,
 //     the Join scale's names (nearestScaleName, recommendedPledgeCents), the
@@ -230,6 +234,7 @@ export * from "./member-export";
 export * from "./payment-references";
 export * from "./money";
 export * from "./dues";
+export * from "./member-dues";
 export * from "./camp-fees";
 export * from "./audience-authz";
 export * from "./pinned-order";

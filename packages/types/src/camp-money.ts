@@ -174,6 +174,55 @@ export function offeredAbroadWays(
   return ABROAD_WAYS.filter((way) => abroad.ways[way]);
 }
 
+/**
+ * The way abroad the pay guide shows: the one the member picked while Finance
+ * still ticks it, else the first ticked one; undefined when none is ticked.
+ */
+export function abroadWayShown(
+  abroad: CampBankDetails["abroad"],
+  picked: AbroadWay | null,
+): AbroadWay | undefined {
+  const ways = offeredAbroadWays(abroad);
+  return picked && ways.includes(picked) ? picked : ways[0];
+}
+
+/**
+ * The lines a member copies to pay, label then value, leaving out the ones
+ * Finance has not typed: the South African account (`"za"`), or the way
+ * abroad shown. A pay link (or no way at all) has no lines: only the way
+ * Finance ticked, never the South African account by default.
+ */
+export function payDetailRows(
+  bank: CampBankDetails,
+  shown: "za" | AbroadWay | undefined,
+): [label: string, value: string][] {
+  const { southAfrica: za, abroad } = bank;
+  const entries: [string, string | null][] =
+    shown === "za"
+      ? [
+          ["Bank", za.bank],
+          ["Account name", za.accountName],
+          ["Account number", za.accountNumber],
+          ["Branch code", za.branchCode],
+        ]
+      : shown === "swift"
+        ? [
+            ["SWIFT code", abroad.swift],
+            ["Bank", abroad.bankAddress],
+            ["Account name", za.accountName],
+            ["Account number", abroad.accountNumber ?? za.accountNumber],
+          ]
+        : shown === "iban"
+          ? [
+              ["Account name", abroad.iban.accountName],
+              ["IBAN", abroad.iban.iban],
+              ["BIC / SWIFT", abroad.iban.bic],
+              ["Bank", abroad.iban.bank],
+            ]
+          : [];
+  return entries.filter((e): e is [string, string] => !!e[1]);
+}
+
 /** Bank details with nothing typed yet. */
 export const EMPTY_CAMP_BANK_DETAILS: CampBankDetails = {
   southAfrica: {

@@ -1,9 +1,6 @@
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   campDayKey,
-  duesBalance,
-  nextInstalment,
-  paymentFigures,
   feeStandardCents,
   isFeeConcession,
   MAX_FEE_TIERS,
@@ -11,7 +8,6 @@ import {
   FEE_ALREADY_SET,
   FEE_PLEDGE_ACTION_KEY,
   FEE_PLEDGE_REF_TYPE,
-  feeFigures,
   pledgeRefusal,
   proposeRefund,
   refundAmount,
@@ -21,26 +17,23 @@ import {
   settleUpCharges,
   TIER_GONE,
   TOO_MANY_TIERS,
-  type DuesBalance,
-  type Instalment,
-  type NextFeePayment,
-  type NextInstalment,
-  type PaymentFigures,
   type RefundRule,
   MONEY_KEEPER,
+  MONEY_REFUSAL,
+  memberDues,
+  duesAccountRow,
+  feeChargeFromPledge,
+  type DuesAccountRow,
+  type MemberDues,
 } from "@camp404/core";
 import type {
-  ChargeKind,
   ChargeInput,
   DuesYearInput,
   FeeTierInput,
   FeeTiming,
-  ParticipationStatus,
-  PaymentMethod,
   PaymentPlanInput,
   PaymentSource,
   PledgeInput,
-  RefundStatus,
   SetFeeInput,
   SettleUpInput,
 } from "@camp404/types";
@@ -73,8 +66,8 @@ export type MoneyResult<T = object> =
   | ({ ok: true } & T)
   | { ok: false; error: string };
 
-export const NOT_A_MONEY_KEEPER =
-  "Only captains and Finance leads can change the camp's dues.";
+/** MONEY_REFUSAL (@camp404/core), under the name the money writes use. */
+export const NOT_A_MONEY_KEEPER = MONEY_REFUSAL;
 export const YEAR_CHANGED =
   "Someone changed this year's dues dates first. Reload the page.";
 // The sentences of the rules both dues stores share live with those rules in
@@ -460,92 +453,16 @@ export async function archiveFeeTier(input: {
 
 // --- A member's account --------------------------------------------------------------
 
-export interface Pledge {
-  /** Only a pledge made on a fee tier before 2026-10-27 has one. */
-  tierId: string | null;
-  /** That tier's label, else null (a pledge of the member's own amount). */
-  tierLabel: string | null;
-  amountCents: number;
-  pledgedAt: Date | null;
-}
-
-export interface DuesChargeRow {
-  id: string;
-  kind: ChargeKind;
-  description: string;
-  amountCents: number;
-  currency: string;
-  /** A fee's pledged amount, when a concession set it lower. */
-  standardAmountCents: number | null;
-  /** The concession's reason. Always null on a member's own read. */
-  concessionReason: string | null;
-  /** True when the fee was lowered or given with a reason. */
-  concession: boolean;
-  cancelled: boolean;
-  createdAt: Date;
-}
-
-export interface DuesRefundRow {
-  id: string;
-  paymentId: string;
-  status: RefundStatus;
-  proposedCents: number | null;
-  amountCents: number;
-  currency: string;
-  note: string | null;
-  declineReason: string | null;
-  decidedAt: Date | null;
-  createdAt: Date;
-}
-
-export interface DuesPaymentRow {
-  id: string;
-  reference: string;
-  amountCents: number;
-  currency: string;
-  status: PaymentStatus;
-  source: PaymentSource;
-  method: PaymentMethod | null;
-  paidOn: string | null;
-  hasProof: boolean;
-  /** The ledger note. Null on a member's own read. */
-  note: string | null;
-  createdAt: Date;
-  /** Its refund, when one was asked for (the latest). */
-  refund: DuesRefundRow | null;
-}
-
-export interface MemberDues {
-  userId: string;
-  cycle: number;
-  name: string;
-  refCode: string | null;
-  pledge: Pledge | null;
-  /** When they said they can pay (their pledge, or a fee_timing answer). */
-  payBy: FeeTiming | null;
-  /** They asked for a subsidy: talk to them; no fee reminders. */
-  subsidy: boolean;
-  planVersion: number;
-  instalments: { dueOn: string; amountCents: number }[];
-  charges: DuesChargeRow[];
-  payments: DuesPaymentRow[];
-  participation: {
-    status: ParticipationStatus;
-    /** The camp day they said No after holding a place, else null. */
-    withdrewOn: string | null;
-  } | null;
-  balance: DuesBalance;
-  next: NextInstalment | null;
-  /** The burn year the fees are for (feeBurnYear: the cycle, or the next
-   * AfrikaBurn when no year is set). Name a "by when" with it. */
-  burnYear: number;
-  /** What the fee is: the live camp fee, else the pledge, else 0. */
-  feeTotalCents: number;
-  /** What is still owed of it after every payment received or waived. */
-  feeOwingCents: number;
-  /** Their next fee payment: the plan's, else the pledge's "by when". */
-  feeNext: NextFeePayment;
-}
+// The record and its rows are built in @camp404/core (memberDues), the same
+// for both dues stores; this module only fetches the rows.
+export type {
+  DuesAccountRow,
+  DuesChargeRow,
+  DuesPaymentRow,
+  DuesRefundRow,
+  MemberDues,
+  Pledge,
+} from "@camp404/core";
 
 /**
  * One member's dues for a year, or null when there is no such member. A
@@ -653,97 +570,24 @@ export async function getMemberDues(
     ]);
   const user = users[0];
   if (!user) return null;
-  const account = accounts[0];
-
-  const refundRows: DuesRefundRow[] = refunds.map((r) => ({
-    id: r.id,
-    paymentId: r.paymentId,
-    status: r.status,
-    proposedCents: r.proposedCents,
-    amountCents: r.amountCents,
-    currency: r.currency,
-    note: options.forFinance ? r.note : null,
-    declineReason: r.declineReason,
-    decidedAt: r.decidedAt,
-    createdAt: r.createdAt,
-  }));
-  const chargeRows: DuesChargeRow[] = charges.map((c) => ({
-    id: c.id,
-    kind: c.kind,
-    description: c.description,
-    amountCents: c.amountCents,
-    currency: c.currency,
-    standardAmountCents: options.forFinance ? c.standardAmountCents : null,
-    concessionReason: options.forFinance ? c.concessionReason : null,
-    concession: options.forFinance ? isFeeConcession(c) : false,
-    cancelled: c.cancelledAt !== null,
-    createdAt: c.createdAt,
-  }));
-  const paymentRows: DuesPaymentRow[] = payments.map((p) => ({
-    id: p.id,
-    reference: p.reference,
-    amountCents: p.amountCents,
-    currency: p.currency,
-    status: p.status,
-    source: p.source,
-    method: p.method,
-    paidOn: p.paidOn,
-    hasProof: p.proofPathname !== null,
-    note: options.forFinance ? p.note : null,
-    createdAt: p.createdAt,
-    refund: refundRows.find((r) => r.paymentId === p.id) ?? null,
-  }));
-  const balance = duesBalance({
-    charges: charges.filter((c) => c.cancelledAt === null),
-    payments,
-    refunds,
-  });
-  const place = places[0];
-  const today = options.today ?? campDayKey(new Date());
-  return {
-    userId,
-    cycle,
-    name: user.name?.trim() || "Unnamed burner",
-    refCode: user.refCode,
-    pledge:
-      account && account.amountCents !== null
-        ? {
-            tierId: account.tierId,
-            tierLabel: account.tierLabel,
-            amountCents: account.amountCents,
-            pledgedAt: account.pledgedAt,
-          }
-        : null,
-    payBy: account?.payBy ?? null,
-    subsidy: account?.subsidy ?? false,
-    planVersion: account?.planVersion ?? 0,
-    instalments,
-    charges: chargeRows,
-    payments: paymentRows,
-    participation: place
-      ? {
-          status: place.status,
-          withdrewOn:
-            place.status === "not_attending"
-              ? campDayKey(place.updatedAt)
-              : null,
-        }
-      : null,
-    balance,
-    next: nextInstalment(instalments, balance.paidCents, today),
-    ...feeFigures({
-      liveFeeCents:
-        charges.find((c) => c.kind === "fee" && c.cancelledAt === null)
-          ?.amountCents ?? null,
-      pledgedCents: account?.amountCents ?? null,
-      payBy: account?.payBy ?? null,
-      subsidy: account?.subsidy ?? false,
-      paidCents: balance.paidCents,
-      plan: instalments,
+  return memberDues(
+    {
+      userId,
       cycle,
-      today,
-    }),
-  };
+      name: user.name,
+      refCode: user.refCode,
+      account: accounts[0] ?? null,
+      charges,
+      payments,
+      refunds,
+      instalments,
+      participation: places[0] ?? null,
+    },
+    {
+      forFinance: options.forFinance,
+      today: options.today ?? campDayKey(new Date()),
+    },
+  );
 }
 
 /**
@@ -773,14 +617,10 @@ export async function chargeFeeFromPledge(
       ),
     )
     .limit(1);
-  // A subsidy pledge of R0 charges nothing: the Finance team sets their fee
-  // after the talk.
-  if (!account || account.amountCents === null || account.amountCents <= 0) {
-    return false;
-  }
-  const description = account.tierLabel
-    ? `Camp fee: ${account.tierLabel}`
-    : "Camp fee: pledged amount";
+  // feeChargeFromPledge: nothing for no pledge or a subsidy pledge of R0.
+  const charge = feeChargeFromPledge(account);
+  if (!charge) return false;
+  const { description, amountCents } = charge;
   const rows = await tx
     .insert(schema.duesCharges)
     .values({
@@ -788,7 +628,7 @@ export async function chargeFeeFromPledge(
       cycle: input.cycle,
       kind: "fee",
       description,
-      amountCents: account.amountCents,
+      amountCents,
       createdByUserId: input.actorId,
     })
     .onConflictDoNothing({
@@ -801,11 +641,7 @@ export async function chargeFeeFromPledge(
     actorId: input.actorId,
     action: "dues.fee_charged",
     target: input.userId,
-    metadata: {
-      cycle: input.cycle,
-      description,
-      amountCents: account.amountCents,
-    },
+    metadata: { cycle: input.cycle, description, amountCents },
   });
   return true;
 }
@@ -1153,39 +989,6 @@ export async function setPaymentPlan(
 
 // --- Every member, for the Finance team -------------------------------------------------
 
-export interface DuesAccountRow {
-  userId: string;
-  name: string;
-  refCode: string | null;
-  participation: ParticipationStatus | null;
-  /** The fee tier's label of a pledge made on one before 2026-10-27. */
-  pledgeLabel: string | null;
-  pledgeCents: number | null;
-  payBy: FeeTiming | null;
-  subsidy: boolean;
-  /** The live camp fee, or null when none is charged. */
-  feeCents: number | null;
-  /** The live fee was lowered or given with a reason. */
-  concession: boolean;
-  balance: DuesBalance;
-  next: NextInstalment | null;
-  /** Payments the member sent in, waiting to be checked against the bank. */
-  pendingProofs: number;
-  /** Their payments in the Finance team's words (bank, excused, to check, promised). */
-  figures: PaymentFigures;
-  /** Refunds asked for and not decided. */
-  openRefunds: number;
-  /** The Finance team's payment plan, by day (empty: none). */
-  plan: Instalment[];
-  /** The burn year the fees are for (feeBurnYear: the cycle, or the next
-   * AfrikaBurn when no year is set). Name a "by when" with it. */
-  burnYear: number;
-  /** What the fee is: the live camp fee, else the pledge, else 0. */
-  feeTotalCents: number;
-  feeOwingCents: number;
-  feeNext: NextFeePayment;
-}
-
 /**
  * Every member's dues for a year, for the Finance team's list of who owes
  * what: approved, real, not erased. Six reads side by side, joined here.
@@ -1204,6 +1007,7 @@ export async function listDuesAccounts(
           name: schema.users.displayName,
           refCode: schema.users.refCode,
           status: schema.campParticipations.status,
+          updatedAt: schema.campParticipations.updatedAt,
         })
         .from(schema.users)
         .leftJoin(
@@ -1223,10 +1027,13 @@ export async function listDuesAccounts(
       db
         .select({
           userId: schema.duesAccounts.userId,
-          label: schema.feeTiers.label,
+          tierId: schema.duesAccounts.pledgedTierId,
+          tierLabel: schema.feeTiers.label,
           amountCents: schema.duesAccounts.pledgedAmountCents,
+          pledgedAt: schema.duesAccounts.pledgedAt,
           payBy: schema.duesAccounts.payBy,
           subsidy: schema.duesAccounts.subsidy,
+          planVersion: schema.duesAccounts.planVersion,
         })
         .from(schema.duesAccounts)
         .leftJoin(
@@ -1243,23 +1050,9 @@ export async function listDuesAccounts(
             isNull(schema.duesCharges.cancelledAt),
           ),
         ),
+      db.select().from(schema.payments).where(eq(schema.payments.cycle, cycle)),
       db
-        .select({
-          userId: schema.payments.userId,
-          amountCents: schema.payments.amountCents,
-          currency: schema.payments.currency,
-          status: schema.payments.status,
-          source: schema.payments.source,
-        })
-        .from(schema.payments)
-        .where(eq(schema.payments.cycle, cycle)),
-      db
-        .select({
-          userId: schema.paymentRefunds.userId,
-          amountCents: schema.paymentRefunds.amountCents,
-          currency: schema.paymentRefunds.currency,
-          status: schema.paymentRefunds.status,
-        })
+        .select()
         .from(schema.paymentRefunds)
         .where(eq(schema.paymentRefunds.cycle, cycle)),
       db
@@ -1286,52 +1079,28 @@ export async function listDuesAccounts(
   const refundsOf = by(refunds);
   const plansOf = by(instalments);
   return members
-    .map((m) => {
-      const mine = chargesOf.get(m.id) ?? [];
-      const paid = paymentsOf.get(m.id) ?? [];
-      const refunded = refundsOf.get(m.id) ?? [];
-      const balance = duesBalance({
-        charges: mine,
-        payments: paid,
-        refunds: refunded,
-      });
-      const fee = mine.find((c) => c.kind === "fee");
-      const account = accountOf.get(m.id);
-      const plan = (plansOf.get(m.id) ?? [])
-        .map((i) => ({ dueOn: i.dueOn, amountCents: i.amountCents }))
-        .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
-      return {
-        userId: m.id,
-        name: m.name?.trim() || "Unnamed burner",
-        refCode: m.refCode,
-        participation: m.status,
-        pledgeLabel:
-          account?.amountCents != null ? (account.label ?? null) : null,
-        pledgeCents: account?.amountCents ?? null,
-        payBy: account?.payBy ?? null,
-        subsidy: account?.subsidy ?? false,
-        feeCents: fee?.amountCents ?? null,
-        concession: fee ? isFeeConcession(fee) : false,
-        balance,
-        next: nextInstalment(plan, balance.paidCents, today),
-        pendingProofs: paid.filter(
-          (p) => p.status === "pending" && p.source === "member",
-        ).length,
-        figures: paymentFigures(paid),
-        openRefunds: refunded.filter((r) => r.status === "requested").length,
-        plan,
-        ...feeFigures({
-          liveFeeCents: fee?.amountCents ?? null,
-          pledgedCents: account?.amountCents ?? null,
-          payBy: account?.payBy ?? null,
-          subsidy: account?.subsidy ?? false,
-          paidCents: balance.paidCents,
-          plan,
+    .map((m) =>
+      duesAccountRow(
+        {
+          userId: m.id,
           cycle,
-          today,
-        }),
-      };
-    })
+          name: m.name,
+          refCode: m.refCode,
+          account: accountOf.get(m.id) ?? null,
+          charges: chargesOf.get(m.id) ?? [],
+          payments: paymentsOf.get(m.id) ?? [],
+          refunds: refundsOf.get(m.id) ?? [],
+          instalments: [...(plansOf.get(m.id) ?? [])].sort((a, b) =>
+            a.dueOn.localeCompare(b.dueOn),
+          ),
+          participation:
+            m.status && m.updatedAt
+              ? { status: m.status, updatedAt: m.updatedAt }
+              : null,
+        },
+        today,
+      ),
+    )
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

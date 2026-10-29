@@ -6,7 +6,9 @@ import {
   EMPTY_CAMP_BANK_DETAILS,
   MarkCampBillPaidInput,
   isValidIban,
+  abroadWayShown,
   offeredAbroadWays,
+  payDetailRows,
 } from "../camp-money";
 
 // The camp's own money (camp fees sprint): bank details, the bank balance
@@ -125,5 +127,62 @@ describe("camp money shapes", () => {
         paidOn: "2026-11-14",
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("the pay guide's lines", () => {
+  const bank: CampBankDetails = {
+    southAfrica: {
+      bank: "FNB",
+      accountName: "Camp 404",
+      accountNumber: "62000000000",
+      branchCode: null,
+    },
+    abroad: {
+      ...EMPTY_CAMP_BANK_DETAILS.abroad,
+      ways: { payLink: true, swift: false, iban: true },
+      payLink: "https://wise.com/pay/camp404",
+      swift: "FIRNZAJJ",
+      iban: {
+        accountName: "Camp 404 (Wise)",
+        iban: "BE68539007547034",
+        bic: null,
+        bank: "Wise",
+      },
+    },
+  };
+
+  it("shows the way the member picked while it is ticked, else the first", () => {
+    expect(abroadWayShown(bank.abroad, null)).toBe("payLink");
+    expect(abroadWayShown(bank.abroad, "iban")).toBe("iban");
+    // SWIFT is not ticked, so a pick of it falls back.
+    expect(abroadWayShown(bank.abroad, "swift")).toBe("payLink");
+    expect(
+      abroadWayShown(EMPTY_CAMP_BANK_DETAILS.abroad, "iban"),
+    ).toBeUndefined();
+  });
+
+  it("lists only the lines Finance typed, for the account shown", () => {
+    expect(payDetailRows(bank, "za")).toEqual([
+      ["Bank", "FNB"],
+      ["Account name", "Camp 404"],
+      ["Account number", "62000000000"],
+    ]);
+    expect(payDetailRows(bank, "iban")).toEqual([
+      ["Account name", "Camp 404 (Wise)"],
+      ["IBAN", "BE68539007547034"],
+      ["Bank", "Wise"],
+    ]);
+    // SWIFT goes to the South African account unless Finance typed another.
+    expect(payDetailRows(bank, "swift")).toEqual([
+      ["SWIFT code", "FIRNZAJJ"],
+      ["Account name", "Camp 404"],
+      ["Account number", "62000000000"],
+    ]);
+  });
+
+  it("never falls back to the South African account abroad", () => {
+    expect(payDetailRows(bank, "payLink")).toEqual([]);
+    expect(payDetailRows(bank, undefined)).toEqual([]);
   });
 });
