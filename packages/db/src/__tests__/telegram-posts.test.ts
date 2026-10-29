@@ -14,17 +14,22 @@ import {
   LEAD_POST_NOT_A_LEAD,
   listTelegramPlaces,
   postTeamLeadInTelegram,
+  queueFeeReminderPost,
   queueTelegramPosts,
   reminderTags,
   removeTelegramPlace,
   setTelegramPostSettings,
   TELEGRAM_CAPTAINS_ONLY,
-  TELEGRAM_POST_MAX_QUEUED_HOURS,
   type TelegramPostSend,
 } from "../telegram-posts";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { getActiveChatByKind } from "../telegram";
+import {
+  TELEGRAM_MAX_DEFERRALS_IN_A_ROW,
+  TELEGRAM_MAX_QUEUED_HOURS,
+} from "../telegram-outbox";
+import { FEE_TELEGRAM_BUTTON } from "@camp404/core";
 import { withTransaction } from "../index";
 import * as schema from "../schema";
 
@@ -312,6 +317,38 @@ describe("queueing posts", () => {
         queueTelegramPosts(tx, { ...post, dedupe: "meeting:def" }),
       ),
     ).toBe(0);
+  });
+
+  it("queues the fee reminder as its own kind, with every tick off, drawn as before", async () => {
+    const db = h.db();
+    const captain = await connectedCaptain(db, "915");
+    await addPlace("915", "-1009");
+    await setTelegramPostSettings({
+      actorId: captain.id,
+      settings: { announcements: false, reminders: false, meetings: false },
+    });
+    expect(
+      await withTransaction((tx) =>
+        queueFeeReminderPost(tx, { cycle: 1, day: "2026-10-28" }),
+      ),
+    ).toBe(1);
+    expect(
+      await withTransaction((tx) =>
+        queueFeeReminderPost(tx, { cycle: 1, day: "2026-10-28" }),
+      ),
+    ).toBe(0);
+    const [row] = await queuedPosts(db);
+    expect([row!.kind, row!.dedupeKey]).toEqual([
+      "fee",
+      "fees:1:2026-10-28:-1009",
+    ]);
+
+    const send = vi.fn<TelegramPostSend>(async () => ({ ok: true }) as const);
+    await drainTelegramPosts(send, { siteUrl: SITE });
+    expect(send).toHaveBeenCalledWith("-1009", null, {
+      text: "Camp fees are coming due\n\nCheck My dues in Camp 404 to see what you owe and how to pay.",
+      button: { text: FEE_TELEGRAM_BUTTON, url: `${SITE}/dues` },
+    });
   });
 
   it("queues a captain's announcement to everyone when it was ticked", async () => {
@@ -615,7 +652,7 @@ describe("drainTelegramPosts", () => {
     const removed = await queue(db, { chatId: "-100777" });
     const stale = await queue(db, {
       createdAt: new Date(
-        Date.now() - (TELEGRAM_POST_MAX_QUEUED_HOURS + 1) * 3600_000,
+        Date.now() - (TELEGRAM_MAX_QUEUED_HOURS + 1) * 3600_000,
       ),
     });
     const send = vi.fn<TelegramPostSend>(async () => ({ ok: true }) as const);
@@ -686,6 +723,22 @@ describe("drainTelegramPosts", () => {
     await drainTelegramPosts(send, { siteUrl: SITE });
     expect(send).toHaveBeenCalledOnce();
     expect(await statusOf(db, second)).toBe("skipped");
+  });
+
+  it("stops after three not-now answers in a row, as the private notices do", async () => {
+    const db = h.db();
+    await connectedCaptain(db, "935");
+    await addPlace("935");
+    const ids = [await queue(db), await queue(db), await queue(db)];
+    ids.push(await queue(db));
+    const send = vi.fn<TelegramPostSend>(
+      async () =>
+        ({ ok: false, error: "Telegram 502", retryable: true }) as const,
+    );
+    const result = await drainTelegramPosts(send, { siteUrl: SITE });
+    expect(result.deferred).toBe(TELEGRAM_MAX_DEFERRALS_IN_A_ROW);
+    expect(send).toHaveBeenCalledTimes(TELEGRAM_MAX_DEFERRALS_IN_A_ROW);
+    for (const id of ids) expect(await statusOf(db, id)).toBe("queued");
   });
 
   it("stops at a rate limit and leaves the rest queued", async () => {

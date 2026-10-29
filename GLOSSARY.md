@@ -83,3 +83,30 @@ fetches, by `memberDues(rows, viewer)` in `packages/core/src/member-dues.ts`;
 the Finance team's list line is `duesAccountRow`. The viewer decides the
 masking there: on a member's own read the concession (its reason, the
 standard amount, the flag) and the ledger and refund notes are null.
+
+**Recipients.** Who a send reaches, and who it leaves out, for ONE year
+(`packages/db/src/recipients.ts`). A send names its `Reach`: which members
+count (approved, approved or waiting, any) and what their answer to "Coming
+this year?" does. `GROUP_SEND` leaves out who said Not coming (Maybe and not
+answered still reached); `GROUP_TAG` reaches only who said Coming
+(`isComingThisYear`); `DEADLINE_REMINDER` also reaches who waits for
+approval; picked by name, whatever they said. Never a system actor or an
+erased member. `splitAudience` is the pure half; `sendAudience`,
+`reachWhere`, `owingMembers` and `saidNotComing` read it. Every send path asks
+here.
+
+**Outbox drain.** How Ol' Jeb sends a Telegram queue at most once
+(`drainTelegramOutbox`, `packages/db/src/telegram-outbox.ts`): claim the
+oldest rows and commit them `sending` before any send, write each answer
+after, fail what waited 20 hours, and end the run at a 429 or three "not now"
+answers in a row. A queue (the private notices, the posts in the camp's
+chats) supplies only its rows, what it skips and how it sends one. Email and
+push have drains of their own.
+
+**Post kind.** One kind of Ol' Jeb post in the camp's chats (`announcement`,
+`fee`, `meeting`, `reminder`, `questionnaire`, `lead`), one entry each in
+`TELEGRAM_POST_KINDS` (`packages/db/src/telegram-post-kinds.ts`): the Camp
+settings tick that switches it off (or none), and what it reads and draws as
+it is sent (or nothing: not posted). Every kind is queued by
+`queueTelegramPosts`. A new kind is a value in `telegram_post_kind` and one
+entry.

@@ -71,7 +71,7 @@
     "./meal-plan": "./src/meal-plan.ts",
     "./recipes": "./src/recipes.ts",
     "./camp-events": "./src/camp-events.ts",
-    "./audience": "./src/audience.ts",
+    "./recipients": "./src/recipients.ts",
     "./push": "./src/push.ts",
     "./push-status": "./src/push-status.ts",
     "./account": "./src/account.ts",
@@ -85,7 +85,9 @@
     "./audit": "./src/audit.ts",
     "./maintenance": "./src/maintenance.ts",
     "./pets": "./src/pets.ts",
-    "./telegram-posts": "./src/telegram-posts.ts"
+    "./telegram-posts": "./src/telegram-posts.ts",
+    "./telegram-post-kinds": "./src/telegram-post-kinds.ts",
+    "./telegram-outbox": "./src/telegram-outbox.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",

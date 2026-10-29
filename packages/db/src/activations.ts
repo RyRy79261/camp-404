@@ -2,16 +2,21 @@ import { setPledgeTiming } from "./dues";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { createHttpDb, withTransaction, type PooledDatabase } from "./index";
 import * as schema from "./schema";
-import { computeAudience, type BroadcastScope } from "./audience";
+import {
+  GROUP_SEND,
+  leftOutNames,
+  sendAudience,
+  splitAudience,
+  yearAllows,
+  type BroadcastScope,
+  type LeftOutMember,
+} from "./recipients";
 import { currentCycle, resolveCycles, UNSET_CYCLE } from "./camp-config";
 import { meetsRequiredVersion } from "./versions";
 import { currentCycleNumber } from "./cycles";
 import type { DbOrTx } from "./audit";
 import { lockOpenSend } from "./questionnaire-responses";
-import {
-  applyParticipationIntent,
-  listNotComingUserIds,
-} from "./participations";
+import { applyParticipationIntent } from "./participations";
 import {
   safeParseStoredDefinition,
   type Questionnaire,
@@ -210,49 +215,54 @@ async function pushRecipients(
   act: typeof schema.questionnaireActivations.$inferSelect,
 ): Promise<string[]> {
   const httpDb = createHttpDb();
-  const [members, memberships, targets, notComing] = await Promise.all([
-    httpDb
-      .select({
-        id: schema.users.id,
-        isSystem: schema.users.isSystem,
-        sanitised: schema.users.sanitised,
-        approvalStatus: schema.users.approvalStatus,
-      })
-      .from(schema.users),
-    // Team membership is year-scoped, so "who is on the kitchen team" has to be
-    // asked of a particular year — and the year that governs a send is the one
-    // FROZEN on the activation, never the live config. If a rollover lands
-    // between draft and open, the transaction below refuses to open the send.
-    httpDb
-      .select({
-        userId: schema.teamMemberships.userId,
-        team: schema.teamMemberships.team,
-        isLead: schema.teamMemberships.isLead,
-      })
-      .from(schema.teamMemberships)
-      .where(eq(schema.teamMemberships.cycle, act.cycle)),
-    httpDb
-      .select({ userId: schema.questionnaireActivationTargets.userId })
-      .from(schema.questionnaireActivationTargets)
-      .where(eq(schema.questionnaireActivationTargets.activationId, act.id)),
-    // Who said Not coming in the send's frozen year: a group send leaves them
-    // out (owner, 2026-10-27).
-    listNotComingUserIds(httpDb, act.cycle),
-  ]);
-
-  // Questionnaire scope never targets drivers; pass [] for that axis. No sender
-  // to exclude for an activation.
-  return computeAudience(
-    { scope: act.scope as BroadcastScope, team: act.team },
+  const targets = await httpDb
+    .select({ userId: schema.questionnaireActivationTargets.userId })
+    .from(schema.questionnaireActivationTargets)
+    .where(eq(schema.questionnaireActivationTargets.activationId, act.id));
+  // Team membership and who said Not coming are year-scoped, and the year
+  // that governs a send is the one FROZEN on the activation, never the live
+  // config. If a rollover lands between draft and open, the transaction
+  // below refuses to open the send. No sender to exclude for an activation.
+  const split = await sendAudience(
+    httpDb,
     {
-      members,
-      memberships,
-      driverUserIds: [],
+      scope: act.scope as BroadcastScope,
+      team: act.team,
       targetUserIds: targets.map((t) => t.userId),
-      notComingUserIds: notComing,
     },
-    null,
+    { cycle: act.cycle, senderId: null },
   );
+  return split.reaches;
+}
+
+/** Who a questionnaire send would gate, and who it would leave out. */
+export interface SendAudiencePreview {
+  reaches: number;
+  /** Said Not coming for the send's year, by name. The caller decides who reads names. */
+  notComing: LeftOutMember[];
+}
+
+/**
+ * The Send screen's count: who a send with these settings would gate if it
+ * opened now. Read for the year the send will freeze (the camp's current
+ * year, as `sendActivation` stamps it) by the same `sendAudience` that
+ * {@link pushRecipients} fans out over, so the preview and the send agree.
+ * An optional questionnaire shows to the whole camp: count `everyone`.
+ */
+export async function previewSendAudience(spec: {
+  scope: BroadcastScope;
+  team: string | null;
+  targetUserIds: readonly string[];
+}): Promise<SendAudiencePreview> {
+  const db = createHttpDb();
+  const split = await sendAudience(db, spec, {
+    cycle: await currentCycleNumber(db),
+    senderId: null,
+  });
+  return {
+    reaches: split.reaches.length,
+    notComing: await leftOutNames(db, split.notComing),
+  };
 }
 
 /**
@@ -351,7 +361,7 @@ export async function reconcileOpenActivations(
   ).filter((act) => PUSH_SCOPES.has(act.scope));
   if (open.length === 0) return 0;
 
-  const [meRows, memberships, targets, gates, said] = await Promise.all([
+  const [meRows, memberships, targets, gates, answers] = await Promise.all([
     db
       .select({
         id: schema.users.id,
@@ -416,7 +426,8 @@ export async function reconcileOpenActivations(
 
   let written = 0;
   for (const act of open) {
-    const audience = computeAudience(
+    const said = answers.find((p) => p.cycle === act.cycle)?.status ?? null;
+    const audience = splitAudience(
       { scope: act.scope as BroadcastScope, team: act.team },
       {
         members: [me],
@@ -426,14 +437,10 @@ export async function reconcileOpenActivations(
         targetUserIds: targets.some((t) => t.activationId === act.id)
           ? [userId]
           : [],
-        notComingUserIds: said.some(
-          (p) => p.cycle === act.cycle && p.status === "not_attending",
-        )
-          ? [userId]
-          : [],
+        notComingUserIds: yearAllows(GROUP_SEND.year, said) ? [] : [userId],
       },
       null,
-    );
+    ).reaches;
     if (audience.length === 0) continue;
 
     const gate = gates.find((g) => g.actionKey === act.questionnaireKey);

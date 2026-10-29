@@ -1,20 +1,14 @@
-import { plainPreview } from "@camp404/core";
 import {
-  enqueueAnnouncement,
   findInviteByLink,
   getActiveChatByKind,
-  listDueAnnouncements,
   listPendingInvitesForUser,
-  markAnnouncementFailed,
-  markAnnouncementSent,
   markInviteUsed,
   recordInvite,
   recordTelegramUserId,
-  type TelegramAnnouncementRow,
   type TelegramChatRow,
   type TelegramInviteRow,
 } from "@camp404/db/telegram";
-import { TelegramApiError, type TelegramClient } from "./client";
+import type { TelegramClient } from "./client";
 import type { TelegramChatMemberUpdate } from "./webhook";
 
 /** How long a per-user invite link stays valid before Telegram retires it. */
@@ -103,92 +97,4 @@ function isJoinedState(status: string): boolean {
   return (
     status === "member" || status === "administrator" || status === "creator"
   );
-}
-
-export interface EnqueueAnnouncementInput {
-  body: string;
-  /** Optional cross-reference to a `broadcasts` row. */
-  broadcastId?: string | null;
-  /** Future-dated announcements: send no earlier than this. */
-  sendAfter?: Date | null;
-  /** Override the default `announcement_channel` target. */
-  chatId?: string;
-}
-
-/**
- * Queue a Telegram announcement. Defaults to the active
- * `announcement_channel`. Returns the queued row.
- */
-export async function queueAnnouncement(
-  input: EnqueueAnnouncementInput,
-): Promise<TelegramAnnouncementRow> {
-  let chatId = input.chatId;
-  if (!chatId) {
-    const chat = await getActiveChatByKind("announcement_channel");
-    if (!chat) {
-      throw new Error(
-        "No active announcement_channel telegram chat is configured.",
-      );
-    }
-    chatId = chat.chatId;
-  }
-  return enqueueAnnouncement({
-    chatId,
-    body: input.body,
-    broadcastId: input.broadcastId ?? null,
-    sendAfter: input.sendAfter ?? null,
-  });
-}
-
-export interface DispatchResult {
-  attempted: number;
-  sent: number;
-  failed: number;
-}
-
-/**
- * Drain the announcement queue: send each due row, mark it sent / failed.
- * Safe to call from a cron — bounded by `limit` per invocation so a
- * thundering herd doesn't exhaust the function's wall-clock budget.
- *
- * The send is a PLAIN-TEXT boundary. `sendMessage` carries no `parse_mode`,
- * which is the right call — Telegram's markdown is not the markdown a captain
- * writes, and a stray `_` or `[` in a real announcement would make the whole
- * message fail to send rather than merely look wrong. So the body is stripped
- * to its words on the way out. Stripping HERE rather than at `queueAnnouncement`
- * also covers rows that were queued before this existed.
- */
-export async function dispatchPendingAnnouncements(input: {
-  client: TelegramClient;
-  now?: Date;
-  limit?: number;
-}): Promise<DispatchResult> {
-  const now = input.now ?? new Date();
-  const due = await listDueAnnouncements(now, input.limit ?? 25);
-  let sent = 0;
-  let failed = 0;
-  for (const row of due) {
-    try {
-      const message = await input.client.sendMessage({
-        chatId: row.chatId,
-        text: plainPreview(row.body),
-      });
-      await markAnnouncementSent({
-        id: row.id,
-        messageId: String(message.message_id),
-        sentAt: new Date(),
-      });
-      sent++;
-    } catch (err) {
-      const description =
-        err instanceof TelegramApiError
-          ? err.description
-          : err instanceof Error
-            ? err.message
-            : String(err);
-      await markAnnouncementFailed({ id: row.id, errorMessage: description });
-      failed++;
-    }
-  }
-  return { attempted: due.length, sent, failed };
 }

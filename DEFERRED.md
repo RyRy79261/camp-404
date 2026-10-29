@@ -116,6 +116,11 @@ from questionnaire stage 2 → stage 3" report and the error-handling gap it exp
   > `dispatchPendingAnnouncements` are superseded by it and stay uncalled (they
   > know no topic and no at-most-once claim; do not wire them). The invite link
   > on approval (`issueGroupInviteForUser`) is still uncalled.
+  >
+  > **[CORRECTION 2026-10-28]** `queueAnnouncement`, `dispatchPendingAnnouncements`
+  > and their db functions (`enqueueAnnouncement`, `listDueAnnouncements`) are
+  > deleted: the post drain replaced them. Only the invite on approval is left
+  > here.
 
 - **Invite-code case handling** — generated/DB codes are canonically lowercase (validity pattern `/^[a-z0-9]+.../`), but the redeem path matches **verbatim** while `/api/tools/invite/check` lowercases — so a DB code typed in the wrong case can pass the availability check yet fail on redeem. Fixing this needs a _coordinated_ change (normalise at redeem + env + seed + storage **and** update the e2e fixtures + the CI `INVITE_CODES`, which currently use uppercase verbatim). An earlier attempt that only lowercased the redeem path broke the e2e and was reverted; do it as a deliberate, test-data-aware change. **[audit #11]**
 

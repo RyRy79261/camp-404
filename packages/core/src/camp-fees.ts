@@ -738,8 +738,8 @@ export interface FeeReminderAudience<M> {
 }
 
 // Who said Not coming is not decided here: the caller passes the same list
-// every group send leaves out (`listNotComingUserIds` in
-// @camp404/db/participations, the `notComingUserIds` of `splitAudience`), so
+// every group send leaves out (`saidNotComing` in @camp404/db/recipients,
+// the `notComingUserIds` of `splitAudience`), so
 // the rule has one owner. Required, so no caller can forget it.
 
 /**

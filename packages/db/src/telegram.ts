@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
 import { createHttpDb } from "./index";
 import * as schema from "./schema";
 
@@ -6,8 +6,6 @@ export type TelegramChatKind =
   (typeof schema.telegramChatKindEnum.enumValues)[number];
 export type TelegramInviteStatus =
   (typeof schema.telegramInviteStatusEnum.enumValues)[number];
-export type TelegramAnnouncementStatus =
-  (typeof schema.telegramAnnouncementStatusEnum.enumValues)[number];
 
 export interface TelegramChatRow {
   id: string;
@@ -28,19 +26,6 @@ export interface TelegramInviteRow {
   status: TelegramInviteStatus;
   expiresAt: Date | null;
   joinedAt: Date | null;
-  createdAt: Date;
-}
-
-export interface TelegramAnnouncementRow {
-  id: string;
-  broadcastId: string | null;
-  chatId: string;
-  body: string;
-  status: TelegramAnnouncementStatus;
-  messageId: string | null;
-  errorMessage: string | null;
-  sendAfter: Date;
-  sentAt: Date | null;
   createdAt: Date;
 }
 
@@ -148,72 +133,6 @@ export async function recordTelegramUserId(input: {
       updatedAt: new Date(),
     })
     .where(eq(schema.users.id, input.userId));
-}
-
-export async function enqueueAnnouncement(input: {
-  chatId: string;
-  body: string;
-  broadcastId?: string | null;
-  sendAfter?: Date | null;
-}): Promise<TelegramAnnouncementRow> {
-  const db = createHttpDb();
-  const [row] = await db
-    .insert(schema.telegramAnnouncements)
-    .values({
-      chatId: input.chatId,
-      body: input.body,
-      broadcastId: input.broadcastId ?? null,
-      sendAfter: input.sendAfter ?? new Date(),
-    })
-    .returning();
-  if (!row) throw new Error("Failed to enqueue telegram announcement");
-  return row;
-}
-
-export async function listDueAnnouncements(
-  now: Date,
-  limit = 25,
-): Promise<TelegramAnnouncementRow[]> {
-  const db = createHttpDb();
-  return db
-    .select()
-    .from(schema.telegramAnnouncements)
-    .where(
-      and(
-        eq(schema.telegramAnnouncements.status, "queued"),
-        lte(schema.telegramAnnouncements.sendAfter, now),
-      ),
-    )
-    .orderBy(schema.telegramAnnouncements.sendAfter)
-    .limit(limit);
-}
-
-export async function markAnnouncementSent(input: {
-  id: string;
-  messageId: string;
-  sentAt: Date;
-}): Promise<void> {
-  const db = createHttpDb();
-  await db
-    .update(schema.telegramAnnouncements)
-    .set({
-      status: "sent",
-      messageId: input.messageId,
-      sentAt: input.sentAt,
-      errorMessage: null,
-    })
-    .where(eq(schema.telegramAnnouncements.id, input.id));
-}
-
-export async function markAnnouncementFailed(input: {
-  id: string;
-  errorMessage: string;
-}): Promise<void> {
-  const db = createHttpDb();
-  await db
-    .update(schema.telegramAnnouncements)
-    .set({ status: "failed", errorMessage: input.errorMessage })
-    .where(eq(schema.telegramAnnouncements.id, input.id));
 }
 
 export async function listPendingInvitesForUser(

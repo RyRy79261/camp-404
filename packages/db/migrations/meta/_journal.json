@@ -883,6 +883,13 @@
       "when": 1793142394428,
       "tag": "0125_camp_fee_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1793226123846,
+      "tag": "0126_telegram_post_kind_fee",
+      "breakpoints": true
     }
   ]
 }

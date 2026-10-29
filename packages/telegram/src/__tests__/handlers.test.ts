@@ -21,23 +21,10 @@ const dbState: {
     joinedAt: Date | null;
     createdAt: Date;
   }>;
-  announcements: Array<{
-    id: string;
-    broadcastId: string | null;
-    chatId: string;
-    body: string;
-    status: "queued" | "sent" | "failed";
-    messageId: string | null;
-    errorMessage: string | null;
-    sendAfter: Date;
-    sentAt: Date | null;
-    createdAt: Date;
-  }>;
   userTelegramIds: Map<string, string>;
 } = {
   chats: [],
   invites: [],
-  announcements: [],
   userTelegramIds: new Map(),
 };
 
@@ -90,65 +77,14 @@ vi.mock("@camp404/db/telegram", () => ({
   }) {
     dbState.userTelegramIds.set(input.userId, input.telegramUserId);
   },
-  async enqueueAnnouncement(input: {
-    chatId: string;
-    body: string;
-    broadcastId?: string | null;
-    sendAfter?: Date | null;
-  }) {
-    const row = {
-      id: newId(),
-      broadcastId: input.broadcastId ?? null,
-      chatId: input.chatId,
-      body: input.body,
-      status: "queued" as const,
-      messageId: null,
-      errorMessage: null,
-      sendAfter: input.sendAfter ?? new Date(),
-      sentAt: null,
-      createdAt: new Date(),
-    };
-    dbState.announcements.push(row);
-    return row;
-  },
-  async listDueAnnouncements(now: Date, limit = 25) {
-    return dbState.announcements
-      .filter((a) => a.status === "queued" && a.sendAfter <= now)
-      .slice(0, limit);
-  },
-  async markAnnouncementSent(input: {
-    id: string;
-    messageId: string;
-    sentAt: Date;
-  }) {
-    const row = dbState.announcements.find((a) => a.id === input.id);
-    if (row) {
-      row.status = "sent";
-      row.messageId = input.messageId;
-      row.sentAt = input.sentAt;
-    }
-  },
-  async markAnnouncementFailed(input: { id: string; errorMessage: string }) {
-    const row = dbState.announcements.find((a) => a.id === input.id);
-    if (row) {
-      row.status = "failed";
-      row.errorMessage = input.errorMessage;
-    }
-  },
 }));
 
-const {
-  dispatchPendingAnnouncements,
-  handleChatMemberUpdate,
-  issueGroupInviteForUser,
-  queueAnnouncement,
-} = await import("../handlers");
-const { TelegramApiError } = await import("../client");
+const { handleChatMemberUpdate, issueGroupInviteForUser } =
+  await import("../handlers");
 
 function resetState() {
   dbState.chats = [];
   dbState.invites = [];
-  dbState.announcements = [];
   dbState.userTelegramIds = new Map();
   idCounter = 0;
 }
@@ -292,122 +228,5 @@ describe("handleChatMemberUpdate", () => {
       invite_link: { invite_link: "https://t.me/+nope" },
     });
     expect(out).toBeNull();
-  });
-});
-
-describe("announcement queue + dispatch", () => {
-  it("queues to the active announcement_channel by default", async () => {
-    dbState.chats.push({
-      id: "chat-2",
-      kind: "announcement_channel",
-      chatId: "-100999",
-      title: "Camp 404 Announcements",
-      username: null,
-      addedByUserId: null,
-      addedAt: new Date(),
-      archivedAt: null,
-    });
-    const row = await queueAnnouncement({ body: "Phase 2 unlocked" });
-    expect(row.chatId).toBe("-100999");
-    expect(row.status).toBe("queued");
-  });
-
-  it("sends due rows and marks them sent", async () => {
-    dbState.announcements.push({
-      id: "a1",
-      broadcastId: null,
-      chatId: "-100999",
-      body: "Hello",
-      status: "queued",
-      messageId: null,
-      errorMessage: null,
-      sendAfter: new Date("2026-05-23"),
-      sentAt: null,
-      createdAt: new Date("2026-05-23"),
-    });
-    const client = fakeClient();
-    const result = await dispatchPendingAnnouncements({
-      client,
-      now: new Date("2026-05-24"),
-    });
-    expect(result).toEqual({ attempted: 1, sent: 1, failed: 0 });
-    expect(dbState.announcements[0]?.status).toBe("sent");
-    expect(dbState.announcements[0]?.messageId).toBe("99");
-  });
-
-  it("sends the body as plain words — the send carries no parse_mode", async () => {
-    dbState.announcements.push({
-      id: "a1",
-      broadcastId: "b1",
-      chatId: "-100999",
-      body: "## Burn night\n\n**Everyone** meets at *20:00*.\n\n- Bring [water](https://camp-404.com/water)",
-      status: "queued",
-      messageId: null,
-      errorMessage: null,
-      sendAfter: new Date("2026-05-23"),
-      sentAt: null,
-      createdAt: new Date("2026-05-23"),
-    });
-    const client = fakeClient();
-    await dispatchPendingAnnouncements({
-      client,
-      now: new Date("2026-05-24"),
-    });
-    const sendMessage = (
-      client as unknown as { sendMessage: ReturnType<typeof vi.fn> }
-    ).sendMessage;
-    expect(sendMessage).toHaveBeenCalledWith({
-      chatId: "-100999",
-      text: "Burn night\n\nEveryone meets at 20:00.\n\nBring water",
-    });
-  });
-
-  it("marks rows failed when the API errors out", async () => {
-    dbState.announcements.push({
-      id: "a1",
-      broadcastId: null,
-      chatId: "-100999",
-      body: "Hello",
-      status: "queued",
-      messageId: null,
-      errorMessage: null,
-      sendAfter: new Date("2026-05-23"),
-      sentAt: null,
-      createdAt: new Date("2026-05-23"),
-    });
-    const client = fakeClient({
-      sendMessage: vi
-        .fn()
-        .mockRejectedValue(new TelegramApiError(403, "Bot blocked")),
-    });
-    const result = await dispatchPendingAnnouncements({
-      client,
-      now: new Date("2026-05-24"),
-    });
-    expect(result).toEqual({ attempted: 1, sent: 0, failed: 1 });
-    expect(dbState.announcements[0]?.status).toBe("failed");
-    expect(dbState.announcements[0]?.errorMessage).toBe("Bot blocked");
-  });
-
-  it("skips rows scheduled in the future", async () => {
-    dbState.announcements.push({
-      id: "a-future",
-      broadcastId: null,
-      chatId: "-100999",
-      body: "Later",
-      status: "queued",
-      messageId: null,
-      errorMessage: null,
-      sendAfter: new Date("2026-06-01"),
-      sentAt: null,
-      createdAt: new Date("2026-05-23"),
-    });
-    const client = fakeClient();
-    const result = await dispatchPendingAnnouncements({
-      client,
-      now: new Date("2026-05-24"),
-    });
-    expect(result.attempted).toBe(0);
-    expect(client.sendMessage).not.toHaveBeenCalled();
   });
 });

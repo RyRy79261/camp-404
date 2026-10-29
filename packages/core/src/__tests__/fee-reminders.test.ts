@@ -42,7 +42,7 @@ describe("fee reminder audiences", () => {
     member("Quiet"),
     member("Nope"),
   ];
-  // Who said Not coming this year, as listNotComingUserIds reads it.
+  // Who said Not coming this year, as saidNotComing reads it.
   const notComing = ["Bongi", "Nope"];
 
   it("reminds who owes, never Not coming and never a subsidy", () => {

@@ -24,7 +24,7 @@ import { lockSenderReach } from "./broadcasts";
 import { resolveTeamsConfig, teamLabelMap } from "./camp-config";
 import { queueTelegramPosts } from "./telegram-posts";
 import { currentCycleNumber } from "./cycles";
-import { hasNotSaidNotComing } from "./participations";
+import { GROUP_SEND, PICKED_CAMP_MEMBER, reachWhere } from "./recipients";
 import { createHttpDb, withTransaction, type Tx } from "./index";
 import * as schema from "./schema";
 
@@ -312,17 +312,17 @@ async function guestCandidates(
   db: DbOrTx,
   row: { audience: CampEventAudience; peopleUserIds: readonly string[] },
 ): Promise<{ id: string; name: string }[]> {
-  const here = and(
-    eq(schema.users.sanitised, false),
-    eq(schema.users.isSystem, false),
-    eq(schema.users.approvalStatus, "approved"),
-  );
   if (row.audience === "people") {
     if (row.peopleUserIds.length === 0) return [];
     const found = await db
       .select({ id: schema.users.id, name: schema.users.displayName })
       .from(schema.users)
-      .where(and(inArray(schema.users.id, [...row.peopleUserIds]), here));
+      .where(
+        and(
+          inArray(schema.users.id, [...row.peopleUserIds]),
+          reachWhere(PICKED_CAMP_MEMBER),
+        ),
+      );
     const byId = new Map(
       found.map((r) => [r.id, r.name?.trim() || "Camp member"]),
     );
@@ -344,11 +344,10 @@ async function guestCandidates(
         and(
           eq(schema.teamMemberships.cycle, cycle),
           eq(schema.teamMemberships.isLead, true),
-          here,
           // A group invite: a lead who said Not coming this year is left
           // out (owner, 2026-10-27). Picked people are named one by one, so
           // they are asked whatever they said, as an `individual` send is.
-          hasNotSaidNotComing(schema.users.id, cycle),
+          reachWhere(GROUP_SEND, cycle),
         ),
       )
       .orderBy(asc(schema.users.displayName))

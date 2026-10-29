@@ -1,12 +1,4 @@
-import {
-  and,
-  eq,
-  inArray,
-  isNotNull,
-  sql,
-  type AnyColumn,
-  type SQL,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   isParticipationDecision,
   participationAfterIntent,
@@ -371,42 +363,4 @@ export async function getParticipation(
     )
     .limit(1);
   return row ?? null;
-}
-
-/**
- * Who said Not coming for one year: the members every group send leaves out
- * (`notComingUserIds` in ./audience). On the caller's handle, so a send's
- * transaction reads it on its own connection.
- */
-export async function listNotComingUserIds(
-  db: DbOrTx,
-  cycle: number,
-): Promise<string[]> {
-  const rows = await db
-    .select({ userId: schema.campParticipations.userId })
-    .from(schema.campParticipations)
-    .where(
-      and(
-        eq(schema.campParticipations.cycle, cycle),
-        eq(schema.campParticipations.status, "not_attending"),
-      ),
-    );
-  return rows.map((r) => r.userId);
-}
-
-/**
- * A WHERE fragment: the member in `userId` did NOT say Not coming for `cycle`.
- * The reminders and tags of a group send keep to it, as `computeAudience`
- * does for the send itself.
- */
-export function hasNotSaidNotComing(
-  userId: AnyColumn,
-  cycle: number | SQL,
-): SQL {
-  return sql`not exists (
-    select 1 from ${schema.campParticipations}
-    where ${schema.campParticipations.userId} = ${userId}
-      and ${schema.campParticipations.cycle} = ${cycle}
-      and ${schema.campParticipations.status} = 'not_attending'
-  )`;
 }

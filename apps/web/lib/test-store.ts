@@ -172,8 +172,15 @@ import {
 } from "./test-store-help-wanted";
 import { resetDailySheetStore } from "./test-store-daily-sheet";
 import type { MyLift } from "@camp404/db/cars";
-import type { PendingRequiredAction } from "@camp404/db/activations";
-import { splitAudience, type AudienceSplit } from "@camp404/db/audience";
+import type {
+  PendingRequiredAction,
+  SendAudiencePreview,
+} from "@camp404/db/activations";
+import {
+  splitAudience,
+  type AudienceSplit,
+  type BroadcastScope,
+} from "@camp404/db/recipients";
 import {
   RESET_CAPTAINS_ONLY,
   RESET_NO_SIGN_IN,
@@ -2484,7 +2491,7 @@ export const testStore = {
    */
   /**
    * Twin of the database's audience read: the same rows handed to the same
-   * pure rule (computeAudience): real members only (never a system actor or
+   * pure rule (splitAudience): real members only (never a system actor or
    * an erased stub), a group audience approved members only, this year's
    * teams, leads and drivers, never the sender.
    */
@@ -2493,7 +2500,7 @@ export const testStore = {
     return [...usersByAuthId.values()].filter((u) => wanted.has(u.id));
   },
 
-  /** Twin of listNotComingUserIds: who said Not coming for one year. */
+  /** Twin of saidNotComing (@camp404/db/recipients): who said Not coming for one year. */
   notComingUserIds(cycle: number): string[] {
     return [...participations.values()]
       .filter((p) => p.cycle === cycle && p.status === "not_attending")
@@ -2533,6 +2540,43 @@ export const testStore = {
     audience: Audience = { scope: "everyone" },
   ): AnnouncementAudiencePreview {
     const split = this.announcementSplit(senderId, audience);
+    return {
+      reaches: split.reaches.length,
+      notComing: split.notComing
+        .map((id) => ({
+          id,
+          name: findUserById(id)?.displayName?.trim() || "Camp member",
+        }))
+        .sort(
+          (a, b) =>
+            a.name.localeCompare(b.name, "en") || a.id.localeCompare(b.id),
+        ),
+    };
+  },
+
+  /** Twin of previewSendAudience in @camp404/db/activations. */
+  previewSendAudience(spec: {
+    scope: BroadcastScope;
+    team: string | null;
+    targetUserIds: readonly string[];
+  }): SendAudiencePreview {
+    const cycle = currentCycleNumber();
+    const split = splitAudience(
+      spec,
+      {
+        members: [...usersByAuthId.values()].map((u) => ({
+          id: u.id,
+          isSystem: false,
+          sanitised: u.sanitised,
+          approvalStatus: u.approvalStatus,
+        })),
+        memberships: teamMemberships.filter((m) => m.cycle === cycle),
+        driverUserIds: [],
+        targetUserIds: [...spec.targetUserIds],
+        notComingUserIds: this.notComingUserIds(cycle),
+      },
+      null,
+    );
     return {
       reaches: split.reaches.length,
       notComing: split.notComing

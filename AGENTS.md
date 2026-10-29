@@ -770,6 +770,21 @@ Decisions baked into the schema — keep new code consistent with them:
   people. Left out: M who said Not coming this year. Who?" (`splitAudience`,
   `components/audience-reach.tsx`); the names go only to team lead and up.
   The new year after a rollover has no answers, so nobody is left out there.
+  [CORRECTION 2026-10-28] Who a send reaches has one module now,
+  `@camp404/db/recipients` (GLOSSARY.md, "Recipients"): `computeAudience`,
+  `audience.ts`, `listNotComingUserIds` and `hasNotSaidNotComing` are gone.
+  Every send asks it for ONE year under a named `Reach`: `GROUP_SEND`
+  (announcements, questionnaire sends, the opt-in note, a team-leads event's
+  invites, fee reminders), `OWED_NUDGE` (Remind, the "Post in Telegram"
+  dialog), `GROUP_TAG` (Ol' Jeb's reminder tags: said Coming only, owner's
+  rule kept apart on purpose), `DEADLINE_REMINDER` (still reaches a member
+  waiting for approval) and `PICKED_BY_NAME` / `PICKED_CAMP_MEMBER`.
+  `splitAudience` is its pure half, `sendAudience` reads a scope for a year,
+  `reachWhere` is the same rule as SQL and `owingMembers` lists who a send
+  still waits on. The questionnaire Send preview asks `previewSendAudience`
+  (`@camp404/db/activations`) for the year the send will freeze, so the
+  preview and the send agree. A new send path asks this module; never
+  re-write "not coming" or "a real member" at a call site.
 - **The member's answer and the captains' decision are two things** (owner,
   2026-09-28). "Coming" / "Maybe" / "Not coming" is what the member said
   (`intent`); "Accepted" (on the camp's list this year) and "Waiting list"
@@ -896,7 +911,15 @@ Decisions baked into the schema — keep new code consistent with them:
   only a valid username, the rest are counted "without a Telegram
   username"), so an erased member's name is never kept in the table. The
   drain is the DM drain's shape (committed `sending` before a send, a 429
-  ends the run, 20 hours to live). The welcome wizard offers "Get your
+  ends the run, 20 hours to live). [CORRECTION 2026-10-28] Both drains are
+  one outbox drain now (`@camp404/db/telegram-outbox`, GLOSSARY.md "Outbox
+  drain"), so posts also stop after three "not now" answers in a row. Each
+  kind of post is one entry in `TELEGRAM_POST_KINDS`
+  (`@camp404/db/telegram-post-kinds`, "Post kind"): its Camp settings tick
+  (or none), what it reads as it is sent and how it is drawn; every kind is
+  queued through `queueTelegramPosts`. The Finance team's fee reminder is its
+  own kind, `fee` (migration 0126; no tick, as before); rows queued before it
+  stay `announcement` and post the same. The welcome wizard offers "Get your
   notices on Telegram" as an optional step to an approved member who has not
   connected (never a `required_actions` row).
   [2026-10-27] **"Tell the camp on Telegram" after a new lead** (owner: an
@@ -1373,9 +1396,10 @@ LOCKED`, reminders dedupe. Each email carries an `Idempotency-Key` per
   loads or the source editor's loading panel polls (`resetStaleRuns`). The
   owner ruled out automatic retries on every AI call (2026-10-07): the shared
   Anthropic and Groq clients are built with `maxRetries: 0`.
-- Telegram outbound stays off (`DEFERRED.md`). `dispatchPendingAnnouncements`
-  is kept in `@camp404/telegram`; when Telegram is turned on, call it from
-  `deliverDue`, not from a scheduled route.
+- Telegram outbound stays off (`DEFERRED.md`). [CORRECTION 2026-10-28] The
+  old announcement queue (`dispatchPendingAnnouncements`,
+  `queueAnnouncement`, `enqueueAnnouncement`, `listDueAnnouncements`) was
+  never called and is deleted; the post drain replaced it.
   [CORRECTION 2026-10-26] Private notices are on: `deliverDue` drains queued
   Telegram notices (`drainQueuedTelegram`, 25 a run, oldest first, `FOR
 UPDATE SKIP LOCKED`) when `TELEGRAM_BOT_TOKEN` is set, behind
@@ -1388,8 +1412,8 @@ UPDATE SKIP LOCKED`) when `TELEGRAM_BOT_TOKEN` is set, behind
   than a week. Group posts (`dispatchPendingAnnouncements`, invites, tags)
   are still off: step 2 of the plan. [CORRECTION 2026-10-26] Group posts are
   on: `deliverDue` also drains `drainTelegramPosts` (announcements, reminder
-  tags, new meetings; see Notifications). `dispatchPendingAnnouncements` is
-  superseded and stays uncalled; the invite link on approval is still off.
+  tags, new meetings; see Notifications). The invite link on approval is
+  still off.
 
 ## Conventions
 
