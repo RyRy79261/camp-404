@@ -118,8 +118,10 @@ describe("TelegramCard", () => {
       "Something went wrong. Please try again.",
     );
     expect(tab.close).toHaveBeenCalled();
+    // The alert can commit before the transition ends, so the button may
+    // still read "Making your link…" for a moment: wait for its name.
     expect(
-      screen.getByRole("button", { name: "Connect Telegram" }),
+      await screen.findByRole("button", { name: "Connect Telegram" }),
     ).toBeTruthy();
   });
 
