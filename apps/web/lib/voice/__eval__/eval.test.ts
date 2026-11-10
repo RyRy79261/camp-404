@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type Anthropic from "@anthropic-ai/sdk";
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { useTestDb } from "../../../../../packages/db/src/__tests__/_harness";
 
 // The voice eval (#356, "no mistakes"). Two modes:
@@ -128,6 +128,18 @@ const cost = (u: Usage) =>
 const h = useTestDb();
 
 describe("voice eval", () => {
+  // The camp is seeded as of NOW, but the connector's tools read the real
+  // clock (list_tasks keeps done tasks for 30 days). Without this, the
+  // recorded cases drift as the real date moves past the camp's: task-08's
+  // done task fell off the board on 31 Oct 2026. Only Date is faked.
+  beforeAll(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+  });
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
   it("has the cases the bar asks for", () => {
     expect(CASES.length).toBeGreaterThanOrEqual(100);
     expect(

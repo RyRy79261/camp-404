@@ -2,6 +2,7 @@ import {
   test,
   expect,
   type APIRequestContext,
+  type Locator,
   type Page,
 } from "@playwright/test";
 import {
@@ -32,6 +33,21 @@ async function approvedMember(
   await redeemInviteAtGate(page, "TEST-INVITE-E2E-ONLY-CODE");
   await expect(page).toHaveURL(/\/onboarding\/questionnaire/);
   await completeOnboarding(request, id);
+}
+
+/**
+ * A ResponsiveDataTable in whichever copy this viewport shows: the <table>
+ * on a wide window, the card list (a <ul> with the same label) on a phone.
+ */
+function dataTable(page: Page, name: string) {
+  return page
+    .getByRole("table", { name })
+    .or(page.getByRole("list", { name }))
+    .filter({ visible: true });
+}
+
+function dataRow(table: Locator, text: string) {
+  return table.locator("tr, li").filter({ hasText: text });
 }
 
 async function heading(page: Page, name: string) {
@@ -67,10 +83,8 @@ test.describe("camp money (test-mode)", () => {
     await dialog.getByRole("button", { name: "Add bill" }).click();
     await expect(dialog).toHaveCount(0);
 
-    const table = page
-      .getByRole("table", { name: "Date by date" })
-      .filter({ visible: true });
-    const row = table.getByRole("row").filter({ hasText: "Tent hire deposit" });
+    const table = dataTable(page, "Date by date");
+    const row = dataRow(table, "Tent hire deposit");
     await expect(row).toContainText(/−R\s70\s000,00/);
     await expect(page.getByRole("group", { name: "Money left" })).toContainText(
       /−R\s70\s000,00/,
@@ -82,10 +96,7 @@ test.describe("camp money (test-mode)", () => {
 
     await page.getByRole("link", { name: /^Paid/ }).click();
     await expect(
-      page
-        .getByRole("table", { name: "Bills paid" })
-        .filter({ visible: true })
-        .getByText("Tent hire deposit"),
+      dataTable(page, "Bills paid").getByText("Tent hire deposit"),
     ).toBeVisible();
   });
 
@@ -112,12 +123,10 @@ test.describe("camp money (test-mode)", () => {
 
     await page.goto("/captains/payments/members");
     await heading(page, "Who owes what");
-    const members = page
-      .getByRole("table", { name: "Members' fees" })
-      .filter({ visible: true });
-    await expect(
-      members.getByRole("row").filter({ hasText: "Lerato Owes" }),
-    ).toContainText(/Part by end Nov/);
+    const members = dataTable(page, "Members' fees");
+    await expect(dataRow(members, "Lerato Owes")).toContainText(
+      /Part by end Nov/,
+    );
 
     // Off: the dialog says to switch it on, and sends nothing.
     await page.getByRole("button", { name: "Remind who still owes" }).click();
