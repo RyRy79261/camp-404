@@ -1,0 +1,216 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Team dashboards (Idea B) — mock-up</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:oklch(0.15 0.05 295);--panel:oklch(0.2 0.06 295);--line:oklch(0.35 0.08 295);
+  --fg:oklch(0.95 0.01 295);--mut:oklch(0.72 0.04 295);--mag:oklch(0.65 0.27 340);
+  --blue:oklch(0.62 0.18 255);--ok:oklch(0.75 0.17 150);--warn:oklch(0.8 0.15 80);--bad:oklch(0.68 0.2 25);
+  --sunk:color-mix(in oklch,var(--panel) 80%,black);
+}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;font-family:Inter,sans-serif;font-size:13px;color:var(--fg);background:#0b0912;line-height:1.45}
+h2{font:12px Silkscreen;color:var(--blue);margin:24px 0 8px}
+.intro{color:var(--mut);max-width:860px;margin:0 0 8px}
+.ctl{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;margin:12px 0 16px}
+.ctl .lb{font:10px Silkscreen;color:var(--mut);margin-right:8px}
+.chips{display:inline-flex;border:1px solid var(--line);padding:4px;gap:4px;flex-wrap:wrap}
+.chips span{padding:6px 10px;color:var(--mut);cursor:pointer;font-weight:500}
+.chips span.on{background:var(--mag);color:#fff}
+.desk{background:var(--bg);background-image:linear-gradient(color-mix(in oklch,var(--line) 60%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in oklch,var(--line) 60%,transparent) 1px,transparent 1px);background-size:32px 32px;padding:16px;min-width:0}
+.win{background:var(--panel);border:2px solid var(--line);box-shadow:4px 4px 0 #0008;min-width:0;max-width:1100px}
+.bar{display:flex;align-items:center;gap:8px;background:color-mix(in oklch,var(--mag) 70%,var(--bg));padding:4px 8px;font:12px Silkscreen}
+.bar .b{margin-left:auto;display:flex;gap:4px}.bar .b i{width:12px;height:12px;border:1px solid var(--fg);display:block}
+.body{padding:16px;container-type:inline-size;min-width:0}
+.eye{font:10px Silkscreen;color:var(--mag)}
+h1{font-size:20px;margin:4px 0 4px}
+.desc{color:var(--mut);margin:0 0 12px;max-width:640px}
+.badge{font:10px Silkscreen;padding:2px 6px;border:1px solid;display:inline-block;white-space:nowrap}
+.b-mag{color:var(--mag)}.b-mut{color:var(--mut)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px;margin-top:16px}
+@container (max-width:700px){.layout{grid-template-columns:1fr}}
+.card{border:1px solid var(--line);background:var(--sunk);padding:16px;min-width:0}
+.col>*+*{margin-top:16px}
+.ct{font-weight:600;font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.ct .ico{color:var(--mag)}
+.new{position:relative;outline:2px dashed var(--mag);outline-offset:4px}
+.new::before{content:"NEW";position:absolute;top:-14px;right:8px;font:9px Silkscreen;background:var(--mag);color:#fff;padding:2px 6px}
+.ghost{color:var(--mut);font-size:12px;display:flex;justify-content:space-between}
+.ghost b{color:var(--fg);font-weight:600;font-size:14px}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@container (min-width:860px){.tiles.four{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.tile{border:1px solid var(--line);background:color-mix(in oklch,var(--panel) 50%,transparent);padding:12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile .l{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);font-weight:500}
+.tile .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:8px}
+.tile .h{font-size:11px;color:var(--mut)}
+.dot{width:10px;height:10px;display:inline-block;flex:none}
+.d-ok{background:var(--ok)}.d-warn{background:var(--warn)}.d-bad{background:var(--bad)}
+.prog{height:6px;border:1px solid var(--line);background:var(--bg);margin-top:6px}
+.prog i{display:block;height:100%;background:var(--mag)}
+.att{margin:16px 0 0}
+.att h3{font:10px Silkscreen;color:var(--mut);margin:0 0 8px;font-weight:400}
+.att ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.att li{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;font-size:12px}
+.att li .go{color:var(--blue);cursor:pointer;white-space:nowrap}
+.stack{display:flex;height:14px;border:1px solid var(--line);margin-top:4px}
+.stack i{display:block;height:100%}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--mut);margin-top:4px}
+.legend span::before{content:"";display:inline-block;width:8px;height:8px;margin-right:4px;background:var(--c)}
+.phases{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 12px;align-items:center;font-size:12px}
+.phases .n{font-variant-numeric:tabular-nums;color:var(--mut);white-space:nowrap}
+.links{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:16px}
+.links a{color:var(--mag);font-size:12px;font-weight:500;text-decoration:none;cursor:pointer}
+.links a:hover{text-decoration:underline}
+.lock{font-size:12px;color:var(--mut);margin-top:12px;border-top:1px solid color-mix(in oklch,var(--line) 50%,transparent);padding-top:8px}
+.people li{list-style:none;padding:6px 0;border-bottom:1px solid color-mix(in oklch,var(--line) 50%,transparent);font-size:12px}
+.people{padding:0;margin:0}
+.notes{max-width:1100px;margin-top:16px;border:1px solid var(--line);border-left:4px solid var(--blue);background:var(--sunk);padding:12px 16px;font-size:12px}
+.notes h4{margin:0 0 6px;font:10px Silkscreen;color:var(--blue);font-weight:400}
+.notes ul{margin:0;padding-left:18px}.notes li{margin:2px 0}
+.qs{max-width:1100px;margin-top:12px;border:1px solid var(--line);border-left:4px solid var(--mag);background:var(--sunk);padding:12px 16px;font-size:12px}
+.qs h4{margin:0 0 6px;font:10px Silkscreen;color:var(--mag);font-weight:400}
+.qs ol{margin:0;padding-left:18px}
+.hidden{display:none!important}
+</style></head><body>
+
+<h2>Team dashboards — Idea B: one panel per team (mock-up, 2026-11-12)</h2>
+<p class="intro">Each team page gets one new panel, under "About". It answers one question: <b>is this team ready?</b> Every number comes from data the app already holds. The cards that are on the page today stay as they are (grey, below). Pick a team. Switch the viewer to see what a plain member sees and what the team's lead (or a captain) sees.</p>
+
+<div class="ctl">
+  <div><span class="lb">TEAM</span><span class="chips" id="teams"></span></div>
+  <div><span class="lb">VIEWER</span><span class="chips" id="viewer"><span data-v="member">Member</span><span data-v="lead" class="on">This team's lead / captain</span></span></div>
+</div>
+
+<div class="desk">
+  <section class="win" aria-label="Team window">
+    <div class="bar"><span id="file">KITCHEN.EXE</span><span class="b"><i></i><i></i><i></i></span></div>
+    <div class="body">
+      <div class="eye">CAMP / TEAMS</div>
+      <h1 id="title">Kitchen</h1>
+      <p class="desc">What the team does, how ready it is, what's coming up, and who is on it this year.</p>
+      <div class="row" id="badges"></div>
+      <div class="layout">
+        <div class="col">
+          <div class="card"><div class="ghost"><b>About</b><span>unchanged</span></div><p class="ghost" id="about" style="margin:8px 0 0"></p></div>
+          <div class="card new" id="panel"></div>
+          <div class="card"><div class="ghost"><b>Coming up</b><span>unchanged</span></div></div>
+          <div class="card"><div class="ghost"><b>Open tasks</b><span>unchanged</span></div></div>
+          <div class="card"><div class="ghost"><b>Meetings</b><span>unchanged</span></div></div>
+          <div class="card"><div class="ghost"><b>Announcements</b><span>unchanged</span></div></div>
+          <div class="card"><div class="ghost"><b>Budget</b><span>unchanged</span></div></div>
+        </div>
+        <div class="card" style="align-self:start"><div class="ghost"><b>People this year</b><span>unchanged</span></div>
+          <ul class="people"><li>👑 Lead name</li><li>Member name</li><li>Member name</li></ul></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="notes"><h4>WHERE THE NUMBERS COME FROM / WHO SEES WHAT</h4><ul id="notes"></ul></div>
+<div class="qs"><h4>QUESTIONS FOR YOU</h4><ol>
+  <li>Teams with no data of their own (Water, Sound, Art and Activities, Ministry of Memes, Mutant Vehicle) get no panel in Idea B. They get the shared "Ready?" row in Idea A. Okay?</li>
+  <li>Kitchen: is this layout okay? (A Kitchen layout needs your approval.)</li>
+  <li>Safety and Finance show figures to their leads and captains only. A member sees only their own line. Okay?</li>
+</ol></div>
+
+<script>
+const P=(v,max)=>`<div class="prog"><i style="width:${Math.round(100*v/max)}%"></i></div>`;
+const T=(l,v,h,o={})=>({l,v,h,...o});
+const TEAMS={
+kitchen:{label:"Kitchen",file:"KITCHEN.EXE",about:"We feed the camp: breakfast and dinner, every day on site.",icon:"🍳",title:"Kitchen at a glance",
+ tiles:[T("Meals with a recipe","12 of 14","2 meals still empty",{bar:[12,14]}),
+        T("Recipes to review","3","waiting for a Kitchen lead"),
+        T("Shopping ticked","41 of 96","on the shared list",{bar:[41,96]}),
+        T("Allergy plans","1 missing","a meal someone coming can't eat",{band:"bad",lead:1})],
+ attention:[["warn","Day 4 dinner has no recipe yet.","Meal plan"],["warn","Day 6 breakfast has no recipe yet.","Meal plan"],
+   ["bad","Day 2 dinner: no allergy plan for an anaphylactic member.","Meal plan",1],["warn","3 recipes are not counted for their meal's plates yet.","Recipe book"],
+   ["ok","Next prep step: Day 1, marinate the chicken (on the task board).","Tasks"]],
+ links:["Meal plan","Shopping list","Recipe book"],
+ lockMember:"Allergy plans are for the Kitchen leads and captains.",
+ notes:["Meals with a recipe: kitchen_meal_plan_days + kitchen_menu_items (breakfast and dinner only).","Recipes to review: the review queue (recipes waiting for approval). Every member reads the count.","Shopping ticked: buildShoppingList and kitchen_shopping_ticks.","Allergy plans: kitchen_allergen_plans against members coming who are anaphylactic. SAFETY_VISIBLE, so a lead or captain only. No name and no food is shown here: the meal plan page has that.","Next prep step: kitchen_prep_steps."]},
+transport_and_logistics:{label:"Transport and Logistics",file:"TRANSPORT.EXE",about:"We get people and gear to the Tankwa and back.",icon:"🚗",title:"Getting there",
+ tiles:[T("Seats free","14","in 7 cars, after riders"),T("Lifts asked","3","still waiting for a car",{band:"warn"}),
+        T("Trailers","2","1 has no car to tow it",{band:"warn"}),T("Next phase","Pack","in 23 days, on 6 April")],
+ attendance:true,
+ attention:[["warn","3 people asked for a lift and have no car yet.","Transport"],["warn","The big trailer has no car to tow it.","Transport"],["warn","Strike: only 6 said Going.","Logistics"]],
+ links:["Transport","Logistics"],
+ notes:["Seats free and lifts: driver_profiles, car_members, lift_requests (counts only).","Trailers: transport_trailers and their tow car.","Next phase: logistics_phases.","Who helps on which day: logistics_attendance. Every member already reads these answers by name. 'Not answered' is a count for a member (it needs participation status, which reads at team lead)."]},
+finance:{label:"Finance",file:"FINANCE.EXE",about:"We collect the fees, pay the bills and keep the budgets.",icon:"💰",title:"Camp money",
+ member:{tiles:[T("Your fees","R1,200 left","of R4,800 · next by 1 March",{bar:[3600,4800]})],attention:[],links:["My dues","How to pay"]},
+ tiles:[T("Fees collected","R42,000","of R96,000 expected",{bar:[42,96]}),T("Payments to check","4","proof sent, not confirmed",{band:"warn"}),
+        T("Claims to pay","2","R1,850, approved by a lead"),T("Bills in 30 days","R6,500","camp balance after: R18,300")],
+ attention:[["warn","4 payments are waiting to be confirmed.","Payments"],["warn","2 approved claims are waiting to be paid.","Claims"],["bad","Kitchen is R600 over its budget.","Budgets"],["ok","11 people pledged a by-when date this month.","Dues"]],
+ links:["Dues","Payments","Claims","Budgets"],
+ notes:["A member sees only their own fees here (their own dues account, same as My dues).","Leads of Finance and captains (MONEY_KEEPER) see the camp figures: dues_charges and payments, camp_balances, camp_bills, reimbursements, team_budgets.","No member is named in the panel. The money pages keep their own rules."]},
+structures:{label:"Structures",file:"STRUCTURES.EXE",about:"We build the shade, the lounge and everything that stands up.",icon:"🏗️",title:"The build",
+ tiles:[T("Camp layout","Version 7","saved 3 days ago"),T("Build crew","9 going","3 maybe · 6 not answered",{band:"warn"}),
+        T("Build starts","in 30 days","on 13 April"),T("Strike crew","6 going","4 maybe",{band:"warn"})],
+ attention:[["warn","6 people coming have not said if they help on Build.","Logistics"],["ok","The neighbour page is on.","Camp layout"]],
+ links:["Camp layout","Logistics"],
+ notes:["Camp layout: camp_layout_versions (latest version and when).","Build and Strike crew: logistics_attendance for those phases. Same counts as the Transport panel."]},
+ministry_of_vibes:{label:"Ministry of Vibes",file:"VIBES.EXE",about:"We run the lounge: DJ sets, games and the late-night chats.",icon:"🪩",title:"The lounge",
+ tiles:[T("Lounge slots filled","18 of 30","on the days × times grid",{bar:[18,30]}),T("Offers waiting","4","for a Vibes lead to decide",{band:"warn"}),
+        T("DJ sets","11","accepted this year"),T("Activities","7","accepted this year")],
+ attention:[["warn","Day 2 night has nothing on.","Lounge"],["warn","Day 5 afternoon has nothing on.","Lounge"],["warn","4 offers are waiting for a yes or no.","Lounge"]],
+ links:["Lounge programme"],
+ notes:["lounge_offers and lounge_slots, against the grid in lounge_settings. Every member reads the programme already."]},
+sanitation_and_water:{label:"Sanitation and MOOP",file:"SANITATION.EXE",about:"We keep the camp clean and leave no trace.",icon:"🧹",title:"Cleaning shifts",
+ tiles:[T("Places filled","22 of 40","on the cleaning roster",{bar:[22,40]}),T("Shifts with places open","5","fewer people than the shift needs",{band:"warn"}),
+        T("Not signed up","19","people coming with no cleaning shift"),T("Changes close","in 31 days","at the start of each shift's day")],
+ attention:[["warn","Day 2 morning: 1 of 3.","Shifts"],["warn","Day 5 evening: 0 of 3.","Shifts"],["ok","The roster prints for site from the Shifts page.","Shifts"]],
+ links:["Shifts","Print the roster"],
+ notes:["shift_types of this team, shift_slots, shift_signups. Shifts with places open: people signed up against the shift's own places.","Not signed up: a count only for a member; the names need participation status (team lead)."]},
+health_and_safety:{label:"Safety",file:"SAFETY.EXE",about:"We look after people: first aid, fire safety and emergencies.",icon:"⛑️",title:"Safety check",
+ member:{tiles:[T("Your emergency contact","Set ✓","Jane (sister) · change it on My forms",{band:"ok"})],attention:[],links:["My forms"]},
+ tiles:[T("No emergency contact","5","of 48 people coming",{band:"bad"}),T("Anaphylactic","2","people coming"),
+        T("Medical form done","39 of 48","burner profile",{bar:[39,48]}),T("Allergies noted","7","people coming, for the Kitchen too")],
+ attention:[["bad","5 people coming have no emergency contact.","Roster"],["warn","9 people coming have not filled in their burner profile.","Roster"]],
+ links:["Roster","Camp sheet"],
+ notes:["SAFETY_VISIBLE data: a lead or captain sees counts only. No name is shown, so no audit row is written by the panel. The names stay behind the roster and the Camp sheet, which already audit.","A member sees only their own line."]},
+communications_and_hr:{label:"Communications & HR",file:"COMMS.EXE",about:"We talk to the camp and look after who joins.",icon:"📣",title:"Is the camp listening?",
+ tiles:[T("Open questionnaires","2","still waiting on answers"),T("Telegram connected","22 of 48","get notices from Ol' Jeb",{bar:[22,48]}),
+        T("Waiting for approval","3","new sign-ups",{lead:1,band:"warn"}),T("Sent this month","6","announcements")],
+ qs:[["Coming this year?",34,48],["Kitchen helpers",12,48]],
+ attention:[["warn","3 new sign-ups wait for a captain's approval.","Camp management",1],["warn","Coming this year?: 14 people have not answered.","Questionnaires"]],
+ links:["Announcements","Questionnaires","Join site"],
+ lockMember:"Sign-ups waiting for approval are for leads and captains.",
+ notes:["Open questionnaires and answer rates: questionnaire_activations, required_actions (counts).","Telegram connected: users.telegram_dm_at (count only).","Waiting for approval: users.approval_status = pending (count, team lead and up).","Sent this month: broadcasts."]},
+power_and_lighting:{label:"Power and Lighting",file:"POWER.EXE",about:"We keep the lights on and the generator fed.",icon:"⚡",title:"Power plan at a glance",
+ tiles:[T("Peak load","4.2 kW","5.1 kVA, the most drawn at once"),T("Generator load","68%","Fine · Honda EU70is, 7 kVA",{band:"ok"}),
+        T("Fuel for the burn","210 L","over 7 days, with the 15% margin"),T("Jerry cans","11","20 L cans, after the 4 owned"),
+        T("Cans on a car","8 of 11","new: who fills each can",{bar:[8,11],nw:1}),T("Generator ready","7 of 10","new: readiness checks",{bar:[7,10],nw:1})],
+ attention:[["warn","3 cans have no car to travel with.","Fuel"],["warn","3 readiness checks are not done.","Generators"]],
+ links:["Load list","Fuel plan","Generators"],
+ notes:["The top 4 tiles are the panel you have today.","New: fuel_cans with travels_with_user_id, and generator_readiness_items."]},
+};
+const ORDER=Object.keys(TEAMS);let team="kitchen",viewer="lead";
+const tc=document.getElementById('teams');
+ORDER.forEach(k=>{const s=document.createElement('span');s.textContent=TEAMS[k].label;s.dataset.k=k;if(k===team)s.className='on';tc.appendChild(s)});
+tc.addEventListener('click',e=>{const s=e.target.closest('span');if(!s)return;team=s.dataset.k;[...tc.children].forEach(c=>c.classList.toggle('on',c===s));draw()});
+const vc=document.getElementById('viewer');
+vc.addEventListener('click',e=>{const s=e.target.closest('span');if(!s)return;viewer=s.dataset.v;[...vc.children].forEach(c=>c.classList.toggle('on',c===s));draw()});
+function tile(t){return `<div class="tile"><span class="l">${t.l}${t.nw?' <span class="badge b-mag" style="font-size:8px">NEW</span>':''}</span><span class="v">${t.band?`<i class="dot d-${t.band}"></i>`:''}${t.v}</span><span class="h">${t.h}</span>${t.bar?P(...t.bar):''}</div>`}
+function draw(){
+ const d=TEAMS[team];const lead=viewer==='lead';
+ const src=(!lead&&d.member)?d.member:d;
+ document.getElementById('file').textContent=d.file;
+ document.getElementById('title').textContent=d.label;
+ document.getElementById('about').textContent=d.about;
+ document.getElementById('badges').innerHTML=(lead?'<span class="badge b-mag">You lead this team</span>':'')+'<span class="badge b-mut">8 people</span>';
+ const tiles=src.tiles.filter(t=>lead||!t.lead);
+ let h=`<div class="ct"><span class="ico">${d.icon}</span>${d.title}</div><div class="tiles ${tiles.length>=4?'four':''}">${tiles.map(tile).join('')}</div>`;
+ if(d.attendance&&src===d)h+=`<div class="att"><h3>WHO HELPS ON WHICH DAY</h3><div class="phases">
+  ${[["Pack",12,4,2,10],["Build",9,3,6,10],["Strike",6,4,8,10],["Unpack",5,2,9,12]].map(r=>`<span>${r[0]}</span><div><div class="stack"><i style="flex:${r[1]};background:var(--ok)"></i><i style="flex:${r[2]};background:var(--warn)"></i><i style="flex:${r[3]};background:var(--bad)"></i><i style="flex:${r[4]};background:var(--line)"></i></div></div><span class="n">${r[1]} going</span>`).join('')}
+  </div><div class="legend"><span style="--c:var(--ok)">Going</span><span style="--c:var(--warn)">Maybe</span><span style="--c:var(--bad)">Can't</span><span style="--c:var(--line)">Not answered</span></div></div>`;
+ if(d.qs&&src===d)h+=`<div class="att"><h3>ANSWERS SO FAR</h3><div class="phases">${d.qs.map(q=>`<span>${q[0]}</span><div>${P(q[1],q[2])}</div><span class="n">${q[1]} of ${q[2]}</span>`).join('')}</div></div>`;
+ const att=src.attention.filter(a=>lead||!a[3]);
+ if(att.length)h+=`<div class="att"><h3>NEEDS ATTENTION</h3><ul>${att.map(a=>`<li><i class="dot d-${a[0]}"></i><span>${a[1]}</span><span class="go">${a[2]} →</span></li>`).join('')}</ul></div>`;
+ h+=`<div class="links">${src.links.map(l=>`<a>${l}</a>`).join('')}</div>`;
+ if(!lead&&d.lockMember)h+=`<div class="lock">${d.lockMember}</div>`;
+ if(!lead&&d.member)h+=`<div class="lock">The camp's figures are for this team's leads and captains.</div>`;
+ document.getElementById('panel').innerHTML=h;
+ document.getElementById('notes').innerHTML=d.notes.map(n=>`<li>${n}</li>`).join('');
+}
+draw();
+</script>
+</body></html>

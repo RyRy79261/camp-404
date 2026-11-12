@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Fuel, PlugZap, Zap } from "lucide-react";
+import { ClipboardCheck, Fuel, PlugZap, Zap } from "lucide-react";
 import { buttonVariants } from "@camp404/ui/components/button";
 import {
   Card,
@@ -7,12 +7,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@camp404/ui/components/card";
+import { ProgressBar } from "@camp404/ui/components/progress-bar";
 import { cn } from "@camp404/ui/lib/utils";
 import { BAND_BAR, BAND_TEXT } from "@/components/power/load-panels";
-import type { PowerGlance } from "@/lib/power-glance";
+import type { PowerGlance, PowerSiteGlance } from "@/lib/power-glance";
 import {
   POWER_FUEL_PATH,
   POWER_LOADS_PATH,
+  POWER_READINESS_PATH,
   formatNumber,
   kw,
   litres,
@@ -28,7 +30,9 @@ import {
 // Those who may edit the plan get links into the Power tool that say so;
 // everyone else gets the same pages to read. With no loads and no generator
 // there is nothing to show: the card is one line, and the editor's link to
-// start the load list.
+// start the load list. Two more tiles (2026-11-12) count the work before the
+// burn: the fuel cans that travel with a car and the generator's readiness
+// checks, with a link to each.
 
 interface Tile {
   key: string;
@@ -36,6 +40,7 @@ interface Tile {
   value: string;
   hint: string;
   band?: keyof typeof BAND_BAR;
+  progress?: { value: number; max: number };
 }
 
 function tiles(glance: PowerGlance): Tile[] {
@@ -81,13 +86,44 @@ function tiles(glance: PowerGlance): Tile[] {
   ];
 }
 
+/** The work before the burn (2026-11-12): cans on a car, readiness checks. */
+function siteTiles(site: PowerSiteGlance): Tile[] {
+  return [
+    {
+      key: "cans-on-car",
+      label: "Cans on a car",
+      value: site.cans ? `${site.cans.onCar} of ${site.cans.all}` : "—",
+      hint: site.cans
+        ? site.cans.onCar === site.cans.all
+          ? "every can travels with a car"
+          : `${site.cans.all - site.cans.onCar} on no car yet`
+        : "No cans on the register yet",
+      progress: site.cans
+        ? { value: site.cans.onCar, max: site.cans.all }
+        : undefined,
+    },
+    {
+      key: "readiness",
+      label: "Generator ready",
+      value: site.checks ? `${site.checks.done} of ${site.checks.all}` : "—",
+      hint: site.checks ? "readiness checks done" : "No checklist started",
+      progress: site.checks
+        ? { value: site.checks.done, max: site.checks.all }
+        : undefined,
+    },
+  ];
+}
+
 export function PowerGlanceCard({
   glance,
   canEdit,
+  site,
 }: {
   glance: PowerGlance;
   /** A captain or a Power & Lighting lead: the links say "Edit". */
   canEdit: boolean;
+  /** The fuel cans and the readiness checks; left out, the card has four. */
+  site?: PowerSiteGlance;
 }) {
   if (glance.peak === null && glance.generator === null) {
     return (
@@ -126,7 +162,7 @@ export function PowerGlanceCard({
           aria-label="Power plan at a glance"
           className="grid gap-3 page-sm:grid-cols-2"
         >
-          {tiles(glance).map((tile) => (
+          {[...tiles(glance), ...(site ? siteTiles(site) : [])].map((tile) => (
             <article
               key={tile.key}
               aria-labelledby={`glance-${tile.key}`}
@@ -151,6 +187,14 @@ export function PowerGlanceCard({
                 {tile.value}
               </span>
               <span className="text-xs text-muted-foreground">{tile.hint}</span>
+              {tile.progress ? (
+                <ProgressBar
+                  className="mt-1"
+                  value={tile.progress.value}
+                  max={tile.progress.max}
+                  label={tile.label}
+                />
+              ) : null}
             </article>
           ))}
         </section>
@@ -169,6 +213,17 @@ export function PowerGlanceCard({
             <Fuel className="h-3.5 w-3.5" aria-hidden />
             {canEdit ? "Edit the fuel plan" : "See the fuel estimate"}
           </Link>
+          {site ? (
+            <Link
+              href={POWER_READINESS_PATH}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
+            >
+              <ClipboardCheck className="h-3.5 w-3.5" aria-hidden />
+              {canEdit
+                ? "Edit the readiness checks"
+                : "See the readiness checks"}
+            </Link>
+          ) : null}
         </div>
       </CardContent>
     </Card>

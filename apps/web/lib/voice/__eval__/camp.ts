@@ -370,8 +370,12 @@ export async function seedEvalCamp(db: DB): Promise<void> {
         t.id === TASKS.shopping.id
           ? new Date("2026-10-07T08:00:00+02:00")
           : null,
+      // Relative to the real clock, not the eval's fixed day: the connector's
+      // task tools read the board with `new Date()`, which shows a done task
+      // only for DONE_VISIBLE_DAYS, so a fixed date fell off the board on
+      // 31 Oct 2026 and "Reopen the camp sign task" stopped matching.
       completedAt:
-        t.status === "done" ? new Date("2026-10-01T10:00:00Z") : null,
+        t.status === "done" ? new Date(Date.now() - 86_400_000) : null,
     })),
   );
   await db.insert(schema.reimbursements).values(

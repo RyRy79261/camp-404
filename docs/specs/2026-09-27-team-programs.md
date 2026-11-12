@@ -171,6 +171,19 @@ is the model for a figures row.
 | **Communications & HR**                                                                                          | Shared page, plus its folder's links (Announcements, Questionnaires, Join site)                                                                                                                                                                                                | None named                                                                                                            |
 | **Structures, Sanitation and MOOP, Safety, Art and Activities, Ministry of Memes, Mutant Vehicle, Sound, Water** | Shared page, until each lead says what they need                                                                                                                                                                                                                               | Inventory for the team (#246), Survival Guide chapters (#250), the layout builder (#271), AfrikaBurn deadlines (#247) |
 
+[CORRECTION 2026-11-12] The owner asked for team pages that "actually give you
+insight" and approved a panel per team (mock-up
+`docs/plans/2026-11-12-team-dashboards-mockup.html`). Kitchen, Transport and
+Logistics, Finance, Structures, Ministry of Vibes, Sanitation and MOOP, Safety,
+Communications & HR and Power and Lighting each have an "at a glance" panel
+(`apps/web/lib/team-glance/*`, drawn by `components/teams/team-glance-card.tsx`):
+figure tiles, "Needs attention" lines and links, counts only, never a name. A
+member sees Finance and Safety only as their own line (their fees, their
+emergency contact set or not); the camp figures are for that team's leads and
+captains. No prep steps on any panel (owner: "I dont like the prep steps thing
+at all"). Water, Sound, Art and Activities, Ministry of Memes and Mutant
+Vehicle get their own tools first (`docs/plans/2026-11-12-team-tools-mockup.html`).
+
 **Announcements on a program.** [CORRECTION 2026-09-27] The owner ruled that
 every member reads a team's announcements on its program (ruling 3 below).
 Who receives them does not change.

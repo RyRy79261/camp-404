@@ -1,0 +1,232 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Team tools — mock-up</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:oklch(0.15 0.05 295);--panel:oklch(0.2 0.06 295);--line:oklch(0.35 0.08 295);--fg:oklch(0.95 0.01 295);--mut:oklch(0.72 0.04 295);--mag:oklch(0.65 0.27 340);--blue:oklch(0.62 0.18 255);--ok:oklch(0.75 0.17 150);--warn:oklch(0.8 0.15 80);--bad:oklch(0.68 0.2 25);--sunk:color-mix(in oklch,var(--panel) 80%,black)}
+*{box-sizing:border-box}
+body{margin:0;padding:0;font-family:Inter,sans-serif;font-size:13px;color:var(--fg);line-height:1.45}
+h2{font:12px Silkscreen;color:var(--blue);margin:8px 0}
+.intro{color:var(--mut);margin:0 0 8px}
+.chips{display:inline-flex;border:1px solid var(--line);padding:4px;gap:4px;flex-wrap:wrap;margin:8px 0 16px}
+.chips span{padding:6px 10px;color:var(--mut);cursor:pointer;font-weight:500}
+.chips span.on{background:var(--mag);color:#fff}
+.desk{background:var(--bg);background-image:linear-gradient(color-mix(in oklch,var(--line) 60%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in oklch,var(--line) 60%,transparent) 1px,transparent 1px);background-size:32px 32px;padding:16px}
+.win{background:var(--panel);border:2px solid var(--line);box-shadow:4px 4px 0 #0008}
+.win+.win{margin-top:16px}
+.bar{display:flex;align-items:center;gap:8px;background:color-mix(in oklch,var(--mag) 70%,var(--bg));padding:4px 8px;font:12px Silkscreen}
+.bar .b{margin-left:auto;display:flex;gap:4px}.bar .b i{width:12px;height:12px;border:1px solid var(--fg);display:block}
+.body{padding:16px;container-type:inline-size}
+.eye{font:10px Silkscreen;color:var(--mag)}
+h1{font-size:20px;margin:4px 0}
+.desc{color:var(--mut);margin:0 0 12px}
+.card{border:1px solid var(--line);background:var(--sunk);padding:16px}
+.card+.card{margin-top:16px}
+.new{outline:2px dashed var(--mag);outline-offset:4px;position:relative}
+.new::before{content:"NEW";position:absolute;top:-14px;right:8px;font:9px Silkscreen;background:var(--mag);color:#fff;padding:2px 6px}
+.ct{font-weight:600;font-size:14px;margin:0 0 12px;display:flex;gap:8px;align-items:center}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.tile{border:1px solid var(--line);background:color-mix(in oklch,var(--panel) 50%,transparent);padding:12px;display:flex;flex-direction:column;gap:2px}
+.tile .l{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);font-weight:500}
+.tile .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:8px}
+.tile .h{font-size:11px;color:var(--mut)}
+.dot{width:10px;height:10px;display:inline-block;flex:none}
+.d-ok{background:var(--ok)}.d-warn{background:var(--warn)}.d-bad{background:var(--bad)}.d-mut{background:var(--line)}
+.prog{height:6px;border:1px solid var(--line);background:var(--bg);margin-top:6px}.prog i{display:block;height:100%;background:var(--mag)}
+h3{font:10px Silkscreen;color:var(--mut);margin:16px 0 8px;font-weight:400}
+ul.att{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+ul.att li{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:center;font-size:12px}
+.go{color:var(--blue);white-space:nowrap;font-size:12px}
+.links{display:flex;gap:16px;margin-top:16px;flex-wrap:wrap}.links a{color:var(--mag);font-size:12px;font-weight:500}
+.lock{font-size:12px;color:var(--mut);margin-top:12px;border-top:1px solid color-mix(in oklch,var(--line) 50%,transparent);padding-top:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--mag);background:var(--mag);color:#fff;font:500 13px Inter;padding:8px 12px;cursor:pointer;white-space:nowrap}
+.btn.o{background:transparent;color:var(--fg);border-color:var(--line)}.btn.s{padding:4px 8px;font-size:12px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+table{width:100%;border-collapse:collapse}th{font-size:11px;text-align:left;color:var(--mut);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:8px;border-bottom:1px solid color-mix(in oklch,var(--line) 50%,transparent);vertical-align:top}
+.r{text-align:right;font-variant-numeric:tabular-nums}
+.badge{font:10px Silkscreen;padding:2px 6px;border:1px solid;display:inline-block;white-space:nowrap}
+.b-ok{color:var(--ok)}.b-warn{color:var(--warn)}.b-bad{color:var(--bad)}.b-mut{color:var(--mut)}.b-blue{color:var(--blue)}.b-mag{color:var(--mag)}
+.grid{display:grid;grid-template-columns:70px repeat(5,minmax(0,1fr));gap:4px;font-size:11px}
+.grid .h{color:var(--mut);text-align:center;font:9px Silkscreen;padding:4px 0}
+.grid .rl{color:var(--mut);font:9px Silkscreen;display:flex;align-items:center}
+.slot{border:1px dashed var(--line);min-height:44px;padding:4px;color:var(--mut)}
+.slot.f{border:1px solid var(--mag);background:color-mix(in oklch,var(--mag) 16%,var(--bg));color:var(--fg)}
+.slot small{display:block;color:var(--mut)}
+.idea{border:1px solid var(--line);background:var(--bg);padding:12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px}
+.idea+.idea{margin-top:8px}.idea b{font-weight:600}.idea p{margin:0;color:var(--mut);font-size:12px;grid-column:1}
+.keen{display:flex;flex-direction:column;align-items:center;border:1px solid var(--line);padding:4px 10px;cursor:pointer;grid-row:1/3;grid-column:2}
+.keen.on{border-color:var(--mag);color:var(--mag)}.keen b{font-size:16px}
+.cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.cols>div>h4{font:9px Silkscreen;color:var(--mut);margin:0 0 6px;font-weight:400}
+.empty{border:1px dashed var(--line);padding:24px;text-align:center;color:var(--mut)}
+.field{display:flex;flex-direction:column;gap:4px}.field label{font-size:12px;font-weight:500}
+.input{border:1px solid var(--line);background:var(--bg);padding:8px 10px;color:var(--fg);font:13px Inter}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.chk{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid color-mix(in oklch,var(--line) 50%,transparent)}
+.chk i{width:16px;height:16px;border:1px solid var(--mut);display:grid;place-items:center;font-style:normal;font-size:11px}
+.chk.d i{background:var(--ok);border-color:var(--ok);color:var(--bg)}
+.notes{margin-top:16px;border:1px solid var(--line);border-left:4px solid var(--blue);background:var(--sunk);padding:12px 16px;font-size:12px}
+.notes h4{margin:0 0 6px;font:10px Silkscreen;color:var(--blue);font-weight:400}.notes ul{margin:0;padding-left:18px}
+.qs{margin-top:12px;border:1px solid var(--line);border-left:4px solid var(--mag);background:var(--sunk);padding:12px 16px;font-size:12px}
+.qs h4{margin:0 0 6px;font:10px Silkscreen;color:var(--mag);font-weight:400}.qs ol{margin:0;padding-left:18px}
+.hidden{display:none!important}
+</style></head><body>
+<h2>Team tools — mock-up 2 (2026-11-12)</h2>
+<p class="intro">Your answers to mock-up 1. Each one adds a new tool. Each team page also gets its glance panel. Pick one.</p>
+<div class="chips" id="pick"><span class="on" data-p="kitchen">Kitchen: ingredients, gear</span><span data-p="water">Water: estimate</span><span data-p="sound">Sound: rental</span><span data-p="art">Art and Activities: themes and projects</span><span data-p="memes">Ministry of Memes: ideas board</span><span data-p="mv">Mutant Vehicle</span></div>
+
+<div class="desk">
+
+<!-- KITCHEN -->
+<div data-pane="kitchen">
+ <section class="win"><div class="bar">KITCHEN.EXE<span class="b"><i></i><i></i><i></i></span></div><div class="body">
+  <div class="eye">CAMP / TEAMS</div><h1>Kitchen</h1><p class="desc">The "Kitchen at a glance" panel from mock-up 1 stays. A second panel goes under it.</p>
+  <div class="card new">
+   <div class="ct">🔪 Ingredients and gear</div>
+   <div class="tiles">
+    <div class="tile"><span class="l">Ingredients</span><span class="v">96</span><span class="h">lines on the shopping list · 7 shop areas</span></div>
+    <div class="tile"><span class="l">Priced</span><span class="v">71 of 96</span><span class="h">R14,820 estimated · R3,200 paid</span><div class="prog"><i style="width:74%"></i></div></div>
+    <div class="tile"><span class="l">Kitchen gear</span><span class="v">38 items</span><span class="h">in the inventory</span></div>
+    <div class="tile"><span class="l">Gear to fix</span><span class="v"><i class="dot d-warn"></i>3</span><span class="h">2 need repair · 1 broken</span></div>
+    <div class="tile"><span class="l">Gear still needed</span><span class="v">4 of 11</span><span class="h">after camp stock, bought and pledged</span><div class="prog"><i style="width:64%"></i></div></div>
+    <div class="tile"><span class="l">Biggest ingredients</span><span class="v" style="font-size:14px;font-weight:600;flex-direction:column;align-items:flex-start;gap:0">Rice 18 kg<br>Onions 12 kg<br>Eggs 240</span><span class="h">by amount</span></div>
+   </div>
+   <h3>NEEDS ATTENTION</h3>
+   <ul class="att"><li><i class="dot d-warn"></i><span>25 shopping lines have no price yet.</span><span class="go">Shopping list →</span></li>
+   <li><i class="dot d-warn"></i><span>The big pot is broken.</span><span class="go">Inventory →</span></li>
+   <li><i class="dot d-warn"></i><span>Still needed: 2 gas bottles, 1 cooler box.</span><span class="go">Inventory →</span></li></ul>
+   <div class="links"><a>Meal plan</a><a>Shopping list</a><a>Kitchen inventory</a></div>
+   <div class="lock">Member view: the same, but no prices ("Priced" shows only "71 of 96 priced"). Members are never sent a price.</div>
+  </div>
+ </div></section>
+ <div class="notes"><h4>DATA</h4><ul><li>All of it exists today: the shopping list, kitchen_shopping_prices, inventory_items / needs / pledges of the Kitchen team.</li><li>No new tables.</li></ul></div>
+</div>
+
+<!-- WATER -->
+<div data-pane="water" class="hidden">
+ <section class="win"><div class="bar">WATER.EXE<span class="b"><i></i><i></i><i></i></span></div><div class="body">
+  <div class="eye">CAMP / TEAMS</div><h1>Water</h1>
+  <div class="card new">
+   <div class="ct">💧 Water for the burn</div>
+   <div class="tiles">
+    <div class="tile"><span class="l">Water needed</span><span class="v">3,024 L</span><span class="h">48 people × 9 days × 7 L a day</span></div>
+    <div class="tile"><span class="l">Containers</span><span class="v">121</span><span class="h">25 L each · or 4 × 1,000 L tanks</span></div>
+    <div class="tile"><span class="l">Weight</span><span class="v">3.0 t</span><span class="h">for Transport to plan the trailers</span></div>
+   </div>
+   <h3>A PERSON A DAY</h3>
+   <p style="margin:0"><b>7 L</b> <span class="desc">(drinking, cooking and washing; a Water lead or a captain changes it)</span></p>
+   <p class="lock">People = who is coming (said Coming, or accepted). Days = the days on site from Logistics (first Build day to last Strike day). A Water lead or a captain changes the litres.</p>
+   <div class="links"><a>Change the litres</a><a>Logistics</a></div>
+  </div>
+ </div></section>
+ <div class="notes"><h4>DATA</h4><ul><li>New: the litres a person a day (7 L to start) and the container size. One small table, a compare-and-set, audited. Same shape as Power's fuel estimate.</li><li>People and days already exist.</li></ul></div>
+</div>
+
+<!-- SOUND -->
+<div data-pane="sound" class="hidden">
+ <section class="win"><div class="bar">SOUND.EXE<span class="b"><i></i><i></i><i></i></span></div><div class="body">
+  <div class="eye">CAMP / TEAMS</div><h1>Sound</h1>
+  <div class="card new">
+   <div class="head"><div class="ct">🔊 Sound rental this year</div><span class="btn o s">Edit</span></div>
+   <div class="tiles">
+    <div class="tile"><span class="l">Status</span><span class="v"><i class="dot d-warn"></i>Booked</span><span class="h">Quote → Booked → Paid → Collected → Returned</span></div>
+    <div class="tile"><span class="l">Cost</span><span class="v">R8,500</span><span class="h">R2,000 deposit paid · R6,500 to pay</span></div>
+    <div class="tile"><span class="l">Collect</span><span class="v">8 April</span><span class="h">in 25 days · Cape Town</span></div>
+    <div class="tile"><span class="l">Return</span><span class="v">22 April</span><span class="h">by 12:00 · late fee R500 a day</span></div>
+   </div>
+   <h3>WHAT WE RENT</h3>
+   <table><thead><tr><th>Item</th><th>Size</th><th class="r">How many</th><th class="r">Watts each</th></tr></thead><tbody>
+    <tr><td>Tops (powered speakers)</td><td>12-inch</td><td class="r">4</td><td class="r">500 W</td></tr><tr><td>Subwoofer</td><td>18-inch</td><td class="r">2</td><td class="r">1,200 W</td></tr><tr><td>DJ mixer</td><td>4-channel</td><td class="r">1</td><td class="r">50 W</td></tr><tr><td><b>Total</b></td><td></td><td class="r"><b>7</b></td><td class="r"><b>4,450 W</b></td></tr></tbody></table>
+   <h3>SUPPLIER</h3>
+   <p style="margin:0">Cape Sound Hire · quote Q-1182 · contact on the rental page</p>
+   <h3>NEEDS ATTENTION</h3>
+   <ul class="att"><li><i class="dot d-warn"></i><span>R6,500 still to pay before collection.</span><span class="go">Claims →</span></li><li><i class="dot d-warn"></i><span>The subwoofers are not on the power load list yet.</span><span class="go">Power →</span></li><li><i class="dot d-warn"></i><span>No car is collecting yet.</span><span class="go">Transport →</span></li></ul>
+   <div class="lock">Member view: status, dates and what we rent. Money is for Sound leads, Finance and captains.</div>
+  </div>
+ </div></section>
+ <div class="notes"><h4>DATA</h4><ul><li>New: one rental a year (supplier, quote, status, cost, deposit, collect and return days, place, notes) and its lines (item, size, count, watts each). Rands only.</li><li>The watts can go into Power's load list with one button ("Add to the load list").</li></ul></div>
+</div>
+
+<!-- ART -->
+<div data-pane="art" class="hidden">
+ <section class="win"><div class="bar">SCHEDULE.EXE<span class="b"><i></i><i></i><i></i></span></div><div class="body">
+  <div class="head"><div><div class="eye">CAMP / TEAMS / ART AND ACTIVITIES</div><h1>Activities schedule</h1><p class="desc">What the camp runs for the burn, day by day. Drag an activity onto a time.</p></div><span class="btn">+ Add activity</span></div>
+  <div class="grid">
+   <div></div><div class="h">DAY 1</div><div class="h">DAY 2</div><div class="h">DAY 3</div><div class="h">DAY 4</div><div class="h">DAY 5</div>
+   <div class="rl">MORNING</div><div class="slot f">Yoga<small>Thandi · lounge</small></div><div class="slot"></div><div class="slot f">Yoga<small>Thandi · lounge</small></div><div class="slot"></div><div class="slot f">Pancakes for neighbours<small>Kitchen</small></div>
+   <div class="rl">AFTERNOON</div><div class="slot f">Paint the dome<small>8 places · 5 signed up</small></div><div class="slot f">Costume swap</div><div class="slot"></div><div class="slot f">Glitter station</div><div class="slot"></div>
+   <div class="rl">EVENING</div><div class="slot"></div><div class="slot f">Shadow Work lighting<small>the art piece</small></div><div class="slot f">Fire spinning class</div><div class="slot"></div><div class="slot"></div>
+  </div>
+  <h3>NOT ON A TIME YET</h3>
+  <div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><span class="badge b-mag">Life drawing</span><span class="badge b-mag">Burn quiz</span></div>
+  <div class="card new" style="margin-top:16px">
+   <div class="ct">🎨 Activities at a glance (on the team page)</div>
+   <div class="tiles">
+    <div class="tile"><span class="l">On the schedule</span><span class="v">9</span><span class="h">2 more not on a time yet</span></div>
+    <div class="tile"><span class="l">Empty times</span><span class="v">6 of 15</span><span class="h">Day 4 is the quietest</span></div>
+   </div>
+   <div class="links"><a>Activities schedule</a></div>
+  </div>
+ </div></section>
+ <div class="notes"><h4>DATA</h4><ul><li>New: activities (name, who runs it, where, places, note) and their times on a days × Morning/Afternoon/Evening grid. Same shape as the lounge programme, its own tables (bespoke over generic).</li><li>Every member reads it and may sign up where there are places. An Art lead or a captain edits.</li><li>Option: also push each activity to the camp calendar as an event.</li></ul></div>
+</div>
+
+<!-- MEMES -->
+<div data-pane="memes" class="hidden">
+ <section class="win"><div class="bar">IDEAS.EXE<span class="b"><i></i><i></i><i></i></span></div><div class="body">
+  <div class="head"><div><div class="eye">CAMP / TEAMS / MINISTRY OF MEMES</div><h1>Ideas board</h1><p class="desc">Ideas for the camp's culture: themes, bits, rituals, costumes. Anyone adds one. Say "I'm in" to the ones you like.</p></div><span class="btn">+ Add an idea</span></div>
+  <div class="cols">
+   <div><h4>NEW · 4</h4>
+    <div class="idea"><b>Prince fan club</b><span class="keen on"><b>12</b>I'm in</span><p>Badges and a chant for the cat on the clock.</p></div>
+    <div class="idea"><b>404 dance</b><span class="keen"><b>5</b>I'm in</span><p>A dance that "can't be found".</p></div></div>
+   <div><h4>PICKED · 2</h4>
+    <div class="idea"><b>Error code costumes</b><span class="keen on"><b>18</b>I'm in</span><p>Everyone dresses as an HTTP code on Day 3.</p></div></div>
+   <div><h4>DOING · 1</h4>
+    <div class="idea"><b>Camp sticker</b><span class="keen"><b>9</b>I'm in</span><p>Prince on the clock. Print run of 200.</p></div></div>
+   <div><h4>DONE · 3</h4><div class="idea"><b>Welcome sign</b><span class="keen"><b>7</b>I'm in</span><p>Built 2026.</p></div></div>
+  </div>
+  <div class="card new" style="margin-top:16px">
+   <div class="ct">😹 Ideas at a glance (on the team page)</div>
+   <div class="tiles">
+    <div class="tile"><span class="l">New ideas</span><span class="v">4</span><span class="h">2 this week</span></div>
+    <div class="tile"><span class="l">Most wanted</span><span class="v" style="font-size:16px">Error code costumes</span><span class="h">18 people in</span></div>
+   </div>
+   <div class="links"><a>Ideas board</a></div>
+  </div>
+ </div></section>
+ <div class="notes"><h4>DATA</h4><ul><li>New: ideas (title, a few lines, who added it, status New / Picked / Doing / Done / Not this year) and "I'm in" marks.</li><li>Every member adds ideas and says "I'm in". A Memes lead or a captain moves an idea. The adder may edit or remove their own while it is New.</li><li>Ideas last across years (a "Done" idea keeps its year).</li></ul></div>
+</div>
+
+<!-- MV -->
+<div data-pane="mv" class="hidden">
+ <section class="win"><div class="bar">MUTANT-VEHICLE.EXE<span class="b"><i></i><i></i><i></i></span></div><div class="body">
+  <div class="eye">CAMP / TEAMS</div><h1>Mutant Vehicle</h1>
+  <div class="row" style="display:flex;gap:8px;margin-bottom:16px"><span class="badge b-mut">Not active this year</span></div>
+  <div class="card new">
+   <div class="ct">🚌 The vehicle</div>
+   <div class="empty">No mutant vehicle is coming this year.<br><span style="font-size:12px">If a lead takes the team and we take a vehicle, they register it here for this year.</span><br><br><span class="btn o s">Register a vehicle for this year</span></div>
+  </div>
+  <p class="desc" style="margin-top:16px">When a vehicle is added, the same panel shows:</p>
+  <div class="card">
+   <div class="ct">🚌 The Glitch Bus</div>
+   <div class="tiles">
+    <div class="tile"><span class="l">State</span><span class="v"><i class="dot d-warn"></i>Being fixed</span><span class="h">Ready · Being fixed · Not running</span></div>
+    <div class="tile"><span class="l">Checks done</span><span class="v">5 of 8</span><span class="h">for AfrikaBurn's vehicle licensing</span><div class="prog"><i style="width:62%"></i></div></div>
+   </div>
+   <h3>CHECKS</h3>
+   <div class="chk d"><i>✓</i>Roadworthy to drive to the Tankwa</div><div class="chk d"><i>✓</i>Lights at night</div><div class="chk d"><i>✓</i>Fire extinguisher</div><div class="chk"><i></i>Registered with AfrikaBurn's MV team</div><div class="chk"><i></i>Brakes checked</div>
+   <h3>DETAILS</h3><p style="margin:0" class="desc">What it is, whose it is, where it is kept, how many it carries, who drives it.</p>
+  </div>
+ </div></section>
+ <div class="notes"><h4>DATA</h4><ul><li>New: vehicles (name, what it is, where kept, seats, state, notes) and a per-year "coming this year" mark and its checklist.</li><li>"Not active this year" = no vehicle marked coming. The team stays on the desktop, quiet.</li></ul></div>
+</div>
+
+<div class="qs"><h4>QUESTION FOR YOU</h4><ol>
+ <li>Art and Activities: is this right? Themes per day, art projects, and activities that live on the lounge programme.</li>
+</ol></div>
+</div>
+<script>
+const pk=document.getElementById('pick');
+pk.addEventListener('click',e=>{const s=e.target.closest('span');if(!s)return;[...pk.children].forEach(c=>c.classList.toggle('on',c===s));document.querySelectorAll('[data-pane]').forEach(p=>p.classList.toggle('hidden',p.dataset.pane!==s.dataset.p))});
+document.querySelectorAll('.keen').forEach(k=>k.addEventListener('click',()=>{const b=k.querySelector('b');const on=k.classList.toggle('on');b.textContent=+b.textContent+(on?1:-1)}));
+</script>
+</body></html>

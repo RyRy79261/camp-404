@@ -15,6 +15,7 @@
 
 import type { ViewerRank } from "@camp404/types";
 import { hasClearance } from "./access";
+import { captainOrLeadOf, type Rule } from "./actor";
 
 /**
  * Never shown to another member, at any rank, for any reason. There is no
@@ -536,6 +537,26 @@ export function safetyReadBasis(viewer: FieldViewer): SafetyReadBasis | null {
   if (!canReadMemberField(viewer, "users.emergencyContacts")) return null;
   return viewer.rank === "captain" ? "captain" : "team_lead";
 }
+
+/**
+ * Who reads the Safety team's counts on its team page (owner, 2026-11-12): how
+ * many people coming this year have no emergency contact, are anaphylactic,
+ * have done their burner profile, have allergies noted. A captain or a lead of
+ * Safety; every other viewer reads only their own line. Counts name nobody and
+ * open nobody's value, so reading them writes no audit row; the names stay
+ * behind the audited roster and Camp sheet.
+ */
+export const SAFETY_COUNTS_READER: Rule = captainOrLeadOf("health_and_safety");
+
+/**
+ * Who reads how many members connected Ol' Jeb, on the Communications & HR
+ * team page. `users.telegramDmAt` reads at captain one member at a time; the
+ * count names nobody, and the team that talks to the camp is who needs it: a
+ * captain or a lead of Communications & HR.
+ */
+export const TELEGRAM_REACH_READER: Rule = captainOrLeadOf(
+  "communications_and_hr",
+);
 
 // --- Erasure provers -----------------------------------------------------------
 

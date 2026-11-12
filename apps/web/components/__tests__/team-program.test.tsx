@@ -141,6 +141,26 @@ describe("PowerGlanceCard", () => {
     ).toBe("/power/fuel");
   });
 
+  it("adds the cans on a car and the readiness checks, with their link", () => {
+    render(
+      <PowerGlanceCard
+        glance={GLANCE}
+        canEdit={false}
+        site={{ cans: { onCar: 8, all: 11 }, checks: null }}
+      />,
+    );
+    expect(tile("Cans on a car").textContent).toContain("8 of 11");
+    expect(tile("Cans on a car").textContent).toContain("3 on no car yet");
+    expect(tile("Generator ready").textContent).toContain(
+      "No checklist started",
+    );
+    expect(
+      screen
+        .getByRole("link", { name: "See the readiness checks" })
+        .getAttribute("href"),
+    ).toBe("/power/readiness");
+  });
+
   it("is one line before there is a plan, with the editor's way to start it", () => {
     const empty = { loadCount: 0, peak: null, generator: null, fuel: null };
     render(<PowerGlanceCard glance={empty} canEdit={false} />);

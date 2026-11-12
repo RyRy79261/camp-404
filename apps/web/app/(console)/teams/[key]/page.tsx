@@ -165,7 +165,13 @@ export default async function TeamPage({
   // leaves the shared cards standing: it is logged and left out.
   const teamPanel = TEAM_PANELS[team.data];
   const panel = teamPanel
-    ? await teamPanel({ rank, leadTeams }).catch((error: unknown) => {
+    ? await teamPanel({
+        rank,
+        leadTeams,
+        viewerId: campUser.id,
+        actor,
+        now,
+      }).catch((error: unknown) => {
         console.error(
           `[team-panel:${team.data}]`,
           errorLogText(error, process.env),
