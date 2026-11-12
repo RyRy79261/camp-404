@@ -1,7 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  FEE_ALREADY_SET,
   FEE_CHANGED,
   CHARGE_GONE,
   COLLECTING_CHANGED,
@@ -210,7 +209,7 @@ describe("dues: the database and the test store agree", () => {
     expect(store).toEqual(db);
   });
 
-  it("takes a member's pledge, charges it once they are accepted, and lets only Finance change the fee", async () => {
+  it("takes a member's pledge, charges it once they are accepted, moves the fee to a new amount, and lets only Finance set the fee", async () => {
     const { db, store } = await bothWays(mode, h, async (p, seed) => {
       const pledge = (
         userId: string,
@@ -234,7 +233,7 @@ describe("dues: the database and the test store agree", () => {
         again: await pledge(p.member, own(800_000)),
         sameAmountNewWhen: await pledge(
           p.member,
-          own(720_000, "all_by_15_jan"),
+          own(800_000, "all_by_15_jan"),
         ),
         subsidy: await pledge(p.kitchenLead, {
           amountCents: 0,
@@ -300,7 +299,7 @@ describe("dues: the database and the test store agree", () => {
       accepted: { ok: true, charged: true },
       sameAmountNewWhen: { ok: true, charged: false },
       subsidy: { ok: true, charged: false },
-      again: { ok: false, error: FEE_ALREADY_SET },
+      again: { ok: true, charged: true },
       feeByKitchen: { ok: false, error: NOT_A_MONEY_KEEPER },
       feeByMember: { ok: false, error: NOT_A_MONEY_KEEPER },
       feeStale: { ok: false, error: FEE_CHANGED },
@@ -308,7 +307,12 @@ describe("dues: the database and the test store agree", () => {
       feeForOther: { ok: true },
       nobodyDues: null,
       own: {
-        charges: [{ concessionReason: null }, { concession: false }],
+        // Each new amount moved the fee; Finance's fee replaced the last.
+        charges: [
+          { amountCents: 720_000, cancelled: true, concessionReason: null },
+          { amountCents: 800_000, cancelled: true },
+          { amountCents: 150_000, cancelled: false, concession: false },
+        ],
         payBy: "all_by_15_jan",
         subsidy: false,
         feeTotalCents: 150_000,

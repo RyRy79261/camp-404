@@ -57,12 +57,12 @@ export function PledgeDialog({
   pledge,
   burnYear,
   scale,
-  amountLocked,
+  feeCharged,
 }: {
   pledge: PledgeValue;
   burnYear: number;
   scale: PledgeStepProps["scale"];
-  amountLocked: boolean;
+  feeCharged: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -77,16 +77,15 @@ export function PledgeDialog({
         <DialogHeader>
           <DialogTitle>Your pledge</DialogTitle>
           <DialogDescription>
-            {amountLocked
-              ? "Your fee is charged, so its amount stays. You can still change by when, or ask for a subsidy."
-              : "You can change it until your fee is charged."}
+            {feeCharged
+              ? "You can change it any time. A new amount changes your camp fee to match."
+              : "You can change it any time."}
           </DialogDescription>
         </DialogHeader>
         <PledgeStep
           pledge={pledge}
           burnYear={burnYear}
           scale={scale}
-          amountLocked={amountLocked}
           submitLabel="Save"
           onSaved={() => setOpen(false)}
         />

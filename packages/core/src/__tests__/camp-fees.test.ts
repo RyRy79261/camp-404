@@ -8,7 +8,6 @@ import {
   campBillState,
   campForecast,
   budgetsUnspentCents,
-  FEE_ALREADY_SET,
   feeBurnYear,
   feeFigures,
   feeInstalmentsLeft,
@@ -18,7 +17,7 @@ import {
   feeTotals,
   nearestScaleName,
   nextFeePayment,
-  pledgeRefusal,
+  pledgeMovesFee,
   recommendedPledgeCents,
   type CampBillLike,
   type FeeMember,
@@ -179,31 +178,31 @@ describe("the next fee payment", () => {
 });
 
 describe("the pledge", () => {
-  it("refuses a new amount once the fee is charged, but not a new timing", () => {
+  it("moves a charged fee on a new amount, but not on a new timing", () => {
     expect(
-      pledgeRefusal({ feeCents: null, pledgedCents: null, amountCents: 1 }),
-    ).toBeNull();
+      pledgeMovesFee({ feeCents: null, pledgedCents: null, amountCents: 1 }),
+    ).toBe(false);
     expect(
-      pledgeRefusal({
+      pledgeMovesFee({
         feeCents: R(7000),
         pledgedCents: R(7200),
         amountCents: R(7200),
       }),
-    ).toBeNull();
+    ).toBe(false);
     expect(
-      pledgeRefusal({
+      pledgeMovesFee({
         feeCents: R(7000),
         pledgedCents: R(7200),
         amountCents: R(8000),
       }),
-    ).toBe(FEE_ALREADY_SET);
+    ).toBe(true);
     expect(
-      pledgeRefusal({
+      pledgeMovesFee({
         feeCents: R(7000),
         pledgedCents: null,
         amountCents: R(7000),
       }),
-    ).toBeNull();
+    ).toBe(false);
   });
 });
 

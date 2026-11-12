@@ -97,12 +97,12 @@ export default async function QuestionnaireCompletePage({
         </CardContent>
       </Card>
 
-      {pledgeStep && !pledgeStep.pledge && !pledgeStep.amountLocked && (
+      {pledgeStep && !pledgeStep.pledge && !pledgeStep.feeCharged && (
         <section aria-label="Your pledge" className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
             You said you&rsquo;re coming. One more step: what can you put in?
             Nothing is charged until the captains give you a place, and you can
-            change it on My dues until then.
+            change it on My dues any time.
           </p>
           <PledgeStep
             scale={pledgeStep.scale}

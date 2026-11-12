@@ -11,7 +11,6 @@ import {
   cancelCharge,
   CHARGE_GONE,
   decideRefund,
-  FEE_ALREADY_SET,
   FEE_CHANGED,
   getDuesYear,
   getMemberDues,
@@ -501,20 +500,34 @@ describe("dues", () => {
       });
       const again = await getMemberDues(member.id, YEAR, { forFinance: true });
       expect(again?.charges.filter((c) => c.kind === "fee")).toHaveLength(1);
-      // And the amount is locked now the fee is charged; the by-when is not.
+      // A new amount moves the fee: the old one is cancelled and audited, the
+      // new one charged. A new by-when on the same amount leaves it alone.
       expect(
         await savePledge({
           userId: member.id,
           cycle: YEAR,
           pledge: { amountCents: 100, payBy: "all_by_end_dec", subsidy: false },
         }),
-      ).toEqual({ ok: false, error: FEE_ALREADY_SET });
+      ).toEqual({ ok: true, charged: true });
+      const moved = await getMemberDues(member.id, YEAR, { forFinance: true });
+      expect(
+        moved?.charges
+          .filter((c) => c.kind === "fee")
+          .map((c) => [c.amountCents, c.cancelled]),
+      ).toEqual(
+        expect.arrayContaining([
+          [300_000, true],
+          [100, false],
+        ]),
+      );
+      const cancelled: AuditAction = "dues.charge_cancelled";
+      expect(await auditActions(h.db(), member.id)).toContain(cancelled);
       expect(
         await savePledge({
           userId: member.id,
           cycle: YEAR,
           pledge: {
-            amountCents: 300_000,
+            amountCents: 100,
             payBy: "part_by_end_dec",
             subsidy: false,
           },

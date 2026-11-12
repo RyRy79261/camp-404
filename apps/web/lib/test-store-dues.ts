@@ -9,7 +9,7 @@ import {
   isFeeConcession,
   MAX_FEE_TIERS,
   proposeRefund,
-  pledgeRefusal,
+  pledgeMovesFee,
   refundAmount,
   settleUpCharges,
   MONEY_KEEPER,
@@ -553,14 +553,16 @@ export const duesTestStore = {
     const key = accountKey(input.userId, input.cycle);
     const account =
       state().accounts.get(key) ?? emptyAccount(input.userId, input.cycle);
-    const refusal = pledgeRefusal({
-      feeCents:
-        liveCharges(input.userId, input.cycle).find((c) => c.kind === "fee")
-          ?.amountCents ?? null,
+    const fee = liveCharges(input.userId, input.cycle).find(
+      (c) => c.kind === "fee",
+    );
+    const movesFee = pledgeMovesFee({
+      feeCents: fee?.amountCents ?? null,
       pledgedCents: account.pledgedAmountCents,
       amountCents,
     });
-    if (refusal) return { ok: false, error: refusal };
+    // The old fee goes; the new pledge charges the new one below.
+    if (fee && movesFee) fee.cancelledAt = new Date();
     account.pledgedTierId = null;
     account.pledgedAmountCents = amountCents;
     account.pledgedAt = new Date();
@@ -571,8 +573,9 @@ export const duesTestStore = {
     testStore.satisfyRequiredAction(input.userId, FEE_PLEDGE_ACTION_KEY);
     testStore.readNotices(input.userId, FEE_PLEDGE_REF_TYPE);
     const charged =
+      movesFee ||
       testStore.getParticipation(input.userId, input.cycle)?.status ===
-      "accepted"
+        "accepted"
         ? chargeFromPledge(input.userId, input.cycle)
         : false;
     return { ok: true, charged };

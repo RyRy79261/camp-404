@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import {
-  FEE_ALREADY_SET,
   FEE_CHANGED,
   NOT_A_MONEY_KEEPER,
   REFUND_ALREADY_OPEN,
@@ -96,7 +95,7 @@ describe("the dues twin", () => {
     expect(duesTestStore.listFeeTiers(YEAR)).toHaveLength(2);
   });
 
-  it("charges the pledged fee when a captain accepts the member, once, and locks the pledge", () => {
+  it("charges the pledged fee when a captain accepts the member, once, and moves it to a new amount", () => {
     const { captain, member } = people();
     testStore.seedParticipation({ userId: member.id, status: "applied" });
     expect(
@@ -132,10 +131,18 @@ describe("the dues twin", () => {
         cycle: YEAR,
         pledge: { amountCents: 100, payBy: "all_by_end_nov", subsidy: false },
       }),
-    ).toEqual({ ok: false, error: FEE_ALREADY_SET });
+    ).toEqual({ ok: true, charged: true });
+    // A new amount moves the fee: the old one is cancelled, the new one live.
+    const moved = duesTestStore.getMemberDues(member.id, YEAR, {
+      forFinance: true,
+    })!;
+    expect(moved.charges.map((c) => [c.amountCents, c.cancelled])).toEqual([
+      [200_000, true],
+      [100, false],
+    ]);
 
     // A stale fee id loses the compare-and-set.
-    const feeId = dues.charges[0]!.id;
+    const feeId = moved.charges.find((c) => !c.cancelled)!.id;
     expect(
       duesTestStore.setFee({
         userId: member.id,
@@ -159,7 +166,11 @@ describe("the dues twin", () => {
     const own = duesTestStore.getMemberDues(member.id, YEAR, {
       forFinance: false,
     })!;
-    expect(own.charges.map((c) => c.concessionReason)).toEqual([null, null]);
+    expect(own.charges.map((c) => c.concessionReason)).toEqual([
+      null,
+      null,
+      null,
+    ]);
     expect(own.balance.balanceCents).toBe(100_000);
   });
 
