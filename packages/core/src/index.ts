@@ -61,7 +61,7 @@
 //     duesAccountRow (the Finance team's list) and feeChargeFromPledge, built
 //     from rows either dues store fetches (./member-dues)
 //   - camp fees: the pledge's "by when" (feeTimingSchedule, feeTimingLabel),
-//     the next fee payment (feeInstalmentsLeft, nextFeePayment), pledgeRefusal,
+//     the next fee payment (feeInstalmentsLeft, nextFeePayment), pledgeMovesFee,
 //     the Join scale's names (nearestScaleName, recommendedPledgeCents), the
 //     camp's bills (campBillState, campBillPaymentsLeft) and the money
 //     forecast (feeTotals, campForecast) (./camp-fees)

@@ -288,25 +288,23 @@ export function feeFigures(input: {
 
 // --- The pledge -----------------------------------------------------------------
 
-export const FEE_ALREADY_SET =
-  "Your camp fee is already set. Ask the Finance team if it needs to change.";
-
 /**
- * Whether a member may save this pledge. Once their fee is charged its amount
- * is the Finance team's to change, so a new amount is refused; the same amount
- * with another "by when" or subsidy answer is fine. A refusal is a sentence.
+ * Whether saving this pledge moves the member's charged camp fee (owner,
+ * 2026-11-12: "The amount should always be editable, payments are just
+ * tracked"). A member may always change their amount; once a fee is charged,
+ * a new amount cancels it and charges the new one. The same amount with
+ * another "by when" or subsidy answer leaves the fee alone, so a fee the
+ * Finance team set stays until the member changes their amount.
  */
-export function pledgeRefusal(input: {
+export function pledgeMovesFee(input: {
   /** The live camp fee's amount, or null when none is charged. */
   feeCents: number | null;
   /** The amount already pledged, or null. */
   pledgedCents: number | null;
   amountCents: number;
-}): string | null {
-  if (input.feeCents === null) return null;
-  return input.amountCents === (input.pledgedCents ?? input.feeCents)
-    ? null
-    : FEE_ALREADY_SET;
+}): boolean {
+  if (input.feeCents === null) return false;
+  return input.amountCents !== (input.pledgedCents ?? input.feeCents);
 }
 
 // --- The Join site's scale ------------------------------------------------------

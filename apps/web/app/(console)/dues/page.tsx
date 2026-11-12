@@ -255,7 +255,7 @@ export default async function MyDuesPage() {
                   {dues.subsidy ? ", and asked for a subsidy" : ""}.{" "}
                   <span className="text-muted-foreground">
                     {feeCharged
-                      ? "Ask the Finance team if the amount needs to change."
+                      ? "A new amount changes your fee to match."
                       : "Nothing is charged until you have a place."}
                   </span>
                 </p>
@@ -263,7 +263,7 @@ export default async function MyDuesPage() {
                   burnYear={dues.burnYear}
                   scale={scale}
                   pledge={pledgeValue}
-                  amountLocked={feeCharged}
+                  feeCharged={feeCharged}
                 />
               </div>
             )}

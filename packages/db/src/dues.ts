@@ -5,10 +5,9 @@ import {
   isFeeConcession,
   MAX_FEE_TIERS,
   COLLECTING_CHANGED,
-  FEE_ALREADY_SET,
   FEE_PLEDGE_ACTION_KEY,
   FEE_PLEDGE_REF_TYPE,
-  pledgeRefusal,
+  pledgeMovesFee,
   proposeRefund,
   refundAmount,
   REFUND_TOO_LARGE,
@@ -74,7 +73,6 @@ export const YEAR_CHANGED =
 // @camp404/core; they are named here too, beside the rest.
 export {
   COLLECTING_CHANGED,
-  FEE_ALREADY_SET,
   REFUND_TOO_LARGE,
   SETTLE_UP_CHANGED,
   SETTLE_UP_NOBODY,
@@ -649,8 +647,9 @@ export async function chargeFeeFromPledge(
 /**
  * A member pledges what they can pay this year: their own whole-rand amount,
  * when they can pay it, and whether they need a subsidy (owner, 2026-10-27).
- * Once their fee is charged the amount is the Finance team's to change, so a
- * new amount is refused; a new "by when" or subsidy answer is still saved. A
+ * The amount is always theirs to change (owner, 2026-11-12): once their fee
+ * is charged, a new amount cancels it and charges the new one, audited, in
+ * this transaction; a new "by when" or subsidy answer leaves the fee alone. A
  * member already accepted is charged the fee at once.
  */
 export async function savePledge(input: {
@@ -662,7 +661,11 @@ export async function savePledge(input: {
     await assertMember(tx, input.userId);
     const { amountCents, payBy, subsidy } = input.pledge;
     const [fee] = await tx
-      .select({ amountCents: schema.duesCharges.amountCents })
+      .select({
+        id: schema.duesCharges.id,
+        description: schema.duesCharges.description,
+        amountCents: schema.duesCharges.amountCents,
+      })
       .from(schema.duesCharges)
       .where(
         and(
@@ -685,13 +688,33 @@ export async function savePledge(input: {
       )
       .limit(1)
       .for("update");
-    const refusal = pledgeRefusal({
+    const movesFee = pledgeMovesFee({
       feeCents: fee?.amountCents ?? null,
       pledgedCents: account?.amountCents ?? null,
       amountCents,
     });
-    if (refusal) refuse(refusal);
     const now = new Date();
+    if (fee && movesFee) {
+      // The old fee goes; the new pledge charges the new one below.
+      await tx
+        .update(schema.duesCharges)
+        .set({
+          cancelledAt: now,
+          cancelledByUserId: input.userId,
+          updatedAt: now,
+        })
+        .where(eq(schema.duesCharges.id, fee.id));
+      await writeAuditEvent(tx, {
+        actorId: input.userId,
+        action: "dues.charge_cancelled",
+        target: input.userId,
+        metadata: {
+          cycle: input.cycle,
+          description: fee.description,
+          amountCents: fee.amountCents,
+        },
+      });
+    }
     // The member's own amount: a pledge made on a tier before loses the tier
     // once they pledge again.
     const values = {
@@ -730,7 +753,7 @@ export async function savePledge(input: {
       // and charges the fee, instead of each missing the other's write.
       .for("update");
     const charged =
-      place?.status === "accepted"
+      movesFee || place?.status === "accepted"
         ? await chargeFeeFromPledge(tx, {
             userId: input.userId,
             cycle: input.cycle,

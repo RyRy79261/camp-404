@@ -55,11 +55,6 @@ export interface PledgeStepProps {
    * questionnaire's fee timing question, like the Money Oracle's).
    */
   knownPayBy?: FeeTiming | null;
-  /**
-   * The fee is charged: its amount is the Finance team's now, so only "by
-   * when" and the subsidy answer may change (pledgeRefusal on the server).
-   */
-  amountLocked?: boolean;
   /** The button's words. */
   submitLabel?: string;
   /** After a save, before the page refreshes (a dialog closes). */
@@ -71,7 +66,6 @@ export function PledgeStep({
   burnYear,
   pledge,
   knownPayBy = null,
-  amountLocked = false,
   submitLabel = "Send",
   onSaved,
 }: PledgeStepProps) {
@@ -121,9 +115,7 @@ export function PledgeStep({
 
   function send() {
     setError(null);
-    const read = amountLocked
-      ? ({ ok: true, cents } as const)
-      : readPledgeAmount(typed);
+    const read = readPledgeAmount(typed);
     if (!read.ok) {
       setAmountError(read.error);
       return;
@@ -156,14 +148,13 @@ export function PledgeStep({
         <CardHeader className="p-5 pb-3">
           <CardTitle className="text-base">What can you commit?</CardTitle>
           <CardDescription>
-            {amountLocked
-              ? "Your fee is set. Ask the Finance team if it needs to change."
-              : "A floating scale, not a fixed fee. Pay what you can afford. Slide, or type an amount."}
+            A floating scale, not a fixed fee. Pay what you can afford. Slide,
+            or type an amount.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2 p-5 pt-0">
           <output
-            htmlFor={amountLocked ? undefined : `${id}-range`}
+            htmlFor={`${id}-range`}
             aria-live="polite"
             className="flex flex-wrap items-baseline gap-x-3 gap-y-1"
           >
@@ -188,41 +179,39 @@ export function PledgeStep({
             </span>
           </output>
           {note && <p className="text-sm">{note}</p>}
-          {!amountLocked && (
-            <>
-              <FeeScaleTrack
-                id={`${id}-range`}
-                rands={cents / 100}
-                onRandsChange={slide}
-                max={max}
-                subsidyBelow={scale.tiers[0]?.rands ?? 0}
-                subsidyName={scale.subsidy.name}
-                marks={pledgeMarks(scale)}
-                label="What I can commit, in rands"
-                valueText={`${amount}, ${usd}, ${tag}`}
+          <>
+            <FeeScaleTrack
+              id={`${id}-range`}
+              rands={cents / 100}
+              onRandsChange={slide}
+              max={max}
+              subsidyBelow={scale.tiers[0]?.rands ?? 0}
+              subsidyName={scale.subsidy.name}
+              marks={pledgeMarks(scale)}
+              label="What I can commit, in rands"
+              valueText={`${amount}, ${usd}, ${tag}`}
+              disabled={pending}
+            />
+            <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
+              <InputField
+                label="Or type it (R)"
+                inputMode="numeric"
+                emoji={false}
+                wrapperClassName="w-40"
+                value={typed}
+                error={amountError ?? undefined}
+                onChange={(e) => type(e.currentTarget.value)}
                 disabled={pending}
               />
-              <div className="flex flex-wrap items-end gap-x-3 gap-y-1">
-                <InputField
-                  label="Or type it (R)"
-                  inputMode="numeric"
-                  emoji={false}
-                  wrapperClassName="w-40"
-                  value={typed}
-                  error={amountError ?? undefined}
-                  onChange={(e) => type(e.currentTarget.value)}
-                  disabled={pending}
-                />
-                <span className="pb-2.5 text-xs text-muted-foreground">
-                  More than {scale.tiers[scale.tiers.length - 1]?.name} is fine.
-                </span>
-              </div>
-              <p className="font-mono text-[10px] uppercase text-muted-foreground">
-                Dollar figures are a guide at R{scale.usdRate.randsPerDollar} =
-                US$1 ({scale.usdRate.asOf}). We pay in rands.
-              </p>
-            </>
-          )}
+              <span className="pb-2.5 text-xs text-muted-foreground">
+                More than {scale.tiers[scale.tiers.length - 1]?.name} is fine.
+              </span>
+            </div>
+            <p className="font-mono text-[10px] uppercase text-muted-foreground">
+              Dollar figures are a guide at R{scale.usdRate.randsPerDollar} =
+              US$1 ({scale.usdRate.asOf}). We pay in rands.
+            </p>
+          </>
         </CardContent>
       </Card>
 

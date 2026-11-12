@@ -8,8 +8,7 @@ import type { PledgeStepProps } from "@/components/dues/pledge-step";
 
 // What "What can you commit?" needs after a Coming answer (camp fees sprint,
 // mock-up step 3): the Join site's scale for the year, the member's own
-// pledge if they made one, and whether their fee is charged (then only "by
-// when" and the subsidy answer may change). The member's own figures only;
+// pledge if they made one, and whether their fee is charged. The member's own figures only;
 // the caller has gated the page.
 
 export interface PledgeStepData {
@@ -18,7 +17,8 @@ export interface PledgeStepData {
   pledge: PledgeStepProps["pledge"];
   /** With no pledge, the "by when" a questionnaire answer already gave. */
   knownPayBy: PledgeStepProps["knownPayBy"];
-  amountLocked: boolean;
+  /** A live camp fee: the Finance team set one, or a pledge was charged. */
+  feeCharged: boolean;
 }
 
 /**
@@ -47,6 +47,6 @@ export async function getPledgeStep(
         }
       : null,
     knownPayBy: dues.payBy,
-    amountLocked: dues.charges.some((c) => c.kind === "fee" && !c.cancelled),
+    feeCharged: dues.charges.some((c) => c.kind === "fee" && !c.cancelled),
   };
 }

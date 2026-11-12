@@ -145,25 +145,4 @@ describe("PledgeStep", () => {
       "true",
     );
   });
-
-  it("keeps a charged fee's amount: no slider, no box", async () => {
-    step({
-      pledge: { amountCents: 720_000, payBy: "all_by_end_nov", subsidy: false },
-      amountLocked: true,
-      submitLabel: "Save",
-    });
-    expect(screen.queryByRole("slider")).toBeNull();
-    expect(screen.queryByLabelText("Or type it (R)")).toBeNull();
-    fireEvent.click(
-      screen.getByRole("radio", { name: "All of it by the end of December" }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() =>
-      expect(save).toHaveBeenCalledWith({
-        amountCents: 720_000,
-        payBy: "all_by_end_dec",
-        subsidy: false,
-      }),
-    );
-  });
 });
