@@ -68,6 +68,7 @@
     "./kitchen-prices": "./src/kitchen-prices.ts",
     "./kitchen-meals": "./src/kitchen-meals.ts",
     "./dietary": "./src/dietary.ts",
+    "./team-glance": "./src/team-glance.ts",
     "./meal-plan": "./src/meal-plan.ts",
     "./recipes": "./src/recipes.ts",
     "./camp-events": "./src/camp-events.ts",

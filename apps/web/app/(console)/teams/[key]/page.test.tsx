@@ -76,6 +76,13 @@ vi.mock("@/lib/team-programs", () => ({
     more: false,
   })),
 }));
+vi.mock("@/lib/power-site", () => ({
+  listFuelCans: vi.fn(async () => []),
+  listReadinessItems: vi.fn(async () => []),
+}));
+vi.mock("@/lib/transport", () => ({
+  getTransportBoard: vi.fn(async () => ({ cars: [], trailers: [] })),
+}));
 vi.mock("@/lib/power", () => ({
   // One light on the list, so the glance has figures to show.
   listPowerLoads: vi.fn(async () => [

@@ -1,4 +1,5 @@
 import {
+  canTotals,
   fuelForPlan,
   generatorLoadPct,
   jerryCansNeeded,
@@ -7,6 +8,8 @@ import {
   type Generator,
   type LoadBand,
   type PowerLoad,
+  type RegisterCan,
+  type RegisterCar,
 } from "@camp404/core";
 import type { PowerPlanSettings } from "@camp404/db/power";
 
@@ -113,5 +116,45 @@ export function powerGlance(input: {
       : null,
     generator: rail,
     fuel,
+  };
+}
+
+/**
+ * The team's work before the burn, beside the plan (2026-11-12): how many of
+ * this year's fuel cans travel with a car (its driver fills them; canTotals,
+ * the register's own count), and how many of the plan generator's readiness
+ * checks are done. Null parts mean nothing to count yet.
+ */
+export interface PowerSiteGlance {
+  cans: { onCar: number; all: number } | null;
+  checks: { done: number; all: number } | null;
+}
+
+export function powerSiteGlance(input: {
+  cans: readonly RegisterCan[];
+  cars: readonly RegisterCar[];
+  /** The plan's generator, whose checklist counts; null with none chosen. */
+  generatorId: string | null;
+  items: readonly { generatorId: string; doneAt: Date | null }[];
+}): PowerSiteGlance {
+  const totals = canTotals(input.cans, input.cars);
+  const mine = input.generatorId
+    ? input.items.filter((i) => i.generatorId === input.generatorId)
+    : [];
+  return {
+    cans:
+      totals.all.cans === 0
+        ? null
+        : {
+            onCar: totals.all.cans - totals.notOnCar.cans,
+            all: totals.all.cans,
+          },
+    checks:
+      mine.length === 0
+        ? null
+        : {
+            done: mine.filter((i) => i.doneAt !== null).length,
+            all: mine.length,
+          },
   };
 }

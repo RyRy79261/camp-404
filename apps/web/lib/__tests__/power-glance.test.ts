@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PowerLoad } from "@camp404/core";
 import { POWER_PLAN_DEFAULTS } from "@camp404/types";
-import { powerGlance } from "../power-glance";
+import { powerGlance, powerSiteGlance } from "../power-glance";
 
 // The Power and Lighting program's "power plan at a glance" (owner's ruling
 // 2). The figures are the fuel estimate's own worked example (#254, the
@@ -90,5 +90,37 @@ describe("powerGlance", () => {
     expect(
       powerGlance({ loads: [], plan: PLAN, generator: GENERATOR }),
     ).toMatchObject({ loadCount: 0, peak: null, fuel: null });
+  });
+});
+
+describe("powerSiteGlance", () => {
+  const can = (travelsWithUserId: string | null) => ({
+    sizeLitres: 20,
+    travelsWithUserId,
+  });
+
+  it("is empty with no cans and no checklist", () => {
+    expect(
+      powerSiteGlance({ cans: [], cars: [], generatorId: null, items: [] }),
+    ).toEqual({ cans: null, checks: null });
+  });
+
+  it("counts cans on a car driving this year, and the plan generator's checks", () => {
+    const site = powerSiteGlance({
+      // One on a car driving, one on a car not driving this year, one on none.
+      cans: [can("d1"), can("gone"), can(null)],
+      cars: [{ driverUserId: "d1" }],
+      generatorId: "g1",
+      items: [
+        { generatorId: "g1", doneAt: new Date() },
+        { generatorId: "g1", doneAt: null },
+        // Another generator's check does not count.
+        { generatorId: "g2", doneAt: new Date() },
+      ],
+    });
+    expect(site).toEqual({
+      cans: { onCar: 1, all: 3 },
+      checks: { done: 1, all: 2 },
+    });
   });
 });

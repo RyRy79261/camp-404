@@ -255,7 +255,10 @@ export interface CampHeadcount {
  * system actor or an erased "Lost Cat" stub). One aggregate row, so the
  * desktop can show it on every page without reading the roster.
  *
- * Captain-only: callers MUST gate this behind a captain rank check.
+ * Counts only. Callers gate it: the desktop's tray shows it to captains, and
+ * the Communications & HR team page shows the waiting count to team leads and
+ * up ([CORRECTION 2026-11-12]: this said captain-only; `users.approvalStatus`
+ * reads at camp_member, and a count names nobody).
  */
 export async function getCampHeadcount(): Promise<CampHeadcount> {
   const db = createHttpDb();

@@ -165,7 +165,13 @@ export default async function TeamPage({
   // leaves the shared cards standing: it is logged and left out.
   const teamPanel = TEAM_PANELS[team.data];
   const panel = teamPanel
-    ? await teamPanel({ rank, leadTeams }).catch((error: unknown) => {
+    ? await teamPanel({
+        rank,
+        leadTeams,
+        viewerId: campUser.id,
+        actor,
+        now,
+      }).catch((error: unknown) => {
         console.error(
           `[team-panel:${team.data}]`,
           errorLogText(error, process.env),
@@ -209,7 +215,7 @@ export default async function TeamPage({
       <PageHeading
         eyebrow="Camp / Teams"
         title={entry.label}
-        description="What the team does, what it has sent, what's coming up, and who is on it this year."
+        description="What the team does, how ready it is, what's coming up, and who is on it this year."
       />
       <div className="-mt-3 mb-6 flex flex-wrap gap-2" aria-label="Team">
         {entry.archived ? <Badge variant="outline">Archived</Badge> : null}
