@@ -215,7 +215,7 @@ export default async function TeamPage({
       <PageHeading
         eyebrow="Camp / Teams"
         title={entry.label}
-        description="What the team does, what it has sent, what's coming up, and who is on it this year."
+        description="What the team does, how ready it is, what's coming up, and who is on it this year."
       />
       <div className="-mt-3 mb-6 flex flex-wrap gap-2" aria-label="Team">
         {entry.archived ? <Badge variant="outline">Archived</Badge> : null}
