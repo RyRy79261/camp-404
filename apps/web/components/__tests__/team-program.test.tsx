@@ -176,6 +176,28 @@ describe("PowerGlanceCard", () => {
     ).toBe("/power/loads");
   });
 
+  it("shows the fuel cans with no plan yet, and stays one line with nothing on site", () => {
+    const empty = { loadCount: 0, peak: null, generator: null, fuel: null };
+    render(
+      <PowerGlanceCard
+        glance={empty}
+        canEdit={false}
+        site={{ cans: { onCar: 2, all: 5 }, checks: null }}
+      />,
+    );
+    expect(tile("Cans on a car").textContent).toContain("2 of 5");
+    expect(screen.queryByText("No power plan yet.")).toBeNull();
+    cleanup();
+    render(
+      <PowerGlanceCard
+        glance={empty}
+        canEdit={false}
+        site={{ cans: null, checks: null }}
+      />,
+    );
+    expect(screen.getByText("No power plan yet.")).toBeTruthy();
+  });
+
   it("says what is missing once there is part of a plan", () => {
     render(
       <PowerGlanceCard

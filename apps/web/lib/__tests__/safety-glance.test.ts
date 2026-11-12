@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SAFETY_LINKS,
+  SAFETY_LEAD_NOTE,
   SAFETY_MEMBER_NOTE,
   safetyGlance,
 } from "../team-glance/safety";
@@ -50,6 +51,18 @@ describe("safetyGlance", () => {
     expect(
       safetyGlance({ view: "reader", counts, isCaptain: true }).links,
     ).toEqual([SAFETY_LINKS.roster, SAFETY_LINKS.campSheet]);
+  });
+
+  it("sends a captain to the Camp sheet for who, and tells a lead to ask one", () => {
+    const lead = safetyGlance({ view: "reader", counts, isCaptain: false });
+    expect(lead.attention.every((a) => a.link === undefined)).toBe(true);
+    expect(lead.note).toBe(SAFETY_LEAD_NOTE);
+    const captain = safetyGlance({ view: "reader", counts, isCaptain: true });
+    expect(captain.attention.map((a) => a.link)).toEqual([
+      SAFETY_LINKS.campSheet,
+      SAFETY_LINKS.campSheet,
+    ]);
+    expect(captain.note).toBeUndefined();
   });
 
   it("asks for nothing when everyone is done", () => {

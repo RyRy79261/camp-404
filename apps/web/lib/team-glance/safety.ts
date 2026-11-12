@@ -24,6 +24,9 @@ export const SAFETY_LINKS = {
 export const SAFETY_MEMBER_NOTE =
   "The camp's safety counts are for the Safety leads and captains.";
 
+export const SAFETY_LEAD_NOTE =
+  "Who they are is on the Camp sheet: ask a captain.";
+
 export type SafetyGlanceInput =
   | { view: "member"; hasEmergencyContact: boolean }
   | { view: "reader"; counts: SafetyCounts; isCaptain: boolean };
@@ -60,13 +63,17 @@ export function safetyGlance(input: SafetyGlanceInput): TeamGlance {
   const { counts, isCaptain } = input;
   const ofComing = `of ${plural(counts.coming, "person", "people")} coming`;
   const notDone = counts.coming - counts.burnerProfileDone;
+  // Who they are is on the Camp sheet, a captain's page; the roster's rows
+  // say neither. A captain's line opens it; a Safety lead's line has no link,
+  // and the note says to ask a captain (no names on this panel).
+  const who = isCaptain ? { link: SAFETY_LINKS.campSheet } : {};
   const attention: GlanceAttention[] = [];
   if (counts.noEmergencyContact > 0) {
     attention.push({
       key: "no-contact",
       tone: "bad",
       text: `${plural(counts.noEmergencyContact, "person", "people")} coming ${counts.noEmergencyContact === 1 ? "has" : "have"} no emergency contact.`,
-      link: SAFETY_LINKS.roster,
+      ...who,
     });
   }
   if (notDone > 0) {
@@ -74,7 +81,7 @@ export function safetyGlance(input: SafetyGlanceInput): TeamGlance {
       key: "profile",
       tone: "warn",
       text: `${plural(notDone, "person", "people")} coming ${notDone === 1 ? "has" : "have"} not finished their burner profile.`,
-      link: SAFETY_LINKS.roster,
+      ...who,
     });
   }
   const links: GlanceLink[] = [SAFETY_LINKS.roster];
@@ -121,5 +128,6 @@ export function safetyGlance(input: SafetyGlanceInput): TeamGlance {
     ],
     attention,
     links,
+    ...(!isCaptain && attention.length > 0 ? { note: SAFETY_LEAD_NOTE } : {}),
   };
 }

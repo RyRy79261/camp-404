@@ -1,5 +1,10 @@
 import { Wallet } from "lucide-react";
-import { campDayKey, MONEY_KEEPER, sumMinor } from "@camp404/core";
+import {
+  campDayKey,
+  MONEY_KEEPER,
+  paymentFigures,
+  sumMinor,
+} from "@camp404/core";
 import {
   getCampMoney,
   getFeeOverview,
@@ -61,7 +66,9 @@ export async function FinanceProgramPanel({
         today,
         collecting: overview.year.collectingFees,
         totals: overview.totals,
-        pendingPayments: payments.filter((p) => p.status === "pending").length,
+        // A member's proof to check, as the Finance page counts it; a
+        // payment Finance recorded as promised is not waiting on anyone.
+        pendingPayments: paymentFigures(payments).toCheckCount,
         claimsToPay: {
           count: toPay.length,
           cents: sumMinor(toPay.map((c) => c.amountCents)),

@@ -1,5 +1,5 @@
 import { ChefHat } from "lucide-react";
-import { ALLERGEN_CHECKER } from "@camp404/core";
+import { ALLERGEN_CHECKER, KITCHEN_REVIEWER } from "@camp404/core";
 import {
   getMealChecks,
   getMenuDietaryFor,
@@ -40,6 +40,7 @@ export async function KitchenProgramPanel({
         now,
         facts,
         reviewWaiting,
+        canReview: KITCHEN_REVIEWER.allows(actor),
         allergy: editor && dietary ? { dietary, plans: checks.plans } : null,
       })}
     />

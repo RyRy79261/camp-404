@@ -7,8 +7,8 @@ body{margin:0;padding:0;font-family:Inter,sans-serif;font-size:13px;color:var(--
 h2{font:12px Silkscreen;color:var(--blue);margin:8px 0}
 .intro{color:var(--mut);margin:0 0 8px}
 .chips{display:inline-flex;border:1px solid var(--line);padding:4px;gap:4px;flex-wrap:wrap;margin:8px 0 16px}
-.chips span{padding:6px 10px;color:var(--mut);cursor:pointer;font-weight:500}
-.chips span.on{background:var(--mag);color:#fff}
+.chips button{padding:6px 10px;color:var(--mut);cursor:pointer;font-weight:500;font:inherit;background:none;border:0}
+.chips button.on{background:var(--mag);color:#fff}
 .desk{background:var(--bg);background-image:linear-gradient(color-mix(in oklch,var(--line) 60%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in oklch,var(--line) 60%,transparent) 1px,transparent 1px);background-size:32px 32px;padding:16px}
 .win{background:var(--panel);border:2px solid var(--line);box-shadow:4px 4px 0 #0008}
 .win+.win{margin-top:16px}
@@ -72,7 +72,7 @@ td{padding:8px;border-bottom:1px solid color-mix(in oklch,var(--line) 50%,transp
 </style></head><body>
 <h2>Team tools — mock-up 2 (2026-11-12)</h2>
 <p class="intro">Your answers to mock-up 1. Each one adds a new tool. Each team page also gets its glance panel. Pick one.</p>
-<div class="chips" id="pick"><span class="on" data-p="kitchen">Kitchen: ingredients, gear</span><span data-p="water">Water: estimate</span><span data-p="sound">Sound: rental</span><span data-p="art">Art and Activities: themes and projects</span><span data-p="memes">Ministry of Memes: ideas board</span><span data-p="mv">Mutant Vehicle</span></div>
+<div class="chips" id="pick"><button type="button" class="on" data-p="kitchen" aria-pressed="true">Kitchen: ingredients, gear</button><button type="button" data-p="water" aria-pressed="false">Water: estimate</button><button type="button" data-p="sound" aria-pressed="false">Sound: rental</button><button type="button" data-p="art" aria-pressed="false">Art and Activities: themes and projects</button><button type="button" data-p="memes" aria-pressed="false">Ministry of Memes: ideas board</button><button type="button" data-p="mv" aria-pressed="false">Mutant Vehicle</button></div>
 
 <div class="desk">
 
@@ -226,7 +226,7 @@ td{padding:8px;border-bottom:1px solid color-mix(in oklch,var(--line) 50%,transp
 </div>
 <script>
 const pk=document.getElementById('pick');
-pk.addEventListener('click',e=>{const s=e.target.closest('span');if(!s)return;[...pk.children].forEach(c=>c.classList.toggle('on',c===s));document.querySelectorAll('[data-pane]').forEach(p=>p.classList.toggle('hidden',p.dataset.pane!==s.dataset.p))});
+pk.addEventListener('click',e=>{const s=e.target.closest('button[data-p]');if(!s)return;[...pk.children].forEach(c=>{c.classList.toggle('on',c===s);c.setAttribute('aria-pressed',String(c===s))});document.querySelectorAll('[data-pane]').forEach(p=>p.classList.toggle('hidden',p.dataset.pane!==s.dataset.p))});
 document.querySelectorAll('.keen').forEach(k=>k.addEventListener('click',()=>{const b=k.querySelector('b');const on=k.classList.toggle('on');b.textContent=+b.textContent+(on?1:-1)}));
 </script>
 </body></html>

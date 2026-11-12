@@ -42,7 +42,12 @@ export function loungeGlance(input: LoungeGlanceInput): TeamGlance {
   const filled = cells.length - open.length;
   const counts = filterCounts(input.stages);
   const waiting = counts.act;
-  const onProgramme = new Set(programme.slots.map((s) => s.offerId));
+  // Placed on a day this year's grid still has: a slot on a day the Burn
+  // dates no longer hold is "off the grid" on the lounge page, not on.
+  const onGrid = new Set(days.map((d) => d.day));
+  const onProgramme = new Set(
+    view.items.filter((i) => onGrid.has(i.day)).map((i) => i.offerId),
+  );
   const placedOffers = programme.offers.filter((o) => onProgramme.has(o.id));
   const djSets = placedOffers.filter((o) => o.kind === "dj_set").length;
   const others = placedOffers.length - djSets;

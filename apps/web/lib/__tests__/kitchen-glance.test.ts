@@ -86,6 +86,7 @@ describe("kitchenGlance", () => {
       now: NOW,
       facts: facts(),
       reviewWaiting: 0,
+      canReview: true,
       allergy: null,
     });
     // Day 2 has no breakfast plates, so it is not a meal; Day 2 dinner is empty.
@@ -106,6 +107,7 @@ describe("kitchenGlance", () => {
         ],
       }),
       reviewWaiting: 0,
+      canReview: true,
       allergy: null,
     });
     // The lentils were ticked at an older amount: only the snack counts.
@@ -117,6 +119,7 @@ describe("kitchenGlance", () => {
       now: NOW,
       facts: facts(),
       reviewWaiting: 2,
+      canReview: true,
       allergy: null,
     });
     expect(tile(member, "allergy")).toBeUndefined();
@@ -127,6 +130,7 @@ describe("kitchenGlance", () => {
       now: NOW,
       facts: facts(),
       reviewWaiting: 2,
+      canReview: true,
       allergy: { dietary: dietary(1), plans: NO_CHECKS.plans },
     });
     expect(tile(lead, "allergy")?.value).toBe("1 missing");
@@ -141,6 +145,7 @@ describe("kitchenGlance", () => {
       now: NOW,
       facts: facts(),
       reviewWaiting: 0,
+      canReview: true,
       allergy: {
         dietary: dietary(1),
         plans: [
@@ -159,6 +164,7 @@ describe("kitchenGlance", () => {
       now: NOW,
       facts: facts(),
       reviewWaiting: 0,
+      canReview: true,
       allergy: { dietary: dietary(0), plans: [] },
     });
     expect(tile(mild, "allergy")?.value).toBe("All set");
@@ -180,11 +186,49 @@ describe("kitchenGlance", () => {
         snacks: [],
       }),
       reviewWaiting: 0,
+      canReview: true,
       allergy: null,
     });
     expect(tile(g, "meals")?.value).toBe("—");
     expect(tile(g, "shopping")?.value).toBe("—");
     expect(tile(g, "review")?.hint).toBe("Nothing waiting");
     expect(g.attention).toEqual([]);
+  });
+});
+
+describe("kitchenGlance review fixes", () => {
+  it("gives the Review link to a reviewer only; the count is for everyone", () => {
+    const base = { now: NOW, facts: facts(), reviewWaiting: 2, allergy: null };
+    const reviewer = kitchenGlance({ ...base, canReview: true });
+    const member = kitchenGlance({ ...base, canReview: false });
+    const line = (g: ReturnType<typeof kitchenGlance>) =>
+      g.attention.find((a) => a.key === "review");
+    expect(line(reviewer)?.link?.label).toBe("Review");
+    expect(line(member)?.text).toBe("2 recipes are waiting for review.");
+    expect(line(member)?.link).toBeUndefined();
+  });
+
+  it("asks no allergy plan for a meal whose plates went to 0", () => {
+    const g = (dinnerPlates: number) =>
+      kitchenGlance({
+        now: NOW,
+        facts: facts({
+          plan: {
+            cycle: 2027,
+            daysOnSite: 2,
+            firstDay: null,
+            days: [day(20, dinnerPlates), day(0, 20)],
+            version: 1,
+            updatedAt: null,
+          },
+        }),
+        reviewWaiting: 0,
+        canReview: true,
+        allergy: { dietary: dietary(1), plans: NO_CHECKS.plans },
+      });
+    // The peanut dinner on Day 1 needs a plan while it has plates...
+    expect(tile(g(20), "allergy")?.value).toBe("1 missing");
+    // ...and none once nobody eats it.
+    expect(tile(g(0), "allergy")?.value).toBe("All set");
   });
 });

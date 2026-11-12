@@ -74,4 +74,17 @@ describe("loungeGlance", () => {
     expect(tile(g, "slots")?.hint).toBe("Nothing on the programme yet");
     expect(g.attention).toEqual([]);
   });
+
+  it("does not count a set placed on a day the grid no longer has", () => {
+    const g = loungeGlance({
+      days: DAYS.slice(0, 1),
+      programme: {
+        offers: [offer("dj", "dj_set")],
+        slots: [{ id: "s2", offerId: "dj", day: 2, startMinute: 22 * 60 }],
+      },
+      stages: [],
+    });
+    expect(tile(g, "slots")?.hint).toBe("Nothing on the programme yet");
+    expect(tile(g, "dj")?.value).toBe("0");
+  });
 });

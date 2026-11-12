@@ -43,6 +43,8 @@ export interface KitchenGlanceInput {
   facts: ShoppingFacts;
   /** Suggestions to decide plus proofread recipes to accept. */
   reviewWaiting: number;
+  /** A captain or a Kitchen lead (KITCHEN_REVIEWER): the Review link is theirs. */
+  canReview: boolean;
   /** A captain's or a Kitchen lead's view: the counts and the plans. */
   allergy: { dietary: MenuDietary; plans: MealChecks["plans"] } | null;
 }
@@ -54,8 +56,13 @@ export function kitchenGlance(input: KitchenGlanceInput): TeamGlance {
     mealPlanDayLabel(plan.firstDay, day).split(" · ")[0]!;
 
   // The meals the plan feeds: a day's breakfast or dinner with plates on it.
+  // A recipe left on a meal whose plates went to 0 feeds nobody, so it counts
+  // nowhere here (the shopping list adds nothing for it either).
   const items = menu.items.filter(
-    (i) => i.day <= plan.daysOnSite && menu.recipes[i.recipeId],
+    (i) =>
+      i.day <= plan.daysOnSite &&
+      menu.recipes[i.recipeId] &&
+      mealPlates(plan.days, i.day, i.meal) > 0,
   );
   const meals: { day: number; meal: (typeof MEALS)[number] }[] = [];
   for (let day = 1; day <= plan.daysOnSite; day++) {
@@ -189,7 +196,10 @@ export function kitchenGlance(input: KitchenGlanceInput): TeamGlance {
       key: "review",
       tone: "warn",
       text: `${plural(input.reviewWaiting, "recipe is", "recipes are")} waiting for review.`,
-      link: { href: REVIEW_PATH, label: "Review" },
+      // Only a reviewer may open the review page; everyone else sees the count.
+      ...(input.canReview
+        ? { link: { href: REVIEW_PATH, label: "Review" } }
+        : {}),
     });
   }
   // No prep steps here (owner, 2026-11-12: "I dont like the prep steps

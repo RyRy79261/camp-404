@@ -1,4 +1,3 @@
-import { campDayKey } from "@camp404/core";
 import type { Team } from "@camp404/types";
 import type { ShiftsView } from "@/lib/shifts";
 import { SHIFTS_PATH, SHIFTS_PRINT_PATH } from "@/lib/shifts-copy";
@@ -30,7 +29,6 @@ export function sanitationGlance(input: {
   view: ShiftsView;
 }): TeamGlance {
   const { view, now } = input;
-  const today = campDayKey(now);
   const slots = view.days.flatMap((d) =>
     d.slots
       .filter((s) => s.type.team === CLEANING_TEAM && s.status === "open")
@@ -43,7 +41,10 @@ export function sanitationGlance(input: {
   );
   // Short shifts still taking changes, soonest first (the view's order).
   const short = slots.filter((s) => s.open && s.taken < s.type.places);
-  const firstOpenDay = slots.find((s) => s.day >= today)?.day ?? null;
+  // The first day still taking changes: a slot on today has already closed
+  // (shiftChangesOpen: changes only until the day starts).
+  const firstOpenDay = slots.find((s) => s.open)?.day ?? null;
+  const unfilled = slots.some((s) => s.taken < s.type.places);
 
   // Who is coming with no cleaning shift: only with both halves in view.
   const manages = slots.length > 0 && slots.every((s) => s.people !== null);
@@ -74,7 +75,9 @@ export function sanitationGlance(input: {
         short.length === 0
           ? places === 0
             ? "Nothing to fill yet"
-            : "Every shift is full"
+            : unfilled
+              ? "Sign-ups have closed"
+              : "Every shift is full"
           : "still taking sign-ups",
       ...(short.length > 0 ? { tone: "warn" as const } : {}),
     },

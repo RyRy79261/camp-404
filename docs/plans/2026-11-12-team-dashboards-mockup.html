@@ -14,8 +14,8 @@ h2{font:12px Silkscreen;color:var(--blue);margin:24px 0 8px}
 .ctl{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;margin:12px 0 16px}
 .ctl .lb{font:10px Silkscreen;color:var(--mut);margin-right:8px}
 .chips{display:inline-flex;border:1px solid var(--line);padding:4px;gap:4px;flex-wrap:wrap}
-.chips span{padding:6px 10px;color:var(--mut);cursor:pointer;font-weight:500}
-.chips span.on{background:var(--mag);color:#fff}
+.chips button{padding:6px 10px;color:var(--mut);cursor:pointer;font-weight:500;font:inherit;background:none;border:0}
+.chips button.on{background:var(--mag);color:#fff}
 .desk{background:var(--bg);background-image:linear-gradient(color-mix(in oklch,var(--line) 60%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in oklch,var(--line) 60%,transparent) 1px,transparent 1px);background-size:32px 32px;padding:16px;min-width:0}
 .win{background:var(--panel);border:2px solid var(--line);box-shadow:4px 4px 0 #0008;min-width:0;max-width:1100px}
 .bar{display:flex;align-items:center;gap:8px;background:color-mix(in oklch,var(--mag) 70%,var(--bg));padding:4px 8px;font:12px Silkscreen}
@@ -78,7 +78,7 @@ h1{font-size:20px;margin:4px 0 4px}
 
 <div class="ctl">
   <div><span class="lb">TEAM</span><span class="chips" id="teams"></span></div>
-  <div><span class="lb">VIEWER</span><span class="chips" id="viewer"><span data-v="member">Member</span><span data-v="lead" class="on">This team's lead / captain</span></span></div>
+  <div><span class="lb">VIEWER</span><span class="chips" id="viewer"><button type="button" data-v="member" aria-pressed="false">Member</button><button type="button" data-v="lead" class="on" aria-pressed="true">This team's lead / captain</button></span></div>
 </div>
 
 <div class="desk">
@@ -185,10 +185,11 @@ power_and_lighting:{label:"Power and Lighting",file:"POWER.EXE",about:"We keep t
 };
 const ORDER=Object.keys(TEAMS);let team="kitchen",viewer="lead";
 const tc=document.getElementById('teams');
-ORDER.forEach(k=>{const s=document.createElement('span');s.textContent=TEAMS[k].label;s.dataset.k=k;if(k===team)s.className='on';tc.appendChild(s)});
-tc.addEventListener('click',e=>{const s=e.target.closest('span');if(!s)return;team=s.dataset.k;[...tc.children].forEach(c=>c.classList.toggle('on',c===s));draw()});
+ORDER.forEach(k=>{const s=document.createElement('button');s.type='button';s.textContent=TEAMS[k].label;s.dataset.k=k;s.setAttribute('aria-pressed',String(k===team));if(k===team)s.className='on';tc.appendChild(s)});
+const pick=(box,s)=>[...box.children].forEach(c=>{c.classList.toggle('on',c===s);c.setAttribute('aria-pressed',String(c===s))});
+tc.addEventListener('click',e=>{const s=e.target.closest('button[data-k]');if(!s||!TEAMS[s.dataset.k])return;team=s.dataset.k;pick(tc,s);draw()});
 const vc=document.getElementById('viewer');
-vc.addEventListener('click',e=>{const s=e.target.closest('span');if(!s)return;viewer=s.dataset.v;[...vc.children].forEach(c=>c.classList.toggle('on',c===s));draw()});
+vc.addEventListener('click',e=>{const s=e.target.closest('button[data-v]');if(!s)return;viewer=s.dataset.v;pick(vc,s);draw()});
 function tile(t){return `<div class="tile"><span class="l">${t.l}${t.nw?' <span class="badge b-mag" style="font-size:8px">NEW</span>':''}</span><span class="v">${t.band?`<i class="dot d-${t.band}"></i>`:''}${t.v}</span><span class="h">${t.h}</span>${t.bar?P(...t.bar):''}</div>`}
 function draw(){
  const d=TEAMS[team];const lead=viewer==='lead';

@@ -29,8 +29,8 @@ import {
 // the server with the load list's and the fuel estimate's own calculations.
 // Those who may edit the plan get links into the Power tool that say so;
 // everyone else gets the same pages to read. With no loads and no generator
-// there is nothing to show: the card is one line, and the editor's link to
-// start the load list. Two more tiles (2026-11-12) count the work before the
+// and nothing on site either there is nothing to show: the card is one line,
+// and the editor's link to start the load list. Two more tiles (2026-11-12) count the work before the
 // burn: the fuel cans that travel with a car and the generator's readiness
 // checks, with a link to each.
 
@@ -125,7 +125,11 @@ export function PowerGlanceCard({
   /** The fuel cans and the readiness checks; left out, the card has four. */
   site?: PowerSiteGlance;
 }) {
-  if (glance.peak === null && glance.generator === null) {
+  // The one-line card only when there is nothing at all: registered fuel
+  // cans or readiness checks need no load list or generator, so with any of
+  // them the full card shows (its plan tiles say what is still missing).
+  const siteHasWork = site ? site.cans !== null || site.checks !== null : false;
+  if (glance.peak === null && glance.generator === null && !siteHasWork) {
     return (
       <Card>
         <CardContent className="flex flex-wrap items-center gap-x-3 gap-y-2 p-6">

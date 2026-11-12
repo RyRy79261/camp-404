@@ -110,4 +110,38 @@ describe("sanitationGlance", () => {
     expect(tile(g, "close")?.hint).toBe("No cleaning days yet");
     expect(g.attention).toEqual([]);
   });
+
+  it("points at the next day still taking changes, not one that started today", () => {
+    const g = sanitationGlance({
+      now: NOW,
+      view: view([
+        {
+          day: "2027-04-20",
+          label: "Tue 20 Apr",
+          slots: [slot("t", CLEAN, "2027-04-20", 0)],
+        },
+        {
+          day: "2027-04-22",
+          label: "Thu 22 Apr",
+          slots: [slot("u", CLEAN, "2027-04-22", 3)],
+        },
+      ]),
+    });
+    expect(tile(g, "close")?.value).toBe("in 2 days");
+  });
+
+  it("does not call an unfilled roster full once sign-ups have closed", () => {
+    const g = sanitationGlance({
+      now: NOW,
+      view: view([
+        {
+          day: "2027-04-19",
+          label: "Mon 19 Apr",
+          slots: [slot("p", CLEAN, "2027-04-19", 1)],
+        },
+      ]),
+    });
+    expect(tile(g, "short")?.hint).toBe("Sign-ups have closed");
+    expect(tile(g, "close")?.hint).toBe("Every day has started");
+  });
 });
