@@ -97,6 +97,18 @@ MEMORY CHECK… LOST`) ending in `ERROR 404: YOU ARE HERE`. Skippable
 | `TERMINAL`     | A real little shell: `help`, `whoami`, `ls teams`, `cat mission`, `fee`, `apply`, easter eggs (`walk duck`, `sudo coup chef`). |
 | `APPLY.EXE`    | Dimensional's "Early Access" window, repurposed: pixel heading, boxed APPLY → the Google Form.                                 |
 
+[CORRECTION 2026-11-15] The windows that show a section of the Notion intro are
+now named as that section (Caitlin: the windows and About Camp 404's sections
+have the same names): `TEAMS/` is "How does a Theme Camp like 404 work?",
+`GIFTS.EXE` "Camp 404’s Contributions to Tankwa Town", `MAP.GPS` "Where is 404
+in Tankwa Town?", `CREW.DB` "The Crew" (the Notion words above the counter),
+`SCHEDULE.CAL` "Responsibilities - What You Put In", `PERKS/` "Camp Perks - What
+you Get Out" and `TRUCK.LOG` "How does 404 get stuff to Burn?" (the names live in
+`ABOUT_SECTIONS`, `packages/types/src/join-about.ts`; the terminal still opens
+each by its file name). A new window, "About Camp 404", shows the whole Notion
+page on one page with its List of contents, as the app's About page does.
+README, FEE.CALC, TERMINAL and APPLY.EXE keep their file names.
+
 - **Phone:** dragging is wrong under a thumb. Icons stay a grid; a window
   opens full-screen as a stack you swipe or close through.
 - **Accessibility:** every window reachable by keyboard (icons are buttons,

@@ -4,6 +4,7 @@ import rehypeSanitize from "rehype-sanitize";
 import type { Options as SanitizeSchema } from "rehype-sanitize";
 import { isAllowedBuilderImageUrl } from "@camp404/types";
 import { cn } from "../lib/utils";
+import { ACCENT_CLASS, remarkCampMarks } from "./markdown-marks";
 
 // MarkdownBody — the rendered Markdown a member wrote, wherever another person
 // reads it whole: an announcement, a Survival Guide chapter (in the app and on
@@ -147,10 +148,15 @@ const ANNOUNCEMENT_SCHEMA: SanitizeSchema = {
     "hr",
     "a",
     "img",
+    // Only `marks` (markdown-marks.ts) makes these three.
+    "mark",
+    "u",
+    "span",
   ],
   attributes: {
     a: ["href", "title"],
     img: ["src", "alt", "title"],
+    span: [["className", ACCENT_CLASS]],
     "*": [],
   },
   protocols: {
@@ -212,7 +218,10 @@ const PROSE =
   "[&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-muted [&_pre]:p-3 " +
   "[&_pre_code]:bg-transparent [&_pre_code]:p-0 " +
   "[&_hr]:my-5 [&_hr]:border-border " +
-  "[&_img]:my-3 [&_img]:max-w-full [&_img]:rounded-md";
+  "[&_img]:my-3 [&_img]:max-w-full [&_img]:rounded-md " +
+  // `marks`: Notion's blue background and blue text, in the camp's accent.
+  "[&_mark]:bg-accent/20 [&_mark]:px-0.5 [&_mark]:text-inherit " +
+  "[&_.md-accent]:text-accent [&_u]:underline [&_u]:underline-offset-2";
 
 /** Where a link goes on this surface, and what paper prints after it. */
 export interface MarkdownLinkTarget {
@@ -255,6 +264,12 @@ export interface MarkdownBodyProps {
    * link to it. Two headings with the same words get -2, -3.
    */
   headingAnchor?: (text: string) => string;
+  /**
+   * Read About Camp 404's three extra marks (markdown-marks.ts):
+   * ==highlighted==, {{accent colour}} and ++underlined++. Off, they are the
+   * characters typed.
+   */
+  marks?: boolean;
 }
 
 export function MarkdownBody({
@@ -263,6 +278,7 @@ export function MarkdownBody({
   prose = PROSE,
   linkFor,
   headingAnchor,
+  marks = false,
 }: MarkdownBodyProps) {
   const seen = new Map<string, number>();
   const anchor = (text: string) => {
@@ -275,7 +291,11 @@ export function MarkdownBody({
   return (
     <div className={cn(prose, className)}>
       <Markdown
-        remarkPlugins={[remarkHtmlAsText, remarkLineBreaks]}
+        remarkPlugins={
+          marks
+            ? [remarkHtmlAsText, remarkLineBreaks, remarkCampMarks]
+            : [remarkHtmlAsText, remarkLineBreaks]
+        }
         rehypePlugins={[[rehypeSanitize, ANNOUNCEMENT_SCHEMA]]}
         urlTransform={announcementUrl}
         components={{

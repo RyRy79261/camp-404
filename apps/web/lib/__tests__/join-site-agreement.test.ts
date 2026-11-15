@@ -5,8 +5,8 @@ import { DEFAULT_JOIN_CONTENT, Team } from "@camp404/types";
 import { useTestDb } from "../../../../packages/db/src/__tests__/_harness";
 import { YEAR, bothWays } from "./_agreement";
 
-// join.camp-404.com's words and the captains' cards, through lib/join-site.ts
-// and lib/about.ts, on the database and on the E2E store: one bad section
+// join.camp-404.com's words and the captains' cards, through lib/join-site.ts,
+// on the database and on the E2E store: one bad section
 // saves none (parseJoinSections), the Burn's dates are two real days in order
 // on a year the camp has (cyclesWithBurnDates), and a card is stored trimmed
 // and cut to its limits (campBlurbToSave), all in @camp404/core. Every caller
@@ -21,7 +21,6 @@ vi.mock("@/lib/test-mode", () => ({
 }));
 
 import { testStore } from "../test-store";
-import { getAboutCamp } from "../about";
 import {
   describeTeam,
   getCampBlurb,
@@ -145,7 +144,7 @@ describe("the join site: the database and the test store agree", () => {
     expect(store).toEqual(db);
   });
 
-  it("stores a member's card trimmed and cut, and shows only captains who asked to be shown", async () => {
+  it("stores a member's card trimmed and cut", async () => {
     const { db, store } = await bothWays(mode, h, async (p) => {
       const none = await getCampBlurb(p.member);
       await setCampBlurb(p.captain, {
@@ -159,7 +158,6 @@ describe("the join site: the database and the test store agree", () => {
         showOnJoin: true,
       });
       const captain = await getCampBlurb(p.captain);
-      const about = await getAboutCamp();
       return {
         none,
         captain: {
@@ -168,11 +166,6 @@ describe("the join site: the database and the test store agree", () => {
           showOnJoin: captain.showOnJoin,
         },
         member: await getCampBlurb(p.member),
-        captains: about.captains.map((c) => ({
-          name: c.name,
-          title: c.title.length,
-        })),
-        year: about.year,
       };
     });
     expect(db).toEqual({
@@ -183,8 +176,6 @@ describe("the join site: the database and the test store agree", () => {
         showOnJoin: true,
       },
       member: { title: null, blurb: "I fix things.", showOnJoin: true },
-      captains: [{ name: "Cap", title: MAX_CAMP_TITLE_LENGTH }],
-      year: YEAR,
     });
     expect(store).toEqual(db);
   });

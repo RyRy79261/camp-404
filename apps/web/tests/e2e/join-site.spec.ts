@@ -53,9 +53,9 @@ test.describe("join site editor (test-mode)", () => {
       usesPhoneLayout(page)
         ? page
             .getByRole("navigation", { name: "Sections" })
-            .getByRole("button", { name: /^Who we are/ })
+            .getByRole("button", { name: /^About Camp 404/ })
             .filter({ visible: true })
-        : page.getByRole("heading", { level: 2, name: "Who we are" }),
+        : page.getByRole("heading", { level: 2, name: "About Camp 404" }),
     ).toBeVisible();
     await expect(page.getByRole("status")).toHaveText("No changes");
 
@@ -112,7 +112,7 @@ test.describe("join site editor (test-mode)", () => {
     );
   });
 
-  test("a captain adds a schedule line in its table, and About reads it", async ({
+  test("a captain adds a schedule line in its table, and it is kept", async ({
     page,
     request,
   }) => {
@@ -138,12 +138,19 @@ test.describe("join site editor (test-mode)", () => {
     await page.getByRole("button", { name: "Save page" }).click();
     await expect(page.getByRole("status")).toHaveText(/^Saved\./);
 
-    await page.goto("/about");
-    await expect(
-      page
-        .getByRole("list", { name: "On site" })
-        .getByText("Lamp-lighting walk."),
-    ).toBeVisible();
+    // The schedule is the join site's own now (About reads the Notion
+    // words), so the saved line is read back in the editor.
+    await page.reload();
+    await openJoinSection(page, "What you put in");
+    if (usesPhoneLayout(page)) {
+      await expect(
+        page.getByText("Lamp-lighting walk.").filter({ visible: true }),
+      ).toBeVisible();
+    } else {
+      await expect(
+        page.getByLabel("What happens, On site, Line 5"),
+      ).toHaveValue("Lamp-lighting walk.");
+    }
   });
 
   test("the Burn's dates wait for the camp's year", async ({

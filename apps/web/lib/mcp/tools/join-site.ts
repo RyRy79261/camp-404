@@ -33,6 +33,9 @@ import { runTool, ToolError } from "../tool-utils";
 //    editor's team lines: a team the camp has switched on, at most 200
 //    characters, blank back to the default; it takes the line the caller
 //    read (`expected`).
+//  - The `about` section (About Camp 404, @camp404/types join-about.ts) is
+//    also the app's About page. Its Markdown carries three marks the
+//    description names, so a chat edit keeps the highlights.
 //  - Not here: the fee scale (the `fee` section: the camp fee's amounts, so
 //    money) and the Burn's dates (the camp's year settings). Both stay on
 //    the website.
@@ -121,7 +124,7 @@ export function registerJoinSiteTools(server: McpServer): void {
     {
       title: "Change a section of the join site",
       description:
-        "Replaces one section of join.camp-404.com with `content`, the whole section in get_join_page's shape, and `expectedVersion`, its version there. LIVE ON THE PUBLIC SITE AT ONCE: show the person the new words first. Refused if it changed since. The fee section stays on the website.",
+        "Replaces one section of join.camp-404.com with `content`, the whole section in get_join_page's shape, and `expectedVersion`, its version there. LIVE ON THE PUBLIC SITE AT ONCE: show the person the new words first. Refused if it changed since. The fee section stays on the website. `about` is About Camp 404 (the camp's intro, word for word as the captains keep it): `intro` and `sections` (theme_camp, contributions, where, crew, responsibilities, perks, transport), each Markdown; it is also the About page every member reads in the app. Keep its marks as written: ==highlighted==, {{accent colour}}, ++underlined++.",
       inputSchema: z.object({
         section: z.enum(EDITABLE),
         content: z.record(z.string(), z.unknown()),

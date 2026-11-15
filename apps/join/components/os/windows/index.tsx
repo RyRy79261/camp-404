@@ -5,6 +5,7 @@ import { INKBLOT } from "@/lib/content";
 import { JOIN_COMMANDS, WELCOME } from "@/lib/terminal-commands";
 import type { AppId } from "@/lib/window-manager";
 import { useJoinData } from "../join-data";
+import { AboutWindow } from "./about";
 import { ApplyWindow } from "./apply";
 import { CrewWindow } from "./crew";
 import { FeeWindow } from "./fee";
@@ -60,6 +61,8 @@ export function WindowContent({
   switch (id) {
     case "readme":
       return <ReadmeWindow openApp={openApp} />;
+    case "about":
+      return <AboutWindow />;
     case "teams":
       return <TeamsWindow />;
     case "gifts":

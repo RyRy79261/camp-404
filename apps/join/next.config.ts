@@ -9,6 +9,7 @@ const config: NextConfig = {
     "@camp404/core",
     "@camp404/os",
     "@camp404/games",
+    "@camp404/ui",
   ],
   typedRoutes: true,
   // next dev would write its own AGENTS.md and CLAUDE.md here; the repo's

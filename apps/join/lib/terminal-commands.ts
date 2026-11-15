@@ -13,7 +13,7 @@ import {
   type TermResult,
 } from "@camp404/os/terminal";
 import { formatRands, formatUsdLabel, randsToMinor } from "./fee";
-import { APP_LABELS, INKBLOT, SIGNUP_URL } from "./content";
+import { APP_FILES, APP_LABELS, INKBLOT, SIGNUP_URL } from "./content";
 import type { JoinData } from "./join-data";
 import { teamFile } from "./teams";
 import { APP_IDS, type AppId } from "./window-manager";
@@ -44,9 +44,11 @@ const DUCK = [
 ];
 
 function findApp(name: string): (typeof APP_IDS)[number] | undefined {
-  const n = name.toLowerCase().replace(/\/$/, "");
+  const plain = (s: string) => s.toLowerCase().replace(/\/$/, "");
+  const n = plain(name);
   return APP_IDS.find(
-    (id) => id === n || APP_LABELS[id].toLowerCase().replace(/\/$/, "") === n,
+    (id) =>
+      id === n || plain(APP_FILES[id]) === n || plain(APP_LABELS[id]) === n,
   );
 }
 
@@ -142,7 +144,7 @@ export const JOIN_COMMANDS: CommandTable<AppId, JoinData> = {
     ls: ({ arg }, data) => {
       const dir = arg.toLowerCase().replace(/\/$/, "");
       if (!dir) {
-        return { lines: [out(APP_IDS.map((id) => APP_LABELS[id]).join("  "))] };
+        return { lines: [out(APP_IDS.map((id) => APP_FILES[id]).join("  "))] };
       }
       if (dir === "teams") {
         return { lines: data.teams.map((t) => out(teamFile(t))) };

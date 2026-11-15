@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { ABOUT_CONTENTS_HEADING } from "@camp404/types";
 import { cn } from "@camp404/ui/lib/utils";
 import { scrollInWindow } from "@/lib/scroll-in-window";
 
-// About's "On this page" list (approved redesign, 2026-10-01): a click
+// About's List of contents (the Notion page's own heading; was "On this page") (approved redesign, 2026-10-01): a click
 // scrolls the window to the card, and the card in view is marked. The mark
 // follows an IntersectionObserver (an event, not a loop), so nothing runs
 // while the page sits still. In a wide window it is the left column; in a
@@ -21,8 +22,34 @@ export function AboutToc({
 }) {
   const [current, setCurrent] = React.useState(items[0]?.id ?? "");
 
+  // How tall the scrolling box is (the window's body, or the screen), so the
+  // band below is in pixels: an IntersectionObserver resolves a percentage
+  // margin against the root's WIDTH, even for the bottom one.
+  const [rootHeight, setRootHeight] = React.useState(0);
   React.useEffect(() => {
-    if (variant !== "column" || typeof IntersectionObserver === "undefined") {
+    if (variant !== "column") return;
+    const root =
+      document
+        .getElementById(items[0]?.id ?? "")
+        ?.closest<HTMLElement>("[data-window-body]") ?? null;
+    const measure = () =>
+      setRootHeight(root ? root.clientHeight : window.innerHeight);
+    measure();
+    if (!root || typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const sizes = new ResizeObserver(measure);
+    sizes.observe(root);
+    return () => sizes.disconnect();
+  }, [items, variant]);
+
+  React.useEffect(() => {
+    if (
+      variant !== "column" ||
+      !rootHeight ||
+      typeof IntersectionObserver === "undefined"
+    ) {
       return;
     }
     const cards = items
@@ -36,21 +63,25 @@ export function AboutToc({
         const first = items.find((i) => seen.get(i.id));
         if (first) setCurrent(first.id);
       },
-      { root, rootMargin: "0px 0px -60% 0px" },
+      { root, rootMargin: `0px 0px -${Math.round(rootHeight * 0.6)}px 0px` },
     );
     for (const card of cards) observer.observe(card);
     return () => observer.disconnect();
-  }, [items, variant]);
+  }, [items, variant, rootHeight]);
 
+  // Focus goes to the card too (it has tabIndex -1), so the next Tab goes
+  // on from it, not from the contents.
   const go = (id: string) => {
     setCurrent(id);
-    scrollInWindow(document.getElementById(id));
+    const card = document.getElementById(id);
+    card?.focus({ preventScroll: true });
+    scrollInWindow(card);
   };
 
   if (variant === "row") {
     return (
       <nav
-        aria-label="On this page"
+        aria-label={ABOUT_CONTENTS_HEADING}
         className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 @min-[60rem]/page:hidden"
       >
         {items.map((i) => (
@@ -69,11 +100,11 @@ export function AboutToc({
 
   return (
     <nav
-      aria-label="On this page"
+      aria-label={ABOUT_CONTENTS_HEADING}
       className="sticky top-6 hidden flex-col @min-[60rem]/page:flex"
     >
       <p className="pb-2 font-pixel text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-        On this page
+        {ABOUT_CONTENTS_HEADING}
       </p>
       {items.map((i) => {
         const on = i.id === current;

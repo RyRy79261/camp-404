@@ -9,6 +9,11 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_JOIN_CONTENT } from "@camp404/types";
+import {
+  useLeaveGuard,
+  WindowDirtyProvider,
+  WindowKeyProvider,
+} from "@camp404/os";
 import type { JoinEditorData } from "@/lib/join-site";
 
 // The Join site editor (approved redesign, 2026-10-01): one section open at a
@@ -63,14 +68,14 @@ afterEach(() => {
 });
 
 describe("Join site editor", () => {
-  it("opens on Who we are, lists every section, and has nothing to save", () => {
+  it("opens on About Camp 404, lists every section, and has nothing to save", () => {
     render(<JoinSiteEditor data={DATA} />);
     expect(
-      screen.getByRole("heading", { level: 2, name: "Who we are" }),
+      screen.getByRole("heading", { level: 2, name: "About Camp 404" }),
     ).toBeTruthy();
     expect(
       within(nav().querySelector("ul")!).getAllByRole("button"),
-    ).toHaveLength(10);
+    ).toHaveLength(11);
     expect(status().textContent).toBe("No changes");
     expect(
       (screen.getByRole("button", { name: "Save page" }) as HTMLButtonElement)
@@ -100,6 +105,45 @@ describe("Join site editor", () => {
       ),
     );
     expect(refresh).toHaveBeenCalled();
+  });
+
+  it("asks before its window goes with unsaved words, and a Back keeps them", () => {
+    const confirm = vi.fn(() => false);
+    let leave: ReturnType<typeof useLeaveGuard> = () => true;
+    function Guard() {
+      leave = useLeaveGuard();
+      return null;
+    }
+    const inWindow = (open: boolean) => (
+      <WindowDirtyProvider confirm={confirm}>
+        <Guard />
+        {open ? (
+          <WindowKeyProvider windowKey="join-site">
+            <JoinSiteEditor data={DATA} />
+          </WindowKeyProvider>
+        ) : null}
+      </WindowDirtyProvider>
+    );
+    const view = render(inWindow(true));
+    expect(leave("join-site")).toBe(true);
+    openSection("Where we are");
+    fireEvent.change(screen.getByLabelText("Where we are on the map"), {
+      target: { value: "Block 7 · Street B" },
+    });
+    expect(leave("join-site")).toBe(false);
+    expect(confirm).toHaveBeenCalledWith(
+      "The Join site has changes that are not saved. Leave?",
+    );
+
+    // A Back: the page goes without asking, and comes back with the words.
+    view.rerender(inWindow(false));
+    view.rerender(inWindow(true));
+    openSection("Where we are");
+    expect(
+      (screen.getByLabelText("Where we are on the map") as HTMLInputElement)
+        .value,
+    ).toBe("Block 7 · Street B");
+    expect(status().textContent).toBe("1 section not saved: Where we are");
   });
 
   it("keeps edits in two sections and saves both with one Save", async () => {
@@ -223,5 +267,21 @@ describe("placeOf", () => {
     expect(placeOf("crew", ["capacity", "min"])).toBe(
       "Smallest camp that can run",
     );
+    expect(placeOf("about", ["sections", "crew"])).toBe("The Crew");
+    expect(placeOf("about", ["intro"])).toBe("Intro");
+  });
+
+  it("gives each About Camp 404 section a field under its Notion name", () => {
+    render(<JoinSiteEditor data={DATA} />);
+    expect(
+      screen.getByRole("heading", { level: 2, name: "About Camp 404" }),
+    ).toBeTruthy();
+    for (const label of [
+      "Intro (before the List of contents)",
+      "🏕️ Where is 404 in Tankwa Town?",
+      "🔥 Responsibilities - What You Put In",
+    ]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
   });
 });

@@ -54,7 +54,7 @@ export function DesktopIcon({
       <span
         aria-hidden
         data-label={label}
-        className={`line-clamp-2 max-w-full px-1.5 py-0.5 text-center font-pixel text-[10px] uppercase tracking-wider after:content-[attr(data-label)] ${
+        className={`line-clamp-2 max-w-full px-1.5 [overflow-wrap:anywhere] py-0.5 text-center font-pixel text-[10px] uppercase tracking-wider after:content-[attr(data-label)] ${
           open
             ? "bg-os-primary text-os-bg"
             : "bg-os-chrome/80 text-os-fg group-hover:bg-os-primary group-hover:text-os-bg group-focus-visible:bg-os-primary group-focus-visible:text-os-bg"

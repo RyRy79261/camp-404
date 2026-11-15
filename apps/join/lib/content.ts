@@ -4,6 +4,8 @@
 // from the camp's database instead: lib/join-data.ts, edited in the app at
 // Captains → Join site (owner, 2026-09-25).
 
+import { ABOUT_TITLE, aboutSection } from "@camp404/types";
+
 // Joining happens in the main app, never a Google Form (owner, 2026-09-25):
 // sign up, then enter an invite code.
 export const SIGNUP_URL = "https://camp-404.com/auth/sign-up";
@@ -46,7 +48,6 @@ export const CREW_LABELS = {
   headcountHeading: (year: number) => `Who's coming (${year})`,
   headcountSource:
     "Counted from the “Coming this year?” question in the Camp 404 app.",
-  noCaptains: "Captains for this year are still being herded.",
   minLabel: "Minimum to run",
   maxLabel: "Full camp",
 } as const;
@@ -79,9 +80,35 @@ export const INKBLOT = {
   againButton: "Knock it all over again",
 } as const;
 
-/** Desktop icon labels, in desktop order. The label is also the window title. */
+/**
+ * Desktop icon labels, in desktop order. The label is also the window title.
+ * A window that shows a section of About Camp 404 is named as that section
+ * (Caitlin, 2026-11-15: the windows and the About page's sections have the
+ * same names), from @camp404/types so the two can never drift; the tools
+ * (README, the fee calculator, the terminal, applying) keep their file names.
+ */
 export const APP_LABELS = {
   readme: "README.TXT",
+  about: ABOUT_TITLE,
+  teams: aboutSection("theme_camp").title,
+  gifts: aboutSection("contributions").title,
+  map: aboutSection("where").title,
+  crew: aboutSection("crew").title,
+  schedule: aboutSection("responsibilities").title,
+  fee: "FEE.CALC",
+  perks: aboutSection("perks").title,
+  truck: aboutSection("transport").title,
+  terminal: "TERMINAL",
+  apply: "APPLY.EXE",
+} as const;
+
+/**
+ * Each window's file name, which the terminal still opens it by
+ * (`open map.gps`), from before the windows took the sections' names.
+ */
+export const APP_FILES = {
+  readme: "README.TXT",
+  about: "ABOUT.TXT",
   teams: "TEAMS/",
   gifts: "GIFTS.EXE",
   map: "MAP.GPS",
