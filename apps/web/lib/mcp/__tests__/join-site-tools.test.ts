@@ -63,6 +63,43 @@ async function read(as: string) {
 }
 
 describe("update_join_page_section", () => {
+  it("saves About Camp 404 (the app's About page too), keeping its marks", async () => {
+    const cap = await captain();
+    const about = (await read(cap.id)).sections.about!;
+    const sections = about.content.sections as Record<string, string>;
+    const where = "We are on ==plot 7== this year, **{{Street B}}**.";
+    const res = await call(
+      "update_join_page_section",
+      {
+        section: "about",
+        content: { ...about.content, sections: { ...sections, where } },
+        expectedVersion: about.version,
+      },
+      cap.id,
+    );
+    expect(res.data).toMatchObject({ section: "about" });
+    const live = (await getJoinSitePublic()).content.about;
+    expect(live.sections.where).toBe(where);
+    expect(live.sections.crew).toBe(sections.crew);
+  });
+
+  it("refuses an About Camp 404 with a section left empty, saving nothing", async () => {
+    const cap = await captain();
+    const about = (await read(cap.id)).sections.about!;
+    const sections = about.content.sections as Record<string, string>;
+    const res = await call(
+      "update_join_page_section",
+      {
+        section: "about",
+        content: { ...about.content, sections: { ...sections, crew: " " } },
+        expectedVersion: about.version,
+      },
+      cap.id,
+    );
+    expect(res.error).toMatch(/^about: /);
+    expect(await h.db().select().from(schema.joinSiteContent)).toEqual([]);
+  });
+
   it("replaces a section on the version read, audited, and the public site reads it", async () => {
     const cap = await captain();
     const page = await read(cap.id);
