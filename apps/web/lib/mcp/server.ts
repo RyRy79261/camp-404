@@ -22,6 +22,25 @@ import { registerSearchTools } from "./tools/search";
 import { registerShiftTools } from "./tools/shifts";
 import { registerTaskTools } from "./tools/tasks";
 import { registerTeamTools } from "./tools/teams";
+import { registerPowerTools } from "./tools/power";
+import { registerLoungeTools } from "./tools/lounge";
+import { registerHelpWantedTools } from "./tools/help-wanted";
+import { registerPetsTools } from "./tools/pets";
+import { registerCampLayoutTools } from "./tools/camp-layout";
+import { registerKitchenPlanTools } from "./tools/kitchen-plan";
+import { registerInventoryMoreTools } from "./tools/inventory-more";
+import { registerLogisticsMoreTools } from "./tools/logistics-more";
+import { registerGearRentalTools } from "./tools/gear-rental";
+import { registerTasksMoreTools } from "./tools/tasks-more";
+import { registerMeetingsMoreTools } from "./tools/meetings-more";
+import { registerShiftsMoreTools } from "./tools/shifts-more";
+import { registerTransportMoreTools } from "./tools/transport-more";
+import { registerQuestionnairesMoreTools } from "./tools/questionnaires-more";
+import { registerGuideMoreTools } from "./tools/guide-more";
+import { registerProfileMoreTools } from "./tools/profile-more";
+import { registerCaptainPeopleTools } from "./tools/captain-people";
+import { registerAnnouncementsTools } from "./tools/announcements";
+import { registerJoinSiteTools } from "./tools/join-site";
 
 /**
  * What the connector tells the agent at initialize, before any tool call: what
@@ -102,4 +121,23 @@ export function registerCampMcpTools(server: McpServer): void {
   registerMeetingTools(described);
   registerShiftTools(described);
   registerAttendanceTools(described);
+  registerPowerTools(described);
+  registerLoungeTools(described);
+  registerHelpWantedTools(described);
+  registerPetsTools(described);
+  registerCampLayoutTools(described);
+  registerKitchenPlanTools(described);
+  registerInventoryMoreTools(described);
+  registerLogisticsMoreTools(described);
+  registerGearRentalTools(described);
+  registerTasksMoreTools(described);
+  registerMeetingsMoreTools(described);
+  registerShiftsMoreTools(described);
+  registerTransportMoreTools(described);
+  registerQuestionnairesMoreTools(described);
+  registerGuideMoreTools(described);
+  registerProfileMoreTools(described);
+  registerCaptainPeopleTools(described);
+  registerAnnouncementsTools(described);
+  registerJoinSiteTools(described);
 }

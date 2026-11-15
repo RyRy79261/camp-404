@@ -20,11 +20,11 @@ const WORDS: Partial<Record<Area, RegExp>> = {
   // Team and lead changes, and who is who. People is always sent; matching it
   // only means the command is not unknown.
   People:
-    /\b(teams?|leads?|leader|leading|captain|member|members|roster|who|kitchen|structures|power|lighting|sanitation|safety|art|activities|memes|vibes|finance|transport|logistics|comms|put \w+( \w+)? on|take \w+( \w+)? off|add \w+( \w+)? to|move \w+( \w+)? from)\b/,
+    /\b(notes? on|captain'?s? notes?|ddt|wap|work access|teams?|leads?|leader|leading|captain|member|members|roster|who|kitchen|structures|power|lighting|sanitation|safety|art|activities|memes|vibes|finance|transport|logistics|comms|put \w+( \w+)? on|take \w+( \w+)? off|add \w+( \w+)? to|move \w+( \w+)? from)\b/,
   // A team's description (what its program says about the team).
   Teams:
     /\b(descriptions?|describes?|blurb|about (the|this) team|what (the|this|a) team does|programs?)\b/,
-  You: /\b(my profile|profile|dietary|diet|allerg\w*|vegan|vegetarian|emergency|contact|skills?|burns? (i'?ve|i have)|first burn|history|dues|owe|gear order|my forms|required|driver profile|my car)\b/,
+  You: /\b(my profile|profile|blurb|bio|pronouns|playa name|nickname|tickets?|telegram|dietary|diet|allerg\w*|vegan|vegetarian|emergency|contact|skills?|burns? (i'?ve|i have)|first burn|history|dues|owe|gear order|my forms|required|driver profile|my car)\b/,
   Inbox: /\b(notifications?|inbox|unread|mark .* read|messages?)\b/,
   Tasks:
     /\b(tasks?|to ?do|board|done|doing|in progress|reopen|started?|finish(ed)?|complete[d]?|assign(ed)?|deadline|due)\b/,
@@ -46,6 +46,14 @@ const WORDS: Partial<Record<Area, RegExp>> = {
     /\b(build|strike|pack|unpack|packing|travel|help (on|with|at)|can'?t (make|help|come)|maybe for|attendance|phases?|camp days|burn days|dates?)\b/,
   Transport:
     /\b(lifts?|cars?|ride|riding|rider|driver|driving|drive|seats?|transport|truck|trailer)\b/,
+  Power:
+    /\b(power|generators?|gennies?|loads?|watts?|kw|fuel|diesel|petrol|jerry ?cans?|cans?|grid|cables?|sockets?|distribution|readiness|checklist|refuel\w*|solar|batter(y|ies)|inverters?)\b/,
+  Lounge: /\b(lounge|music|dj|djs|sets?|offers?|slots?|playlist|music policy)\b/,
+  "Camp layout": /\b(layout|site plan|map|neighbours?|placement)\b/,
+  "Help wanted": /\b(help wanted|roles?|keen|places|volunteer for|lead places)\b/,
+  Pets: /\b(pets?|cats?|dogs?|hint|stupid thing)\b/,
+  "Join site": /\b(join (site|page)|recruit\w*|join\.camp)\b/,
+  Announcements: /\b(announcements?|pin(ned)?|unpin)\b/,
   "Invites and audit": /\b(invites?|codes?|revoke|audit|log)\b/,
 };
 
