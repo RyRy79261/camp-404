@@ -10,7 +10,6 @@ import {
 } from "./gates";
 
 import { DOMAIN_CAPABILITIES } from "./tool-caps";
-import { LAYOUT_EDITOR_GATE } from "./tool-caps/camp-layout";
 import { ROLE_KEEPER_GATE } from "./tool-caps/help-wanted";
 import { LOUNGE_RUNNER_GATE } from "./tool-caps/lounge";
 import { POWER_EDITOR_GATE } from "./tool-caps/power";
