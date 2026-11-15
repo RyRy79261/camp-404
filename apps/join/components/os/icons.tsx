@@ -12,6 +12,13 @@ const PATHS: Record<AppId, ReactNode> = {
       <path d="M17 22h16M17 28h16M17 34h10" />
     </>
   ),
+  about: (
+    <>
+      <path d="M24 12c-5-4-12-5-19-4v29c7-1 14 0 19 4 5-4 12-5 19-4V8c-7-1-14 0-19 4z" />
+      <path d="M24 12v29" />
+      <path d="M10 17h9M10 23h9M10 29h6M29 17h9M29 23h9M29 29h6" />
+    </>
+  ),
   teams: (
     <>
       <path d="M5 13h14l4 4h20v24H5z" />

@@ -61,6 +61,11 @@ export interface MarkdownFieldProps {
   mode?: "markdown" | "paragraphs";
   /** Head the Write pane with its name, as the Preview pane is. */
   labelWrite?: boolean;
+  /**
+   * The preview reads About Camp 404's ==highlight==, {{colour}} and
+   * ++underline++ (MarkdownBody's `marks`), as its readers do.
+   */
+  marks?: boolean;
   className?: string;
 }
 
@@ -73,6 +78,7 @@ export function MarkdownField({
   minHeight = "min-h-32",
   mode = "markdown",
   labelWrite = false,
+  marks = false,
   className,
 }: MarkdownFieldProps) {
   const [view, setView] = React.useState<"write" | "preview">("write");
@@ -142,7 +148,9 @@ export function MarkdownField({
             ) : mode === "paragraphs" ? (
               <InlineParagraphsValue value={settled} />
             ) : (
-              <MarkdownBody className="text-sm">{settled}</MarkdownBody>
+              <MarkdownBody className="text-sm" marks={marks}>
+                {settled}
+              </MarkdownBody>
             )}
           </div>
         </div>

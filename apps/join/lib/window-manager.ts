@@ -6,6 +6,7 @@ import type { OsWindow } from "@camp404/os";
 
 export const APP_IDS = [
   "readme",
+  "about",
   "teams",
   "gifts",
   "map",

@@ -63,14 +63,14 @@ afterEach(() => {
 });
 
 describe("Join site editor", () => {
-  it("opens on Who we are, lists every section, and has nothing to save", () => {
+  it("opens on About Camp 404, lists every section, and has nothing to save", () => {
     render(<JoinSiteEditor data={DATA} />);
     expect(
-      screen.getByRole("heading", { level: 2, name: "Who we are" }),
+      screen.getByRole("heading", { level: 2, name: "About Camp 404" }),
     ).toBeTruthy();
     expect(
       within(nav().querySelector("ul")!).getAllByRole("button"),
-    ).toHaveLength(10);
+    ).toHaveLength(11);
     expect(status().textContent).toBe("No changes");
     expect(
       (screen.getByRole("button", { name: "Save page" }) as HTMLButtonElement)
@@ -223,5 +223,21 @@ describe("placeOf", () => {
     expect(placeOf("crew", ["capacity", "min"])).toBe(
       "Smallest camp that can run",
     );
+    expect(placeOf("about", ["sections", "crew"])).toBe("The Crew");
+    expect(placeOf("about", ["intro"])).toBe("Intro");
+  });
+
+  it("gives each About Camp 404 section a field under its Notion name", () => {
+    render(<JoinSiteEditor data={DATA} />);
+    expect(
+      screen.getByRole("heading", { level: 2, name: "About Camp 404" }),
+    ).toBeTruthy();
+    for (const label of [
+      "Intro (before the List of contents)",
+      "🏕️ Where is 404 in Tankwa Town?",
+      "🔥 Responsibilities - What You Put In",
+    ]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
   });
 });

@@ -68,17 +68,25 @@ test("opening README from the Start menu also stops the glow", async ({
 test("an icon opens its window and Esc closes it", async ({ page }) => {
   await expect(page.getByRole("region", { name: "README.TXT" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Open CREW.DB" }).click();
-  const crew = page.getByRole("region", { name: "CREW.DB" });
+  // Named as its section of About Camp 404, with the section's words.
+  await page
+    .getByRole("button", { name: "Open The Crew", exact: true })
+    .click();
+  const crew = page.getByRole("region", { name: "The Crew", exact: true });
   await expect(crew).toBeVisible();
   await expect(crew).toBeFocused();
+  await expect(
+    crew.getByText(
+      "The 404 crew is a total 50 people with space for 10 orphans",
+    ),
+  ).toBeVisible();
   await expect(crew.getByRole("row", { name: /Ryan/ })).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(crew).toHaveCount(0);
   // Focus goes back to the icon that opened it.
   await expect(
-    page.getByRole("button", { name: "Open CREW.DB" }),
+    page.getByRole("button", { name: "Open The Crew", exact: true }),
   ).toBeFocused();
 });
 
@@ -173,15 +181,44 @@ test("the Start menu opens any program", async ({ page }) => {
   await startButton(page).click();
   const menu = page.getByRole("menu", { name: "Start" });
   await expect(menu.getByRole("menuitem").first()).toBeFocused();
-  await menu.getByRole("menuitem", { name: "MAP.GPS" }).click();
+  await menu
+    .getByRole("menuitem", { name: "Where is 404 in Tankwa Town?" })
+    .click();
   await expect(menu).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "MAP.GPS" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Where is 404 in Tankwa Town?" }),
+  ).toBeVisible();
 
   await startButton(page).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu", { name: "Start" })).toHaveCount(0);
   // Esc shut the menu, not the window under it.
-  await expect(page.getByRole("region", { name: "MAP.GPS" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Where is 404 in Tankwa Town?" }),
+  ).toBeVisible();
+});
+
+test("About Camp 404 shows every section on one page, with its contents", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Open About Camp 404" }).click();
+  // The page's hidden summary for search engines is also "About Camp 404".
+  const about = page.locator('[data-window="about"]');
+  await expect(about).toBeVisible();
+  const contents = about.getByRole("navigation", { name: "List of contents" });
+  await expect(contents.getByRole("button")).toHaveCount(7);
+  // The Notion page's highlights read as highlights, never as their signs.
+  await expect(
+    about.locator("mark", {
+      hasText: "Camp members are encouraged to arrive no later than",
+    }),
+  ).toHaveCount(1);
+  await expect(about.getByText("==")).toHaveCount(0);
+
+  await contents.getByRole("button", { name: /The Crew/ }).click();
+  await expect(
+    about.getByRole("region", { name: "The Crew", exact: true }),
+  ).toBeInViewport();
 });
 
 test("the terminal hides a game behind jinn-is-best", async ({ page }) => {

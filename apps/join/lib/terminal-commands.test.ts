@@ -46,6 +46,12 @@ describe("runCommand", () => {
     expect(runCommand("open MAP.GPS").open).toBe("map");
     expect(runCommand("open teams/").open).toBe("teams");
     expect(runCommand("open nowhere").open).toBeUndefined();
+    // A window named as its About Camp 404 section still opens by its file
+    // name, and by the new name too.
+    expect(runCommand("open crew.db").open).toBe("crew");
+    expect(runCommand("open the crew").open).toBe("crew");
+    expect(runCommand("open about.txt").open).toBe("about");
+    expect(text("open crew.db")).toBe("Opening The Crew…");
   });
 
   it("keeps its easter eggs", () => {

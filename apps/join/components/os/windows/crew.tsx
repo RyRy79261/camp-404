@@ -1,21 +1,34 @@
 import { CREW_LABELS } from "@/lib/content";
 import type { JoinHeadcount as Headcount } from "@/lib/join-data";
 import { useJoinData } from "../join-data";
+import { AboutWords } from "../about-words";
 import { Eyebrow, WinBody } from "./ui";
 
-// This year's captains, then a headcount from the app's "Coming this year?"
-// answers: counts only, never a list of who.
+// The Crew, as About Camp 404 tells it (the Notion page's words, captains
+// included), then a headcount from the app's "Coming this year?" answers:
+// counts only, never a list of who. The captains who switched on "Show me on
+// join.camp-404.com" still get their cards, after the words; with none, the
+// words have already named the captains, so nothing more is said.
 export function CrewWindow() {
-  const { year, captains, headcount } = useJoinData();
+  const { year, captains, headcount, content } = useJoinData();
   return (
     <WinBody>
-      <section aria-labelledby="crew-captains" className="space-y-2">
-        <Eyebrow id="crew-captains">
-          {CREW_LABELS.captainsHeading(year)}
-        </Eyebrow>
-        {captains.length === 0 ? (
-          <p className="text-os-muted">{CREW_LABELS.noCaptains}</p>
-        ) : (
+      <AboutWords>{content.about.sections.crew}</AboutWords>
+
+      <section aria-labelledby="crew-count" className="space-y-3">
+        <Eyebrow id="crew-count">{CREW_LABELS.headcountHeading(year)}</Eyebrow>
+        <p className="font-mono text-xs text-os-accent">
+          &gt; SELECT status, COUNT(*) FROM coming_this_year GROUP BY status;
+        </p>
+        <CapacityBar count={headcount} />
+        <p className="text-xs text-os-muted">{CREW_LABELS.headcountSource}</p>
+      </section>
+
+      {captains.length > 0 && (
+        <section aria-labelledby="crew-captains" className="space-y-2">
+          <Eyebrow id="crew-captains">
+            {CREW_LABELS.captainsHeading(year)}
+          </Eyebrow>
           <table className="w-full border-collapse text-left">
             <thead className="font-mono text-[10px] uppercase tracking-widest text-os-muted">
               <tr className="border-b border-os-line">
@@ -50,17 +63,8 @@ export function CrewWindow() {
               ))}
             </tbody>
           </table>
-        )}
-      </section>
-
-      <section aria-labelledby="crew-count" className="space-y-3">
-        <Eyebrow id="crew-count">{CREW_LABELS.headcountHeading(year)}</Eyebrow>
-        <p className="font-mono text-xs text-os-accent">
-          &gt; SELECT status, COUNT(*) FROM coming_this_year GROUP BY status;
-        </p>
-        <CapacityBar count={headcount} />
-        <p className="text-xs text-os-muted">{CREW_LABELS.headcountSource}</p>
-      </section>
+        </section>
+      )}
     </WinBody>
   );
 }

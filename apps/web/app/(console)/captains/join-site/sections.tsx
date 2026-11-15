@@ -11,7 +11,11 @@ import type {
   JoinSiteContent,
 } from "@camp404/types";
 import { formatMoney } from "@camp404/core";
-import { GIFT_ICONS } from "@camp404/types";
+import {
+  ABOUT_SECTIONS,
+  GIFT_ICONS,
+  type AboutSectionKey,
+} from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
 import { Input } from "@camp404/ui/components/input";
 import {
@@ -194,6 +198,74 @@ function TableCard({
     >
       <div className="pb-1">{children}</div>
     </FieldCard>
+  );
+}
+
+// ---- About Camp 404 (the Notion intro) ------------------------------------
+
+/** One part of About Camp 404: full Markdown, Write beside Preview. */
+function AboutWords({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (markdown: string) => void;
+}) {
+  return (
+    <Field label={label}>
+      <MarkdownField
+        label={label}
+        labelWrite
+        value={value}
+        onChange={onChange}
+        minHeight="min-h-48"
+        emptyPreview="Nothing written yet."
+        marks
+      />
+    </Field>
+  );
+}
+
+export function AboutSection({
+  value,
+  set,
+}: {
+  value: C["about"];
+  set: SetSection<"about">;
+}) {
+  const setPart = (key: AboutSectionKey) => (markdown: string) =>
+    set({ ...value, sections: { ...value.sections, [key]: markdown } });
+  return (
+    <>
+      <FieldCard
+        title="How to mark the important lines"
+        description={
+          <>
+            As in the Notion page: <code>==words==</code> are highlighted,{" "}
+            <code>{"{{words}}"}</code> are in the camp&apos;s colour and{" "}
+            <code>++words++</code> are underlined. They can sit around bold
+            words. The Preview shows them as members read them.
+          </>
+        }
+      >
+        <AboutWords
+          label="Intro (before the List of contents)"
+          value={value.intro}
+          onChange={(intro) => set({ ...value, intro })}
+        />
+      </FieldCard>
+      {ABOUT_SECTIONS.map((s) => (
+        <FieldCard key={s.key}>
+          <AboutWords
+            label={`${s.emoji} ${s.title}`}
+            value={value.sections[s.key]}
+            onChange={setPart(s.key)}
+          />
+        </FieldCard>
+      ))}
+    </>
   );
 }
 

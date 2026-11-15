@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Gift,
+  BookOpen,
   HandCoins,
   Heart,
   Loader2,
@@ -20,6 +21,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
+  ABOUT_SECTION_KEYS,
+  ABOUT_TITLE,
+  aboutSection,
   JoinSections,
   type JoinSectionKey,
   type JoinSiteContent,
@@ -32,6 +36,7 @@ import type { JoinEditorData } from "@/lib/join-site";
 import { scrollInWindow } from "@/lib/scroll-in-window";
 import { saveJoinPageAction, type JoinPageInput } from "./actions";
 import {
+  AboutSection,
   ApplySection,
   CrewSection,
   FeeSection,
@@ -47,8 +52,11 @@ import {
 
 // The Join site program (approved redesign, 2026-10-01, Option A): the words
 // on About Camp 404 and on join.camp-404.com, one section open at a time. The
-// sections run down the left (AfrikaBurn's questionnaire builder), named as
-// members read them on About, each with its join-site window as a small tag;
+// sections run down the left (AfrikaBurn's questionnaire builder), each with
+// its join-site window as a small tag. About Camp 404 comes first: the Notion
+// intro word for word, which the app's About page and the join site's About
+// window read whole (Caitlin, 2026-11-15); the rest are the join site's own
+// windows, which keep their pictures and counters;
 // the open section fills the right. One Save, bottom right, saves every
 // section changed, and the footer says which are not saved yet. On a phone the
 // list is its own screen and "All sections" goes back.
@@ -63,68 +71,82 @@ export const SECTIONS: {
   icon: LucideIcon;
 }[] = [
   {
+    key: "about",
+    title: ABOUT_TITLE,
+    file: "About Camp 404, The Crew",
+    description:
+      "The Notion intro, word for word, in its sections: About Camp 404 in the app, the join site's About Camp 404 window, and the words in its The Crew window.",
+    icon: BookOpen,
+  },
+  {
     key: "readme",
     title: "Who we are",
     file: "README.TXT",
-    description:
-      "The first card on About, and the README.TXT window on the join site.",
+    description: "The README.TXT window on the join site.",
     icon: Heart,
   },
   {
     key: "teams",
     title: "How the camp works",
-    file: "TEAMS/",
-    description: "The words around the team list, and one line for each team.",
+    file: aboutSection("theme_camp").title,
+    description:
+      "On the join site: the words around the team list, and one line for each team.",
     icon: Users,
   },
   {
     key: "gifts",
     title: "What we give",
-    file: "GIFTS.EXE",
+    file: aboutSection("contributions").title,
     description:
-      "What the camp gives to Tankwa Town. The main gifts show as the top row.",
+      "On the join site: what the camp gives to Tankwa Town. The main gifts show as the top row.",
     icon: Gift,
   },
   {
     key: "map",
     title: "Where we are",
-    file: "MAP.GPS",
-    description: "Where the camp is on the map, and what is around it.",
+    file: aboutSection("where").title,
+    description:
+      "On the join site: where the camp is on the map, and what is around it.",
     icon: MapPin,
   },
   {
     key: "crew",
     title: "The crew",
-    file: "CREW.DB",
-    description: "How many people the camp needs, and room for.",
+    file: aboutSection("crew").title,
+    description:
+      "On the join site: the counter's numbers, how many people the camp needs and has room for. Its words are About Camp 404's The Crew.",
     icon: UsersRound,
   },
   {
     key: "schedule",
     title: "What you put in",
-    file: "SCHEDULE.CAL",
-    description: "The year at a glance, and the shifts everyone does on site.",
+    file: aboutSection("responsibilities").title,
+    description:
+      "On the join site: the year at a glance, and the shifts everyone does on site.",
     icon: CalendarDays,
   },
   {
     key: "fee",
     title: "The camp fee",
     file: "FEE.CALC",
-    description: "In the order members read it. Amounts are whole rands.",
+    description:
+      "On the join site's fee calculator, in the order visitors read it. Amounts are whole rands.",
     icon: HandCoins,
   },
   {
     key: "perks",
     title: "What you get out",
-    file: "PERKS/",
-    description: "What members get, and the files in the PERKS/ folder.",
+    file: aboutSection("perks").title,
+    description:
+      "On the join site: what members get, and the files in its window.",
     icon: Sparkles,
   },
   {
     key: "truck",
     title: "Getting there",
-    file: "TRUCK.LOG",
-    description: "How the camp and its stuff get to the Burn.",
+    file: aboutSection("transport").title,
+    description:
+      "On the join site: how the camp and its stuff get to the Burn.",
     icon: Car,
   },
   {
@@ -144,6 +166,10 @@ const TITLE = Object.fromEntries(
 // Where a problem is, in the words the editor shows: a field's label, and
 // "line N" for a row of a table.
 const FIELD: Record<string, string> = {
+  "about.intro": "Intro",
+  ...Object.fromEntries(
+    ABOUT_SECTION_KEYS.map((k) => [`about.${k}`, aboutSection(k).title]),
+  ),
   "readme.heading": "Heading",
   "readme.paragraphs": "Words",
   "readme.warning": "Warning",
@@ -267,7 +293,7 @@ export function JoinSiteEditor({ data }: { data: JoinEditorData }) {
   const [lines, setLines] =
     React.useState<Record<string, string>>(initialLines);
   const [burn, setBurn] = React.useState<BurnDraft>(initialBurn);
-  const [active, setActive] = React.useState<JoinSectionKey>("readme");
+  const [active, setActive] = React.useState<JoinSectionKey>("about");
   // On a phone the list is one screen and the open section another.
   const [opened, setOpened] = React.useState(false);
   const [problem, setProblem] = React.useState<Problem | null>(null);
@@ -377,6 +403,8 @@ export function JoinSiteEditor({ data }: { data: JoinEditorData }) {
 
   const body = (() => {
     switch (active) {
+      case "about":
+        return <AboutSection value={content.about} set={setSection("about")} />;
       case "readme":
         return (
           <ReadmeSection value={content.readme} set={setSection("readme")} />

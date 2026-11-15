@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { ABOUT_CONTENTS_HEADING } from "@camp404/types";
 import { cn } from "@camp404/ui/lib/utils";
 import { scrollInWindow } from "@/lib/scroll-in-window";
 
-// About's "On this page" list (approved redesign, 2026-10-01): a click
+// About's List of contents (the Notion page's own heading; was "On this page") (approved redesign, 2026-10-01): a click
 // scrolls the window to the card, and the card in view is marked. The mark
 // follows an IntersectionObserver (an event, not a loop), so nothing runs
 // while the page sits still. In a wide window it is the left column; in a
@@ -50,7 +51,7 @@ export function AboutToc({
   if (variant === "row") {
     return (
       <nav
-        aria-label="On this page"
+        aria-label={ABOUT_CONTENTS_HEADING}
         className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1 @min-[60rem]/page:hidden"
       >
         {items.map((i) => (
@@ -69,11 +70,11 @@ export function AboutToc({
 
   return (
     <nav
-      aria-label="On this page"
+      aria-label={ABOUT_CONTENTS_HEADING}
       className="sticky top-6 hidden flex-col @min-[60rem]/page:flex"
     >
       <p className="pb-2 font-pixel text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-        On this page
+        {ABOUT_CONTENTS_HEADING}
       </p>
       {items.map((i) => {
         const on = i.id === current;

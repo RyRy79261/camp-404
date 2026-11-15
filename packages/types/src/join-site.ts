@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Currency } from "./money";
+import { DEFAULT_JOIN_ABOUT, JoinAbout } from "./join-about";
 
 // join.camp-404.com's words, one document per burn year (join_site_content).
 // Captains edit it section by section in the app; the join site reads it.
@@ -49,6 +50,8 @@ export const JoinFeeTier = z.object({
 export type JoinFeeTier = z.infer<typeof JoinFeeTier>;
 
 export const JoinSections = {
+  /** About Camp 404: the Notion intro, word for word (join-about.ts). */
+  about: JoinAbout,
   readme: z.object({
     heading: Short,
     paragraphs: Lines,
@@ -135,6 +138,7 @@ export type JoinSiteContent = z.infer<typeof JoinSiteContent>;
 export type JoinSection<K extends JoinSectionKey> = JoinSiteContent[K];
 
 export const DEFAULT_JOIN_CONTENT: JoinSiteContent = {
+  about: DEFAULT_JOIN_ABOUT,
   readme: {
     heading: "Camp 404 is a place for the lost.",
     paragraphs: [
