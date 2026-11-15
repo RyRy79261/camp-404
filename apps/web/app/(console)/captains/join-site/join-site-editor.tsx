@@ -89,7 +89,7 @@ export const SECTIONS: {
   {
     key: "teams",
     title: "How the camp works",
-    file: aboutSection("theme_camp").title,
+    file: aboutSection("theme_camp").short,
     description:
       "On the join site: the words around the team list, and one line for each team.",
     icon: Users,
@@ -97,7 +97,7 @@ export const SECTIONS: {
   {
     key: "gifts",
     title: "What we give",
-    file: aboutSection("contributions").title,
+    file: aboutSection("contributions").short,
     description:
       "On the join site: what the camp gives to Tankwa Town. The main gifts show as the top row.",
     icon: Gift,
@@ -105,7 +105,7 @@ export const SECTIONS: {
   {
     key: "map",
     title: "Where we are",
-    file: aboutSection("where").title,
+    file: aboutSection("where").short,
     description:
       "On the join site: where the camp is on the map, and what is around it.",
     icon: MapPin,
@@ -113,7 +113,7 @@ export const SECTIONS: {
   {
     key: "crew",
     title: "The crew",
-    file: aboutSection("crew").title,
+    file: aboutSection("crew").short,
     description:
       "On the join site: the counter's numbers, how many people the camp needs and has room for. Its words are About Camp 404's The Crew.",
     icon: UsersRound,
@@ -121,7 +121,7 @@ export const SECTIONS: {
   {
     key: "schedule",
     title: "What you put in",
-    file: aboutSection("responsibilities").title,
+    file: aboutSection("responsibilities").short,
     description:
       "On the join site: the year at a glance, and the shifts everyone does on site.",
     icon: CalendarDays,
@@ -137,7 +137,7 @@ export const SECTIONS: {
   {
     key: "perks",
     title: "What you get out",
-    file: aboutSection("perks").title,
+    file: aboutSection("perks").short,
     description:
       "On the join site: what members get, and the files in its window.",
     icon: Sparkles,
@@ -145,7 +145,7 @@ export const SECTIONS: {
   {
     key: "truck",
     title: "Getting there",
-    file: aboutSection("transport").title,
+    file: aboutSection("transport").short,
     description:
       "On the join site: how the camp and its stuff get to the Burn.",
     icon: Car,
