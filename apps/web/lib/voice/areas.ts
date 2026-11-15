@@ -20,8 +20,11 @@ const WORDS: Partial<Record<Area, RegExp>> = {
   // Team and lead changes, and who is who. People is always sent; matching it
   // only means the command is not unknown.
   People:
-    /\b(notes? on|captain'?s? notes?|ddt|wap|work access|teams?|leads?|leader|leading|captain|member|members|roster|who|kitchen|structures|power|lighting|sanitation|safety|art|activities|memes|vibes|finance|transport|logistics|comms|put \w+( \w+)? on|take \w+( \w+)? off|add \w+( \w+)? to|move \w+( \w+)? from)\b/,
+    /\b(teams?|leads?|leader|leading|captain|member|members|roster|who|kitchen|structures|power|lighting|sanitation|safety|art|activities|memes|vibes|finance|transport|logistics|comms|put \w+( \w+)? on|take \w+( \w+)? off|add \w+( \w+)? to|move \w+( \w+)? from)\b/,
   // A team's description (what its program says about the team).
+  // A captain's notes on a member, and tickets, DDTs and WAPs.
+  "Member records":
+    /\b(notes? (on|about)|captain'?s? notes?|tickets?|ddt|wap|work access|direct distribution)\b/,
   Teams:
     /\b(descriptions?|describes?|blurb|about (the|this) team|what (the|this|a) team does|programs?)\b/,
   You: /\b(my profile|profile|blurb|bio|pronouns|playa name|nickname|tickets?|telegram|dietary|diet|allerg\w*|vegan|vegetarian|emergency|contact|skills?|burns? (i'?ve|i have)|first burn|history|dues|owe|gear order|my forms|required|driver profile|my car)\b/,
@@ -39,7 +42,7 @@ const WORDS: Partial<Record<Area, RegExp>> = {
     /\b(guide|chapters?|duty cards?|documents?|draft|publish(ed)?|unpublish)\b/,
   Questionnaires: /\b(questionnaires?|forms?|survey|questions)\b/,
   Kitchen:
-    /\b(recipes?|meal|meals|menu|shopping|ingredients?|food|dish|lesson|plates?|cook'?s note)\b/,
+    /\b(snacks?|prices?|prep|allerg\w* plans?|recipes?|meal|meals|menu|shopping|ingredients?|food|dish|lesson|plates?|cook'?s note)\b/,
   Inventory:
     /\b(gear|inventory|items?|stock|equipment|tents?|tarps?|count|how many .* (have|got)|storage|condition|broken)\b/,
   Logistics:
@@ -48,9 +51,11 @@ const WORDS: Partial<Record<Area, RegExp>> = {
     /\b(lifts?|cars?|ride|riding|rider|driver|driving|drive|seats?|transport|truck|trailer)\b/,
   Power:
     /\b(power|generators?|gennies?|loads?|watts?|kw|fuel|diesel|petrol|jerry ?cans?|cans?|grid|cables?|sockets?|distribution|readiness|checklist|refuel\w*|solar|batter(y|ies)|inverters?)\b/,
-  Lounge: /\b(lounge|music|dj|djs|sets?|offers?|slots?|playlist|music policy)\b/,
+  Lounge:
+    /\b(lounge|music|dj|djs|sets?|offers?|slots?|playlist|music policy)\b/,
   "Camp layout": /\b(layout|site plan|map|neighbours?|placement)\b/,
-  "Help wanted": /\b(help wanted|roles?|keen|places|volunteer for|lead places)\b/,
+  "Help wanted":
+    /\b(help wanted|roles?|keen|places|volunteer for|lead places)\b/,
   Pets: /\b(pets?|cats?|dogs?|hint|stupid thing)\b/,
   "Join site": /\b(join (site|page)|recruit\w*|join\.camp)\b/,
   Announcements: /\b(announcements?|pin(ned)?|unpin)\b/,

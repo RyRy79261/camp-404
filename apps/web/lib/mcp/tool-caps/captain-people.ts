@@ -10,28 +10,28 @@ export const CAPTAIN_PEOPLE_CAPABILITIES: Readonly<
 > = {
   list_member_notes: {
     kind: "read",
-    area: "People",
+    area: "Member records",
     gate: GATES.captain,
     does: "Read the captains' private notes on one member (each read is recorded).",
     page: "/captains/camp-management",
   },
   add_member_note: {
     kind: "write",
-    area: "People",
+    area: "Member records",
     gate: GATES.captain,
     does: "Add a captains' private note to a member. The member never sees it.",
     page: "/captains/camp-management",
   },
   list_tickets: {
     kind: "read",
-    area: "People",
+    area: "Member records",
     gate: GATES.captain,
     does: "Every approved member's ticket status, DDT and WAP this year, with where they stand.",
     page: "/captains/applications",
   },
   set_ticket_pass: {
     kind: "write",
-    area: "People",
+    area: "Member records",
     gate: GATES.captain,
     does: "Set a member's ticket status, DDT or WAP for this year.",
     page: "/captains/applications",

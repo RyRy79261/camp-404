@@ -130,6 +130,7 @@ export const AREAS = [
   "Shifts",
   "People",
   "Teams",
+  "Member records",
   "Claims and budgets",
   "Survival Guide",
   "Questionnaires",

@@ -31,8 +31,8 @@ import { runTool, ToolError } from "../tool-utils";
 //    moves, and writes the audit row (logistics.phase_set), all in one
 //    transaction; then it puts the phase on the camp's Google Calendar. So a
 //    call here is the page's Save, with nothing skipped.
-//  - Clearing a phase, "Ask everyone" and the AfrikaBurn dates stay on the
-//    website.
+//  - Clearing a phase is ./logistics-more.ts; "Ask everyone" and the
+//    AfrikaBurn dates stay on the website.
 
 export function registerLogisticsTools(server: McpServer): void {
   server.registerTool(
