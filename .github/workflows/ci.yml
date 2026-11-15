@@ -265,7 +265,10 @@ jobs:
   e2e:
     needs: [changes]
     if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    # Playwright 1.60 installs no browser on ubuntu-latest since it became
+    # 26.04 ("does not support chromium on ubuntu26.04-x64"). Pinned until a
+    # Playwright release supports it.
+    runs-on: ubuntu-24.04
     # A production build, not `next dev`: under `next dev` the server's
     # memory climbed to 14 GB within one shard and the 16 GB runner was
     # killed ("The runner has received a shutdown signal": PR #262, #287, #288
@@ -341,7 +344,10 @@ jobs:
   e2e-join:
     needs: [changes]
     if: needs.changes.outputs.join == 'true'
-    runs-on: ubuntu-latest
+    # Playwright 1.60 installs no browser on ubuntu-latest since it became
+    # 26.04 ("does not support chromium on ubuntu26.04-x64"). Pinned until a
+    # Playwright release supports it.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v5
@@ -380,7 +386,10 @@ jobs:
   e2e-guide:
     needs: [changes]
     if: needs.changes.outputs.guide == 'true'
-    runs-on: ubuntu-latest
+    # Playwright 1.60 installs no browser on ubuntu-latest since it became
+    # 26.04 ("does not support chromium on ubuntu26.04-x64"). Pinned until a
+    # Playwright release supports it.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v5
@@ -407,7 +416,10 @@ jobs:
   e2e-db:
     needs: [changes]
     if: needs.changes.outputs.web == 'true'
-    runs-on: ubuntu-latest
+    # Playwright 1.60 installs no browser on ubuntu-latest since it became
+    # 26.04 ("does not support chromium on ubuntu26.04-x64"). Pinned until a
+    # Playwright release supports it.
+    runs-on: ubuntu-24.04
     # Three shards (tests-ci-3): one worker took about 16.5 minutes. Each
     # shard has its own Postgres and proxy (the services below), and every
     # spec resets the database before it runs, so no spec needs another's.

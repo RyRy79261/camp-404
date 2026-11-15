@@ -19,7 +19,8 @@ permissions:
 
 jobs:
   mobile-360:
-    runs-on: ubuntu-latest
+    # Playwright 1.60 has no browser for ubuntu-latest (26.04); see ci.yml.
+    runs-on: ubuntu-24.04
     # The PR e2e job's set-up (ci.yml), at 360 px: a production build served
     # by `next start` (E2E_SERVE_BUILD=1), in two shards. Under `next dev`
     # Turbopack's memory grew until the runner was killed ("The runner has
