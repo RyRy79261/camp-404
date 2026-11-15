@@ -66,6 +66,18 @@ test.describe("About Camp 404 (test-mode)", () => {
     await expect(
       page.getByRole("link", { name: "Edit in Join site" }),
     ).toHaveCount(0);
+
+    // The List of contents (a column in a wide window, a row in a narrow
+    // one) jumps to a section and moves focus to it.
+    await page
+      .getByRole("navigation", { name: "List of contents" })
+      .getByRole("button", { name: "The Crew", exact: true })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await expect(
+      page.getByRole("region", { name: "The Crew", exact: true }),
+    ).toBeFocused();
   });
 
   test("a lead of a team is not offered the editor, and it refuses them", async ({

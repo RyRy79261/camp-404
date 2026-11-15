@@ -216,9 +216,23 @@ test("About Camp 404 shows every section on one page, with its contents", async 
   await expect(about.getByText("==")).toHaveCount(0);
 
   await contents.getByRole("button", { name: /The Crew/ }).click();
+  const crew = about.getByRole("region", { name: "The Crew", exact: true });
+  await expect(crew).toBeInViewport();
+  // The jump moves focus to the section, so the next Tab goes on from it:
+  // to the first link after it, in Responsibilities.
+  await expect(crew).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(
-    about.getByRole("region", { name: "The Crew", exact: true }),
-  ).toBeInViewport();
+    about.getByRole("link", { name: "teams that create 404" }),
+  ).toBeFocused();
+
+  // A link inside the words jumps the same way.
+  await about.getByRole("link", { name: "HERE", exact: true }).click();
+  const put = about.getByRole("region", {
+    name: "Responsibilities - What You Put In",
+  });
+  await expect(put).toBeFocused();
+  await expect(put).toBeInViewport();
 });
 
 test("the terminal hides a game behind jinn-is-best", async ({ page }) => {
