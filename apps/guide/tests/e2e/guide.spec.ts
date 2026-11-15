@@ -188,3 +188,30 @@ test("on a phone, Contents opens the book over the page", async ({
   ).toBeVisible();
   await expect(sheet).toHaveCount(0);
 });
+
+test("the contents and a chapter share the link preview, a 1200 x 630 PNG", async ({
+  page,
+  request,
+}) => {
+  for (const path of ["/", "/getting-to-the-tankwa"]) {
+    await page.goto(path);
+    await expect(
+      page.locator('meta[property="og:image"]'),
+      path,
+    ).toHaveAttribute("content", /\/opengraph-image(\?|$)/);
+    await expect(
+      page.locator('meta[name="twitter:image"]'),
+      path,
+    ).toHaveAttribute("content", /\/twitter-image(\?|$)/);
+  }
+  for (const path of ["/opengraph-image", "/twitter-image"]) {
+    const res = await request.get(path);
+    expect(res.status(), path).toBe(200);
+    expect(res.headers()["content-type"], path).toBe("image/png");
+    // A PNG's IHDR: the width and height as big-endian words at 16 and 20.
+    const png = await res.body();
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)], path).toEqual([
+      1200, 630,
+    ]);
+  }
+});

@@ -15,6 +15,7 @@
   "dependencies": {
     "@camp404/core": "workspace:*",
     "@camp404/db": "workspace:*",
+    "@camp404/games": "workspace:*",
     "@camp404/types": "workspace:*",
     "@camp404/ui": "workspace:*",
     "next": "^16.4.2",
