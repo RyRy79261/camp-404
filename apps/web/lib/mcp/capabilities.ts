@@ -10,6 +10,10 @@ import {
 } from "./gates";
 
 import { DOMAIN_CAPABILITIES } from "./tool-caps";
+import { LAYOUT_EDITOR_GATE } from "./tool-caps/camp-layout";
+import { ROLE_KEEPER_GATE } from "./tool-caps/help-wanted";
+import { LOUNGE_RUNNER_GATE } from "./tool-caps/lounge";
+import { POWER_EDITOR_GATE } from "./tool-caps/power";
 
 export { AREAS, GATES, atLeast, byRule } from "./gates";
 export type { Area, Gate, ToolCapability } from "./gates";
@@ -847,6 +851,62 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
     why: "It decides what the whole internet reads, so a captain does it on the page. Keeping a chapter members only can be done here.",
     path: "/guide",
     gate: GATES.captain,
+  },
+  {
+    area: "Power",
+    what: "Remove a load, a grid point, a readiness check, a fuel can or the sharing agreement, or archive a generator",
+    why: NO_UNDO,
+    path: "/power",
+    gate: POWER_EDITOR_GATE,
+  },
+  {
+    area: "Lounge",
+    what: "Take an item off the programme",
+    why: NO_UNDO,
+    path: "/lounge",
+    gate: LOUNGE_RUNNER_GATE,
+  },
+  {
+    area: "Help wanted",
+    what: "Remove a team role, or tell the camp on Telegram about a new lead",
+    why: "A role's removal can't be undone, and a Telegram post reaches the whole camp, so a person does these on the page.",
+    path: "/help-wanted",
+    gate: ROLE_KEEPER_GATE,
+  },
+  {
+    area: "Pets",
+    what: "Send your pet in",
+    why: UPLOAD,
+    path: "/pets",
+    gate: GATES.member,
+  },
+  {
+    area: "Camp layout",
+    what: "Share the layout with the neighbours, or stop sharing it",
+    why: "The neighbour page is public, so a captain turns it on or off on the page.",
+    path: "/camp-layout",
+    gate: GATES.captain,
+  },
+  {
+    area: "Join site",
+    what: "Change the fee scale or the Burn's dates on the Join page",
+    why: "The fee scale is money and the dates are the camp's year settings, so a captain changes them on the page.",
+    path: "/captains/join-site",
+    gate: GATES.captain,
+  },
+  {
+    area: "Announcements",
+    what: "Delete an announcement draft",
+    why: NO_UNDO,
+    path: "/captains/announcements",
+    gate: GATES.teamLead,
+  },
+  {
+    area: "You",
+    what: "Connect or disconnect Ol' Jeb on Telegram, delete your account, or change your sign-in",
+    why: "These are your account's own settings, so you change them on the page.",
+    path: "/profile",
+    gate: GATES.member,
   },
   {
     area: "Camp settings",

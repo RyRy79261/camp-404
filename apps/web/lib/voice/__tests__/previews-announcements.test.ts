@@ -5,10 +5,7 @@ import * as schema from "@camp404/db/schema";
 import { DRAFT_NOT_YOURS } from "@camp404/db/broadcasts";
 import { useTestDb } from "../../../../../packages/db/src/__tests__/_harness";
 import { makeUser } from "../../../../../packages/db/src/__tests__/_factories";
-import {
-  NOT_YOUR_PIN,
-  NOT_YOUR_TEAM,
-} from "@/app/(console)/captains/announcements/audience-copy";
+import { NOT_YOUR_PIN, NOT_YOUR_TEAM } from "@/lib/announcement-audience-copy";
 import { createAnnouncementDraft } from "../../notifications";
 import type { McpScope } from "../../mcp/scope";
 

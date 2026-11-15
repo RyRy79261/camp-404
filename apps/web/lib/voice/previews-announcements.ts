@@ -1,5 +1,5 @@
 import { canSendToAudience } from "@camp404/core";
-import { NOT_YOUR_PIN } from "@/app/(console)/captains/announcements/audience-copy";
+import { NOT_YOUR_PIN } from "@/lib/announcement-audience-copy";
 import { AnnouncementAudience } from "@camp404/types";
 import { getTeamsConfig, teamLabelMap } from "../camp-config";
 import {

@@ -192,6 +192,8 @@ describe("no tool returns ID numbers or bank details", () => {
       .filter((v): v is string => Boolean(v));
     ciphertexts.push(claim!.accountDetailsEncrypted);
 
+    /** An id no row has: the tool answers with a refusal, which is fine. */
+    const NO_ROW = "00000000-0000-4000-8000-000000000000";
     const SAMPLE_ARGS: Record<string, Record<string, unknown>> = {
       whoami: {},
       what_can_i_do: {},
@@ -357,6 +359,134 @@ describe("no tool returns ID numbers or bank details", () => {
       assign_team_membership: { userId: member.id, team: "structures" },
       remove_team_membership: { userId: member.id, team: "structures" },
       set_team_lead: { userId: member.id, team: "kitchen", isLead: false },
+      // Power
+      get_power_plan: {},
+      add_power_work_plan: {},
+      save_power_load: {
+        name: "Kettle",
+        area: "kitchen",
+        category: "other",
+        quantity: 1,
+        wattsEach: 2000,
+        schedule: "full_time",
+        owner: "camp",
+      },
+      plug_in_power_load: { loadId: NO_ROW, nodeId: null },
+      save_generator: {
+        model: "Honda",
+        ratedKva: 1.8,
+        maxKva: 2.2,
+        tankLitres: 3.6,
+        runtime50Hours: 4,
+        runtime100Hours: 2.5,
+        fuelType: "petrol",
+        owner: "camp",
+      },
+      set_power_plan: { expectedVersion: 0, daysOnSite: 9 },
+      copy_power_last_year: { what: "loads" },
+      save_grid_node: { name: "Genny", kind: "generator" },
+      start_readiness_checklist: { generatorId: NO_ROW },
+      save_readiness_item: { itemId: NO_ROW, expectedVersion: 1, dueOn: null },
+      tick_readiness_item: { itemId: NO_ROW, done: true },
+      save_power_sharing: {
+        expectedVersion: 0,
+        partnerCamp: "Next Door",
+        generatorSource: "theirs",
+      },
+      save_fuel_can: {
+        sizeLitres: 20,
+        material: "metal",
+        ownerUserId: member.id,
+      },
+      // You, People, Announcements, Join site
+      get_my_profile: {},
+      set_my_display_name: { displayName: "Grace" },
+      update_my_camp_blurb: { blurb: "Hi" },
+      set_my_ticket_status: { ticketStatus: "has_ticket" },
+      set_my_telegram_notices: { notices: "mine" },
+      list_member_notes: { userId: member.id },
+      add_member_note: { userId: member.id, body: "Welds." },
+      list_tickets: {},
+      set_ticket_pass: {
+        userId: member.id,
+        pass: "wap",
+        from: "not_needed",
+        to: "requested",
+      },
+      list_announcements: {},
+      save_announcement_draft: { title: "Hi", body: "x" },
+      update_announcement_draft: { id: NO_ROW, title: "x" },
+      set_announcement_pinned: { id: NO_ROW, pinned: false },
+      get_join_page: {},
+      update_join_page_section: {
+        section: "apply",
+        content: {},
+        expectedVersion: "x",
+      },
+      update_join_team_line: {
+        team: "kitchen",
+        line: "We cook.",
+        expected: "",
+      },
+      // Lounge, Help wanted, Pets, Camp layout
+      get_lounge: {},
+      offer_lounge_activity: {
+        title: "Vinyl",
+        kind: "dj_set",
+        durationMinutes: 60,
+      },
+      update_my_lounge_offer: {
+        offerId: NO_ROW,
+        expectedVersion: 1,
+        title: "Y",
+      },
+      withdraw_my_lounge_offer: { offerId: NO_ROW },
+      decide_lounge_offer: {
+        offerId: NO_ROW,
+        decision: "accepted",
+        expectedStatus: "offered",
+        expectedVersion: 1,
+      },
+      place_lounge_offer: { offerId: NO_ROW, day: 1, startMinute: 600 },
+      set_lounge_music_note: { musicPolicy: "No trance", expectedVersion: 0 },
+      get_help_wanted: {},
+      set_my_keen: { team: "kitchen", roleId: null, keen: true },
+      add_team_role: { team: "kitchen", name: "Shopper", places: 1 },
+      update_team_role: {
+        team: "kitchen",
+        roleId: NO_ROW,
+        expectedVersion: 1,
+        places: 2,
+      },
+      set_lead_places: { team: "kitchen", places: 2 },
+      copy_last_years_roles: { team: "kitchen" },
+      give_team_role: { team: "kitchen", roleId: null, userId: member.id },
+      take_team_role: { team: "kitchen", roleId: null, userId: member.id },
+      list_pets: {},
+      set_pet_stupid_thing: {
+        petId: NO_ROW,
+        stupidThing: "Eats socks",
+        expected: "",
+      },
+      mark_pet_in: { petId: NO_ROW, picture: "jinn", hint: "Look up" },
+      set_pet_hint: { petId: NO_ROW, hint: "Look up", expected: null },
+      set_pet_owner: { petId: NO_ROW, ownerId: null },
+      get_camp_layout: {},
+      save_camp_layout: {
+        layout: {
+          plot: {
+            widthM: 20,
+            depthM: 20,
+            north: "top",
+            part: "whole",
+            edges: { top: "", right: "", bottom: "", left: "" },
+          },
+          pieces: [],
+        },
+        expectedVersion: 0,
+      },
+      restore_camp_layout_version: { number: 1, expectedVersion: 1 },
+      copy_last_year_layout: {},
     };
     expect(Object.keys(SAMPLE_ARGS).sort()).toEqual([...tools.keys()].sort());
 

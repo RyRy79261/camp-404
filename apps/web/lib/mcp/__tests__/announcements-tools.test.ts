@@ -10,10 +10,7 @@ import {
   makeMembership,
   makeUser,
 } from "../../../../../packages/db/src/__tests__/_factories";
-import {
-  NOT_YOUR_PIN,
-  NOT_YOUR_TEAM,
-} from "@/app/(console)/captains/announcements/audience-copy";
+import { NOT_YOUR_PIN, NOT_YOUR_TEAM } from "@/lib/announcement-audience-copy";
 
 vi.mock("next/server", () => ({ after: () => undefined }));
 

@@ -11,7 +11,7 @@ import {
   NOT_YOUR_PIN,
   NOT_YOUR_TEAM,
   PERSON_GONE,
-} from "@/app/(console)/captains/announcements/audience-copy";
+} from "@/lib/announcement-audience-copy";
 import { activeTeams, getTeamsConfig, teamLabelMap } from "../../camp-config";
 import {
   createAnnouncementDraft,
@@ -33,7 +33,7 @@ import { runTool, ToolError } from "../tool-utils";
 // checks that rule does not know (chosen people still in the camp, a team
 // still switched on). Those are audienceRefusal in the page's actions file,
 // which a "use server" file cannot export; this is the same check, in the
-// same sentences (audience-copy.ts).
+// same sentences (lib/announcement-audience-copy.ts).
 //
 //  - Drafts are the composer's saveDraftAction / updateDraftAction. A draft
 //    is its author's own, so updating takes no compare value: nobody else can
