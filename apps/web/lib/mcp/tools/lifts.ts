@@ -21,7 +21,8 @@ import { notFound, runTool, ToolError, truncateList } from "../tool-utils";
 //    a rider may also leave. They refuse a second seat (ALREADY_SEATED), a
 //    driver as a rider (IS_DRIVING) and a full car, in the page's own words.
 //    Nothing here passes a rank or a team list.
-//  - Lift requests, trailers and the car message stay on the page for now.
+//  - Lift requests, seats and trailers are ./transport-more.ts; the car
+//    message and answering a request stay on the page.
 
 const UserId = z.string().uuid();
 

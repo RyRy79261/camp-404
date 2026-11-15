@@ -53,8 +53,8 @@ import { runTool, ToolError, truncateList } from "../tool-utils";
 //    on an older version is refused rather than merged.
 //  - Any member may suggest a change to an item (proposeInventoryChange), as
 //    on the item's page; a lead of its team or a captain decides on the page.
-//  - Archiving, deciding a suggestion, lending, needs and bookings stay on the
-//    page for now.
+//  - Deciding a suggestion, lending, needs and bookings are
+//    ./inventory-more.ts; archiving stays on the page.
 
 /** The fields the Edit dialog sends. */
 const ITEM_KEYS = [

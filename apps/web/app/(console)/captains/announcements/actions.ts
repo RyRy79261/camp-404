@@ -20,7 +20,11 @@ import {
 import { activeTeams, getTeamsConfig } from "@/lib/camp-config";
 import { captainActionGate } from "@/lib/captain-gate";
 import { runAction, type ActionResult } from "@/lib/action-result";
-import { NOT_YOUR_PIN, NOT_YOUR_TEAM, PERSON_GONE } from "./audience-copy";
+import {
+  NOT_YOUR_PIN,
+  NOT_YOUR_TEAM,
+  PERSON_GONE,
+} from "@/lib/announcement-audience-copy";
 import { deliverAfterResponse } from "@/lib/background-work";
 
 type TeamKey = Extract<Audience, { scope: "team" }>["team"];
