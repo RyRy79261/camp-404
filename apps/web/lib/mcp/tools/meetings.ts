@@ -29,9 +29,10 @@ import { notFound, runTool, ToolError } from "../tool-utils";
 //    given here are sent back exactly as read: who was there. The action
 //    items are left out of the write, which then leaves them as they are. The meeting's title and time are its calendar event's.
 //  - Making a meeting (it goes on the camp's shared Google Calendar, so it is
-//    website-only), the first minutes of an event made in Google, ticking
-//    attendees and action items (each one a task on the board) stay on the
-//    Calendar. No audit row: the site writes none for team planning data.
+//    website-only) stays on the Calendar. The first minutes, who was there and
+//    the action items (each one a task on the board) are save_meeting_minutes
+//    (./meetings-more.ts). No audit row: the site writes none for team
+//    planning data.
 
 const MeetingFilter = z.union([Team, z.literal(WHOLE_CAMP_MEETINGS)]);
 
@@ -149,7 +150,7 @@ export function registerMeetingTools(server: McpServer): void {
     "update_meeting_notes",
     {
       title: "Change a meeting's notes",
-      description: `Changes a meeting's agenda, notes or decisions, as the minutes editor's Save does. Give \`expectedVersion\`: the \`version\` from get_meeting. If someone saved since, nothing changes and you are told to read it again. What you leave out stays as it is; \`decisions\` replaces the whole list. The title and time are the calendar event's, and who was there and the action items stay as they are (change them on the Calendar). ${MEETING_NOTE_PRIVACY_REMINDER}`,
+      description: `Changes a meeting's agenda, notes or decisions, as the minutes editor's Save does. Give \`expectedVersion\`: the \`version\` from get_meeting. If someone saved since, nothing changes and you are told to read it again. What you leave out stays as it is; \`decisions\` replaces the whole list. The title and time are the calendar event's, and who was there and the action items stay as they are (save_meeting_minutes changes those). ${MEETING_NOTE_PRIVACY_REMINDER}`,
       inputSchema: z.object({
         meetingId: z.string().uuid(),
         expectedVersion: z.number().int().min(1),

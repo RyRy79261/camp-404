@@ -1,20 +1,21 @@
-import {
-  canEditAnyInventory,
-  hasClearance,
-  LOGISTICS_EDITOR,
-  MONEY_KEEPER,
-  MONEY_REFUSAL,
-  PROOFREADER,
-  RENTAL_MANAGER,
-  TRANSPORT_EDITOR,
-  type Rule,
-} from "@camp404/core";
 import type { ViewerRank } from "@camp404/types";
-import { LOGISTICS_REFUSAL } from "../logistics-copy";
-import { SHIFTS_ACTION_REFUSAL } from "../shifts-copy";
-import { TEAM_PROGRAM_REFUSAL } from "../team-program-copy";
 import { SITE_URL } from "../site";
-import { scopeActor, type McpScope } from "./scope";
+import type { McpScope } from "./scope";
+import {
+  AREAS,
+  GATES,
+  type Area,
+  type Gate,
+  type ToolCapability,
+} from "./gates";
+
+import { DOMAIN_CAPABILITIES } from "./tool-caps";
+import { ROLE_KEEPER_GATE } from "./tool-caps/help-wanted";
+import { LOUNGE_RUNNER_GATE } from "./tool-caps/lounge";
+import { POWER_EDITOR_GATE } from "./tool-caps/power";
+
+export { AREAS, GATES, atLeast, byRule } from "./gates";
+export type { Area, Gate, ToolCapability } from "./gates";
 
 // The Claude connector's one list of who may call what (owner, 2026-10-04:
 // "MCP gets the SAME access as the signed-in person … never more").
@@ -33,152 +34,9 @@ import { scopeActor, type McpScope } from "./scope";
 //  - WEBSITE_ONLY lists what the person may do on the website but never
 //    through Claude: anything with no undo or a wide reach (the owner's list).
 
-/** Who may call a tool, as the website decides it. */
-export interface Gate {
-  /** The audience, for a description: "Captains only". */
-  who: string;
-  allows(scope: McpScope): boolean;
-  /** The one sentence a refused call returns. */
-  refusal: string;
-}
-
-const atLeast =
-  (rung: ViewerRank) =>
-  (scope: McpScope): boolean =>
-    hasClearance(scope.viewerRank, rung);
-
-/** A gate's check: the website's own rule, on the caller's actor. */
-const byRule =
-  (rule: Rule) =>
-  (scope: McpScope): boolean =>
-    rule.allows(scopeActor(scope));
-
-export const GATES = {
-  member: {
-    who: "Any camp member",
-    allows: () => true,
-    refusal: "Only an approved camp member can do this.",
-  },
-  teamLead: {
-    who: "Team leads and captains",
-    allows: atLeast("team_lead"),
-    refusal:
-      "Only a team lead or a captain can do this. Leading any team this year counts.",
-  },
-  captain: {
-    who: "Captains only",
-    allows: atLeast("captain"),
-    refusal: "Only a captain can do this.",
-  },
-  money: {
-    who: "Captains and Finance leads",
-    allows: byRule(MONEY_KEEPER),
-    refusal: MONEY_REFUSAL,
-  },
-  // Website-only gates: no tool uses them, what_can_i_do does.
-  driver: {
-    who: "Drivers this year",
-    allows: (s) => s.isDriver,
-    refusal: "Only someone driving this year can do this.",
-  },
-  rental: {
-    who: "Captains",
-    allows: byRule(RENTAL_MANAGER),
-    refusal: "Only a captain runs gear rental.",
-  },
-  kitchenReview: {
-    who: "Captains and Kitchen leads",
-    allows: byRule(PROOFREADER),
-    refusal: "Only a captain or a Kitchen lead can do this.",
-  },
-  transportEditor: {
-    who: "Captains and Transport & Logistics leads",
-    allows: byRule(TRANSPORT_EDITOR),
-    refusal: "Only a captain or a Transport & Logistics lead can do this.",
-  },
-  // The Logistics page's editors (LOGISTICS_EDITOR): the same people as
-  // transportEditor today, kept apart so each follows its own page's rule.
-  logisticsEditor: {
-    who: "Captains and Transport & Logistics leads",
-    allows: byRule(LOGISTICS_EDITOR),
-    refusal: LOGISTICS_REFUSAL,
-  },
-  // The Inventory page's Add button and an item's Edit (canEditAnyInventory).
-  // Which team's gear is the write's own check (canEditInventory on the
-  // item's team).
-  inventoryEditor: {
-    who: "Captains, and team leads for their own team's gear",
-    allows: (s) => {
-      const actor = scopeActor(s);
-      return canEditAnyInventory(actor.rank, actor.ledTeams);
-    },
-    refusal:
-      "Only a captain or a lead of the item's team can add or change gear. Any member can suggest a change to an item instead.",
-  },
-  // The Shifts page's set-up (saveShiftTypeAction's rank gate): any lead may
-  // reach it, and which team's shifts is the tool's own check (shiftKeeper:
-  // a lead of THAT team, or a captain), made again by the write.
-  shiftKeeper: {
-    who: "Captains, and team leads for their own team's shifts",
-    allows: atLeast("team_lead"),
-    refusal: SHIFTS_ACTION_REFUSAL,
-  },
-  // A team program's Save (canEditTeamProgram): any lead may reach it, and
-  // which team's is the tool's own check (a lead of THAT team, or a captain),
-  // made again by the write.
-  teamProgramEditor: {
-    who: "Captains, and team leads for their own team",
-    allows: atLeast("team_lead"),
-    refusal: TEAM_PROGRAM_REFUSAL,
-  },
-} as const satisfies Record<string, Gate>;
-
-/** The areas the website and the tools are grouped by. */
-export const AREAS = [
-  "You",
-  "Inbox",
-  "Search",
-  "Tasks",
-  "Calendar",
-  "Meetings",
-  "Shifts",
-  "People",
-  "Teams",
-  "Claims and budgets",
-  "Survival Guide",
-  "Questionnaires",
-  "Kitchen",
-  "Inventory",
-  "Logistics",
-  "Transport",
-  "Invites and audit",
-  "Announcements",
-  "Camp settings",
-] as const;
-export type Area = (typeof AREAS)[number];
-
-export interface ToolCapability {
-  /**
-   * Whether the tool only reads or also changes something. Voice (#356) runs
-   * a read at once, while working out what the captain meant, and turns a
-   * write into a row on the list the captain confirms: it never runs a write
-   * before Do. Each write has a preview in lib/voice/previews.ts (a test
-   * fails when one has none).
-   */
-  kind: "read" | "write";
-  area: Area;
-  gate: Gate;
-  /** One plain line: what it does. */
-  does: string;
-  /**
-   * The website page that does the same thing. A refused call names it, so
-   * the person knows where to look (and what the page shows them instead).
-   */
-  page?: string;
-}
-
 /** Every tool the connector registers. A tool missing here cannot run. */
 export const TOOL_CAPABILITIES: Readonly<Record<string, ToolCapability>> = {
+  ...DOMAIN_CAPABILITIES,
   // You
   whoami: {
     kind: "read",
@@ -855,8 +713,8 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
   },
   {
     area: "Transport",
-    what: "Match lift requests to cars, and keep the camp's trailers",
-    why: "These live on the Transport page; the connector has no tool for them yet.",
+    what: "Remove a trailer",
+    why: NO_UNDO,
     path: "/transport",
     gate: GATES.transportEditor,
   },
@@ -904,17 +762,10 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
   },
   {
     area: "Inventory",
-    what: "Approve or turn down a suggested change, archive an item, lend it out, and keep the team's needs",
-    why: "These live on the Inventory page; the connector has no tool for them yet.",
+    what: "Archive an item, take a need off the list, or cancel another member's booking",
+    why: NO_UNDO,
     path: "/inventory",
     gate: GATES.inventoryEditor,
-  },
-  {
-    area: "Logistics",
-    what: "Clear a phase's days (it comes off the camp calendar)",
-    why: "This lives on the Logistics page; the connector has no tool for it yet.",
-    path: "/logistics",
-    gate: GATES.logisticsEditor,
   },
   {
     area: "Logistics",
@@ -925,8 +776,8 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
   },
   {
     area: "Kitchen",
-    what: "Change the meal plan, the menu, the snacks or the prices",
-    why: "These live on the Kitchen's pages; the connector has no tool for them yet.",
+    what: "Take a prep step off, or take a recipe with prep steps or an allergy plan off a meal",
+    why: "It deletes the prep steps and the allergy plan with their tasks, which putting the recipe back does not bring back, so a person does it on the page.",
     path: "/kitchen/meal-plan",
     gate: GATES.kitchenReview,
   },
@@ -953,8 +804,8 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
   },
   {
     area: "Tasks",
-    what: "Change a task's details or take it off the board",
-    why: "These live on the Tasks page; the connector has no tool for them yet.",
+    what: "Take a task off the board",
+    why: NO_UNDO,
     path: "/tasks",
     gate: GATES.member,
   },
@@ -966,25 +817,11 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
     gate: GATES.teamLead,
   },
   {
-    area: "Meetings",
-    what: "Write the first minutes of a meeting, tick who was there, change action items or put one on the task board",
-    why: "These live on the Calendar; the connector has no tool for them yet.",
-    path: "/calendar",
-    gate: GATES.member,
-  },
-  {
     area: "Shifts",
-    what: "Remove a shift, mark a day not needed, put someone on a shift or take them off, and ask everyone to sign up",
-    why: "These live on the Shifts page; the connector has no tool for them yet.",
+    what: "Remove a shift, or ask everyone to sign up",
+    why: "Removing a shift can't be undone, and asking everyone reaches the whole camp, so a person does these on the page.",
     path: "/shifts",
     gate: GATES.teamLead,
-  },
-  {
-    area: "Shifts",
-    what: "Note your AfrikaBurn volunteer shifts",
-    why: "These live on My shifts; the connector has no tool for them yet.",
-    path: "/shifts/mine",
-    gate: GATES.member,
   },
   {
     area: "Survival Guide",
@@ -992,6 +829,62 @@ export const WEBSITE_ONLY: readonly WebsiteOnly[] = [
     why: "It decides what the whole internet reads, so a captain does it on the page. Keeping a chapter members only can be done here.",
     path: "/guide",
     gate: GATES.captain,
+  },
+  {
+    area: "Power",
+    what: "Remove a load, a grid point, a readiness check, a fuel can or the sharing agreement, or archive a generator",
+    why: NO_UNDO,
+    path: "/power",
+    gate: POWER_EDITOR_GATE,
+  },
+  {
+    area: "Lounge",
+    what: "Take an item off the programme",
+    why: NO_UNDO,
+    path: "/lounge",
+    gate: LOUNGE_RUNNER_GATE,
+  },
+  {
+    area: "Help wanted",
+    what: "Remove a team role, or tell the camp on Telegram about a new lead",
+    why: "A role's removal can't be undone, and a Telegram post reaches the whole camp, so a person does these on the page.",
+    path: "/help-wanted",
+    gate: ROLE_KEEPER_GATE,
+  },
+  {
+    area: "Pets",
+    what: "Send your pet in",
+    why: UPLOAD,
+    path: "/pets",
+    gate: GATES.member,
+  },
+  {
+    area: "Camp layout",
+    what: "Share the layout with the neighbours, or stop sharing it",
+    why: "The neighbour page is public, so a captain turns it on or off on the page.",
+    path: "/camp-layout",
+    gate: GATES.captain,
+  },
+  {
+    area: "Join site",
+    what: "Change the fee scale or the Burn's dates on the Join page",
+    why: "The fee scale is money and the dates are the camp's year settings, so a captain changes them on the page.",
+    path: "/captains/join-site",
+    gate: GATES.captain,
+  },
+  {
+    area: "Announcements",
+    what: "Delete an announcement draft",
+    why: NO_UNDO,
+    path: "/captains/announcements",
+    gate: GATES.teamLead,
+  },
+  {
+    area: "You",
+    what: "Connect or disconnect Ol' Jeb on Telegram, delete your account, or change your sign-in",
+    why: "These are your account's own settings, so you change them on the page.",
+    path: "/profile",
+    gate: GATES.member,
   },
   {
     area: "Camp settings",

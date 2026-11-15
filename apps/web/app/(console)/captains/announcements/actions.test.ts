@@ -50,7 +50,11 @@ import {
   saveDraftAction,
   setPinnedAction,
 } from "./actions";
-import { NOT_YOUR_PIN, NOT_YOUR_TEAM, PERSON_GONE } from "./audience-copy";
+import {
+  NOT_YOUR_PIN,
+  NOT_YOUR_TEAM,
+  PERSON_GONE,
+} from "@/lib/announcement-audience-copy";
 import { getAuthenticatedUser } from "@/lib/auth";
 import { ensureCampUser, getLeadTeams, isTeamLead } from "@/lib/users";
 import {

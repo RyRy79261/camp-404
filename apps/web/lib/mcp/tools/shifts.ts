@@ -20,7 +20,7 @@ import { runTool, ToolError } from "../tool-utils";
 //
 //  - The roster reads as getShiftsView shapes it for this viewer: who is on a
 //    shift as "Dee M.", never ids (those reach only a shift's managers, on the
-//    page). The set-up, the fairness view and placing people stay on the page.
+//    page). Placing people is ./shifts-more.ts; the fairness view stays on the page.
 //  - Signing up and leaving are the member's own: the caller's id, never one
 //    passed in. The write locks the slot, refuses a day that has started, a
 //    slot not needed, a second place and a full shift (the places limit is a
@@ -35,8 +35,8 @@ import { runTool, ToolError } from "../tool-utils";
 //    (shifts.type_added / shifts.type_changed). The dialog sends the whole
 //    shift; update_shift_type takes only what changes and fills the rest from
 //    the shift as it stands, and only at the version the caller read.
-//    Removing a shift, marking a day not needed, placing people and asking
-//    everyone stay on the page.
+//    Marking a day not needed and placing people are ./shifts-more.ts;
+//    removing a shift and asking everyone stay on the page.
 
 const SHIFTS_PATH = "/shifts";
 
