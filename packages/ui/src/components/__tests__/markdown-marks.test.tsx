@@ -46,6 +46,16 @@ describe("MarkdownBody's marks", () => {
     expect(html("==a ++b== c++")).toBe("<p>==a <u>b== c</u></p>");
   });
 
+  it("reads words named like Object's own members as words", () => {
+    for (const word of ["constructor", "toString", "valueOf"]) {
+      expect(html(`**${word}** and ${word}`)).toBe(
+        `<p><strong>${word}</strong> and ${word}</p>`,
+      );
+    }
+    // Underscores are Markdown's own bold, so __proto__ is typed escaped.
+    expect(html("\\_\\_proto\\_\\_")).toBe("<p>__proto__</p>");
+  });
+
   it("reads no marks inside code", () => {
     expect(html("`==x==`")).toBe("<p><code>==x==</code></p>");
   });

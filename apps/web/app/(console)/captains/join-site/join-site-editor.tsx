@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useKeptDraft, useWindowDirty } from "@camp404/os";
 import {
   CalendarDays,
   Car,
@@ -276,6 +277,19 @@ const same = (a: unknown, b: unknown) =>
 
 type Problem = { section: JoinSectionKey; message: string };
 
+type Draft = {
+  content: C;
+  lines: Record<string, string>;
+  burn: BurnDraft;
+};
+
+/** A kept draft, if it is one this editor gave useWindowDirty. */
+function keptDraft(value: unknown): Draft | null {
+  if (!value || typeof value !== "object") return null;
+  const d = value as Partial<Draft>;
+  return d.content && d.lines && d.burn ? (d as Draft) : null;
+}
+
 export function JoinSiteEditor({ data }: { data: JoinEditorData }) {
   const router = useRouter();
   const initialLines = React.useMemo(
@@ -289,10 +303,16 @@ export function JoinSiteEditor({ data }: { data: JoinEditorData }) {
     lines: initialLines,
     burn: initialBurn,
   });
-  const [content, setContent] = React.useState<C>(data.content);
-  const [lines, setLines] =
-    React.useState<Record<string, string>>(initialLines);
-  const [burn, setBurn] = React.useState<BurnDraft>(initialBurn);
+  // Words kept from a Back with unsaved changes (useWindowDirty below), in
+  // memory only: never browser storage.
+  const kept = keptDraft(useKeptDraft());
+  const [content, setContent] = React.useState<C>(
+    kept?.content ?? data.content,
+  );
+  const [lines, setLines] = React.useState<Record<string, string>>(
+    kept?.lines ?? initialLines,
+  );
+  const [burn, setBurn] = React.useState<BurnDraft>(kept?.burn ?? initialBurn);
   const [active, setActive] = React.useState<JoinSectionKey>("about");
   // On a phone the list is one screen and the open section another.
   const [opened, setOpened] = React.useState(false);
@@ -317,15 +337,14 @@ export function JoinSiteEditor({ data }: { data: JoinEditorData }) {
     if (problem) scrollInWindow(topRef.current, { onlyUp: true });
   }, [problem]);
 
-  // Leaving the page with unsaved words asks first.
-  React.useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+  // Closing, minimising or switching the window with unsaved words asks
+  // first; a Back keeps them in memory for this window (AGENTS.md: unsaved
+  // input goes through useWindowDirty).
+  useWindowDirty(
+    dirty,
+    "The Join site has changes that are not saved. Leave?",
+    { content, lines, burn } satisfies Draft,
+  );
 
   function setSection<K extends JoinSectionKey>(key: K) {
     return (next: C[K]) => {

@@ -50,7 +50,9 @@ function ReadCard({
       aria-labelledby={title ? `${id}-title` : undefined}
       aria-label={title ? undefined : "Intro to Camp 404"}
       role="region"
-      className="scroll-mt-4 p-4 page-sm:p-5"
+      // The List of contents moves focus here when it jumps.
+      tabIndex={-1}
+      className="scroll-mt-4 p-4 outline-none page-sm:p-5"
     >
       {title ? (
         <h2

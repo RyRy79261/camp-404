@@ -25,16 +25,18 @@ export interface MarkNode {
 
 type Kind = "mark" | "accent" | "underline";
 
-const OPEN: Record<string, Kind> = {
-  "==": "mark",
-  "{{": "accent",
-  "++": "underline",
-};
-const CLOSE: Record<string, Kind> = {
-  "==": "mark",
-  "}}": "accent",
-  "++": "underline",
-};
+// Maps, not object literals: a paragraph that reads "constructor" or
+// "toString" must not find Object.prototype's members and become a mark.
+const OPEN = new Map<string, Kind>([
+  ["==", "mark"],
+  ["{{", "accent"],
+  ["++", "underline"],
+]);
+const CLOSE = new Map<string, Kind>([
+  ["==", "mark"],
+  ["}}", "accent"],
+  ["++", "underline"],
+]);
 const SIGN: Record<Kind, [string, string]> = {
   mark: ["==", "=="],
   accent: ["{{", "}}"],
@@ -87,13 +89,13 @@ export function applyMarks(children: readonly MarkNode[]): MarkNode[] {
     }
     for (const piece of (child.value ?? "").split(SPLIT)) {
       if (piece === "") continue;
-      const closes = CLOSE[piece];
+      const closes = CLOSE.get(piece);
       if (closes && top().kind === closes) {
         const frame = stack.pop()!;
         top().children.push(element(closes, mergeText(frame.children)));
         continue;
       }
-      const opens = OPEN[piece];
+      const opens = OPEN.get(piece);
       if (opens && !stack.some((f) => f.kind === opens)) {
         stack.push({ kind: opens, children: [] });
         continue;

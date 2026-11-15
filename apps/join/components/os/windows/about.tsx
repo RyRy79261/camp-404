@@ -22,11 +22,28 @@ export function AboutWindow() {
     aboutAnchor(ABOUT_SECTIONS[0].key),
   );
 
-  // Mark the section in view: an IntersectionObserver (an event, not a
-  // loop), so nothing runs while the window sits still.
+  // How tall the window's body is, so the band below can be in pixels: an
+  // IntersectionObserver resolves a percentage margin against the root's
+  // WIDTH, even for the bottom one.
+  const [bodyHeight, setBodyHeight] = useState(0);
   useEffect(() => {
     const box = root.current?.closest<HTMLElement>("[data-window-body]");
-    if (!box || typeof IntersectionObserver === "undefined") return;
+    if (!box) return;
+    setBodyHeight(box.clientHeight);
+    if (typeof ResizeObserver === "undefined") return;
+    const sizes = new ResizeObserver(() => setBodyHeight(box.clientHeight));
+    sizes.observe(box);
+    return () => sizes.disconnect();
+  }, []);
+
+  // Mark the section in view: the first one in the top 40% of the window
+  // body. An IntersectionObserver (an event, not a loop), so nothing runs
+  // while the window sits still.
+  useEffect(() => {
+    const box = root.current?.closest<HTMLElement>("[data-window-body]");
+    if (!box || !bodyHeight || typeof IntersectionObserver === "undefined") {
+      return;
+    }
     const seen = new Map<string, boolean>();
     const observer = new IntersectionObserver(
       (entries) => {
@@ -34,14 +51,17 @@ export function AboutWindow() {
         const first = ABOUT_SECTIONS.find((s) => seen.get(aboutAnchor(s.key)));
         if (first) setCurrent(aboutAnchor(first.key));
       },
-      { root: box, rootMargin: "0px 0px -60% 0px" },
+      {
+        root: box,
+        rootMargin: `0px 0px -${Math.round(bodyHeight * 0.6)}px 0px`,
+      },
     );
     for (const s of ABOUT_SECTIONS) {
       const el = document.getElementById(aboutAnchor(s.key));
       if (el) observer.observe(el);
     }
     return () => observer.disconnect();
-  }, []);
+  }, [bodyHeight]);
 
   return (
     <div
@@ -96,7 +116,9 @@ export function AboutWindow() {
             key={s.key}
             id={aboutAnchor(s.key)}
             aria-labelledby={`${aboutAnchor(s.key)}-title`}
-            className="border border-os-line bg-os-bg/60 p-4"
+            // A jump moves focus here, so the next Tab goes on from it.
+            tabIndex={-1}
+            className="border border-os-line bg-os-bg/60 p-4 outline-none"
           >
             <h3
               id={`${aboutAnchor(s.key)}-title`}

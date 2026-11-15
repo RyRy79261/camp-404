@@ -22,8 +22,34 @@ export function AboutToc({
 }) {
   const [current, setCurrent] = React.useState(items[0]?.id ?? "");
 
+  // How tall the scrolling box is (the window's body, or the screen), so the
+  // band below is in pixels: an IntersectionObserver resolves a percentage
+  // margin against the root's WIDTH, even for the bottom one.
+  const [rootHeight, setRootHeight] = React.useState(0);
   React.useEffect(() => {
-    if (variant !== "column" || typeof IntersectionObserver === "undefined") {
+    if (variant !== "column") return;
+    const root =
+      document
+        .getElementById(items[0]?.id ?? "")
+        ?.closest<HTMLElement>("[data-window-body]") ?? null;
+    const measure = () =>
+      setRootHeight(root ? root.clientHeight : window.innerHeight);
+    measure();
+    if (!root || typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const sizes = new ResizeObserver(measure);
+    sizes.observe(root);
+    return () => sizes.disconnect();
+  }, [items, variant]);
+
+  React.useEffect(() => {
+    if (
+      variant !== "column" ||
+      !rootHeight ||
+      typeof IntersectionObserver === "undefined"
+    ) {
       return;
     }
     const cards = items
@@ -37,15 +63,19 @@ export function AboutToc({
         const first = items.find((i) => seen.get(i.id));
         if (first) setCurrent(first.id);
       },
-      { root, rootMargin: "0px 0px -60% 0px" },
+      { root, rootMargin: `0px 0px -${Math.round(rootHeight * 0.6)}px 0px` },
     );
     for (const card of cards) observer.observe(card);
     return () => observer.disconnect();
-  }, [items, variant]);
+  }, [items, variant, rootHeight]);
 
+  // Focus goes to the card too (it has tabIndex -1), so the next Tab goes
+  // on from it, not from the contents.
   const go = (id: string) => {
     setCurrent(id);
-    scrollInWindow(document.getElementById(id));
+    const card = document.getElementById(id);
+    card?.focus({ preventScroll: true });
+    scrollInWindow(card);
   };
 
   if (variant === "row") {

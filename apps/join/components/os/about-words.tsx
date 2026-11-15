@@ -52,9 +52,14 @@ function jump(e: MouseEvent<HTMLElement>) {
   jumpTo(target);
 }
 
+/**
+ * Scroll the window to a section and move focus to it (the section has
+ * tabIndex -1), so the next Tab goes on from the section, not the link.
+ */
 export function jumpTo(target: HTMLElement | null) {
   const box = target?.closest<HTMLElement>("[data-window-body]");
   if (!target || !box) return;
+  target.focus({ preventScroll: true });
   const top =
     target.getBoundingClientRect().top -
     box.getBoundingClientRect().top +
