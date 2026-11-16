@@ -2,6 +2,8 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: { alias: { "@": new URL("./", import.meta.url).pathname } },
+  // The pets package holds a .tsx component; the tsconfig keeps JSX for Next.
+  esbuild: { jsx: "automatic" },
   test: {
     include: ["**/*.test.{ts,tsx}"],
     exclude: ["node_modules/**", "tests/e2e/**", ".next/**"],

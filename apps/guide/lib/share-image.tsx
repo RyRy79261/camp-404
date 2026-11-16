@@ -1,12 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
-import {
-  PET_PORTRAITS,
-  trimSprite,
-  type PetModuleKey,
-} from "@camp404/games/pets";
+import type { PetModuleKey } from "@camp404/games/pets";
 import { FIRE, glow, stars } from "./campfire";
+import { portrait } from "./campfire-cats";
 
 /** A sprite: one letter a pixel, "." see-through. */
 type Sprite = readonly string[];
@@ -234,25 +231,6 @@ function Night() {
         <Cat key={s.cat} {...s} />
       ))}
     </>
-  );
-}
-
-/**
- * Moda and Nipster in Jinn's art style (owner, 2026-11-16: their desktop
- * sprites are "a different artstyle"): Jinn's own sitting portrait, every
- * pixel where it is, only its coat (K), the sheen on his back and tail (D)
- * and his eye (E) recoloured to theirs.
- */
-const RECOATS: Partial<Record<PetModuleKey, Record<string, string>>> = {
-  moda: { K: "A", D: "a", E: "L" }, // orange tabby, a darker back
-  nipster: { K: "K", D: "A", E: "L" }, // tortoiseshell: black, orange back
-};
-
-function portrait(cat: PetModuleKey): Sprite {
-  const coat = RECOATS[cat];
-  const sprite = coat ? PET_PORTRAITS.jinn.sprite : PET_PORTRAITS[cat].sprite;
-  return trimSprite(
-    coat ? sprite.map((r) => r.replace(/[KDE]/g, (c) => coat[c]!)) : sprite,
   );
 }
 
