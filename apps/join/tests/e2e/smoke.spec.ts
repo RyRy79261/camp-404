@@ -181,12 +181,10 @@ test("the Start menu opens any program", async ({ page }) => {
   await startButton(page).click();
   const menu = page.getByRole("menu", { name: "Start" });
   await expect(menu.getByRole("menuitem").first()).toBeFocused();
-  await menu
-    .getByRole("menuitem", { name: "Where is 404 in Tankwa Town?" })
-    .click();
+  await menu.getByRole("menuitem", { name: "Where is 404?" }).click();
   await expect(menu).toHaveCount(0);
   await expect(
-    page.getByRole("region", { name: "Where is 404 in Tankwa Town?" }),
+    page.getByRole("region", { name: "Where is 404?" }),
   ).toBeVisible();
 
   await startButton(page).click();
@@ -194,7 +192,7 @@ test("the Start menu opens any program", async ({ page }) => {
   await expect(page.getByRole("menu", { name: "Start" })).toHaveCount(0);
   // Esc shut the menu, not the window under it.
   await expect(
-    page.getByRole("region", { name: "Where is 404 in Tankwa Town?" }),
+    page.getByRole("region", { name: "Where is 404?" }),
   ).toBeVisible();
 });
 

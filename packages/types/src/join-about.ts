@@ -8,8 +8,11 @@ import { z } from "zod";
 //
 // The sections and their names are fixed here, in the Notion page's List of
 // Contents order, so the app's About page, the join site's About window and
-// its desktop programs can never name a section two ways. Captains edit only
-// the words (Captains → Join site → About Camp 404).
+// its desktop programs can never name a section two ways. `title` is the
+// Notion heading, word for word, wherever the section's words are shown;
+// `short` names the join site's desktop program for it (icon, window, taskbar,
+// Start menu), where the full heading does not fit (owner, 2026-11-15).
+// Captains edit only the words (Captains → Join site → About Camp 404).
 //
 // Each part is Markdown, rendered through @camp404/ui's MarkdownBody with its
 // `marks` on, which reads three marks Markdown has no sign for, the ones the
@@ -24,21 +27,39 @@ export const ABOUT_SECTIONS = [
     key: "theme_camp",
     emoji: "4️⃣",
     title: "How does a Theme Camp like 404 work?",
+    short: "How 404 Works",
   },
   {
     key: "contributions",
     emoji: "4️⃣",
     title: "Camp 404’s Contributions to Tankwa Town",
+    short: "What We Give",
   },
-  { key: "where", emoji: "🏕️", title: "Where is 404 in Tankwa Town?" },
-  { key: "crew", emoji: "🛠", title: "The Crew" },
+  {
+    key: "where",
+    emoji: "🏕️",
+    title: "Where is 404 in Tankwa Town?",
+    short: "Where is 404?",
+  },
+  { key: "crew", emoji: "🛠", title: "The Crew", short: "The Crew" },
   {
     key: "responsibilities",
     emoji: "🔥",
     title: "Responsibilities - What You Put In",
+    short: "What You Put In",
   },
-  { key: "perks", emoji: "🔥", title: "Camp Perks - What you Get Out" },
-  { key: "transport", emoji: "🛻", title: "How does 404 get stuff to Burn?" },
+  {
+    key: "perks",
+    emoji: "🔥",
+    title: "Camp Perks - What you Get Out",
+    short: "What You Get Out",
+  },
+  {
+    key: "transport",
+    emoji: "🛻",
+    title: "How does 404 get stuff to Burn?",
+    short: "Getting to Burn",
+  },
 ] as const;
 
 export type AboutSectionKey = (typeof ABOUT_SECTIONS)[number]["key"];
