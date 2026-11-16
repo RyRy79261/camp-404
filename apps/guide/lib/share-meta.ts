@@ -3,7 +3,7 @@
 
 export const SHARE_SIZE = { width: 1200, height: 630 } as const;
 export const SHARE_ALT =
-  "Four pixel cats leaping out of a 16-bit explosion. Camp 404's Survival Guide.";
+  "Four pixel cats sitting round a campfire under the stars. Camp 404's Survival Guide.";
 
 /**
  * The preview as an Open Graph image. A page that sets its own `openGraph`
