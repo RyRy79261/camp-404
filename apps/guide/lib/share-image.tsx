@@ -31,8 +31,8 @@ import { SHARE_SIZE } from "./share-meta";
 // survival-guide.camp-404.com's link preview (owner, 2026-11-16, after a
 // first draft of the cats flying out of an explosion): the camp's four cats
 // round a campfire under the stars, from the Camp pets portraits
-// (PET_PORTRAITS): Jinn's sitting one, recoloured for Moda and Nipster, and
-// Prince asleep by the fire. Beside the guide's name. Drawn by
+// (PET_PORTRAITS): Jinn's sitting one, with Moda, Nipster and Prince painted
+// on his outline (campfire-cats.ts). Beside the guide's name. Drawn by
 // next/og at build time; no image files. The cats are never named, here or in
 // the alt text (easter eggs).
 
@@ -131,7 +131,7 @@ const SEATS: { cat: PetModuleKey; x: number; y: number; flip?: boolean }[] = [
   { cat: "moda", x: 722, y: 500 },
   { cat: "nipster", x: 1020, y: 500, flip: true },
   { cat: "jinn", x: 616, y: 584 },
-  { cat: "prince", x: 1084, y: 584 },
+  { cat: "prince", x: 1104, y: 584, flip: true },
 ];
 
 /** Embers rising off the fire, in pixels from the top of its flames. */

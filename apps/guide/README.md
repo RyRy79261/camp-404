@@ -17,14 +17,14 @@ book to read and print, with no sign-in. Writing stays in the app
   sitemap.
 - **Link preview:** `app/opengraph-image.tsx` and `app/twitter-image.tsx`,
   drawn by next/og at build time (`lib/share-image.tsx`): the camp's four
-  cats round a campfire under the stars, from the Camp pets portraits
-  (`PET_PORTRAITS` from `@camp404/games/pets`, the only part of that package
-  the guide imports): Jinn's sitting portrait, recoloured (not redrawn) for
-  Moda and Nipster so all three share his art style, and Prince asleep. The
-  fire, its glow and the stars are `lib/campfire.ts`. A chapter sets its own
-  `openGraph`, which replaces the layout's, so it names the image again
-  (`SHARE_OG_IMAGE`). The cats are never named, in the picture or its alt
-  text.
+  cats round a campfire under the stars. All four are Jinn's sitting
+  portrait (`PET_PORTRAITS` from `@camp404/games/pets`, the only part of
+  that package the guide imports): Moda recoloured, and Nipster and Prince
+  painted pixel by pixel on his outline (`lib/campfire-cats.ts`, which tests
+  the outline never moves). The fire, its glow and the stars are
+  `lib/campfire.ts`. A chapter sets its own `openGraph`, which replaces the
+  layout's, so it names the image again (`SHARE_OG_IMAGE`). The cats are
+  never named, in the picture or its alt text.
 - **Print:** the browser's dialog. A chapter prints on A4 with a running head
   and page numbers in the margin (Chromium; other browsers print without
   them); a duty card prints as the app's card (`@camp404/ui`'s
