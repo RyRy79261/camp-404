@@ -70,30 +70,6 @@ export const PRINCE_SLEEPING: Sprite = [
   ".OOOOOOOOOOOOOOO.....",
 ];
 
-/**
- * Prince sitting up, facing you (owner, 2026-11-16, for the Survival Guide's
- * campfire), 17 x 15, the camp cats' sitting pose: the black cap over both
- * ears with the white blaze down it, a white face and chest, the black patch
- * on his back showing on his right side and the big black tail curled round.
- */
-export const PRINCE_SITTING: Sprite = [
-  "..O.....O........",
-  ".OKO...OKO.......",
-  ".OKKOOOKKO.......",
-  "OKKKKWKKKKO......",
-  "OKKWWWWWKKO......",
-  "OWLOWWWOLWO......",
-  "OWWWWPWWWWO......",
-  ".OWWWWWWWO.......",
-  "..OWWWWWO........",
-  ".OWWWWWWWO.......",
-  "OWWWWWWKKKO..OO..",
-  "OGWWWWWKKKO.OKO..",
-  "OGWWWWWWKKWOOKO..",
-  "OGWWOWOWOWWWKKO..",
-  "OOOOOOOOOOOOOOO..",
-];
-
 /** A sprite's width: its longest row. */
 export function spriteWidth(sprite: Sprite): number {
   return Math.max(0, ...sprite.map((r) => r.length));

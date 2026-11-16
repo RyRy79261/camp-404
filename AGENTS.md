@@ -241,8 +241,8 @@ never "the lamp") sits at the bottom of the Teams folder with Jinn on it.
 dependency). Join imports only `@camp404/games/inkblot` and
 `@camp404/games/inkblot/art` (`apps/join/lib/games-boundary.test.ts`
 fails on any other). The Survival Guide imports only
-`@camp404/games/cats/sitting`, for its link preview (all four cats sitting
-round a campfire, plain data). The web app loads the rest lazily, through
+`@camp404/games/pets`, for its link preview (the four cats' Camp pets
+portraits round a campfire). The web app loads the rest lazily, through
 `components/os/desktop-cats.tsx`. Easter eggs are never labelled: a cat or the
 art piece is a toy for the pointer, hidden from assistive tech and out of the
 Tab order, with no name, hint or instruction anywhere in the UI; the

@@ -2,18 +2,39 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import {
-  mirrorSprite,
-  pixelRuns,
-  SITTING,
-  type SittingCat,
-  type Sprite,
-} from "@camp404/games/cats/sitting";
+  PET_PORTRAITS,
+  trimSprite,
+  type PetModuleKey,
+} from "@camp404/games/pets";
 import { FIRE, glow, stars } from "./campfire";
+
+/** A sprite: one letter a pixel, "." see-through. */
+type Sprite = readonly string[];
+
+/** Each row's neighbouring pixels of one colour, as one rectangle. */
+function pixelRuns(
+  sprite: Sprite,
+  colours: Record<string, string>,
+): { x: number; y: number; w: number; ch: string }[] {
+  const runs: { x: number; y: number; w: number; ch: string }[] = [];
+  sprite.forEach((row, y) => {
+    let x = 0;
+    while (x < row.length) {
+      const ch = row[x]!;
+      let end = x + 1;
+      while (end < row.length && row[end] === ch) end++;
+      if (colours[ch]) runs.push({ x, y, w: end - x, ch });
+      x = end;
+    }
+  });
+  return runs;
+}
 import { SHARE_SIZE } from "./share-meta";
 
 // survival-guide.camp-404.com's link preview (owner, 2026-11-16, after a
 // first draft of the cats flying out of an explosion): the camp's four cats
-// sitting round a campfire under the stars, beside the guide's name. Drawn by
+// round a campfire under the stars, each in its own Camp pets portrait
+// (PET_PORTRAITS, so Prince is asleep by it), beside the guide's name. Drawn by
 // next/og at build time; no image files. The cats are never named, here or in
 // the alt text (easter eggs).
 
@@ -22,14 +43,17 @@ export { SHARE_ALT, SHARE_SIZE } from "./share-meta";
 // Hex, because the image renderer does not read the site's oklch tokens.
 const BG = "#140a24"; // --color-os-bg
 const FG = "#f7ecf3"; // --color-os-fg
-const MUTED = "#b7a3c4"; // --os-muted
+const MUTED = "#af94b0"; // --os-muted
 const MAGENTA = "#ff008c";
 const CYAN = "#00dcff";
 const PINK = "#f02fc2"; // --color-os-primary
 
-/** The cats' letters (@camp404/games/cats/sitting) as hex. */
+/**
+ * The portraits' letters as hex: their palettes use the desktop's CSS
+ * variables and oklch, which the image renderer does not read.
+ */
 const CAT_COLOURS: Record<string, string> = {
-  O: "#4b3b66", // outline, lifted so the black cat reads on the dark
+  O: MUTED, // the outline, as the pet cards draw it
   K: "#0b0714", // Jinn's coat
   D: "#3a2d55", // Jinn's sheen
   E: "#ff3fb4", // Jinn's eye
@@ -105,11 +129,11 @@ const FIRE_BASE = 512;
  * Each cat: the middle of its feet, and whether it is turned round. Two sit
  * close to the fire, two further out and nearer the viewer.
  */
-const SEATS: { cat: SittingCat; x: number; y: number; flip?: boolean }[] = [
+const SEATS: { cat: PetModuleKey; x: number; y: number }[] = [
   { cat: "moda", x: 722, y: 500 },
   { cat: "nipster", x: 1020, y: 500 },
   { cat: "jinn", x: 616, y: 584 },
-  { cat: "prince", x: 1118, y: 584 },
+  { cat: "prince", x: 1084, y: 584 },
 ];
 
 /** Embers rising off the fire, in pixels from the top of its flames. */
@@ -120,9 +144,6 @@ const EMBERS = [
   { dx: 6, dy: -12, c: MAGENTA },
   { dx: 1, dy: -15, c: "#ff8a1f" },
 ];
-
-/** Jinn's outline, lifted further: a black cat on a dark night. */
-const JINN_COLOURS = { ...CAT_COLOURS, O: "#8a74ad" };
 
 /** A sprite placed by the middle of its bottom row. */
 function Standing({
@@ -215,13 +236,13 @@ function Night() {
   );
 }
 
-function Cat({ cat, x, y, flip }: (typeof SEATS)[number]) {
+function Cat({ cat, x, y }: (typeof SEATS)[number]) {
   return (
     <Standing
-      sprite={flip ? mirrorSprite(SITTING[cat]) : SITTING[cat]}
+      sprite={trimSprite(PET_PORTRAITS[cat].sprite)}
       x={x}
       y={y}
-      colours={cat === "jinn" ? JINN_COLOURS : CAT_COLOURS}
+      colours={CAT_COLOURS}
     />
   );
 }

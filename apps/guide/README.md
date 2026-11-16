@@ -17,11 +17,11 @@ book to read and print, with no sign-in. Writing stays in the app
   sitemap.
 - **Link preview:** `app/opengraph-image.tsx` and `app/twitter-image.tsx`,
   drawn by next/og at build time (`lib/share-image.tsx`): the camp's four
-  cats sitting round a campfire under the stars
-  (`@camp404/games/cats/sitting`, the only part of that package the guide
-  imports; the fire, its glow and the stars are `lib/campfire.ts`). A
-  chapter sets its own `openGraph`, which replaces the layout's, so it names
-  the image again (`SHARE_OG_IMAGE`). The cats are never named, in the
+  cats round a campfire under the stars, each in its own Camp pets portrait
+  (`PET_PORTRAITS` from `@camp404/games/pets`, the only part of that package
+  the guide imports; the fire, its glow and the stars are `lib/campfire.ts`).
+  A chapter sets its own `openGraph`, which replaces the layout's, so it
+  names the image again (`SHARE_OG_IMAGE`). The cats are never named, in the
   picture or its alt text.
 - **Print:** the browser's dialog. A chapter prints on A4 with a running head
   and page numbers in the margin (Chromium; other browsers print without

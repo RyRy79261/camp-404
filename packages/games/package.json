@@ -12,7 +12,6 @@
     "./inkblot/styles.css": "./src/inkblot/inkblot.css",
     "./cats": "./src/cats/index.ts",
     "./cats/styles.css": "./src/cats/cats.css",
-    "./cats/sitting": "./src/cats/sitting.ts",
     "./shadow-work": "./src/shadow-work/index.ts",
     "./characters": "./src/characters/index.ts",
     "./camp-cats": "./src/camp-cats/index.ts",
