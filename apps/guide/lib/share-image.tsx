@@ -33,8 +33,9 @@ import { SHARE_SIZE } from "./share-meta";
 
 // survival-guide.camp-404.com's link preview (owner, 2026-11-16, after a
 // first draft of the cats flying out of an explosion): the camp's four cats
-// round a campfire under the stars, each in its own Camp pets portrait
-// (PET_PORTRAITS, so Prince is asleep by it), beside the guide's name. Drawn by
+// round a campfire under the stars, from the Camp pets portraits
+// (PET_PORTRAITS): Jinn's sitting one, recoloured for Moda and Nipster, and
+// Prince asleep by the fire. Beside the guide's name. Drawn by
 // next/og at build time; no image files. The cats are never named, here or in
 // the alt text (easter eggs).
 
@@ -129,9 +130,9 @@ const FIRE_BASE = 512;
  * Each cat: the middle of its feet, and whether it is turned round. Two sit
  * close to the fire, two further out and nearer the viewer.
  */
-const SEATS: { cat: PetModuleKey; x: number; y: number }[] = [
+const SEATS: { cat: PetModuleKey; x: number; y: number; flip?: boolean }[] = [
   { cat: "moda", x: 722, y: 500 },
-  { cat: "nipster", x: 1020, y: 500 },
+  { cat: "nipster", x: 1020, y: 500, flip: true },
   { cat: "jinn", x: 616, y: 584 },
   { cat: "prince", x: 1084, y: 584 },
 ];
@@ -236,10 +237,30 @@ function Night() {
   );
 }
 
-function Cat({ cat, x, y }: (typeof SEATS)[number]) {
+/**
+ * Moda and Nipster in Jinn's art style (owner, 2026-11-16: their desktop
+ * sprites are "a different artstyle"): Jinn's own sitting portrait, every
+ * pixel where it is, only its coat (K), the sheen on his back and tail (D)
+ * and his eye (E) recoloured to theirs.
+ */
+const RECOATS: Partial<Record<PetModuleKey, Record<string, string>>> = {
+  moda: { K: "A", D: "a", E: "L" }, // orange tabby, a darker back
+  nipster: { K: "K", D: "A", E: "L" }, // tortoiseshell: black, orange back
+};
+
+function portrait(cat: PetModuleKey): Sprite {
+  const coat = RECOATS[cat];
+  const sprite = coat ? PET_PORTRAITS.jinn.sprite : PET_PORTRAITS[cat].sprite;
+  return trimSprite(
+    coat ? sprite.map((r) => r.replace(/[KDE]/g, (c) => coat[c]!)) : sprite,
+  );
+}
+
+function Cat({ cat, x, y, flip }: (typeof SEATS)[number]) {
+  const sprite = portrait(cat);
   return (
     <Standing
-      sprite={trimSprite(PET_PORTRAITS[cat].sprite)}
+      sprite={flip ? sprite.map((r) => [...r].reverse().join("")) : sprite}
       x={x}
       y={y}
       colours={CAT_COLOURS}
