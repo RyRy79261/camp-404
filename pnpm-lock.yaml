@@ -70,6 +70,9 @@ importers:
       '@camp404/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@camp404/games':
+        specifier: workspace:*
+        version: link:../../packages/games
       '@camp404/types':
         specifier: workspace:*
         version: link:../../packages/types

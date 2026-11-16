@@ -33,6 +33,7 @@ import {
 } from "@/lib/book";
 import { publicChapter, publicChapters, teamLabels } from "@/lib/guide-data";
 import { linkResolver } from "@/lib/links";
+import { SHARE_OG_IMAGE } from "@/lib/share-meta";
 
 // One chapter or duty card on survival-guide.camp-404.com (#250). Only what a
 // public page may show (the plan's section 2): its title, section, team,
@@ -69,6 +70,7 @@ export async function generateMetadata({
       title: chapter.title,
       description,
       url: `/${chapter.slug}`,
+      images: [SHARE_OG_IMAGE],
     },
   };
 }

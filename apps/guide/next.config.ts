@@ -12,7 +12,12 @@ import type { NextConfig } from "next";
 //    outlive an unpublish. Crawling stays allowed so the tag is read.
 const config: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@camp404/types", "@camp404/core", "@camp404/ui"],
+  transpilePackages: [
+    "@camp404/types",
+    "@camp404/core",
+    "@camp404/ui",
+    "@camp404/games",
+  ],
   typedRoutes: true,
   poweredByHeader: false,
   // next dev would write its own AGENTS.md and CLAUDE.md here; the repo's
