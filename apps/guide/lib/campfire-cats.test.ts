@@ -21,7 +21,7 @@ describe("the campfire's cats", () => {
 
   it("gives Prince his white coat with black cap, patch and tail", () => {
     const fills = new Set(PRINCE_ON_JINN.join("").replace(/[.O]/g, ""));
-    expect([...fills].sort()).toEqual(["G", "K", "L", "P", "W"]);
+    expect([...fills].sort()).toEqual(["G", "K", "L", "W"]);
     expect(portrait("prince")).toEqual(PRINCE_ON_JINN);
   });
 

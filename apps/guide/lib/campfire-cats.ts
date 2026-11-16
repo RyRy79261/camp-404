@@ -40,23 +40,24 @@ export const NIPSTER_ON_JINN: Sprite = [
 ];
 
 /**
- * Prince, painted pixel by pixel on Jinn's sitting portrait as the app draws
- * him: white, a black cap over both ears with a white blaze, a black patch on
- * his back and his big black tail. No picture of him has his eyes open; they
- * are the others' green.
+ * Prince, painted pixel by pixel on Jinn's sitting portrait from the owner's
+ * reference photo of him (2026-11-16): white and fluffy, a black cap over both
+ * ears and round his eyes with a white blaze down the middle, a small black
+ * nose, a big black patch on his back above white haunches, his big black
+ * tail, and pale green eyes.
  */
 export const PRINCE_ON_JINN: Sprite = [
   ".....OO...OO",
   ".....OKOOOKO",
   ".....OKKWKKO",
-  ".....OWLWWOO",
-  ".....OWWWWPO",
+  ".....OKLWWOO",
+  ".....OWWWWKO",
   ".....OGWWWWO",
-  "....OKKWWWO.",
-  "....OKKWWWO.",
+  "....OKKKWWO.",
+  "....OKKKWWO.",
   "....OGWWWWO.",
-  ".OOOKKWOWOWO",
-  "OKKOKGWOWOWO",
+  ".OOOKWWOWOWO",
+  "OKKOKWWOWOWO",
   "OOOOOOOOOOOO",
 ];
 
