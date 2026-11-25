@@ -3,8 +3,18 @@ import type {
   FeeTiming,
   ParticipationStatus,
 } from "@camp404/types";
-import type { Instalment } from "./dues";
-import { sumMinor } from "./money";
+import type {
+  BalanceCharge,
+  BalancePayment,
+  BalanceRefund,
+  Instalment,
+} from "./dues";
+import {
+  formatMoney,
+  isCurrency,
+  sumMinor,
+  UnknownCurrencyError,
+} from "./money";
 import { isComingThisYear } from "./participation";
 
 // Camp fees (owner, 2026-10-27): a member's pledge and when they can pay it,
@@ -305,6 +315,65 @@ export function pledgeMovesFee(input: {
 }): boolean {
   if (input.feeCents === null) return false;
   return input.amountCents !== (input.pledgedCents ?? input.feeCents);
+}
+
+/**
+ * The least a member may pledge (owner, 2026-11-25: "if anything's been
+ * logged and approved as received, then obviously they can't lower it past
+ * that"): the money the camp has confirmed as received from them this year
+ * (`reconciled` payments, less refunds paid out) that their other live
+ * charges (gear rental, a settle-up, anything else) do not already take. A
+ * member's own "I paid" proof the Finance team has not confirmed (`pending`)
+ * and an excused payment (`waived`, which brings in nothing) do not count.
+ * Pass live charges only. Never below R0. Throws on a row in any currency but
+ * ZAR.
+ */
+export function pledgeFloorCents(input: {
+  charges: readonly (BalanceCharge & { kind: string })[];
+  payments: readonly BalancePayment[];
+  refunds?: readonly BalanceRefund[];
+}): number {
+  const refunds = input.refunds ?? [];
+  for (const row of [...input.charges, ...input.payments, ...refunds]) {
+    if (!isCurrency(row.currency)) throw new UnknownCurrencyError(row.currency);
+  }
+  const received = sumMinor(
+    input.payments
+      .filter((p) => p.status === "reconciled")
+      .map((p) => p.amountCents),
+  );
+  const refunded = sumMinor(
+    refunds
+      .filter((r) => r.status === "refunded")
+      .map((r) => r.amountCents ?? 0),
+  );
+  const otherCharges = sumMinor(
+    input.charges.filter((c) => c.kind !== "fee").map((c) => c.amountCents),
+  );
+  return Math.max(0, received - refunded - otherCharges);
+}
+
+/** Why a pledge below what the camp has received is refused. */
+export function pledgeFloorSentence(floorCents: number): string {
+  return `The camp has already received ${formatMoney(floorCents, "ZAR", { wholeRands: true })} from you towards your camp fee, so your pledge can't be less than that.`;
+}
+
+/**
+ * The refusal for a new pledge amount below the floor (pledgeFloorCents), or
+ * null when it may be saved. Raising it, or lowering it down to exactly the
+ * floor, is fine. Keeping the amount it already is (`currentCents`: the
+ * pledge, else the live fee) is always fine, so a member already paid past
+ * their amount still changes their "by when".
+ */
+export function pledgeFloorRefusal(input: {
+  amountCents: number;
+  /** The amount now: the pledge, else the live camp fee, else null. */
+  currentCents: number | null;
+  floorCents: number;
+}): string | null {
+  if (input.amountCents >= input.floorCents) return null;
+  if (input.amountCents === input.currentCents) return null;
+  return pledgeFloorSentence(input.floorCents);
 }
 
 // --- The Join site's scale ------------------------------------------------------

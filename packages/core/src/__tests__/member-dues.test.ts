@@ -3,6 +3,7 @@ import {
   duesAccountRow,
   feeChargeFromPledge,
   memberDues,
+  pledgeToEdit,
   type MemberDuesRows,
 } from "../member-dues";
 
@@ -205,6 +206,48 @@ describe("memberDues", () => {
       feeTotalCents: 0,
       feeNext: { kind: "no_pledge" },
     });
+  });
+});
+
+describe("pledgeToEdit and the pledge floor", () => {
+  const viewer = { forFinance: false, today: TODAY };
+  it("edits the pledge, floored at the payment received", () => {
+    const dues = memberDues(rows(), viewer);
+    expect(pledgeToEdit(dues)).toEqual({
+      amountCents: 300_000,
+      payBy: "all_by_end_dec",
+      subsidy: false,
+    });
+    // Only the reconciled R1,000 counts; the pending proof does not.
+    expect(dues.pledgeFloorCents).toBe(100_000);
+  });
+
+  it("edits the live fee when the Finance team set one with no pledge", () => {
+    const dues = memberDues(
+      rows({
+        account: {
+          tierId: null,
+          tierLabel: null,
+          amountCents: null,
+          pledgedAt: null,
+          payBy: "all_by_15_jan",
+          subsidy: false,
+          planVersion: 0,
+        },
+      }),
+      viewer,
+    );
+    expect(dues.pledge).toBeNull();
+    expect(pledgeToEdit(dues)).toEqual({
+      amountCents: 200_000,
+      payBy: "all_by_15_jan",
+      subsidy: false,
+    });
+  });
+
+  it("has nothing to edit with no pledge and no fee", () => {
+    const dues = memberDues(rows({ account: null, charges: [] }), viewer);
+    expect(pledgeToEdit(dues)).toBeNull();
   });
 });
 

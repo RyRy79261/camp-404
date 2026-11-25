@@ -109,6 +109,7 @@ export default async function QuestionnaireCompletePage({
             burnYear={pledgeStep.burnYear}
             pledge={null}
             knownPayBy={pledgeStep.knownPayBy}
+            floorCents={pledgeStep.floorCents}
           />
         </section>
       )}

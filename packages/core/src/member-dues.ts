@@ -6,7 +6,7 @@ import type {
   PaymentSource,
   RefundStatus,
 } from "@camp404/types";
-import { feeFigures, type NextFeePayment } from "./camp-fees";
+import { feeFigures, pledgeFloorCents, type NextFeePayment } from "./camp-fees";
 import {
   duesBalance,
   isFeeConcession,
@@ -194,6 +194,30 @@ export interface MemberDues {
   feeOwingCents: number;
   /** Their next fee payment: the plan's, else the pledge's "by when". */
   feeNext: NextFeePayment;
+  /**
+   * The least they may pledge: what the camp has confirmed as received
+   * towards their fee (pledgeFloorCents). 0 when nothing is.
+   */
+  pledgeFloorCents: number;
+}
+
+/** What the member's pledge form starts from and edits. */
+export interface PledgeToEdit {
+  amountCents: number;
+  payBy: FeeTiming | null;
+  subsidy: boolean;
+}
+
+/**
+ * The pledge a member edits: their pledge, else the live camp fee the Finance
+ * team set with no pledge behind it (so a member charged a fee can always
+ * change the amount), else null (nothing to change: they pledge afresh).
+ */
+export function pledgeToEdit(dues: MemberDues): PledgeToEdit | null {
+  const fee = dues.charges.find((c) => c.kind === "fee" && !c.cancelled);
+  const amountCents = dues.pledge?.amountCents ?? fee?.amountCents ?? null;
+  if (amountCents === null) return null;
+  return { amountCents, payBy: dues.payBy, subsidy: dues.subsidy };
 }
 
 /** A blank display name, in every dues screen's words. */
@@ -293,6 +317,11 @@ export function memberDues(
       : null,
     balance,
     next: nextInstalment(instalments, balance.paidCents, viewer.today),
+    pledgeFloorCents: pledgeFloorCents({
+      charges: live,
+      payments: rows.payments,
+      refunds: rows.refunds,
+    }),
     ...feeFigures({
       liveFeeCents: live.find((c) => c.kind === "fee")?.amountCents ?? null,
       pledgedCents: account?.amountCents ?? null,

@@ -20,6 +20,7 @@ import {
   TIER_GONE,
   TOO_MANY_TIERS,
   MAX_FEE_TIERS,
+  pledgeFloorSentence,
 } from "@camp404/core";
 import { MANUAL_CHARGE_KINDS, type FeeTiming } from "@camp404/types";
 import { useTestDb } from "../../../../packages/db/src/__tests__/_harness";
@@ -332,6 +333,74 @@ describe("dues: the database and the test store agree", () => {
       payBy: "talk_to_captain",
       feeOwingCents: 90_000,
       feeNext: { kind: "no_date", amountCents: 90_000 },
+    });
+    expect(store).toEqual(db);
+  });
+
+  it("keeps a new pledge at or above what the camp confirmed as received, and lets a Finance-set fee be changed", async () => {
+    const { db, store } = await bothWays(mode, h, async (p, seed) => {
+      const own = (amountCents: number) => ({
+        amountCents,
+        payBy: "all_by_end_dec" as const,
+        subsidy: false,
+      });
+      const pledge = (userId: string, amountCents: number) =>
+        savePledge({ userId, cycle: YEAR, pledge: own(amountCents) });
+      await seed.participation(p.member, "accepted");
+      await seed.participation(p.other, "accepted");
+      await pledge(p.member, 800_000);
+      for (const [amountCents, status] of [
+        [300_000, "reconciled"],
+        [200_000, "pending"],
+        [100_000, "waived"],
+      ] as const) {
+        await recordPayment({
+          userId: p.member,
+          amountCents,
+          currency: "ZAR",
+          status,
+          recordedByUserId: p.captain,
+        });
+      }
+      const floorBefore = (
+        await getMemberDues(p.member, YEAR, { forFinance: false, today: TODAY })
+      )?.pledgeFloorCents;
+      const below = await pledge(p.member, 299_900);
+      const exactly = await pledge(p.member, 300_000);
+      // A fee the Finance team set with no pledge behind it.
+      const financeFee = await setFee({
+        userId: p.other,
+        amountCents: 600_000,
+        concessionReason: null,
+        cycle: YEAR,
+        expectedFeeId: null,
+        actorId: p.financeLead,
+      });
+      const lowered = await pledge(p.other, 400_000);
+      const fees = async (userId: string) =>
+        (
+          await getMemberDues(userId, YEAR, { forFinance: false, today: TODAY })
+        )?.charges
+          .filter((c) => c.kind === "fee" && !c.cancelled)
+          .map((c) => c.amountCents);
+      return {
+        floorBefore,
+        below,
+        exactly,
+        financeFee: financeFee.ok,
+        lowered,
+        memberFee: await fees(p.member),
+        otherFee: await fees(p.other),
+      };
+    });
+    expect(db).toEqual({
+      floorBefore: 300_000,
+      below: { ok: false, error: pledgeFloorSentence(300_000) },
+      exactly: { ok: true, charged: true },
+      financeFee: true,
+      lowered: { ok: true, charged: true },
+      memberFee: [300_000],
+      otherFee: [400_000],
     });
     expect(store).toEqual(db);
   });

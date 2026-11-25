@@ -57,6 +57,7 @@ const DUES: MemberDues = {
   burnYear: 2027,
   feeTotalCents: 250000,
   feeOwingCents: 150000,
+  pledgeFloorCents: 0,
   feeNext: { kind: "no_date", amountCents: 150000 },
   planVersion: 0,
   instalments: [],

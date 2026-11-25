@@ -1,6 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { FINANCE_TEAM, type AuditAction } from "@camp404/core";
+import {
+  FINANCE_TEAM,
+  pledgeFloorSentence,
+  type AuditAction,
+} from "@camp404/core";
 import type { ParticipationStatus, Team } from "@camp404/types";
 import type { CampConfig } from "../camp-config";
 import { sanitiseAccount } from "../account";
@@ -563,6 +567,120 @@ describe("dues", () => {
           pledge: { amountCents: 0, payBy: null, subsidy: true },
         }),
       ).toEqual({ ok: true, charged: false });
+    });
+
+    it("never lowers the pledge below what the camp confirmed as received", async () => {
+      const { member, captain } = await people();
+      await place(h.db(), member.id, "accepted");
+      // Pledged double by mistake, and charged.
+      await savePledge({
+        userId: member.id,
+        cycle: YEAR,
+        pledge: {
+          amountCents: 400_000,
+          payBy: "all_by_end_nov",
+          subsidy: false,
+        },
+      });
+      await recordPayment({
+        userId: member.id,
+        amountCents: 150_000,
+        currency: "ZAR",
+        status: "reconciled",
+        recordedByUserId: captain.id,
+      });
+      // The member's own proof, not confirmed yet, does not count.
+      await recordPayment({
+        userId: member.id,
+        amountCents: 100_000,
+        currency: "ZAR",
+        status: "pending",
+        recordedByUserId: member.id,
+        source: "member",
+      });
+      const fee = async () =>
+        (await getMemberDues(member.id, YEAR, { forFinance: true }))?.charges
+          .filter((c) => c.kind === "fee" && !c.cancelled)
+          .map((c) => c.amountCents);
+      expect(
+        (await getMemberDues(member.id, YEAR, { forFinance: false }))
+          ?.pledgeFloorCents,
+      ).toBe(150_000);
+      expect(
+        await savePledge({
+          userId: member.id,
+          cycle: YEAR,
+          pledge: {
+            amountCents: 149_900,
+            payBy: "all_by_end_nov",
+            subsidy: false,
+          },
+        }),
+      ).toEqual({ ok: false, error: pledgeFloorSentence(150_000) });
+      // Refused whole: the fee and the pledge are as they were.
+      expect(await fee()).toEqual([400_000]);
+      expect(
+        (await getMemberDues(member.id, YEAR, { forFinance: false }))?.pledge
+          ?.amountCents,
+      ).toBe(400_000);
+      // Down to exactly what was received is fine, and moves the fee.
+      expect(
+        await savePledge({
+          userId: member.id,
+          cycle: YEAR,
+          pledge: {
+            amountCents: 150_000,
+            payBy: "all_by_end_nov",
+            subsidy: false,
+          },
+        }),
+      ).toEqual({ ok: true, charged: true });
+      expect(await fee()).toEqual([150_000]);
+      // Raising it again is fine too.
+      expect(
+        await savePledge({
+          userId: member.id,
+          cycle: YEAR,
+          pledge: {
+            amountCents: 200_000,
+            payBy: "all_by_end_dec",
+            subsidy: false,
+          },
+        }),
+      ).toEqual({ ok: true, charged: true });
+      expect(await fee()).toEqual([200_000]);
+    });
+
+    it("lets a member change a fee the Finance team set with no pledge behind it", async () => {
+      const { member, financeLead } = await people();
+      await place(h.db(), member.id, "accepted");
+      const set = await setFee({
+        userId: member.id,
+        cycle: YEAR,
+        amountCents: 800_000,
+        concessionReason: null,
+        expectedFeeId: null,
+        actorId: financeLead.id,
+      });
+      expect(set.ok).toBe(true);
+      expect(
+        await savePledge({
+          userId: member.id,
+          cycle: YEAR,
+          pledge: {
+            amountCents: 400_000,
+            payBy: "all_by_end_dec",
+            subsidy: false,
+          },
+        }),
+      ).toEqual({ ok: true, charged: true });
+      const dues = await getMemberDues(member.id, YEAR, { forFinance: false });
+      expect(
+        dues?.charges
+          .filter((c) => c.kind === "fee" && !c.cancelled)
+          .map((c) => c.amountCents),
+      ).toEqual([400_000]);
+      expect(dues?.pledge?.amountCents).toBe(400_000);
     });
 
     it("sets a concession as a compare-and-set, its reason for the Finance team only", async () => {

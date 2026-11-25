@@ -69,7 +69,10 @@ they need a subsidy, on their `dues_accounts` row (`savePledge`,
 `@camp404/db/dues`; `Pledge` in `@camp404/core`). It is not a charge: it
 becomes the camp fee when a captain accepts them (or when they pledge once
 accepted), through `feeChargeFromPledge`. A subsidy pledge of R0 charges
-nothing. Not a gear pledge.
+nothing. The member may change the amount any time (a new amount moves a
+charged fee), but never below what the camp has confirmed as received
+towards the fee (`pledgeFloorCents` / `pledgeFloorRefusal`). Not a gear
+pledge.
 
 **Gear pledge.** A member's "I'm bringing 2 camping chairs" against a team's
 inventory need this year: one `inventory_pledges` row per member per need

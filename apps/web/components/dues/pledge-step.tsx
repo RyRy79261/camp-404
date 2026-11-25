@@ -3,7 +3,11 @@
 import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { formatMoney, recommendedPledgeCents } from "@camp404/core";
+import {
+  formatMoney,
+  pledgeFloorRefusal,
+  recommendedPledgeCents,
+} from "@camp404/core";
 import { FeeScaleTrack, feeScaleMax, useWindowDirty } from "@camp404/os";
 import { FEE_TIMINGS, type FeeTiming } from "@camp404/types";
 import { Button } from "@camp404/ui/components/button";
@@ -59,6 +63,11 @@ export interface PledgeStepProps {
   submitLabel?: string;
   /** After a save, before the page refreshes (a dialog closes). */
   onSaved?: () => void;
+  /**
+   * The least the amount may be: what the camp has confirmed as received
+   * towards the fee (pledgeFloorCents). The server refuses below it too.
+   */
+  floorCents?: number;
 }
 
 export function PledgeStep({
@@ -68,6 +77,7 @@ export function PledgeStep({
   knownPayBy = null,
   submitLabel = "Send",
   onSaved,
+  floorCents = 0,
 }: PledgeStepProps) {
   const id = useId();
   const router = useRouter();
@@ -118,6 +128,15 @@ export function PledgeStep({
     const read = readPledgeAmount(typed);
     if (!read.ok) {
       setAmountError(read.error);
+      return;
+    }
+    const belowFloor = pledgeFloorRefusal({
+      amountCents: read.cents,
+      currentCents: pledge?.amountCents ?? null,
+      floorCents,
+    });
+    if (belowFloor) {
+      setAmountError(belowFloor);
       return;
     }
     const input = {
@@ -207,6 +226,14 @@ export function PledgeStep({
                 More than {scale.tiers[scale.tiers.length - 1]?.name} is fine.
               </span>
             </div>
+            {floorCents > 0 && (
+              <p data-testid="pledge-floor" className="text-sm">
+                The camp has received{" "}
+                {formatMoney(floorCents, "ZAR", { wholeRands: true })} from you
+                towards your fee, so the least you can pledge is{" "}
+                {formatMoney(floorCents, "ZAR", { wholeRands: true })}.
+              </p>
+            )}
             <p className="font-mono text-[10px] uppercase text-muted-foreground">
               Dollar figures are a guide at R{scale.usdRate.randsPerDollar} =
               US$1 ({scale.usdRate.asOf}). We pay in rands.

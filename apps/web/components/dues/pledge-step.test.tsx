@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { pledgeFloorSentence } from "@camp404/core";
 import { DEFAULT_JOIN_CONTENT } from "@camp404/types";
 
 const save = vi.hoisted(() => vi.fn());
@@ -129,6 +130,39 @@ describe("PledgeStep", () => {
     expect((await screen.findByRole("alert")).textContent).toBe(
       "Pick when you can pay it.",
     );
+  });
+
+  it("shows the least they can pledge and refuses below it beside the box", async () => {
+    step({
+      pledge: { amountCents: 800_000, payBy: "all_by_end_dec", subsidy: false },
+      floorCents: 150_000,
+      submitLabel: "Save",
+    });
+    expect(screen.getByTestId("pledge-floor").textContent).toMatch(
+      /received R\s1\s500 from you towards your fee, so the least you can pledge is R\s1\s500\./,
+    );
+    const box = screen.getByLabelText("Or type it (R)");
+    fireEvent.change(box, { target: { value: "1499" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("alert").textContent).toBe(
+      pledgeFloorSentence(150_000),
+    );
+    expect(save).not.toHaveBeenCalled();
+    // Exactly the floor is fine.
+    fireEvent.change(box, { target: { value: "1500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith({
+        amountCents: 150_000,
+        payBy: "all_by_end_dec",
+        subsidy: false,
+      }),
+    );
+  });
+
+  it("shows no floor line when nothing is received", () => {
+    step();
+    expect(screen.queryByTestId("pledge-floor")).toBeNull();
   });
 
   it("reads a saved pledge back as the member left it", () => {
