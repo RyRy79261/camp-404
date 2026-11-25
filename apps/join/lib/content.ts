@@ -82,22 +82,23 @@ export const INKBLOT = {
 
 /**
  * Desktop icon labels, in desktop order. The label is also the window title.
- * A window that shows a section of About Camp 404 is named as that section
- * (Caitlin, 2026-11-15: the windows and the About page's sections have the
- * same names), from @camp404/types so the two can never drift; the tools
+ * A window that shows a section of About Camp 404 is named by that section's
+ * short name (Caitlin, 2026-11-15: the windows and the About page's sections
+ * have the same names; owner, the same day: the full headings are too long
+ * for an icon), from @camp404/types so the two can never drift; the tools
  * (README, the fee calculator, the terminal, applying) keep their file names.
  */
 export const APP_LABELS = {
   readme: "README.TXT",
   about: ABOUT_TITLE,
-  teams: aboutSection("theme_camp").title,
-  gifts: aboutSection("contributions").title,
-  map: aboutSection("where").title,
-  crew: aboutSection("crew").title,
-  schedule: aboutSection("responsibilities").title,
+  teams: aboutSection("theme_camp").short,
+  gifts: aboutSection("contributions").short,
+  map: aboutSection("where").short,
+  crew: aboutSection("crew").short,
+  schedule: aboutSection("responsibilities").short,
   fee: "FEE.CALC",
-  perks: aboutSection("perks").title,
-  truck: aboutSection("transport").title,
+  perks: aboutSection("perks").short,
+  truck: aboutSection("transport").short,
   terminal: "TERMINAL",
   apply: "APPLY.EXE",
 } as const;
