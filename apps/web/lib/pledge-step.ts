@@ -1,5 +1,7 @@
 import "server-only";
 
+import { pledgeToEdit } from "@camp404/core";
+
 import { getMemberDues } from "./dues";
 import { getFeeScale } from "./join-site";
 import { getMyParticipation } from "./participations";
@@ -19,6 +21,8 @@ export interface PledgeStepData {
   knownPayBy: PledgeStepProps["knownPayBy"];
   /** A live camp fee: the Finance team set one, or a pledge was charged. */
   feeCharged: boolean;
+  /** The least they may pledge: what the camp confirmed as received. */
+  floorCents: number;
 }
 
 /**
@@ -39,14 +43,10 @@ export async function getPledgeStep(
   return {
     scale,
     burnYear: dues.burnYear,
-    pledge: dues.pledge
-      ? {
-          amountCents: dues.pledge.amountCents,
-          payBy: dues.payBy,
-          subsidy: dues.subsidy,
-        }
-      : null,
+    // Their pledge, else a fee the Finance team set: the amount to change.
+    pledge: pledgeToEdit(dues),
     knownPayBy: dues.payBy,
     feeCharged: dues.charges.some((c) => c.kind === "fee" && !c.cancelled),
+    floorCents: dues.pledgeFloorCents,
   };
 }

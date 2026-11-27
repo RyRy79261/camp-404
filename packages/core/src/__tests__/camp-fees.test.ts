@@ -17,6 +17,9 @@ import {
   feeTotals,
   nearestScaleName,
   nextFeePayment,
+  pledgeFloorCents,
+  pledgeFloorRefusal,
+  pledgeFloorSentence,
   pledgeMovesFee,
   recommendedPledgeCents,
   type CampBillLike,
@@ -203,6 +206,87 @@ describe("the pledge", () => {
         amountCents: R(7000),
       }),
     ).toBe(false);
+  });
+
+  const ZAR = "ZAR";
+  const paid = (
+    amountCents: number,
+    status: "pending" | "reconciled" | "waived",
+  ) => ({
+    amountCents,
+    currency: ZAR,
+    status,
+  });
+
+  it("floors the pledge at what the camp confirmed as received towards the fee", () => {
+    expect(pledgeFloorCents({ charges: [], payments: [] })).toBe(0);
+    expect(
+      pledgeFloorCents({
+        charges: [{ kind: "fee", amountCents: R(8000), currency: ZAR }],
+        payments: [
+          paid(R(1500), "reconciled"),
+          // A proof the Finance team has not confirmed, and an excused
+          // payment, bring nothing in.
+          paid(R(2000), "pending"),
+          paid(R(500), "waived"),
+        ],
+      }),
+    ).toBe(R(1500));
+    // Refunds paid out come off; one only asked for does not.
+    expect(
+      pledgeFloorCents({
+        charges: [],
+        payments: [paid(R(3000), "reconciled")],
+        refunds: [
+          { amountCents: R(1000), currency: ZAR, status: "refunded" },
+          { amountCents: R(500), currency: ZAR, status: "requested" },
+        ],
+      }),
+    ).toBe(R(2000));
+    // The other charges (gear rental) take their share first, never below R0.
+    expect(
+      pledgeFloorCents({
+        charges: [
+          { kind: "fee", amountCents: R(4000), currency: ZAR },
+          { kind: "rental", amountCents: R(1000), currency: ZAR },
+        ],
+        payments: [paid(R(3000), "reconciled")],
+      }),
+    ).toBe(R(2000));
+    expect(
+      pledgeFloorCents({
+        charges: [{ kind: "rental", amountCents: R(1000), currency: ZAR }],
+        payments: [paid(R(500), "reconciled")],
+      }),
+    ).toBe(0);
+    expect(() =>
+      pledgeFloorCents({
+        charges: [],
+        payments: [{ amountCents: 1, currency: "USD", status: "reconciled" }],
+      }),
+    ).toThrow();
+  });
+
+  it("refuses a new amount below the floor, and allows it down to exactly the floor", () => {
+    const floor = { currentCents: R(4000), floorCents: R(1500) };
+    expect(pledgeFloorRefusal({ ...floor, amountCents: R(1499) })).toBe(
+      pledgeFloorSentence(R(1500)),
+    );
+    expect(pledgeFloorSentence(R(1500))).toBe(
+      "The camp has already received R\u00a01\u00a0500 from you towards your camp fee, so your pledge can't be less than that.",
+    );
+    expect(pledgeFloorRefusal({ ...floor, amountCents: R(1500) })).toBeNull();
+    expect(pledgeFloorRefusal({ ...floor, amountCents: R(2000) })).toBeNull();
+    expect(pledgeFloorRefusal({ ...floor, amountCents: R(9000) })).toBeNull();
+    // Keeping an amount already under the floor (paid past it) is fine, so
+    // a new "by when" still saves.
+    expect(
+      pledgeFloorRefusal({
+        currentCents: R(1000),
+        floorCents: R(1500),
+        amountCents: R(1000),
+      }),
+    ).toBeNull();
   });
 });
 

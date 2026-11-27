@@ -9,6 +9,8 @@ import {
   isFeeConcession,
   MAX_FEE_TIERS,
   proposeRefund,
+  pledgeFloorCents,
+  pledgeFloorRefusal,
   pledgeMovesFee,
   refundAmount,
   settleUpCharges,
@@ -553,9 +555,21 @@ export const duesTestStore = {
     const key = accountKey(input.userId, input.cycle);
     const account =
       state().accounts.get(key) ?? emptyAccount(input.userId, input.cycle);
-    const fee = liveCharges(input.userId, input.cycle).find(
-      (c) => c.kind === "fee",
-    );
+    const live = liveCharges(input.userId, input.cycle);
+    const fee = live.find((c) => c.kind === "fee");
+    // The floor: never below what the camp has confirmed as received.
+    const belowFloor = pledgeFloorRefusal({
+      amountCents,
+      currentCents: account.pledgedAmountCents ?? fee?.amountCents ?? null,
+      floorCents: pledgeFloorCents({
+        charges: live.map(zar),
+        payments: testStore
+          .duesPayments(input.cycle)
+          .filter((p) => p.userId === input.userId),
+        refunds: refundsOf(input.userId, input.cycle).map(zar),
+      }),
+    });
+    if (belowFloor) return { ok: false, error: belowFloor };
     const movesFee = pledgeMovesFee({
       feeCents: fee?.amountCents ?? null,
       pledgedCents: account.pledgedAmountCents,

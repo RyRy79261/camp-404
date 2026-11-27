@@ -3,6 +3,7 @@ import {
   campDayKey,
   formatMoney,
   PAYMENT_METHOD_LABELS,
+  pledgeToEdit,
   REFUND_STATUS_LABELS,
 } from "@camp404/core";
 import { Badge } from "@camp404/ui/components/badge";
@@ -89,13 +90,9 @@ export default async function MyDuesPage() {
     burnYear: dues.burnYear,
     next: dues.feeNext,
   });
-  const pledgeValue = dues.pledge
-    ? {
-        amountCents: dues.pledge.amountCents,
-        payBy: dues.payBy,
-        subsidy: dues.subsidy,
-      }
-    : null;
+  // Their pledge, else a fee the Finance team set with no pledge behind it:
+  // either way the amount is theirs to change.
+  const pledgeValue = pledgeToEdit(dues);
 
   const charges = dues.charges.filter((c) => !c.cancelled);
   const feeCharged = charges.some((c) => c.kind === "fee");
@@ -239,15 +236,15 @@ export default async function MyDuesPage() {
                   )}
                 </p>
               )}
-            {dues.pledge && pledgeValue && (
+            {pledgeValue && (
               <div
                 data-testid="my-pledge"
                 className="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3"
               >
                 <p className="text-sm">
-                  You pledged{" "}
+                  {dues.pledge ? "You pledged" : "Your camp fee is"}{" "}
                   <span className="font-medium tabular-nums">
-                    {pledgeWithScale(dues.pledge.amountCents, scale)}
+                    {pledgeWithScale(pledgeValue.amountCents, scale)}
                   </span>
                   {dues.payBy
                     ? `, ${feeTimingPhrase(dues.payBy, dues.burnYear)}`
@@ -264,6 +261,7 @@ export default async function MyDuesPage() {
                   scale={scale}
                   pledge={pledgeValue}
                   feeCharged={feeCharged}
+                  floorCents={dues.pledgeFloorCents}
                 />
               </div>
             )}

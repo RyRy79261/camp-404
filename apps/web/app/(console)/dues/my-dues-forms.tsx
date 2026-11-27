@@ -49,20 +49,23 @@ const selectClass =
   "h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50";
 
 /**
- * "Change" beside a saved pledge: the "What can you commit?" step in a
- * dialog. Once the fee is charged its amount is the Finance team's, so only
- * "by when" and the subsidy answer change.
+ * "Change" beside a saved pledge (or a fee the Finance team set): the "What
+ * can you commit?" step in a dialog. The amount is always the member's to
+ * change; once the fee is charged a new amount moves it, never below what
+ * the camp has confirmed as received (`floorCents`).
  */
 export function PledgeDialog({
   pledge,
   burnYear,
   scale,
   feeCharged,
+  floorCents,
 }: {
   pledge: PledgeValue;
   burnYear: number;
   scale: PledgeStepProps["scale"];
   feeCharged: boolean;
+  floorCents: number;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -87,6 +90,7 @@ export function PledgeDialog({
           burnYear={burnYear}
           scale={scale}
           submitLabel="Save"
+          floorCents={floorCents}
           onSaved={() => setOpen(false)}
         />
       </DialogContent>

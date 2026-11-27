@@ -7,6 +7,8 @@ import {
   COLLECTING_CHANGED,
   FEE_PLEDGE_ACTION_KEY,
   FEE_PLEDGE_REF_TYPE,
+  pledgeFloorCents,
+  pledgeFloorRefusal,
   pledgeMovesFee,
   proposeRefund,
   refundAmount,
@@ -688,6 +690,56 @@ export async function savePledge(input: {
       )
       .limit(1)
       .for("update");
+    // The floor (owner, 2026-11-25): never below what the camp has confirmed
+    // as received towards the fee. The payments are locked, so Finance
+    // marking one received waits for this pledge, or this pledge sees it.
+    const payments = await tx
+      .select({
+        amountCents: schema.payments.amountCents,
+        currency: schema.payments.currency,
+        status: schema.payments.status,
+      })
+      .from(schema.payments)
+      .where(
+        and(
+          eq(schema.payments.userId, input.userId),
+          eq(schema.payments.cycle, input.cycle),
+        ),
+      )
+      .for("update");
+    const refunds = await tx
+      .select({
+        amountCents: schema.paymentRefunds.amountCents,
+        currency: schema.paymentRefunds.currency,
+        status: schema.paymentRefunds.status,
+      })
+      .from(schema.paymentRefunds)
+      .where(
+        and(
+          eq(schema.paymentRefunds.userId, input.userId),
+          eq(schema.paymentRefunds.cycle, input.cycle),
+        ),
+      );
+    const charges = await tx
+      .select({
+        kind: schema.duesCharges.kind,
+        amountCents: schema.duesCharges.amountCents,
+        currency: schema.duesCharges.currency,
+      })
+      .from(schema.duesCharges)
+      .where(
+        and(
+          eq(schema.duesCharges.userId, input.userId),
+          eq(schema.duesCharges.cycle, input.cycle),
+          isNull(schema.duesCharges.cancelledAt),
+        ),
+      );
+    const belowFloor = pledgeFloorRefusal({
+      amountCents,
+      currentCents: account?.amountCents ?? fee?.amountCents ?? null,
+      floorCents: pledgeFloorCents({ charges, payments, refunds }),
+    });
+    if (belowFloor) refuse(belowFloor);
     const movesFee = pledgeMovesFee({
       feeCents: fee?.amountCents ?? null,
       pledgedCents: account?.amountCents ?? null,

@@ -104,6 +104,7 @@ export default async function FormReplayPage({
               burnYear={pledgeStep.burnYear}
               pledge={pledgeStep.pledge}
               knownPayBy={pledgeStep.knownPayBy}
+              floorCents={pledgeStep.floorCents}
               submitLabel={pledgeStep.pledge ? "Save my pledge" : "Send"}
             />
           </section>
